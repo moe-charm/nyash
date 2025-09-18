@@ -122,6 +122,24 @@ impl super::MirBuilder {
                     dst: method_id,
                     value: ConstValue::String(format!("__method_{}_{}", name, method_name)),
                 })?;
+                // Track unified member getters: __get_<prop> | __get_once_<prop> | __get_birth_<prop>
+                let kind_and_prop: Option<(super::PropertyKind, String)> = if let Some(rest) = method_name.strip_prefix("__get_once_") {
+                    Some((super::PropertyKind::Once, rest.to_string()))
+                } else if let Some(rest) = method_name.strip_prefix("__get_birth_") {
+                    Some((super::PropertyKind::BirthOnce, rest.to_string()))
+                } else if let Some(rest) = method_name.strip_prefix("__get_") {
+                    Some((super::PropertyKind::Computed, rest.to_string()))
+                } else {
+                    None
+                };
+                if let Some((k, prop)) = kind_and_prop {
+                    use std::collections::HashMap;
+                    let entry: &mut HashMap<String, super::PropertyKind> = self
+                        .property_getters_by_box
+                        .entry(name.clone())
+                        .or_insert_with(HashMap::new);
+                    entry.insert(prop, k);
+                }
             }
         }
 

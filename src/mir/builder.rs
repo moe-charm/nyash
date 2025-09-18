@@ -12,7 +12,6 @@ use super::{
 use crate::ast::{ASTNode, LiteralValue};
 use std::collections::HashMap;
 use std::collections::HashSet;
-use std::fs;
 mod builder_calls;
 mod decls; // declarations lowering split
 mod exprs; // expression lowering split
@@ -21,17 +20,27 @@ mod exprs_include; // include lowering
 mod exprs_lambda; // lambda lowering
 mod exprs_peek; // peek expression
 mod exprs_qmark; // ?-propagate
+mod exprs_legacy; // legacy big-match lowering
 mod fields; // field access/assignment lowering split
 pub(crate) mod loops;
 mod ops;
 mod phi;
 mod if_form;
+mod control_flow; // thin wrappers to centralize control-flow entrypoints
 mod lifecycle; // prepare/lower_root/finalize split
 // legacy large-match remains inline for now (planned extraction)
 mod plugin_sigs; // plugin signature loader
 mod stmts;
 mod utils;
 mod vars; // variables/scope helpers // small loop helpers (header/exit context)
+
+// Unified member property kinds for computed/once/birth_once
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub(crate) enum PropertyKind {
+    Computed,
+    Once,
+    BirthOnce,
+}
 
 // moved helpers to builder/utils.rs
 
@@ -68,6 +77,9 @@ pub struct MirBuilder {
 
     /// Weak field registry: BoxName -> {weak field names}
     pub(super) weak_fields_by_box: HashMap<String, HashSet<String>>,
+
+    /// Unified members: BoxName -> {propName -> Kind}
+    pub(super) property_getters_by_box: HashMap<String, HashMap<String, PropertyKind>>,
 
     /// Remember class of object fields after assignments: (base_id, field) -> class_name
     pub(super) field_origin_class: HashMap<(ValueId, String), String>,
@@ -130,6 +142,7 @@ impl MirBuilder {
             value_origin_newbox: HashMap::new(),
             user_defined_boxes: HashSet::new(),
             weak_fields_by_box: HashMap::new(),
+            property_getters_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
             value_types: HashMap::new(),
             plugin_method_sigs,
@@ -171,7 +184,8 @@ impl MirBuilder {
         self.build_expression_impl(ast)
     }
 
-    // Moved implementation to exprs.rs; keeping a small shim here improves readability
+    // build_expression_impl_legacy moved to builder/exprs_legacy.rs
+    /*
     pub(super) fn build_expression_impl_legacy(&mut self, ast: ASTNode) -> Result<ValueId, String> {
         match ast {
             ASTNode::Literal { value, .. } => self.build_literal(value),
@@ -682,6 +696,7 @@ impl MirBuilder {
             _ => Err(format!("Unsupported AST node type: {:?}", ast)),
         }
     }
+    */
 
     /// Build a literal value
     pub(super) fn build_literal(&mut self, literal: LiteralValue) -> Result<ValueId, String> {

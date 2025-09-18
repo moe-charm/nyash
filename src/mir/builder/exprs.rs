@@ -8,7 +8,6 @@ impl super::MirBuilder {
         if matches!(
             ast,
             ASTNode::Program { .. }
-                | ASTNode::Print { .. }
                 | ASTNode::If { .. }
                 | ASTNode::Loop { .. }
                 | ASTNode::TryCatch { .. }
@@ -241,7 +240,7 @@ impl super::MirBuilder {
 
             ASTNode::Include { filename, .. } => self.build_include_expression(filename.clone()),
 
-            ASTNode::Program { statements, .. } => self.build_block(statements.clone()),
+            ASTNode::Program { statements, .. } => self.cf_block(statements.clone()),
 
             ASTNode::Print { expression, .. } => self.build_print_statement(*expression.clone()),
 
@@ -259,7 +258,7 @@ impl super::MirBuilder {
                 } else {
                     None
                 };
-                self.build_if_statement(
+                self.cf_if(
                     *condition.clone(),
                     ASTNode::Program {
                         statements: then_body.clone(),
@@ -271,20 +270,20 @@ impl super::MirBuilder {
 
             ASTNode::Loop {
                 condition, body, ..
-            } => self.build_loop_statement(*condition.clone(), body.clone()),
+            } => self.cf_loop(*condition.clone(), body.clone()),
 
             ASTNode::TryCatch {
                 try_body,
                 catch_clauses,
                 finally_body,
                 ..
-            } => self.build_try_catch_statement(
+            } => self.cf_try_catch(
                 try_body.clone(),
                 catch_clauses.clone(),
                 finally_body.clone(),
             ),
 
-            ASTNode::Throw { expression, .. } => self.build_throw_statement(*expression.clone()),
+            ASTNode::Throw { expression, .. } => self.cf_throw(*expression.clone()),
 
             _ => Err(format!("Unsupported AST node type: {:?}", ast)),
         }

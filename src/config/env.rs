@@ -409,6 +409,17 @@ pub fn try_result_mode() -> bool {
 pub fn method_catch() -> bool {
     std::env::var("NYASH_METHOD_CATCH").ok().as_deref() == Some("1") || parser_stage3()
 }
+/// Parser gate for Unified Members (stored/computed/once/birth_once).
+/// Default: ON during Phase-15 (set NYASH_ENABLE_UNIFIED_MEMBERS=0|false|off to disable).
+pub fn unified_members() -> bool {
+    match std::env::var("NYASH_ENABLE_UNIFIED_MEMBERS").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
+}
 pub fn ny_compiler_child_args() -> Option<String> {
     std::env::var("NYASH_NY_COMPILER_CHILD_ARGS").ok()
 }

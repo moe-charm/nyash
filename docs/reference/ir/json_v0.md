@@ -51,6 +51,15 @@ Special notes
 - `Var("me")`: Bridge 既定では未定義エラー。デバッグ用に `NYASH_BRIDGE_ME_DUMMY=1` でダミー `NewBox{class}` を注入可（`NYASH_BRIDGE_ME_CLASS` 省略時は `Main`）。
 - `--ny-parser-pipe` は stdin の JSON v0 を受け取り、MIR→MIR‑Interp 経由で実行する。
 
+Unified Members (Phase‑15)
+- Source‑level unified members (stored/computed/once/birth_once) are lowered before JSON emission into regular slots/methods; JSON v0 remains unchanged.
+- Lowering conventions:
+  - stored → slot (initializer becomes a one‑time evaluation in construction path)
+  - computed → synthetic getter method; field read becomes method call
+  - once → synthetic getter + hidden `Option<T>` slot with first‑read initialization; uncaught exception on first read poisons the property and rethrows on subsequent reads
+  - birth_once → hidden slot initialized before user `birth` body in declaration order; uncaught exception aborts construction
+  - method postfix `catch/cleanup` lower to try/catch/finally when Stage‑3 is enabled; when disabled, bodies execute without handlers
+
 CLI/Env cheatsheet
 - Pipe: `echo '{...}' | target/release/nyash --ny-parser-pipe`
 - File: `target/release/nyash --json-file sample.json`

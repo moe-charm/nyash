@@ -3,49 +3,137 @@
     {
       "blocks": [
         {
-          "id": 0,
-          "instructions": [
-            {
-              "args": [],
-              "dst": 0,
-              "op": "newbox",
-              "type": "ArrayBox"
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 41
-              }
-            },
-            {
-              "op": "jump",
-              "target": 3
-            }
-          ]
-        },
-        {
           "id": 2,
           "instructions": [
             {
-              "op": "jump",
-              "target": 3
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "__once_value"
+              }
+            },
+            {
+              "args": [
+                1
+              ],
+              "box": 0,
+              "dst": 2,
+              "method": "getField",
+              "op": "boxcall"
+            },
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": "void",
+                "value": 0
+              }
+            },
+            {
+              "dst": 4,
+              "lhs": 2,
+              "op": "compare",
+              "operation": "!=",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 4,
+              "op": "branch",
+              "then": 3
             }
           ]
         },
         {
           "id": 3,
           "instructions": [
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 5
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "args": [],
+              "box": 0,
+              "dst": 7,
+              "method": "__compute_once_value",
+              "op": "boxcall"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "__once_value"
+              }
+            },
+            {
+              "args": [
+                8,
+                7
+              ],
+              "box": 0,
+              "dst": 9,
+              "method": "setField",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 7
+            }
+          ]
+        }
+      ],
+      "name": "Cacher.__get_once_value/0",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "counter"
+              }
+            },
+            {
+              "args": [
+                1
+              ],
+              "box": 0,
+              "dst": 2,
+              "method": "getField",
+              "op": "boxcall"
+            },
             {
               "dst": 3,
               "op": "const",
@@ -62,25 +150,116 @@
               "rhs": 3
             },
             {
-              "op": "ret",
-              "value": 4
-            }
-          ]
-        },
-        {
-          "id": 4,
-          "instructions": [
-            {
               "dst": 5,
               "op": "const",
               "value": {
-                "type": "void",
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "counter"
+              }
+            },
+            {
+              "args": [
+                5,
+                4
+              ],
+              "box": 0,
+              "dst": null,
+              "method": "setField",
+              "op": "boxcall"
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "counter"
+              }
+            },
+            {
+              "args": [
+                6
+              ],
+              "box": 0,
+              "dst": 7,
+              "method": "getField",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 7
+            }
+          ]
+        }
+      ],
+      "name": "Cacher.__compute_once_value/0",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 5,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "dst": 6,
+              "op": "newbox",
+              "type": "Cacher"
+            },
+            {
+              "args": [],
+              "box": 6,
+              "dst": 7,
+              "method": "__get_once_value",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                7
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [],
+              "box": 6,
+              "dst": 8,
+              "method": "__get_once_value",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                8
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": "i64",
                 "value": 0
               }
             },
             {
               "op": "ret",
-              "value": 5
+              "value": 9
             }
           ]
         }

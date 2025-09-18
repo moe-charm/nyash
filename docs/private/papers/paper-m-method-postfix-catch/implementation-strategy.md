@@ -474,8 +474,136 @@ nyash-migrate --phase 16.2 src/  # 統一構文
 - [ ] 新規開発者の学習時間短縮（25%+）
 - [ ] 他言語からの影響検証（学術追跡）
 
+## 🔥 Property System革命 - 最終決定事項（9月18日 4AM）
+
+### ChatGPT5との最終合意
+
+**採用決定**: Header-first構文を正式採用、Block-first構文との両立戦略確立
+
+### 最終実装戦略
+
+#### Phase 1: Header-first構文（最優先）
+```nyash
+box Example {
+    // stored: 読み書き可能
+    name: StringBox = "default"
+    counter: IntegerBox = 0
+    
+    // computed: 毎回計算（読み専用）
+    size: IntegerBox { me.items.count() }
+    greeting: StringBox => "Hello " + me.name  // ショートハンド
+    
+    // once: 遅延評価+キャッシュ（読み専用）
+    once cache: CacheBox { buildExpensiveCache() }
+    once data: DataBox => loadData()  // ショートハンド
+    
+    // birth_once: 即座評価+保存（読み専用）
+    birth_once config: ConfigBox { loadConfiguration() }
+    birth_once token: StringBox => readEnv("TOKEN")  // ショートハンド
+}
+```
+
+#### Phase 2: Block-first構文（共存）
+```nyash
+box Example {
+    // 哲学的統一：まず計算→役割付与
+    { return "Hello " + me.baseName } as greeting: StringBox
+    { return buildCache() } as once cache: CacheBox
+    { return loadConfig() } as birth_once config: ConfigBox
+}
+```
+
+### 技術決定事項
+
+#### 視覚ルール確立
+- **`=` が見える** → stored（読み書き可能）
+- **`{}` または `=>` が見える** → 読み専用（computed系）
+
+#### パーサー実装戦略
+```rust
+// メンバ領域での二分岐（曖昧性なし）
+if current_token == '{' {
+    parse_block_first_member()  // 共存時
+} else {
+    parse_header_first_member() // 既定
+}
+```
+
+#### 例外処理統合
+```nyash
+// stored以外でcatch/cleanup許可
+once cache: CacheBox {
+    return buildCache()
+} catch (e) {
+    return EmptyCache()  // フォールバック（キャッシュ）
+} cleanup {
+    log("Cache init finished")
+}
+```
+
+#### Poison-on-throw戦略
+- **Success Path**: 計算成功 → 値キャッシュ
+- **Fallback Path**: 例外発生、catch成功 → フォールバックキャッシュ  
+- **Poison Path**: 例外発生、catchなし → 永続poison、再アクセス時即再throw
+
+### フォーマッタ戦略
+
+#### 正規化方針
+```bash
+# nyfmt.toml設定
+style = "header-first"  # 既定
+# または
+style = "block-first"   # 哲学重視
+
+# 個別制御
+# nyfmt: keep-block-first  # コメントで保持指示
+```
+
+#### 往復変換
+- Header-first ⇄ Block-first 完全等価変換
+- プロジェクト設定で統一スタイル選択可能
+
+### 実装順序確定
+
+#### ステップ1（最小実装）
+- Header-first全対応（stored/computed/once/birth_once）
+- `=>` ショートハンド砂糖
+- Block-first未実装（丁寧なエラーメッセージ）
+
+#### ステップ2（軽量拡張）
+- Block-first受理追加（メンバ領域限定）
+- 内部ASTはheader-firstと同一形に正規化
+- handlersなし
+
+#### ステップ3（完全対応）
+- Block-first にもcatch/cleanup対応
+- フォーマッタ実装
+
+### 成功指標追加
+
+#### Property System採用率
+- [ ] Header-first構文採用率（90%+）
+- [ ] Block-first構文採用率（10%+、哲学重視場面）
+- [ ] フォーマッタ正規化成功率（100%）
+
+#### 開発効率向上
+- [ ] プロパティ実装時間短縮（40%+）
+- [ ] 型推論支援効果測定
+- [ ] IDE補完改善効果
+
+### 革新的意義
+
+この実装戦略により：
+
+1. **実用性**: Header-first でツール対応最優先
+2. **革新性**: Block-first で哲学的統一保持
+3. **柔軟性**: フォーマッタで両者統一
+4. **段階性**: 最小リスクで段階的展開
+
+**結論**: 現実的革命の完璧な実現戦略確立
+
 ---
 
-**最終更新**: 2025年9月18日
-**実装責任者**: ChatGPT (基盤実装) + 段階的拡張チーム
-**状態**: Phase 15.6実装準備完了、Phase 16.x設計完了
+**最終更新**: 2025年9月18日 4AM
+**実装責任者**: ChatGPT5 (最終設計) + 段階的実装チーム  
+**状態**: 全設計完了、実装準備100%完了、学術論文準備完了

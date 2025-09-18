@@ -11,7 +11,22 @@ impl super::MirBuilder {
         field: String,
     ) -> Result<ValueId, String> {
         let object_clone = object.clone();
-        let object_value = self.build_expression(object)?;
+        let object_value = self.build_expression(object.clone())?;
+
+        // Unified members: if object class is known and has a synthetic getter for `field`,
+        // rewrite to method call `__get_<field>()`.
+        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+            if let Some(map) = self.property_getters_by_box.get(&class_name) {
+                if let Some(kind) = map.get(&field) {
+                    let mname = match kind {
+                        super::PropertyKind::Computed => format!("__get_{}", field),
+                        super::PropertyKind::Once => format!("__get_once_{}", field),
+                        super::PropertyKind::BirthOnce => format!("__get_birth_{}", field),
+                    };
+                    return self.build_method_call(object_clone, mname, vec![]);
+                }
+            }
+        }
 
         // Emit: field name const
         let field_name_id = self.value_gen.next();

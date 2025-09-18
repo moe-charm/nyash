@@ -37,6 +37,30 @@ static box Main {
 }
 ```
 
+### プロパティ（stored / computed / once / birth_once）
+```nyash
+box MyBox {
+  # stored（格納・読み書き可）
+  name: StringBox
+  id: IntegerBox = 42   # 初期値は生成時に一度だけ評価
+
+  # computed（計算・読み専用）
+  greeting: StringBox { return "Hello, " + me.name }
+
+  # once（初回アクセス時に一度だけ計算→以降は保存値）
+  once cache: ResultBox { return heavyWork() }
+
+  # birth_once（生成時に一度だけ計算→以降は保存値）
+  birth_once token: StringBox { return readEnv("TOKEN") }
+}
+
+# 読みは共通、書きは stored のみ可能
+local b = new MyBox()
+print(b.greeting)   # OK（computed）
+b.name = "A"        # OK（stored）
+b.greeting = "x"    # エラー（computed には代入不可）
+```
+
 ## 🔄 制御構文
 
 ### 条件分岐
@@ -165,6 +189,16 @@ x = 42    # Runtime Error: 未宣言変数
 # ✅ 正しい
 local x
 x = 42
+```
+
+### ❌ 計算プロパティへの代入
+```nyash
+box B {
+  value: IntegerBox { return 1 }  # computed
+}
+
+local b = new B()
+b.value = 2   # ❌ エラー: 計算プロパティには代入できません（setter を定義するか stored にしてください）
 ```
 
 ### ❌ 削除された構文

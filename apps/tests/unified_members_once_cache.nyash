@@ -1,0 +1,17 @@
+box Cacher {
+  counter: IntegerBox = 0
+  once value: IntegerBox {
+    me.counter = me.counter + 1
+    return me.counter
+  }
+}
+
+static box Main {
+  main(args) {
+    local c = new Cacher()
+    print(c.value)   # expect 1
+    print(c.value)   # expect still 1 (cached)
+    return 0
+  }
+}
+

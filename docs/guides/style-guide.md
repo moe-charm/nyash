@@ -34,10 +34,14 @@ Structure
 - Prefer pure helpers where possible; isolate I/O in specific methods.
 
 Box layout
-- フィールドは box 本体の先頭にまとめる（先頭ブロック）。
-- 先頭フィールド群の後ろはメソッドのみを記述する（`birth` を含む）。
-- フィールド間の空行・コメントは許可。アノテーション（将来追加予定）もフィールド行の直前/行末を許可。
-- NG: 最初のメソッド以降にフィールドを追加すること（リンタ警告／厳格モードでエラー）。
+- 統一メンバ採用時（`NYASH_ENABLE_UNIFIED_MEMBERS=1`）の推奨順序:
+  1) stored（格納プロパティ: `name: Type [= expr]`）
+  2) computed / once / birth_once（読み専: `name: Type {}` / `once name: Type {}` / `birth_once name: Type {}`）
+  3) methods（`birth` を含む）
+- 既存表記でも同様に「フィールド（格納）を先頭にまとめる」。
+- 先頭群の後ろはメソッドのみを記述する。
+- メンバ間の空行・コメントは許可。アノテーション（将来）もメンバ直前/行末で許可。
+- NG: 最初のメソッド以降に stored を追加すること（リンタ警告／厳格モードでエラー）。
 
 良い例
 ```nyash

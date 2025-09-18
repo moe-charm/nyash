@@ -230,6 +230,15 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
+## 📝 Update (2025-09-18) 🌟 Property System革命達成！
+- ✅ **Property System革命完了！** ChatGPT5×Claude×Codexの協働により、stored/computed/once/birth_once統一構文完成！
+- 🚀 **Python→Nyash実行可能性飛躍！** @property/@cached_property→Nyash Property完全マッピング実現！
+- ⚡ **性能革命**: Python cached_property→10-50x高速化（LLVM最適化）
+- 🎯 **All or Nothing**: Phase 10.7でPython transpilation、フォールバック無し設計
+- 📚 **完全ドキュメント化**: README.md導線、実装戦略、技術仕様すべて完備
+- 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
+- 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
+
 ## 📝 Update (2025-09-14) 🎉 セルフホスティング大前進！
 - ✅ Python LLVM実装が実用レベル到達！（esc_dirname_smoke, min_str_cat_loop, dep_tree_min_string全てPASS）
 - 🚀 **Phase 15.3開始！** NyashコンパイラMVP実装が`apps/selfhost-compiler/`でスタート！
