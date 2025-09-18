@@ -26,6 +26,20 @@ factor    := INT
            | 'new' IDENT '(' args? ')'
            | '[' args? ']'           ; Array literal (Stage‑1 sugar, gated)
            | '{' map_entries? '}'    ; Map literal (Stage‑2 sugar, gated)
+           | match_expr              ; Pattern matching (replaces legacy peek)
+
+match_expr := 'match' expr '{' match_arm+ default_arm? '}'
+match_arm  := pattern guard? '=>' (expr | block) ','?
+default_arm:= '_' '=>' (expr | block) ','?
+
+pattern   := '_'
+           | STRING | INT | 'true' | 'false' | 'null'
+           | IDENT '(' IDENT? ')'           ; Type pattern e.g., StringBox(s)
+           | '[' (IDENT (',' '..' IDENT)? )? ']'
+           | '{' ( (STRING|IDENT) ':' IDENT (',' '..')? )? '}'
+           | pattern '|' pattern            ; OR pattern (same arm)
+
+guard     := 'if' expr
 
 map_entries := (STRING | IDENT) ':' expr (',' (STRING | IDENT) ':' expr)* [',']
 
@@ -42,6 +56,57 @@ Notes
 - Array literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_ARRAY_LITERAL=1 is set.
 - Map literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_MAP_LITERAL=1 is set.
 - Identifier keys (`{name: v}`) are Stage‑3 and require either NYASH_SYNTAX_SUGAR_LEVEL=full or NYASH_ENABLE_MAP_IDENT_KEY=1.
+- Pattern matching: `match` replaces legacy `peek`. MVP supports wildcard `_`, literals, simple type patterns, fixed/variadic array heads `[hd, ..tl]`, simple map key extract `{ "k": v, .. }`, OR patterns, and guards `if`.
+
+## Box Members (Phase‑15, env gate: NYASH_ENABLE_UNIFIED_MEMBERS; default ON)
+
+This section adds a minimal grammar for Box members (a unified member model) without changing JSON v0/MIR. Parsing is controlled by env `NYASH_ENABLE_UNIFIED_MEMBERS` (default ON; set `0/false/off` to disable).
+
+```
+box_decl       := 'box' IDENT '{' member* '}'
+
+member         := stored
+                | computed
+                | once_decl
+                | birth_once_decl
+                | method_decl
+                | block_as_role      ; nyash-mode (block-first) equivalent
+
+stored         := IDENT ':' TYPE ( '=' expr )?
+                  ; stored property (read/write). No handlers supported.
+
+computed       := IDENT ':' TYPE ( '=>' expr | block ) handler_tail?
+                  ; computed property (read‑only). Recomputes on each read.
+
+once_decl      := 'once' IDENT ':' TYPE ( '=>' expr | block ) handler_tail?
+                  ; lazy once. First read computes and caches; later reads return cached value.
+
+birth_once_decl:= 'birth_once' IDENT ':' TYPE ( '=>' expr | block ) handler_tail?
+                  ; eager once. Computed during construction (before user birth), in declaration order.
+
+method_decl    := IDENT '(' params? ')' ( ':' TYPE )? block handler_tail?
+
+; nyash-mode (block-first) variant — gated with NYASH_ENABLE_UNIFIED_MEMBERS=1
+block_as_role  := block 'as' ( 'once' | 'birth_once' )? IDENT ':' TYPE
+
+handler_tail   := ( catch_block )? ( cleanup_block )?
+catch_block    := 'catch' ( '(' ( IDENT IDENT | IDENT )? ')' )? block
+cleanup_block  := 'cleanup' block
+```
+
+Semantics (summary)
+- stored: O(1) slot read; write via assignment. Initializer (if present) evaluates at construction once.
+- computed: read‑only; each read evaluates the block; assignment is an error unless a setter is explicitly defined.
+- once: first read evaluates the block and caches the value; subsequent reads return the cached value. On exception without a `catch`, the property becomes poisoned and rethrows on later reads (no retries).
+- birth_once: evaluated before the user `birth` body, in declaration order; exceptions without a `catch` abort construction; cycles between `birth_once` members are an error.
+- handlers: `catch/cleanup` are permitted for computed/once/birth_once/method blocks (Stage‑3), not for stored.
+
+Lowering (no JSON v0 change)
+- stored → slot
+- computed → synthesize `__get_name():T { try body; catch; finally }`; reads of `obj.name` become `obj.__get_name()`
+- once → add `__name: Option<T>` and emit `__get_name()` with first‑read initialization; on uncaught exception mark poisoned and rethrow on subsequent reads
+- birth_once → add `__name: T` and insert initialization just before user `birth` in declaration order; handlers apply to each initializer
+- method → existing method forms; optional postfix handlers lower to try/catch/finally
 
 ## Stage‑3 (Gated) Additions
 
@@ -62,5 +127,9 @@ Enabled when `NYASH_PARSER_STAGE3=1` for the Rust parser (and via `--stage3`/`NY
 - Method‑level postfix catch/cleanup（Phase 15.6, gated）
   - `method_decl := 'method' IDENT '(' params? ')' block ('catch' '(' (IDENT IDENT | IDENT | ε) ')' block)? ('cleanup' block)?`
   - Gate: `NYASH_METHOD_CATCH=1`（または `NYASH_PARSER_STAGE3=1` と同梱）
+
+- Member‑level postfix catch/cleanup（Phase 15.6, gated）
+  - Applies to computed/once/birth_once in the unified member model: see “Box Members”.
+  - Gate: `NYASH_PARSER_STAGE3=1` (shared). Stored members do not accept handlers.
 
 These constructs remain experimental; behaviour may degrade to no‑op in some backends until runtime support lands, as tracked in CURRENT_TASK.md.

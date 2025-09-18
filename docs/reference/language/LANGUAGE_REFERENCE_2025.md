@@ -1,6 +1,6 @@
 # 🚀 Nyash Language Reference 2025
 
-**最終更新: 2025年9月4日 - Phase 12.7実装済み機能の正確な反映**
+**最終更新: 2025年9月18日 - Property System Revolution + Method-Level Exception Handling**
 
 ## 📖 概要
 
@@ -11,7 +11,7 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 
 ## 🔤 **1. 予約語・キーワード完全リスト**
 
-### **Phase 12.7で確定した15個の予約語**
+### **Phase 15で確定した17個の予約語**
 | 予約語 | 用途 | 例 |
 |-------|------|---|
 | `box` | クラス定義 | `box MyClass { }` |
@@ -26,9 +26,11 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 | `else` | else節 | `else { }` |
 | `loop` | ループ（唯一の形式） | `loop(condition) { }` |
 | `continue` | ループ継続 | `continue` |
-| `peek` | パターンマッチング風分岐 | `peek value { "A" => 1, else => 0 }` |
+| `match` | パターンマッチング（構造/型/ガード） | `match value { "A" => 1, _ => 0 }` |
 | `try` | 例外捕獲開始 | `try { }` |
 | `interface` | インターフェース定義 | `interface Comparable { }` |
+| `once` | **NEW** 遅延評価プロパティ | `once cache: CacheBox { build() }` |
+| `birth_once` | **NEW** 即座評価プロパティ | `birth_once config: ConfigBox { load() }` |
 
 ### **その他の重要キーワード（予約語ではない）**
 | キーワード | 用途 | 例 |
@@ -194,7 +196,7 @@ loop() { }          # パーサーエラー
 #### **Peek式（Phase 12.7で追加）**
 ```nyash
 # パターンマッチング風の分岐
-local result = peek value {
+local result = match value {
     "A" => 100,
     "B" => 200,
     "C" => 300,
@@ -202,7 +204,7 @@ local result = peek value {
 }
 
 # 文の形式も可
-peek status {
+match status {
     "error" => {
         print("Error occurred")
         return null
@@ -254,6 +256,63 @@ local add = fn(x, y) { return x + y }
 local double = fn(x) { x * 2 }  # 単一式なら省略可
 
 # await式  
+
+### **2.5 プロパティ（統一メンバ — Phase 15、既定ON: NYASH_ENABLE_UNIFIED_MEMBERS）**
+
+概要
+- Box 内のメンバを「格納/計算/一度だけ（遅延 or 生成時）」で統一的に扱います。JSON v0/MIR は変更せず、ローワで既存の slot/method に展開します。
+- 環境変数 `NYASH_ENABLE_UNIFIED_MEMBERS` で制御（Phase 15 では既定ON、`0/false/off` で無効化）。
+
+分類と構文（header‑first）
+- stored（格納・読み書き可）
+  - `name: Type` または `name: Type = expr`（初期値は生成時に一度だけ評価）
+- computed（計算・読み専用）
+  - `name: Type { /* body */ }`（読むたびに計算。代入不可）
+- once（初回アクセス時に一度だけ計算 → 以後は保存値）
+  - `once name: Type { /* body */ }` または `once name: Type => expr`
+- birth_once（生成時に一度だけ計算 → 以後は保存値）
+  - `birth_once name: Type { /* body */ }` または `birth_once name: Type => expr`
+
+nyashモード（block‑first、オプション）
+- `{"..."}` の直後に `as` を置く統一構文を、Box メンバ領域で受理
+  - computed: `{ body } as name: Type`
+  - once: `{ body } as once name: Type`
+  - birth_once: `{ body } as birth_once name: Type`
+  - stored は block‑first では宣言しない（header‑first を使用）
+
+共通ルール
+- 読みは全て `obj.name` で同一表記。違いは書き込み可否と計算タイミングのみ。
+- 代入:
+  - stored のみ許可（`obj.name = v`）。
+  - computed/once/birth_once は代入不可（エラー）。setter を定義した場合のみ糖衣で許可（`obj.name = v` → `__set_name(v)`）。
+
+例
+```nyash
+box MyBox {
+  name: StringBox                 # stored
+  size: IntegerBox { me.items.len() }   # computed
+  once cache: CacheBox { buildCache() } # once
+  birth_once token: StringBox { readEnv("TOKEN") } # eager once
+}
+```
+
+例外・ハンドラ（Stage‑3, `NYASH_PARSER_STAGE3=1`）
+- stored 以外のブロック末尾に `catch`/`cleanup` を付与可能（header‑first / block‑first 両対応）。
+  - computed: `name: T { body } catch(e) { ... } cleanup { ... }`
+  - once: `once name: T { body } catch { ... } cleanup { ... }`
+  - birth_once: `birth_once name: T { body } catch { ... } cleanup { ... }`
+- once の例外ポリシー（catch が無い場合）: 例外をその場で伝播し、プロパティは poison 状態となり以後の読みでも同じ例外を再スロー（再実行しない）。
+- birth_once の実行順: ユーザ `birth` 本体の前、宣言順で実行。未捕捉例外はコンストラクタ失敗として伝播。自己参照はエラー。相互依存の循環は検出してエラー。
+
+ローワ（下ろし先の概要）
+- stored → slot（初期化子は生成時に一度だけ評価）。
+- computed → `__get_name():T` メソッドを合成し、`obj.name` 読みを呼び出しに解決。
+- once → `__name: Option<T>` + `__get_name()`（初回のみ評価・保存）。未捕捉例外で poison し、以後は即 rethrow。
+- birth_once → `__name: T` を用意し、`birth` 直前に宣言順で初期化コードを挿入。未捕捉例外は `new` 失敗。
+
+注意
+- JSON v0 は unchanged。Unified Members はパーサ/ローワの砂糖として振る舞います。
+- stored の初期化子は式のみ（`catch/cleanup` は不可）。
 local result = await asyncTask()
 ```
 
@@ -453,15 +512,15 @@ static box Calculator {
 ### **Peek式 - パターンマッチング風分岐**
 ```nyash
 # 式として使用（値を返す）
-local grade = peek score {
+local grade = match score {
     100 => "Perfect",
     90 => "Excellent", 
     80 => "Good",
-    else => "Needs improvement"
+    _ => "Needs improvement"
 }
 
 # 文として使用（アクション実行）
-peek command {
+match command {
     "save" => {
         saveFile()
         print("Saved!")
@@ -470,7 +529,7 @@ peek command {
         cleanup()
         return
     },
-    else => print("Unknown command")
+    _ => print("Unknown command")
 }
 ```
 
