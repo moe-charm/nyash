@@ -59,6 +59,7 @@ impl NyashParser {
                 default_expr = Some(expr.clone());
                 arms_any.push(MatchArm::Default(expr));
             } else {
+                // arm head
                 // Type pattern? IDENT '(' IDENT ')'
                 let mut handled = false;
                 if let TokenType::IDENTIFIER(type_name) = self.current_token().token_type.clone() {
@@ -91,7 +92,10 @@ impl NyashParser {
                             while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
                                 self.skip_newlines();
                                 if !self.match_token(&TokenType::RBRACE) {
-                                    stmts.push(self.parse_statement()?);
+                                    eprintln!("[parser.match] in-block before stmt token={:?} line={}", self.current_token().token_type, self.current_token().line);
+                                    let st = self.parse_statement()?;
+                                    eprintln!("[parser.match] parsed stmt kind={}", st.info());
+                                    stmts.push(st);
                                 }
                             }
                             self.consume(TokenType::RBRACE)?;
@@ -107,6 +111,7 @@ impl NyashParser {
                 }
                 if !handled {
                     // リテラル（OR結合可）
+                    eprintln!("[parser.match] parse literal pattern, token={:?}", self.current_token().token_type);
                     let mut lits: Vec<crate::ast::LiteralValue> = Vec::new();
                     let first = self.lit_only_for_match()?;
                     lits.push(first);
@@ -116,13 +121,16 @@ impl NyashParser {
                         lits.push(nxt);
                     }
                     self.consume(TokenType::FatArrow)?;
+                    eprintln!("[parser.match] after FatArrow token={:?}", self.current_token().token_type);
                     let expr = if self.match_token(&TokenType::LBRACE) {
+                        eprintln!("[parser.match] entering block arm");
                         self.advance(); // consume '{'
                         let mut stmts: Vec<ASTNode> = Vec::new();
                         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
                             self.skip_newlines();
                             if !self.match_token(&TokenType::RBRACE) {
-                                stmts.push(self.parse_statement()?);
+                                let st = self.parse_statement()?;
+                                stmts.push(st);
                             }
                         }
                         self.consume(TokenType::RBRACE)?;
@@ -171,8 +179,8 @@ impl NyashParser {
         }
 
         // 型パターンを含む: ASTで if 連鎖へ合成
-        // 1) scrutinee を一度だけ評価しローカルに束縛
-        let scr_var = "__ny_match_scrutinee".to_string();
+        // 1) scrutinee を一度だけ評価しローカルに束縛（衝突回避のため gensym 風の名前を付与）
+        let scr_var = format!("__ny_match_scrutinee_{}", self.current());
         let scr_local = ASTNode::Local {
             variables: vec![scr_var.clone()],
             initial_values: vec![Some(Box::new(scrutinee))],

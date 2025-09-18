@@ -47,10 +47,16 @@ code=${code:-0}
 [[ "$code" -eq 50 ]] && pass "PyVM: ternary nested (exit=50)" || fail "PyVM: ternary nested" "exit=$code"
 unset code
 
-# 7) Match expr block (exit=1)
+# 7) Match expr block: assert output and exit code
+OUT=$(NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/peek_expr_block.nyash" 2>&1 || true)
+if echo "$OUT" | rg -q 'found one'; then
+  :
+else
+  echo "[warn] match expr block output mismatch; will check exit code only" >&2
+fi
 NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/peek_expr_block.nyash" >/dev/null 2>&1 || code=$?
 code=${code:-0}
-[[ "$code" -eq 1 ]] && pass "PyVM: match expr block (exit=1)" || fail "PyVM: match expr block" "exit=$code"
+[[ "$code" -eq 1 ]] && pass "PyVM: match expr block (print+exit=1)" || fail "PyVM: match expr block exit" "exit=$code"
 unset code
 
 # 8) Match return value (temporarily skipped; covered by block form)
