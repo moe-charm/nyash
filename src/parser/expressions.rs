@@ -185,9 +185,9 @@ impl NyashParser {
 
     /// 単項演算子をパース
     pub(crate) fn parse_unary(&mut self) -> Result<ASTNode, ParseError> {
-        // peek式の先読み
-        if self.match_token(&TokenType::PEEK) {
-            return self.parse_peek_expr();
+        // match式（peek置換）の先読み
+        if self.match_token(&TokenType::MATCH) {
+            return self.parse_match_expr();
         }
         if self.match_token(&TokenType::MINUS) {
             self.advance(); // consume '-'
@@ -221,15 +221,16 @@ impl NyashParser {
         self.parse_call()
     }
 
-    /// peek式: peek <expr> { lit => arm ... else => arm }
-    /// P1: arm は 式 または ブロック（{ ... } 最後の式が値）
-    fn parse_peek_expr(&mut self) -> Result<ASTNode, ParseError> {
-        self.advance(); // consume 'peek'
-        let scrutinee = self.parse_expression()?;
+    /// match式: match <expr> { pat => arm ... _ => arm }
+    /// MVP: pat はリテラルのみ（OR/型/構造は後段）。アームは式またはブロック（最後の式が値）。
+    fn parse_match_expr(&mut self) -> Result<ASTNode, ParseError> {
+        self.advance(); // consume 'match'
+        // Scrutinee: keep MVP simple and accept a primary/call expression
+        let scrutinee = self.parse_primary()?;
         self.consume(TokenType::LBRACE)?;
 
         let mut arms: Vec<(crate::ast::LiteralValue, ASTNode)> = Vec::new();
-        let mut else_expr: Option<ASTNode> = None;
+        let mut default_expr: Option<ASTNode> = None;
 
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
             self.skip_newlines();
@@ -241,10 +242,10 @@ impl NyashParser {
                 break;
             }
 
-            // else or literal
-            let is_else = matches!(self.current_token().token_type, TokenType::ELSE);
-            if is_else {
-                self.advance(); // consume 'else'
+            // default '_' or literal arm
+            let is_default = matches!(self.current_token().token_type, TokenType::IDENTIFIER(ref s) if s == "_");
+            if is_default {
+                self.advance(); // consume '_'
                 self.consume(TokenType::FatArrow)?;
                 // else アーム: ブロック or 式
                 let expr = if self.match_token(&TokenType::LBRACE) {
@@ -263,9 +264,10 @@ impl NyashParser {
                         span: Span::unknown(),
                     }
                 } else {
-                    self.parse_expression()?
+                    // MVP: accept a primary/call expression for arm body
+                    self.parse_primary()?
                 };
-                else_expr = Some(expr);
+                default_expr = Some(expr);
             } else {
                 // リテラルのみ許可（P0）
                 let lit = self.parse_literal_only()?;
@@ -292,18 +294,16 @@ impl NyashParser {
             }
 
             // 区切り（カンマや改行を許可）
-            if self.match_token(&TokenType::COMMA) {
+            while self.match_token(&TokenType::COMMA) || self.match_token(&TokenType::NEWLINE) {
                 self.advance();
             }
-            if self.match_token(&TokenType::NEWLINE) {
-                self.advance();
-            }
+            self.skip_newlines();
         }
 
         self.consume(TokenType::RBRACE)?;
-        let else_expr = else_expr.ok_or(ParseError::UnexpectedToken {
+        let else_expr = default_expr.ok_or(ParseError::UnexpectedToken {
             found: self.current_token().token_type.clone(),
-            expected: "else => <expr> in peek".to_string(),
+            expected: "_ => <expr> in match".to_string(),
             line: self.current_token().line,
         })?;
 

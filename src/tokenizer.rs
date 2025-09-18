@@ -24,7 +24,7 @@ pub enum TokenType {
     GLOBAL,
     SINGLETON,
     NEW,
-    PEEK,
+    MATCH,
     IF,
     ELSE,
     LOOP,
@@ -64,7 +64,7 @@ pub enum TokenType {
     BitAnd,        // & (bitwise and)
     BitOr,         // | (bitwise or)
     BitXor,        // ^ (bitwise xor)
-    FatArrow,      // => (peek arms)
+    FatArrow,      // => (match arms)
     EQUALS,        // ==
     NotEquals,     // !=
     LessEquals,    // <=
@@ -498,7 +498,7 @@ impl NyashTokenizer {
             "global" => TokenType::GLOBAL,
             "singleton" => TokenType::SINGLETON,
             "new" => TokenType::NEW,
-            "peek" => TokenType::PEEK,
+            "match" => TokenType::MATCH,
             "if" => TokenType::IF,
             "else" => TokenType::ELSE,
             "loop" => TokenType::LOOP,

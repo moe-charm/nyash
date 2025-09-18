@@ -1,11 +1,11 @@
 static box Main {
   main(args) {
-    // Use peek as an expression to produce a value
+    // Use match as an expression to produce a value
     local d = "1"
-    local v = peek d {
-      "0" => { 0 }
-      "1" => { 1 }
-      else => { 0 }
+    local v = match d {
+      "0" => 0,
+      "1" => 1,
+      _ => 0
     }
     // Show the result and finish
     local console = new ConsoleBox()
