@@ -32,6 +32,18 @@ P0/P1 Safety Fixes (2025-09-19)
   - Updated to_http_string and Display/to_string to read via locks; manual Clone implemented.
   - Removes RefCell TODOs at http_message_box.rs:292–330 without violating BoxCore Send+Sync.
 
+LLVM Harness Gate (2025-09-19)
+- Added env gate `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to optionally drop malformed empty PHI lines before llvmlite parse.
+  - Default OFF; dev-only safety valve while finalizing PHI wiring.
+  - Code: src/llvm_py/llvm_builder.py (compile_to_object).
+
+Clone() Reduction — Phase 1 (Arc/str)
+- TypeBox internals
+  - `TypeBox.name: String` → `Arc<str>`.
+  - `TypeBox.type_parameters: Vec<String>` → `Vec<Arc<str>>`.
+  - Adjusted builder/registry and `full_name()` accordingly; public behavior unchanged.
+  - Rationale: share-on-clone for frequently copied identifiers, reduce String allocations.
+
 Refactor Plan (next 1–2 weeks)
 1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs
    - Targets (line ranges are indicative):
