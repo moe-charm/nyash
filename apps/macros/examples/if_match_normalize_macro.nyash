@@ -8,6 +8,7 @@ static box MacroBoxSpec {
 
   expand(json, ctx) {
     local JB = include "apps/lib/json_builder.nyash"
+    local CF = include "apps/lib/cf_builder.nyash"
 
     // --- helpers copied/adapted from loop_normalize ---
     function parse_value(s, i) {
@@ -225,7 +226,7 @@ static box MacroBoxSpec {
           local then_s = [ JB.assignment(tgt, th_e) ]
           local else_s = null
           if el_e != null { else_s = [ JB.assignment(tgt, el_e) ] }
-          return JB.if_(cond, then_s, else_s)
+          return CF.if_stmt(cond, then_s, else_s)
         }
       }
       // Return with If value → If(Return ...)
@@ -242,7 +243,7 @@ static box MacroBoxSpec {
           local then_s = [ JB.return_(th_e) ]
           local else_s = null
           if el_e != null { else_s = [ JB.return_(el_e) ] }
-          return JB.if_(cond, then_s, else_s)
+          return CF.if_stmt(cond, then_s, else_s)
         }
       }
       // Print with If expression → If(Print ...)
@@ -259,7 +260,7 @@ static box MacroBoxSpec {
           local then_s = [ JB.print_(th_e) ]
           local else_s = null
           if el_e != null { else_s = [ JB.print_(el_e) ] }
-          return JB.if_(cond, then_s, else_s)
+          return CF.if_stmt(cond, then_s, else_s)
         }
       }
       // Recurse for If/Loop nodes
