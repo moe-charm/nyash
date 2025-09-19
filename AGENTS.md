@@ -73,6 +73,8 @@ Docs links（開発方針/スタイル）
 - Template → Macro 統合方針: `docs/guides/template-unification.md`
 - User Macros（MacroBox/Phase 2）: `docs/guides/user-macros.md`
 - Macro capabilities (io/net/env): `docs/reference/macro/capabilities.md`
+- LoopForm ガイド: `docs/guides/loopform.md`
+- Phase‑17（LoopForm Self‑Hosting & Polish）: `docs/development/roadmap/phases/phase-17-loopform-selfhost/`
  - MacroBox（ユーザー拡張）: `docs/guides/macro-box.md`
   - MacroBox in Nyash（設計草案）: `docs/guides/macro-box-nyash.md`
 
