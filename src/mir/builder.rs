@@ -182,6 +182,10 @@ impl MirBuilder {
     pub(crate) fn hint_scope_leave(&mut self, id: u32) { self.hint_sink.scope_leave(id); }
     #[inline]
     pub(crate) fn hint_join_result<S: Into<String>>(&mut self, var: S) { self.hint_sink.join_result(var.into()); }
+    #[inline]
+    pub(crate) fn hint_loop_carrier<S: Into<String>>(&mut self, vars: impl IntoIterator<Item = S>) {
+        self.hint_sink.loop_carrier(vars.into_iter().map(|s| s.into()).collect::<Vec<_>>());
+    }
 
     // moved to builder_calls.rs: lower_method_as_function
 

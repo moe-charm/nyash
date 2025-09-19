@@ -143,6 +143,39 @@ impl<'a> LoopBuilder<'a> {
         condition: ASTNode,
         body: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Pre-scan body for simple carrier pattern (up to 2 assigned variables, no break/continue)
+        fn collect_assigns(n: &ASTNode, vars: &mut Vec<String>, has_ctrl: &mut bool) {
+            match n {
+                ASTNode::Assignment { target, .. } => {
+                    if let ASTNode::Variable { name, .. } = target.as_ref() {
+                        if !vars.iter().any(|v| v == name) {
+                            vars.push(name.clone());
+                        }
+                    }
+                }
+                ASTNode::Break { .. } | ASTNode::Continue { .. } => { *has_ctrl = true; }
+                ASTNode::If { then_body, else_body, .. } => {
+                    let tp = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
+                    collect_assigns(&tp, vars, has_ctrl);
+                    if let Some(eb) = else_body {
+                        let ep = ASTNode::Program { statements: eb.clone(), span: crate::ast::Span::unknown() };
+                        collect_assigns(&ep, vars, has_ctrl);
+                    }
+                }
+                ASTNode::Program { statements, .. } => {
+                    for s in statements { collect_assigns(s, vars, has_ctrl); }
+                }
+                _ => {}
+            }
+        }
+        let mut assigned_vars: Vec<String> = Vec::new();
+        let mut has_ctrl = false;
+        for st in &body { collect_assigns(st, &mut assigned_vars, &mut has_ctrl); }
+        if !has_ctrl && !assigned_vars.is_empty() && assigned_vars.len() <= 2 {
+            // Emit a carrier hint (no-op sink by default; visible with NYASH_MIR_TRACE_HINTS=1)
+            self.parent_builder.hint_loop_carrier(assigned_vars.clone());
+        }
+
         // 1. ブロックの準備
         let preheader_id = self.current_block()?;
         let (header_id, body_id, after_loop_id) =
