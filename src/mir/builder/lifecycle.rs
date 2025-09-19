@@ -20,6 +20,9 @@ impl super::MirBuilder {
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
 
+        // Hint: scope enter at function entry (id=0 for main)
+        self.hint_scope_enter(0);
+
         if std::env::var("NYASH_BUILDER_SAFEPOINT_ENTRY")
             .ok()
             .as_deref()
@@ -39,6 +42,8 @@ impl super::MirBuilder {
         &mut self,
         result_value: ValueId,
     ) -> Result<MirModule, String> {
+        // Hint: scope leave at function end (id=0 for main)
+        self.hint_scope_leave(0);
         if let Some(block_id) = self.current_block {
             if let Some(ref mut function) = self.current_function {
                 if let Some(block) = function.get_block_mut(block_id) {
