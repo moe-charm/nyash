@@ -8,7 +8,7 @@
 - eq(expr_json)                       … scrut == expr
 - or_(conds_json_array)               … c1 || c2 || …
 - and_(conds_json_array)              … g1 && g2 && …
-- type_is(type_name, scrut_json)      … type_check(scrut, type_name)
+- type_is(type_name, scrut_json)      … scrut.is("TypeName") に展開（MIRでTypeOp(check)に降下）
 - default()                           … デフォルト用マーカー（CF側で末尾へ）
 
 使用例
@@ -24,9 +24,9 @@ local cond = PT.and_([ p, JB.variable("small") ])
 
 注意
 - default() は条件式ではないため、ControlFlowBuilder 側で最後の else に落とす処理を行う。
-- 型チェックは TypeOp(check) の JSON を生成するか、既存の JSON 片を組み立てる（実装詳細に依存）。
+- type_is は MethodCall(object=scrut, method="is", args=["Type"]) に展開され、
+  src/mir/builder/exprs.rs で MIR::TypeOp(Check, …) へ降下する。
 
 関連
 - docs/guides/controlflow-builder.md
 - docs/guides/if-match-normalize.md
-

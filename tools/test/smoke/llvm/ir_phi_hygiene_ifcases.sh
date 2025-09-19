@@ -40,11 +40,11 @@ check_case() {
   echo "[OK] PHI hygiene (no empty PHI): $(basename "$irfile")"
 }
 
-check_case "apps/tests/macro_golden_if_assign.nyash"
-check_case "apps/tests/macro_golden_if_print.nyash"
-check_case "apps/tests/macro_golden_if_return.nyash"
-check_case "apps/tests/macro_golden_type_is_basic.nyash"
-check_case "apps/tests/macro_golden_if_chain_guard.nyash"
+check_case "apps/tests/macro/if/assign.nyash"
+check_case "apps/tests/macro/if/print_expr.nyash"
+check_case "apps/tests/macro/if/return_expr.nyash"
+check_case "apps/tests/macro/types/is_basic.nyash"
+check_case "apps/tests/macro/if/chain_guard.nyash"
 
 if [ "$fails" -ne 0 ]; then
   exit 2

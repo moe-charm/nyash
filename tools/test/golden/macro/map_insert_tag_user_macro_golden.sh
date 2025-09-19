@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_map_insert_tag.nyash"
+src="apps/tests/macro/collections/map_insert_tag.nyash"
 golden="$root/tools/test/golden/macro/map_insert_tag.expanded.json"
 
 if [ ! -x "$bin" ]; then

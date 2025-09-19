@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_type_is_basic.nyash"
+src="apps/tests/macro/types/is_basic.nyash"
 golden="$root/tools/test/golden/macro/type_is_basic.expanded.json"
 
 if [ ! -x "$bin" ]; then
@@ -29,4 +29,3 @@ if [ "$out_norm" != "$gold_norm" ]; then
 fi
 
 echo "[OK] golden type_is basic matched"
-

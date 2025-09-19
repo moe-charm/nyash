@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_map_insert_tag.nyash"
+src="apps/tests/macro/collections/map_insert_tag.nyash"
 
 if [ ! -x "$bin" ]; then
   echo "nyash binary not found at $bin; build first (cargo build --release)" >&2
@@ -24,4 +24,3 @@ echo "$out" | rg -q "selfhost macro pre-expand: engaging" && echo "[OK] map pre-
 echo "[WARN] map pre-expand auto did not engage; printing logs:" >&2
 echo "$out" >&2
 exit 2
-

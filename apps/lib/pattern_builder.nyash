@@ -36,20 +36,14 @@ static box PatternBuilder {
     return acc
   }
 
-  // type_is(type_name, expr_json) — MVP: 呼び出し側で適宜拡張。
-  // ここでは簡易に eq(typeof(expr), type_name) 相当のプレースホルダを返すか、
-  // プロジェクトの TypeOp 実装に合わせて後で差し替える。
+  // type_is(type_name, expr_json)
+  // Lowering 規約: MethodCall(object=expr, method="is", arguments=[Literal(String type_name)])
+  // → MIR::TypeOp(Check, value=expr, ty=map(type_name)) に降下される（src/mir/builder/exprs.rs）。
   type_is(type_name, expr_json) {
-    // プレースホルダ（将来の実装点）: 常に true にせず、明示的に比較形を構築するのが安全。
-    // ユーザー側の Lower/Resolver が未対応なら、後で本関数を差し替える。
-    local JB = include "apps/lib/json_builder.nyash"
-    // 仮: Call 形式を使わず、ダミーの比較を残す（"__ny_type(expr) == type_name" 的イメージ）。
-    // 実際の採用時は TypeOp(check) の AST 形へ置換する。
-    local left = JB.binary("__typeof", expr_json, JB.literal_null()) // ダミー演算子（後で置換）
-    return JB.binary("==", left, JB.literal_string(type_name))
+    local t = "{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"" + type_name + "\"}}"
+    return "{\"kind\":\"MethodCall\",\"object\":" + expr_json + ",\"method\":\"is\",\"arguments\":[" + t + "]}"
   }
 
   // default マーカー（条件式ではない）。
   default() { return "__NY_PATTERN_DEFAULT" }
 }
-

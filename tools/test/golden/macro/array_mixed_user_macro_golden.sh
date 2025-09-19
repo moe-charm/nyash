@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_array_mixed.nyash"
+src="apps/tests/macro/collections/array_mixed.nyash"
 golden="$root/tools/test/golden/macro/array_mixed.expanded.json"
 
 if [ ! -x "$bin" ]; then
@@ -27,4 +27,3 @@ if [ "$(norm "$out")" != "$(norm "$(cat "$golden")")" ]; then
 fi
 
 echo "[OK] golden user macro array_mixed matched"
-

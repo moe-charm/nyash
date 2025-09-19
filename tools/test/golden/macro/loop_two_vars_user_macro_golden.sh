@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_loop_two_vars.nyash"
+src="apps/tests/macro/loopform/two_vars.nyash"
 golden="$root/tools/test/golden/macro/loop_two_vars.expanded.json"
 
 if [ ! -x "$bin" ]; then

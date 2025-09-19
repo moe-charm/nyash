@@ -38,8 +38,12 @@ pub fn init_from_env() {
 
 fn try_load_one(path: &str) -> Result<(), String> {
     let src = std::fs::read_to_string(path).map_err(|e| e.to_string())?;
-    let ast = nyash_rust::parser::NyashParser::parse_from_string(&src)
-        .map_err(|e| format!("parse error: {:?}", e))?;
+    // Enable minimal sugar for macro files during scanning (array/map literals etc.)
+    let prev_sugar = std::env::var("NYASH_SYNTAX_SUGAR_LEVEL").ok();
+    std::env::set_var("NYASH_SYNTAX_SUGAR_LEVEL", "basic");
+    let ast_res = nyash_rust::parser::NyashParser::parse_from_string(&src);
+    if let Some(v) = prev_sugar { std::env::set_var("NYASH_SYNTAX_SUGAR_LEVEL", v); } else { std::env::remove_var("NYASH_SYNTAX_SUGAR_LEVEL"); }
+    let ast = ast_res.map_err(|e| format!("parse error: {:?}", e))?;
     // Find a BoxDeclaration with static function expand(...)
     if let ASTNode::Program { statements, .. } = ast {
         // Capabilities: conservative scan before registration
@@ -53,7 +57,7 @@ fn try_load_one(path: &str) -> Result<(), String> {
                 if let Some(ASTNode::FunctionDeclaration { name: mname, body: exp_body, params, .. }) = methods.get("expand") {
                     if mname == "expand" {
                         let reg_name = derive_box_name(&box_name, methods.get("name"));
-                        // Prefer child-proxy registration when enabled (default ON)
+                        // Prefer Nyash runner route by default (self-hosting). Child-proxy only when explicitly enabled.
                         let use_child = std::env::var("NYASH_MACRO_BOX_CHILD").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(true);
                         if use_child {
                             let nm = reg_name;
@@ -360,9 +364,10 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
         }
         cmd.stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
-        // Sandbox env (PoC): prefer PyVM; disable plugins
+        // Sandbox env (PoC): prefer PyVM; disable plugins; enable minimal syntax sugar for macros
         cmd.env("NYASH_VM_USE_PY", "1");
         cmd.env("NYASH_DISABLE_PLUGINS", "1");
+        cmd.env("NYASH_SYNTAX_SUGAR_LEVEL", "basic");
         // Timeout
         let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
         // Spawn

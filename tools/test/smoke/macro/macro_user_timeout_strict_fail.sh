@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_identity.nyash"
+src="apps/tests/macro/identity/identity.nyash"
 
 if [ ! -x "$bin" ]; then
   echo "nyash binary not found at $bin; build first (cargo build --release)" >&2

@@ -63,7 +63,8 @@ Action Items (next 48h)
 - [x] Golden normalizer (key‑order insensitive) for macro tests
 - [x] Loop simple/two‑vars goldens with normalization
 - [ ] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
-- [ ] LLVM PHI hygiene smoke on LoopForm cases
+- [x] LLVM PHI hygiene smoke on LoopForm cases
+- [x] LLVM PHI hygiene smoke on If cases
 - [ ] ScopeBox docs + macro scaffold (no-op) + MIR hint type sketch
 - [ ] ControlFlowBuilder/PatternBuilder docs（本commitで追加）→ スキャフォールド実装 → If/Matchマクロ置換の最初の1本
 

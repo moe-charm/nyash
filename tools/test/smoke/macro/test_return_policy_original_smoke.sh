@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-file="apps/tests/macro_test_return_policy.nyash"
+file="apps/tests/macro/test_runner/return_policy.nyash"
 
 if [ ! -x "$bin" ]; then
   echo "nyash binary not found at $bin; build first (cargo build --release)" >&2
@@ -21,4 +21,3 @@ if [ "$code" -ne 7 ]; then
 fi
 
 echo "[OK] test_return_policy_original passed"
-

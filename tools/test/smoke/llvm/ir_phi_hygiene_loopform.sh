@@ -49,12 +49,11 @@ check_case() {
   echo "[OK] PHI hygiene (no empty PHI): $(basename "$irfile")"
 }
 
-check_case "apps/tests/macro_golden_loop_simple.nyash"
-check_case "apps/tests/macro_golden_loop_two_vars.nyash"
+check_case "apps/tests/macro/loopform/simple.nyash"
+check_case "apps/tests/macro/loopform/two_vars.nyash"
 
 if [ "$fails" -ne 0 ]; then
   exit 2
 fi
 echo "[OK] LLVM PHI hygiene for LoopForm cases passed"
 exit 0
-

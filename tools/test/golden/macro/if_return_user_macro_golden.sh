@@ -3,7 +3,7 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="apps/tests/macro_golden_if_return.nyash"
+src="apps/tests/macro/if/return_expr.nyash"
 golden="$root/tools/test/golden/macro/if_return.expanded.json"
 
 if [ ! -x "$bin" ]; then
@@ -29,4 +29,3 @@ if [ "$out_norm" != "$gold_norm" ]; then
 fi
 
 echo "[OK] golden if-return normalization matched"
-

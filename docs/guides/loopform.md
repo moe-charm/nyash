@@ -109,7 +109,7 @@ while (i < n) {
   - `tools/test/golden/macro/loop_simple_user_macro_golden.sh`
   - `tools/test/golden/macro/loop_two_vars_user_macro_golden.sh`
 - 自己ホスト前展開（PyVM 経由）
-  - `NYASH_VM_USE_PY=1 NYASH_USE_NY_COMPILER=1 NYASH_MACRO_ENABLE=1 NYASH_MACRO_PATHS=apps/macros/examples/loop_normalize_macro.nyash ./target/release/nyash --macro-preexpand --backend vm apps/tests/macro_golden_loop_simple.nyash`
+  - `NYASH_VM_USE_PY=1 NYASH_USE_NY_COMPILER=1 NYASH_MACRO_ENABLE=1 NYASH_MACRO_PATHS=apps/macros/examples/loop_normalize_macro.nyash ./target/release/nyash --macro-preexpand --backend vm apps/tests/macro/loopform/simple.nyash`
 
 参考
 - docs/development/roadmap/phases/phase-17-loopform-selfhost/
