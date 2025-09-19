@@ -10,8 +10,8 @@ Philosophy
 API (Nyash)
 ```nyash
 box MacroBoxSpec {
-  // Required entry. Receives entire AST and returns a transformed AST.
-  static function expand(ast) { /* pure transform */ }
+  // Required entry. Receives AST JSON and returns transformed AST JSON.
+  static function expand(json, ctx) { /* pure transform over JSON string */ }
 
   // Optional metadata.
   static function name() { return "MyMacro" }
@@ -27,7 +27,8 @@ paths = [
   "apps/macros/json_lints.nyash"
 ]
 ```
-- Loading policy (dev-only gate): `NYASH_MACRO_BOX_NY=1` enables loading Nyash MacroBoxes from configured paths.
+- Loading policy: register via `NYASH_MACRO_PATHS=path1,path2`（推奨）。
+- Runner route is default（self‑hosting優先）。内部子ルートは非推奨（`NYASH_MACRO_BOX_CHILD_RUNNER=0` 強制時のみ）。
 - Isolation: loaded in a dedicated interpreter with IO disabled; only AST utilities and safe helpers exposed.
  - Interim mapping (prototype): `name()` may map to built-in MacroBoxes for effects (e.g., `"UppercasePrintMacro"`). Otherwise, identity transform.
 

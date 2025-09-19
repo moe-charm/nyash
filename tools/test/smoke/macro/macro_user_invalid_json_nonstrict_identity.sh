@@ -11,11 +11,9 @@ if [ ! -x "$bin" ]; then
   exit 1
 fi
 
-export NYASH_MACRO_BOX_NY=1
-export NYASH_MACRO_BOX_CHILD_RUNNER=1
-export NYASH_MACRO_BOX_NY_PATHS="apps/macros/examples/invalid_json_macro.nyash"
+export NYASH_MACRO_ENABLE=1
+export NYASH_MACRO_PATHS="apps/macros/examples/invalid_json_macro.nyash"
 export NYASH_MACRO_STRICT=0   # non-strict should fall back to identity
-export NYASH_MACRO_BOX=1
 
 out=$("$bin" --dump-expanded-ast-json "$src")
 

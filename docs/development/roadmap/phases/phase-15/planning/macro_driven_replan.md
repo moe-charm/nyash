@@ -20,7 +20,7 @@ Status: Adopted (2025‑09). This plan reframes Phase‑15 self‑hosting to lev
 
 ## Work Items
 1) Enable PyVM runner route for macros (done)
-   - `NYASH_MACRO_BOX_CHILD_RUNNER=1` → runner includes macro + calls `MacroBoxSpec.expand(json)`
+   - ランナールートが既定。内部子ルートは非推奨（`NYASH_MACRO_BOX_CHILD_RUNNER=0` でのみ強制）
 2) Identity + upper_string templates (done)
    - Examples under `apps/macros/examples/`
 3) Golden tests
@@ -36,4 +36,3 @@ Status: Adopted (2025‑09). This plan reframes Phase‑15 self‑hosting to lev
 - Expanded AST JSON matches goldens for sample programs
 - Macro runner path green under strict=1, timeout=2000ms
 - MIR/LLVM/VM paths stable with expanded inputs
-

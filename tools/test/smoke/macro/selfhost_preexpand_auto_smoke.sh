@@ -12,10 +12,7 @@ fi
 
 # Enable user macro (upper string) and macro engine
 export NYASH_MACRO_ENABLE=1
-export NYASH_MACRO_BOX_NY=1
-export NYASH_MACRO_BOX_NY_PATHS="apps/macros/examples/upper_string_macro.nyash"
-# Prefer internal child mode for speed/stability in CI
-export NYASH_MACRO_BOX_CHILD_RUNNER=0
+export NYASH_MACRO_PATHS="apps/macros/examples/upper_string_macro.nyash"
 
 # Selfhost pre-expand: default auto (no explicit env); requires PyVM
 export NYASH_USE_NY_COMPILER=1
@@ -31,4 +28,3 @@ echo "$out" | rg -q "selfhost macro pre-expand: engaging" && echo "[OK] selfhost
 echo "[WARN] selfhost pre-expand auto did not engage; printing logs:" >&2
 echo "$out" >&2
 exit 2
-

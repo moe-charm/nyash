@@ -10,11 +10,9 @@ if [ ! -x "$bin" ]; then
   exit 1
 fi
 
-export NYASH_MACRO_BOX_NY=1
-export NYASH_MACRO_BOX_CHILD_RUNNER=1
-export NYASH_MACRO_BOX_NY_PATHS="apps/macros/examples/invalid_json_macro.nyash"
+export NYASH_MACRO_ENABLE=1
+export NYASH_MACRO_PATHS="apps/macros/examples/invalid_json_macro.nyash"
 export NYASH_MACRO_STRICT=1    # strict should fail process on invalid JSON
-export NYASH_MACRO_BOX=1
 
 set +e
 "$bin" --dump-expanded-ast-json "$src" >/dev/null 2>&1

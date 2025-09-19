@@ -148,7 +148,7 @@ Imports/Namespace plan（15.3‑late）
 
 ### 直近タスクリスト（Phase‑15用）
 1. Macro 前段の正式導入（完了／PoC→実運用）
-   - `NYASH_MACRO_BOX_NY=1` → PyVMランナー経由（既定推奨）
+   - `NYASH_MACRO_PATHS=...` でユーザーマクロ登録（ランナールート既定）
    - strict=1/timeout=2000ms（既定）
    - `--dump-expanded-ast-json` を golden として活用
 2. Self‑host フロントの簡素化
