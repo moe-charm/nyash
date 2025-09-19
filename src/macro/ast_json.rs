@@ -27,6 +27,11 @@ pub fn ast_to_json(ast: &ASTNode) -> Value {
             "target": ast_to_json(&target),
             "value": ast_to_json(&value),
         }),
+        ASTNode::Local { variables, initial_values, .. } => json!({
+            "kind": "Local",
+            "variables": variables,
+            "inits": initial_values.into_iter().map(|opt| opt.map(|v| ast_to_json(&v))).collect::<Vec<_>>()
+        }),
         ASTNode::If { condition, then_body, else_body, .. } => json!({
             "kind": "If",
             "condition": ast_to_json(&condition),
@@ -94,6 +99,13 @@ pub fn json_to_ast(v: &Value) -> Option<ASTNode> {
         "Break" => ASTNode::Break { span: Span::unknown() },
         "Continue" => ASTNode::Continue { span: Span::unknown() },
         "Assignment" => ASTNode::Assignment { target: Box::new(json_to_ast(v.get("target")?)?), value: Box::new(json_to_ast(v.get("value")?)?), span: Span::unknown() },
+        "Local" => {
+            let vars = v.get("variables")?.as_array()?.iter().filter_map(|s| s.as_str().map(|x| x.to_string())).collect();
+            let inits = v.get("inits")?.as_array()?.iter().map(|initv| {
+                if initv.is_null() { None } else { json_to_ast(initv).map(Box::new) }
+            }).collect();
+            ASTNode::Local { variables: vars, initial_values: inits, span: Span::unknown() }
+        },
         "If" => ASTNode::If { condition: Box::new(json_to_ast(v.get("condition")?)?), then_body: v.get("then")?.as_array()?.iter().filter_map(json_to_ast).collect::<Vec<_>>(), else_body: v.get("else").and_then(|a| a.as_array().map(|arr| arr.iter().filter_map(json_to_ast).collect::<Vec<_>>())), span: Span::unknown() },
         "FunctionDeclaration" => ASTNode::FunctionDeclaration {
             name: v.get("name")?.as_str()?.to_string(),

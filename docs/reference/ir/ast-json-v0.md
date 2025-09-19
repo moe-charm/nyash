@@ -25,6 +25,7 @@ Kinds (subset for Phase 2+)
 - FunctionCall: { kind: "FunctionCall", name: string, arguments: [Node] }
 - Array: { kind: "Array", elements: [Node] }
 - Map: { kind: "Map", entries: [{k: string, v: Node}] }
+- Local: { kind: "Local", variables: [string], inits: [Node|null] }
 
 LiteralValue
 - { type: "string", value: string }

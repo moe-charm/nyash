@@ -175,7 +175,7 @@ fn expand_indicates_uppercase(body: &Vec<ASTNode>, params: &Vec<String>) -> bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag }
+pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize }
 
 pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     let src = match std::fs::read_to_string(path) { Ok(s) => s, Err(_) => return MacroBehavior::Identity };
@@ -241,6 +241,18 @@ pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     if let ASTNode::Program { statements, .. } = ast {
         for st in statements {
             if let ASTNode::BoxDeclaration { name: _, methods, .. } = st {
+                // Detect LoopNormalize by name() returning a specific string
+                if let Some(ASTNode::FunctionDeclaration { name: mname, body, .. }) = methods.get("name") {
+                    if mname == "name" {
+                        if body.len() == 1 {
+                            if let ASTNode::Return { value: Some(v), .. } = &body[0] {
+                                if let ASTNode::Literal { value: nyash_rust::ast::LiteralValue::String(s), .. } = &**v {
+                                    if s == "LoopNormalize" { return MacroBehavior::LoopNormalize; }
+                                }
+                            }
+                        }
+                    }
+                }
                 if let Some(ASTNode::FunctionDeclaration { name: mname, body, params, .. }) = methods.get("expand") {
                     if mname == "expand" {
                         if expand_indicates_uppercase(body, params) {

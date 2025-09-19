@@ -95,6 +95,10 @@ pub fn run_macro_child(macro_file: &str) {
         }
         crate::r#macro::macro_box_ny::MacroBehavior::ArrayPrependZero => transform_array_prepend_zero(&ast),
         crate::r#macro::macro_box_ny::MacroBehavior::MapInsertTag => transform_map_insert_tag(&ast),
+        crate::r#macro::macro_box_ny::MacroBehavior::LoopNormalize => {
+            // MVP: identity (future: normalize Loop into carrier-based form)
+            ast.clone()
+        }
     };
     let out_json = crate::r#macro::ast_json::ast_to_json(&out_ast);
     println!("{}", out_json.to_string());
