@@ -54,6 +54,11 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        // Macro sandbox child mode: --macro-expand-child <file>
+        if let Some(ref macro_file) = self.config.macro_expand_child {
+            crate::runner::modes::macro_child::run_macro_child(macro_file);
+            return;
+        }
         // Build system (MVP): nyash --build <nyash.toml>
         let groups = self.config.as_groups();
         if let Some(cfg_path) = groups.build.path.clone() {

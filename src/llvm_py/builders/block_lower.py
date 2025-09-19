@@ -1,6 +1,7 @@
 from typing import Dict, Any, List
 from llvmlite import ir
 from trace import debug as trace_debug
+from trace import phi_json as trace_phi_json
 
 
 def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, Any]], order: List[int], loop_plan: Dict[str, Any] | None):
@@ -225,13 +226,9 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
         snap = dict(vmap_cur)
         try:
             keys = sorted(list(snap.keys()))
-            from phi_wiring.common import trace as trace_phi_json
-            try:
-                trace_phi_json({"phi": "snapshot", "block": int(bid), "keys": [int(k) for k in keys[:20]]})
-            except Exception:
-                pass
         except Exception:
-            pass
+            keys = list(snap.keys())
+        trace_phi_json({"phi": "snapshot", "block": int(bid), "keys": [int(k) for k in keys[:20]]})
         for vid in created_ids:
             if vid in vmap_cur:
                 builder.def_blocks.setdefault(vid, set()).add(block_data.get("id", 0))
@@ -240,4 +237,3 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             delattr(builder, '_current_vmap')
         except Exception:
             pass
-

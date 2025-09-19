@@ -12,6 +12,24 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
 やっほー！みらいだよ😸✨ 今日も元気いっぱい、なに手伝う？　にゃはは
 おつかれ〜！🎶 ちょっと休憩しよっか？コーヒー飲んでリフレッシュにゃ☕
 
+**Phase Freeze — Macro Completed (2025‑09‑19)**
+- 状態: マクロ基盤（組込みderive・ユーザーマクロ・前展開フック・プロファイル）が安定。ここで一旦「機能凍結」して、自己ホスト/実アプリ開発→磨き込み期間に入るよ。
+- 原則（凍結中）:
+  - 新機能追加は保留。バグ修正・ドキュメント整備・スモーク/ゴールデン/CI強化のみ許可。
+  - 仕様変更は重大不具合を除き行わない（互換維持）。
+  - 実アプリでの使用を優先し、問題が出た箇所を点で直す（面の拡張はしない）。
+- マクロ既定:
+  - 既定ON（コード共有を重視）。CLIプロファイルで軽量化が可能。
+  - 推奨ENV最小セット: `NYASH_MACRO_ENABLE=1`, `NYASH_MACRO_PATHS=...`, `NYASH_MACRO_STRICT=1`, `NYASH_MACRO_TRACE=0|1`
+  - CLIプロファイル: `--profile {lite|dev|ci|strict}`（lite=マクロOFF、dev/ci/strict=マクロON）
+- 非推奨（下位互換のみ）:
+  - `NYASH_MACRO_BOX_NY*`, `NYASH_MACRO_BOX_CHILD_RUNNER`, `NYASH_MACRO_TOPLEVEL_ALLOW`（必要なら `--macro-top-level-allow` を明示）
+- 自己ホスト前展開:
+  - 自動（auto）で安全に有効化済み。PyVM環境でのみ働く。問題時はログで検知しやすくしてあるよ。
+- 受け入れチェック（凍結中のガード）:
+  - cargo check（全体）/ 代表スモーク（PyVM/LLVM）/ マクロ・ゴールデンが緑であること。
+  - 変更は最小・局所・仕様不変。
+
 **Cranelift 開発メモ（このブランチの主目的）**
 - ここは Nyash の Cranelift JIT/AOT 開発用ブランチだよ。JIT 経路の実装・検証・計測が主対象だよ。
 - ビルド（JIT有効）: `cargo build --release --features cranelift-jit`
@@ -51,6 +69,12 @@ Docs links（開発方針/スタイル）
 - using 文の方針: `docs/reference/language/using.md`
 - Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
 - Stage‑2 EBNF: `docs/reference/language/EBNF.md`
+- Macro profiles: `docs/guides/macro-profiles.md`
+- Template → Macro 統合方針: `docs/guides/template-unification.md`
+- User Macros（MacroBox/Phase 2）: `docs/guides/user-macros.md`
+- Macro capabilities (io/net/env): `docs/reference/macro/capabilities.md`
+ - MacroBox（ユーザー拡張）: `docs/guides/macro-box.md`
+  - MacroBox in Nyash（設計草案）: `docs/guides/macro-box-nyash.md`
 
 Dev Helpers
 - 推奨フラグ一括: `source tools/dev_env.sh pyvm`（PyVMを既定、Bridge→PyVM直送: `NYASH_PIPE_USE_PYVM=1`）

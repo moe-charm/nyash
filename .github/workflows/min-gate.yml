@@ -1,0 +1,121 @@
+name: min-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo check (default features)
+        run: cargo check --all-targets -q
+
+  pyvm-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep (for smokes)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Run PyVM Stage-2 smokes
+        run: bash tools/pyvm_stage2_smoke.sh
+
+  macro-golden:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release -q
+
+      - name: Macro golden — identity
+        run: bash tools/test/golden/macro/identity_user_macro_golden.sh
+
+      - name: Macro golden — upper string
+        run: bash tools/test/golden/macro/upper_string_user_macro_golden.sh
+
+      - name: Macro golden — array prepend zero
+        run: bash tools/test/golden/macro/array_prepend_zero_user_macro_golden.sh
+
+      - name: Macro golden — array empty
+        run: bash tools/test/golden/macro/array_empty_user_macro_golden.sh
+
+      - name: Macro golden — array nested
+        run: bash tools/test/golden/macro/array_nested_user_macro_golden.sh
+
+      - name: Macro golden — array mixed
+        run: bash tools/test/golden/macro/array_mixed_user_macro_golden.sh
+
+      - name: Macro golden — map insert tag
+        run: bash tools/test/golden/macro/map_insert_tag_user_macro_golden.sh
+
+      - name: Macro golden — map multi
+        run: bash tools/test/golden/macro/map_multi_user_macro_golden.sh
+
+      - name: Macro golden — map escape
+        run: bash tools/test/golden/macro/map_esc_user_macro_golden.sh
+
+  selfhost-preexpand-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release -q
+
+      - name: Self-host preexpand (upper_string)
+        env:
+          NYASH_USE_NY_COMPILER: "1"
+          NYASH_VM_USE_PY: "1"
+          NYASH_MACRO_BOX: "1"
+          NYASH_MACRO_BOX_NY: "1"
+          NYASH_MACRO_BOX_CHILD_RUNNER: "0"
+          NYASH_MACRO_BOX_NY_PATHS: apps/macros/examples/upper_string_macro.nyash
+        run: |
+          set -euo pipefail
+          out=$(./target/release/nyash --macro-preexpand --backend vm apps/tests/macro_golden_upper_string.nyash 2>&1)
+          echo "$out"
+          echo "$out" | grep -q "HELLO"

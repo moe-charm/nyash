@@ -1,0 +1,9 @@
+// Example user macro: echo (identity)
+// Contract: expand(json: string) -> string (AST JSON v0)
+
+static box MacroBoxSpec {
+  expand(json) {
+    // In real macros, parse and transform AST JSON here.
+    return json
+  }
+}

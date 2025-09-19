@@ -25,6 +25,8 @@ impl NyashRunner {
                 process::exit(1);
             }
         };
+        // Macro expansion (env-gated)
+        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
         // Compile to MIR (opt passes configurable)
         let mut mir_compiler = MirCompiler::with_options(!self.config.no_optimize);

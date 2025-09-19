@@ -13,6 +13,27 @@ use crate::tokenizer::TokenType;
 use std::collections::HashMap;
 
 impl NyashParser {
+    /// Forbid user-defined methods named exactly as the box (constructor-like names).
+    /// Nyash constructors are explicit: init/pack/birth. A method with the same name
+    /// as the box is likely a mistaken constructor attempt; reject for clarity.
+    fn validate_no_ctor_like_name(
+        &mut self,
+        box_name: &str,
+        methods: &HashMap<String, ASTNode>,
+    ) -> Result<(), ParseError> {
+        if methods.contains_key(box_name) {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: format!(
+                    "method name must not match box name '{}'; use init/pack/birth for constructors",
+                    box_name
+                ),
+                line,
+            });
+        }
+        Ok(())
+    }
     /// Validate that birth_once properties do not have cyclic dependencies via me.<prop> references
     fn validate_birth_once_cycles(
         &mut self,
@@ -592,6 +613,8 @@ impl NyashParser {
         }
 
         self.consume(TokenType::RBRACE)?;
+        // 🚫 Disallow method named same as the box (constructor-like confusion)
+        self.validate_no_ctor_like_name(&name, &methods)?;
 
         // 🔥 Override validation
         for parent in &extends {

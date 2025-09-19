@@ -50,6 +50,7 @@ pub mod semantics; // mirror library semantics module for crate path consistency
 // 🚀 Refactored modules for better organization
 pub mod cli;
 pub mod runner;
+pub mod r#macro;
 
 // BID-FFI / Plugin System (prototype)
 pub mod bid;

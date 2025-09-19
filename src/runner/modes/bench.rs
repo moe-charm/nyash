@@ -137,7 +137,8 @@ impl NyashRunner {
         std::env::set_var("NYASH_JIT_NATIVE_F64", "1");
         let start = std::time::Instant::now();
         for _ in 0..iters {
-            if let Ok(ast) = NyashParser::parse_from_string(code) {
+            if let Ok(ast0) = NyashParser::parse_from_string(code) {
+                let ast = crate::r#macro::maybe_expand_and_dump(&ast0, false);
                 let mut interp = NyashInterpreter::new();
                 let _ = interp.execute(ast);
             }
@@ -155,7 +156,8 @@ impl NyashRunner {
     fn bench_vm(&self, code: &str, iters: u32) -> std::time::Duration {
         let start = std::time::Instant::now();
         for _ in 0..iters {
-            if let Ok(ast) = NyashParser::parse_from_string(code) {
+            if let Ok(ast0) = NyashParser::parse_from_string(code) {
+                let ast = crate::r#macro::maybe_expand_and_dump(&ast0, false);
                 let mut mc = MirCompiler::new();
                 if let Ok(cr) = mc.compile(ast) {
                     let mut vm = VM::new();
@@ -186,7 +188,8 @@ impl NyashRunner {
         }
         let start = std::time::Instant::now();
         for _ in 0..iters {
-            if let Ok(ast) = NyashParser::parse_from_string(code) {
+            if let Ok(ast0) = NyashParser::parse_from_string(code) {
+                let ast = crate::r#macro::maybe_expand_and_dump(&ast0, false);
                 let mut mc = MirCompiler::new();
                 if let Ok(cr) = mc.compile(ast) {
                     let mut vm = VM::new();
@@ -208,8 +211,8 @@ impl NyashRunner {
     fn verify_outputs_match(&self, code: &str) -> Result<(), String> {
         // VM
         let vm_out = {
-            let ast =
-                NyashParser::parse_from_string(code).map_err(|e| format!("vm parse: {}", e))?;
+            let ast0 = NyashParser::parse_from_string(code).map_err(|e| format!("vm parse: {}", e))?;
+            let ast = crate::r#macro::maybe_expand_and_dump(&ast0, false);
             let mut mc = MirCompiler::new();
             let cr = mc.compile(ast).map_err(|e| format!("vm compile: {}", e))?;
             let mut vm = VM::new();
@@ -222,8 +225,8 @@ impl NyashRunner {
         let jit_out = {
             std::env::set_var("NYASH_JIT_EXEC", "1");
             std::env::set_var("NYASH_JIT_THRESHOLD", "1");
-            let ast =
-                NyashParser::parse_from_string(code).map_err(|e| format!("jit parse: {}", e))?;
+            let ast0 = NyashParser::parse_from_string(code).map_err(|e| format!("jit parse: {}", e))?;
+            let ast = crate::r#macro::maybe_expand_and_dump(&ast0, false);
             let mut mc = MirCompiler::new();
             let cr = mc.compile(ast).map_err(|e| format!("jit compile: {}", e))?;
             let mut vm = VM::new();

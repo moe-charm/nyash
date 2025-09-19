@@ -15,6 +15,8 @@
 ---
 
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
+User Macros (Phase 2): `docs/guides/user-macros.md`
+AST JSON v0 (macro/bridge): `docs/reference/ir/ast-json-v0.md`
 MIR mode note: default is MIR13 (PHI-off). See `docs/development/mir/MIR13_MODE.md`.
 Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
 ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.

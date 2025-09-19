@@ -60,7 +60,29 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
                 process::exit(1);
             }
         };
-        println!("{:#?}", ast);
+        // Optional macro expansion dump (no-op expansion for now)
+        let ast2 = if crate::r#macro::enabled() {
+            crate::r#macro::maybe_expand_and_dump(&ast, true)
+        } else {
+            ast.clone()
+        };
+        println!("{:#?}", ast2);
+        return;
+    }
+
+    // Dump expanded AST as JSON v0 and exit
+    if runner.config.dump_expanded_ast_json {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+        };
+        let ast = match NyashParser::parse_from_string(&code) {
+            Ok(ast) => ast,
+            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+        };
+        let expanded = if crate::r#macro::enabled() { crate::r#macro::maybe_expand_and_dump(&ast, false) } else { ast };
+        let j = crate::r#macro::ast_json::ast_to_json(&expanded);
+        println!("{}", j.to_string());
         return;
     }
 

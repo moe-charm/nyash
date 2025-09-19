@@ -33,12 +33,7 @@ from phi_wiring import setup_phi_placeholders as _setup_phi_placeholders, finali
 from phi_wiring import ensure_phi as _ensure_phi
 from trace import debug as trace_debug
 from trace import phi as trace_phi
-try:
-    # Structured JSON trace for PHI wiring (shared with phi_wiring)
-    from phi_wiring.common import trace as trace_phi_json
-except Exception:
-    def trace_phi_json(_msg):
-        pass
+from trace import phi_json as trace_phi_json
 from prepass.loops import detect_simple_while
 from prepass.if_merge import plan_ret_phi_predeclare
 from build_ctx import BuildCtx

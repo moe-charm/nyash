@@ -131,6 +131,44 @@ Imports/Namespace plan（15.3‑late）
 
 ---
 
+## ♻ 再計画（Macro駆動リファクタ）
+
+強化されたマクロ基盤（AST JSON v0 / PyVMサンドボックス / strict / timeout / golden）を前提に、Phase‑15 のセルフホスティング工程を **「前段AST正規化 → 正式MIR生成」** の二段型にリフレームする。
+
+### ポイント（運用）
+- すべてのフロント側変換（構文糖衣・derive相当・軽微なリライト・静的検証）は **MacroBoxSpec**（Nyash/PyVM）で実行（1パス固定点）。
+- Rust側は **最小のコア**（パース/AST JSON生成、MIRビルド、バックエンド）に収束。
+- 決定性担保: strict=1（既定）、capabilitiesは全OFF（io/net/env=false）の純粋展開。
+- 観測: `--dump-expanded-ast-json` と golden 比較で安定性を担保。
+
+### 実行順序（改定）
+1) Parse → AST
+2) Macro expand（1パス固定点: Built‑in(Rust)→User (Nyash/PyVM)）
+3) Using/解決 → MIR → Backend（VM/LLVM/AOT）
+
+### 直近タスクリスト（Phase‑15用）
+1. Macro 前段の正式導入（完了／PoC→実運用）
+   - `NYASH_MACRO_BOX_NY=1` → PyVMランナー経由（既定推奨）
+   - strict=1/timeout=2000ms（既定）
+   - `--dump-expanded-ast-json` を golden として活用
+2. Self‑host フロントの簡素化
+   - Nyash 製パーサは **最小構文**のみサポート（Stage‑2サブセット）
+   - 糖衣や軽いリライトは **MacroBox** に寄せる
+3. Golden セットの拡充
+   - `apps/tests/*` → `tools/test/golden/*` で展開後JSONの一致
+   - timeout/strict/失敗cap の負例テストを追加
+4. nyash.toml 設計の雛形（capabilities）
+   - `[macros] paths=[…]` + `[macro_caps."path"] io/net/env=false` をドキュメント化
+
+### 受け入れ基準（Phase‑15）
+- `--dump-expanded-ast-json` の golden が緑（MacroON/OFF差分は無い／または期待通り）
+- PyVM ランナー経由で `MacroBoxSpec.expand(json)` を呼べる（strict/timeout遵守）
+- MIR/LLVM/VM の後段は、Macro展開済み入力で恒常緑
+
+関連: [planning/macro_driven_replan.md](planning/macro_driven_replan.md)
+
+---
+
 補足: JSON v0 の扱い（互換）
 - Phase‑15: Bridge で PHI を生成（現行継続）。
 - MIR18（LoopForm）以降: PHI 自動化後、JSON 側の PHI は非必須（将来は除外方向）。

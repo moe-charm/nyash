@@ -21,6 +21,7 @@ pub fn execute_pyvm_only(_runner: &NyashRunner, filename: &str) {
             process::exit(1);
         }
     };
+    let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
     // Compile to MIR (respect default optimizer setting)
     let mut mir_compiler = MirCompiler::with_options(true);

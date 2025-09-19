@@ -19,6 +19,7 @@ impl NyashRunner {
             Ok(ast) => ast,
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
+        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
         // Compile to MIR
         let mut mir_compiler = MirCompiler::new();

@@ -2,6 +2,12 @@
 
 非公開（ドラフト）論文と付属アーティファクトの入口です。公開版は別リポ（nyash-lang/papers）に集約予定です。
 
+## Folder Roles & Policy（運用方針）
+- papers（論文）: まとまった原稿・図表・ビルド対象。仕様本文は置かず、必要箇所で `docs/reference` を参照する。
+- research（研究ノート）: 実験ログ・草稿・素材置き場。論文化された内容は papers 側へ。各ノートから papers へリンクで誘導。
+- reference（仕様）: 正典は `docs/reference`。private/reference は 2025-09-19 に docs/reference へ統合。以後は `docs/reference` を唯一の正典とする。
+- 出力先: 論文PDF/TeXは `docs/private/out/` に統一（各 paper 配下の `out/` は参照専用）。
+
 現在のドラフト:
 - 論文A（MIR13/IR設計）: `docs/private/papers/paper-a-mir13-ir-design/`
 - 論文B（Nyash言語と実行モデル）: `docs/private/papers/paper-b-nyash-execution-model/`

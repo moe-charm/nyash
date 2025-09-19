@@ -155,3 +155,21 @@ DEBUG.startTracking()
 DEBUG.trackBox(myObject, "説明")
 print(DEBUG.memoryReport())
 ```
+## Macro-based Test Runner (MVP)
+
+Nyash provides a macro-powered lightweight test runner in Phase 16 (MVP).
+
+- Enable and run tests in a script file:
+  - `nyash --run-tests apps/tests/my_tests.nyash`
+  - Discovers top-level `test_*` functions and Box `test_*` methods (static/instance).
+- Filtering: `--test-filter NAME` (substring match) or env `NYASH_TEST_FILTER`.
+- Entry policy when a main exists:
+  - `--test-entry wrap` → run tests then call original main
+  - `--test-entry override` → replace entry with test harness only
+  - Force apply: `NYASH_TEST_FORCE=1`
+- Parameterized tests (MVP): `NYASH_TEST_ARGS_DEFAULTS=1` injects integer `0` for each parameter (static/instance tests).
+- Exit code = number of failed tests (0 on success).
+
+Notes
+- The feature is behind the macro gate; CLI `--run-tests` enables it automatically.
+- Future versions will add JSON-based per-test arguments and richer reporting.

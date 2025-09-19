@@ -1,0 +1,45 @@
+// map_insert_tag_macro.nyash
+// MacroBoxSpec.expand: insert a leading entry {"k":"__macro","v":"on"} into every Map entries list
+// Contract: expand(json: string) -> string (AST JSON v0)
+
+static box MacroBoxSpec {
+  expand(json) {
+    local s, out, i, pat, plen, ins
+    s = json
+    out = ""
+    i = 0
+    pat = "\"kind\":\"Map\",\"entries\":["
+    plen = pat.length()
+    ins = "{\"k\":\"__macro\",\"v\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"on\"}}}"
+
+    loop(i < s.length()) {
+      if i + plen <= s.length() && s.substring(i, i + plen) == pat {
+        // Copy the Map header
+        out = out + pat
+        // Look ahead: if next is ']' it's empty map; otherwise add comma after inserted entry
+        if i + plen < s.length() && s.substring(i + plen, i + plen + 1) != "]" {
+          out = out + ins + ","
+        } else {
+          out = out + ins
+        }
+        i = i + plen
+        continue
+      }
+      // Also support reversed key order: ..."entries":[ ... ],"kind":"Map"
+      if i + 12 <= s.length() && s.substring(i, i + 12) == "\"entries\":[" {
+        out = out + "\"entries\":["
+        if i + 12 < s.length() && s.substring(i + 12, i + 13) != "]" {
+          out = out + ins + ","
+        } else {
+          out = out + ins
+        }
+        i = i + 12
+        continue
+      }
+      // Copy-through
+      out = out + s.substring(i, i + 1)
+      i = i + 1
+    }
+    return out
+  }
+}

@@ -117,6 +117,7 @@ impl NyashRunner {
                 process::exit(1);
             }
         };
+        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
         // Prepare runtime and collect Box declarations for VM user-defined types
         let runtime = {

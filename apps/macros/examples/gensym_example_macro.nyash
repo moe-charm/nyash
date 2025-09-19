@@ -1,0 +1,14 @@
+// Example user macro that accepts ctx (JSON string) and returns input unchanged.
+// Demonstrates the expand(json, ctx) signature. Parsing ctx is optional.
+
+static box MacroBoxSpec {
+  static function name() { return "GensymExample" }
+
+  static function expand(json, ctx) {
+    // json: AST JSON v0 as string
+    // ctx:  JSON string (MVP: {"caps":{"io":false,"net":false,"env":false}})
+    // This example ignores ctx and returns json unchanged.
+    return json
+  }
+}
+

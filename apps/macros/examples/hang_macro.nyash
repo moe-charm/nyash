@@ -1,0 +1,12 @@
+// hang_macro.nyash
+// Macro that never returns (infinite loop) to test timeout handling.
+
+static box MacroBoxSpec {
+  expand(json) {
+    // Busy loop forever
+    loop(true) {
+      // do nothing
+    }
+    return json
+  }
+}

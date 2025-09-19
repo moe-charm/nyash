@@ -7,6 +7,7 @@
  */
 
 use super::*;
+use nyash_rust::{mir::MirCompiler, parser::NyashParser};
 use std::{fs, process};
 
 impl NyashRunner {
@@ -36,6 +37,56 @@ impl NyashRunner {
         if let Err(e) = std::fs::create_dir_all(tmp_dir) {
             eprintln!("[ny-compiler] mkdir tmp failed: {}", e);
             return false;
+        }
+
+        // Optional macro pre‑expand path for selfhost
+        // Default: auto when macro engine is enabled (safe: PyVM only)
+        // Gate: NYASH_MACRO_SELFHOST_PRE_EXPAND={1|auto|0}
+        {
+            let preenv = std::env::var("NYASH_MACRO_SELFHOST_PRE_EXPAND")
+                .ok()
+                .or_else(|| if crate::r#macro::enabled() { Some("auto".to_string()) } else { None });
+            let do_pre = match preenv.as_deref() {
+                Some("1") => true,
+                Some("auto") => crate::r#macro::enabled() && crate::config::env::vm_use_py(),
+                _ => false,
+            };
+            if do_pre && crate::r#macro::enabled() {
+            crate::cli_v!("[ny-compiler] selfhost macro pre-expand: engaging (mode={:?})", preenv);
+            match NyashParser::parse_from_string(code_ref.as_ref()) {
+                Ok(ast0) => {
+                    let ast = crate::r#macro::maybe_expand_and_dump(&ast0, false);
+                    // Compile to MIR and execute (respect VM/PyVM policy similar to vm mode)
+                    let mut mir_compiler = MirCompiler::with_options(true);
+                    match mir_compiler.compile(ast) {
+                        Ok(result) => {
+                            let prefer_pyvm = crate::config::env::vm_use_py();
+                            if prefer_pyvm {
+                                if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand") {
+                                    println!("Result: {}", code);
+                                    std::process::exit(code);
+                                } else {
+                                    eprintln!("❌ PyVM error (selfhost-preexpand)");
+                                    std::process::exit(1);
+                                }
+                            } else {
+                                // For now, only PyVM path is supported in pre-expand mode; fall back otherwise.
+                                crate::cli_v!("[ny-compiler] pre-expand path requires NYASH_VM_USE_PY=1; falling back to default selfhost");
+                                return false;
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("[ny-compiler] pre-expand compile error: {}", e);
+                            return false;
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("[ny-compiler] pre-expand parse error: {}", e);
+                    return false;
+                }
+            }
+            }
         }
         let tmp_path = tmp_dir.join("ny_parser_input.ny");
         if !use_tmp_only {

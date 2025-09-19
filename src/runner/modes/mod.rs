@@ -7,6 +7,7 @@ pub mod mir;
 #[cfg(feature = "vm-legacy")]
 pub mod vm;
 pub mod pyvm;
+pub mod macro_child;
 
 // Shared helpers extracted from common.rs (in progress)
 pub mod common_util;

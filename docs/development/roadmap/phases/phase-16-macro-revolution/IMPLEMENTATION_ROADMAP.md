@@ -114,10 +114,10 @@ method __generated_equals_1234(other: UserBox) -> BoolBox {
 ```
 
 #### 完了条件
-- [ ] @derive(Equals)の動作確認
-- [ ] @derive(ToString)の動作確認  
-- [ ] HIRパッチエンジンの安定動作
-- [ ] 4つの必須テストケース通過
+- [x] @derive(Equals)の動作確認（AST展開→MIRで実行）
+- [x] @derive(ToString)の動作確認  
+- [x] HIRパッチエンジンの安定動作（MVP: no‑op/derive注入）
+- [x] 初期スモークにてgreen（追加テスト拡充中）
 
 ## 🛡️ Phase 16.4: @validate統合（1週間）
 
@@ -187,11 +187,11 @@ static method load() -> Result<AppConfig, ConfigError> {
 
 ### 品質保証とデモンストレーション
 
-#### ChatGPT推奨の必須テスト
-1. **derive等価性**: `UserBox("a",1) == UserBox("a",1)` → 真
-2. **validation**: `age=200` → `ValidationError`
-3. **config**: `DATABASE_URL`未設定 → `Err`
-4. **hygiene**: 手書き`equals`と生成コードが衝突しない
+#### ChatGPT推奨の必須テスト（進捗: 部分達成）
+1. **derive等価性**: `UserBox("a",1) == UserBox("a",1)` → 真（達成）
+2. **validation**: `age=200` → `ValidationError`（未）
+3. **config**: `DATABASE_URL`未設定 → `Err`（未）
+4. **hygiene**: 手書き`equals`と生成コードが衝突しない（MVPでは上書き回避で担保）
 
 #### デバッグツール
 - `nyash --expand`: マクロ展開結果の可視化
@@ -297,19 +297,19 @@ local request = HttpRequestBox.builder()
 - **学習コスト**: 充実したドキュメントとサンプル
 - **既存影響**: MIR14不変でリスク最小化
 
-## 🎯 次のアクション
+## 🎯 次のアクション（進捗反映）
 
 ### 即座着手（今週）
-1. **Pattern Matching最小実装**開始
-2. **AST操作基盤API設計**確定
-3. **HIRパッチエンジン設計**詳細化
-4. **@derive(Equals)実装計画**策定
+1. **Pattern/Quote最小実装**（$name / $...name / OrPattern）完了
+2. **AST操作基盤API設計**（MVP）完了
+3. **HIRパッチエンジン**（MVP）完了
+4. **@derive(Equals/ToString)** 実装済み（MVP）
 
 ### 2週間後
-1. **Pattern Matching完成**
-2. **@derive(Equals)スモーク動作**
-3. **マクロ展開デバッグツール**完成
-4. **実用アプリ適用**開始
+1. **Test Runner拡張**（Box内/entry policy/args JSON）
+2. **Pattern強化**（配列/マップ/中間可変）
+3. **Macro debug CLI**（展開ステップの可視化の拡張）
+4. **実用アプリ適用**（derive/test導入）
 
 ---
 

@@ -51,3 +51,27 @@ def phi(msg) -> None:
 def values(msg: str) -> None:
     if _enabled('NYASH_LLVM_TRACE_VALUES'):
         _write(msg)
+
+def phi_json(msg):
+    """Safe JSON-style PHI trace delegator.
+
+    - Gated by NYASH_LLVM_TRACE_PHI=1 (same gate as phi())
+    - Delegates to phi_wiring.common.trace if available; otherwise no-op
+    - Accepts arbitrary Python objects and forwards as-is
+    """
+    if not _enabled('NYASH_LLVM_TRACE_PHI'):
+        return
+    try:
+        from phi_wiring.common import trace as _trace_phi_json  # type: ignore
+        _trace_phi_json(msg)
+    except Exception:
+        # Fallback: stringify and route via plain phi
+        try:
+            if not isinstance(msg, (str, bytes)):
+                try:
+                    msg = json.dumps(msg, ensure_ascii=False, separators=(",", ":"))
+                except Exception:
+                    msg = str(msg)
+            phi(msg)
+        except Exception:
+            pass

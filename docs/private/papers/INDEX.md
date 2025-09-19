@@ -18,3 +18,4 @@
 Build (Pandoc):
 - bash tools/papers/build.sh a-jp  # or b-jp / all
 - output: docs/private/out/
+ - note: 各 paper 配下の `out/` は参照専用（生成物は `docs/private/out/` に統一）

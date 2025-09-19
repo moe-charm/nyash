@@ -15,6 +15,8 @@
 ---
 
 開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
+ユーザーマクロ（Phase 2）: `docs/guides/user-macros.md`
+AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
 

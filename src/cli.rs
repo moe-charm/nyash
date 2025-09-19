@@ -75,6 +75,10 @@ pub struct CliConfig {
     pub emit_exe: Option<String>,
     pub emit_exe_nyrt: Option<String>,
     pub emit_exe_libs: Option<String>,
+    // Macro child (sandbox) mode
+    pub macro_expand_child: Option<String>,
+    // Dump expanded AST as JSON and exit
+    pub dump_expanded_ast_json: bool,
 }
 
 /// Grouped views (Phase 1: non-breaking). These structs provide a categorized
@@ -274,6 +278,18 @@ impl CliConfig {
                     .index(1)
             )
             .arg(
+                Arg::new("macro-expand-child")
+                    .long("macro-expand-child")
+                    .value_name("FILE")
+                    .help("Macro sandbox child: read AST JSON v0 from stdin, expand using Nyash macro file, write AST JSON v0 to stdout (PoC)")
+            )
+            .arg(
+                Arg::new("dump-expanded-ast-json")
+                    .long("dump-expanded-ast-json")
+                    .help("Dump AST after macro expansion as JSON v0 and exit")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
                 Arg::new("gc")
                     .long("gc")
                     .value_name("{auto,rc+cycle,minorgen,stw,rc,off}")
@@ -353,6 +369,66 @@ impl CliConfig {
                     .long("dump-ast")
                     .help("Dump parsed AST and exit")
                     .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("profile")
+                    .long("profile")
+                    .value_name("{lite|dev|ci|strict}")
+                    .help("Set execution profile: lite (macros OFF), dev (macros ON), ci (macros ON+strict), strict (macros ON+strict). Default run behaves like dev for macros.")
+            )
+            .arg(
+                Arg::new("expand")
+                    .long("expand")
+                    .help("Macro: enable macro engine and dump expansion traces (sets NYASH_MACRO_ENABLE=1, NYASH_MACRO_TRACE=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("macro-preexpand")
+                    .long("macro-preexpand")
+                    .help("Self-host: pre-expand macros before MIR compile (sets NYASH_MACRO_SELFHOST_PRE_EXPAND=1). Requires NYASH_USE_NY_COMPILER=1 and NYASH_VM_USE_PY=1.")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("macro-preexpand-auto")
+                    .long("macro-preexpand-auto")
+                    .help("Self-host: pre-expand macros in auto mode (sets NYASH_MACRO_SELFHOST_PRE_EXPAND=auto). Requires NYASH_USE_NY_COMPILER=1 and NYASH_VM_USE_PY=1.")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("macro-top-level-allow")
+                    .long("macro-top-level-allow")
+                    .help("Allow top-level static MacroBoxSpec.expand(json[,ctx]) without BoxDeclaration (sets NYASH_MACRO_TOPLEVEL_ALLOW=1)")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("macro-profile")
+                    .long("macro-profile")
+                    .value_name("{dev|ci-fast|strict}")
+                    .help("Convenience: configure macro envs for dev/ci-fast/strict. Non-breaking; can be overridden by explicit envs/flags.")
+            )
+            .arg(
+                Arg::new("run-tests")
+                    .long("run-tests")
+                    .help("Run tests: enable macro engine and inject test harness (functions starting with 'test_')")
+                    .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("test-filter")
+                    .long("test-filter")
+                    .value_name("SUBSTR")
+                    .help("Only run tests whose name contains SUBSTR (with --run-tests)")
+            )
+            .arg(
+                Arg::new("test-entry")
+                    .long("test-entry")
+                    .value_name("{wrap|override}")
+                    .help("When --run-tests and a main exists: wrap (run tests then call original) or override (replace main with test harness). Default: keep original (no harness). Use with --run-tests.")
+            )
+            .arg(
+                Arg::new("test-return")
+                    .long("test-return")
+                    .value_name("{tests|original}")
+                    .help("When --run-tests with --test-entry wrap: choose harness return policy (tests: return failures count; original: return original main()'s result)")
             )
             .arg(
                 Arg::new("dump-mir")
@@ -611,7 +687,7 @@ impl CliConfig {
         if let Some(a) = matches.get_one::<String>("ny-compiler-args") {
             std::env::set_var("NYASH_NY_COMPILER_CHILD_ARGS", a);
         }
-        Self {
+        let cfg = Self {
             file: matches.get_one::<String>("file").cloned(),
             debug_fuel: parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap()),
             dump_ast: matches.get_flag("dump-ast"),
@@ -676,7 +752,78 @@ impl CliConfig {
             emit_exe: matches.get_one::<String>("emit-exe").cloned(),
             emit_exe_nyrt: matches.get_one::<String>("emit-exe-nyrt").cloned(),
             emit_exe_libs: matches.get_one::<String>("emit-exe-libs").cloned(),
+            macro_expand_child: matches.get_one::<String>("macro-expand-child").cloned(),
+            dump_expanded_ast_json: matches.get_flag("dump-expanded-ast-json"),
+        };
+        // Macro debug gate
+        if matches.get_flag("expand") {
+            std::env::set_var("NYASH_MACRO_ENABLE", "1");
+            std::env::set_var("NYASH_MACRO_TRACE", "1");
         }
+        // Profile mapping (non-breaking; users can override afterwards)
+        if let Some(p) = matches.get_one::<String>("profile") {
+            match p.as_str() {
+                "lite" => {
+                    std::env::set_var("NYASH_MACRO_ENABLE", "0");
+                    std::env::set_var("NYASH_MACRO_STRICT", "0");
+                    std::env::set_var("NYASH_MACRO_TRACE", "0");
+                }
+                "dev" => {
+                    std::env::set_var("NYASH_MACRO_ENABLE", "1");
+                    std::env::set_var("NYASH_MACRO_STRICT", "1");
+                    std::env::set_var("NYASH_MACRO_TRACE", "0");
+                }
+                "ci" | "strict" => {
+                    std::env::set_var("NYASH_MACRO_ENABLE", "1");
+                    std::env::set_var("NYASH_MACRO_STRICT", "1");
+                    std::env::set_var("NYASH_MACRO_TRACE", "0");
+                }
+                _ => {}
+            }
+        }
+        if matches.get_flag("run-tests") {
+            std::env::set_var("NYASH_MACRO_ENABLE", "1");
+            std::env::set_var("NYASH_TEST_RUN", "1");
+            if let Some(f) = matches.get_one::<String>("test-filter") {
+                std::env::set_var("NYASH_TEST_FILTER", f);
+            }
+            if let Some(entry) = matches.get_one::<String>("test-entry") {
+                let v = entry.as_str();
+                if v == "wrap" || v == "override" {
+                    std::env::set_var("NYASH_TEST_ENTRY", v);
+                }
+            }
+            if let Some(ret) = matches.get_one::<String>("test-return") {
+                let v = ret.as_str();
+                if v == "tests" || v == "original" {
+                    std::env::set_var("NYASH_TEST_RETURN", v);
+                }
+            }
+        }
+        // Self-host macro pre-expand gate (CLI convenience)
+        if matches.get_flag("macro-preexpand") {
+            std::env::set_var("NYASH_MACRO_SELFHOST_PRE_EXPAND", "1");
+        }
+        if matches.get_flag("macro-preexpand-auto") {
+            std::env::set_var("NYASH_MACRO_SELFHOST_PRE_EXPAND", "auto");
+        }
+        if matches.get_flag("macro-top-level-allow") {
+            std::env::set_var("NYASH_MACRO_TOPLEVEL_ALLOW", "1");
+        }
+        if let Some(p) = matches.get_one::<String>("macro-profile") {
+            let p = p.as_str();
+            match p {
+                "dev" | "ci-fast" | "strict" => {
+                    // Minimal, non-invasive mapping; users can still override.
+                    std::env::set_var("NYASH_MACRO_ENABLE", "1");
+                    std::env::set_var("NYASH_MACRO_STRICT", "1");
+                    std::env::set_var("NYASH_MACRO_TOPLEVEL_ALLOW", "0");
+                    std::env::set_var("NYASH_MACRO_SELFHOST_PRE_EXPAND", "auto");
+                }
+                _ => {}
+            }
+        }
+        cfg
     }
 }
 
@@ -734,6 +881,8 @@ impl Default for CliConfig {
             emit_exe: None,
             emit_exe_nyrt: None,
             emit_exe_libs: None,
+            macro_expand_child: None,
+            dump_expanded_ast_json: false,
         }
     }
 }
