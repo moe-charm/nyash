@@ -38,14 +38,17 @@ impl BoxFactory for UserDefinedBoxFactory {
         })?;
 
         // Create InstanceBox with fields and methods
-        let instance = InstanceBox::from_declaration(
+        let mut instance = InstanceBox::from_declaration(
             name.to_string(),
             box_decl.fields.clone(),
             box_decl.methods.clone(),
         );
 
-        // TODO: Execute birth/init constructor with args
-        // For now, just return the instance
+        // Safe stub: run minimal init hook (no-op for now).
+        // - Does not execute user birth/init AST yet (interpreter-owned).
+        // - Avoids panics; ignores errors to keep factory safe.
+        let _ = instance.init(_args);
+
         Ok(Box::new(instance))
     }
 

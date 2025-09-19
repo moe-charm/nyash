@@ -256,53 +256,42 @@ impl std::fmt::Display for HTTPRequestBox {
 }
 
 /// HTTP レスポンスを生成・操作するBox
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct HTTPResponseBox {
     base: BoxBase,
-    status_code: i32,
-    status_message: String,
-    headers: HashMap<String, String>,
-    body: String,
-    http_version: String,
+    status_code: std::sync::Mutex<i32>,
+    status_message: std::sync::Mutex<String>,
+    headers: std::sync::Mutex<HashMap<String, String>>,
+    body: std::sync::Mutex<String>,
+    http_version: std::sync::Mutex<String>,
 }
 
 impl HTTPResponseBox {
     pub fn new() -> Self {
         Self {
             base: BoxBase::new(),
-            status_code: 200,
-            status_message: "OK".to_string(),
-            headers: HashMap::new(),
-            body: "".to_string(),
-            http_version: "HTTP/1.1".to_string(),
+            status_code: std::sync::Mutex::new(200),
+            status_message: std::sync::Mutex::new("OK".to_string()),
+            headers: std::sync::Mutex::new(HashMap::new()),
+            body: std::sync::Mutex::new(String::new()),
+            http_version: std::sync::Mutex::new("HTTP/1.1".to_string()),
         }
     }
 
     /// ステータスコード・メッセージ設定
-    pub fn set_status(
-        &self,
-        code: Box<dyn NyashBox>,
-        message: Box<dyn NyashBox>,
-    ) -> Box<dyn NyashBox> {
-        // Note: This would need interior mutability for actual mutation
-        // For now, this is a placeholder for the API structure
-        let _code_val = code.to_string_box().value.parse::<i32>().unwrap_or(200);
-        let _message_val = message.to_string_box().value;
-
-        // TODO: Use RefCell or similar for interior mutability
+    pub fn set_status(&self, code: Box<dyn NyashBox>, message: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let code_val = code.to_string_box().value.parse::<i32>().unwrap_or(200);
+        let message_val = message.to_string_box().value;
+        *self.status_code.lock().unwrap() = code_val;
+        *self.status_message.lock().unwrap() = message_val;
         Box::new(BoolBox::new(true))
     }
 
     /// ヘッダー設定
-    pub fn set_header(
-        &self,
-        name: Box<dyn NyashBox>,
-        value: Box<dyn NyashBox>,
-    ) -> Box<dyn NyashBox> {
-        let _name_str = name.to_string_box().value;
-        let _value_str = value.to_string_box().value;
-
-        // TODO: Use RefCell for interior mutability
+    pub fn set_header(&self, name: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+        let name_str = name.to_string_box().value;
+        let value_str = value.to_string_box().value;
+        self.headers.lock().unwrap().insert(name_str, value_str);
         Box::new(BoolBox::new(true))
     }
 
@@ -317,17 +306,15 @@ impl HTTPResponseBox {
 
     /// レスポンスボディ設定
     pub fn set_body(&self, content: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        let _content_str = content.to_string_box().value;
-
-        // TODO: Use RefCell for interior mutability
+        let content_str = content.to_string_box().value;
+        *self.body.lock().unwrap() = content_str;
         Box::new(BoolBox::new(true))
     }
 
     /// ボディ追加
     pub fn append_body(&self, content: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
-        let _content_str = content.to_string_box().value;
-
-        // TODO: Use RefCell for interior mutability
+        let content_str = content.to_string_box().value;
+        self.body.lock().unwrap().push_str(&content_str);
         Box::new(BoolBox::new(true))
     }
 
@@ -336,26 +323,28 @@ impl HTTPResponseBox {
         let mut response = String::new();
 
         // Status line
-        response.push_str(&format!(
-            "{} {} {}\r\n",
-            self.http_version, self.status_code, self.status_message
-        ));
+        let version = self.http_version.lock().unwrap().clone();
+        let status_code = *self.status_code.lock().unwrap();
+        let status_message = self.status_message.lock().unwrap().clone();
+        response.push_str(&format!("{} {} {}\r\n", version, status_code, status_message));
 
         // Headers
-        for (name, value) in &self.headers {
+        for (name, value) in self.headers.lock().unwrap().iter() {
             response.push_str(&format!("{}: {}\r\n", name, value));
         }
 
         // Content-Length if not already set
-        if !self.headers.contains_key("content-length") && !self.body.is_empty() {
-            response.push_str(&format!("Content-Length: {}\r\n", self.body.len()));
+        let body_len = { self.body.lock().unwrap().len() };
+        let need_len = { !self.headers.lock().unwrap().contains_key("content-length") && body_len > 0 };
+        if need_len {
+            response.push_str(&format!("Content-Length: {}\r\n", body_len));
         }
 
         // Empty line before body
         response.push_str("\r\n");
 
         // Body
-        response.push_str(&self.body);
+        response.push_str(&self.body.lock().unwrap());
 
         Box::new(StringBox::new(response))
     }
@@ -363,39 +352,53 @@ impl HTTPResponseBox {
     /// Quick HTML response creation
     pub fn create_html_response(content: Box<dyn NyashBox>) -> Self {
         let mut response = HTTPResponseBox::new();
-        response.status_code = 200;
-        response.status_message = "OK".to_string();
-        response.headers.insert(
+        *response.status_code.lock().unwrap() = 200;
+        *response.status_message.lock().unwrap() = "OK".to_string();
+        response.headers.lock().unwrap().insert(
             "Content-Type".to_string(),
             "text/html; charset=utf-8".to_string(),
         );
-        response.body = content.to_string_box().value;
+        *response.body.lock().unwrap() = content.to_string_box().value;
         response
     }
 
     /// Quick JSON response creation
     pub fn create_json_response(content: Box<dyn NyashBox>) -> Self {
         let mut response = HTTPResponseBox::new();
-        response.status_code = 200;
-        response.status_message = "OK".to_string();
-        response
-            .headers
-            .insert("Content-Type".to_string(), "application/json".to_string());
-        response.body = content.to_string_box().value;
+        *response.status_code.lock().unwrap() = 200;
+        *response.status_message.lock().unwrap() = "OK".to_string();
+        response.headers.lock().unwrap().insert(
+            "Content-Type".to_string(),
+            "application/json".to_string(),
+        );
+        *response.body.lock().unwrap() = content.to_string_box().value;
         response
     }
 
     /// Quick 404 response creation
     pub fn create_404_response() -> Self {
         let mut response = HTTPResponseBox::new();
-        response.status_code = 404;
-        response.status_message = "Not Found".to_string();
-        response.headers.insert(
+        *response.status_code.lock().unwrap() = 404;
+        *response.status_message.lock().unwrap() = "Not Found".to_string();
+        response.headers.lock().unwrap().insert(
             "Content-Type".to_string(),
             "text/html; charset=utf-8".to_string(),
         );
-        response.body = "<html><body><h1>404 - Not Found</h1></body></html>".to_string();
+        *response.body.lock().unwrap() = "<html><body><h1>404 - Not Found</h1></body></html>".to_string();
         response
+    }
+}
+
+impl Clone for HTTPResponseBox {
+    fn clone(&self) -> Self {
+        Self {
+            base: self.base.clone(),
+            status_code: std::sync::Mutex::new(*self.status_code.lock().unwrap()),
+            status_message: std::sync::Mutex::new(self.status_message.lock().unwrap().clone()),
+            headers: std::sync::Mutex::new(self.headers.lock().unwrap().clone()),
+            body: std::sync::Mutex::new(self.body.lock().unwrap().clone()),
+            http_version: std::sync::Mutex::new(self.http_version.lock().unwrap().clone()),
+        }
     }
 }
 
@@ -410,12 +413,10 @@ impl NyashBox for HTTPResponseBox {
     }
 
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!(
-            "HTTPResponse({} {} - {} bytes)",
-            self.status_code,
-            self.status_message,
-            self.body.len()
-        ))
+        let code = *self.status_code.lock().unwrap();
+        let msg = self.status_message.lock().unwrap().clone();
+        let len = self.body.lock().unwrap().len();
+        StringBox::new(format!("HTTPResponse({} {} - {} bytes)", code, msg, len))
     }
 
     fn type_name(&self) -> &'static str {
@@ -441,13 +442,10 @@ impl BoxCore for HTTPResponseBox {
     }
 
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "HTTPResponse({} {} - {} bytes)",
-            self.status_code,
-            self.status_message,
-            self.body.len()
-        )
+        let code = *self.status_code.lock().unwrap();
+        let msg = self.status_message.lock().unwrap().clone();
+        let len = self.body.lock().unwrap().len();
+        write!(f, "HTTPResponse({} {} - {} bytes)", code, msg, len)
     }
 
     fn as_any(&self) -> &dyn Any {
