@@ -54,6 +54,7 @@ Next (short)
 - for/foreach pre‑desugaring → LoopForm normalization (limited)
 - LLVM IR hygiene for LoopForm cases — PHI at block head, no empty PHIs (smoke)
 - Docs: enrich `docs/guides/loopform.md` with carrier examples and JSON builder snippets.
+- If/Match normalization pass: canonical If join with single PHI group and Match→If‑chain (scrutinee once, guard fused), expression results via join var.
 
 Action Items (next 48h)
 - [x] Enable sugar by default (array/map literals)
