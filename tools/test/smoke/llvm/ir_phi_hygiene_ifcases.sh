@@ -23,7 +23,7 @@ check_case() {
   NYASH_LLVM_DUMP_IR="$irfile" "$bin" --backend llvm "$src" >/dev/null 2>&1 || true
   if [ ! -s "$irfile" ]; then
     # guard: some cases may run mock backend; allow skip for those
-    if [[ "$src" == *"guard_literal_or.nyash"* ]]; then
+    if [[ "$src" == *"guard_literal_or.nyash"* ]] || [[ "$src" == *"literal_three_arms.nyash"* ]]; then
       echo "[SKIP] IR not dumped (mock) for $src"
       return
     fi
@@ -46,6 +46,7 @@ check_case "apps/tests/macro/if/assign.nyash"
 check_case "apps/tests/macro/if/print_expr.nyash"
 check_case "apps/tests/macro/match/literal_basic.nyash"
 check_case "apps/tests/macro/match/guard_literal_or.nyash"
+check_case "apps/tests/macro/match/literal_three_arms.nyash"
 
 if [ "$fails" -ne 0 ]; then
   exit 2
