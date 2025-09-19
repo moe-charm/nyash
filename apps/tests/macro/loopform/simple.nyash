@@ -1,2 +1,6 @@
-include "../../macro_golden_loop_simple.nyash"
+local i = 0
+loop(i < 3) {
+  print(i)
+  i = i + 1
+}
 

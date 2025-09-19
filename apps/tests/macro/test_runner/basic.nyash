@@ -1,2 +1,8 @@
-include "../../macro_test_runner_basic.nyash"
+function test_true() {
+    return true
+}
+
+function test_one_equals_one() {
+    return 1 == 1
+}
 

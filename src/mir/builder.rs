@@ -124,6 +124,9 @@ pub struct MirBuilder {
     /// Policy flags (snapshotted at entry of try/catch lowering)
     pub(super) cleanup_allow_return: bool,
     pub(super) cleanup_allow_throw: bool,
+
+    /// Hint sink (zero-cost guidance; currently no-op)
+    pub(super) hint_sink: crate::mir::hints::HintSink,
 }
 
 impl MirBuilder {
@@ -160,12 +163,25 @@ impl MirBuilder {
             in_cleanup_block: false,
             cleanup_allow_return: false,
             cleanup_allow_throw: false,
+            hint_sink: crate::mir::hints::HintSink::new(),
         }
     }
 
     /// Push/pop helpers for If merge context (best-effort; optional usage)
     pub(super) fn push_if_merge(&mut self, bb: BasicBlockId) { self.if_merge_stack.push(bb); }
     pub(super) fn pop_if_merge(&mut self) { let _ = self.if_merge_stack.pop(); }
+
+    // ---- Hint helpers (no-op by default) ----
+    #[inline]
+    pub(crate) fn hint_loop_header(&mut self) { self.hint_sink.loop_header(); }
+    #[inline]
+    pub(crate) fn hint_loop_latch(&mut self) { self.hint_sink.loop_latch(); }
+    #[inline]
+    pub(crate) fn hint_scope_enter(&mut self, id: u32) { self.hint_sink.scope_enter(id); }
+    #[inline]
+    pub(crate) fn hint_scope_leave(&mut self, id: u32) { self.hint_sink.scope_leave(id); }
+    #[inline]
+    pub(crate) fn hint_join_result<S: Into<String>>(&mut self, var: S) { self.hint_sink.join_result(var.into()); }
 
     // moved to builder_calls.rs: lower_method_as_function
 

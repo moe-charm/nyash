@@ -62,8 +62,11 @@ impl MirBuilder {
         self.ensure_block_exists(merge_block)?;
         self.push_if_merge(merge_block);
 
-        // Pre-analysis: identify then-assigned var for skip
+        // Pre-analysis: identify then/else assigned var for skip and hints
         let assigned_then_pre = super::phi::extract_assigned_var(&then_ast_for_analysis);
+        let assigned_else_pre = else_ast_for_analysis
+            .as_ref()
+            .and_then(|e| super::phi::extract_assigned_var(e));
         let pre_then_var_value = assigned_then_pre
             .as_ref()
             .and_then(|name| pre_if_var_map.get(name).copied());
@@ -82,6 +85,13 @@ impl MirBuilder {
             &else_var_map_end_opt,
             pre_then_var_value,
         )?;
+
+        // Hint: join result variable if both branches assign to the same variable name
+        if let (Some(tn), Some(en)) = (assigned_then_pre.as_deref(), assigned_else_pre.as_deref()) {
+            if tn == en {
+                self.hint_join_result(tn);
+            }
+        }
 
         // Merge other modified variables (skip the primary assignment if any)
         let skip_name = assigned_then_pre.as_deref();

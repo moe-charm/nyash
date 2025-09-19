@@ -1,2 +1,8 @@
-include "../../macro_test_return_policy.nyash"
+function test_dummy() {
+    return true
+}
+
+function main(args) {
+    return 7
+}
 

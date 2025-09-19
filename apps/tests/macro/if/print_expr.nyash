@@ -1,2 +1,2 @@
-include "../../macro_golden_if_print.nyash"
+print(if (1 < 2) { 10 } else { 20 })
 

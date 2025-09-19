@@ -156,6 +156,8 @@ impl<'a> LoopBuilder<'a> {
 
         // 3. Headerブロックの準備（unsealed状態）
         self.set_current_block(header_id)?;
+        // Hint: loop header (no-op sink)
+        self.parent_builder.hint_loop_header();
         let _ = self.mark_block_unsealed(header_id);
 
         // 4. ループ変数のPhi nodeを準備
@@ -189,6 +191,8 @@ impl<'a> LoopBuilder<'a> {
         // 8. Latchブロック（ボディの最後）からHeaderへ戻る
         // 現在の挿入先が latch（最後のブロック）なので、そのブロックIDでスナップショットを保存する
         let latch_id = self.current_block()?;
+        // Hint: loop latch (no-op sink)
+        self.parent_builder.hint_loop_latch();
         let latch_snapshot = self.get_current_variable_map();
         // 以前は body_id に保存していたが、複数ブロックのボディや continue 混在時に不正確になるため
         // 実際の latch_id に対してスナップショットを紐づける

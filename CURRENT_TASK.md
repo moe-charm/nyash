@@ -67,6 +67,8 @@ Action Items (next 48h)
 - [x] LLVM PHI hygiene smoke on If cases
 - [ ] ScopeBox docs + macro scaffold (no-op) + MIR hint type sketch
 - [ ] ControlFlowBuilder/PatternBuilder docs（本commitで追加）→ スキャフォールド実装 → If/Matchマクロ置換の最初の1本
+ - [x] Reorganize macro tests under apps/tests/macro/* and update golden/smoke paths
+ - [x] Add MIR hints module (no-op sink) and loop header/latch hint calls
 
 ## Phase‑16 Outlook
 - MacroCtx (gensym/report/getEnv) and capabilities mapped to `nyash.toml`.

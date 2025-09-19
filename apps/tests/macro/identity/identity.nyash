@@ -1,2 +1,2 @@
-include "../../macro_golden_identity.nyash"
+print("x")
 

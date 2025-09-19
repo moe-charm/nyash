@@ -1,2 +1,4 @@
-include "../../macro_golden_if_return.nyash"
+function main() {
+  return if (1 < 2) { 10 } else { 20 }
+}
 

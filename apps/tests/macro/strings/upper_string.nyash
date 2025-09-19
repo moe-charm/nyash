@@ -1,2 +1,2 @@
-include "../../macro_golden_upper_string.nyash"
+print("UPPER:hello")
 

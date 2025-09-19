@@ -1,8 +1,0 @@
-function test_api_ok() {
-    return true
-}
-
-function test_impl_skip() {
-    return true
-}
-

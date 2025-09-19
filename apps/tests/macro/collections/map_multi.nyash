@@ -1,2 +1,2 @@
-include "../../macro_golden_map_multi.nyash"
+print({"a": 1, "b": 2})
 

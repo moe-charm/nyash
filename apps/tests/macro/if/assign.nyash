@@ -1,2 +1,4 @@
-include "../../macro_golden_if_assign.nyash"
+local x = 0
+x = if (1 < 2) { 10 } else { 20 }
+print(x)
 
