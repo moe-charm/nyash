@@ -19,7 +19,8 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
     }
 
     // Direct v0 bridge when requested via CLI/env
-    let use_ny_parser = runner.config.parser_ny
+    let groups = runner.config.as_groups();
+    let use_ny_parser = groups.parser.parser_ny
         || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");
     if use_ny_parser {
         let code = match fs::read_to_string(filename) {
@@ -43,7 +44,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
     }
 
     // AST dump mode
-    if runner.config.dump_ast {
+    if groups.debug.dump_ast {
         println!("🧠 Nyash AST Dump - Processing file: {}", filename);
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
@@ -64,14 +65,14 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
     }
 
     // MIR dump/verify
-    if runner.config.dump_mir || runner.config.verify_mir {
+    if groups.debug.dump_mir || groups.debug.verify_mir {
         crate::cli_v!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
         runner.execute_mir_mode(filename);
         return;
     }
 
     // WASM / AOT (feature-gated)
-    if runner.config.compile_wasm {
+    if groups.compile_wasm {
         #[cfg(feature = "wasm-backend")]
         {
             super::modes::wasm::execute_wasm_mode(runner, filename);
@@ -83,7 +84,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             process::exit(1);
         }
     }
-    if runner.config.compile_native {
+    if groups.compile_native {
         #[cfg(feature = "cranelift-jit")]
         {
             runner.execute_aot_mode(filename);
@@ -97,7 +98,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
     }
 
     // Backend selection
-    match runner.config.backend.as_str() {
+    match groups.backend.backend.as_str() {
         "mir" => {
             crate::cli_v!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
             runner.execute_mir_mode(filename);
@@ -154,7 +155,8 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
 impl NyashRunner {
     pub(crate) fn execute_mir_module(&self, module: &crate::mir::MirModule) {
         // If CLI requested MIR JSON emit, write to file and exit immediately.
-        if let Some(path) = self.config.emit_mir_json.as_ref() {
+        let groups = self.config.as_groups();
+        if let Some(path) = groups.emit.emit_mir_json.as_ref() {
             let p = std::path::Path::new(path);
             if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(module, p) {
                 eprintln!("❌ MIR JSON emit error: {}", e);
@@ -164,12 +166,12 @@ impl NyashRunner {
             std::process::exit(0);
         }
         // If CLI requested EXE emit, generate JSON then invoke ny-llvmc to link NyRT and exit.
-        if let Some(exe_out) = self.config.emit_exe.as_ref() {
+        if let Some(exe_out) = groups.emit.emit_exe.as_ref() {
             if let Err(e) = crate::runner::modes::common_util::exec::ny_llvmc_emit_exe_bin(
                 module,
                 exe_out,
-                self.config.emit_exe_nyrt.as_deref(),
-                self.config.emit_exe_libs.as_deref(),
+                groups.emit.emit_exe_nyrt.as_deref(),
+                groups.emit.emit_exe_libs.as_deref(),
             ) {
                 eprintln!("❌ {}", e);
                 std::process::exit(1);

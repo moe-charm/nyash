@@ -7,6 +7,7 @@
 
 use clap::{Arg, ArgMatches, Command};
 use serde_json;
+use std::fmt::Debug as _; // for derive Debug consistency
 
 /// Command-line configuration structure
 #[derive(Debug, Clone)]
@@ -77,6 +78,99 @@ pub struct CliConfig {
     pub emit_exe_libs: Option<String>,
 }
 
+/// Grouped views (Phase 1: non-breaking). These structs provide a categorized
+/// lens over the flat CliConfig without changing public fields.
+#[derive(Debug, Clone)]
+pub struct InputConfig {
+    pub file: Option<String>,
+    pub cli_usings: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct DebugConfig {
+    pub debug_fuel: Option<usize>,
+    pub dump_ast: bool,
+    pub dump_mir: bool,
+    pub verify_mir: bool,
+    pub mir_verbose: bool,
+    pub mir_verbose_effects: bool,
+    pub cli_verbose: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct BackendConfig {
+    pub backend: String,
+    // VM
+    pub vm_stats: bool,
+    pub vm_stats_json: bool,
+    // JIT
+    pub jit: JitConfig,
+}
+
+#[derive(Debug, Clone)]
+pub struct JitConfig {
+    pub exec: bool,
+    pub stats: bool,
+    pub stats_json: bool,
+    pub dump: bool,
+    pub events: bool,
+    pub events_compile: bool,
+    pub events_runtime: bool,
+    pub events_path: Option<String>,
+    pub threshold: Option<u32>,
+    pub phi_min: bool,
+    pub hostcall: bool,
+    pub handle_debug: bool,
+    pub native_f64: bool,
+    pub native_bool: bool,
+    pub only: bool,
+    pub direct: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct BuildConfig {
+    pub path: Option<String>,
+    pub app: Option<String>,
+    pub out: Option<String>,
+    pub aot: Option<String>,
+    pub profile: Option<String>,
+    pub target: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct EmitConfig {
+    pub emit_cfg: Option<String>,
+    pub emit_mir_json: Option<String>,
+    pub emit_exe: Option<String>,
+    pub emit_exe_nyrt: Option<String>,
+    pub emit_exe_libs: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParserPipeConfig {
+    pub parser_ny: bool,
+    pub ny_parser_pipe: bool,
+    pub json_file: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CliGroups {
+    pub input: InputConfig,
+    pub debug: DebugConfig,
+    pub backend: BackendConfig,
+    pub build: BuildConfig,
+    pub emit: EmitConfig,
+    pub parser: ParserPipeConfig,
+    pub gc_mode: Option<String>,
+    pub compile_wasm: bool,
+    pub compile_native: bool,
+    pub output_file: Option<String>,
+    pub benchmark: bool,
+    pub iterations: u32,
+    pub run_task: Option<String>,
+    pub load_ny_plugins: bool,
+}
+
 impl CliConfig {
     /// Parse command-line arguments and return configuration
     pub fn parse() -> Self {
@@ -98,6 +192,73 @@ impl CliConfig {
         } else {
             let matches = Self::build_command().get_matches();
             Self::from_matches(&matches)
+        }
+    }
+
+    /// Non-breaking grouped view for downstream code to gradually adopt.
+    pub fn as_groups(&self) -> CliGroups {
+        CliGroups {
+            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone() },
+            debug: DebugConfig {
+                debug_fuel: self.debug_fuel,
+                dump_ast: self.dump_ast,
+                dump_mir: self.dump_mir,
+                verify_mir: self.verify_mir,
+                mir_verbose: self.mir_verbose,
+                mir_verbose_effects: self.mir_verbose_effects,
+                cli_verbose: self.cli_verbose,
+            },
+            backend: BackendConfig {
+                backend: self.backend.clone(),
+                vm_stats: self.vm_stats,
+                vm_stats_json: self.vm_stats_json,
+                jit: JitConfig {
+                    exec: self.jit_exec,
+                    stats: self.jit_stats,
+                    stats_json: self.jit_stats_json,
+                    dump: self.jit_dump,
+                    events: self.jit_events,
+                    events_compile: self.jit_events_compile,
+                    events_runtime: self.jit_events_runtime,
+                    events_path: self.jit_events_path.clone(),
+                    threshold: self.jit_threshold,
+                    phi_min: self.jit_phi_min,
+                    hostcall: self.jit_hostcall,
+                    handle_debug: self.jit_handle_debug,
+                    native_f64: self.jit_native_f64,
+                    native_bool: self.jit_native_bool,
+                    only: self.jit_only,
+                    direct: self.jit_direct,
+                },
+            },
+            build: BuildConfig {
+                path: self.build_path.clone(),
+                app: self.build_app.clone(),
+                out: self.build_out.clone(),
+                aot: self.build_aot.clone(),
+                profile: self.build_profile.clone(),
+                target: self.build_target.clone(),
+            },
+            emit: EmitConfig {
+                emit_cfg: self.emit_cfg.clone(),
+                emit_mir_json: self.emit_mir_json.clone(),
+                emit_exe: self.emit_exe.clone(),
+                emit_exe_nyrt: self.emit_exe_nyrt.clone(),
+                emit_exe_libs: self.emit_exe_libs.clone(),
+            },
+            parser: ParserPipeConfig {
+                parser_ny: self.parser_ny,
+                ny_parser_pipe: self.ny_parser_pipe,
+                json_file: self.json_file.clone(),
+            },
+            gc_mode: self.gc_mode.clone(),
+            compile_wasm: self.compile_wasm,
+            compile_native: self.compile_native,
+            output_file: self.output_file.clone(),
+            benchmark: self.benchmark,
+            iterations: self.iterations,
+            run_task: self.run_task.clone(),
+            load_ny_plugins: self.load_ny_plugins,
         }
     }
 

@@ -47,6 +47,14 @@ Clone() Reduction — Phase 1 (Arc/str)
    - `types: HashMap<String, Arc<TypeBox>>` → `HashMap<Arc<str>, Arc<TypeBox>>`（内部型名の共有化）。
    - API互換（`get_type(&str)` は Borrow によりそのまま利用可能）。
 
+CLI Refactor — Phase A (non‑breaking)
+- Added grouped view structs without changing existing fields or parsing:
+  - InputConfig, DebugConfig, BackendConfig(+JitConfig), BuildConfig, EmitConfig, ParserPipeConfig
+  - Access via `CliConfig::as_groups()` to enable gradual adoption.
+
+Python LLVM Builder Split — Phase A (incremental)
+- Extracted entry wrapper creation to `src/llvm_py/builders/entry.py::ensure_ny_main(builder)` and delegated from `build_from_mir`.
+- Added scaffolding for function lowering split: `src/llvm_py/builders/function_lower.py` (not yet wired for all paths).
 Refactor Plan (next 1–2 weeks)
 1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs
    - Targets (line ranges are indicative):

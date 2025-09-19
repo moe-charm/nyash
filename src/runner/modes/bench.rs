@@ -176,10 +176,11 @@ impl NyashRunner {
         // Force JIT mode for this run
         std::env::set_var("NYASH_JIT_EXEC", "1");
         std::env::set_var("NYASH_JIT_THRESHOLD", "1");
-        if self.config.jit_stats {
+        let groups = self.config.as_groups();
+        if groups.backend.jit.stats {
             std::env::set_var("NYASH_JIT_STATS", "1");
         }
-        if self.config.jit_stats_json {
+        if groups.backend.jit.stats_json {
             std::env::set_var("NYASH_JIT_STATS_JSON", "1");
         }
         let start = std::time::Instant::now();

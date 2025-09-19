@@ -54,6 +54,7 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
+        let groups = self.config.as_groups();
         // Build system (MVP): nyash --build <nyash.toml>
         if let Some(cfg_path) = self.config.build_path.clone() {
             if let Err(e) = self.run_build_mvp(&cfg_path) {
@@ -346,41 +347,41 @@ impl NyashRunner {
         }
 
         // Optional: enable VM stats via CLI flags
-        if self.config.vm_stats {
+        if groups.backend.vm_stats {
             std::env::set_var("NYASH_VM_STATS", "1");
         }
-        if self.config.vm_stats_json {
+        if groups.backend.vm_stats_json {
             // Prefer explicit JSON flag over any default
             std::env::set_var("NYASH_VM_STATS_JSON", "1");
         }
         // Optional: JIT controls via CLI flags (centralized)
         {
             // CLI opt-in for JSONL events
-            if self.config.jit_events {
+            if groups.backend.jit.events {
                 std::env::set_var("NYASH_JIT_EVENTS", "1");
             }
-            if self.config.jit_events_compile {
+            if groups.backend.jit.events_compile {
                 std::env::set_var("NYASH_JIT_EVENTS_COMPILE", "1");
             }
-            if self.config.jit_events_runtime {
+            if groups.backend.jit.events_runtime {
                 std::env::set_var("NYASH_JIT_EVENTS_RUNTIME", "1");
             }
-            if let Some(ref p) = self.config.jit_events_path {
+            if let Some(ref p) = groups.backend.jit.events_path {
                 std::env::set_var("NYASH_JIT_EVENTS_PATH", p);
             }
             let mut jc = nyash_rust::jit::config::JitConfig::from_env();
-            jc.exec |= self.config.jit_exec;
-            jc.stats |= self.config.jit_stats;
-            jc.stats_json |= self.config.jit_stats_json;
-            jc.dump |= self.config.jit_dump;
-            if self.config.jit_threshold.is_some() {
-                jc.threshold = self.config.jit_threshold;
+            jc.exec |= groups.backend.jit.exec;
+            jc.stats |= groups.backend.jit.stats;
+            jc.stats_json |= groups.backend.jit.stats_json;
+            jc.dump |= groups.backend.jit.dump;
+            if groups.backend.jit.threshold.is_some() {
+                jc.threshold = groups.backend.jit.threshold;
             }
-            jc.phi_min |= self.config.jit_phi_min;
-            jc.hostcall |= self.config.jit_hostcall;
-            jc.handle_debug |= self.config.jit_handle_debug;
-            jc.native_f64 |= self.config.jit_native_f64;
-            jc.native_bool |= self.config.jit_native_bool;
+            jc.phi_min |= groups.backend.jit.phi_min;
+            jc.hostcall |= groups.backend.jit.hostcall;
+            jc.handle_debug |= groups.backend.jit.handle_debug;
+            jc.native_f64 |= groups.backend.jit.native_f64;
+            jc.native_bool |= groups.backend.jit.native_bool;
             // If observability is enabled and no threshold is provided, force threshold=1 so lowering runs and emits events
             let events_on = std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1")
                 || std::env::var("NYASH_JIT_EVENTS_COMPILE").ok().as_deref() == Some("1")
@@ -388,14 +389,14 @@ impl NyashRunner {
             if events_on && jc.threshold.is_none() {
                 jc.threshold = Some(1);
             }
-            if self.config.jit_only {
+            if groups.backend.jit.only {
                 std::env::set_var("NYASH_JIT_ONLY", "1");
             }
             // Apply runtime capability probe (e.g., disable b1 ABI if unsupported)
             let caps = nyash_rust::jit::config::probe_capabilities();
             jc = nyash_rust::jit::config::apply_runtime_caps(jc, caps);
             // Optional DOT emit via CLI (ensures dump is on when path specified)
-            if let Some(path) = &self.config.emit_cfg {
+            if let Some(path) = &groups.emit.emit_cfg {
                 std::env::set_var("NYASH_JIT_DOT", path);
                 jc.dump = true;
             }

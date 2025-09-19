@@ -36,8 +36,9 @@ impl NyashRunner {
             }
         };
 
+        let groups = self.config.as_groups();
         // Verify MIR if requested
-        if self.config.verify_mir {
+        if groups.debug.verify_mir {
             println!("🔍 Verifying MIR...");
             match &compile_result.verification_result {
                 Ok(()) => println!("✅ MIR verification passed!"),
@@ -52,13 +53,13 @@ impl NyashRunner {
         }
 
         // Dump MIR if requested
-        if self.config.dump_mir {
-            let mut printer = if self.config.mir_verbose {
+        if groups.debug.dump_mir {
+            let mut printer = if groups.debug.mir_verbose {
                 MirPrinter::verbose()
             } else {
                 MirPrinter::new()
             };
-            if self.config.mir_verbose_effects {
+            if groups.debug.mir_verbose_effects {
                 printer.set_show_effects_inline(true);
             }
             println!("🚀 MIR Output for {}:", filename);
@@ -66,7 +67,7 @@ impl NyashRunner {
         }
 
         // Emit MIR JSON if requested and exit
-        if let Some(path) = self.config.emit_mir_json.as_ref() {
+        if let Some(path) = groups.emit.emit_mir_json.as_ref() {
             let p = std::path::Path::new(path);
             if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness(&compile_result.module, p) {
                 eprintln!("❌ MIR JSON emit error: {}", e);
@@ -77,12 +78,12 @@ impl NyashRunner {
         }
 
         // Emit native executable via ny-llvmc (crate) and exit
-        if let Some(exe_out) = self.config.emit_exe.as_ref() {
+        if let Some(exe_out) = groups.emit.emit_exe.as_ref() {
             if let Err(e) = crate::runner::modes::common_util::exec::ny_llvmc_emit_exe_lib(
                 &compile_result.module,
                 exe_out,
-                self.config.emit_exe_nyrt.as_deref(),
-                self.config.emit_exe_libs.as_deref(),
+                groups.emit.emit_exe_nyrt.as_deref(),
+                groups.emit.emit_exe_libs.as_deref(),
             ) {
                 eprintln!("❌ {}", e);
                 std::process::exit(1);

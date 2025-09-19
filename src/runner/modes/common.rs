@@ -27,7 +27,8 @@ impl NyashRunner {
             }
         }
         // Direct v0 bridge when requested via CLI/env
-        let use_ny_parser = self.config.parser_ny || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");
+        let groups = self.config.as_groups();
+        let use_ny_parser = groups.parser.parser_ny || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");
         if use_ny_parser {
             let code = match fs::read_to_string(filename) {
                 Ok(content) => content,
@@ -45,7 +46,7 @@ impl NyashRunner {
             }
         }
         // AST dump mode
-        if self.config.dump_ast {
+        if groups.debug.dump_ast {
             println!("🧠 Nyash AST Dump - Processing file: {}", filename);
             let code = match fs::read_to_string(filename) {
                 Ok(content) => content,
@@ -60,20 +61,20 @@ impl NyashRunner {
         }
 
         // MIR dump/verify
-        if self.config.dump_mir || self.config.verify_mir {
+        if groups.debug.dump_mir || groups.debug.verify_mir {
             crate::cli_v!("🚀 Nyash MIR Compiler - Processing file: {} 🚀", filename);
             self.execute_mir_mode(filename);
             return;
         }
 
         // WASM / AOT (feature-gated)
-        if self.config.compile_wasm {
+        if groups.compile_wasm {
             #[cfg(feature = "wasm-backend")]
             { self.execute_wasm_mode(filename); return; }
             #[cfg(not(feature = "wasm-backend"))]
             { eprintln!("❌ WASM backend not available. Please rebuild with: cargo build --features wasm-backend"); process::exit(1); }
         }
-        if self.config.compile_native {
+        if groups.compile_native {
             #[cfg(feature = "cranelift-jit")]
             { self.execute_aot_mode(filename); return; }
             #[cfg(not(feature = "cranelift-jit"))]
@@ -81,7 +82,7 @@ impl NyashRunner {
         }
 
         // Backend selection
-        match self.config.backend.as_str() {
+        match groups.backend.backend.as_str() {
             "mir" => {
                 crate::cli_v!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
                 self.execute_mir_interpreter_mode(filename);
