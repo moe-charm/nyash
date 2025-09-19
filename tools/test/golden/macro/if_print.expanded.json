@@ -1,0 +1,8 @@
+{"kind":"Program","statements":[
+  {"kind":"If","condition":{"kind":"BinaryOp","op":"<","left":{"kind":"Literal","value":{"type":"int","value":1}},"right":{"kind":"Literal","value":{"type":"int","value":2}}},"then":[
+    {"kind":"Print","expression":{"kind":"Literal","value":{"type":"int","value":10}}}
+  ],"else":[
+    {"kind":"Print","expression":{"kind":"Literal","value":{"type":"int","value":20}}}
+  ]}
+]}
+
