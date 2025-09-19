@@ -8,6 +8,8 @@ static box MacroBoxSpec {
 
   expand(json, ctx) {
     local JB = include "apps/lib/json_builder.nyash"
+    local CF = include "apps/lib/cf_builder.nyash"
+    local PT = include "apps/lib/pattern_builder.nyash"
 
     // --- helpers copied/adapted from loop_normalize ---
     function parse_value(s, i) {
@@ -221,12 +223,12 @@ static box MacroBoxSpec {
         local arm_json = arms.get(idx)
         local lit_json = get_field(arm_json, "literal")
         local body_json = get_field(arm_json, "body")
-      local cond = JB.binary("==", scr, lit_json)
-      local then_arr = [body_json]
-      local else_arr = null
-      if current != null { else_arr = [current] }
-      local if_json = JB.if_(cond, then_arr, else_arr)
-      current = if_json
+        local cond = PT.eq(scr, lit_json)
+        local then_arr = [body_json]
+        local else_arr = null
+        if current != null { else_arr = [current] }
+        local if_json = CF.if_(cond, then_arr, else_arr)
+        current = if_json
       }
       return current
     }
@@ -248,19 +250,19 @@ static box MacroBoxSpec {
           local th_e = null
           if th != null && th.substring(0,1) == "[" {
             local parts = split_array(th)
-            if parts.length() > 0 { th_e = parts.get(0) } else { th_e = JB.literal_null() }
+            th_e = parts.length() > 0 ? parts.get(0) : JB.literal_null()
           }
           local el_e = null
           if el == null || el == "null" {
             el_e = null
           } else if el.substring(0,1) == "[" {
             local parts2 = split_array(el)
-            if parts2.length() > 0 { el_e = parts2.get(0) } else { el_e = JB.literal_null() }
+            el_e = parts2.length() > 0 ? parts2.get(0) : JB.literal_null()
           }
           local then_s = [ JB.assignment(tgt, th_e) ]
           local else_s = null
           if el_e != null { else_s = [ JB.assignment(tgt, el_e) ] }
-          return JB.if_(cond, then_s, else_s)
+          return CF.if_stmt(cond, then_s, else_s)
         }
       }
       // Return with If value → If(Return ...)
@@ -277,19 +279,19 @@ static box MacroBoxSpec {
           local th_e = null
           if th != null && th.substring(0,1) == "[" {
             local parts = split_array(th)
-            if parts.length() > 0 { th_e = parts.get(0) } else { th_e = JB.literal_null() }
+            th_e = parts.length() > 0 ? parts.get(0) : JB.literal_null()
           }
           local el_e = null
           if el == null || el == "null" {
             el_e = null
           } else if el.substring(0,1) == "[" {
             local parts2 = split_array(el)
-            if parts2.length() > 0 { el_e = parts2.get(0) } else { el_e = JB.literal_null() }
+            el_e = parts2.length() > 0 ? parts2.get(0) : JB.literal_null()
           }
           local then_s = [ JB.return_(th_e) ]
           local else_s = null
           if el_e != null { else_s = [ JB.return_(el_e) ] }
-          return JB.if_(cond, then_s, else_s)
+          return CF.if_stmt(cond, then_s, else_s)
         }
       }
       // Print with If expression → If(Print ...)
@@ -306,19 +308,19 @@ static box MacroBoxSpec {
           local th_e = null
           if th != null && th.substring(0,1) == "[" {
             local parts = split_array(th)
-            if parts.length() > 0 { th_e = parts.get(0) } else { th_e = JB.literal_null() }
+            th_e = parts.length() > 0 ? parts.get(0) : JB.literal_null()
           }
           local el_e = null
           if el == null || el == "null" {
             el_e = null
           } else if el.substring(0,1) == "[" {
             local parts2 = split_array(el)
-            if parts2.length() > 0 { el_e = parts2.get(0) } else { el_e = JB.literal_null() }
+            el_e = parts2.length() > 0 ? parts2.get(0) : JB.literal_null()
           }
           local then_s = [ JB.print_(th_e) ]
           local else_s = null
           if el_e != null { else_s = [ JB.print_(el_e) ] }
-          return JB.if_(cond, then_s, else_s)
+          return CF.if_stmt(cond, then_s, else_s)
         }
       }
       if has_kind(njson, "Local") {
@@ -401,4 +403,19 @@ static box MacroBoxSpec {
     }
     return json
   }
+}
+
+
+function main(args) {
+    if args.length() == 0 { print(\"{}\"); return 0 }
+    local j, r, ctx
+    j = args.get(0)
+    if args.length() > 1 { ctx = args.get(1) } else { ctx = \"{}\" }
+    try {
+        r = MacroBoxSpec.expand(j, ctx)
+    } catch (e) {
+        r = MacroBoxSpec.expand(j)
+    }
+    print(r)
+    return 0
 }

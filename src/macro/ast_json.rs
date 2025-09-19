@@ -78,6 +78,18 @@ pub fn ast_to_json(ast: &ASTNode) -> Value {
             "kind":"Map",
             "entries": entries.into_iter().map(|(k,v)| json!({"k":k,"v":ast_to_json(&v)})).collect::<Vec<_>>()
         }),
+        ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => json!({
+            "kind":"PeekExpr",
+            "scrutinee": ast_to_json(&scrutinee),
+            "arms": arms.into_iter().map(|(lit, body)| json!({
+                "literal": {
+                    "kind": "Literal",
+                    "value": lit_to_json(&lit)
+                },
+                "body": ast_to_json(&body)
+            })).collect::<Vec<_>>(),
+            "else": ast_to_json(&else_expr),
+        }),
         other => json!({"kind":"Unsupported","debug": format!("{:?}", other)}),
     }
 }
@@ -125,6 +137,24 @@ pub fn json_to_ast(v: &Value) -> Option<ASTNode> {
         "Map" => ASTNode::MapLiteral { entries: v.get("entries")?.as_array()?.iter().filter_map(|e| {
             Some((e.get("k")?.as_str()?.to_string(), json_to_ast(e.get("v")?)?))
         }).collect(), span: Span::unknown() },
+        "PeekExpr" => {
+            let scr = json_to_ast(v.get("scrutinee")?)?;
+            let arms_json = v.get("arms")?.as_array()?.iter();
+            let mut arms = Vec::new();
+            for arm_v in arms_json {
+                let lit_val = arm_v.get("literal")?.get("value")?;
+                let lit = json_to_lit(lit_val)?;
+                let body = json_to_ast(arm_v.get("body")?)?;
+                arms.push((lit, body));
+            }
+            let else_expr = json_to_ast(v.get("else")?)?;
+            ASTNode::PeekExpr {
+                scrutinee: Box::new(scr),
+                arms,
+                else_expr: Box::new(else_expr),
+                span: Span::unknown(),
+            }
+        }
         _ => return None,
     })
 }

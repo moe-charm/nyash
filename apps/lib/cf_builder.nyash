@@ -12,7 +12,7 @@ static box ControlFlowBuilder {
   if_expr(cond_json, then_expr_json, else_expr_json, res_name) {
     local JB = include "apps/lib/json_builder.nyash"
     local res_var = JB.variable(res_name)
-    local decl = JB.local([res_name], [null])
+    local decl = JB.local_decl([res_name], [null])
     local then_s = [ JB.assignment(res_var, then_expr_json) ]
     local else_s = [ JB.assignment(res_var, else_expr_json) ]
     local ifn = JB.if_(cond_json, then_s, else_s)
@@ -31,11 +31,11 @@ static box ControlFlowBuilder {
     local PT = include "apps/lib/pattern_builder.nyash"
 
     // scrutinee を一度だけ評価
-    local decl_scrut = JB.local([scrut_name], [scrut_json])
+    local decl_scrut = JB.local_decl([scrut_name], [scrut_json])
     local scrut_var = JB.variable(scrut_name)
 
     // res の宣言
-    local res_decl = JB.local([res_name], [null])
+    local res_decl = JB.local_decl([res_name], [null])
     local res_var = JB.variable(res_name)
 
     // デフォルト（任意）を抽出
@@ -96,4 +96,3 @@ static box ControlFlowBuilder {
     return [ decl_scrut, res_decl, chain ]
   }
 }
-

@@ -1,5 +1,67 @@
 use serde_json::Value;
 
+fn map_expr_to_stmt(e: nyash_rust::ASTNode) -> nyash_rust::ASTNode { e }
+
+fn transform_peek_to_if_expr(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
+    use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
+    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+        // only support literal-only arms conservatively
+        let mut conds_bodies: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
+        for (lit, body) in arms {
+            conds_bodies.push((lit.clone(), (*body).clone()));
+        }
+        let mut current: A = *(*else_expr).clone();
+        for (lit, body) in conds_bodies.into_iter().rev() {
+            let rhs = A::Literal { value: lit, span: Span::unknown() };
+            let cond = A::BinaryOp { operator: BinaryOperator::Equal, left: scrutinee.clone(), right: Box::new(rhs), span: Span::unknown() };
+            let then_body = vec![map_expr_to_stmt(body)];
+            let else_body = Some(vec![map_expr_to_stmt(current)]);
+            current = A::If { condition: Box::new(cond), then_body, else_body, span: Span::unknown() };
+        }
+        Some(current)
+    } else { None }
+}
+
+fn transform_peek_match_literal_local_init(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::ASTNode as A;
+    match ast.clone() {
+        A::Program { statements, span } => {
+            A::Program { statements: statements.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect(), span }
+        }
+        A::If { condition, then_body, else_body, span } => {
+            A::If {
+                condition: Box::new(transform_peek_match_literal_local_init(&condition)),
+                then_body: then_body.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect(),
+                else_body: else_body.map(|v| v.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect()),
+                span,
+            }
+        }
+        A::Loop { condition, body, span } => {
+            A::Loop {
+                condition: Box::new(transform_peek_match_literal_local_init(&condition)),
+                body: body.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect(),
+                span,
+            }
+        }
+        A::Local { variables, initial_values, span } => {
+            let mut new_inits: Vec<Option<Box<A>>> = Vec::with_capacity(initial_values.len());
+            for opt in initial_values {
+                if let Some(v) = opt {
+                    if let Some(ifexpr) = transform_peek_to_if_expr(&v) {
+                        new_inits.push(Some(Box::new(ifexpr)));
+                    } else {
+                        new_inits.push(Some(Box::new(transform_peek_match_literal_local_init(&v))));
+                    }
+                } else {
+                    new_inits.push(None);
+                }
+            }
+            A::Local { variables, initial_values: new_inits, span }
+        }
+        other => other,
+    }
+}
+
 fn transform_array_prepend_zero(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
     use nyash_rust::ast::{ASTNode as A, LiteralValue, Span};
     match ast {
@@ -98,6 +160,9 @@ pub fn run_macro_child(macro_file: &str) {
         crate::r#macro::macro_box_ny::MacroBehavior::LoopNormalize => {
             // MVP: identity (future: normalize Loop into carrier-based form)
             ast.clone()
+        }
+        crate::r#macro::macro_box_ny::MacroBehavior::IfMatchNormalize => {
+            transform_peek_match_literal_local_init(&ast)
         }
     };
     let out_json = crate::r#macro::ast_json::ast_to_json(&out_ast);

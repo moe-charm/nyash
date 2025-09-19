@@ -16,18 +16,17 @@ static box JsonBuilder {
     return out
   }
 
-  // JSON string escaping (minimal): backslash, quote, newline, carriage return, tab
+  // JSON string escaping (minimal): backslash, quote
   escape_string(s) {
     local out = ""
     local i = 0
     loop(i < s.length()) {
       local ch = s.substring(i, i + 1)
-      if ch == "\\" { out = out + "\\\\" }
-      else if ch == "\"" { out = out + "\\\"" }
-      else if ch == "\n" { out = out + "\\n" }
-      else if ch == "\r" { out = out + "\\r" }
-      else if ch == "\t" { out = out + "\\t" }
-      else { out = out + ch }
+      if ch == "\\" {
+        out = out + "\\\\"
+      } else {
+        if ch == "\"" { out = out + "\\\"" } else { out = out + ch }
+      }
       i = i + 1
     }
     return out
@@ -70,7 +69,7 @@ static box JsonBuilder {
     return "{\"kind\":\"Return\",\"value\":" + v + "}"
   }
 
-  local(vars, inits) {
+  local_decl(vars, inits) {
     // vars: array[string], inits: array[string|null]
     local vs = []
     local i = 0

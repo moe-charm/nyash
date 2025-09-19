@@ -19,16 +19,16 @@ check_case() {
   local src="$1"
   local irfile="$root/tmp/$(basename "$src" .nyash)_llvm.ll"
   mkdir -p "$root/tmp"
-  NYASH_LLVM_DUMP_IR="$irfile" "$bin" --backend llvm "$src" >/dev/null 2>&1 || {
+  if ! NYASH_LLVM_DUMP_IR="$irfile" "$bin" --backend llvm "$src" >/dev/null 2>&1; then
     echo "[FAIL] LLVM run failed for $src" >&2
     fails=$((fails+1))
     return
-  }
+  fi
   if [ ! -s "$irfile" ]; then
     echo "[FAIL] IR not dumped for $src" >&2
     fails=$((fails+1))
     return
-  }
+  fi
   local empty_cnt
   empty_cnt=$(rg -n "\\bphi\\b" "$irfile" | rg -v "\\[" | wc -l | tr -d ' ')
   if [ "${empty_cnt:-0}" != "0" ]; then
@@ -45,6 +45,8 @@ check_case "apps/tests/macro/if/print_expr.nyash"
 check_case "apps/tests/macro/if/return_expr.nyash"
 check_case "apps/tests/macro/types/is_basic.nyash"
 check_case "apps/tests/macro/if/chain_guard.nyash"
+check_case "apps/tests/macro/match/literal_basic.nyash"
+check_case "apps/tests/match_guard_type_basic.nyash"
 
 if [ "$fails" -ne 0 ]; then
   exit 2

@@ -1,0 +1,15 @@
+{"kind":"Program","statements":[
+  {"kind":"Local","variables":["d"],"inits":[{"kind":"Literal","value":{"type":"int","value":2}}]},
+  {"kind":"Local","variables":["r"],"inits":[
+    {"kind":"If","condition":{"kind":"BinaryOp","op":"==","left":{"kind":"Variable","name":"d"},"right":{"kind":"Literal","value":{"type":"int","value":1}}},"then":[
+      {"kind":"Literal","value":{"type":"int","value":10}}
+    ],"else":[
+      {"kind":"If","condition":{"kind":"BinaryOp","op":"==","left":{"kind":"Variable","name":"d"},"right":{"kind":"Literal","value":{"type":"int","value":2}}},"then":[
+        {"kind":"Literal","value":{"type":"int","value":20}}
+      ],"else":[
+        {"kind":"Literal","value":{"type":"int","value":30}}
+      ]}
+    ]}
+  ]},
+  {"kind":"Print","expression":{"kind":"Variable","name":"r"}}
+]}

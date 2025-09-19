@@ -28,9 +28,13 @@ pub fn register(m: &'static dyn MacroBox) {
     }
 }
 
-/// Gate for MacroBox execution (default OFF).
+/// Gate for MacroBox execution.
+///
+/// Legacy env `NYASH_MACRO_BOX=1` still forces ON, but by default we
+/// synchronize with the macro system gate so user macros run when macros are enabled.
 pub fn enabled() -> bool {
-    std::env::var("NYASH_MACRO_BOX").ok().as_deref() == Some("1")
+    if std::env::var("NYASH_MACRO_BOX").ok().as_deref() == Some("1") { return true; }
+    super::enabled()
 }
 
 /// Expand AST by applying all registered MacroBoxes in order once.

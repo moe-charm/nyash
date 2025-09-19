@@ -1,9 +1,27 @@
-# Current Task — Phase Freeze (Macro Complete)
+# Current Task — Macro Normalize + Freeze (Save Point)
 
-Updated: 2025‑09‑19 (night)
+Updated: 2025‑09‑20
 
-## Status
-マクロ基盤は完成・既定ONで安定（AST JSON v0、PyVMサンドボックス、strict/timeout、dump/golden、JSONL trace、プロファイル）。ここで機能を一旦凍結し、自己ホスト/実アプリ開発に注力して磨き込むフェーズに入る。
+## Today (Done)
+- PeekExpr → If 連鎖の正変換を安定化
+  - マクロ側（IfMatchNormalize）での検出を has_kind("PeekExpr") に統一。
+  - Local/Assignment/Return/Print の4経路で PeekExpr を If に置換できるよう整備。
+  - 子ランナー（PyVM）経路の不安定さを踏まえ、既定実行を「internal‑child（内蔵変換）」に切替。
+    - 内蔵変換（Rust）で Literal‑only の match を If 連鎖へ正規化する安全パスを実装。
+  - Golden 緑化: tools/test/golden/macro/match_literal_basic_user_macro_golden.sh
+- ランナー診断の強化
+  - 子プロセス stderr を親に透過。失敗時にエラー内容を必ず表示（EOF隠れを防止）。
+- JsonBuilder の安定化
+  - キーワード衝突を回避（local → local_decl）。呼び出し側を追従。
+- LLVM PHI 健全性スモーク拡張（If/Matchを追加）
+  - 実行には LLVM ビルドが必要。スクリプトは tools/test/smoke/llvm/ir_phi_hygiene_ifcases.sh。
+- Scope ヒント設計（no‑op）
+  - docs/guides/scope-hints.md を追加（今は観測用のみ）。
+
+重要な運用変更
+- ユーザーマクロは継続使用。ただし既定実行は internal‑child（内蔵変換）。
+  - NYASH_MACRO_BOX_CHILD_RUNNER の既定は OFF（必要時のみON）。
+  - 子環境では NYASH_MACRO_ENABLE=0 などを明示して再帰初期化を抑止。
 
 ## Delivered (Macro Platform)
 - Built‑in macros (Rust): derive(Equals/ToString) minimal, public‑only + hygiene.
@@ -47,12 +65,13 @@ Updated: 2025‑09‑19 (night)
 - DONE: MacroCtx 契約 PoC — ランナーが `expand(json, ctx)` を優先、失敗時に `expand(json)` へフォールバック。
 
 Next (short)
+- Match（ガード含む）の正規化を内蔵変換にも拡張（If 連鎖）+ golden/smoke 追加
 - LoopForm MVP‑2: while → carrier normalization (no break/continue, up to 2 vars)
   - Extract updated vars (e.g., i, sum) and normalize body so updates are tail; emit carrier‑like structure with existing AST forms (Local/If/Loop/Assignment) while preserving semantics.
   - Add goldens (two‑vars) + selfhost‑preexpand smokes; verify PyVM/LLVM parity.
 - LoopForm MVP‑3: break/continue minimal handling (single‑level)
 - for/foreach pre‑desugaring → LoopForm normalization (limited)
-- LLVM IR hygiene for LoopForm cases — PHI at block head, no empty PHIs (smoke)
+- LLVM IR hygiene for LoopForm / If / Match — PHI at block head, no empty PHIs (smoke)
 - Docs: enrich `docs/guides/loopform.md` with carrier examples and JSON builder snippets.
 - If/Match normalization pass: canonical If join with single PHI group and Match→If‑chain (scrutinee once, guard fused), expression results via join var.
 - ScopeBox (compile-time meta): design + docs; no-op macro scaffold; MIR hint names (no-op) and plan for zero-cost stripping.
@@ -62,6 +81,7 @@ Action Items (next 48h)
 - [x] Enable sugar by default (array/map literals)
 - [x] Golden normalizer (key‑order insensitive) for macro tests
 - [x] Loop simple/two‑vars goldens with normalization
+- [ ] Match guard: 内蔵変換（If 連鎖）+ golden/smoke
 - [ ] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
 - [x] LLVM PHI hygiene smoke on LoopForm cases
 - [x] LLVM PHI hygiene smoke on If cases

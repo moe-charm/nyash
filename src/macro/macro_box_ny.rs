@@ -179,7 +179,7 @@ fn expand_indicates_uppercase(body: &Vec<ASTNode>, params: &Vec<String>) -> bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize }
+pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize, IfMatchNormalize }
 
 pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     let src = match std::fs::read_to_string(path) { Ok(s) => s, Err(_) => return MacroBehavior::Identity };
@@ -245,13 +245,14 @@ pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     if let ASTNode::Program { statements, .. } = ast {
         for st in statements {
             if let ASTNode::BoxDeclaration { name: _, methods, .. } = st {
-                // Detect LoopNormalize by name() returning a specific string
+                // Detect LoopNormalize/IfMatchNormalize by name() returning a specific string
                 if let Some(ASTNode::FunctionDeclaration { name: mname, body, .. }) = methods.get("name") {
                     if mname == "name" {
                         if body.len() == 1 {
                             if let ASTNode::Return { value: Some(v), .. } = &body[0] {
                                 if let ASTNode::Literal { value: nyash_rust::ast::LiteralValue::String(s), .. } = &**v {
                                     if s == "LoopNormalize" { return MacroBehavior::LoopNormalize; }
+                                    if s == "IfMatchNormalize" { return MacroBehavior::IfMatchNormalize; }
                                 }
                             }
                         }
@@ -327,7 +328,7 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
             Err(e) => { eprintln!("[macro-proxy] current_exe failed: {}", e); return ast.clone(); }
         };
         // Prefer Nyash runner route by default for self-hosting; legacy env can force internal child with 0.
-        let use_runner = std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(true);
+        let use_runner = std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false);
         if std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().is_some() {
             eprintln!("[macro][compat] NYASH_MACRO_BOX_CHILD_RUNNER is deprecated; prefer defaults");
         }
@@ -343,7 +344,7 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
             let macro_src = std::fs::read_to_string(self.file)
                 .unwrap_or_else(|_| String::from("// failed to read macro file\n"));
             let script = format!(
-                "{}\n\nfunction main(args) {{\n    if args.length() == 0 {{ print(\\\"{{}}\\\"); return 0 }}\n    local j, r, ctx\n    j = args.get(0)\n    if args.length() > 1 {{ ctx = args.get(1) }} else {{ ctx = \\\"{{}}\\\" }}\n    try {{\n        r = MacroBoxSpec.expand(j, ctx)\n    }} catch (e) {{\n        r = MacroBoxSpec.expand(j)\n    }}\n    print(r)\n    return 0\n}}\n",
+                "{}\n\nfunction main(args) {{\n    if args.length() == 0 {{\n        print(\"{{}}\")\n        return 0\n    }}\n    local j, r, ctx\n    j = args.get(0)\n    if args.length() > 1 {{ ctx = args.get(1) }} else {{ ctx = \"{{}}\" }}\n    r = MacroBoxSpec.expand(j, ctx)\n    print(r)\n    return 0\n}}\n",
                 macro_src
             );
             if let Err(e) = f.write_all(script.as_bytes()) { eprintln!("[macro-proxy] write tmp runner failed: {}", e); return ast.clone(); }
@@ -368,6 +369,13 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
         cmd.env("NYASH_VM_USE_PY", "1");
         cmd.env("NYASH_DISABLE_PLUGINS", "1");
         cmd.env("NYASH_SYNTAX_SUGAR_LEVEL", "basic");
+        // Disable macro system inside child to avoid recursive registration/expansion
+        cmd.env("NYASH_MACRO_ENABLE", "0");
+        cmd.env_remove("NYASH_MACRO_PATHS");
+        cmd.env_remove("NYASH_MACRO_BOX_NY");
+        cmd.env_remove("NYASH_MACRO_BOX_NY_PATHS");
+        cmd.env_remove("NYASH_MACRO_BOX_CHILD");
+        cmd.env_remove("NYASH_MACRO_BOX_CHILD_RUNNER");
         // Timeout
         let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS").ok().and_then(|s| s.parse().ok()).unwrap_or(2000);
         // Spawn
@@ -388,9 +396,11 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
         use std::time::{Duration, Instant};
         let start = Instant::now();
         let mut out = String::new();
+        let mut status_opt = None;
         loop {
             match child.try_wait() {
-                Ok(Some(_status)) => {
+                Ok(Some(status)) => {
+                    status_opt = Some(status);
                     if let Some(mut so) = child.stdout.take() { use std::io::Read; let _ = so.read_to_string(&mut out); }
                     break;
                 }
@@ -406,10 +416,21 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
                 Err(e) => { eprintln!("[macro-proxy] wait error: {}", e); if strict_enabled() { std::process::exit(2); } return ast.clone(); }
             }
         }
+        // Capture stderr for diagnostics
+        let mut err = String::new();
+        if let Some(mut se) = child.stderr.take() { use std::io::Read; let _ = se.read_to_string(&mut err); }
         // Parse output JSON
         match serde_json::from_str::<serde_json::Value>(&out) {
-            Ok(v) => match crate::r#macro::ast_json::json_to_ast(&v) { Some(a) => a, None => { eprintln!("[macro-proxy] child JSON did not map to AST"); if strict_enabled() { std::process::exit(2); } ast.clone() } },
-            Err(e) => { eprintln!("[macro-proxy] invalid JSON from child: {}", e); if strict_enabled() { std::process::exit(2); } ast.clone() }
+            Ok(v) => match crate::r#macro::ast_json::json_to_ast(&v) {
+                Some(a) => a,
+                None => { eprintln!("[macro-proxy] child JSON did not map to AST. stderr=\n{}", err); if strict_enabled() { std::process::exit(2); } ast.clone() }
+            },
+            Err(e) => {
+                let code = status_opt.and_then(|s| s.code()).unwrap_or(-1);
+                eprintln!("[macro-proxy] invalid JSON from child (code={}): {}\n-- child stderr --\n{}\n-- end stderr --", code, e, err);
+                if strict_enabled() { std::process::exit(2); }
+                ast.clone()
+            }
         }
     }
 }

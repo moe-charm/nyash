@@ -402,3 +402,17 @@ static box MacroBoxSpec {
     return json
   }
 }
+
+
+function main(args) {
+    if args.length() == 0 {
+        print("{}")
+        return 0
+    }
+    local j, r, ctx
+    j = args.get(0)
+    if args.length() > 1 { ctx = args.get(1) } else { ctx = "{}" }
+    r = MacroBoxSpec.expand(j, ctx)
+    print(r)
+    return 0
+}
