@@ -82,6 +82,7 @@ Action Items (next 48h)
 - [x] Golden normalizer (key‑order insensitive) for macro tests
 - [x] Loop simple/two‑vars goldens with normalization
 - [ ] Match guard: 内蔵変換（If 連鎖）+ golden/smoke
+- [x] Smoke for guard/type match normalization（no PeekExpr; If present）
 - [ ] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
 - [x] LLVM PHI hygiene smoke on LoopForm cases
 - [x] LLVM PHI hygiene smoke on If cases
