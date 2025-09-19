@@ -13,6 +13,345 @@ use crate::tokenizer::TokenType;
 use std::collections::HashMap;
 
 impl NyashParser {
+    /// Extracted: parse block-first unified member: `{ body } as [once|birth_once]? name : Type [postfix]`
+    /// Returns true if a member was parsed and emitted into `methods`.
+    fn parse_unified_member_block_first(
+        &mut self,
+        methods: &mut HashMap<String, ASTNode>,
+        birth_once_props: &mut Vec<String>,
+    ) -> Result<bool, ParseError> {
+        if !(crate::config::env::unified_members() && self.match_token(&TokenType::LBRACE)) {
+            return Ok(false);
+        }
+        // Parse block body first
+        let mut final_body = self.parse_block_statements()?;
+        self.skip_newlines();
+        // Expect 'as'
+        if let TokenType::IDENTIFIER(kw) = &self.current_token().token_type {
+            if kw != "as" {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "'as' after block for block-first member".to_string(),
+                    line,
+                });
+            }
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "'as' after block for block-first member".to_string(),
+                line,
+            });
+        }
+        self.advance(); // consume 'as'
+        // Optional kind keyword
+        let mut kind = "computed".to_string();
+        if let TokenType::IDENTIFIER(k) = &self.current_token().token_type {
+            if k == "once" || k == "birth_once" {
+                kind = k.clone();
+                self.advance();
+            }
+        }
+        // Name : Type
+        let name = if let TokenType::IDENTIFIER(n) = &self.current_token().token_type {
+            let s = n.clone();
+            self.advance();
+            s
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: "identifier for member name".to_string(),
+                line,
+            });
+        };
+        if self.match_token(&TokenType::COLON) {
+            self.advance();
+            if let TokenType::IDENTIFIER(_ty) = &self.current_token().token_type {
+                self.advance();
+            } else {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "type name after ':'".to_string(),
+                    line,
+                });
+            }
+        } else {
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                found: self.current_token().token_type.clone(),
+                expected: ": type".to_string(),
+                line,
+            });
+        }
+        // Optional postfix handlers (Stage‑3)
+        if crate::config::env::parser_stage3()
+            && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
+        {
+            let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
+            if self.match_token(&TokenType::CATCH) {
+                self.advance();
+                self.consume(TokenType::LPAREN)?;
+                let (exc_ty, exc_var) = self.parse_catch_param()?;
+                self.consume(TokenType::RPAREN)?;
+                let catch_body = self.parse_block_statements()?;
+                catch_clauses.push(crate::ast::CatchClause {
+                    exception_type: exc_ty,
+                    variable_name: exc_var,
+                    body: catch_body,
+                    span: crate::ast::Span::unknown(),
+                });
+                self.skip_newlines();
+                if self.match_token(&TokenType::CATCH) {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "single catch only after member block".to_string(),
+                        line,
+                    });
+                }
+            }
+            let finally_body = if self.match_token(&TokenType::CLEANUP) {
+                self.advance();
+                Some(self.parse_block_statements()?)
+            } else {
+                None
+            };
+            final_body = vec![ASTNode::TryCatch {
+                try_body: final_body,
+                catch_clauses,
+                finally_body,
+                span: Span::unknown(),
+            }];
+        }
+        // Generate method(s) according to kind (delegate to existing logic path by reusing current block)
+        if kind == "once" || kind == "birth_once" {
+            // Re-inject tokens to reuse existing lowering logic would be complex; we instead synthesize
+            // small wrappers by mimicking existing naming. For safety, fall back to simple getter here.
+            if kind == "birth_once" {
+                birth_once_props.push(name.clone());
+            }
+            let getter_name = if kind == "once" {
+                format!("__get_once_{}", name)
+            } else if kind == "birth_once" {
+                format!("__get_birth_{}", name)
+            } else {
+                format!("__get_{}", name)
+            };
+            let getter = ASTNode::FunctionDeclaration {
+                name: getter_name.clone(),
+                params: vec![],
+                body: final_body,
+                is_static: false,
+                is_override: false,
+                span: Span::unknown(),
+            };
+            methods.insert(getter_name, getter);
+        } else {
+            let getter_name = format!("__get_{}", name);
+            let getter = ASTNode::FunctionDeclaration {
+                name: getter_name.clone(),
+                params: vec![],
+                body: final_body,
+                is_static: false,
+                is_override: false,
+                span: Span::unknown(),
+            };
+            methods.insert(getter_name, getter);
+        }
+        self.skip_newlines();
+        Ok(true)
+    }
+
+    /// Extracted: method-level postfix catch/cleanup after a method
+    fn parse_method_postfix_after_last_method(
+        &mut self,
+        methods: &mut HashMap<String, ASTNode>,
+        last_method_name: &Option<String>,
+    ) -> Result<bool, ParseError> {
+        if !(self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
+            || last_method_name.is_none()
+        {
+            return Ok(false);
+        }
+        let mname = last_method_name.clone().unwrap();
+        let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
+        if self.match_token(&TokenType::CATCH) {
+            self.advance();
+            self.consume(TokenType::LPAREN)?;
+            let (exc_ty, exc_var) = self.parse_catch_param()?;
+            self.consume(TokenType::RPAREN)?;
+            let catch_body = self.parse_block_statements()?;
+            catch_clauses.push(crate::ast::CatchClause {
+                exception_type: exc_ty,
+                variable_name: exc_var,
+                body: catch_body,
+                span: crate::ast::Span::unknown(),
+            });
+            self.skip_newlines();
+            if self.match_token(&TokenType::CATCH) {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "single catch only after method body".to_string(),
+                    line,
+                });
+            }
+        }
+        let finally_body = if self.match_token(&TokenType::CLEANUP) {
+            self.advance();
+            Some(self.parse_block_statements()?)
+        } else {
+            None
+        };
+        if let Some(mnode) = methods.get_mut(&mname) {
+            if let crate::ast::ASTNode::FunctionDeclaration { body, .. } = mnode {
+                let already = body
+                    .iter()
+                    .any(|n| matches!(n, crate::ast::ASTNode::TryCatch { .. }));
+                if already {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "duplicate postfix catch/cleanup after method".to_string(),
+                        line,
+                    });
+                }
+                let old = std::mem::take(body);
+                *body = vec![crate::ast::ASTNode::TryCatch {
+                    try_body: old,
+                    catch_clauses,
+                    finally_body,
+                    span: crate::ast::Span::unknown(),
+                }];
+            }
+        }
+        Ok(true)
+    }
+
+    /// Extracted: init { ... } block (non-call form)
+    fn parse_init_block_if_any(
+        &mut self,
+        init_fields: &mut Vec<String>,
+        weak_fields: &mut Vec<String>,
+    ) -> Result<bool, ParseError> {
+        if !(self.match_token(&TokenType::INIT) && self.peek_token() != &TokenType::LPAREN) {
+            return Ok(false);
+        }
+        self.advance(); // consume 'init'
+        self.consume(TokenType::LBRACE)?;
+        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            self.skip_newlines();
+            if self.match_token(&TokenType::RBRACE) {
+                break;
+            }
+            let is_weak = if self.match_token(&TokenType::WEAK) {
+                self.advance();
+                true
+            } else {
+                false
+            };
+            if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
+                init_fields.push(field_name.clone());
+                if is_weak {
+                    weak_fields.push(field_name.clone());
+                }
+                self.advance();
+                if self.match_token(&TokenType::COMMA) {
+                    self.advance();
+                }
+            } else {
+                return Err(ParseError::UnexpectedToken {
+                    expected: if is_weak {
+                        "field name after 'weak'"
+                    } else {
+                        "field name"
+                    }
+                    .to_string(),
+                    found: self.current_token().token_type.clone(),
+                    line: self.current_token().line,
+                });
+            }
+        }
+        self.consume(TokenType::RBRACE)?;
+        Ok(true)
+    }
+
+    /// Extracted: visibility block or single property header-first
+    fn parse_visibility_block_or_single(
+        &mut self,
+        visibility: &str,
+        methods: &mut HashMap<String, ASTNode>,
+        fields: &mut Vec<String>,
+        public_fields: &mut Vec<String>,
+        private_fields: &mut Vec<String>,
+        last_method_name: &mut Option<String>,
+    ) -> Result<bool, ParseError> {
+        if visibility != "public" && visibility != "private" {
+            return Ok(false);
+        }
+        if self.match_token(&TokenType::LBRACE) {
+            self.advance();
+            self.skip_newlines();
+            while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                if let TokenType::IDENTIFIER(fname) = &self.current_token().token_type {
+                    let fname = fname.clone();
+                    if visibility == "public" {
+                        public_fields.push(fname.clone());
+                    } else {
+                        private_fields.push(fname.clone());
+                    }
+                    fields.push(fname);
+                    self.advance();
+                    if self.match_token(&TokenType::COMMA) {
+                        self.advance();
+                    }
+                    self.skip_newlines();
+                    continue;
+                }
+                return Err(ParseError::UnexpectedToken {
+                    expected: "identifier in visibility block".to_string(),
+                    found: self.current_token().token_type.clone(),
+                    line: self.current_token().line,
+                });
+            }
+            self.consume(TokenType::RBRACE)?;
+            self.skip_newlines();
+            return Ok(true);
+        }
+        if let TokenType::IDENTIFIER(n) = &self.current_token().token_type {
+            let fname = n.clone();
+            self.advance();
+            if crate::parser::declarations::box_def::members::fields::try_parse_header_first_field_or_property(
+                self,
+                fname.clone(),
+                methods,
+                fields,
+            )? {
+                if visibility == "public" {
+                    public_fields.push(fname.clone());
+                } else {
+                    private_fields.push(fname.clone());
+                }
+                *last_method_name = None;
+                self.skip_newlines();
+                return Ok(true);
+            } else {
+                // Fallback: record visibility + field name for compatibility
+                if visibility == "public" {
+                    public_fields.push(fname.clone());
+                } else {
+                    private_fields.push(fname.clone());
+                }
+                fields.push(fname);
+                self.skip_newlines();
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
     /// box宣言をパース: box Name { fields... methods... }
     pub fn parse_box_declaration(&mut self) -> Result<ASTNode, ParseError> {
         self.consume(TokenType::BOX)?;
@@ -169,36 +508,7 @@ impl NyashParser {
             }
 
             // Fallback: method-level postfix catch/cleanup after a method (non-static box)
-            if (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP)) && last_method_name.is_some() {
-                let mname = last_method_name.clone().unwrap();
-                let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
-                if self.match_token(&TokenType::CATCH) {
-                    self.advance();
-                    self.consume(TokenType::LPAREN)?;
-                    let (exc_ty, exc_var) = self.parse_catch_param()?;
-                    self.consume(TokenType::RPAREN)?;
-                    let catch_body = self.parse_block_statements()?;
-                    catch_clauses.push(crate::ast::CatchClause { exception_type: exc_ty, variable_name: exc_var, body: catch_body, span: crate::ast::Span::unknown() });
-                    self.skip_newlines();
-                    if self.match_token(&TokenType::CATCH) {
-                        let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "single catch only after method body".to_string(), line });
-                    }
-                }
-                let finally_body = if self.match_token(&TokenType::CLEANUP) { self.advance(); Some(self.parse_block_statements()?) } else { None };
-                if let Some(mnode) = methods.get_mut(&mname) {
-                    if let crate::ast::ASTNode::FunctionDeclaration { body, .. } = mnode {
-                        let already = body.iter().any(|n| matches!(n, crate::ast::ASTNode::TryCatch{..}));
-                        if already {
-                            let line = self.current_token().line;
-                            return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "duplicate postfix catch/cleanup after method".to_string(), line });
-                        }
-                        let old = std::mem::take(body);
-                        *body = vec![crate::ast::ASTNode::TryCatch { try_body: old, catch_clauses, finally_body, span: crate::ast::Span::unknown() }];
-                        continue;
-                    }
-                }
-            }
+            if self.parse_method_postfix_after_last_method(&mut methods, &last_method_name)? { continue; }
 
             // RBRACEに到達していればループを抜ける
             if self.match_token(&TokenType::RBRACE) {
@@ -206,55 +516,7 @@ impl NyashParser {
             }
 
             // initブロックの処理（initメソッドではない場合のみ）
-            if self.match_token(&TokenType::INIT) && self.peek_token() != &TokenType::LPAREN {
-                self.advance(); // consume 'init'
-                self.consume(TokenType::LBRACE)?;
-
-                // initブロック内のフィールド定義を読み込み
-                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    self.skip_newlines();
-
-                    if self.match_token(&TokenType::RBRACE) {
-                        break;
-                    }
-
-                    // Check for weak modifier
-                    let is_weak = if self.match_token(&TokenType::WEAK) {
-                        self.advance(); // consume 'weak'
-                        true
-                    } else {
-                        false
-                    };
-
-                    if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
-                        init_fields.push(field_name.clone());
-                        if is_weak {
-                            weak_fields.push(field_name.clone()); // 🔗 Add to weak fields list
-                        }
-                        self.advance();
-
-                        // カンマがあればスキップ
-                        if self.match_token(&TokenType::COMMA) {
-                            self.advance();
-                        }
-                    } else {
-                        // 不正なトークンがある場合はエラー
-                        return Err(ParseError::UnexpectedToken {
-                            expected: if is_weak {
-                                "field name after 'weak'"
-                            } else {
-                                "field name"
-                            }
-                            .to_string(),
-                            found: self.current_token().token_type.clone(),
-                            line: self.current_token().line,
-                        });
-                    }
-                }
-
-                self.consume(TokenType::RBRACE)?;
-                continue;
-            }
+            if self.parse_init_block_if_any(&mut init_fields, &mut weak_fields)? { continue; }
 
             // overrideキーワードをチェック
             let mut is_override = false;
@@ -286,82 +548,15 @@ impl NyashParser {
                 let field_or_method = field_or_method.clone();
                 self.advance();
 
-                // 可視性:
-                // - public { ... } / private { ... } ブロック
-                // - public name: Type 単行（P0: 型はパースのみ、意味付けは後段）
-                if field_or_method == "public" || field_or_method == "private" {
-                    if self.match_token(&TokenType::LBRACE) {
-                        // ブロック形式
-                        self.advance(); // consume '{'
-                        self.skip_newlines();
-                        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                            if let TokenType::IDENTIFIER(fname) = &self.current_token().token_type {
-                                let fname = fname.clone();
-                                // ブロックに追加
-                                if field_or_method == "public" {
-                                    public_fields.push(fname.clone());
-                                } else {
-                                    private_fields.push(fname.clone());
-                                }
-                                // 互換性のため、全体fieldsにも追加
-                                fields.push(fname);
-                                self.advance();
-                                // カンマ/改行をスキップ
-                                if self.match_token(&TokenType::COMMA) {
-                                    self.advance();
-                                }
-                                self.skip_newlines();
-                                continue;
-                            }
-                            // 予期しないトークン
-                            return Err(ParseError::UnexpectedToken {
-                                expected: "identifier in visibility block".to_string(),
-                                found: self.current_token().token_type.clone(),
-                                line: self.current_token().line,
-                            });
-                        }
-                        self.consume(TokenType::RBRACE)?;
-                        self.skip_newlines();
-                        continue;
-                    } else if matches!(self.current_token().token_type, TokenType::IDENTIFIER(_)) {
-                        // 単行形式: public/private name[: Type] (= init | => expr | { ... }[postfix]) を委譲
-                        let fname = if let TokenType::IDENTIFIER(n) = &self.current_token().token_type {
-                            n.clone()
-                        } else {
-                            unreachable!()
-                        };
-                        self.advance();
-                        if crate::parser::declarations::box_def::members::fields::try_parse_header_first_field_or_property(
-                            self,
-                            fname.clone(),
-                            &mut methods,
-                            &mut fields,
-                        )? {
-                            if field_or_method == "public" {
-                                public_fields.push(fname.clone());
-                            } else {
-                                private_fields.push(fname.clone());
-                            }
-                            // プロパティ経路ではメソッド後置（catch/cleanup）を無効化する
-                            last_method_name = None;
-                            self.skip_newlines();
-                            continue;
-                        } else {
-                            // 解析不能な場合は従来どおりフィールド扱い（後方互換の保険）
-                            if field_or_method == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
-                            fields.push(fname);
-                            self.skip_newlines();
-                            continue;
-                        }
-                    } else {
-                        // public/private の後に '{' でも識別子でもない
-                        return Err(ParseError::UnexpectedToken {
-                            found: self.current_token().token_type.clone(),
-                            expected: "'{' or field name".to_string(),
-                            line: self.current_token().line,
-                        });
-                    }
-                }
+                // 可視性: public/private ブロック/単行
+                if self.parse_visibility_block_or_single(
+                    &field_or_method,
+                    &mut methods,
+                    &mut fields,
+                    &mut public_fields,
+                    &mut private_fields,
+                    &mut last_method_name,
+                )? { continue; }
 
                 // Unified Members (header-first) gate: support once/birth_once via members::properties
                 if crate::config::env::unified_members() && (field_or_method == "once" || field_or_method == "birth_once") {
