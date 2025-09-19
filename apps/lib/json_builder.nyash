@@ -1,0 +1,113 @@
+// JsonBuilder — Minimal helpers to construct AST JSON v0 fragments as strings
+// Usage: local JB = include "apps/lib/json_builder.nyash"
+//        local s = JB.literal_string("x")
+
+static box JsonBuilder {
+  // Join array of strings with a separator
+  join(arr, sep) {
+    local out = ""
+    local i = 0
+    local n = arr.length()
+    loop(i < n) {
+      out = out + arr.get(i)
+      if i + 1 < n { out = out + sep }
+      i = i + 1
+    }
+    return out
+  }
+
+  // JSON string escaping (minimal): backslash, quote, newline, carriage return, tab
+  escape_string(s) {
+    local out = ""
+    local i = 0
+    loop(i < s.length()) {
+      local ch = s.substring(i, i + 1)
+      if ch == "\\" { out = out + "\\\\" }
+      else if ch == "\"" { out = out + "\\\"" }
+      else if ch == "\n" { out = out + "\\n" }
+      else if ch == "\r" { out = out + "\\r" }
+      else if ch == "\t" { out = out + "\\t" }
+      else { out = out + ch }
+      i = i + 1
+    }
+    return out
+  }
+
+  quote(s) { return "\"" + this.escape_string(s) + "\"" }
+
+  // ==== Node builders (strings) ====
+  literal_string(s) {
+    return "{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":" + this.quote(s) + "}}"
+  }
+  literal_int(i) {
+    return "{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":" + i + "}}"
+  }
+  literal_bool(b) {
+    if b { return "{\"kind\":\"Literal\",\"value\":{\"type\":\"bool\",\"value\":true}}" }
+    return "{\"kind\":\"Literal\",\"value\":{\"type\":\"bool\",\"value\":false}}"
+  }
+  literal_null() { return "{\"kind\":\"Literal\",\"value\":{\"type\":\"null\"}}" }
+
+  variable(name) {
+    return "{\"kind\":\"Variable\",\"name\":" + this.quote(name) + "}"
+  }
+
+  binary(op, lhs_json, rhs_json) {
+    return "{\"kind\":\"BinaryOp\",\"op\":" + this.quote(op) + ",\"left\":" + lhs_json + ",\"right\":" + rhs_json + "}"
+  }
+
+  assignment(target_json, value_json) {
+    return "{\"kind\":\"Assignment\",\"target\":" + target_json + ",\"value\":" + value_json + "}"
+  }
+
+  local(vars, inits) {
+    // vars: array[string], inits: array[string|null]
+    local vs = []
+    local i = 0
+    loop(i < vars.length()) {
+      vs.push(this.quote(vars.get(i)))
+      i = i + 1
+    }
+    local is = []
+    i = 0
+    loop(i < inits.length()) {
+      local v = inits.get(i)
+      if v == null { is.push("null") } else { is.push(v) }
+      i = i + 1
+    }
+    return "{\"kind\":\"Local\",\"variables\":[" + this.join(vs, ",") + "],\"inits\":[" + this.join(is, ",") + "]}"
+  }
+
+  array(elems_json) {
+    return "{\"kind\":\"Array\",\"elements\":[" + this.join(elems_json, ",") + "]}"
+  }
+  map(entries) {
+    // entries: array of [k:string, v:json]
+    local parts = []
+    local i = 0
+    loop(i < entries.length()) {
+      local kv = entries.get(i)
+      local k = kv.get(0)
+      local v = kv.get(1)
+      parts.push("{\"k\":" + this.quote(k) + ",\"v\":" + v + "}")
+      i = i + 1
+    }
+    return "{\"kind\":\"Map\",\"entries\":[" + this.join(parts, ",") + "]}"
+  }
+
+  if_(cond_json, then_stmts_json, else_stmts_json) {
+    local then_s = "[" + this.join(then_stmts_json, ",") + "]"
+    local else_s = "null"
+    if else_stmts_json != null { else_s = "[" + this.join(else_stmts_json, ",") + "]" }
+    return "{\"kind\":\"If\",\"condition\":" + cond_json + ",\"then\":" + then_s + ",\"else\":" + else_s + "}"
+  }
+
+  loop_(cond_json, body_stmts_json) {
+    return "{\"kind\":\"Loop\",\"condition\":" + cond_json + ",\"body\":[" + this.join(body_stmts_json, ",") + "]}"
+  }
+
+  program(stmts_json) {
+    return "{\"kind\":\"Program\",\"statements\":[" + this.join(stmts_json, ",") + "]}"
+  }
+}
+

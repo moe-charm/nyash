@@ -6,8 +6,11 @@ static box MacroBoxSpec {
   static function name() { return "LoopNormalize" }
 
   static function expand(json, ctx) {
-    // For MVP, return input unchanged.
+    // MVP: return input unchanged, but ensure JsonBuilder is loadable for next step.
+    // Example usage (commented):
+    // local JB = include "apps/lib/json_builder.nyash"
+    // local zero = JB.literal_int(0)
+    // _ = zero // suppress unused
     return json
   }
 }
-
