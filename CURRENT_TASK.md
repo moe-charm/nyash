@@ -56,6 +56,7 @@ Next (short)
 - Docs: enrich `docs/guides/loopform.md` with carrier examples and JSON builder snippets.
 - If/Match normalization pass: canonical If join with single PHI group and Match→If‑chain (scrutinee once, guard fused), expression results via join var.
 - ScopeBox (compile-time meta): design + docs; no-op macro scaffold; MIR hint names (no-op) and plan for zero-cost stripping.
+- ControlFlowBuilder/PatternBuilder docs and scaffolding: author APIs for If/Match normalization and pattern conditions; migrate macros to use them.
 
 Action Items (next 48h)
 - [x] Enable sugar by default (array/map literals)
@@ -64,6 +65,7 @@ Action Items (next 48h)
 - [ ] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
 - [ ] LLVM PHI hygiene smoke on LoopForm cases
 - [ ] ScopeBox docs + macro scaffold (no-op) + MIR hint type sketch
+- [ ] ControlFlowBuilder/PatternBuilder docs（本commitで追加）→ スキャフォールド実装 → If/Matchマクロ置換の最初の1本
 
 ## Phase‑16 Outlook
 - MacroCtx (gensym/report/getEnv) and capabilities mapped to `nyash.toml`.

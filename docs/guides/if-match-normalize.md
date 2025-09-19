@@ -4,6 +4,10 @@
 - If と Match を“合流点が明確な制御フロー”へ正規化し、MIR/LLVM が一貫した PHI 生成を行えるようにする。
 - ルールをシンプルに保ち、LoopForm（キャリア）と相性良く動作させる。
 
+推奨ビルダー（コンパイル時メタ）
+- ControlFlowBuilder: If/Match の正規化（join 変数・If 連鎖生成）。
+- PatternBuilder: パターン条件（==/OR/AND/型チェック/デフォルト）を構築。
+
 適用タイミング
 - マクロ前展開パスの中で、If/Match 正規化 →（必要に応じて）LoopForm 正規化の順で適用するのが基本。
 - ループ本体に If/Match が含まれていても、If/Match 正規化は局所的に完結する（LoopForm と独立に安全）。
