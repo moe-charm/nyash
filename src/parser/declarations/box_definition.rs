@@ -23,10 +23,11 @@ impl NyashParser {
         if !(crate::config::env::unified_members() && self.match_token(&TokenType::LBRACE)) {
             return Ok(false);
         }
-        // Parse block body first
+        // 1) Parse block body first
         let mut final_body = self.parse_block_statements()?;
         self.skip_newlines();
-        // Expect 'as'
+
+        // 2) Expect 'as'
         if let TokenType::IDENTIFIER(kw) = &self.current_token().token_type {
             if kw != "as" {
                 let line = self.current_token().line;
@@ -45,7 +46,8 @@ impl NyashParser {
             });
         }
         self.advance(); // consume 'as'
-        // Optional kind keyword
+
+        // 3) Optional kind keyword: once | birth_once
         let mut kind = "computed".to_string();
         if let TokenType::IDENTIFIER(k) = &self.current_token().token_type {
             if k == "once" || k == "birth_once" {
@@ -53,7 +55,8 @@ impl NyashParser {
                 self.advance();
             }
         }
-        // Name : Type
+
+        // 4) Name : Type
         let name = if let TokenType::IDENTIFIER(n) = &self.current_token().token_type {
             let s = n.clone();
             self.advance();
@@ -86,7 +89,8 @@ impl NyashParser {
                 line,
             });
         }
-        // Optional postfix handlers (Stage‑3)
+
+        // 5) Optional postfix handlers (Stage‑3) directly after block
         if crate::config::env::parser_stage3()
             && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
         {
@@ -126,41 +130,115 @@ impl NyashParser {
                 span: Span::unknown(),
             }];
         }
-        // Generate method(s) according to kind (delegate to existing logic path by reusing current block)
-        if kind == "once" || kind == "birth_once" {
-            // Re-inject tokens to reuse existing lowering logic would be complex; we instead synthesize
-            // small wrappers by mimicking existing naming. For safety, fall back to simple getter here.
-            if kind == "birth_once" {
-                birth_once_props.push(name.clone());
-            }
-            let getter_name = if kind == "once" {
-                format!("__get_once_{}", name)
-            } else if kind == "birth_once" {
-                format!("__get_birth_{}", name)
-            } else {
-                format!("__get_{}", name)
-            };
-            let getter = ASTNode::FunctionDeclaration {
-                name: getter_name.clone(),
+
+        // 6) Generate methods per kind (fully equivalent to former inline branch)
+        if kind == "once" {
+            // __compute_once_<name>
+            let compute_name = format!("__compute_once_{}", name);
+            let compute = ASTNode::FunctionDeclaration {
+                name: compute_name.clone(),
                 params: vec![],
                 body: final_body,
                 is_static: false,
                 is_override: false,
                 span: Span::unknown(),
             };
+            methods.insert(compute_name.clone(), compute);
+
+            // Getter with cache + poison handling
+            let key = format!("__once_{}", name);
+            let poison_key = format!("__once_poison_{}", name);
+            let cached_local = format!("__ny_cached_{}", name);
+            let poison_local = format!("__ny_poison_{}", name);
+            let val_local = format!("__ny_val_{}", name);
+            let me_node = ASTNode::Me { span: Span::unknown() };
+            let get_cached = ASTNode::MethodCall {
+                object: Box::new(me_node.clone()),
+                method: "getField".to_string(),
+                arguments: vec![ASTNode::Literal {
+                    value: crate::ast::LiteralValue::String(key.clone()),
+                    span: Span::unknown(),
+                }],
+                span: Span::unknown(),
+            };
+            let local_cached = ASTNode::Local {
+                variables: vec![cached_local.clone()],
+                initial_values: vec![Some(Box::new(get_cached))],
+                span: Span::unknown(),
+            };
+            let cond_cached = ASTNode::BinaryOp {
+                operator: crate::ast::BinaryOperator::NotEqual,
+                left: Box::new(ASTNode::Variable { name: cached_local.clone(), span: Span::unknown() }),
+                right: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::Null, span: Span::unknown() }),
+                span: Span::unknown(),
+            };
+            let then_ret_cached = vec![ASTNode::Return {
+                value: Some(Box::new(ASTNode::Variable { name: cached_local.clone(), span: Span::unknown() })),
+                span: Span::unknown(),
+            }];
+            let if_cached = ASTNode::If { condition: Box::new(cond_cached), then_body: then_ret_cached, else_body: None, span: Span::unknown() };
+
+            let get_poison = ASTNode::MethodCall {
+                object: Box::new(me_node.clone()),
+                method: "getField".to_string(),
+                arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(poison_key.clone()), span: Span::unknown() }],
+                span: Span::unknown(),
+            };
+            let local_poison = ASTNode::Local {
+                variables: vec![poison_local.clone()],
+                initial_values: vec![Some(Box::new(get_poison))],
+                span: Span::unknown(),
+            };
+            let cond_poison = ASTNode::BinaryOp {
+                operator: crate::ast::BinaryOperator::NotEqual,
+                left: Box::new(ASTNode::Variable { name: poison_local.clone(), span: Span::unknown() }),
+                right: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::Null, span: Span::unknown() }),
+                span: Span::unknown(),
+            };
+            let then_throw = vec![ASTNode::Throw {
+                expression: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::String(format!("once '{}' previously failed", name)), span: Span::unknown() }),
+                span: Span::unknown(),
+            }];
+            let if_poison = ASTNode::If { condition: Box::new(cond_poison), then_body: then_throw, else_body: None, span: Span::unknown() };
+
+            let call_compute = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: compute_name.clone(), arguments: vec![], span: Span::unknown() };
+            let local_val = ASTNode::Local { variables: vec![val_local.clone()], initial_values: vec![Some(Box::new(call_compute))], span: Span::unknown() };
+            let set_call = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "setField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(key.clone()), span: Span::unknown() }, ASTNode::Variable { name: val_local.clone(), span: Span::unknown() }], span: Span::unknown() };
+            let ret_stmt = ASTNode::Return { value: Some(Box::new(ASTNode::Variable { name: val_local.clone(), span: Span::unknown() })), span: Span::unknown() };
+            let try_body = vec![local_val, set_call, ret_stmt];
+            let catch_body = vec![
+                ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "setField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(poison_key.clone()), span: Span::unknown() }, ASTNode::Literal { value: crate::ast::LiteralValue::Bool(true), span: Span::unknown() }], span: Span::unknown() },
+                ASTNode::Throw { expression: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::String(format!("once '{}' init failed", name)), span: Span::unknown() }), span: Span::unknown() }
+            ];
+            let trycatch = ASTNode::TryCatch { try_body, catch_clauses: vec![crate::ast::CatchClause { exception_type: None, variable_name: None, body: catch_body, span: Span::unknown() }], finally_body: None, span: Span::unknown() };
+            let getter_body = vec![local_cached, if_cached, local_poison, if_poison, trycatch];
+            let getter_name = format!("__get_once_{}", name);
+            let getter = ASTNode::FunctionDeclaration { name: getter_name.clone(), params: vec![], body: getter_body, is_static: false, is_override: false, span: Span::unknown() };
+            methods.insert(getter_name, getter);
+        } else if kind == "birth_once" {
+            // Self-cycle guard: birth_once cannot reference itself via me.<name>
+            if self.ast_contains_me_field(&final_body, &name) {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: format!("birth_once '{}' must not reference itself", name), line });
+            }
+            birth_once_props.push(name.clone());
+            let compute_name = format!("__compute_birth_{}", name);
+            let compute = ASTNode::FunctionDeclaration { name: compute_name.clone(), params: vec![], body: final_body, is_static: false, is_override: false, span: Span::unknown() };
+            methods.insert(compute_name.clone(), compute);
+            let key = format!("__birth_{}", name);
+            let me_node = ASTNode::Me { span: Span::unknown() };
+            let get_call = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "getField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(key.clone()), span: Span::unknown() }], span: Span::unknown() };
+            let getter_body = vec![ASTNode::Return { value: Some(Box::new(get_call)), span: Span::unknown() }];
+            let getter_name = format!("__get_birth_{}", name);
+            let getter = ASTNode::FunctionDeclaration { name: getter_name.clone(), params: vec![], body: getter_body, is_static: false, is_override: false, span: Span::unknown() };
             methods.insert(getter_name, getter);
         } else {
+            // computed
             let getter_name = format!("__get_{}", name);
-            let getter = ASTNode::FunctionDeclaration {
-                name: getter_name.clone(),
-                params: vec![],
-                body: final_body,
-                is_static: false,
-                is_override: false,
-                span: Span::unknown(),
-            };
+            let getter = ASTNode::FunctionDeclaration { name: getter_name.clone(), params: vec![], body: final_body, is_static: false, is_override: false, span: Span::unknown() };
             methods.insert(getter_name, getter);
         }
+
         self.skip_newlines();
         Ok(true)
     }
@@ -382,130 +460,7 @@ impl NyashParser {
             }
 
             // nyashモード（block-first）: { body } as (once|birth_once)? name : Type
-            if crate::config::env::unified_members() && self.match_token(&TokenType::LBRACE) {
-                // Parse block body first
-                let mut final_body = self.parse_block_statements()?;
-                self.skip_newlines();
-                // Expect 'as'
-                if let TokenType::IDENTIFIER(kw) = &self.current_token().token_type {
-                    if kw != "as" {
-                        // Not a block-first member; treat as standalone block statement in box (unsupported)
-                        let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "'as' after block for block-first member".to_string(), line });
-                    }
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "'as' after block for block-first member".to_string(), line });
-                }
-                self.advance(); // consume 'as'
-                // Optional kind keyword
-                let mut kind = "computed".to_string();
-                if let TokenType::IDENTIFIER(k) = &self.current_token().token_type {
-                    if k == "once" || k == "birth_once" {
-                        kind = k.clone();
-                        self.advance();
-                    }
-                }
-                // Name : Type
-                let name = if let TokenType::IDENTIFIER(n) = &self.current_token().token_type {
-                    let s = n.clone();
-                    self.advance();
-                    s
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "identifier for member name".to_string(), line });
-                };
-                if self.match_token(&TokenType::COLON) {
-                    self.advance();
-                    if let TokenType::IDENTIFIER(_ty) = &self.current_token().token_type { self.advance(); } else {
-                        let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "type name after ':'".to_string(), line });
-                    }
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: ": type".to_string(), line });
-                }
-                // Optional postfix handlers (Stage-3) directly after block
-                if crate::config::env::parser_stage3() && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP)) {
-                    let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
-                    if self.match_token(&TokenType::CATCH) {
-                        self.advance();
-                        self.consume(TokenType::LPAREN)?;
-                        let (exc_ty, exc_var) = self.parse_catch_param()?;
-                        self.consume(TokenType::RPAREN)?;
-                        let catch_body = self.parse_block_statements()?;
-                        catch_clauses.push(crate::ast::CatchClause { exception_type: exc_ty, variable_name: exc_var, body: catch_body, span: crate::ast::Span::unknown() });
-                        self.skip_newlines();
-                        if self.match_token(&TokenType::CATCH) {
-                            let line = self.current_token().line;
-                            return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "single catch only after member block".to_string(), line });
-                        }
-                    }
-                    let finally_body = if self.match_token(&TokenType::CLEANUP) { self.advance(); Some(self.parse_block_statements()?) } else { None };
-                    final_body = vec![ASTNode::TryCatch { try_body: final_body, catch_clauses, finally_body, span: crate::ast::Span::unknown() }];
-                }
-
-                // Generate methods per kind
-                if kind == "once" {
-                    let compute_name = format!("__compute_once_{}", name);
-                    let compute = ASTNode::FunctionDeclaration { name: compute_name.clone(), params: vec![], body: final_body, is_static: false, is_override: false, span: Span::unknown() };
-                    methods.insert(compute_name.clone(), compute);
-                    let key = format!("__once_{}", name);
-                    let poison_key = format!("__once_poison_{}", name);
-                    let cached_local = format!("__ny_cached_{}", name);
-                    let poison_local = format!("__ny_poison_{}", name);
-                    let val_local = format!("__ny_val_{}", name);
-                    let me_node = ASTNode::Me { span: Span::unknown() };
-                    let get_cached = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "getField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(key.clone()), span: Span::unknown() }], span: Span::unknown() };
-                    let local_cached = ASTNode::Local { variables: vec![cached_local.clone()], initial_values: vec![Some(Box::new(get_cached))], span: Span::unknown() };
-                    let cond_cached = ASTNode::BinaryOp { operator: crate::ast::BinaryOperator::NotEqual, left: Box::new(ASTNode::Variable { name: cached_local.clone(), span: Span::unknown() }), right: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::Null, span: Span::unknown() }), span: Span::unknown() };
-                    let then_ret_cached = vec![ASTNode::Return { value: Some(Box::new(ASTNode::Variable { name: cached_local.clone(), span: Span::unknown() })), span: Span::unknown() }];
-                    let if_cached = ASTNode::If { condition: Box::new(cond_cached), then_body: then_ret_cached, else_body: None, span: Span::unknown() };
-                    let get_poison = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "getField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(poison_key.clone()), span: Span::unknown() }], span: Span::unknown() };
-                    let local_poison = ASTNode::Local { variables: vec![poison_local.clone()], initial_values: vec![Some(Box::new(get_poison))], span: Span::unknown() };
-                    let cond_poison = ASTNode::BinaryOp { operator: crate::ast::BinaryOperator::NotEqual, left: Box::new(ASTNode::Variable { name: poison_local.clone(), span: Span::unknown() }), right: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::Null, span: Span::unknown() }), span: Span::unknown() };
-                    let then_throw = vec![ASTNode::Throw { expression: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::String(format!("once '{}' previously failed", name)), span: Span::unknown() }), span: Span::unknown() }];
-                    let if_poison = ASTNode::If { condition: Box::new(cond_poison), then_body: then_throw, else_body: None, span: Span::unknown() };
-                    let call_compute = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: compute_name.clone(), arguments: vec![], span: Span::unknown() };
-                    let local_val = ASTNode::Local { variables: vec![val_local.clone()], initial_values: vec![Some(Box::new(call_compute))], span: Span::unknown() };
-                    let set_call = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "setField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(key.clone()), span: Span::unknown() }, ASTNode::Variable { name: val_local.clone(), span: Span::unknown() }], span: Span::unknown() };
-                    let ret_stmt = ASTNode::Return { value: Some(Box::new(ASTNode::Variable { name: val_local.clone(), span: Span::unknown() })), span: Span::unknown() };
-                    let try_body = vec![local_val, set_call, ret_stmt];
-                    let catch_body = vec![
-                        ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "setField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(poison_key.clone()), span: Span::unknown() }, ASTNode::Literal { value: crate::ast::LiteralValue::Bool(true), span: Span::unknown() }], span: Span::unknown() },
-                        ASTNode::Throw { expression: Box::new(ASTNode::Literal { value: crate::ast::LiteralValue::String(format!("once '{}' init failed", name)), span: Span::unknown() }), span: Span::unknown() }
-                    ];
-                    let trycatch = ASTNode::TryCatch { try_body, catch_clauses: vec![crate::ast::CatchClause { exception_type: None, variable_name: None, body: catch_body, span: Span::unknown() }], finally_body: None, span: Span::unknown() };
-                    let getter_body = vec![local_cached, if_cached, local_poison, if_poison, trycatch];
-                    let getter_name = format!("__get_once_{}", name);
-                    let getter = ASTNode::FunctionDeclaration { name: getter_name.clone(), params: vec![], body: getter_body, is_static: false, is_override: false, span: Span::unknown() };
-                    methods.insert(getter_name, getter);
-                } else if kind == "birth_once" {
-                    // Self-cycle guard: birth_once cannot reference itself via me.<name>
-                    if self.ast_contains_me_field(&final_body, &name) {
-                        let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: format!("birth_once '{}' must not reference itself", name), line });
-                    }
-                    birth_once_props.push(name.clone());
-                    let compute_name = format!("__compute_birth_{}", name);
-                    let compute = ASTNode::FunctionDeclaration { name: compute_name.clone(), params: vec![], body: final_body, is_static: false, is_override: false, span: Span::unknown() };
-                    methods.insert(compute_name.clone(), compute);
-                    let key = format!("__birth_{}", name);
-                    let me_node = ASTNode::Me { span: Span::unknown() };
-                    let get_call = ASTNode::MethodCall { object: Box::new(me_node.clone()), method: "getField".to_string(), arguments: vec![ASTNode::Literal { value: crate::ast::LiteralValue::String(key.clone()), span: Span::unknown() }], span: Span::unknown() };
-                    let getter_body = vec![ASTNode::Return { value: Some(Box::new(get_call)), span: Span::unknown() }];
-                    let getter_name = format!("__get_birth_{}", name);
-                    let getter = ASTNode::FunctionDeclaration { name: getter_name.clone(), params: vec![], body: getter_body, is_static: false, is_override: false, span: Span::unknown() };
-                    methods.insert(getter_name, getter);
-                } else {
-                    // computed
-                    let getter_name = format!("__get_{}", name);
-                    let getter = ASTNode::FunctionDeclaration { name: getter_name.clone(), params: vec![], body: final_body, is_static: false, is_override: false, span: Span::unknown() };
-                    methods.insert(getter_name, getter);
-                }
-                self.skip_newlines();
-                continue;
-            }
+            if self.parse_unified_member_block_first(&mut methods, &mut birth_once_props)? { continue; }
 
             // Fallback: method-level postfix catch/cleanup after a method (non-static box)
             if self.parse_method_postfix_after_last_method(&mut methods, &last_method_name)? { continue; }

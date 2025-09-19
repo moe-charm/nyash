@@ -18,6 +18,12 @@ Delivered
 - Docs
   - AGENTS.md: Add LLVM/PHI invariants + debug flow; match guard policy; harness build/run steps.
 
+Refactor Progress (2025-09-19, noon)
+- Parser/Box Definition
+  - Extracted and integrated parse_unified_member_block_first (block-first unified members) from parse_box_declaration.
+  - Behavior preserved: once/birth_once/computed generation identical to prior inline branch, including cache/poison and self-cycle guard.
+  - Postfix handlers (catch/cleanup) remain supported under Stage‑3 gate and are wrapped into TryCatch on the member body.
+
 Refactor Plan (next 1–2 weeks)
 1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs
    - Targets (line ranges are indicative):
