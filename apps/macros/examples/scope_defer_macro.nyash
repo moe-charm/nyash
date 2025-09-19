@@ -1,0 +1,16 @@
+// scope_defer_macro.nyash
+// MVP scaffold: detect @scope/@defer style markers in AST JSON (string) and keep identity.
+// Future: attach scope attrs to blocks and emit MIR hints in lowering.
+
+static box MacroBoxSpec {
+  name() { return "ScopeDeferScaffold" }
+
+  expand(json, ctx) {
+    // For now, return input as-is. This keeps behavior unchanged and allows
+    // us to enable/disable the macro without risk. Future versions will:
+    //  - parse attributes/comments/markers to attach scope metadata
+    //  - leave semantic code intact (zero-cost in release)
+    return json
+  }
+}
+
