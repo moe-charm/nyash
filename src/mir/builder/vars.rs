@@ -3,6 +3,7 @@ use std::collections::HashSet;
 
 /// Collect free variables used in `node` into `used`, excluding names present in `locals`.
 /// `locals` is updated as new local declarations are encountered.
+#[allow(dead_code)]
 pub(super) fn collect_free_vars(
     node: &ASTNode,
     used: &mut HashSet<String>,

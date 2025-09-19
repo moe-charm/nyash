@@ -214,6 +214,22 @@ Flags
 - Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
  - LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
 
+### LLVM Python Builder Layout (after split)
+- Files (under `src/llvm_py/`):
+  - `llvm_builder.py`: top-level orchestration; delegates to builders.
+  - `builders/entry.py`: `ensure_ny_main(builder)` – create ny_main wrapper if needed.
+  - `builders/function_lower.py`: `lower_function(builder, func_json)` – per-function lowering (CFG, PHI metadata, loop prepass, finalize_phis).
+  - `builders/block_lower.py`: `lower_blocks(builder, func, block_by_id, order, loop_plan)` – block-local lowering and snapshots.
+  - `builders/instruction_lower.py`: `lower_instruction(owner, builder, inst, func)` – per-instruction dispatch.
+- Dev toggles:
+  - `NYASH_LLVM_DUMP_IR=<path>` – dump IR text for inspection.
+  - `NYASH_LLVM_PREPASS_IFMERGE=1` – enable return-merge PHI predeclare metadata.
+  - `NYASH_LLVM_PREPASS_LOOP=1` – enable simple while prepass (loopform synthesis).
+  - `NYASH_CLI_VERBOSE=1` – extra trace from builder.
+- Smokes:
+  - Empty PHI guard: `tools/test/smoke/llvm/ir_phi_empty_check.sh <file.nyash>`
+  - Batch run: `tools/test/smoke/llvm/ir_phi_empty_check_all.sh`
+
 ## Codex Async Workflow (Background Jobs)
 - Purpose: run Codex tasks in the background and notify a tmux session on completion.
 - Script: `tools/codex-async-notify.sh`

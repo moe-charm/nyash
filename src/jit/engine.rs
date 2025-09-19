@@ -9,7 +9,9 @@ use std::sync::Arc;
 #[derive(Default)]
 pub struct JitEngine {
     // In the future: isa, module, context, fn table, etc.
+    #[allow(dead_code)]
     initialized: bool,
+    #[allow(dead_code)]
     next_handle: u64,
     /// Stub function table: handle -> callable closure
     fntab: HashMap<

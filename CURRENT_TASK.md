@@ -18,6 +18,17 @@ Delivered
 - Docs
   - AGENTS.md: Add LLVM/PHI invariants + debug flow; match guard policy; harness build/run steps.
 
+Minor Polish (2025-09-19 evening)
+- Rust warnings cleanup
+  - Remove unused Effect/EffectMask import in `src/mir/optimizer.rs:11`.
+  - Silence dead_code on helper `collect_free_vars` and TLS helper `with_current_vm_mut` (kept for future use).
+  - Fix duplicate `groups` binding in `src/runner/mod.rs`.
+  - Drop unnecessary `mut` bindings in `src/boxes/http_message_box.rs` quick creators.
+- Parser hygiene
+  - Make `MatchArm::Default` a unit variant (no unused payload); logic unchanged.
+- Build check
+  - `cargo check` clean (no warnings) on default feature set; LLVM path unchanged.
+
 Refactor Progress (2025-09-19, noon)
 - Parser/Box Definition
   - Extracted and integrated parse_unified_member_block_first (block-first unified members) from parse_box_declaration.
@@ -55,6 +66,15 @@ CLI Refactor — Phase A (non‑breaking)
 Python LLVM Builder Split — Phase A (incremental)
 - Extracted entry wrapper creation to `src/llvm_py/builders/entry.py::ensure_ny_main(builder)` and delegated from `build_from_mir`.
 - Added scaffolding for function lowering split: `src/llvm_py/builders/function_lower.py` (not yet wired for all paths).
+
+Python LLVM Builder Split — Phase B/C (complete delegation)
+- Function-level delegation is now default:
+  - `llvm_builder.py.lower_function` delegates to `builders/function_lower.py` by default (fallback only on exception).
+  - Blocks are lowered via `builders/block_lower.py::lower_blocks`.
+  - Instructions are lowered via `builders/instruction_lower.py::lower_instruction`.
+- Developer flow:
+  - Use `NYASH_LLVM_DUMP_IR` to inspect IR and `tools/test/smoke/llvm/ir_phi_empty_check.sh` to assert there are no empty PHIs.
+  - Optional: `NYASH_LLVM_PREPASS_IFMERGE=1` and `NYASH_LLVM_PREPASS_LOOP=1` to test prepasses.
 Refactor Plan (next 1–2 weeks)
 1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs
    - Targets (line ranges are indicative):

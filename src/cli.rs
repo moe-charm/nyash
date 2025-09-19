@@ -7,7 +7,6 @@
 
 use clap::{Arg, ArgMatches, Command};
 use serde_json;
-use std::fmt::Debug as _; // for derive Debug consistency
 
 /// Command-line configuration structure
 #[derive(Debug, Clone)]

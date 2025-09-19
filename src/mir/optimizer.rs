@@ -8,7 +8,7 @@
  * - Dead code elimination
  */
 
-use super::{Effect, EffectMask, MirFunction, MirInstruction, MirModule, MirType, ValueId};
+use super::{MirFunction, MirInstruction, MirModule, MirType, ValueId};
 use crate::mir::optimizer_stats::OptimizationStats;
 // std::collections imports removed (local DCE/CSE impls deleted)
 
@@ -514,4 +514,3 @@ mod tests {
         );
     }
 }
-

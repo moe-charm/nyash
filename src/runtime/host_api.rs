@@ -24,6 +24,7 @@ pub fn clear_current_vm() {
     CURRENT_VM.with(|c| c.set(std::ptr::null_mut()));
 }
 #[cfg(feature = "vm-legacy")]
+#[allow(dead_code)]
 fn with_current_vm_mut<F, R>(f: F) -> Option<R>
 where
     F: FnOnce(&mut crate::backend::vm::VM) -> R,
@@ -44,6 +45,7 @@ pub fn set_current_vm(_ptr: *mut ()) {}
 #[cfg(not(feature = "vm-legacy"))]
 pub fn clear_current_vm() {}
 #[cfg(not(feature = "vm-legacy"))]
+#[allow(dead_code)]
 fn with_current_vm_mut<F, R>(_f: F) -> Option<R>
 where
     F: FnOnce(&mut ()) -> R,

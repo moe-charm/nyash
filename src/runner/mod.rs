@@ -54,9 +54,9 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
-        let groups = self.config.as_groups();
         // Build system (MVP): nyash --build <nyash.toml>
-        if let Some(cfg_path) = self.config.build_path.clone() {
+        let groups = self.config.as_groups();
+        if let Some(cfg_path) = groups.build.path.clone() {
             if let Err(e) = self.run_build_mvp(&cfg_path) {
                 eprintln!("❌ build error: {}", e);
                 std::process::exit(1);
@@ -67,7 +67,7 @@ impl NyashRunner {
         let mut using_ctx = self.init_using_context();
         let mut pending_using: Vec<(String, Option<String>)> = Vec::new();
         // CLI --using SPEC entries (SPEC: 'ns', 'ns as Alias', '"path" as Alias')
-        for spec in &self.config.cli_usings {
+        for spec in &groups.input.cli_usings {
             let s = spec.trim();
             if s.is_empty() {
                 continue;
@@ -133,7 +133,7 @@ impl NyashRunner {
             return;
         }
         // Run named task from nyash.toml (MVP)
-        if let Some(task) = self.config.run_task.clone() {
+        if let Some(task) = groups.run_task.clone() {
             if let Err(e) = run_named_task(&task) {
                 eprintln!("❌ Task error: {}", e);
                 process::exit(1);
@@ -141,11 +141,11 @@ impl NyashRunner {
             return;
         }
         // Verbose CLI flag maps to env for downstream helpers/scripts
-        if self.config.cli_verbose {
+        if groups.debug.cli_verbose {
             std::env::set_var("NYASH_CLI_VERBOSE", "1");
         }
         // GC mode forwarding: map CLI --gc to NYASH_GC_MODE for downstream runtimes
-        if let Some(ref m) = self.config.gc_mode {
+        if let Some(ref m) = groups.gc_mode {
             if !m.trim().is_empty() {
                 std::env::set_var("NYASH_GC_MODE", m);
             }
@@ -155,7 +155,7 @@ impl NyashRunner {
         //   // @env KEY=VALUE
         //   // @jit-debug           (preset: exec, threshold=1, events+trace)
         //   // @plugin-builtins     (NYASH_USE_PLUGIN_BUILTINS=1)
-        if let Some(ref filename) = self.config.file {
+        if let Some(ref filename) = groups.input.file {
             if let Ok(code) = fs::read_to_string(filename) {
                 // Apply script-level directives and lint
                 let strict_fields =
@@ -163,7 +163,7 @@ impl NyashRunner {
                 if let Err(e) = cli_directives::apply_cli_directives_from_source(
                     &code,
                     strict_fields,
-                    self.config.cli_verbose,
+                groups.debug.cli_verbose,
                 ) {
                     eprintln!("❌ Lint/Directive error: {}", e);
                     std::process::exit(1);
@@ -273,7 +273,7 @@ impl NyashRunner {
         std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
 
         // Opt-in: load Ny script plugins listed in nyash.toml [ny_plugins]
-        if self.config.load_ny_plugins
+        if groups.load_ny_plugins
             || std::env::var("NYASH_LOAD_NY_PLUGINS").ok().as_deref() == Some("1")
         {
             if let Ok(text) = std::fs::read_to_string("nyash.toml") {
@@ -406,7 +406,7 @@ impl NyashRunner {
         }
         // Architectural pivot: JIT is compiler-only (EXE/AOT). Ensure VM runtime does not dispatch to JIT
         // unless explicitly requested via independent JIT mode, or when emitting AOT objects.
-        if !self.config.compile_native && !self.config.jit_direct {
+        if !groups.compile_native && !groups.backend.jit.direct {
             // When AOT object emission is requested, allow JIT to run for object generation
             let aot_obj = std::env::var("NYASH_AOT_OBJECT_OUT").ok();
             if aot_obj.is_none() || aot_obj.as_deref() == Some("") {
@@ -415,10 +415,10 @@ impl NyashRunner {
             }
         }
         // Benchmark mode - can run without a file
-        if self.config.benchmark {
+        if groups.benchmark {
             println!("📊 Nyash Performance Benchmark Suite");
             println!("====================================");
-            println!("Running {} iterations per test...", self.config.iterations);
+            println!("Running {} iterations per test...", groups.iterations);
             println!();
             #[cfg(feature = "vm-legacy")]
             {
@@ -434,9 +434,9 @@ impl NyashRunner {
             }
         }
 
-        if let Some(ref filename) = self.config.file {
+        if let Some(ref filename) = groups.input.file {
             // Independent JIT direct mode (no VM execute path)
-            if self.config.jit_direct {
+            if groups.backend.jit.direct {
                 self.run_file_jit_direct(filename);
                 return;
             }

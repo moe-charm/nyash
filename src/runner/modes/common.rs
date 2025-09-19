@@ -110,7 +110,8 @@ impl NyashRunner {
             _ => {
                 if cli_verbose() {
                     println!("🦀 Nyash Rust Implementation - Executing file: {} 🦀", filename);
-                    if let Some(fuel) = self.config.debug_fuel {
+                    let groups = self.config.as_groups();
+                    if let Some(fuel) = groups.debug.debug_fuel {
                         println!("🔥 Debug fuel limit: {} iterations", fuel);
                     } else {
                         println!("🔥 Debug fuel limit: unlimited");
@@ -498,8 +499,9 @@ impl NyashRunner {
         }
 
         // Parse the code with debug fuel limit
-        eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", self.config.debug_fuel);
-        let ast = match NyashParser::parse_from_string_with_fuel(code_ref, self.config.debug_fuel) {
+        let groups = self.config.as_groups();
+        eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", groups.debug.debug_fuel);
+        let ast = match NyashParser::parse_from_string_with_fuel(code_ref, groups.debug.debug_fuel) {
             Ok(ast) => { eprintln!("🔍 DEBUG: Parse completed, AST created"); ast },
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };

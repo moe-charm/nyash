@@ -351,7 +351,7 @@ impl HTTPResponseBox {
 
     /// Quick HTML response creation
     pub fn create_html_response(content: Box<dyn NyashBox>) -> Self {
-        let mut response = HTTPResponseBox::new();
+        let response = HTTPResponseBox::new();
         *response.status_code.lock().unwrap() = 200;
         *response.status_message.lock().unwrap() = "OK".to_string();
         response.headers.lock().unwrap().insert(
@@ -364,7 +364,7 @@ impl HTTPResponseBox {
 
     /// Quick JSON response creation
     pub fn create_json_response(content: Box<dyn NyashBox>) -> Self {
-        let mut response = HTTPResponseBox::new();
+        let response = HTTPResponseBox::new();
         *response.status_code.lock().unwrap() = 200;
         *response.status_message.lock().unwrap() = "OK".to_string();
         response.headers.lock().unwrap().insert(
@@ -377,7 +377,7 @@ impl HTTPResponseBox {
 
     /// Quick 404 response creation
     pub fn create_404_response() -> Self {
-        let mut response = HTTPResponseBox::new();
+        let response = HTTPResponseBox::new();
         *response.status_code.lock().unwrap() = 404;
         *response.status_message.lock().unwrap() = "Not Found".to_string();
         response.headers.lock().unwrap().insert(

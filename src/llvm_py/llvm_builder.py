@@ -184,16 +184,15 @@ class NyashLLVMBuilder:
     
     def lower_function(self, func_data: Dict[str, Any]):
         """Lower a single MIR function to LLVM IR"""
-        # Optional: delegate to external helper when gated (incremental split)
+        # Prefer delegated helper (incremental split); fall back on failure
         try:
-            if os.environ.get('NYASH_LLVM_USE_HELPER_LOWER') == '1':
-                try:
-                    from builders.function_lower import lower_function as _lower
-                    return _lower(self, func_data)
-                except Exception as _e:
-                    trace_debug(f"[Python LLVM] helper lower_function failed, falling back: {_e}")
-        except Exception:
-            pass
+            from builders.function_lower import lower_function as _lower
+            return _lower(self, func_data)
+        except Exception as _e:
+            try:
+                trace_debug(f"[Python LLVM] helper lower_function failed, falling back: {_e}")
+            except Exception:
+                pass
         name = func_data.get("name", "unknown")
         self.current_function_name = name
         import re
@@ -853,156 +852,8 @@ class NyashLLVMBuilder:
             pass
     
     def lower_instruction(self, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
-        """Dispatch instruction to appropriate handler"""
-        op = inst.get("op")
-        # Pick current vmap context
-        vmap_ctx = getattr(self, '_current_vmap', self.vmap)
-        
-        if op == "const":
-            dst = inst.get("dst")
-            value = inst.get("value")
-            lower_const(builder, self.module, dst, value, vmap_ctx, self.resolver)
-            
-        elif op == "binop":
-            operation = inst.get("operation")
-            lhs = inst.get("lhs")
-            rhs = inst.get("rhs")
-            dst = inst.get("dst")
-            dst_type = inst.get("dst_type")
-            lower_binop(builder, self.resolver, operation, lhs, rhs, dst,
-                        vmap_ctx, builder.block, self.preds, self.block_end_values, self.bb_map,
-                        dst_type=dst_type)
-            
-        elif op == "jump":
-            target = inst.get("target")
-            lower_jump(builder, target, self.bb_map)
-            
-        elif op == "copy":
-            dst = inst.get("dst")
-            src = inst.get("src")
-            lower_copy(builder, dst, src, vmap_ctx, self.resolver, builder.block, self.preds, self.block_end_values, self.bb_map, getattr(self, 'ctx', None))
-            
-        elif op == "branch":
-            cond = inst.get("cond")
-            then_bid = inst.get("then")
-            else_bid = inst.get("else")
-            lower_branch(builder, cond, then_bid, else_bid, vmap_ctx, self.bb_map, self.resolver, self.preds, self.block_end_values)
-            
-        elif op == "ret":
-            value = inst.get("value")
-            lower_return(builder, value, vmap_ctx, func.function_type.return_type,
-                         self.resolver, self.preds, self.block_end_values, self.bb_map, getattr(self, 'ctx', None))
-            
-        elif op == "phi":
-            # No-op here: PHIはメタのみ（resolverがon‑demand生成）
-            return
-            
-        elif op == "compare":
-            # Dedicated compare op
-            operation = inst.get("operation") or inst.get("op")
-            lhs = inst.get("lhs")
-            rhs = inst.get("rhs")
-            dst = inst.get("dst")
-            cmp_kind = inst.get("cmp_kind")
-            lower_compare(builder, operation, lhs, rhs, dst, vmap_ctx,
-                          self.resolver, builder.block, self.preds, self.block_end_values, self.bb_map,
-                          meta={"cmp_kind": cmp_kind} if cmp_kind else None,
-                          ctx=getattr(self, 'ctx', None))
-            
-        elif op == "call":
-            func_name = inst.get("func")
-            args = inst.get("args", [])
-            dst = inst.get("dst")
-            lower_call(builder, self.module, func_name, args, dst, vmap_ctx, self.resolver, self.preds, self.block_end_values, self.bb_map, getattr(self, 'ctx', None))
-            
-        elif op == "boxcall":
-            box_vid = inst.get("box")
-            method = inst.get("method")
-            args = inst.get("args", [])
-            dst = inst.get("dst")
-            lower_boxcall(builder, self.module, box_vid, method, args, dst,
-                          vmap_ctx, self.resolver, self.preds, self.block_end_values, self.bb_map, getattr(self, 'ctx', None))
-            # Optional: honor explicit dst_type for tagging (string handle)
-            try:
-                dst_type = inst.get("dst_type")
-                if dst is not None and isinstance(dst_type, dict):
-                    if dst_type.get("kind") == "handle" and dst_type.get("box_type") == "StringBox":
-                        if hasattr(self.resolver, 'mark_string'):
-                            self.resolver.mark_string(int(dst))
-                # Track last substring for optional esc_json fallback
-                try:
-                    if isinstance(method, str) and method == 'substring' and isinstance(dst, int):
-                        self._last_substring_vid = int(dst)
-                except Exception:
-                    pass
-            except Exception:
-                pass
-            
-        elif op == "externcall":
-            func_name = inst.get("func")
-            args = inst.get("args", [])
-            dst = inst.get("dst")
-            lower_externcall(builder, self.module, func_name, args, dst,
-                             vmap_ctx, self.resolver, self.preds, self.block_end_values, self.bb_map, getattr(self, 'ctx', None))
-            
-        elif op == "newbox":
-            box_type = inst.get("type")
-            args = inst.get("args", [])
-            dst = inst.get("dst")
-            lower_newbox(builder, self.module, box_type, args, dst, 
-                        vmap_ctx, self.resolver, getattr(self, 'ctx', None))
-            
-        elif op == "typeop":
-            operation = inst.get("operation")
-            src = inst.get("src")
-            dst = inst.get("dst")
-            target_type = inst.get("target_type")
-            lower_typeop(builder, operation, src, dst, target_type,
-                         vmap_ctx, self.resolver, self.preds, self.block_end_values, self.bb_map, getattr(self, 'ctx', None))
-            
-        elif op == "safepoint":
-            live = inst.get("live", [])
-            lower_safepoint(builder, self.module, live, vmap_ctx,
-                            resolver=self.resolver, preds=self.preds,
-                            block_end_values=self.block_end_values, bb_map=self.bb_map,
-                            ctx=getattr(self, 'ctx', None))
-            
-        elif op == "barrier":
-            barrier_type = inst.get("type", "memory")
-            lower_barrier(builder, barrier_type, ctx=getattr(self, 'ctx', None))
-            
-        elif op == "while":
-            # Experimental LoopForm lowering
-            cond = inst.get("cond")
-            body = inst.get("body", [])
-            self.loop_count += 1
-            if not lower_while_loopform(builder, func, cond, body,
-                                       self.loop_count, self.vmap, self.bb_map,
-                                       self.resolver, self.preds, self.block_end_values,
-                                       getattr(self, 'ctx', None)):
-                # Fallback to regular while (structured)
-                try:
-                    self.resolver._owner_lower_instruction = self.lower_instruction
-                except Exception:
-                    pass
-                lower_while_regular(builder, func, cond, body,
-                                    self.loop_count, self.vmap, self.bb_map,
-                                    self.resolver, self.preds, self.block_end_values)
-        else:
-            trace_debug(f"[Python LLVM] Unknown instruction: {op}")
-        # Record per-inst definition for lifetime hinting as soon as available
-        try:
-            dst_maybe = inst.get("dst")
-            if isinstance(dst_maybe, int) and dst_maybe in self.vmap:
-                cur_bid = None
-                try:
-                    cur_bid = int(str(builder.block.name).replace('bb',''))
-                except Exception:
-                    pass
-                if cur_bid is not None:
-                    self.def_blocks.setdefault(dst_maybe, set()).add(cur_bid)
-        except Exception:
-            pass
+        from builders.instruction_lower import lower_instruction as _li
+        return _li(self, builder, inst, func)
     
     # NOTE: regular while lowering is implemented in
     # instructions/controlflow/while_.py::lower_while_regular and invoked

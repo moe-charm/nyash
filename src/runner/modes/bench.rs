@@ -6,9 +6,10 @@ use nyash_rust::{
 impl NyashRunner {
     /// Execute benchmark mode (split)
     pub(crate) fn execute_benchmark_mode(&self) {
+        let groups = self.config.as_groups();
         println!(
             "🏁 Running benchmark mode with {} iterations",
-            self.config.iterations
+            groups.iterations
         );
         // Tests: some run on all backends, some are JIT+f64 only
         // Third element indicates JIT+f64 only (skip VM/Interpreter)
@@ -72,16 +73,16 @@ impl NyashRunner {
                     "(JIT+f64 only) Skipping VM/Interpreter; requires --features cranelift-jit"
                 );
                 // Warmup JIT
-                let warmup = (self.config.iterations / 10).max(1);
+                let warmup = (groups.iterations / 10).max(1);
                 self.bench_jit(code, warmup);
                 // Measured
-                let jit_time = self.bench_jit(code, self.config.iterations);
+                let jit_time = self.bench_jit(code, groups.iterations);
                 println!("\n📊 Performance Summary [{}]:", name);
                 println!(
                     "  JIT f64 ops: {} iters in {:?} ({:.2} ops/sec)",
-                    self.config.iterations,
+                    groups.iterations,
                     jit_time,
-                    self.config.iterations as f64 / jit_time.as_secs_f64()
+                    groups.iterations as f64 / jit_time.as_secs_f64()
                 );
             } else {
                 // Quick correctness check across modes (golden): Interpreter vs VM vs VM+JIT
@@ -91,15 +92,15 @@ impl NyashRunner {
                     println!("✅ Outputs match across Interpreter/VM/JIT");
                 }
                 // Warmup (not measured)
-                let warmup = (self.config.iterations / 10).max(1);
+                let warmup = (groups.iterations / 10).max(1);
                 self.bench_interpreter(code, warmup);
                 self.bench_vm(code, warmup);
                 self.bench_jit(code, warmup);
 
                 // Measured runs
-                let interpreter_time = self.bench_interpreter(code, self.config.iterations);
-                let vm_time = self.bench_vm(code, self.config.iterations);
-                let jit_time = self.bench_jit(code, self.config.iterations);
+                let interpreter_time = self.bench_interpreter(code, groups.iterations);
+                let vm_time = self.bench_vm(code, groups.iterations);
+                let jit_time = self.bench_jit(code, groups.iterations);
 
                 // Summary
                 let vm_vs_interp = interpreter_time.as_secs_f64() / vm_time.as_secs_f64();

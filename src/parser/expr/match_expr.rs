@@ -15,7 +15,7 @@ impl NyashParser {
         enum MatchArm {
             Lit { lits: Vec<LiteralValue>, guard: Option<ASTNode>, body: ASTNode },
             Type { ty: String, bind: String, guard: Option<ASTNode>, body: ASTNode },
-            Default(ASTNode),
+            Default,
         }
 
         let mut arms_any: Vec<MatchArm> = Vec::new();
@@ -67,7 +67,7 @@ impl NyashParser {
                     self.parse_expression()?
                 };
                 default_expr = Some(expr.clone());
-                arms_any.push(MatchArm::Default(expr));
+                arms_any.push(MatchArm::Default);
             } else {
                 // arm head
                 // Type pattern? IDENT '(' IDENT ')'
@@ -187,7 +187,7 @@ impl NyashParser {
                             lit_arms.push((lit, body.clone()));
                         }
                     }
-                    MatchArm::Default(_) => { /* handled via else_expr above */ }
+                    MatchArm::Default => { /* handled via else_expr above */ }
                     MatchArm::Type { .. } => unreachable!(),
                 }
             }
@@ -216,7 +216,7 @@ impl NyashParser {
         // Process arms in reverse to build nested If
         for arm in arms_any.into_iter().rev() {
             match arm {
-                MatchArm::Default(_) => {
+                MatchArm::Default => {
                     // already handled as else_node
                 }
                 MatchArm::Lit { lits, guard, body } => {

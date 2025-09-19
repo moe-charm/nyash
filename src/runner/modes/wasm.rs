@@ -35,7 +35,8 @@ impl NyashRunner {
         };
 
         // Determine output file
-        let output = self.config.output_file.as_deref().unwrap_or_else(|| {
+        let groups = self.config.as_groups();
+        let output = groups.output_file.as_deref().unwrap_or_else(|| {
             if filename.ends_with(".nyash") { filename.strip_suffix(".nyash").unwrap_or(filename) } else { filename }
         });
         let output_file = format!("{}.wat", output);
@@ -46,4 +47,3 @@ impl NyashRunner {
         }
     }
 }
-

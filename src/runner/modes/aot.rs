@@ -6,7 +6,8 @@ impl NyashRunner {
     /// Execute AOT compilation mode (split)
     #[cfg(feature = "cranelift-jit")]
     pub(crate) fn execute_aot_mode(&self, filename: &str) {
-        let output = self.config.output_file.as_deref().unwrap_or("app");
+        let groups = self.config.as_groups();
+        let output = groups.output_file.as_deref().unwrap_or("app");
         // Prefer using provided helper scripts to ensure link flags and runtime integration
         let status = if cfg!(target_os = "windows") {
             // Use PowerShell helper; falls back to bash if available inside the script
