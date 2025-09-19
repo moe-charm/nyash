@@ -89,6 +89,38 @@ jobs:
       - name: Macro golden — map escape
         run: bash tools/test/golden/macro/map_esc_user_macro_golden.sh
 
+  macro-smokes-lite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep (for smokes)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Build (release)
+        run: cargo build --release -q
+
+      - name: Smoke — match guard literal OR
+        run: bash tools/test/smoke/macro/match_guard_literal_or_smoke.sh
+
+      - name: Smoke — match guard type (no PeekExpr)
+        run: bash tools/test/smoke/macro/match_guard_type_smoke.sh
+
+      - name: Smoke — MIR hints Scope enter/leave
+        run: bash tools/test/smoke/mir/hints_trace_smoke.sh
+
+      - name: Smoke — MIR hints JoinResult
+        run: bash tools/test/smoke/mir/hints_join_result_smoke.sh
+
   selfhost-preexpand-smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 20
