@@ -162,46 +162,8 @@ impl NyashParser {
             });
         }
 
-        // 5) Optional postfix handlers (Stage‑3) directly after block
-        if crate::config::env::parser_stage3()
-            && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
-        {
-            let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
-            if self.match_token(&TokenType::CATCH) {
-                self.advance();
-                self.consume(TokenType::LPAREN)?;
-                let (exc_ty, exc_var) = self.parse_catch_param()?;
-                self.consume(TokenType::RPAREN)?;
-                let catch_body = self.parse_block_statements()?;
-                catch_clauses.push(crate::ast::CatchClause {
-                    exception_type: exc_ty,
-                    variable_name: exc_var,
-                    body: catch_body,
-                    span: crate::ast::Span::unknown(),
-                });
-                self.skip_newlines();
-                if self.match_token(&TokenType::CATCH) {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "single catch only after member block".to_string(),
-                        line,
-                    });
-                }
-            }
-            let finally_body = if self.match_token(&TokenType::CLEANUP) {
-                self.advance();
-                Some(self.parse_block_statements()?)
-            } else {
-                None
-            };
-            final_body = vec![ASTNode::TryCatch {
-                try_body: final_body,
-                catch_clauses,
-                finally_body,
-                span: Span::unknown(),
-            }];
-        }
+        // 5) Optional postfix handlers (Stage‑3) directly after block (shared helper)
+        final_body = crate::parser::declarations::box_def::members::postfix::wrap_with_optional_postfix(self, final_body)?;
 
         // 6) Generate methods per kind (fully equivalent to former inline branch)
         if kind == "once" {
