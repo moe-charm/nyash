@@ -1,0 +1,13 @@
+// if_match_normalize_macro.nyash
+// Scaffold: identity expansion for now. Future: introduce join variable and
+// canonical If/Match normalization (scrutinee once, guard fused) as documented
+// in docs/guides/if-match-normalize.md.
+
+static box MacroBoxSpec {
+  name() { return "IfMatchNormalizeScaffold" }
+
+  expand(json, ctx) {
+    return json
+  }
+}
+
