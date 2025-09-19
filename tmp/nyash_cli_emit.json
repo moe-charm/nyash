@@ -6,143 +6,7 @@
           "id": 0,
           "instructions": [
             {
-              "args": [],
               "dst": 0,
-              "op": "newbox",
-              "type": "ArrayBox"
-            },
-            {
-              "args": [],
-              "dst": 1,
-              "op": "newbox",
-              "type": "ConsoleBox"
-            },
-            {
-              "args": [],
-              "box": 1,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "args": [],
-              "dst": 2,
-              "op": "newbox",
-              "type": "ArrayBox"
-            },
-            {
-              "args": [],
-              "box": 2,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "args": [],
-              "dst": 3,
-              "op": "newbox",
-              "type": "MapBox"
-            },
-            {
-              "args": [],
-              "box": 3,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "dst": 5,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "dst": 7,
-              "op": "copy",
-              "src": 3
-            },
-            {
-              "dst": 8,
-              "op": "copy",
-              "src": 1
-            },
-            {
-              "dst": 13,
-              "op": "copy",
-              "src": 2
-            },
-            {
-              "dst": 10,
-              "op": "copy",
-              "src": 6
-            },
-            {
-              "dst": 12,
-              "op": "copy",
-              "src": 5
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 14,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 10
-              }
-            },
-            {
-              "dst": 15,
-              "lhs": 12,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 14
-            },
-            {
-              "cond": 15,
-              "else": 3,
-              "op": "branch",
-              "then": 2
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "instructions": [
-            {
-              "dst": 16,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 17,
-              "lhs": 12,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 16
-            },
-            {
-              "dst": 18,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -150,29 +14,70 @@
               }
             },
             {
-              "dst": 19,
-              "lhs": 17,
-              "op": "binop",
-              "operation": "%",
-              "rhs": 18
-            },
-            {
-              "dst": 20,
+              "dst": 1,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 1
               }
             },
             {
-              "dst": 21,
-              "lhs": 19,
+              "dst": 2,
+              "lhs": 0,
               "op": "compare",
               "operation": "==",
-              "rhs": 20
+              "rhs": 1
             },
             {
-              "cond": 21,
+              "cond": 2,
+              "else": 2,
+              "op": "branch",
+              "then": 1
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 10
+              }
+            },
+            {
+              "dst": 9,
+              "op": "copy",
+              "src": 3
+            },
+            {
+              "op": "jump",
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 2
+              }
+            },
+            {
+              "dst": 5,
+              "lhs": 0,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 4
+            },
+            {
+              "cond": 5,
               "else": 5,
               "op": "branch",
               "then": 4
@@ -183,79 +88,16 @@
           "id": 3,
           "instructions": [
             {
-              "dst": 48,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "x="
-              }
-            },
-            {
-              "dst": 49,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 48,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 10
-            },
-            {
-              "dst": 50,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": ", len="
-              }
-            },
-            {
-              "dst": 51,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 49,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 50
-            },
-            {
-              "args": [],
-              "box": 13,
-              "dst": 52,
-              "method": "len",
-              "op": "boxcall"
-            },
-            {
-              "dst": 53,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 51,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 52
-            },
-            {
               "args": [
-                53
+                9
               ],
-              "box": 8,
-              "dst": 54,
-              "method": "println",
-              "op": "boxcall"
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "op": "ret",
-              "value": 10
+              "value": 9
             }
           ]
         },
@@ -263,44 +105,21 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 31,
-              "op": "copy",
-              "src": 28
-            },
-            {
-              "args": [
-                17
-              ],
-              "box": 13,
-              "dst": 22,
-              "method": "push",
-              "op": "boxcall"
-            },
-            {
-              "dst": 23,
+              "dst": 6,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 4
+                "value": 20
               }
             },
             {
-              "dst": 24,
-              "lhs": 17,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 23
-            },
-            {
-              "dst": 31,
+              "dst": 8,
               "op": "copy",
-              "src": 28
+              "src": 6
             },
             {
-              "cond": 24,
-              "else": 8,
-              "op": "branch",
-              "then": 7
+              "op": "jump",
+              "target": 6
             }
           ]
         },
@@ -308,24 +127,17 @@
           "id": 5,
           "instructions": [
             {
-              "dst": 29,
+              "dst": 7,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 1
+                "value": 30
               }
             },
             {
-              "dst": 30,
-              "lhs": 28,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 29
-            },
-            {
-              "dst": 31,
+              "dst": 8,
               "op": "copy",
-              "src": 30
+              "src": 7
             },
             {
               "op": "jump",
@@ -337,262 +149,18 @@
           "id": 6,
           "instructions": [
             {
-              "dst": 33,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 7
-              }
-            },
-            {
-              "dst": 34,
-              "lhs": 17,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 33
-            },
-            {
-              "cond": 34,
-              "else": 12,
-              "op": "branch",
-              "then": 11
-            }
-          ]
-        },
-        {
-          "id": 7,
-          "instructions": [
-            {
-              "dst": 12,
+              "dst": 9,
               "op": "copy",
-              "src": 17
+              "src": 8
             },
             {
-              "dst": 12,
+              "dst": 9,
               "op": "copy",
-              "src": 17
+              "src": 8
             },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 8,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 9,
-          "instructions": [
-            {
-              "dst": 27,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 28,
-              "lhs": 10,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 27
-            },
-            {
-              "op": "jump",
-              "target": 6
-            }
-          ]
-        },
-        {
-          "id": 10,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 11,
-          "instructions": [
-            {
-              "dst": 35,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "k"
-              }
-            },
-            {
-              "dst": 36,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "v"
-              }
-            },
-            {
-              "args": [
-                35,
-                36
-              ],
-              "box": 7,
-              "dst": 37,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "dst": 38,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 5
-              }
-            },
-            {
-              "dst": 39,
-              "lhs": 31,
-              "op": "compare",
-              "operation": ">",
-              "rhs": 38
-            },
-            {
-              "cond": 39,
-              "else": 15,
-              "op": "branch",
-              "then": 14
-            }
-          ]
-        },
-        {
-          "id": 12,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 13
-            }
-          ]
-        },
-        {
-          "id": 13,
-          "instructions": [
-            {
-              "dst": 43,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 3
-              }
-            },
-            {
-              "dst": 44,
-              "lhs": 17,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 43
-            },
-            {
-              "cond": 44,
-              "else": 19,
-              "op": "branch",
-              "then": 18
-            }
-          ]
-        },
-        {
-          "id": 14,
-          "instructions": [
             {
               "op": "jump",
               "target": 3
-            }
-          ]
-        },
-        {
-          "id": 15,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 16
-            }
-          ]
-        },
-        {
-          "id": 16,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 13
-            }
-          ]
-        },
-        {
-          "id": 17,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 16
-            }
-          ]
-        },
-        {
-          "id": 18,
-          "instructions": [
-            {
-              "op": "ret",
-              "value": 31
-            }
-          ]
-        },
-        {
-          "id": 19,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 20
-            }
-          ]
-        },
-        {
-          "id": 20,
-          "instructions": [
-            {
-              "dst": 10,
-              "op": "copy",
-              "src": 31
-            },
-            {
-              "dst": 12,
-              "op": "copy",
-              "src": 17
-            },
-            {
-              "dst": 10,
-              "op": "copy",
-              "src": 31
-            },
-            {
-              "dst": 12,
-              "op": "copy",
-              "src": 17
-            },
-            {
-              "op": "jump",
-              "target": 1
             }
           ]
         }

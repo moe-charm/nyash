@@ -1,4 +1,7 @@
 function main() {
-  return if (1 < 2) { 10 } else { 20 }
+  if (1 < 2) {
+    return 10
+  } else {
+    return 20
+  }
 }
-

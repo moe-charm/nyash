@@ -416,6 +416,8 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
                 Err(e) => { eprintln!("[macro-proxy] wait error: {}", e); if strict_enabled() { std::process::exit(2); } return ast.clone(); }
             }
         }
+        // Touch once to avoid unused_assignments warning on success-only paths
+        let _code_peek = status_opt.as_ref().and_then(|s| s.code());
         // Capture stderr for diagnostics
         let mut err = String::new();
         if let Some(mut se) = child.stderr.take() { use std::io::Read; let _ = se.read_to_string(&mut err); }
