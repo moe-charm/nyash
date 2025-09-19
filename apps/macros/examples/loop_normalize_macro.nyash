@@ -1,0 +1,13 @@
+// loop_normalize_macro.nyash
+// MVP: identity expansion with (json, ctx) signature.
+// Next steps: normalize `loop(cond){ body }` into carrier-based LoopForm.
+
+static box MacroBoxSpec {
+  static function name() { return "LoopNormalize" }
+
+  static function expand(json, ctx) {
+    // For MVP, return input unchanged.
+    return json
+  }
+}
+

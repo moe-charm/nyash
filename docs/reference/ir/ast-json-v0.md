@@ -7,10 +7,13 @@ Top-level
 - Nested nodes referenced inline; no IDs.
 - Span is omitted in v0 (unknown). Future versions may include `span` with file/line/col.
 
-Kinds (subset for Phase 2)
+Kinds (subset for Phase 2+)
 - Program: { kind: "Program", statements: [Node] }
+- Loop: { kind: "Loop", condition: Node, body: [Node] }
 - Print: { kind: "Print", expression: Node }
 - Return: { kind: "Return", value: Node|null }
+- Break: { kind: "Break" }
+- Continue: { kind: "Continue" }
 - Assignment: { kind: "Assignment", target: Node, value: Node }
 - If: { kind: "If", condition: Node, then: [Node], else: [Node]|null }
 - FunctionDeclaration: { kind: "FunctionDeclaration", name: string, params: [string], body: [Node], static: bool, override: bool }

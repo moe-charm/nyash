@@ -7,6 +7,11 @@ pub fn ast_to_json(ast: &ASTNode) -> Value {
             "kind": "Program",
             "statements": statements.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>()
         }),
+        ASTNode::Loop { condition, body, .. } => json!({
+            "kind": "Loop",
+            "condition": ast_to_json(&condition),
+            "body": body.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>()
+        }),
         ASTNode::Print { expression, .. } => json!({
             "kind": "Print",
             "expression": ast_to_json(&expression),
@@ -15,6 +20,8 @@ pub fn ast_to_json(ast: &ASTNode) -> Value {
             "kind": "Return",
             "value": value.as_ref().map(|v| ast_to_json(v)),
         }),
+        ASTNode::Break { .. } => json!({"kind":"Break"}),
+        ASTNode::Continue { .. } => json!({"kind":"Continue"}),
         ASTNode::Assignment { target, value, .. } => json!({
             "kind": "Assignment",
             "target": ast_to_json(&target),
@@ -77,8 +84,15 @@ pub fn json_to_ast(v: &Value) -> Option<ASTNode> {
             let stmts = v.get("statements")?.as_array()?.iter().filter_map(json_to_ast).collect::<Vec<_>>();
             ASTNode::Program { statements: stmts, span: Span::unknown() }
         }
+        "Loop" => ASTNode::Loop {
+            condition: Box::new(json_to_ast(v.get("condition")?)?),
+            body: v.get("body")?.as_array()?.iter().filter_map(json_to_ast).collect::<Vec<_>>(),
+            span: Span::unknown(),
+        },
         "Print" => ASTNode::Print { expression: Box::new(json_to_ast(v.get("expression")?)?), span: Span::unknown() },
         "Return" => ASTNode::Return { value: v.get("value").and_then(json_to_ast).map(Box::new), span: Span::unknown() },
+        "Break" => ASTNode::Break { span: Span::unknown() },
+        "Continue" => ASTNode::Continue { span: Span::unknown() },
         "Assignment" => ASTNode::Assignment { target: Box::new(json_to_ast(v.get("target")?)?), value: Box::new(json_to_ast(v.get("value")?)?), span: Span::unknown() },
         "If" => ASTNode::If { condition: Box::new(json_to_ast(v.get("condition")?)?), then_body: v.get("then")?.as_array()?.iter().filter_map(json_to_ast).collect::<Vec<_>>(), else_body: v.get("else").and_then(|a| a.as_array().map(|arr| arr.iter().filter_map(json_to_ast).collect::<Vec<_>>())), span: Span::unknown() },
         "FunctionDeclaration" => ASTNode::FunctionDeclaration {
