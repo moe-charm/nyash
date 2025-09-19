@@ -6,8 +6,33 @@
           "id": 0,
           "instructions": [
             {
-              "op": "jump",
-              "target": 2
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 2
+              }
+            },
+            {
+              "dst": 3,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "<",
+              "rhs": 2
+            },
+            {
+              "cond": 3,
+              "else": 2,
+              "op": "branch",
+              "then": 1
             }
           ]
         },
@@ -15,50 +40,7 @@
           "id": 1,
           "instructions": [
             {
-              "args": [
-                1
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "op": "ret",
-              "value": 1
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "instructions": []
-        },
-        {
-          "id": 3,
-          "instructions": [
-            {
               "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 30
-              }
-            },
-            {
-              "dst": 1,
-              "op": "copy",
-              "src": 4
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 4,
-          "instructions": [
-            {
-              "dst": 2,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -66,25 +48,21 @@
               }
             },
             {
-              "dst": 1,
+              "dst": 6,
               "op": "copy",
-              "src": 2
+              "src": 4
             },
             {
               "op": "jump",
-              "target": 1
+              "target": 3
             }
           ]
         },
         {
-          "id": 5,
-          "instructions": []
-        },
-        {
-          "id": 6,
+          "id": 2,
           "instructions": [
             {
-              "dst": 3,
+              "dst": 5,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -92,13 +70,30 @@
               }
             },
             {
-              "dst": 1,
+              "dst": 6,
               "op": "copy",
-              "src": 3
+              "src": 5
             },
             {
               "op": "jump",
-              "target": 1
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "args": [
+                6
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "op": "ret",
+              "value": 6
             }
           ]
         }

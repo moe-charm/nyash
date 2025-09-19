@@ -26,3 +26,15 @@ Next
 - Wire ScopeEnter/Leave in MirBuilder for function entry/exit and block constructs.
 - Add a simple debug dump when NYASH_MIR_TRACE_HINTS=1.
 
+Runtime Trace
+- Enable: `NYASH_MIR_TRACE_HINTS=1`
+- Backend: any path that builds MIR (e.g., `--backend vm`)
+- Output (stderr):
+  - `[mir][hint] ScopeEnter(0)` at function entry
+  - `[mir][hint] JoinResult(x)` when both branches assign same variable `x`
+  - `[mir][hint] ScopeLeave(0)` at function exit
+
+Example
+- `apps/tests/macro/if/assign_both_branches.nyash` emits JoinResult(x):
+  - `if (cond) { x = 10 } else { x = 20 }`
+  - Both branches assign `x`, builder hints the join.
