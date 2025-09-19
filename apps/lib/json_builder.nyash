@@ -60,6 +60,16 @@ static box JsonBuilder {
     return "{\"kind\":\"Assignment\",\"target\":" + target_json + ",\"value\":" + value_json + "}"
   }
 
+  print_(expr_json) {
+    return "{\"kind\":\"Print\",\"expression\":" + expr_json + "}"
+  }
+
+  return_(value_json) {
+    local v = "null"
+    if value_json != null { v = value_json }
+    return "{\"kind\":\"Return\",\"value\":" + v + "}"
+  }
+
   local(vars, inits) {
     // vars: array[string], inits: array[string|null]
     local vs = []
@@ -110,4 +120,3 @@ static box JsonBuilder {
     return "{\"kind\":\"Program\",\"statements\":[" + this.join(stmts_json, ",") + "]}"
   }
 }
-
