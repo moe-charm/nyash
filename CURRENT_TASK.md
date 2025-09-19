@@ -1,6 +1,6 @@
 # Current Task — Phase Freeze (Macro Complete)
 
-Updated: 2025‑09‑19
+Updated: 2025‑09‑19 (night)
 
 ## Status
 マクロ基盤は完成・既定ONで安定（AST JSON v0、PyVMサンドボックス、strict/timeout、dump/golden、JSONL trace、プロファイル）。ここで機能を一旦凍結し、自己ホスト/実アプリ開発に注力して磨き込むフェーズに入る。
@@ -23,6 +23,14 @@ Updated: 2025‑09‑19
 - CI: min‑gate に macro‑golden ジョブと selfhost‑preexpand‑smoke を追加。
 - Docs: user‑macros.md / ast‑json‑v0.md / capabilities.md (io/net/env).
 
+## Delivered (LoopForm – MVP‑1 Safe)
+- LoopNormalize macro (Nyash runner) scaffolded and active.
+- Canonicalize Loop node key order (condition → body).
+- Safe body reorder: move Assignment nodes to tail only when original order already has non‑assign → assign; otherwise keep order (no semantic change).
+- JsonBuilder utility added for AST JSON v0 fragments (string‑based minimal helpers).
+- Golden comparison made key‑order insensitive (JSON normalized via python) for macro tests.
+- LLVM pre‑expand run verified on loop_simple (PyVM → MIR → LLVM).
+
 ## Focus — Freeze & Polish
 1) 実アプリの作成と運用（マクロ前展開/PyVM/LLVMラインの動作確認）
 2) バグ修正・ドキュメント整備・スモーク/ゴールデン/CI強化（仕様不変）
@@ -39,21 +47,20 @@ Updated: 2025‑09‑19
 - DONE: MacroCtx 契約 PoC — ランナーが `expand(json, ctx)` を優先、失敗時に `expand(json)` へフォールバック。
 
 Next (short)
-- Self‑host 前展開: array/map ケースの追加スモーク（auto 動作の追認）。
-- `macro-profile` の最終化（ドキュメント化 + CIプロファイルの導入検討）。
-- MacroCtx: ctx JSON スキーマの明記（limits/nonce/gensym 提示）と `ctx.gensym` の採用例を追加。
+- LoopForm MVP‑2: while → carrier normalization (no break/continue, up to 2 vars)
+  - Extract updated vars (e.g., i, sum) and normalize body so updates are tail; emit carrier‑like structure with existing AST forms (Local/If/Loop/Assignment) while preserving semantics.
+  - Add goldens (two‑vars) + selfhost‑preexpand smokes; verify PyVM/LLVM parity.
+- LoopForm MVP‑3: break/continue minimal handling (single‑level)
+- for/foreach pre‑desugaring → LoopForm normalization (limited)
+- LLVM IR hygiene for LoopForm cases — PHI at block head, no empty PHIs (smoke)
+- Docs: enrich `docs/guides/loopform.md` with carrier examples and JSON builder snippets.
 
 Action Items (next 48h)
-- [x] Add selfhost pre-expand smokes for array/map
-  - Scripts: `tools/test/smoke/macro/selfhost_preexpand_array_auto.sh`, `selfhost_preexpand_map_auto.sh`
-  - Accept: logs contain "selfhost macro pre-expand: engaging" and program exits 0
-- [x] Finalize macro profiles
-  - Docs: `docs/guides/macro-profiles.md`（dev/lite/ci → envの対応）
-  - CLI: `--profile {lite|dev|ci|strict}` 実装済
-- [x] MacroCtx example
-  - Example macro: `apps/macros/examples/gensym_example_macro.nyash`
-- [x] ENV縮約の警告
-  - 旧ENV使用時の非推奨ログを追加（TOPLEVEL_ALLOW/BOX_CHILD_RUNNER/BOX_NY_*）
+- [x] Enable sugar by default (array/map literals)
+- [x] Golden normalizer (key‑order insensitive) for macro tests
+- [x] Loop simple/two‑vars goldens with normalization
+- [ ] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
+- [ ] LLVM PHI hygiene smoke on LoopForm cases
 
 ## Phase‑16 Outlook
 - MacroCtx (gensym/report/getEnv) and capabilities mapped to `nyash.toml`.
