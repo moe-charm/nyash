@@ -206,6 +206,354 @@ fn transform_map_insert_tag(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
     }
 }
 
+fn transform_loop_normalize(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::ASTNode as A;
+    match ast.clone() {
+        // Recurse into container nodes first
+        A::Program { statements, span } => {
+            A::Program { statements: statements.into_iter().map(|n| transform_loop_normalize(&n)).collect(), span }
+        }
+        A::If { condition, then_body, else_body, span } => {
+            A::If {
+                condition: Box::new(transform_loop_normalize(&condition)),
+                then_body: then_body.into_iter().map(|n| transform_loop_normalize(&n)).collect(),
+                else_body: else_body.map(|v| v.into_iter().map(|n| transform_loop_normalize(&n)).collect()),
+                span,
+            }
+        }
+        A::Loop { condition, body, span } => {
+            // First, normalize inside children
+            let condition = Box::new(transform_loop_normalize(&condition));
+            let body_norm: Vec<A> = body.into_iter().map(|n| transform_loop_normalize(&n)).collect();
+
+            // MVP-3: break/continue 最小対応
+            // 方針: 本体を control(Break/Continue) でセグメントに分割し、
+            // 各セグメント内のみ安全に「非代入→代入」に整列する（順序維持の安定版）。
+            // 追加ガード: 代入先は変数に限る。変数の種類は全体で最大2種まで（MVP-2 制約維持）。
+
+            // まず全体の更新変数の種類数を計測（上限2）。
+            let mut uniq_targets_overall: Vec<String> = Vec::new();
+            for stmt in &body_norm {
+                if let A::Assignment { target, .. } = stmt {
+                    if let A::Variable { name, .. } = target.as_ref() {
+                        if !uniq_targets_overall.iter().any(|s| s == name) {
+                            uniq_targets_overall.push(name.clone());
+                            if uniq_targets_overall.len() > 2 { // 超過したら全体の並べ替えは不許可
+                                return A::Loop { condition, body: body_norm, span };
+                            }
+                        }
+                    } else {
+                        // 複合ターゲットを含む場合は保守的にスキップ
+                        return A::Loop { condition, body: body_norm, span };
+                    }
+                }
+            }
+
+            // セグメント分解 → セグメント毎に安全整列
+            let mut rebuilt: Vec<A> = Vec::with_capacity(body_norm.len());
+            let mut seg: Vec<A> = Vec::new();
+            let flush_seg = |seg: &mut Vec<A>, out: &mut Vec<A>| {
+                // セグメント内で「代入の後に非代入」が存在したら整列しない
+                let mut saw_assign = false;
+                let mut safe = true;
+                for n in seg.iter() {
+                    match n {
+                        A::Assignment { .. } => { saw_assign = true; }
+                        _ => {
+                            if saw_assign { safe = false; break; }
+                        }
+                    }
+                }
+                if safe {
+                    // others → assigns の順で安定整列
+                    let mut others: Vec<A> = Vec::new();
+                    let mut assigns: Vec<A> = Vec::new();
+                    for n in seg.drain(..) {
+                        match n {
+                            A::Assignment { .. } => assigns.push(n),
+                            _ => others.push(n),
+                        }
+                    }
+                    out.extend(others.into_iter());
+                    out.extend(assigns.into_iter());
+                } else {
+                    // そのまま吐き出す
+                    out.extend(seg.drain(..));
+                }
+            };
+
+            for stmt in body_norm.into_iter() {
+                match stmt.clone() {
+                    A::Break { .. } | A::Continue { .. } => {
+                        // control の直前までをフラッシュしてから control を出力
+                        flush_seg(&mut seg, &mut rebuilt);
+                        rebuilt.push(stmt);
+                    }
+                    other => seg.push(other),
+                }
+            }
+            // 末尾セグメントをフラッシュ
+            flush_seg(&mut seg, &mut rebuilt);
+
+            A::Loop { condition, body: rebuilt, span }
+        }
+        // Leaf and other nodes: unchanged
+        A::Local { variables, initial_values, span } => A::Local { variables, initial_values, span },
+        A::Assignment { target, value, span } => A::Assignment { target, value, span },
+        A::Return { value, span } => A::Return { value, span },
+        A::Print { expression, span } => A::Print { expression, span },
+        A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left, right, span },
+        A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand, span },
+        A::MethodCall { object, method, arguments, span } => A::MethodCall { object, method, arguments, span },
+        A::FunctionCall { name, arguments, span } => A::FunctionCall { name, arguments, span },
+        A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements, span },
+        A::MapLiteral { entries, span } => A::MapLiteral { entries, span },
+        other => other,
+    }
+}
+
+// Core normalization pass used by runners (always-on when macros enabled).
+// Order matters: for/foreach → match(PeekExpr) → loop tail alignment.
+pub fn normalize_core_pass(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    let a1 = transform_for_foreach(ast);
+    let a2 = transform_peek_match_literal(&a1);
+    let a3 = transform_loop_normalize(&a2);
+    a3
+}
+
+fn subst_var(node: &nyash_rust::ASTNode, name: &str, replacement: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::ASTNode as A;
+    match node.clone() {
+        A::Variable { name: n, .. } if n == name => replacement.clone(),
+        A::Program { statements, span } => A::Program { statements: statements.iter().map(|s| subst_var(s, name, replacement)).collect(), span },
+        A::Print { expression, span } => A::Print { expression: Box::new(subst_var(&expression, name, replacement)), span },
+        A::Return { value, span } => A::Return { value: value.as_ref().map(|v| Box::new(subst_var(v, name, replacement))), span },
+        A::Assignment { target, value, span } => A::Assignment { target: Box::new(subst_var(&target, name, replacement)), value: Box::new(subst_var(&value, name, replacement)), span },
+        A::If { condition, then_body, else_body, span } => A::If {
+            condition: Box::new(subst_var(&condition, name, replacement)),
+            then_body: then_body.iter().map(|s| subst_var(s, name, replacement)).collect(),
+            else_body: else_body.map(|v| v.iter().map(|s| subst_var(s, name, replacement)).collect()),
+            span,
+        },
+        A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(subst_var(&left, name, replacement)), right: Box::new(subst_var(&right, name, replacement)), span },
+        A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(subst_var(&operand, name, replacement)), span },
+        A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(subst_var(&object, name, replacement)), method, arguments: arguments.iter().map(|a| subst_var(a, name, replacement)).collect(), span },
+        A::FunctionCall { name: fn_name, arguments, span } => A::FunctionCall { name: fn_name, arguments: arguments.iter().map(|a| subst_var(a, name, replacement)).collect(), span },
+        A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.iter().map(|e| subst_var(e, name, replacement)).collect(), span },
+        A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.iter().map(|(k,v)| (k.clone(), subst_var(v, name, replacement))).collect(), span },
+        other => other,
+    }
+}
+
+fn transform_for_foreach(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::{ASTNode as A, BinaryOperator, LiteralValue, Span};
+
+    fn rewrite_stmt_list(list: Vec<A>) -> Vec<A> {
+        let mut out: Vec<A> = Vec::new();
+        for st in list.into_iter() {
+            match st.clone() {
+                A::FunctionCall { name, arguments, .. } if (name == "ny_for" || name == "for") && arguments.len() == 4 => {
+                    let init = arguments[0].clone();
+                    let cond = arguments[1].clone();
+                    let step = arguments[2].clone();
+                    let body_lam = arguments[3].clone();
+                    if let A::Lambda { params, body, .. } = body_lam {
+                        if params.is_empty() {
+                            // Accept init as Local/Assignment or Lambda(); step as Assignment or Lambda()
+                            // Emit init statements (0..n)
+                            match init.clone() {
+                                A::Assignment { .. } | A::Local { .. } => out.push(init),
+                                A::Lambda { params: p2, body: b2, .. } if p2.is_empty() => {
+                                    for s in b2 { out.push(transform_for_foreach(&s)); }
+                                }
+                                _ => {}
+                            }
+                            let mut loop_body: Vec<A> = body
+                                .into_iter()
+                                .map(|n| transform_for_foreach(&n))
+                                .collect();
+                            // Append step statements at tail
+                            match step.clone() {
+                                A::Assignment { .. } => loop_body.push(step),
+                                A::Lambda { params: p3, body: b3, .. } if p3.is_empty() => {
+                                    for s in b3 { loop_body.push(transform_for_foreach(&s)); }
+                                }
+                                _ => {}
+                            }
+                            out.push(A::Loop { condition: Box::new(cond), body: loop_body, span: Span::unknown() });
+                            continue;
+                        }
+                    }
+                    // Fallback: keep as-is
+                    out.push(A::FunctionCall { name, arguments, span: Span::unknown() });
+                }
+                A::FunctionCall { name, arguments, .. } if (name == "ny_foreach" || name == "foreach") && arguments.len() == 3 => {
+                    let arr = arguments[0].clone();
+                    let var_name_opt = match &arguments[1] { A::Literal { value: LiteralValue::String(s), .. } => Some(s.clone()), _ => None };
+                    let lam = arguments[2].clone();
+                    if let (Some(vn), A::Lambda { params, body, .. }) = (var_name_opt, lam) {
+                        if params.is_empty() {
+                            let idx_name = "__ny_i".to_string();
+                            let idx_var = A::Variable { name: idx_name.clone(), span: Span::unknown() };
+                            let init_idx = A::Local { variables: vec![idx_name.clone()], initial_values: vec![Some(Box::new(A::Literal { value: LiteralValue::Integer(0), span: Span::unknown() }))], span: Span::unknown() };
+                            let size_call = A::MethodCall { object: Box::new(arr.clone()), method: "size".to_string(), arguments: vec![], span: Span::unknown() };
+                            let cond = A::BinaryOp { operator: BinaryOperator::Less, left: Box::new(idx_var.clone()), right: Box::new(size_call), span: Span::unknown() };
+                            let elem = A::MethodCall { object: Box::new(arr.clone()), method: "get".to_string(), arguments: vec![idx_var.clone()], span: Span::unknown() };
+                            let mut loop_body: Vec<A> = body.into_iter().map(|n| subst_var(&n, &vn, &elem)).map(|n| transform_for_foreach(&n)).collect();
+                            let step = A::Assignment { target: Box::new(A::Variable { name: idx_name.clone(), span: Span::unknown() }), value: Box::new(A::BinaryOp { operator: BinaryOperator::Add, left: Box::new(A::Variable { name: idx_name.clone(), span: Span::unknown() }), right: Box::new(A::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }), span: Span::unknown() }), span: Span::unknown() };
+                            loop_body.push(step);
+                            out.push(init_idx);
+                            out.push(A::Loop { condition: Box::new(cond), body: loop_body, span: Span::unknown() });
+                            continue;
+                        }
+                    }
+                    out.push(A::FunctionCall { name, arguments, span: Span::unknown() });
+                }
+                A::Local { variables, initial_values, .. } => {
+                    let mut expanded_any = false;
+                    for opt in &initial_values {
+                        if let Some(v) = opt {
+                            if let A::FunctionCall { name, arguments, .. } = v.as_ref() {
+                                if ((name == "ny_for" || name == "for") && arguments.len() == 4)
+                                    || ((name == "ny_foreach" || name == "foreach") && arguments.len() == 3)
+                                {
+                                    expanded_any = true;
+                                }
+                            }
+                        }
+                    }
+                    if expanded_any {
+                        for opt in initial_values {
+                            if let Some(v) = opt {
+                    match v.as_ref() {
+                                    A::FunctionCall { name: _, arguments, .. } if (arguments.len() == 4) => {
+                                        // Reuse handling by fabricating a statement call
+                                        let fake = A::FunctionCall { name: "for".to_string(), arguments: arguments.clone(), span: Span::unknown() };
+                                        // Route into the top arm by re-matching
+                                        match fake.clone() {
+                                            A::FunctionCall { name: _, arguments, .. } => {
+                                                let init = arguments[0].clone();
+                                                let cond = arguments[1].clone();
+                                                let step = arguments[2].clone();
+                                                let body_lam = arguments[3].clone();
+                                                if let A::Lambda { params, body, .. } = body_lam {
+                                                    if params.is_empty() {
+                                                        match init.clone() {
+                                                            A::Assignment { .. } | A::Local { .. } => out.push(init),
+                                                            A::Lambda { params: p2, body: b2, .. } if p2.is_empty() => { for s in b2 { out.push(transform_for_foreach(&s)); } }
+                                                            _ => {}
+                                                        }
+                                                        let mut loop_body: Vec<A> = body.into_iter().map(|n| transform_for_foreach(&n)).collect();
+                                                        match step.clone() {
+                                                            A::Assignment { .. } => loop_body.push(step),
+                                                            A::Lambda { params: p3, body: b3, .. } if p3.is_empty() => { for s in b3 { loop_body.push(transform_for_foreach(&s)); } }
+                                                            _ => {}
+                                                        }
+                                                        out.push(A::Loop { condition: Box::new(cond), body: loop_body, span: Span::unknown() });
+                                                    }
+                                                }
+                                            }
+                                            _ => {}
+                                        }
+                                    }
+                                    A::FunctionCall { name: _, arguments, .. } if (arguments.len() == 3) => {
+                                        let arr = arguments[0].clone();
+                                        let var_name_opt = match &arguments[1] { A::Literal { value: LiteralValue::String(s), .. } => Some(s.clone()), _ => None };
+                                        let lam = arguments[2].clone();
+                                        if let (Some(vn), A::Lambda { params, body, .. }) = (var_name_opt, lam) {
+                                            if params.is_empty() {
+                                                let idx_name = "__ny_i".to_string();
+                                                let idx_var = A::Variable { name: idx_name.clone(), span: Span::unknown() };
+                                                let init_idx = A::Local { variables: vec![idx_name.clone()], initial_values: vec![Some(Box::new(A::Literal { value: LiteralValue::Integer(0), span: Span::unknown() }))], span: Span::unknown() };
+                                                let size_call = A::MethodCall { object: Box::new(arr.clone()), method: "size".to_string(), arguments: vec![], span: Span::unknown() };
+                                                let cond = A::BinaryOp { operator: BinaryOperator::Less, left: Box::new(idx_var.clone()), right: Box::new(size_call), span: Span::unknown() };
+                                                let elem = A::MethodCall { object: Box::new(arr.clone()), method: "get".to_string(), arguments: vec![idx_var.clone()], span: Span::unknown() };
+                                                let mut loop_body: Vec<A> = body.into_iter().map(|n| subst_var(&n, &vn, &elem)).map(|n| transform_for_foreach(&n)).collect();
+                                                let step = A::Assignment { target: Box::new(A::Variable { name: idx_name.clone(), span: Span::unknown() }), value: Box::new(A::BinaryOp { operator: BinaryOperator::Add, left: Box::new(A::Variable { name: idx_name.clone(), span: Span::unknown() }), right: Box::new(A::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }), span: Span::unknown() }), span: Span::unknown() };
+                                                loop_body.push(step);
+                                                out.push(init_idx);
+                                                out.push(A::Loop { condition: Box::new(cond), body: loop_body, span: Span::unknown() });
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        // Drop original Local that carried macros
+                        continue;
+                    } else {
+                        out.push(A::Local { variables, initial_values, span: Span::unknown() });
+                    }
+                }
+                A::FunctionCall { name, arguments, .. } if name == "foreach_" && arguments.len() == 3 => {
+                    let arr = arguments[0].clone();
+                    let var_name_opt = match &arguments[1] { A::Literal { value: LiteralValue::String(s), .. } => Some(s.clone()), _ => None };
+                    let lam = arguments[2].clone();
+                    if let (Some(vn), A::Lambda { params, body, .. }) = (var_name_opt, lam) {
+                        if params.is_empty() {
+                            // __ny_i = 0; loop(__ny_i < arr.size()) { body[var=arr.get(__ny_i)]; __ny_i = __ny_i + 1 }
+                            let idx_name = "__ny_i".to_string();
+                            let idx_var = A::Variable { name: idx_name.clone(), span: Span::unknown() };
+                            let init_idx = A::Local { variables: vec![idx_name.clone()], initial_values: vec![Some(Box::new(A::Literal { value: LiteralValue::Integer(0), span: Span::unknown() }))], span: Span::unknown() };
+                            let size_call = A::MethodCall { object: Box::new(arr.clone()), method: "size".to_string(), arguments: vec![], span: Span::unknown() };
+                            let cond = A::BinaryOp { operator: BinaryOperator::Less, left: Box::new(idx_var.clone()), right: Box::new(size_call), span: Span::unknown() };
+                            let elem = A::MethodCall { object: Box::new(arr.clone()), method: "get".to_string(), arguments: vec![idx_var.clone()], span: Span::unknown() };
+                            let mut loop_body: Vec<A> = body.into_iter().map(|n| subst_var(&n, &vn, &elem)).map(|n| transform_for_foreach(&n)).collect();
+                            let step = A::Assignment { target: Box::new(A::Variable { name: idx_name.clone(), span: Span::unknown() }), value: Box::new(A::BinaryOp { operator: BinaryOperator::Add, left: Box::new(A::Variable { name: idx_name.clone(), span: Span::unknown() }), right: Box::new(A::Literal { value: LiteralValue::Integer(1), span: Span::unknown() }), span: Span::unknown() }), span: Span::unknown() };
+                            loop_body.push(step);
+                            out.push(init_idx);
+                            out.push(A::Loop { condition: Box::new(cond), body: loop_body, span: Span::unknown() });
+                            continue;
+                        }
+                    }
+                    out.push(A::FunctionCall { name, arguments, span: Span::unknown() });
+                }
+                // Recurse into container nodes and preserve others
+                A::If { condition, then_body, else_body, span } => {
+                    out.push(A::If {
+                        condition: Box::new(transform_for_foreach(&condition)),
+                        then_body: rewrite_stmt_list(then_body),
+                        else_body: else_body.map(rewrite_stmt_list),
+                        span,
+                    });
+                }
+                A::Loop { condition, body, span } => {
+                    out.push(A::Loop {
+                        condition: Box::new(transform_for_foreach(&condition)),
+                        body: rewrite_stmt_list(body),
+                        span,
+                    });
+                }
+                other => out.push(transform_for_foreach(&other)),
+            }
+        }
+        out
+    }
+
+    match ast.clone() {
+        A::Program { statements, span } => A::Program { statements: rewrite_stmt_list(statements), span },
+        A::If { condition, then_body, else_body, span } => A::If {
+            condition: Box::new(transform_for_foreach(&condition)),
+            then_body: rewrite_stmt_list(then_body),
+            else_body: else_body.map(rewrite_stmt_list),
+            span,
+        },
+        A::Loop { condition, body, span } => A::Loop { condition: Box::new(transform_for_foreach(&condition)), body: rewrite_stmt_list(body), span },
+        // Leaf and expression nodes: descend but no statement expansion
+        A::Print { expression, span } => A::Print { expression: Box::new(transform_for_foreach(&expression)), span },
+        A::Return { value, span } => A::Return { value: value.as_ref().map(|v| Box::new(transform_for_foreach(v))), span },
+        A::Assignment { target, value, span } => A::Assignment { target: Box::new(transform_for_foreach(&target)), value: Box::new(transform_for_foreach(&value)), span },
+        A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(transform_for_foreach(&left)), right: Box::new(transform_for_foreach(&right)), span },
+        A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(transform_for_foreach(&operand)), span },
+        A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(transform_for_foreach(&object)), method, arguments: arguments.iter().map(|a| transform_for_foreach(a)).collect(), span },
+        A::FunctionCall { name, arguments, span } => A::FunctionCall { name, arguments: arguments.iter().map(|a| transform_for_foreach(a)).collect(), span },
+        A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.iter().map(|e| transform_for_foreach(e)).collect(), span },
+        A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.iter().map(|(k,v)| (k.clone(), transform_for_foreach(v))).collect(), span },
+        other => other,
+    }
+}
+
 pub fn run_macro_child(macro_file: &str) {
     // Read stdin all
     use std::io::Read;
@@ -234,11 +582,13 @@ pub fn run_macro_child(macro_file: &str) {
         crate::r#macro::macro_box_ny::MacroBehavior::ArrayPrependZero => transform_array_prepend_zero(&ast),
         crate::r#macro::macro_box_ny::MacroBehavior::MapInsertTag => transform_map_insert_tag(&ast),
         crate::r#macro::macro_box_ny::MacroBehavior::LoopNormalize => {
-            // MVP: identity (future: normalize Loop into carrier-based form)
-            ast.clone()
+            transform_loop_normalize(&ast)
         }
         crate::r#macro::macro_box_ny::MacroBehavior::IfMatchNormalize => {
             transform_peek_match_literal(&ast)
+        }
+        crate::r#macro::macro_box_ny::MacroBehavior::ForForeachNormalize => {
+            transform_for_foreach(&ast)
         }
     };
     let out_json = crate::r#macro::ast_json::ast_to_json(&out_ast);

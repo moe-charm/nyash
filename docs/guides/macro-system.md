@@ -60,6 +60,26 @@ NYASH_MACRO_ENABLE=1 NYASH_TEST_ARGS_DEFAULTS=1 \
 ```
 Shows pre/post expansion AST (debug only).
 
+## Core Normalization (always-on when macros enabled)
+
+Certain language sugars are normalized before MIR across all runners when the macro gate is enabled. These are not user macros and do not require any registration:
+
+- for sugar → Loop
+  - `for(fn(){ init }, cond, fn(){ step }, fn(){ body })`
+  - Emits: `init; loop(cond){ body; step }`
+  - `init/step` also accept a single Assignment or Local instead of `fn(){..}`.
+
+- foreach sugar → Loop
+  - `foreach(array_expr, "x", fn(){ body_with_x })`
+  - Expands into an index-based loop with `__ny_i`, and substitutes `x` with `array_expr.get(__ny_i)` inside body.
+
+Normalization order (within the core pass):
+1) for/foreach → 2) match(PeekExpr) → 3) loop tail alignment (carrier-like ordering; break/continue segments supported).
+
+Notes:
+- Backward-compat function names `ny_for` / `ny_foreach` are also accepted but `for` / `foreach` are preferred.
+- This pass is part of the language pipeline; it is orthogonal to user-defined macros.
+
 ## Developer API (preview)
 
 - Pattern/Quote primitives are available to bootstrap macro authorship.

@@ -92,6 +92,21 @@ while (i < n) {
 - break: 「現キャリア」を exit へ（ヘッダ合流と衝突しないよう保持）。
 - いずれも 1 段ネストまでの最小対応から開始。
 
+MVP-3（実装済み・最小対応）
+- 本体を break/continue でセグメント分割し、各セグメント内のみ安全に「非代入→代入」に整列。
+- ガード:
+  - 代入先は変数のみ（フィールド等は対象外）
+  - 全体の更新変数は最大2種（MVP-2 制約を継承）
+  - セグメント内で「代入の後に非代入」があれば整列しない（順序保持）
+- スモーク:
+  - `tools/test/smoke/macro/loopform_continue_break_output_smoke.sh`
+
+for / foreach の糖衣と正規化（概要）
+- for: `for(fn(){ init }, cond, fn(){ step }, fn(){ body })` を `init; loop(cond){ body; step }` へ正規化。
+  - init/step は `Assignment`/`Local` 単体でも可。
+- foreach: `foreach(arr, "x", fn(){ body })` を `__ny_i` で走査する Loop へ正規化し、`x` を `arr.get(__ny_i)` に置換。
+- スモーク: `tools/test/smoke/macro/for_foreach_output_smoke.sh`
+
 対応状況（MVP→順次拡張）
 - Week1: while（break/continue無し）
 - Week2: break/continue/ネスト最小対応、キャリア自動抽出
@@ -103,13 +118,23 @@ while (i < n) {
 検証
 - macro‑golden（展開後ASTのゴールデン）
 - LLVM PHI健全性スモーク（空PHI無し、先頭グループ化）
+ - 出力一致スモーク（two‑vars の実行出力が同一であること）
 
 手元での確認
 - ゴールデン（キー順無視の比較）
   - `tools/test/golden/macro/loop_simple_user_macro_golden.sh`
   - `tools/test/golden/macro/loop_two_vars_user_macro_golden.sh`
+ - 出力一致スモーク（VM）
+   - `tools/test/smoke/macro/loop_two_vars_output_smoke.sh`
 - 自己ホスト前展開（PyVM 経由）
   - `NYASH_VM_USE_PY=1 NYASH_USE_NY_COMPILER=1 NYASH_MACRO_ENABLE=1 NYASH_MACRO_PATHS=apps/macros/examples/loop_normalize_macro.nyash ./target/release/nyash --macro-preexpand --backend vm apps/tests/macro/loopform/simple.nyash`
+
+実装メモ（内蔵変換ルート / Rust）
+- 既定のマクロ実行は internal‑child（Rust内蔵）です。LoopNormalize は以下の保守的なガードで正規化します。
+  - トップレベル本体に Break/Continue がないこと
+  - 代入対象は最大2変数、かつ単純な変数（フィールド代入などは除外）
+  - 代入の後ろに非代入が現れない（安全に末尾整列できる）
+- 条件を満たす場合のみ「非代入→代入」の順でボディを再構成します（意味は不変）。
 
 参考
 - docs/development/roadmap/phases/phase-17-loopform-selfhost/

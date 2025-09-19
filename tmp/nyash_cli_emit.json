@@ -6,33 +6,58 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
               "dst": 0,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
+              "op": "newbox",
+              "type": "ArrayBox"
             },
             {
+              "args": [],
               "dst": 1,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
             },
             {
               "dst": 2,
-              "lhs": 0,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 1
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
             },
             {
-              "cond": 2,
-              "else": 2,
-              "op": "branch",
-              "then": 1
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 4,
+              "op": "copy",
+              "src": 1
+            },
+            {
+              "dst": 5,
+              "op": "copy",
+              "src": 3
+            },
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 2
+            },
+            {
+              "op": "jump",
+              "target": 1
             }
           ]
         },
@@ -40,33 +65,25 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 3,
+              "dst": 8,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 1
+                "value": 8
               }
             },
             {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 5,
-              "lhs": 3,
+              "dst": 9,
+              "lhs": 6,
               "op": "compare",
               "operation": "<",
-              "rhs": 4
+              "rhs": 8
             },
             {
-              "cond": 5,
-              "else": 5,
+              "cond": 9,
+              "else": 3,
               "op": "branch",
-              "then": 4
+              "then": 2
             }
           ]
         },
@@ -74,7 +91,22 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 18,
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 11,
+              "lhs": 6,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 10
+            },
+            {
+              "dst": 12,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -82,17 +114,39 @@
               }
             },
             {
-              "dst": 19,
-              "lhs": 0,
+              "dst": 13,
+              "lhs": 11,
               "op": "compare",
               "operation": "==",
-              "rhs": 18
+              "rhs": 12
             },
             {
-              "cond": 19,
-              "else": 14,
+              "dst": 14,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 4
+              }
+            },
+            {
+              "dst": 15,
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 14
+            },
+            {
+              "dst": 16,
+              "lhs": 13,
+              "op": "binop",
+              "operation": "|",
+              "rhs": 15
+            },
+            {
+              "cond": 16,
+              "else": 5,
               "op": "branch",
-              "then": 13
+              "then": 4
             }
           ]
         },
@@ -100,16 +154,39 @@
           "id": 3,
           "instructions": [
             {
+              "dst": 40,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "acc="
+              }
+            },
+            {
+              "dst": 41,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 40,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 5
+            },
+            {
               "args": [
-                28
+                41
               ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "box": 4,
+              "dst": 42,
+              "method": "println",
+              "op": "boxcall"
             },
             {
               "op": "ret",
-              "value": 28
+              "value": 5
             }
           ]
         },
@@ -118,20 +195,17 @@
           "instructions": [
             {
               "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 10
-              }
+              "op": "copy",
+              "src": 11
             },
             {
-              "dst": 17,
+              "dst": 6,
               "op": "copy",
-              "src": 6
+              "src": 11
             },
             {
               "op": "jump",
-              "target": 6
+              "target": 1
             }
           ]
         },
@@ -139,25 +213,8 @@
           "id": 5,
           "instructions": [
             {
-              "dst": 7,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 8,
-              "lhs": 0,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 7
-            },
-            {
-              "cond": 8,
-              "else": 8,
-              "op": "branch",
-              "then": 7
+              "op": "jump",
+              "target": 6
             }
           ]
         },
@@ -165,18 +222,25 @@
           "id": 6,
           "instructions": [
             {
-              "dst": 28,
-              "op": "copy",
-              "src": 17
+              "dst": 19,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 6
+              }
             },
             {
-              "dst": 28,
-              "op": "copy",
-              "src": 17
+              "dst": 20,
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 19
             },
             {
-              "op": "jump",
-              "target": 3
+              "cond": 20,
+              "else": 9,
+              "op": "branch",
+              "then": 8
             }
           ]
         },
@@ -184,33 +248,8 @@
           "id": 7,
           "instructions": [
             {
-              "dst": 9,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 10,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 3
-              }
-            },
-            {
-              "dst": 11,
-              "lhs": 9,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 10
-            },
-            {
-              "cond": 11,
-              "else": 11,
-              "op": "branch",
-              "then": 10
+              "op": "jump",
+              "target": 6
             }
           ]
         },
@@ -218,21 +257,25 @@
           "id": 8,
           "instructions": [
             {
-              "dst": 15,
+              "dst": 21,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 30
+                "value": 5
               }
             },
             {
-              "dst": 16,
-              "op": "copy",
-              "src": 15
+              "dst": 22,
+              "lhs": 5,
+              "op": "compare",
+              "operation": ">",
+              "rhs": 21
             },
             {
-              "op": "jump",
-              "target": 9
+              "cond": 22,
+              "else": 12,
+              "op": "branch",
+              "then": 11
             }
           ]
         },
@@ -240,18 +283,8 @@
           "id": 9,
           "instructions": [
             {
-              "dst": 17,
-              "op": "copy",
-              "src": 16
-            },
-            {
-              "dst": 17,
-              "op": "copy",
-              "src": 16
-            },
-            {
               "op": "jump",
-              "target": 6
+              "target": 10
             }
           ]
         },
@@ -259,78 +292,7 @@
           "id": 10,
           "instructions": [
             {
-              "dst": 12,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 20
-              }
-            },
-            {
-              "dst": 14,
-              "op": "copy",
-              "src": 12
-            },
-            {
-              "op": "jump",
-              "target": 12
-            }
-          ]
-        },
-        {
-          "id": 11,
-          "instructions": [
-            {
-              "dst": 13,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 30
-              }
-            },
-            {
-              "dst": 14,
-              "op": "copy",
-              "src": 13
-            },
-            {
-              "op": "jump",
-              "target": 12
-            }
-          ]
-        },
-        {
-          "id": 12,
-          "instructions": [
-            {
-              "dst": 16,
-              "op": "copy",
-              "src": 14
-            },
-            {
-              "dst": 16,
-              "op": "copy",
-              "src": 14
-            },
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 13,
-          "instructions": [
-            {
-              "dst": 20,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "dst": 21,
+              "dst": 26,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -338,55 +300,23 @@
               }
             },
             {
-              "dst": 22,
-              "lhs": 20,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 21
-            },
-            {
-              "cond": 22,
-              "else": 17,
-              "op": "branch",
-              "then": 16
-            }
-          ]
-        },
-        {
-          "id": 14,
-          "instructions": [
-            {
-              "dst": 26,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 30
-              }
-            },
-            {
               "dst": 27,
-              "op": "copy",
-              "src": 26
+              "lhs": 11,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 26
             },
             {
-              "op": "jump",
-              "target": 15
+              "cond": 27,
+              "else": 16,
+              "op": "branch",
+              "then": 15
             }
           ]
         },
         {
-          "id": 15,
+          "id": 11,
           "instructions": [
-            {
-              "dst": 28,
-              "op": "copy",
-              "src": 27
-            },
-            {
-              "dst": 28,
-              "op": "copy",
-              "src": 27
-            },
             {
               "op": "jump",
               "target": 3
@@ -394,24 +324,47 @@
           ]
         },
         {
+          "id": 12,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 13
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 10
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 13
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "instructions": [
+            {
+              "op": "ret",
+              "value": 5
+            }
+          ]
+        },
+        {
           "id": 16,
           "instructions": [
             {
-              "dst": 23,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 20
-              }
-            },
-            {
-              "dst": 25,
-              "op": "copy",
-              "src": 23
-            },
-            {
               "op": "jump",
-              "target": 18
+              "target": 17
             }
           ]
         },
@@ -419,21 +372,40 @@
           "id": 17,
           "instructions": [
             {
-              "dst": 24,
+              "dst": 29,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 30
+                "value": 2
               }
             },
             {
-              "dst": 25,
-              "op": "copy",
-              "src": 24
+              "dst": 30,
+              "lhs": 11,
+              "op": "binop",
+              "operation": "%",
+              "rhs": 29
             },
             {
-              "op": "jump",
-              "target": 18
+              "dst": 31,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 32,
+              "lhs": 30,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 31
+            },
+            {
+              "cond": 32,
+              "else": 19,
+              "op": "branch",
+              "then": 18
             }
           ]
         },
@@ -441,18 +413,86 @@
           "id": 18,
           "instructions": [
             {
-              "dst": 27,
-              "op": "copy",
-              "src": 25
+              "dst": 33,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 2
+              }
             },
             {
-              "dst": 27,
+              "dst": 34,
+              "lhs": 5,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 33
+            },
+            {
+              "dst": 37,
               "op": "copy",
-              "src": 25
+              "src": 34
             },
             {
               "op": "jump",
-              "target": 15
+              "target": 20
+            }
+          ]
+        },
+        {
+          "id": 19,
+          "instructions": [
+            {
+              "dst": 35,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 36,
+              "lhs": 34,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 35
+            },
+            {
+              "dst": 37,
+              "op": "copy",
+              "src": 36
+            },
+            {
+              "op": "jump",
+              "target": 20
+            }
+          ]
+        },
+        {
+          "id": 20,
+          "instructions": [
+            {
+              "dst": 5,
+              "op": "copy",
+              "src": 37
+            },
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 11
+            },
+            {
+              "dst": 5,
+              "op": "copy",
+              "src": 37
+            },
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 11
+            },
+            {
+              "op": "jump",
+              "target": 1
             }
           ]
         }

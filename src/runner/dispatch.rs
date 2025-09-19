@@ -62,7 +62,8 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         };
         // Optional macro expansion dump (no-op expansion for now)
         let ast2 = if crate::r#macro::enabled() {
-            crate::r#macro::maybe_expand_and_dump(&ast, true)
+            let a = crate::r#macro::maybe_expand_and_dump(&ast, true);
+            crate::runner::modes::macro_child::normalize_core_pass(&a)
         } else {
             ast.clone()
         };
@@ -80,7 +81,10 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             Ok(ast) => ast,
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
-        let expanded = if crate::r#macro::enabled() { crate::r#macro::maybe_expand_and_dump(&ast, false) } else { ast };
+        let expanded = if crate::r#macro::enabled() {
+            let a = crate::r#macro::maybe_expand_and_dump(&ast, false);
+            crate::runner::modes::macro_child::normalize_core_pass(&a)
+        } else { ast };
         let j = crate::r#macro::ast_json::ast_to_json(&expanded);
         println!("{}", j.to_string());
         return;

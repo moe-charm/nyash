@@ -66,9 +66,15 @@ Updated: 2025‑09‑20
 
 Next (short)
 - Match（ガード含む）の正規化を内蔵変換にも拡張（If 連鎖）+ golden/smoke 追加
-- LoopForm MVP‑2: while → carrier normalization (no break/continue, up to 2 vars)
-  - Extract updated vars (e.g., i, sum) and normalize body so updates are tail; emit carrier‑like structure with existing AST forms (Local/If/Loop/Assignment) while preserving semantics.
-  - Add goldens (two‑vars) + selfhost‑preexpand smokes; verify PyVM/LLVM parity.
+- DONE: LoopForm MVP‑2 — while → carrier normalization（break/continueなし、最大2変数）
+  - 内蔵変換（Rust, internal‑child）で安全ガード付きの末尾整列を実装（非代入→代入）。
+  - two‑vars の出力一致スモークを追加（tools/test/smoke/macro/loop_two_vars_output_smoke.sh）。
+- DONE: LoopForm MVP‑3 — break/continue 最小対応（セグメント整列）
+  - 本体を control 文で分割、各セグメント内のみ安全に「非代入→代入」。
+  - スモーク: tools/test/smoke/macro/loopform_continue_break_output_smoke.sh
+- DONE: for/foreach 正規化（コア正規化パスへ昇格）
+  - 形: `for(fn(){init}, cond, fn(){step}, fn(){body})`, `foreach(arr, "x", fn(){body})`
+  - 出力スモーク: tools/test/smoke/macro/for_foreach_output_smoke.sh（for: 0,1,2 / foreach: 1,2,3）
 - LoopForm MVP‑3: break/continue minimal handling (single‑level)
 - for/foreach pre‑desugaring → LoopForm normalization (limited)
 - LLVM IR hygiene for LoopForm / If / Match — PHI at block head, no empty PHIs (smoke)
@@ -85,7 +91,7 @@ Action Items (next 48h)
 - [x] Match guard: golden（literal OR 最小形）
 - [ ] Match guard: 追加golden（type最小形、Boxなし構成）
 - [x] Smoke for guard/type match normalization（no PeekExpr; If present）
-- [ ] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
+- [x] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
 - [x] LLVM PHI hygiene smoke on LoopForm cases
 - [x] LLVM PHI hygiene smoke on If cases
 - [ ] ScopeBox docs + macro scaffold (no-op) + MIR hint type sketch

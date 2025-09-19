@@ -31,7 +31,12 @@ pub fn init_from_env() {
     let Some(paths) = paths else { return; };
     for p in paths.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()) {
         if let Err(e) = try_load_one(p) {
-            eprintln!("[macro][box_ny] failed to load '{}': {}", p, e);
+            // Quiet by default; print only when tracing is enabled to reduce noise in normal runs
+            let noisy = std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1")
+                || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+            if noisy {
+                eprintln!("[macro][box_ny] failed to load '{}': {}", p, e);
+            }
         }
     }
 }
@@ -179,7 +184,7 @@ fn expand_indicates_uppercase(body: &Vec<ASTNode>, params: &Vec<String>) -> bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize, IfMatchNormalize }
+pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize, IfMatchNormalize, ForForeachNormalize }
 
 pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     let src = match std::fs::read_to_string(path) { Ok(s) => s, Err(_) => return MacroBehavior::Identity };
@@ -253,6 +258,7 @@ pub fn analyze_macro_file(path: &str) -> MacroBehavior {
                                 if let ASTNode::Literal { value: nyash_rust::ast::LiteralValue::String(s), .. } = &**v {
                                     if s == "LoopNormalize" { return MacroBehavior::LoopNormalize; }
                                     if s == "IfMatchNormalize" { return MacroBehavior::IfMatchNormalize; }
+                                    if s == "ForForeach" { return MacroBehavior::ForForeachNormalize; }
                                 }
                             }
                         }
@@ -396,11 +402,9 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
         use std::time::{Duration, Instant};
         let start = Instant::now();
         let mut out = String::new();
-        let mut status_opt = None;
         loop {
             match child.try_wait() {
-                Ok(Some(status)) => {
-                    status_opt = Some(status);
+                Ok(Some(_status)) => {
                     if let Some(mut so) = child.stdout.take() { use std::io::Read; let _ = so.read_to_string(&mut out); }
                     break;
                 }
@@ -416,8 +420,7 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
                 Err(e) => { eprintln!("[macro-proxy] wait error: {}", e); if strict_enabled() { std::process::exit(2); } return ast.clone(); }
             }
         }
-        // Touch once to avoid unused_assignments warning on success-only paths
-        let _code_peek = status_opt.as_ref().and_then(|s| s.code());
+        // capture stderr for diagnostics and continue
         // Capture stderr for diagnostics
         let mut err = String::new();
         if let Some(mut se) = child.stderr.take() { use std::io::Read; let _ = se.read_to_string(&mut err); }
@@ -428,8 +431,7 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
                 None => { eprintln!("[macro-proxy] child JSON did not map to AST. stderr=\n{}", err); if strict_enabled() { std::process::exit(2); } ast.clone() }
             },
             Err(e) => {
-                let code = status_opt.and_then(|s| s.code()).unwrap_or(-1);
-                eprintln!("[macro-proxy] invalid JSON from child (code={}): {}\n-- child stderr --\n{}\n-- end stderr --", code, e, err);
+                eprintln!("[macro-proxy] invalid JSON from child: {}\n-- child stderr --\n{}\n-- end stderr --", e, err);
                 if strict_enabled() { std::process::exit(2); }
                 ast.clone()
             }

@@ -31,6 +31,7 @@ impl NyashRunner {
         };
         // Macro expansion (env-gated)
         let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
+        let ast = crate::runner::modes::macro_child::normalize_core_pass(&ast);
 
         // Compile to MIR
         let mut mir_compiler = MirCompiler::new();
