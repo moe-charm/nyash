@@ -322,7 +322,8 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
             Ok(p) => p,
             Err(e) => { eprintln!("[macro-proxy] current_exe failed: {}", e); return ast.clone(); }
         };
-        let use_runner = std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().map(|v| v == "1").unwrap_or(false);
+        // Prefer Nyash runner route by default for self-hosting; legacy env can force internal child with 0.
+        let use_runner = std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(true);
         if std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().is_some() {
             eprintln!("[macro][compat] NYASH_MACRO_BOX_CHILD_RUNNER is deprecated; prefer defaults");
         }

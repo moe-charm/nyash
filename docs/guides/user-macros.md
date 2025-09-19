@@ -16,6 +16,8 @@ Environment overview (recommended minimal set)
 - `NYASH_MACRO_STRICT=1`（既定: 厳格）
 - `NYASH_MACRO_TRACE=0|1`（開発用トレース）
 
+- Runner route is default（self‑hosting優先）。内部子ルートは非推奨（`NYASH_MACRO_BOX_CHILD_RUNNER=0` でのみ有効）。
+
 Backward compat (deprecated)
 - `NYASH_MACRO_BOX_NY=1` + `NYASH_MACRO_BOX_NY_PATHS=...` → 今後は `NYASH_MACRO_PATHS` を使ってね
 
