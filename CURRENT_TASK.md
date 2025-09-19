@@ -43,6 +43,9 @@ Clone() Reduction — Phase 1 (Arc/str)
   - `TypeBox.type_parameters: Vec<String>` → `Vec<Arc<str>>`.
   - Adjusted builder/registry and `full_name()` accordingly; public behavior unchanged.
   - Rationale: share-on-clone for frequently copied identifiers, reduce String allocations.
+ - TypeRegistry
+   - `types: HashMap<String, Arc<TypeBox>>` → `HashMap<Arc<str>, Arc<TypeBox>>`（内部型名の共有化）。
+   - API互換（`get_type(&str)` は Borrow によりそのまま利用可能）。
 
 Refactor Plan (next 1–2 weeks)
 1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs

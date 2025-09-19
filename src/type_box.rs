@@ -14,7 +14,7 @@ use std::sync::Arc;
 /// メソッドシグニチャ情報
 #[derive(Debug, Clone)]
 pub struct MethodSignature {
-    pub name: String,
+    pub name: Arc<str>,
     pub parameters: Vec<String>,
     pub parameter_types: Vec<Arc<TypeBox>>,
     pub return_type: Arc<TypeBox>,
@@ -22,9 +22,9 @@ pub struct MethodSignature {
 }
 
 impl MethodSignature {
-    pub fn new(name: String, parameters: Vec<String>) -> Self {
+    pub fn new<N: Into<Arc<str>>>(name: N, parameters: Vec<String>) -> Self {
         Self {
-            name,
+            name: name.into(),
             parameters,
             parameter_types: Vec::new(),
             return_type: Arc::new(TypeBox::void_type()),
@@ -32,14 +32,14 @@ impl MethodSignature {
         }
     }
 
-    pub fn with_types(
-        name: String,
+    pub fn with_types<N: Into<Arc<str>>>(
+        name: N,
         parameters: Vec<String>,
         parameter_types: Vec<Arc<TypeBox>>,
         return_type: Arc<TypeBox>,
     ) -> Self {
         Self {
-            name,
+            name: name.into(),
             parameters,
             parameter_types,
             return_type,
@@ -58,7 +58,7 @@ pub struct TypeBox {
     pub fields: HashMap<String, Arc<TypeBox>>,
 
     /// メソッドシグニチャ情報
-    pub methods: HashMap<String, MethodSignature>,
+    pub methods: HashMap<Arc<str>, MethodSignature>,
 
     /// 親型（継承）
     pub parent_type: Option<Arc<TypeBox>>,
@@ -295,7 +295,7 @@ impl Display for TypeBox {
 #[derive(Debug)]
 pub struct TypeRegistry {
     /// 登録済み型
-    types: HashMap<String, Arc<TypeBox>>,
+    types: HashMap<Arc<str>, Arc<TypeBox>>,
 
     /// 継承チェーン情報（高速化用）
     inheritance_chains: HashMap<String, Vec<String>>,
@@ -342,7 +342,7 @@ impl TypeRegistry {
         }
 
         self.inheritance_chains.insert(name_s.clone(), chain);
-        self.types.insert(name_s, type_box);
+        self.types.insert(type_box.name.clone(), type_box);
     }
 
     /// 型を取得
@@ -365,7 +365,7 @@ impl TypeRegistry {
 
     /// すべての型名を取得
     pub fn get_all_type_names(&self) -> Vec<String> {
-        self.types.keys().cloned().collect()
+        self.types.keys().map(|k| k.as_ref().to_string()).collect()
     }
 
     /// ジェネリクス型をインスタンス化

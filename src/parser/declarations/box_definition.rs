@@ -13,6 +13,78 @@ use crate::tokenizer::TokenType;
 use std::collections::HashMap;
 
 impl NyashParser {
+    /// Validate that birth_once properties do not have cyclic dependencies via me.<prop> references
+    fn validate_birth_once_cycles(
+        &mut self,
+        methods: &HashMap<String, ASTNode>,
+    ) -> Result<(), ParseError> {
+        if !crate::config::env::unified_members() {
+            return Ok(());
+        }
+        use std::collections::{HashMap, HashSet};
+        // Collect birth_once compute bodies
+        let mut birth_bodies: HashMap<String, Vec<ASTNode>> = HashMap::new();
+        for (mname, mast) in methods {
+            if let Some(prop) = mname.strip_prefix("__compute_birth_") {
+                if let ASTNode::FunctionDeclaration { body, .. } = mast {
+                    birth_bodies.insert(prop.to_string(), body.clone());
+                }
+            }
+        }
+        if birth_bodies.is_empty() {
+            return Ok(());
+        }
+        // Build dependency graph: A -> {B | me.B used inside A}
+        let mut deps: HashMap<String, HashSet<String>> = HashMap::new();
+        let props: HashSet<String> = birth_bodies.keys().cloned().collect();
+        for (p, body) in &birth_bodies {
+            let used = self.ast_collect_me_fields(body);
+            let mut set = HashSet::new();
+            for u in used {
+                if props.contains(&u) && u != *p {
+                    set.insert(u);
+                }
+            }
+            deps.insert(p.clone(), set);
+        }
+        // Detect cycle via DFS
+        fn has_cycle(
+            node: &str,
+            deps: &HashMap<String, HashSet<String>>,
+            temp: &mut HashSet<String>,
+            perm: &mut HashSet<String>,
+        ) -> bool {
+            if perm.contains(node) {
+                return false;
+            }
+            if !temp.insert(node.to_string()) {
+                return true; // back-edge
+            }
+            if let Some(ns) = deps.get(node) {
+                for n in ns {
+                    if has_cycle(n, deps, temp, perm) {
+                        return true;
+                    }
+                }
+            }
+            temp.remove(node);
+            perm.insert(node.to_string());
+            false
+        }
+        let mut perm = HashSet::new();
+        let mut temp = HashSet::new();
+        for p in deps.keys() {
+            if has_cycle(p, &deps, &mut temp, &mut perm) {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "birth_once declarations must not have cyclic dependencies".to_string(),
+                    line,
+                });
+            }
+        }
+        Ok(())
+    }
     /// Extracted: parse block-first unified member: `{ body } as [once|birth_once]? name : Type [postfix]`
     /// Returns true if a member was parsed and emitted into `methods`.
     fn parse_unified_member_block_first(
@@ -565,67 +637,7 @@ impl NyashParser {
         }
 
         // birth_once 相互依存の簡易検出（宣言間の循環）
-        if crate::config::env::unified_members() {
-            // Collect birth_once compute bodies
-            use std::collections::{HashMap, HashSet};
-            let mut birth_bodies: HashMap<String, Vec<ASTNode>> = HashMap::new();
-            for (mname, mast) in &methods {
-                if let Some(prop) = mname.strip_prefix("__compute_birth_") {
-                    if let ASTNode::FunctionDeclaration { body, .. } = mast {
-                        birth_bodies.insert(prop.to_string(), body.clone());
-                    }
-                }
-            }
-            // Build dependency graph: A -> {B | me.B used inside A}
-            let mut deps: HashMap<String, HashSet<String>> = HashMap::new();
-            let props: HashSet<String> = birth_bodies.keys().cloned().collect();
-            for (p, body) in &birth_bodies {
-                let used = self.ast_collect_me_fields(body);
-                let mut set = HashSet::new();
-                for u in used {
-                    if props.contains(&u) && u != *p {
-                        set.insert(u);
-                    }
-                }
-                deps.insert(p.clone(), set);
-            }
-            // Detect cycle via DFS
-            fn has_cycle(
-                node: &str,
-                deps: &HashMap<String, HashSet<String>>,
-                temp: &mut HashSet<String>,
-                perm: &mut HashSet<String>,
-            ) -> bool {
-                if perm.contains(node) {
-                    return false;
-                }
-                if !temp.insert(node.to_string()) {
-                    return true; // back-edge
-                }
-                if let Some(ns) = deps.get(node) {
-                    for n in ns {
-                        if has_cycle(n, deps, temp, perm) {
-                            return true;
-                        }
-                    }
-                }
-                temp.remove(node);
-                perm.insert(node.to_string());
-                false
-            }
-            let mut perm = HashSet::new();
-            let mut temp = HashSet::new();
-            for p in deps.keys() {
-                if has_cycle(p, &deps, &mut temp, &mut perm) {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "birth_once declarations must not have cyclic dependencies".to_string(),
-                        line,
-                    });
-                }
-            }
-        }
+        self.validate_birth_once_cycles(&methods)?;
 
         Ok(ASTNode::BoxDeclaration {
             name,
