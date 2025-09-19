@@ -42,10 +42,11 @@ check_case() {
 
 check_case "apps/tests/macro_golden_if_assign.nyash"
 check_case "apps/tests/macro_golden_if_print.nyash"
+check_case "apps/tests/macro_golden_if_return.nyash"
+check_case "apps/tests/macro_golden_type_is_basic.nyash"
 
 if [ "$fails" -ne 0 ]; then
   exit 2
 fi
 echo "[OK] LLVM PHI hygiene for If-cases passed"
 exit 0
-

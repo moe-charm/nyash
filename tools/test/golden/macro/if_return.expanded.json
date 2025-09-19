@@ -1,0 +1,10 @@
+{"kind":"Program","statements":[
+  {"kind":"FunctionDeclaration","name":"main","params":[],"body":[
+    {"kind":"If","condition":{"kind":"BinaryOp","op":"<","left":{"kind":"Literal","value":{"type":"int","value":1}},"right":{"kind":"Literal","value":{"type":"int","value":2}}},"then":[
+      {"kind":"Return","value":{"kind":"Literal","value":{"type":"int","value":10}}}
+    ],"else":[
+      {"kind":"Return","value":{"kind":"Literal","value":{"type":"int","value":20}}}
+    ]}
+  ],"static":false,"override":false}
+]}
+
