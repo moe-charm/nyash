@@ -1,0 +1,55 @@
+// PatternBuilder — パターン条件ビルダー（コンパイル時メタ）
+// 生成物は AST JSON v0 の条件式（文字列）。
+
+static box PatternBuilder {
+  // eq(lhs, rhs) => lhs == rhs
+  eq(lhs_json, rhs_json) {
+    local JB = include "apps/lib/json_builder.nyash"
+    return JB.binary("==", lhs_json, rhs_json)
+  }
+
+  // or_([c1, c2, ...]) => c1 || c2 || ... （空は false）
+  or_(conds) {
+    local JB = include "apps/lib/json_builder.nyash"
+    if conds.length() == 0 { return JB.literal_bool(false) }
+    if conds.length() == 1 { return conds.get(0) }
+    local i = 1
+    local acc = conds.get(0)
+    loop(i < conds.length()) {
+      acc = JB.binary("||", acc, conds.get(i))
+      i = i + 1
+    }
+    return acc
+  }
+
+  // and_([g1, g2, ...]) => g1 && g2 && ... （空は true）
+  and_(conds) {
+    local JB = include "apps/lib/json_builder.nyash"
+    if conds.length() == 0 { return JB.literal_bool(true) }
+    if conds.length() == 1 { return conds.get(0) }
+    local i = 1
+    local acc = conds.get(0)
+    loop(i < conds.length()) {
+      acc = JB.binary("&&", acc, conds.get(i))
+      i = i + 1
+    }
+    return acc
+  }
+
+  // type_is(type_name, expr_json) — MVP: 呼び出し側で適宜拡張。
+  // ここでは簡易に eq(typeof(expr), type_name) 相当のプレースホルダを返すか、
+  // プロジェクトの TypeOp 実装に合わせて後で差し替える。
+  type_is(type_name, expr_json) {
+    // プレースホルダ（将来の実装点）: 常に true にせず、明示的に比較形を構築するのが安全。
+    // ユーザー側の Lower/Resolver が未対応なら、後で本関数を差し替える。
+    local JB = include "apps/lib/json_builder.nyash"
+    // 仮: Call 形式を使わず、ダミーの比較を残す（"__ny_type(expr) == type_name" 的イメージ）。
+    // 実際の採用時は TypeOp(check) の AST 形へ置換する。
+    local left = JB.binary("__typeof", expr_json, JB.literal_null()) // ダミー演算子（後で置換）
+    return JB.binary("==", left, JB.literal_string(type_name))
+  }
+
+  // default マーカー（条件式ではない）。
+  default() { return "__NY_PATTERN_DEFAULT" }
+}
+
