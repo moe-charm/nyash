@@ -6,11 +6,206 @@ static box MacroBoxSpec {
   static function name() { return "LoopNormalize" }
 
   static function expand(json, ctx) {
-    // MVP: return input unchanged, but ensure JsonBuilder is loadable for next step.
-    // Example usage (commented):
-    // local JB = include "apps/lib/json_builder.nyash"
-    // local zero = JB.literal_int(0)
-    // _ = zero // suppress unused
-    return json
+    // MVP normalizer: detect Loop nodes with canonical key order
+    // "kind":"Loop","condition":<json>,"body":[ ... ] and rewrite them
+    // into a normalized form using JsonBuilder (keys ordered as condition/body).
+
+    local JB = include "apps/lib/json_builder.nyash"
+
+    // helpers
+    local s = json
+    local out = ""
+    local i = 0
+
+    // parse a JSON string starting at i (supports objects, arrays, strings, numbers, true/false/null)
+    function parse_value(s, i) {
+      local n = s.length()
+      if i >= n { return ["", i] }
+      local ch = s.substring(i, i+1)
+      // string
+      if ch == "\"" {
+        local j = i + 1
+        loop(j < n) {
+          local c = s.substring(j, j+1)
+          if c == "\\" { j = j + 2; continue }
+          if c == "\"" { j = j + 1; break }
+          j = j + 1
+        }
+        return [s.substring(i, j), j]
+      }
+      // object
+      if ch == "{" {
+        local depth = 1
+        local j = i + 1
+        local in_str = false
+        loop(j < n && depth > 0) {
+          local c = s.substring(j, j+1)
+          if c == "\"" {
+            // toggle string (respect escape)
+            local k = j - 1
+            local esc = false
+            if k >= 0 && s.substring(k, k+1) == "\\" { esc = true }
+            if !esc { in_str = !in_str }
+            j = j + 1
+            continue
+          }
+          if !in_str {
+            if c == "{" { depth = depth + 1 }
+            else if c == "}" { depth = depth - 1 }
+          }
+          j = j + 1
+        }
+        return [s.substring(i, j), j]
+      }
+      // array
+      if ch == "[" {
+        local depth = 1
+        local j = i + 1
+        local in_str = false
+        loop(j < n && depth > 0) {
+          local c = s.substring(j, j+1)
+          if c == "\"" {
+            local k = j - 1
+            local esc = false
+            if k >= 0 && s.substring(k, k+1) == "\\" { esc = true }
+            if !esc { in_str = !in_str }
+            j = j + 1
+            continue
+          }
+          if !in_str {
+            if c == "[" { depth = depth + 1 }
+            else if c == "]" { depth = depth - 1 }
+          }
+          j = j + 1
+        }
+        return [s.substring(i, j), j]
+      }
+      // number/true/false/null: read until delimiter
+      local j = i
+      loop(j < n) {
+        local c = s.substring(j, j+1)
+        if c == "," || c == "]" || c == "}" || c == "\n" || c == "\r" || c == "\t" || c == " " { break }
+        j = j + 1
+      }
+      return [s.substring(i, j), j]
+    }
+
+    // pattern tokens
+    local t_kind_loop = "\"kind\":\"Loop\""
+    local t_cond = "\"condition\":"
+    local t_body = "\"body\":"
+
+    loop(i < s.length()) {
+      // try to detect a Loop object start
+      if i + 6 < s.length() && s.substring(i, i+1) == "{" {
+        // look ahead inside this object to see if it begins with kind:Loop
+        local val = parse_value(s, i)
+        local obj = val.get(0)
+        local endi = val.get(1)
+
+        // quick check: contains kind:"Loop"
+        local pos_kind = obj.indexOf(t_kind_loop)  // assume Nyash has indexOf? If not, manual scan fallback below
+        if pos_kind == null {
+          // Fallback manual contains
+          local found = 0
+          local k = 0
+          loop(k + t_kind_loop.length() <= obj.length()) {
+            if obj.substring(k, k + t_kind_loop.length()) == t_kind_loop { found = 1; break }
+            k = k + 1
+          }
+          if found == 0 {
+            out = out + obj
+            i = endi
+            continue
+          }
+        }
+
+        // Now attempt to parse condition and body assuming canonical order
+        // Find condition token within object string
+        local oj = 0
+        local pos_c = -1
+        loop(oj + t_cond.length() <= obj.length()) {
+          if obj.substring(oj, oj + t_cond.length()) == t_cond { pos_c = oj + t_cond.length(); break }
+          oj = oj + 1
+        }
+        local pos_b = -1
+        local kk = 0
+        loop(kk + t_body.length() <= obj.length()) {
+          if obj.substring(kk, kk + t_body.length()) == t_body { pos_b = kk + t_body.length(); break }
+          kk = kk + 1
+        }
+        if pos_c >= 0 && pos_b >= 0 {
+          // extract values
+          local cond_pair = parse_value(obj, pos_c)
+          local cond_json = cond_pair.get(0)
+          // move after condition to find body array
+          // ensure we re-scan from pos_b to robustly pick body
+          local body_pair = parse_value(obj, pos_b)
+          local body_json = body_pair.get(0)
+          // if body_json is not array, keep identity
+          if body_json.substring(0,1) == "[" {
+            // decompose body array into elements
+            local elems = []
+            // strip [ ... ]
+            local inner = body_json.substring(1, body_json.length()-1)
+            // split top-level JSON elements (respect nesting)
+            local p = 0
+            local n = inner.length()
+            local in_str = false
+            local depth_obj = 0
+            local depth_arr = 0
+            local start = 0
+            loop(p < n) {
+              local c = inner.substring(p, p+1)
+              if c == "\"" {
+                // toggle string unless escaped
+                local k2 = p - 1
+                local esc2 = false
+                if k2 >= 0 && inner.substring(k2, k2+1) == "\\" { esc2 = true }
+                if !esc2 { in_str = !in_str }
+              } else if !in_str {
+                if c == "{" { depth_obj = depth_obj + 1 }
+                else if c == "}" { depth_obj = depth_obj - 1 }
+                else if c == "[" { depth_arr = depth_arr + 1 }
+                else if c == "]" { depth_arr = depth_arr - 1 }
+                else if c == "," && depth_obj == 0 && depth_arr == 0 {
+                  elems.push(inner.substring(start, p))
+                  start = p + 1
+                }
+              }
+              p = p + 1
+            }
+            if start < n { elems.push(inner.substring(start, n)) }
+
+            // trim spaces of elements (simple)
+            local t = 0
+            loop(t < elems.length()) {
+              local e = elems.get(t)
+              // naive trim
+              local a = 0
+              local b = e.length()
+              loop(a < b && (e.substring(a,a+1)==" " || e.substring(a,a+1)=="\n" || e.substring(a,a+1)=="\t" || e.substring(a,a+1)=="\r")) { a = a + 1 }
+              loop(b > a && (e.substring(b-1,b)==" " || e.substring(b-1,b)=="\n" || e.substring(b-1,b)=="\t" || e.substring(b-1,b)=="\r")) { b = b - 1 }
+              elems.set(t, e.substring(a,b))
+              t = t + 1
+            }
+
+            // rebuild Loop via JsonBuilder (canonical key order)
+            local loop_norm = JB.loop_(cond_json, elems)
+            out = out + loop_norm
+            i = endi
+            continue
+          }
+        }
+        // fallback: copy as-is if parsing failed
+        out = out + obj
+        i = endi
+        continue
+      }
+      // default: copy through one char
+      out = out + s.substring(i, i+1)
+      i = i + 1
+    }
+    return out
   }
 }
