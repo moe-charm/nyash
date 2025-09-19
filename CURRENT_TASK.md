@@ -24,6 +24,14 @@ Refactor Progress (2025-09-19, noon)
   - Behavior preserved: once/birth_once/computed generation identical to prior inline branch, including cache/poison and self-cycle guard.
   - Postfix handlers (catch/cleanup) remain supported under Stage‑3 gate and are wrapped into TryCatch on the member body.
 
+P0/P1 Safety Fixes (2025-09-19)
+- UserDefinedBoxFactory
+  - Added safe init stub: call InstanceBox::init(args) after creation (no panic; ignore error). Birth/init AST execution remains interpreter-owned.
+- HTTPResponseBox interior mutability (thread-safe)
+  - Replaced fields with Mutex-based interior mutability and implemented setters: set_status/set_header/set_body/append_body.
+  - Updated to_http_string and Display/to_string to read via locks; manual Clone implemented.
+  - Removes RefCell TODOs at http_message_box.rs:292–330 without violating BoxCore Send+Sync.
+
 Refactor Plan (next 1–2 weeks)
 1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs
    - Targets (line ranges are indicative):

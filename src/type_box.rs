@@ -52,7 +52,7 @@ impl MethodSignature {
 #[derive(Debug, Clone)]
 pub struct TypeBox {
     /// 型名
-    pub name: String,
+    pub name: Arc<str>,
 
     /// フィールド情報 (field_name -> field_type)
     pub fields: HashMap<String, Arc<TypeBox>>,
@@ -64,7 +64,7 @@ pub struct TypeBox {
     pub parent_type: Option<Arc<TypeBox>>,
 
     /// ジェネリクス型パラメータ
-    pub type_parameters: Vec<String>,
+    pub type_parameters: Vec<Arc<str>>,
 
     /// インスタンス化された具体型（ジェネリクス用）
     pub concrete_types: HashMap<String, Arc<TypeBox>>,
@@ -80,7 +80,7 @@ impl TypeBox {
     /// 新しいTypeBoxを作成
     pub fn new(name: &str) -> Self {
         Self {
-            name: name.to_string(),
+            name: Arc::<str>::from(name),
             fields: HashMap::new(),
             methods: HashMap::new(),
             parent_type: None,
@@ -114,8 +114,8 @@ impl TypeBox {
     }
 
     /// 型パラメータを追加
-    pub fn add_type_parameter(&mut self, param: String) {
-        self.type_parameters.push(param);
+    pub fn add_type_parameter<S: Into<Arc<str>>>(&mut self, param: S) {
+        self.type_parameters.push(param.into());
     }
 
     /// 具体型を設定（ジェネリクス用）
@@ -183,9 +183,9 @@ impl TypeBox {
     /// 型名を完全表示（ジェネリクス対応）
     pub fn full_name(&self) -> String {
         if self.concrete_types.is_empty() {
-            self.name.clone()
+            self.name.as_ref().to_string()
         } else {
-            let mut result = self.name.clone();
+            let mut result = self.name.as_ref().to_string();
             result.push('<');
 
             let concrete_names: Vec<String> = self
@@ -193,9 +193,9 @@ impl TypeBox {
                 .iter()
                 .map(|param| {
                     self.concrete_types
-                        .get(param)
-                        .map(|t| t.name.clone())
-                        .unwrap_or_else(|| param.clone())
+                        .get(param.as_ref())
+                        .map(|t| t.name.as_ref().to_string())
+                        .unwrap_or_else(|| param.as_ref().to_string())
                 })
                 .collect();
 
@@ -331,18 +331,18 @@ impl TypeRegistry {
 
     /// 型を登録
     pub fn register_type(&mut self, type_box: Arc<TypeBox>) {
-        let name = type_box.name.clone();
+        let name_s: String = type_box.name.as_ref().to_string();
 
         // 継承チェーンを構築
-        let mut chain = vec![name.clone()];
+        let mut chain = vec![name_s.clone()];
         let mut current = &type_box.parent_type;
         while let Some(parent) = current {
-            chain.push(parent.name.clone());
+            chain.push(parent.name.as_ref().to_string());
             current = &parent.parent_type;
         }
 
-        self.inheritance_chains.insert(name.clone(), chain);
-        self.types.insert(name, type_box);
+        self.inheritance_chains.insert(name_s.clone(), chain);
+        self.types.insert(name_s, type_box);
     }
 
     /// 型を取得
@@ -393,7 +393,7 @@ impl TypeRegistry {
 
         // 新しい具体化型を作成
         let mut concrete_type = (*base).clone();
-        concrete_type.name = format!("{}_{}", base_type, concrete_types.join("_"));
+        concrete_type.name = format!("{}_{}", base_type, concrete_types.join("_")).into();
         concrete_type.concrete_types.clear();
 
         // 具体型を設定
@@ -446,7 +446,7 @@ impl TypeBoxBuilder {
 
     /// 型パラメータを追加
     pub fn type_param(mut self, param: &str) -> Self {
-        self.type_box.add_type_parameter(param.to_string());
+        self.type_box.add_type_parameter(param);
         self
     }
 

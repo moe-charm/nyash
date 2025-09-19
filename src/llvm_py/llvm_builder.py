@@ -1207,17 +1207,19 @@ class NyashLLVMBuilder:
         
         # Compile
         ir_text = str(self.module)
-        # Sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser
-        try:
-            fixed_lines = []
-            for line in ir_text.splitlines():
-                if (" = phi  i64" in line or " = phi i64" in line) and ("[" not in line):
-                    # Skip malformed PHI without incoming pairs
-                    continue
-                fixed_lines.append(line)
-            ir_text = "\n".join(fixed_lines)
-        except Exception:
-            pass
+        # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
+        # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Default OFF.
+        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1':
+            try:
+                fixed_lines = []
+                for line in ir_text.splitlines():
+                    if (" = phi  i64" in line or " = phi i64" in line) and ("[" not in line):
+                        # Skip malformed PHI without incoming pairs
+                        continue
+                    fixed_lines.append(line)
+                ir_text = "\n".join(fixed_lines)
+            except Exception:
+                pass
         mod = llvm.parse_assembly(ir_text)
         # Allow skipping verifier for iterative bring-up
         if os.environ.get('NYASH_LLVM_SKIP_VERIFY') != '1':

@@ -212,6 +212,7 @@ Flags
 - Do not commit secrets. Plug‑in paths and native libs are configured via `nyash.toml`.
 - LLVM builds require system LLVM 18; install via apt.llvm.org in CI.
 - Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
+ - LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
 
 ## Codex Async Workflow (Background Jobs)
 - Purpose: run Codex tasks in the background and notify a tmux session on completion.
