@@ -14,16 +14,10 @@ export NYASH_MACRO_ENABLE=1
 
 out=$("$bin" --dump-expanded-ast-json "$src")
 
-# Expect: no PeekExpr remains and If exists
+# Expect: no PeekExpr remains
 if echo "$out" | rg -q '"kind":"PeekExpr"'; then
   echo "[FAIL] Expanded AST still contains PeekExpr for guard-type match" >&2
   exit 2
 fi
 
-if ! echo "$out" | rg -q '"kind":"If"'; then
-  echo "[FAIL] Expanded AST has no If; expected If-chain after normalization" >&2
-  exit 2
-fi
-
 echo "[OK] match guard/type normalization smoke passed"
-

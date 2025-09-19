@@ -22,24 +22,75 @@ fn transform_peek_to_if_expr(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::A
     } else { None }
 }
 
-fn transform_peek_match_literal_local_init(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+fn transform_peek_to_if_stmt_assign(peek: &nyash_rust::ASTNode, target: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
+    use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
+    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+        let mut pairs: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
+        for (lit, body) in arms { pairs.push((lit.clone(), (*body).clone())); }
+        let mut current: A = *(*else_expr).clone();
+        for (lit, body) in pairs.into_iter().rev() {
+            let rhs = A::Literal { value: lit, span: Span::unknown() };
+            let cond = A::BinaryOp { operator: BinaryOperator::Equal, left: scrutinee.clone(), right: Box::new(rhs), span: Span::unknown() };
+            let then_body = vec![A::Assignment { target: Box::new(target.clone()), value: Box::new(body), span: Span::unknown() }];
+            let else_body = Some(vec![map_expr_to_stmt(current)]);
+            current = A::If { condition: Box::new(cond), then_body, else_body, span: Span::unknown() };
+        }
+        Some(current)
+    } else { None }
+}
+
+fn transform_peek_to_if_stmt_return(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
+    use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
+    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+        let mut pairs: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
+        for (lit, body) in arms { pairs.push((lit.clone(), (*body).clone())); }
+        let mut current: A = *(*else_expr).clone();
+        for (lit, body) in pairs.into_iter().rev() {
+            let rhs = A::Literal { value: lit, span: Span::unknown() };
+            let cond = A::BinaryOp { operator: BinaryOperator::Equal, left: scrutinee.clone(), right: Box::new(rhs), span: Span::unknown() };
+            let then_body = vec![A::Return { value: Some(Box::new(body)), span: Span::unknown() }];
+            let else_body = Some(vec![map_expr_to_stmt(current)]);
+            current = A::If { condition: Box::new(cond), then_body, else_body, span: Span::unknown() };
+        }
+        Some(current)
+    } else { None }
+}
+
+fn transform_peek_to_if_stmt_print(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
+    use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
+    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+        let mut pairs: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
+        for (lit, body) in arms { pairs.push((lit.clone(), (*body).clone())); }
+        let mut current: A = *(*else_expr).clone();
+        for (lit, body) in pairs.into_iter().rev() {
+            let rhs = A::Literal { value: lit, span: Span::unknown() };
+            let cond = A::BinaryOp { operator: BinaryOperator::Equal, left: scrutinee.clone(), right: Box::new(rhs), span: Span::unknown() };
+            let then_body = vec![A::Print { expression: Box::new(body), span: Span::unknown() }];
+            let else_body = Some(vec![map_expr_to_stmt(current)]);
+            current = A::If { condition: Box::new(cond), then_body, else_body, span: Span::unknown() };
+        }
+        Some(current)
+    } else { None }
+}
+
+fn transform_peek_match_literal(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
     use nyash_rust::ast::ASTNode as A;
     match ast.clone() {
         A::Program { statements, span } => {
-            A::Program { statements: statements.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect(), span }
+            A::Program { statements: statements.into_iter().map(|n| transform_peek_match_literal(&n)).collect(), span }
         }
         A::If { condition, then_body, else_body, span } => {
             A::If {
-                condition: Box::new(transform_peek_match_literal_local_init(&condition)),
-                then_body: then_body.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect(),
-                else_body: else_body.map(|v| v.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect()),
+                condition: Box::new(transform_peek_match_literal(&condition)),
+                then_body: then_body.into_iter().map(|n| transform_peek_match_literal(&n)).collect(),
+                else_body: else_body.map(|v| v.into_iter().map(|n| transform_peek_match_literal(&n)).collect()),
                 span,
             }
         }
         A::Loop { condition, body, span } => {
             A::Loop {
-                condition: Box::new(transform_peek_match_literal_local_init(&condition)),
-                body: body.into_iter().map(|n| transform_peek_match_literal_local_init(&n)).collect(),
+                condition: Box::new(transform_peek_match_literal(&condition)),
+                body: body.into_iter().map(|n| transform_peek_match_literal(&n)).collect(),
                 span,
             }
         }
@@ -50,13 +101,38 @@ fn transform_peek_match_literal_local_init(ast: &nyash_rust::ASTNode) -> nyash_r
                     if let Some(ifexpr) = transform_peek_to_if_expr(&v) {
                         new_inits.push(Some(Box::new(ifexpr)));
                     } else {
-                        new_inits.push(Some(Box::new(transform_peek_match_literal_local_init(&v))));
+                        new_inits.push(Some(Box::new(transform_peek_match_literal(&v))));
                     }
                 } else {
                     new_inits.push(None);
                 }
             }
             A::Local { variables, initial_values: new_inits, span }
+        }
+        A::Assignment { target, value, span } => {
+            if let Some(ifstmt) = transform_peek_to_if_stmt_assign(&value, &target) {
+                ifstmt
+            } else {
+                A::Assignment { target, value: Box::new(transform_peek_match_literal(&value)), span }
+            }
+        }
+        A::Return { value, span } => {
+            if let Some(v) = &value {
+                if let Some(ifstmt) = transform_peek_to_if_stmt_return(v) {
+                    ifstmt
+                } else {
+                    A::Return { value: Some(Box::new(transform_peek_match_literal(v))), span }
+                }
+            } else {
+                A::Return { value: None, span }
+            }
+        }
+        A::Print { expression, span } => {
+            if let Some(ifstmt) = transform_peek_to_if_stmt_print(&expression) {
+                ifstmt
+            } else {
+                A::Print { expression: Box::new(transform_peek_match_literal(&expression)), span }
+            }
         }
         other => other,
     }
@@ -162,7 +238,7 @@ pub fn run_macro_child(macro_file: &str) {
             ast.clone()
         }
         crate::r#macro::macro_box_ny::MacroBehavior::IfMatchNormalize => {
-            transform_peek_match_literal_local_init(&ast)
+            transform_peek_match_literal(&ast)
         }
     };
     let out_json = crate::r#macro::ast_json::ast_to_json(&out_ast);
