@@ -1,0 +1,9 @@
+{"kind":"Program","statements":[
+  {"kind":"Local","variables":["x"],"inits":[{"kind":"Literal","value":{"type":"int","value":1}}]},
+  {"kind":"If","condition":{"kind":"MethodCall","object":{"kind":"Variable","name":"x"},"method":"is","arguments":[{"kind":"Literal","value":{"type":"string","value":"Integer"}}]},"then":[
+    {"kind":"Print","expression":{"kind":"Literal","value":{"type":"int","value":1}}}
+  ],"else":[
+    {"kind":"Print","expression":{"kind":"Literal","value":{"type":"int","value":0}}}
+  ]}
+]}
+

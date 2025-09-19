@@ -44,6 +44,11 @@ Binary operators
 Notes
 - The schema is intentionally minimal; it covers nodes needed for Phase 2 samples.
 - Future: add `span`, `attrs`, typed annotations as needed.
+- Type checks (is/as) mapping
+  - AST JSON v0 does not introduce a dedicated TypeOp node. Instead, write MethodCall with
+    method "is" or "as" and a single string literal type argument:
+    {"kind":"MethodCall","object":<expr>,"method":"is","arguments":[{"kind":"Literal","value":{"type":"string","value":"Integer"}}]}
+  - Lowering maps this to MIR::TypeOp(Check/ Cast) with the target type resolved by name.
 
 ## Example
 
