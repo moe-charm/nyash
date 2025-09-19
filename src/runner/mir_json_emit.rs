@@ -20,7 +20,6 @@ pub fn emit_mir_json_for_harness(
                 let mut block_defines: std::collections::HashSet<u32> = std::collections::HashSet::new();
                 for inst in &bb.instructions {
                     match inst {
-                        I::Copy { dst, .. }
                         | I::UnaryOp { dst, .. }
                         | I::Const { dst, .. }
                         | I::BinOp { dst, .. }
@@ -126,6 +125,29 @@ pub fn emit_mir_json_for_harness(
                                     insts.push(json!({"op":"const","dst": dst.as_u32(), "value": {"type": "void", "value": 0}}));
                                 }
                             }
+                        }
+                        I::TypeOp { dst, op, value, ty } => {
+                            let op_s = match op {
+                                nyash_rust::mir::TypeOpKind::Check => "check",
+                                nyash_rust::mir::TypeOpKind::Cast => "cast",
+                            };
+                            let ty_s = match ty {
+                                MirType::Integer => "Integer".to_string(),
+                                MirType::Float => "Float".to_string(),
+                                MirType::Bool => "Bool".to_string(),
+                                MirType::String => "String".to_string(),
+                                MirType::Void => "Void".to_string(),
+                                MirType::Box(name) => name.clone(),
+                                _ => "Unknown".to_string(),
+                            };
+                            insts.push(json!({
+                                "op":"typeop",
+                                "operation": op_s,
+                                "src": value.as_u32(),
+                                "dst": dst.as_u32(),
+                                "target_type": ty_s,
+                            }));
+                            emitted_defs.insert(dst.as_u32());
                         }
                         I::BinOp { dst, op, lhs, rhs } => {
                             let op_s = match op {

@@ -16,7 +16,7 @@
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 3
+                "value": 1
               }
             },
             {
@@ -24,14 +24,14 @@
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 5
+                "value": 1
               }
             },
             {
               "dst": 3,
               "lhs": 1,
               "op": "compare",
-              "operation": "<",
+              "operation": "==",
               "rhs": 2
             },
             {
@@ -55,13 +55,21 @@
             },
             {
               "dst": 5,
-              "lhs": 2,
-              "op": "compare",
-              "operation": "<",
-              "rhs": 4
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
-              "cond": 5,
+              "dst": 6,
+              "lhs": 4,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 5
+            },
+            {
+              "cond": 6,
               "else": 5,
               "op": "branch",
               "then": 4
@@ -72,21 +80,25 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 9,
+              "dst": 16,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 60
+                "value": 1
               }
             },
             {
-              "dst": 10,
-              "op": "copy",
-              "src": 9
+              "dst": 17,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 16
             },
             {
-              "op": "jump",
-              "target": 3
+              "cond": 17,
+              "else": 11,
+              "op": "branch",
+              "then": 10
             }
           ]
         },
@@ -95,7 +107,7 @@
           "instructions": [
             {
               "op": "ret",
-              "value": 10
+              "value": 22
             }
           ]
         },
@@ -103,17 +115,36 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 6,
+              "dst": 7,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 40
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "no"
               }
             },
             {
+              "args": [
+                7
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
               "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 7
+              }
+            },
+            {
+              "dst": 15,
               "op": "copy",
-              "src": 6
+              "src": 8
             },
             {
               "op": "jump",
@@ -125,17 +156,122 @@
           "id": 5,
           "instructions": [
             {
-              "dst": 7,
+              "dst": 9,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 50
+                "value": 1
               }
             },
             {
-              "dst": 8,
+              "dst": 10,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 9
+            },
+            {
+              "cond": 10,
+              "else": 8,
+              "op": "branch",
+              "then": 7
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 22,
               "op": "copy",
-              "src": 7
+              "src": 15
+            },
+            {
+              "dst": 22,
+              "op": "copy",
+              "src": 15
+            },
+            {
+              "op": "jump",
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "instructions": [
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "yes"
+              }
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 9
+              }
+            },
+            {
+              "dst": 14,
+              "op": "copy",
+              "src": 12
+            },
+            {
+              "op": "jump",
+              "target": 9
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "instructions": [
+            {
+              "dst": 13,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 14,
+              "op": "copy",
+              "src": 13
+            },
+            {
+              "op": "jump",
+              "target": 9
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "instructions": [
+            {
+              "dst": 15,
+              "op": "copy",
+              "src": 14
+            },
+            {
+              "dst": 15,
+              "op": "copy",
+              "src": 14
             },
             {
               "op": "jump",
@@ -144,17 +280,80 @@
           ]
         },
         {
-          "id": 6,
+          "id": 10,
           "instructions": [
             {
-              "dst": 10,
-              "op": "copy",
-              "src": 8
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "yes"
+              }
             },
             {
-              "dst": 10,
+              "args": [
+                18
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 19,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 9
+              }
+            },
+            {
+              "dst": 21,
               "op": "copy",
-              "src": 8
+              "src": 19
+            },
+            {
+              "op": "jump",
+              "target": 12
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "instructions": [
+            {
+              "dst": 20,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 21,
+              "op": "copy",
+              "src": 20
+            },
+            {
+              "op": "jump",
+              "target": 12
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "instructions": [
+            {
+              "dst": 22,
+              "op": "copy",
+              "src": 21
+            },
+            {
+              "dst": 22,
+              "op": "copy",
+              "src": 21
             },
             {
               "op": "jump",

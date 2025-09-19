@@ -264,6 +264,60 @@ class PyVM:
                     i += 1
                     continue
 
+                if op == "typeop":
+                    # operation: "check" | "cast" ("as" is treated as cast for MVP)
+                    operation = inst.get("operation") or inst.get("op")
+                    src_vid = inst.get("src")
+                    dst_vid = inst.get("dst")
+                    target = (inst.get("target_type") or "")
+                    src_val = self._read(regs, src_vid)
+                    def is_type(val: Any, ty: str) -> bool:
+                        t = (ty or "").strip()
+                        t = t.lower()
+                        # Normalize aliases
+                        if t in ("stringbox",):
+                            t = "string"
+                        if t in ("integerbox", "int", "i64"):
+                            t = "integer"
+                        if t in ("floatbox", "f64"):
+                            t = "float"
+                        if t in ("boolbox", "boolean"):
+                            t = "bool"
+                        # Check by Python types/our boxed representations
+                        if t == "string":
+                            return isinstance(val, str)
+                        if t == "integer":
+                            # Treat Python ints (including 0/1) as integer
+                            return isinstance(val, int) and not isinstance(val, bool)
+                        if t == "float":
+                            return isinstance(val, float)
+                        if t == "bool":
+                            # Our VM uses 0/1 ints for bool; accept 0 or 1
+                            return isinstance(val, int) and (val == 0 or val == 1)
+                        # Boxed receivers
+                        if t.endswith("box"):
+                            box_name = ty
+                            if isinstance(val, dict) and val.get("__box__") == box_name:
+                                return True
+                            if box_name == "StringBox" and isinstance(val, str):
+                                return True
+                            if box_name == "ConsoleBox" and self._is_console(val):
+                                return True
+                            if box_name == "ArrayBox" and isinstance(val, dict) and val.get("__box__") == "ArrayBox":
+                                return True
+                            if box_name == "MapBox" and isinstance(val, dict) and val.get("__box__") == "MapBox":
+                                return True
+                            return False
+                        return False
+                    if (operation or "").lower() in ("check", "is"):
+                        out = 1 if is_type(src_val, str(target)) else 0
+                        self._set(regs, dst_vid, out)
+                    else:
+                        # cast/as: MVP pass-through
+                        self._set(regs, dst_vid, src_val)
+                    i += 1
+                    continue
+
                 if op == "unop":
                     kind = inst.get("kind")
                     src = self._read(regs, inst.get("src"))

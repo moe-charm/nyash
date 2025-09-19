@@ -31,7 +31,8 @@ def setup_phi_placeholders(builder, blocks: List[Dict[str, Any]]):
                     incoming0 = []
                 if dst0 is None or bb0 is None:
                     continue
-                _ = ensure_phi(builder, bid0, dst0, bb0)
+                # Do not materialize PHI here; finalize_phis will ensure and wire at block head.
+                # _ = ensure_phi(builder, bid0, dst0, bb0)
                 # Tag propagation
                 try:
                     dst_type0 = inst.get("dst_type")

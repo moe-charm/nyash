@@ -1,4 +1,51 @@
 # Current Task — Phase 15 Snapshot (2025-09-18)
+ 
+## Update (2025-09-19) — PyVM TypeOp + Match Guards, LLVM PHI hygiene, and Refactor Plan
+
+Delivered
+- Parser/Match
+  - Accept guards in match arms: `case <pattern> if <cond> => <expr|block>`.
+  - Literal-only arms still lower to PeekExpr (fast path). Type/guard arms lower to nested If-chain.
+  - Default `_` does not accept guards (parse error by design).
+- PyVM (reference executor)
+  - Implement TypeOp(check/cast MVP) in Python VM; normalize Box vs primitive checks (String/StringBox, Integer/IntegerBox, etc.).
+  - JSON emit now includes `typeop` instructions for harness/PyVM.
+  - Stage-2 smoke updated; match guard (literal & type) are strict and green.
+- LLVM harness (llvmlite)
+  - Centralize PHI creation/wiring in `phi_wiring` and avoid early placeholder creation.
+  - Normalize incoming values to i64 and sanitize stray empty PHIs at parse boundary (safety valve).
+  - Harness EXE path validated on representative samples.
+- Docs
+  - AGENTS.md: Add LLVM/PHI invariants + debug flow; match guard policy; harness build/run steps.
+
+Refactor Plan (next 1–2 weeks)
+1) Split parse_box_declaration (667 lines) in src/parser/declarations/box_definition.rs
+   - Targets (line ranges are indicative):
+     - parse_unified_members (~40–169)
+     - parse_postfix_handlers (~170–201)
+     - parse_init_blocks (~208–257)
+     - parse_visibility_blocks (~290–364)
+   - Place extracted logic under existing submodules:
+     - members/properties.rs, members/postfix.rs, members/constructors.rs, members/methods.rs / fields.rs
+   - Keep the top-level function as a thin orchestrator (no behavior change).
+2) TODO/FIXME triage (25 items)
+   - Classify as P0–P3; fix P0/P1 quickly (e.g., user_defined::birth/init safe stubs; http_message_box RefCell guard rails).
+   - Track in docs/development/issues/todo_triage.md.
+3) Clone reduction (safe pass)
+   - Internal storage to Arc/str where applicable; replace heavy String clones with &str/Arc clones.
+   - Keep public APIs stable; measure hotspots only.
+4) CliConfig split (Input/Debug/Backend)
+   - Use clap flatten; no CLI breaking changes.
+5) Python LLVM builder split
+   - FunctionBuilder / BlockLowerer / InstructionLowerer; keep PHI wiring in phi_wiring.
+
+Acceptance gates for each step
+- cargo build --release (green)
+- PyVM Stage‑2 smokes (green): tools/pyvm_stage2_smoke.sh
+- Harness EXE (where env allows): ny-llvmc build + peek_expr_block, guard cases
+- No semantic changes beyond stated (
+  equality of printed output/exit where applicable)
+
 
 ## Snapshot / Policy
 - Execution policy: PHI-off (edge-copy) by default. MIR builders/bridge do not emit PHIs; LLVM (llvmlite harness) synthesizes PHIs. PHI-on is dev-only and gated by feature `phi-legacy`.

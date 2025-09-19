@@ -123,7 +123,10 @@ Selfhost 子プロセスの引数透過（開発者向け）
 
 ## Build, Test, and Development Commands
 - Build (JIT/VM): `cargo build --release --features cranelift-jit`
-- Build (LLVM AOT): `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+- Build (LLVM AOT / harness-first):
+  - `cargo build --release -p nyash-llvm-compiler` (ny-llvmc builder)
+  - `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+  - Run via harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
 - Quick VM run: `./target/release/nyash --backend vm apps/APP/main.nyash`
 - Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
 - Smokes: `./tools/llvm_smoke.sh release` (use env toggles like `NYASH_LLVM_VINVOKE_RET_SMOKE=1`)
@@ -151,6 +154,38 @@ Flags
   - 小刻み: 作業は半日粒度。詰まったら撤退→Issue化→次タスクにスイッチ。
   - 検証: 代表スモーク（Roundtrip/using/modules/JIT直/collections）を常時維持。VMとJIT(--jit-direct)の一致が受け入れ基準。
   - 観測: hostcall イベントは 1 呼び出し=1 件、短絡は分岐採用の記録のみ。ノイズ増は回避。
+  - LLVM/PHI: ハーネスでは「PHI は常にブロック先頭にグループ化」「incoming は型付き (i64 v, %bb)」の不変条件を厳守。PHI の生成・配線は `phi_wiring` に一元化する。
+
+## LLVM Harness — PHI Invariants & Debug
+
+- Invariants
+  - PHI nodes are created at the block head only (grouped at top).
+  - Incoming pairs are always well-typed: `i64 <value>, %bb<id>`.
+  - Placeholder PHIs are not materialized during prepasses; only metadata is recorded.
+  - Finalization (`phi_wiring.finalize_phis`) ensures creation and wiring; no empty PHI remains.
+
+- Implementation notes
+  - Prepass metadata: `phi_wiring.tagging.setup_phi_placeholders` collects declared PHIs and records `block_phi_incomings`; it does not call `ensure_phi` anymore.
+  - Wiring: `phi_wiring.wiring.ensure_phi` places PHI at the block head; `wire_incomings` resolves per-pred values and normalizes to i64.
+  - Safety valve: `llvm_builder.compile_to_object` sanitizes IR text to drop malformed empty PHIs (should be unreachable in normal flow).
+
+- How to run harness
+  - Build: `cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm`
+  - Run: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash`
+  - IR dump: `NYASH_LLVM_DUMP_IR=tmp/nyash_harness.ll ...`
+  - PHI trace: `NYASH_LLVM_TRACE_PHI=1 ...` (JSON lines output via `phi_wiring.common.trace`)
+
+## Match Guards — Parser & Lowering Policy
+
+- Syntax: `case <pattern> [if <cond>] => <expr|block>` within `match <expr> { ... }`.
+- Patterns (MVP): literals (with `|`), type patterns like `StringBox(s)`.
+- Semantics:
+  - Default `_` does not accept guards (parse error by design).
+  - Without type/guard: lowers to PeekExpr for legacy path.
+  - With type/guard: lowers to nested If-chain; guard is evaluated inside then-branch (after type bind for type patterns).
+- Notes:
+  - is/as TypeOp mapping normalizes common Box names to primitives (e.g., `StringBox` → String) for parity across VM/JIT/LLVM.
+  - VM/PyVM may require bridging for primitive↔Box checks; keep guard tests for literal strict, type guard as warning until parity is complete.
 - 3日スタートプラン:
   1) JSON v0 短絡 &&/|| を JSON→MIR→VM→JIT の順で最小実装。短絡副作用なしを smoke で確認。
   2) collections 最小 hostcall（len/get/set/push/size/has）と policy ガードの整合性チェック。

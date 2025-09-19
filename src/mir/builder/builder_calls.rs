@@ -249,11 +249,13 @@ impl super::MirBuilder {
     // Map a user-facing type name to MIR type
     pub(super) fn parse_type_name_to_mir(name: &str) -> super::MirType {
         match name {
-            "Integer" | "Int" | "I64" => super::MirType::Integer,
-            "Float" | "F64" => super::MirType::Float,
-            "Bool" | "Boolean" => super::MirType::Bool,
-            "String" => super::MirType::String,
+            // Primitive families
+            "Integer" | "Int" | "I64" | "IntegerBox" | "IntBox" => super::MirType::Integer,
+            "Float" | "F64" | "FloatBox" => super::MirType::Float,
+            "Bool" | "Boolean" | "BoolBox" => super::MirType::Bool,
+            "String" | "StringBox" => super::MirType::String,
             "Void" | "Unit" => super::MirType::Void,
+            // Fallback: treat as user box type
             other => super::MirType::Box(other.to_string()),
         }
     }

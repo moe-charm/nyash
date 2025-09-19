@@ -25,41 +25,15 @@
               "op": "boxcall"
             },
             {
-              "args": [],
               "dst": 2,
-              "op": "newbox",
-              "type": "ArrayBox"
-            },
-            {
-              "args": [],
-              "box": 2,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "args": [],
-              "dst": 3,
-              "op": "newbox",
-              "type": "MapBox"
-            },
-            {
-              "args": [],
-              "box": 3,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
-            {
-              "dst": 5,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 1
               }
             },
             {
-              "dst": 6,
+              "dst": 3,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -69,27 +43,17 @@
             {
               "dst": 7,
               "op": "copy",
-              "src": 2
+              "src": 1
             },
             {
-              "dst": 8,
+              "dst": 4,
               "op": "copy",
               "src": 3
             },
             {
-              "dst": 9,
+              "dst": 6,
               "op": "copy",
-              "src": 1
-            },
-            {
-              "dst": 11,
-              "op": "copy",
-              "src": 5
-            },
-            {
-              "dst": 12,
-              "op": "copy",
-              "src": 6
+              "src": 2
             },
             {
               "op": "jump",
@@ -101,22 +65,22 @@
           "id": 1,
           "instructions": [
             {
-              "dst": 14,
+              "dst": 8,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 10
+                "value": 5
               }
             },
             {
-              "dst": 15,
-              "lhs": 11,
+              "dst": 9,
+              "lhs": 6,
               "op": "compare",
-              "operation": "<",
-              "rhs": 14
+              "operation": "<=",
+              "rhs": 8
             },
             {
-              "cond": 15,
+              "cond": 9,
               "else": 3,
               "op": "branch",
               "then": 2
@@ -127,22 +91,7 @@
           "id": 2,
           "instructions": [
             {
-              "dst": 16,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "dst": 17,
-              "lhs": 11,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 16
-            },
-            {
-              "dst": 18,
+              "dst": 10,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -150,29 +99,29 @@
               }
             },
             {
-              "dst": 19,
-              "lhs": 17,
+              "dst": 11,
+              "lhs": 6,
               "op": "binop",
               "operation": "%",
-              "rhs": 18
+              "rhs": 10
             },
             {
-              "dst": 20,
+              "dst": 12,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 1
               }
             },
             {
-              "dst": 21,
-              "lhs": 19,
+              "dst": 13,
+              "lhs": 11,
               "op": "compare",
               "operation": "==",
-              "rhs": 20
+              "rhs": 12
             },
             {
-              "cond": 21,
+              "cond": 13,
               "else": 5,
               "op": "branch",
               "then": 4
@@ -183,79 +132,47 @@
           "id": 3,
           "instructions": [
             {
-              "dst": 48,
+              "dst": 22,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "x="
+                "value": "sum="
               }
             },
             {
-              "dst": 49,
+              "dst": 23,
               "dst_type": {
                 "box_type": "StringBox",
                 "kind": "handle"
               },
-              "lhs": 48,
+              "lhs": 22,
               "op": "binop",
               "operation": "+",
-              "rhs": 12
-            },
-            {
-              "dst": 50,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": ", len="
-              }
-            },
-            {
-              "dst": 51,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 49,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 50
-            },
-            {
-              "args": [],
-              "box": 7,
-              "dst": 52,
-              "method": "len",
-              "op": "boxcall"
-            },
-            {
-              "dst": 53,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 51,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 52
+              "rhs": 4
             },
             {
               "args": [
-                53
+                23
               ],
-              "box": 9,
-              "dst": 54,
+              "box": 7,
+              "dst": 24,
               "method": "println",
               "op": "boxcall"
             },
             {
+              "dst": 25,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
               "op": "ret",
-              "value": 12
+              "value": 25
             }
           ]
         },
@@ -263,44 +180,20 @@
           "id": 4,
           "instructions": [
             {
-              "dst": 31,
+              "dst": 14,
+              "lhs": 4,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 6
+            },
+            {
+              "dst": 17,
               "op": "copy",
-              "src": 28
+              "src": 14
             },
             {
-              "args": [
-                17
-              ],
-              "box": 7,
-              "dst": 22,
-              "method": "push",
-              "op": "boxcall"
-            },
-            {
-              "dst": 23,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 4
-              }
-            },
-            {
-              "dst": 24,
-              "lhs": 17,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 23
-            },
-            {
-              "dst": 31,
-              "op": "copy",
-              "src": 28
-            },
-            {
-              "cond": 24,
-              "else": 8,
-              "op": "branch",
-              "then": 7
+              "op": "jump",
+              "target": 6
             }
           ]
         },
@@ -308,24 +201,24 @@
           "id": 5,
           "instructions": [
             {
-              "dst": 29,
+              "dst": 15,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 1
+                "value": 0
               }
             },
             {
-              "dst": 30,
-              "lhs": 28,
+              "dst": 16,
+              "lhs": 14,
               "op": "binop",
               "operation": "+",
-              "rhs": 29
+              "rhs": 15
             },
             {
-              "dst": 31,
+              "dst": 17,
               "op": "copy",
-              "src": 30
+              "src": 16
             },
             {
               "op": "jump",
@@ -337,258 +230,34 @@
           "id": 6,
           "instructions": [
             {
-              "dst": 33,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 7
-              }
-            },
-            {
-              "dst": 34,
-              "lhs": 17,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 33
-            },
-            {
-              "cond": 34,
-              "else": 12,
-              "op": "branch",
-              "then": 11
-            }
-          ]
-        },
-        {
-          "id": 7,
-          "instructions": [
-            {
-              "dst": 11,
+              "dst": 4,
               "op": "copy",
               "src": 17
             },
             {
-              "dst": 11,
-              "op": "copy",
-              "src": 17
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 8,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 9,
-          "instructions": [
-            {
-              "dst": 27,
+              "dst": 19,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 2
+                "value": 1
               }
             },
             {
-              "dst": 28,
-              "lhs": 12,
+              "dst": 20,
+              "lhs": 6,
               "op": "binop",
               "operation": "+",
-              "rhs": 27
+              "rhs": 19
             },
             {
-              "op": "jump",
-              "target": 6
-            }
-          ]
-        },
-        {
-          "id": 10,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 11,
-          "instructions": [
-            {
-              "dst": 35,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "k"
-              }
-            },
-            {
-              "dst": 36,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "v"
-              }
-            },
-            {
-              "args": [
-                35,
-                36
-              ],
-              "box": 8,
-              "dst": 37,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "dst": 38,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 5
-              }
-            },
-            {
-              "dst": 39,
-              "lhs": 31,
-              "op": "compare",
-              "operation": ">",
-              "rhs": 38
-            },
-            {
-              "cond": 39,
-              "else": 15,
-              "op": "branch",
-              "then": 14
-            }
-          ]
-        },
-        {
-          "id": 12,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 13
-            }
-          ]
-        },
-        {
-          "id": 13,
-          "instructions": [
-            {
-              "dst": 43,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 3
-              }
-            },
-            {
-              "dst": 44,
-              "lhs": 17,
-              "op": "compare",
-              "operation": "==",
-              "rhs": 43
-            },
-            {
-              "cond": 44,
-              "else": 19,
-              "op": "branch",
-              "then": 18
-            }
-          ]
-        },
-        {
-          "id": 14,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 3
-            }
-          ]
-        },
-        {
-          "id": 15,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 16
-            }
-          ]
-        },
-        {
-          "id": 16,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 13
-            }
-          ]
-        },
-        {
-          "id": 17,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 16
-            }
-          ]
-        },
-        {
-          "id": 18,
-          "instructions": [
-            {
-              "op": "ret",
-              "value": 31
-            }
-          ]
-        },
-        {
-          "id": 19,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 20
-            }
-          ]
-        },
-        {
-          "id": 20,
-          "instructions": [
-            {
-              "dst": 11,
+              "dst": 4,
               "op": "copy",
               "src": 17
             },
             {
-              "dst": 12,
+              "dst": 6,
               "op": "copy",
-              "src": 31
-            },
-            {
-              "dst": 11,
-              "op": "copy",
-              "src": 17
-            },
-            {
-              "dst": 12,
-              "op": "copy",
-              "src": 31
+              "src": 20
             },
             {
               "op": "jump",

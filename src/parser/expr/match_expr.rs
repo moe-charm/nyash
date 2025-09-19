@@ -8,18 +8,19 @@ impl NyashParser {
     /// MVP: リテラルパターン＋OR＋デフォルト(_) のみ。アーム本体は式またはブロック。
     pub(crate) fn expr_parse_match(&mut self) -> Result<ASTNode, ParseError> {
         self.advance(); // consume 'match'
-        // Scrutinee: MVPでは primary/call に限定（表現力は十分）
-        let scrutinee = self.expr_parse_primary()?;
+        // Scrutinee: 通常の式を受理（演算子優先順位を含む）
+        let scrutinee = self.parse_expression()?;
         self.consume(TokenType::LBRACE)?;
 
         enum MatchArm {
-            Lit(Vec<LiteralValue>, ASTNode),
-            Type { ty: String, bind: String, body: ASTNode },
+            Lit { lits: Vec<LiteralValue>, guard: Option<ASTNode>, body: ASTNode },
+            Type { ty: String, bind: String, guard: Option<ASTNode>, body: ASTNode },
             Default(ASTNode),
         }
 
         let mut arms_any: Vec<MatchArm> = Vec::new();
         let mut saw_type_arm = false;
+        let mut saw_guard = false;
         let mut default_expr: Option<ASTNode> = None;
 
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
@@ -36,6 +37,15 @@ impl NyashParser {
             let is_default = matches!(self.current_token().token_type, TokenType::IDENTIFIER(ref s) if s == "_");
             if is_default {
                 self.advance(); // consume '_'
+                // MVP: default '_' does not accept guard
+                if self.match_token(&TokenType::IF) {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "'=>' (guard is not allowed for default arm)".to_string(),
+                        line,
+                    });
+                }
                 self.consume(TokenType::FatArrow)?;
                 let expr = if self.match_token(&TokenType::LBRACE) {
                     // ブロックを式として扱う（最後の文の値が返る）
@@ -53,8 +63,8 @@ impl NyashParser {
                         span: Span::unknown(),
                     }
                 } else {
-                    // MVP: アームは primary/call を優先
-                    self.expr_parse_primary()?
+                    // 値アームは通常の式全体を受理
+                    self.parse_expression()?
                 };
                 default_expr = Some(expr.clone());
                 arms_any.push(MatchArm::Default(expr));
@@ -85,6 +95,13 @@ impl NyashParser {
                             }
                         };
                         self.consume(TokenType::RPAREN)?;
+                        // Optional guard
+                        let guard = if self.match_token(&TokenType::IF) {
+                            self.advance();
+                            let g = self.parse_expression()?;
+                            saw_guard = true;
+                            Some(g)
+                        } else { None };
                         self.consume(TokenType::FatArrow)?;
                         let body = if self.match_token(&TokenType::LBRACE) {
                             self.advance(); // consume '{'
@@ -92,26 +109,24 @@ impl NyashParser {
                             while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
                                 self.skip_newlines();
                                 if !self.match_token(&TokenType::RBRACE) {
-                                    eprintln!("[parser.match] in-block before stmt token={:?} line={}", self.current_token().token_type, self.current_token().line);
                                     let st = self.parse_statement()?;
-                                    eprintln!("[parser.match] parsed stmt kind={}", st.info());
                                     stmts.push(st);
                                 }
                             }
                             self.consume(TokenType::RBRACE)?;
                             ASTNode::Program { statements: stmts, span: Span::unknown() }
                         } else {
-                            self.expr_parse_primary()?
+                            // 値アームは通常の式全体を受理
+                            self.parse_expression()?
                         };
                         // type arm parsed
-                        arms_any.push(MatchArm::Type { ty, bind, body });
+                        arms_any.push(MatchArm::Type { ty, bind, guard, body });
                         saw_type_arm = true;
                         handled = true;
                     }
                 }
                 if !handled {
                     // リテラル（OR結合可）
-                    eprintln!("[parser.match] parse literal pattern, token={:?}", self.current_token().token_type);
                     let mut lits: Vec<crate::ast::LiteralValue> = Vec::new();
                     let first = self.lit_only_for_match()?;
                     lits.push(first);
@@ -120,10 +135,15 @@ impl NyashParser {
                         let nxt = self.lit_only_for_match()?;
                         lits.push(nxt);
                     }
+                    // Optional guard before '=>'
+                    let guard = if self.match_token(&TokenType::IF) {
+                        self.advance();
+                        let g = self.parse_expression()?;
+                        saw_guard = true;
+                        Some(g)
+                    } else { None };
                     self.consume(TokenType::FatArrow)?;
-                    eprintln!("[parser.match] after FatArrow token={:?}", self.current_token().token_type);
                     let expr = if self.match_token(&TokenType::LBRACE) {
-                        eprintln!("[parser.match] entering block arm");
                         self.advance(); // consume '{'
                         let mut stmts: Vec<ASTNode> = Vec::new();
                         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
@@ -136,9 +156,10 @@ impl NyashParser {
                         self.consume(TokenType::RBRACE)?;
                         ASTNode::Program { statements: stmts, span: Span::unknown() }
                     } else {
-                        self.expr_parse_primary()?
+                        // 値アームは通常の式全体を受理
+                        self.parse_expression()?
                     };
-                    arms_any.push(MatchArm::Lit(lits, expr));
+                    arms_any.push(MatchArm::Lit { lits, guard, body: expr });
                 }
             }
 
@@ -156,14 +177,14 @@ impl NyashParser {
             line: self.current_token().line,
         })?;
 
-        if !saw_type_arm {
+        if !saw_type_arm && !saw_guard {
             // 既存の Lower を活用するため PeekExpr に落とす（型パターンが無い場合のみ）
             let mut lit_arms: Vec<(LiteralValue, ASTNode)> = Vec::new();
             for arm in arms_any.into_iter() {
                 match arm {
-                    MatchArm::Lit(lits, expr) => {
+                    MatchArm::Lit { lits, guard: _, body } => {
                         for lit in lits.into_iter() {
-                            lit_arms.push((lit, expr.clone()));
+                            lit_arms.push((lit, body.clone()));
                         }
                     }
                     MatchArm::Default(_) => { /* handled via else_expr above */ }
@@ -198,7 +219,7 @@ impl NyashParser {
                 MatchArm::Default(_) => {
                     // already handled as else_node
                 }
-                MatchArm::Lit(lits, body) => {
+                MatchArm::Lit { lits, guard, body } => {
                     // condition: (scr == lit1) || (scr == lit2) || ...
                     let mut cond: Option<ASTNode> = None;
                     for lit in lits.into_iter() {
@@ -218,15 +239,27 @@ impl NyashParser {
                             },
                         });
                     }
-                    let then_prog = ASTNode::Program { statements: vec![body], span: Span::unknown() };
+                    let else_statements = match else_node.clone() { ASTNode::Program { statements, .. } => statements, other => vec![other] };
+                    let then_body_statements = if let Some(g) = guard {
+                        // Nested guard: if g then body else else_node
+                        let guard_if = ASTNode::If {
+                            condition: Box::new(g),
+                            then_body: vec![body],
+                            else_body: Some(else_statements.clone()),
+                            span: Span::unknown(),
+                        };
+                        vec![guard_if]
+                    } else {
+                        vec![body]
+                    };
                     else_node = ASTNode::If {
                         condition: Box::new(cond.expect("literal arm must have at least one literal")),
-                        then_body: match then_prog { ASTNode::Program { statements, .. } => statements, _ => unreachable!() },
-                        else_body: Some(match else_node.clone() { ASTNode::Program { statements, .. } => statements, other => vec![other] }),
+                        then_body: then_body_statements,
+                        else_body: Some(else_statements),
                         span: Span::unknown(),
                     };
                 }
-                MatchArm::Type { ty, bind, body } => {
+                MatchArm::Type { ty, bind, guard, body } => {
                     // condition: scr.is("Type")
                     let is_call = ASTNode::MethodCall {
                         object: Box::new(ASTNode::Variable { name: scr_var.clone(), span: Span::unknown() }),
@@ -246,11 +279,23 @@ impl NyashParser {
                         initial_values: vec![Some(Box::new(cast))],
                         span: Span::unknown(),
                     };
-                    let then_prog = ASTNode::Program { statements: vec![bind_local, body], span: Span::unknown() };
+                    let else_statements = match else_node.clone() { ASTNode::Program { statements, .. } => statements, other => vec![other] };
+                    let then_body_statements = if let Some(g) = guard {
+                        // After binding, check guard then branch to body else fallthrough to else_node
+                        let guard_if = ASTNode::If {
+                            condition: Box::new(g),
+                            then_body: vec![body],
+                            else_body: Some(else_statements.clone()),
+                            span: Span::unknown(),
+                        };
+                        vec![bind_local, guard_if]
+                    } else {
+                        vec![bind_local, body]
+                    };
                     else_node = ASTNode::If {
                         condition: Box::new(is_call),
-                        then_body: match then_prog { ASTNode::Program { statements, .. } => statements, _ => unreachable!() },
-                        else_body: Some(match else_node.clone() { ASTNode::Program { statements, .. } => statements, other => vec![other] }),
+                        then_body: then_body_statements,
+                        else_body: Some(else_statements),
                         span: Span::unknown(),
                     };
                 }

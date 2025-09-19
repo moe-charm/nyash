@@ -352,30 +352,7 @@ class NyashLLVMBuilder:
                     if not hasattr(self, 'block_phi_incomings') or self.block_phi_incomings is None:
                         self.block_phi_incomings = {}
                     for bbid, ret_vid in plan.items():
-                        # Create a placeholder PHI at block head if missing
-                        bb0 = self.bb_map.get(bbid)
-                        if bb0 is not None:
-                            b0 = ir.IRBuilder(bb0)
-                            try:
-                                b0.position_at_start(bb0)
-                            except Exception:
-                                pass
-                            cur = self.vmap.get(ret_vid)
-                            need_new = True
-                            try:
-                                need_new = not (cur is not None and hasattr(cur, 'add_incoming'))
-                            except Exception:
-                                need_new = True
-                            if need_new:
-                                ph = b0.phi(self.i64, name=f"phi_ret_{ret_vid}")
-                                self.vmap[ret_vid] = ph
-                            else:
-                                ph = cur
-                            # Record for later unify
-                            try:
-                                self.predeclared_ret_phis[(int(bbid), int(ret_vid))] = ph
-                            except Exception:
-                                pass
+                        # Do not pre-materialize PHI here; record only metadata.
                         # Record declared incoming metadata using the same value-id
                         # for each predecessor; finalize_phis will resolve per-pred end values.
                         try:
@@ -398,7 +375,7 @@ class NyashLLVMBuilder:
                         except Exception:
                             pass
                         try:
-                            trace_debug(f"[prepass] if-merge: predeclare PHI at bb{bbid} for v{ret_vid} preds={preds_list}")
+                            trace_debug(f"[prepass] if-merge: plan metadata at bb{bbid} for v{ret_vid} preds={preds_list}")
                         except Exception:
                             pass
         except Exception:
@@ -460,19 +437,8 @@ class NyashLLVMBuilder:
                 except Exception:
                     pass
                 for vid in need:
-                    # Skip if we already have a PHI mapped for (bid, vid)
-                    cur = self.vmap.get(int(vid))
-                    has_phi_here = False
-                    try:
-                        has_phi_here = (
-                            cur is not None and hasattr(cur, 'add_incoming') and
-                            getattr(getattr(cur, 'basic_block', None), 'name', None) == bb0.name
-                        )
-                    except Exception:
-                        has_phi_here = False
-                    if not has_phi_here:
-                        ph = b0.phi(self.i64, name=f"phi_{vid}")
-                        self.vmap[int(vid)] = ph
+                    # Do not create placeholder here; let finalize_phis materialize
+                    # to keep PHIs strictly grouped at block heads and avoid dups.
                     # Record incoming metadata for finalize_phis (pred -> same vid)
                     try:
                         self.block_phi_incomings.setdefault(int(bid), {}).setdefault(int(vid), [])
@@ -498,11 +464,7 @@ class NyashLLVMBuilder:
         except Exception:
             loop_plan = None
 
-        # Provide predeclared ret-phi map to resolver for ret lowering to reuse
-        try:
-            self.resolver.ret_phi_map = self.predeclared_ret_phis
-        except Exception:
-            pass
+        # No predeclared PHIs are materialized; resolver may ignore ret_phi_map
 
         # Now lower blocks
         skipped: set[int] = set()
@@ -1244,7 +1206,19 @@ class NyashLLVMBuilder:
         target_machine = target.create_target_machine()
         
         # Compile
-        mod = llvm.parse_assembly(str(self.module))
+        ir_text = str(self.module)
+        # Sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser
+        try:
+            fixed_lines = []
+            for line in ir_text.splitlines():
+                if (" = phi  i64" in line or " = phi i64" in line) and ("[" not in line):
+                    # Skip malformed PHI without incoming pairs
+                    continue
+                fixed_lines.append(line)
+            ir_text = "\n".join(fixed_lines)
+        except Exception:
+            pass
+        mod = llvm.parse_assembly(ir_text)
         # Allow skipping verifier for iterative bring-up
         if os.environ.get('NYASH_LLVM_SKIP_VERIFY') != '1':
             mod.verify()

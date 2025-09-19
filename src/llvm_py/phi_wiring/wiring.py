@@ -5,9 +5,17 @@ import llvmlite.ir as ir
 
 from .common import trace
 
+def _const_i64(builder, n: int) -> ir.Constant:
+    try:
+        return ir.Constant(builder.i64, int(n))
+    except Exception:
+        # Failsafe: llvmlite requires a Module-bound type; fallback to 64-bit 0
+        return ir.Constant(ir.IntType(64), int(n) if isinstance(n, int) else 0)
+
 
 def ensure_phi(builder, block_id: int, dst_vid: int, bb: ir.Block) -> ir.Instruction:
     """Ensure a PHI placeholder exists at the block head for dst_vid and return it."""
+    # Always place PHI at block start to keep LLVM invariant "PHI nodes at top"
     b = ir.IRBuilder(bb)
     try:
         b.position_at_start(bb)
@@ -114,8 +122,16 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
             )
         except Exception:
             val = None
+        # Normalize to a well-typed LLVM value (i64)
         if val is None:
-            val = ir.Constant(builder.i64, 0)
+            val = _const_i64(builder, 0)
+        else:
+            try:
+                # Some paths can accidentally pass plain integers; coerce to i64 const
+                if not hasattr(val, 'type'):
+                    val = _const_i64(builder, int(val))
+            except Exception:
+                val = _const_i64(builder, 0)
         chosen[pred_match] = val
         trace({"phi": "wire_choose", "pred": int(pred_match), "dst": int(dst_vid), "src": int(vs)})
     wired = 0
@@ -123,6 +139,7 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
         pred_bb = builder.bb_map.get(pred_bid)
         if pred_bb is None:
             continue
+        # llvmlite requires (value, block) of correct types
         phi.add_incoming(val, pred_bb)
         trace({"phi": "add_incoming", "dst": int(dst_vid), "pred": int(pred_bid)})
         wired += 1

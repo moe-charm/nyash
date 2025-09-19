@@ -3,48 +3,102 @@
     {
       "blocks": [
         {
-          "id": 2,
+          "id": 0,
           "instructions": [
+            {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
             {
               "dst": 1,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "__once_value"
+                "type": "i64",
+                "value": 1
               }
             },
             {
-              "args": [
-                1
-              ],
-              "box": 0,
               "dst": 2,
-              "method": "getField",
-              "op": "boxcall"
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
               "dst": 3,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 2
+            },
+            {
+              "cond": 3,
+              "else": 2,
+              "op": "branch",
+              "then": 1
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 4,
               "op": "const",
               "value": {
-                "type": "void",
+                "type": "i64",
                 "value": 0
               }
             },
             {
-              "dst": 4,
-              "lhs": 2,
-              "op": "compare",
-              "operation": "!=",
-              "rhs": 3
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
-              "cond": 4,
-              "else": 4,
+              "dst": 6,
+              "lhs": 4,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 5
+            },
+            {
+              "cond": 6,
+              "else": 5,
               "op": "branch",
-              "then": 3
+              "then": 4
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 16,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 17,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 16
+            },
+            {
+              "cond": 17,
+              "else": 11,
+              "op": "branch",
+              "then": 10
             }
           ]
         },
@@ -53,7 +107,7 @@
           "instructions": [
             {
               "op": "ret",
-              "value": 2
+              "value": 22
             }
           ]
         },
@@ -61,8 +115,40 @@
           "id": 4,
           "instructions": [
             {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "no"
+              }
+            },
+            {
+              "args": [
+                7
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 7
+              }
+            },
+            {
+              "dst": 15,
+              "op": "copy",
+              "src": 8
+            },
+            {
               "op": "jump",
-              "target": 5
+              "target": 6
             }
           ]
         },
@@ -70,72 +156,7 @@
           "id": 5,
           "instructions": [
             {
-              "args": [],
-              "box": 0,
-              "dst": 7,
-              "method": "__compute_once_value",
-              "op": "boxcall"
-            },
-            {
-              "dst": 8,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "__once_value"
-              }
-            },
-            {
-              "args": [
-                8,
-                7
-              ],
-              "box": 0,
               "dst": 9,
-              "method": "setField",
-              "op": "boxcall"
-            },
-            {
-              "op": "ret",
-              "value": 7
-            }
-          ]
-        }
-      ],
-      "name": "Cacher.__get_once_value/0",
-      "params": [
-        0
-      ]
-    },
-    {
-      "blocks": [
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "counter"
-              }
-            },
-            {
-              "args": [
-                1
-              ],
-              "box": 0,
-              "dst": 2,
-              "method": "getField",
-              "op": "boxcall"
-            },
-            {
-              "dst": 3,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -143,114 +164,85 @@
               }
             },
             {
-              "dst": 4,
-              "lhs": 2,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 3
+              "dst": 10,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 9
             },
             {
-              "dst": 5,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "counter"
-              }
-            },
-            {
-              "args": [
-                5,
-                4
-              ],
-              "box": 0,
-              "dst": null,
-              "method": "setField",
-              "op": "boxcall"
-            },
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "counter"
-              }
-            },
-            {
-              "args": [
-                6
-              ],
-              "box": 0,
-              "dst": 7,
-              "method": "getField",
-              "op": "boxcall"
-            },
-            {
-              "op": "ret",
-              "value": 7
+              "cond": 10,
+              "else": 8,
+              "op": "branch",
+              "then": 7
             }
           ]
-        }
-      ],
-      "name": "Cacher.__compute_once_value/0",
-      "params": [
-        0
-      ]
-    },
-    {
-      "blocks": [
+        },
         {
-          "id": 0,
+          "id": 6,
           "instructions": [
             {
-              "args": [],
-              "dst": 5,
-              "op": "newbox",
-              "type": "ArrayBox"
+              "dst": 22,
+              "op": "copy",
+              "src": 15
             },
             {
-              "args": [],
-              "dst": 6,
-              "op": "newbox",
-              "type": "Cacher"
+              "dst": 22,
+              "op": "copy",
+              "src": 15
             },
             {
-              "args": [],
-              "box": 6,
-              "dst": 7,
-              "method": "__get_once_value",
-              "op": "boxcall"
+              "op": "jump",
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "instructions": [
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "yes"
+              }
             },
             {
               "args": [
-                7
+                11
               ],
               "dst": null,
               "func": "nyash.console.log",
               "op": "externcall"
             },
             {
-              "args": [],
-              "box": 6,
-              "dst": 8,
-              "method": "__get_once_value",
-              "op": "boxcall"
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 9
+              }
             },
             {
-              "args": [
-                8
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "dst": 14,
+              "op": "copy",
+              "src": 12
             },
             {
-              "dst": 9,
+              "op": "jump",
+              "target": 9
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "instructions": [
+            {
+              "dst": 13,
               "op": "const",
               "value": {
                 "type": "i64",
@@ -258,8 +250,114 @@
               }
             },
             {
-              "op": "ret",
-              "value": 9
+              "dst": 14,
+              "op": "copy",
+              "src": 13
+            },
+            {
+              "op": "jump",
+              "target": 9
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "instructions": [
+            {
+              "dst": 15,
+              "op": "copy",
+              "src": 14
+            },
+            {
+              "dst": 15,
+              "op": "copy",
+              "src": 14
+            },
+            {
+              "op": "jump",
+              "target": 6
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "instructions": [
+            {
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "yes"
+              }
+            },
+            {
+              "args": [
+                18
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 19,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 9
+              }
+            },
+            {
+              "dst": 21,
+              "op": "copy",
+              "src": 19
+            },
+            {
+              "op": "jump",
+              "target": 12
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "instructions": [
+            {
+              "dst": 20,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 21,
+              "op": "copy",
+              "src": 20
+            },
+            {
+              "op": "jump",
+              "target": 12
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "instructions": [
+            {
+              "dst": 22,
+              "op": "copy",
+              "src": 21
+            },
+            {
+              "dst": 22,
+              "op": "copy",
+              "src": 21
+            },
+            {
+              "op": "jump",
+              "target": 3
             }
           ]
         }
