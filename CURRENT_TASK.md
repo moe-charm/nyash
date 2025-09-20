@@ -95,6 +95,10 @@ Next (short)
   - ctx JSON: `{ "caps": { "io|net|env": bool } }`
   - 例マクロ: `apps/macros/examples/macro_ctx_demo.nyash`（identity、stdoutは使わない）
   - Docs: guides/macro-system.md にMacroCtx節を追記
+  
+- Goldens 追加（正規化結果の固定化）
+  - for_basic / foreach_basic の expanded.json と照合スクリプト
+  - loop_nonreorder（非整列パス: 代入の後に非代入がある）→ 変換スキップの確認
 - LoopForm MVP‑3: break/continue minimal handling (single‑level)
 - for/foreach pre‑desugaring → LoopForm normalization (limited)
 - LLVM IR hygiene for LoopForm / If / Match — PHI at block head, no empty PHIs (smoke)
