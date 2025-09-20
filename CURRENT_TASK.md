@@ -1,141 +1,177 @@
-# Current Task — Macro Normalize + Freeze (Save Point)
+# Current Task — Freeze Polish (Concise)
 
-Updated: 2025‑09‑20
+Updated: 2025‑09‑21
 
-## Today (Done)
-- Polishing Sprint（非破壊・仕様不変）
-  - main の薄型化（bin→lib 委譲）とテスト import 整流
-  - LLVM Python ビルダ: builders/* に一本化（fallback 除去）
-  - 重要区間の例外ログ化（`NYASH_CLI_VERBOSE=1` 連動）
-  - 生成物の既定出力を `tmp/` に統一（tools/build_llvm.sh, tools/build_aot.sh, llvm_builder.py CLI）
-  - README 冒頭に Execution Status を追記（Active/Inactive の明示）
-  - DEV_QUICKSTART に Acceptance Checklist を追記
-  - lib 内コメントのトーン整流（実装は要点のみ）
-- PeekExpr → If 連鎖の正変換を安定化
-  - マクロ側（IfMatchNormalize）での検出を has_kind("PeekExpr") に統一。
-  - Local/Assignment/Return/Print の4経路で PeekExpr を If に置換できるよう整備。
-  - 子ランナー（PyVM）経路の不安定さを踏まえ、既定実行を「internal‑child（内蔵変換）」に切替。
-    - 内蔵変換（Rust）で Literal‑only の match を If 連鎖へ正規化する安全パスを実装。
-  - Golden 緑化: tools/test/golden/macro/match_literal_basic_user_macro_golden.sh
-- ランナー診断の強化
-  - 子プロセス stderr を親に透過。失敗時にエラー内容を必ず表示（EOF隠れを防止）。
-- JsonBuilder の安定化
-  - キーワード衝突を回避（local → local_decl）。呼び出し側を追従。
-- LLVM PHI 健全性スモーク拡張（If/Matchを追加）
-  - 実行には LLVM ビルドが必要。スクリプトは tools/test/smoke/llvm/ir_phi_hygiene_ifcases.sh。
-- Scope ヒント設計（no‑op）
-  - docs/guides/scope-hints.md を追加（今は観測用のみ）。
+## Compressed Snapshot (Short)
+- Strings (UTF‑8/CP vs Byte): baseline done
+  - [x] PyVM CP smokes (length/indexOf/lastIndexOf/substring)
+  - [x] ASCII Byte smoke
+  - [x] Rust CP gate (`NYASH_STR_CP=1`) for length/indexOf/lastIndexOf
+  - [x] Docs: blueprint updated with CP gate
+- Mini‑VM BinOp(+): stabilization in progress（safe pathのみで緑化へ）
+  - [x] Removed global digit-sum fallbacks（ハング源を除去）
+  - [x] Added typed/token/value-pair probes（仕様不変）
+  - [x] Expression‑bounded extractor（Print.expression の `{…}` で value×2 決定的抽出）
+  - [x] Main.fast‑path: BinaryOp('+') を早期に 2 値抽出→加算→即 return
+  - [x] PyVM: `__me__` ディスパッチ（同一Box内メソッド呼びの安全化）
+  - [x] PyVM: `String.substring` の None 引数を安全化（None→既定値）
+  - [ ] Mini‑VM 内の me 呼びを完全撤去（関数呼びに統一）/ substring 前の index ガード徹底
+  - [ ] 代表スモーク（int+int=46）を緑化（print_prints_in_slice の無限ループ回避を含む）
+- CI: keep min-gate light (MacroCtx/selfhost-preexpand/UTF‑8/ScopeBox) — all green
 
-重要な運用変更
-- ユーザーマクロは継続使用。ただし既定実行は internal‑child（内蔵変換）。
-  - NYASH_MACRO_BOX_CHILD_RUNNER の既定は OFF（必要時のみON）。
-  - 子環境では NYASH_MACRO_ENABLE=0 などを明示して再帰初期化を抑止。
+This page is trimmed to reflect the active work only. The previous long form has been archived at `CURRENT_TASK_restored.md`.
 
-## Delivered (Macro Platform)
-- Built‑in macros (Rust): derive(Equals/ToString) minimal, public‑only + hygiene.
-- User macros (Nyash/PyVM): Proxy → child process (NYASH_VM_USE_PY=1, plugins disabled, timeout). Strict=1 by default (fail on error/timeout; strict=0 → identity fallback).
-- Dump/Trace: `--dump-expanded-ast-json`, `NYASH_MACRO_TRACE_JSONL=…`.
-- Runner routes:
-  - Child mode (PoC): `--macro-expand-child <file>` (stdin JSON → stdout JSON).
-  - PyVM runner (recommended): dynamic runner includes macro and calls `MacroBoxSpec.expand(json)` once per pass.
-- Templates & Tests:
-  - Templates: echo_macro (identity), upper_string_macro ("UPPER:" prefix → uppercase suffix).
-  - Array/Map examples: array_prepend_zero_macro (prepend 0 to any Array), map_insert_tag_macro (insert {"__macro":"on"} into any Map).
-  - Goldens (user macros): identity, upper_string, array_prepend_zero, array_empty, array_nested, array_mixed, map_insert_tag, map_multi, map_esc。
-  - Negative smokes: user macro timeout (strict fail), invalid JSON strict fail, invalid JSON non‑strict → identity fallback。
-- Capabilities (実効化): マクロNyashのAST静的走査で IO/NET をゲート（strict=fail / 非厳格は未登録=identity）。
-- MacroCtx (MVP): gensym/report/getEnv の最小スキャフォールドを提供。
-- Self‑host 前展開（PyVM限定）: `NYASH_USE_NY_COMPILER=1` + `NYASH_MACRO_SELFHOST_PRE_EXPAND=1|auto` → AST前展開→MIR→PyVM 実行。
-- CI: min‑gate に macro‑golden ジョブと selfhost‑preexpand‑smoke を追加。
-- Docs: user‑macros.md / ast‑json‑v0.md / capabilities.md (io/net/env).
+Principles (freeze)
+- Self‑hosting first. Macro normalization pre‑MIR; PyVM semantics are authoritative.
+- New features are paused; allow only bug fixes, docs, smokes/goldens, CI polish.
+- Keep changes minimal/local; no spec changes unless to fix critical issues.
 
-## Delivered (LoopForm – MVP‑1 Safe)
-- LoopNormalize macro (Nyash runner) scaffolded and active.
-- Canonicalize Loop node key order (condition → body).
-- Safe body reorder: move Assignment nodes to tail only when original order already has non‑assign → assign; otherwise keep order (no semantic change).
-- JsonBuilder utility added for AST JSON v0 fragments (string‑based minimal helpers).
-- Golden comparison made key‑order insensitive (JSON normalized via python) for macro tests.
-- LLVM pre‑expand run verified on loop_simple (PyVM → MIR → LLVM).
+### Delta (since last update)
+- Docs
+  - Added strings blueprint: `docs/blueprints/strings-utf8-byte.md`
+  - Refreshed docs index with clear "Start here" links (blueprints/strings, EBNF, strings reference)
+  - Clarified operator/loop sugar policy in `guides/language-core-and-sugar.md` ("!" adopted, do‑while not adopted)
+- CI/Smokes
+  - Added UTF‑8 CP smoke (PyVM): `tools/test/smoke/strings/utf8_cp_smoke.sh` using `apps/tests/strings/utf8_cp_demo.nyash` (green)
+  - Wired into min‑gate CI alongside MacroCtx smoke (green)
+- Runtime (Rust)
+  - StringBox.length: CP/Byte gate via env `NYASH_STR_CP=1` (default remains byte length; freeze‑safe)
+  - StringBox.indexOf/lastIndexOf: CP gate via env `NYASH_STR_CP=1`（既定はByte index; PyVMはCP挙動）
 
-## Focus — Freeze & Polish
-1) 実アプリの作成と運用（マクロ前展開/PyVM/LLVMラインの動作確認）
-2) バグ修正・ドキュメント整備・スモーク/ゴールデン/CI強化（仕様不変）
-3) 自己ホスト前展開の観測強化（ログ/スモーク）と安定運用
-4) ランタイムcapabilities（io/net/env）のPyVM側実効化は必要になった時点で最小修正
+Notes / Risks
+- 現在の赤は 2 系統の複合が原因：
+  1) Nyash 側の `||` 連鎖短絡による digit 判定崩れ（→ if チェーン化で解消）
+  2) 同一 Box 内の `me.*` 呼びが PyVM で未解決（→ `__me__` ディスパッチ導入）。
+  付随して、`substring(None, …)` 例外や `print_prints_in_slice` のステップ超過が発生。
+  ここを「me 撤去＋index ガード＋ループ番兵」で仕上げる。
 
-## Polishing Sprint (non‑breaking, minimal)
-- [x] Thin bin entry (src/main.rs): remove duplicate `pub mod` list; use `nyash_rust::runner::NyashRunner` and friends.
-- [x] Adjust main test imports to refer to `nyash_rust::box_trait::*`.
-- [x] Add debug logs in Python LLVM builder for previously silent exceptions (gated by `NYASH_CLI_VERBOSE=1`).
-- [x] LLVM builder delegated only (builders/*); legacy fallback removed with clear debug on failure.
-- [x] Default outputs unified to `tmp/` (tools/build_llvm.sh, tools/build_aot.sh, llvm_builder.py CLI default).
-- [x] No behavior change: keep LLVM/PHI invariants and outputs semantics as-is.
+### Design Decision（Strings & Delegation）
+- Keep `StringBox` as the canonical text type (UTF‑8 / Code Point semantics). Do NOT introduce a separate "AnsiStringBox".
+- Separate bytes explicitly via `ByteCursorBox`/buffer types (byte semantics only).
+- Unify operations through a cursor/strategy interface (length/indexOf/lastIndexOf/substring). `StringBox` delegates to `Utf8Cursor` internally; byte paths use `ByteCursor` explicitly.
+- Gate for transition (Rust only): `NYASH_STR_CP=1` enables CP semantics where legacy byte behavior exists.
 
-## Next Milestones
-- DONE: Self‑host 前展開 既定化（auto）
-  - 変更多: `NYASH_MACRO_SELFHOST_PRE_EXPAND` 未設定時に、マクロ有効かつ `NYASH_VM_USE_PY=1` で自動ON（安全策付き）。
-  - 追加: `--macro-preexpand-auto` フラグ。
-- DONE: 環境変数の整理（CLI中心の導線）
-  - 追加: `--macro-top-level-allow`, `--macro-profile {dev|ci-fast|strict}`（非破壊の簡易マッピング）。
-- DONE: Top‑level allow 既定値を OFF に変更 + AST検出へ統一（ファイル名ヒューリスティック撤廃）。
-- DONE: MacroCtx 契約 PoC — ランナーが `expand(json, ctx)` を優先、失敗時に `expand(json)` へフォールバック。
+## Implementation Order（1–2 days）
 
-Next (short)
-- Match（ガード含む）の正規化を内蔵変換にも拡張（If 連鎖）+ golden/smoke 追加
-- DONE: LoopForm MVP‑2 — while → carrier normalization（break/continueなし、最大2変数）
-  - 内蔵変換（Rust, internal‑child）で安全ガード付きの末尾整列を実装（非代入→代入）。
-  - two‑vars の出力一致スモークを追加（tools/test/smoke/macro/loop_two_vars_output_smoke.sh）。
-- DONE: LoopForm MVP‑3 — break/continue 最小対応（セグメント整列）
-  - 本体を control 文で分割、各セグメント内のみ安全に「非代入→代入」。
-  - スモーク: tools/test/smoke/macro/loopform_continue_break_output_smoke.sh
-- DONE: for/foreach 正規化（コア正規化パスへ昇格）
-  - 形: `for(fn(){init}, cond, fn(){step}, fn(){body})`, `foreach(arr, "x", fn(){body})`
-  - 出力スモーク: tools/test/smoke/macro/for_foreach_output_smoke.sh（for: 0,1,2 / foreach: 1,2,3）
-- MacroCtx PoC（子ランナー経路のctx受け渡しを有効化）
-  - ctx JSON: `{ "caps": { "io|net|env": bool } }`
-  - 例マクロ: `apps/macros/examples/macro_ctx_demo.nyash`（identity、stdoutは使わない）
-  - Docs: guides/macro-system.md にMacroCtx節を追記
-  
-- Goldens 追加（正規化結果の固定化）
-  - for_basic / foreach_basic の expanded.json と照合スクリプト
-  - loop_nonreorder（非整列パス: 代入の後に非代入がある）→ 変換スキップの確認
-- LoopForm MVP‑3: break/continue minimal handling (single‑level)
-- for/foreach pre‑desugaring → LoopForm normalization (limited)
-- LLVM IR hygiene for LoopForm / If / Match — PHI at block head, no empty PHIs (smoke)
-- Docs: enrich `docs/guides/loopform.md` with carrier examples and JSON builder snippets.
-- If/Match normalization pass: canonical If join with single PHI group and Match→If‑chain (scrutinee once, guard fused), expression results via join var.
-- ScopeBox (compile-time meta): design + docs; no-op macro scaffold; MIR hint names (no-op) and plan for zero-cost stripping.
-- ControlFlowBuilder/PatternBuilder docs and scaffolding: author APIs for If/Match normalization and pattern conditions; migrate macros to use them.
+1) Strings CP/Byte baseline（foundation）
+- [x] CP smoke（PyVM）: length/indexOf/lastIndexOf/substring（apps/tests/strings/utf8_cp_demo.nyash）
+- [x] ASCII byte smoke（PyVM）: length/indexOf/substring（apps/tests/strings/byte_ascii_demo.nyash）
+- [x] Rust CP gate: length/indexOf/lastIndexOf → `NYASH_STR_CP=1` でCP（既定はByte）
+ - [x] Docs note: CP gate env (`NYASH_STR_CP=1`) を strings blueprint に明記
 
-Action Items (next 48h)
-- [x] Enable sugar by default (array/map literals)
-- [x] Golden normalizer (key‑order insensitive) for macro tests
-- [x] Loop simple/two‑vars goldens with normalization
-- [x] Match guard: smoke（PeekExpr なし）
-- [x] Match guard: golden（literal OR 最小形）
-- [ ] Match guard: 追加golden（type最小形、Boxなし構成）
-- [x] Smoke for guard/type match normalization（no PeekExpr; If present）
-- [x] LoopForm MVP‑2: two‑vars carrier safe normalization + tests/smokes
-- [x] LLVM PHI hygiene smoke on LoopForm cases
-- [x] LLVM PHI hygiene smoke on If cases
-- [ ] ScopeBox docs + macro scaffold (no-op) + MIR hint type sketch
-- [ ] ControlFlowBuilder/PatternBuilder docs（本commitで追加）→ スキャフォールド実装 → If/Matchマクロ置換の最初の1本
- - [x] Reorganize macro tests under apps/tests/macro/* and update golden/smoke paths
- - [x] Add MIR hints module (no-op sink) and loop header/latch hint calls
+2) Mini‑VM BinOp(+）安定化（Stage‑B 内部置換）
+- [x] 広域フォールバック（全数値合算）を削除（安全化）
+- [x] typed/token/value-pair の局所探索を導入（非破壊）
+- [x] 式境界（Print.expression）の `{…}` 内で `value`×2 を確実抽出→加算（決定化）
+- [x] Main.fast‑path を追加（先頭で確定→即 return）
+- [x] PyVM：`__me__` ディスパッチ追加／`substring` None ガード
+- [ ] Mini‑VM：me 呼びの全面撤去（関数呼びへ統一）
+- [ ] `substring` 呼び前の index>=0 ガード徹底・`print_prints_in_slice` に番兵を追加
+- [ ] 代表スモーク（int+int=46）を緑化
 
-## Phase‑16 Outlook
-- MacroCtx (gensym/report/getEnv) and capabilities mapped to `nyash.toml`.
-- Attribute‑style (@derive/@lint) macros consolidated via MacroBox.
-- span/source map for better diagnostics.
+3) JSON ローダ分離（導線のみ・互換維持）
+- [ ] MiniJsonLoader（薄ラッパ）経由に集約→後で `apps/libs/json_cur.nyash` に差し替え可能に
+- [ ] スモークは現状維持（既存の stdin/argv 供給で緑）
 
-## Final Goal (Replacement Strategy)
-- Ultimately replace both the Rust front (beyond minimal bootstrap/backends) and PyVM with Nyash implementations—fully self‑hosted pipeline.
-- Steps: front macros → resolver helpers → MIR lowering helpers → Nyash VM → phase out PyVM → reduce Rust to boot/backends only.
+4) Nyash 箱の委譲（内部・段階導入）
+- [ ] StringBox 公開API → Utf8CursorBox（length/indexOf/substring）へ委譲（互換を保つ）
+- [ ] Byte 系は ByteCursorBox を明示利用（混線防止）
 
-## Quick Reference
-- Profiles: `--profile {lite|dev|ci|strict}`（dev相当が既定運用）
-- Register macros: `NYASH_MACRO_PATHS=apps/macros/examples/echo_macro.nyash`
-- Strict/Timeout: `NYASH_MACRO_STRICT=1`（既定）, `NYASH_NY_COMPILER_TIMEOUT_MS=2000`
-- Dump expanded AST: `nyash --dump-expanded-ast-json <file.nyash>`
-- Self‑host 前展開: 既定auto（PyVM限定）
-- Docs: `docs/guides/user-macros.md`, `docs/guides/macro-profiles.md`, `docs/reference/ir/ast-json-v0.md`, `docs/reference/macro/capabilities.md`
+5) CI/Docs polish（軽量維持）
+- [x] README/blueprint に CP gate を追記
+- [ ] Min-gate は軽量を維持（MacroCtx/前展開/UTF‑8/Scope系のみ）
+
+## Mini‑VM（Stage‑B 進行中）
+
+目的: Nyash で書かれた極小VM（Mini‑VM）を段階育成し、PyVM 依存を徐々に薄める。まずは “読む→解釈→出力” の最小パイプを安定化。
+
+現状（達成）
+- stdin ローダ（ゲート）: `NYASH_MINIVM_READ_STDIN=1`
+- Print(Literal/FunctionCall)、BinaryOp("+") の最小実装とスモーク
+- Compare 6種（<, <=, >, >=, ==, !=）と int+int の厳密抽出
+- If（リテラル条件）片側分岐の走査
+
+ 次にやる（順）
+0) BinOp(+）: me 撤去＋index ガード徹底＋print_prints 番兵（ハング防止）
+1) JSON ローダの分離（`apps/libs/json_cur.nyash` 採用準備）
+2) if/loop の代表スモークを 1–2 本追加（PyVM と出力一致）
+3) Mini‑VM を関数形式へ移行（トップレベル MVP から段階置換）
+
+受け入れ（Stage‑B）
+- stdin/argv から供給した JSON 入力で Print/分岐が正しく動作（スモーク緑）
+
+## UTF‑8 計画（UTF‑8 First, Bytes Separate）
+
+目的: String の公開 API を UTF‑8 カーソルへ委譲し、文字列処理の一貫性と可観測性を確保（性能最適化は後続）。
+
+現状
+- Docs: `docs/reference/language/strings.md`
+- MVP Box: `apps/libs/utf8_cursor.nyash`, `apps/libs/byte_cursor.nyash`
+
+段階導入（内部置換のみ）
+1) StringBox の公開 API を段階的に `Utf8CursorBox` 委譲（`length/indexOf/substring`）
+2) Mini‑VM/macro 内の簡易走査を `Utf8CursorBox`/`ByteCursorBox` に置換（機能同値、内部のみ）
+3) Docs/スモークの更新（出力は不変；必要時のみ観測ログを追加）
+
+Nyash スクリプトの基本ボックス（標準 libs）
+- 既存: `json_cur.nyash`, `string_ext.nyash`, `array_ext.nyash`, `string_builder.nyash`, `test_assert.nyash`, `utf8_cursor.nyash`, `byte_cursor.nyash`
+- 追加候補（凍結順守: libs 配下・任意採用・互換保持）
+  - MapExtBox（keys/values/entries）
+  - PathBox mini（dirname/join の最小）
+  - PrintfExt（`StringBuilderBox` 補助）
+
+## CI/Gates — Green vs Pending
+
+Always‑on（期待値: 緑）
+- rust‑check: `cargo check --all-targets`
+- pyvm‑smoke: `tools/pyvm_stage2_smoke.sh`
+- macro‑golden: identity/strings/array/map/loopform（key‑order insensitive）
+- macro‑smokes‑lite:
+  - match guard（literal OR / type minimal）
+  - MIR hints（Scope/Join/Loop）
+  - ScopeBox（no‑op）
+  - MacroCtx ctx JSON（追加済み）
+- selfhost‑preexpand‑smoke: upper_string（auto engage 確認）
+
+Pending / Skipped（未導入・任意）
+- Match guard: 追加ゴールデン（type最小形）
+- LoopForm: break/continue 降下の観測スモーク
+- Mini‑VM Stage‑B: JSON ローダ分離 + if/loop 代表スモーク
+- Mini‑VM Stage‑B: BinOp(+）緑化（me 撤去＋index ガード＋番兵）
+- UTF‑8 委譲: StringBox→Utf8CursorBox の段階置換（内部のみ；ゲート）
+- UTF‑8 CP gate (Rust): indexOf/lastIndexOf env‑gated CP semantics（既定OFF）
+- LLVM 重テスト: 手動/任意ジョブのみ（常時スキップ）
+
+## 80/20 Plan（小粒で高効果）
+
+Checklist（更新済み）
+- [x] Self‑host 前展開の固定スモーク 1 本（upper_string）
+- [x] MacroCtx ctx JSON スモーク 1 本（CI 組み込み）
+- [ ] Match 正規化: 追加テストは当面維持（必要時にのみ追加）
+- [x] プロファイル運用ガイド追記（`--profile dev|lite`）
+- [ ] LLVM 重テストは常時スキップ（手動/任意ジョブのみ）
+- [ ] 警告掃除は次回リファクタで一括（今回は非破壊）
+
+Acceptance
+- 上記 2 本（pre‑expand/MacroCtx）常時緑、既存 smokes/goldens 緑
+- README/ガイドにプロファイル説明が反映済み
+ - UTF‑8 CP smoke is green under PyVM; Rust CP gate remains opt‑in
+
+## Self‑Hosting — Stage A（要約）
+
+Scope（最小）
+- JSON v0 ローダ（ミニセット）/ Mini‑VM（最小命令）/ スモーク 2 本（print / if）
+
+Progress
+- [x] Mini‑VM MVP（print literal / if branch）
+- [x] PyVM P1: `String.indexOf` 追加
+- [x] Entry 統一（`Main.main`）/ ネスト関数リフト
+
+Next（クリーン経路）
+- [ ] Mini‑VM: 関数形式＋簡易 JSON ローダへ段階移行
+- [ ] Docs: invariants/constraints/testing‑matrix へ反映追加
+
+### Guardrails（active）
+- 参照実行: PyVM が常時緑、マクロ正規化は pre‑MIR で一度だけ
+- 前展開: `NYASH_MACRO_SELFHOST_PRE_EXPAND=auto`（dev/CI）
+- テスト: VM/goldens は軽量維持、IR は任意ジョブ

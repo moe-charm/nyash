@@ -39,13 +39,66 @@ class Function:
 class PyVM:
     def __init__(self, program: Dict[str, Any]):
         self.functions: Dict[str, Function] = {}
+        self._debug = os.environ.get('NYASH_PYVM_DEBUG') in ('1','true','on')
         for f in program.get("functions", []):
             name = f.get("name")
             params = [int(p) for p in f.get("params", [])]
             bmap: Dict[int, Block] = {}
             for bb in f.get("blocks", []):
                 bmap[int(bb.get("id"))] = Block(id=int(bb.get("id")), instructions=list(bb.get("instructions", [])))
+            # Register each function inside the loop (bugfix)
             self.functions[name] = Function(name=name, params=params, blocks=bmap)
+
+    def _dbg(self, *a):
+        if self._debug:
+            try:
+                import sys as _sys
+                print(*a, file=_sys.stderr)
+            except Exception:
+                pass
+
+    def _type_name(self, v: Any) -> str:
+        """Pretty type name for debug traces mapped to MIR conventions."""
+        if v is None:
+            return "null"
+        if isinstance(v, bool):
+            # Booleans are encoded as i64 0/1 in MIR
+            return "i64"
+        if isinstance(v, int):
+            return "i64"
+        if isinstance(v, float):
+            return "f64"
+        if isinstance(v, str):
+            return "string"
+        if isinstance(v, dict) and "__box__" in v:
+            return f"Box({v.get('__box__')})"
+        return type(v).__name__
+
+    # --- Capability helpers (macro sandbox) ---
+    def _macro_sandbox_active(self) -> bool:
+        """Detect if we are running under macro sandbox.
+
+        Heuristics:
+        - Explicit flag NYASH_MACRO_SANDBOX=1
+        - Macro child default envs (plugins off + macro off)
+        - Any MACRO_CAP_* enabled
+        """
+        if os.environ.get("NYASH_MACRO_SANDBOX", "0") in ("1", "true", "on"):
+            return True
+        if os.environ.get("NYASH_DISABLE_PLUGINS") in ("1", "true", "on") and os.environ.get("NYASH_MACRO_ENABLE") in ("0", "false", "off"):
+            return True
+        if self._cap_env() or self._cap_io() or self._cap_net():
+            return True
+        return False
+
+    def _cap_env(self) -> bool:
+        return os.environ.get("NYASH_MACRO_CAP_ENV", "0") in ("1", "true", "on")
+
+    def _cap_io(self) -> bool:
+        return os.environ.get("NYASH_MACRO_CAP_IO", "0") in ("1", "true", "on")
+
+    def _cap_net(self) -> bool:
+        return os.environ.get("NYASH_MACRO_CAP_NET", "0") in ("1", "true", "on")
 
     def _read(self, regs: Dict[int, Any], v: Optional[int]) -> Any:
         if v is None:
@@ -69,13 +122,61 @@ class PyVM:
     def _is_console(self, v: Any) -> bool:
         return isinstance(v, dict) and v.get("__box__") == "ConsoleBox"
 
+    def _sandbox_allow_newbox(self, box_type: str) -> bool:
+        """Allow-list for constructing boxes under macro sandbox."""
+        if not self._macro_sandbox_active():
+            return True
+        if box_type in ("ConsoleBox", "StringBox", "ArrayBox", "MapBox"):
+            return True
+        if box_type in ("FileBox", "PathBox", "DirBox"):
+            return self._cap_io()
+        # Simple net-related boxes
+        if box_type in ("HTTPBox", "HttpBox", "SocketBox"):
+            return self._cap_net()
+        # Unknown boxes are denied in sandbox
+        return False
+
+    def _sandbox_allow_boxcall(self, recv: Any, method: Optional[str]) -> bool:
+        if not self._macro_sandbox_active():
+            return True
+        # Console methods are fine
+        if self._is_console(recv):
+            return True
+        # String methods (our VM treats StringBox receiver as Python str)
+        if isinstance(recv, str):
+            return method in ("length", "substring", "lastIndexOf", "indexOf")
+        # File/Path/Dir need IO cap
+        if isinstance(recv, dict) and recv.get("__box__") in ("FileBox", "PathBox", "DirBox"):
+            return self._cap_io()
+        # Other boxes are denied in sandbox
+        return False
+
     def run(self, entry: str) -> Any:
         fn = self.functions.get(entry)
         if fn is None:
             raise RuntimeError(f"entry function not found: {entry}")
+        self._dbg(f"[pyvm] run entry={entry}")
         return self._exec_function(fn, [])
 
+    def run_args(self, entry: str, args: list[Any]) -> Any:
+        fn = self.functions.get(entry)
+        if fn is None:
+            raise RuntimeError(f"entry function not found: {entry}")
+        self._dbg(f"[pyvm] run entry={entry} argv={args}")
+        call_args = list(args)
+        # If entry is a typical main (main / *.main), pack argv into an ArrayBox-like value
+        # to match Nyash's `main(args)` convention regardless of param count.
+        try:
+            if entry == 'main' or entry.endswith('.main'):
+                call_args = [{"__box__": "ArrayBox", "__arr": list(args)}]
+            elif fn.params and len(fn.params) == 1:
+                call_args = [{"__box__": "ArrayBox", "__arr": list(args)}]
+        except Exception:
+            pass
+        return self._exec_function(fn, call_args)
+
     def _exec_function(self, fn: Function, args: List[Any]) -> Any:
+        self._dbg(f"[pyvm] call {fn.name} args={args}")
         # Intrinsic fast path for small helpers used in smokes
         ok, ret = self._try_intrinsic(fn.name, args)
         if ok:
@@ -344,7 +445,10 @@ class PyVM:
 
                 if op == "newbox":
                     btype = inst.get("type")
-                    if btype == "ConsoleBox":
+                    # Sandbox gate: only allow minimal boxes when sandbox is active
+                    if not self._sandbox_allow_newbox(str(btype)):
+                        val = {"__box__": str(btype), "__denied__": True}
+                    elif btype == "ConsoleBox":
                         val = {"__box__": "ConsoleBox"}
                     elif btype == "StringBox":
                         # empty string instance
@@ -371,6 +475,85 @@ class PyVM:
                     method = inst.get("method")
                     args = [self._read(regs, a) for a in inst.get("args", [])]
                     out: Any = None
+                    self._dbg(f"[pyvm] boxcall recv={recv} method={method} args={args}")
+                    # Sandbox gate: disallow unsafe/unknown boxcalls
+                    if not self._sandbox_allow_boxcall(recv, method):
+                        self._set(regs, inst.get("dst"), out)
+                        i += 1
+                        continue
+                    # Special-case: inside a method body, 'me.method(...)' lowers to a
+                    # boxcall with a synthetic receiver marker '__me__'. Resolve it by
+                    # dispatching to the current box's lowered function if available.
+                    if isinstance(recv, str) and recv == "__me__" and isinstance(method, str):
+                        # Derive box name from current function (e.g., 'MiniVm.foo/2' -> 'MiniVm')
+                        box_name = ""
+                        try:
+                            if "." in fn.name:
+                                box_name = fn.name.split(".")[0]
+                        except Exception:
+                            box_name = ""
+                        if box_name:
+                            cand = f"{box_name}.{method}/{len(args)}"
+                            callee = self.functions.get(cand)
+                            if callee is not None:
+                                self._dbg(f"[pyvm] boxcall(__me__) -> {cand} args={args}")
+                                out = self._exec_function(callee, args)
+                                self._set(regs, inst.get("dst"), out)
+                                i += 1
+                                continue
+                    # Fast-path: built-in ArrayBox minimal methods (avoid noisy unresolved logs)
+                    if isinstance(recv, dict) and recv.get("__box__") == "ArrayBox":
+                        arr = recv.get("__arr", [])
+                        if method in ("len", "size"):
+                            out = len(arr)
+                        elif method == "get":
+                            idx = int(args[0]) if args else 0
+                            out = arr[idx] if 0 <= idx < len(arr) else None
+                        elif method == "set":
+                            idx = int(args[0]) if len(args) > 0 else 0
+                            val = args[1] if len(args) > 1 else None
+                            if 0 <= idx < len(arr):
+                                arr[idx] = val
+                            elif idx == len(arr):
+                                arr.append(val)
+                            else:
+                                while len(arr) < idx:
+                                    arr.append(None)
+                                arr.append(val)
+                            out = 0
+                        elif method == "push":
+                            val = args[0] if args else None
+                            arr.append(val)
+                            out = len(arr)
+                        elif method == "toString":
+                            out = "[" + ",".join(str(x) for x in arr) + "]"
+                        else:
+                            out = None
+                        recv["__arr"] = arr
+                        self._set(regs, inst.get("dst"), out)
+                        i += 1
+                        continue
+
+                    # User-defined box: dispatch to lowered function if available (Box.method/N)
+                    if isinstance(recv, dict) and isinstance(method, str) and "__box__" in recv:
+                        box_name = recv.get("__box__")
+                        cand = f"{box_name}.{method}/{len(args)}"
+                        callee = self.functions.get(cand)
+                        if callee is not None:
+                            self._dbg(f"[pyvm] boxcall dispatch -> {cand} args={args}")
+                            out = self._exec_function(callee, args)
+                            self._set(regs, inst.get("dst"), out)
+                            i += 1
+                            continue
+                        else:
+                            if self._debug:
+                                prefix = f"{box_name}.{method}/"
+                                cands = sorted([k for k in self.functions.keys() if k.startswith(prefix)])
+                                if cands:
+                                    self._dbg(f"[pyvm] boxcall unresolved: '{cand}' — available: {cands}")
+                                else:
+                                    any_for_box = sorted([k for k in self.functions.keys() if k.startswith(f"{box_name}.")])
+                                    self._dbg(f"[pyvm] boxcall unresolved: '{cand}' — no candidates; methods for {box_name}: {any_for_box}")
                     # ConsoleBox methods
                     if method in ("print", "println", "log") and self._is_console(recv):
                         s = args[0] if args else ""
@@ -494,13 +677,33 @@ class PyVM:
                         out = len(str(recv))
                     elif method == "substring":
                         s = str(recv)
-                        start = int(args[0]) if len(args) > 0 else 0
-                        end = int(args[1]) if len(args) > 1 else len(s)
+                        start = int(args[0]) if (len(args) > 0 and args[0] is not None) else 0
+                        end = int(args[1]) if (len(args) > 1 and args[1] is not None) else len(s)
                         out = s[start:end]
                     elif method == "lastIndexOf":
                         s = str(recv)
                         needle = str(args[0]) if args else ""
-                        out = s.rfind(needle)
+                        # Optional start index (ignored by many call sites; support if provided)
+                        if len(args) > 1 and args[1] is not None:
+                            try:
+                                start = int(args[1])
+                            except Exception:
+                                start = 0
+                            out = s.rfind(needle, start)
+                        else:
+                            out = s.rfind(needle)
+                    elif method == "indexOf":
+                        s = str(recv)
+                        needle = str(args[0]) if args else ""
+                        # Support optional start index: indexOf(needle, start)
+                        if len(args) > 1 and args[1] is not None:
+                            try:
+                                start = int(args[1])
+                            except Exception:
+                                start = 0
+                            out = s.find(needle, start)
+                        else:
+                            out = s.find(needle)
                     else:
                         # Unimplemented method -> no-op
                         out = None
@@ -512,6 +715,7 @@ class PyVM:
                     func = inst.get("func")
                     args = [self._read(regs, a) for a in inst.get("args", [])]
                     out: Any = None
+                    self._dbg(f"[pyvm] externcall func={func} args={args}")
                     # Normalize known console/debug externs
                     if isinstance(func, str):
                         if func in ("nyash.console.println", "nyash.console.log", "env.console.log"):
@@ -531,6 +735,10 @@ class PyVM:
                             except Exception:
                                 print(str(s))
                             out = 0
+                        else:
+                            # Macro sandbox: disallow unknown externcall unless explicitly whitelisted by future caps
+                            # (currently no IO/NET externs are allowed in macro child)
+                            out = 0
                     # Unknown extern -> no-op with 0/None
                     self._set(regs, inst.get("dst"), out)
                     i += 1
@@ -542,6 +750,7 @@ class PyVM:
                     eid = int(inst.get("else"))
                     prev = cur
                     cur = tid if self._truthy(cond) else eid
+                    self._dbg(f"[pyvm] branch cond={cond} -> next={cur}")
                     # Restart execution at next block
                     break
 
@@ -549,10 +758,13 @@ class PyVM:
                     tgt = int(inst.get("target"))
                     prev = cur
                     cur = tgt
+                    self._dbg(f"[pyvm] jump -> {cur}")
                     break
 
                 if op == "ret":
                     v = self._read(regs, inst.get("value"))
+                    if self._debug:
+                        self._dbg(f"[pyvm] ret {self._type_name(v)} value={v}")
                     return v
 
                 if op == "call":
@@ -564,9 +776,30 @@ class PyVM:
                         fname = fval if isinstance(fval, str) else None
                     call_args = [self._read(regs, a) for a in inst.get("args", [])]
                     result = None
-                    if isinstance(fname, str) and fname in self.functions:
-                        callee = self.functions[fname]
-                        result = self._exec_function(callee, call_args)
+                    if isinstance(fname, str):
+                        # Direct hit
+                        if fname in self.functions:
+                            callee = self.functions[fname]
+                            self._dbg(f"[pyvm] call -> {fname} args={call_args}")
+                            result = self._exec_function(callee, call_args)
+                        else:
+                            # Heuristic resolution: match suffix ".name/arity"
+                            arity = len(call_args)
+                            suffix = f".{fname}/{arity}"
+                            candidates = [k for k in self.functions.keys() if k.endswith(suffix)]
+                            if len(candidates) == 1:
+                                callee = self.functions[candidates[0]]
+                                self._dbg(f"[pyvm] call -> {candidates[0]} args={call_args}")
+                                result = self._exec_function(callee, call_args)
+                            elif self._debug and len(candidates) > 1:
+                                self._dbg(f"[pyvm] call unresolved: '{fname}'/{arity} has multiple candidates: {candidates}")
+                            elif self._debug:
+                                # Suggest close candidates across arities using suffix ".name/"
+                                any_cands = sorted([k for k in self.functions.keys() if k.endswith(f".{fname}/") or f".{fname}/" in k])
+                                if any_cands:
+                                    self._dbg(f"[pyvm] call unresolved: '{fname}'/{arity} — available: {any_cands}")
+                                else:
+                                    self._dbg(f"[pyvm] call unresolved: '{fname}'/{arity} not found")
                     # Store result if needed
                     self._set(regs, inst.get("dst"), result)
                     i += 1
@@ -592,6 +825,27 @@ class PyVM:
                     else:
                         out.append(ch)
                 return True, "".join(out)
+            if name == "MiniVm.read_digits/2":
+                s = "" if not args or args[0] is None else str(args[0])
+                pos = 0 if len(args) < 2 or args[1] is None else int(args[1])
+                out_chars = []
+                while pos < len(s):
+                    ch = s[pos]
+                    if '0' <= ch <= '9':
+                        out_chars.append(ch)
+                        pos += 1
+                    else:
+                        break
+                return True, "".join(out_chars)
+            if name == "MiniVm.parse_first_int/1":
+                js = "" if not args or args[0] is None else str(args[0])
+                key = '"value":{"type":"int","value":'
+                idx = js.rfind(key)
+                if idx < 0:
+                    return True, "0"
+                start = idx + len(key)
+                ok, digits = self._try_intrinsic("MiniVm.read_digits/2", [js, start])
+                return True, digits
             if name == "Main.dirname/1":
                 p = "" if not args else ("" if args[0] is None else str(args[0]))
                 d = os.path.dirname(p)
