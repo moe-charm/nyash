@@ -1,0 +1,14 @@
+// MacroCtx demo (PoC): shows how ctx (caps) is passed to expand(json, ctx).
+// This macro is identity; when caps.env=true it prints a trace line.
+
+static box MacroBoxSpec {
+  name() { return "MacroCtxDemo" }
+
+  // json: AST JSON v0 (string)
+  // ctx:  JSON string like {"caps":{"io":false,"net":false,"env":false}}
+  expand(json, ctx) {
+    // Identity demo: do not print to stdout (child output must remain pure JSON)
+    // You may inspect ctx (JSON string) and make decisions, but avoid side effects.
+    return json
+  }
+}

@@ -1,10 +1,9 @@
 /*!
- * Nyash Programming Language - Rust Implementation Library
- *
- * Everything is Box philosophy implemented in memory-safe Rust
- */
+ Nyash Programming Language — Rust library crate.
+ Provides parser, MIR, backends, runner, and supporting runtime.
+*/
 
-// 🌐 WebAssembly support
+// WebAssembly support
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
@@ -12,50 +11,47 @@ use wasm_bindgen::prelude::*;
 #[cfg(not(feature = "interpreter-legacy"))]
 mod interpreter_stub;
 
-pub mod ast; // Using old ast.rs for now
+pub mod ast; // using historical ast.rs
 pub mod box_arithmetic;
-pub mod box_factory; // 🏭 Unified Box Factory Architecture (Phase 9.78)
-pub mod box_operators; // 🚀 Operator implementations for basic Box types
+pub mod box_factory; // unified Box Factory
+pub mod box_operators; // operator implementations for basic Box types
 pub mod box_trait;
 pub mod boxes;
 pub mod channel_box;
-pub mod core; // Core models shared by backends
+pub mod core; // core models shared by backends
 pub mod environment;
 pub mod exception_box;
 pub mod finalization;
-pub mod instance_v2; // 🎯 Phase 9.78d: Simplified InstanceBox implementation
+pub mod instance_v2; // simplified InstanceBox implementation
 #[cfg(feature = "interpreter-legacy")]
 pub mod interpreter;
 #[cfg(not(feature = "interpreter-legacy"))]
 pub mod interpreter { pub use crate::interpreter_stub::*; }
 pub mod method_box;
-pub mod operator_traits; // 🚀 Rust-style trait-based operator overloading
-pub mod parser; // Using old parser.rs for now
-pub mod scope_tracker; // 🎯 Phase 9.78a: Box lifecycle tracking for VM
+pub mod operator_traits; // trait-based operator overloading
+pub mod parser; // using historical parser.rs
+pub mod scope_tracker; // Box lifecycle tracking for VM
 pub mod stdlib;
 pub mod tokenizer;
-pub mod type_box; // 🌟 TypeBox revolutionary system // 🚀 Arithmetic operations moved from box_trait.rs
+pub mod type_box; // TypeBox system (arithmetic moved from box_trait.rs)
 
-// 🔥 NyashValue Revolutionary System (NEW!)
 pub mod value;
 
-// 🌐 P2P Communication Infrastructure (NEW!)
 pub mod messaging;
 pub mod transport;
 
-// 🚀 MIR (Mid-level Intermediate Representation) Infrastructure (NEW!)
+// MIR (Mid-level Intermediate Representation)
 pub mod mir;
 #[cfg(feature = "aot-plan-import")]
 pub mod mir_aot_plan_import {
     pub use crate::mir::aot_plan_import::*;
 }
 
-// 🚀 Backend Infrastructure (NEW!)
+// Backends
 pub mod backend;
-pub mod jit; // Phase 10: Cranelift JIT subsystem (skeleton)
+pub mod jit; // Cranelift JIT subsystem (skeleton)
 pub mod semantics; // Unified semantics trait for MIR evaluation/lowering
 
-// 📊 Performance Benchmarks (NEW!)
 pub mod benchmarks;
 
 // BID-FFI / Plugin system (prototype)
@@ -71,9 +67,9 @@ pub mod cli;
 pub mod debug;
 pub mod runner_plugin_init;
 pub mod runtime;
-// Unified Grammar (Phase 11.9 scaffolding)
+// Unified Grammar scaffolding
 pub mod grammar;
-pub mod syntax; // Phase 12.7: syntax sugar config and helpers
+pub mod syntax; // syntax sugar config and helpers
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;
@@ -105,14 +101,13 @@ pub use channel_box::{ChannelBox, MessageBox};
 pub use instance_v2::InstanceBox; // 🎯 新実装テスト（nyash_rustパス使用）
 pub use method_box::{BoxType, EphemeralInstance, FunctionDefinition, MethodBox};
 
-// 🔥 NyashValue Revolutionary System exports
 pub use value::NyashValue;
 
 // Direct canvas test export
 #[cfg(all(target_arch = "wasm32", feature = "interpreter-legacy"))]
 pub use wasm_test::wasm_test::test_direct_canvas_draw;
 
-// 🌐 WebAssembly exports for browser usage
+// WebAssembly exports for browser usage
 #[cfg(all(target_arch = "wasm32", feature = "interpreter-legacy"))]
 #[wasm_bindgen]
 pub struct NyashWasm {

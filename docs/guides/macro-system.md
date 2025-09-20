@@ -92,6 +92,23 @@ Notes:
   - Splice `$...name` into call/array argument lists.
   - Array/Map nodes participate in pattern/unquote (map keys must match literally; values can bind via `$name`).
 
+## MacroCtx (PoC)
+
+User macros executed via the PyVM sandbox receive a second argument `ctx` in `expand(json, ctx)`:
+
+- Shape (string): `{ "caps": { "io": bool, "net": bool, "env": bool } }`
+- Policy: all caps default to false. The sandbox disables plugins and exposes a minimal Box API.
+- Do not print to stdout from macros: the child process stdout is reserved for the expanded JSON.
+  - For diagnostics use stderr in the future; for now prefer silent operation or trace via the parent process.
+
+Example (identity):
+```
+static box MacroBoxSpec {
+  name() { return "MacroCtxDemo" }
+  expand(json, ctx) { return json }
+}
+```
+
 ### JSON test args (advanced)
 
 For `--run-tests`, you can supply per-test arguments and instance construction details via `NYASH_TEST_ARGS_JSON`.

@@ -120,33 +120,13 @@ class NyashLLVMBuilder:
         for func_data in functions:
             self.lower_function(func_data)
 
-        # Create ny_main wrapper if necessary (extracted helper)
+        # Create ny_main wrapper if necessary (delegated builder; no legacy fallback)
         try:
             from builders.entry import ensure_ny_main as _ensure_ny_main
             _ensure_ny_main(self)
-        except Exception:
-            # Fallback to legacy in-place logic if helper import fails
+        except Exception as _e:
             try:
-                has_ny_main = any(f.name == 'ny_main' for f in self.module.functions)
-                fn_main_box = None
-                fn_main_plain = None
-                for f in self.module.functions:
-                    if f.name == 'Main.main/1':
-                        fn_main_box = f
-                    elif f.name == 'main':
-                        fn_main_plain = f
-                target_fn = fn_main_box or fn_main_plain
-                if target_fn is not None and not has_ny_main:
-                    ny_main_ty = ir.FunctionType(self.i64, [])
-                    ny_main = ir.Function(self.module, ny_main_ty, name='ny_main')
-                    entry = ny_main.append_basic_block('entry')
-                    b = ir.IRBuilder(entry)
-                    rv = ir.Constant(self.i64, 0)
-                    if fn_main_box is not None:
-                        rv = b.call(fn_main_box, [], name='call_Main_main_1')
-                    elif fn_main_plain is not None and len(fn_main_plain.args) == 0:
-                        rv = b.call(fn_main_plain, [], name='call_user_main')
-                    b.ret(rv)
+                trace_debug(f"[Python LLVM] ensure_ny_main failed: {_e}")
             except Exception:
                 pass
         
@@ -178,400 +158,16 @@ class NyashLLVMBuilder:
         return str(self.module)
     
     def lower_function(self, func_data: Dict[str, Any]):
-        """Lower a single MIR function to LLVM IR"""
-        # Prefer delegated helper (incremental split); fall back on failure
+        """Lower a single MIR function to LLVM IR (delegated, no legacy fallback)."""
         try:
             from builders.function_lower import lower_function as _lower
             return _lower(self, func_data)
         except Exception as _e:
             try:
-                trace_debug(f"[Python LLVM] helper lower_function failed, falling back: {_e}")
+                trace_debug(f"[Python LLVM] lower_function failed: {_e}")
             except Exception:
                 pass
-        name = func_data.get("name", "unknown")
-        self.current_function_name = name
-        import re
-        params = func_data.get("params", [])
-        blocks = func_data.get("blocks", [])
-        
-        # Determine function signature
-        if name == "ny_main":
-            # Special case: ny_main returns i32
-            func_ty = ir.FunctionType(self.i32, [])
-        else:
-            # Default: i64(i64, ...) signature; derive arity from '/N' suffix when params missing
-            m = re.search(r"/(\d+)$", name)
-            arity = int(m.group(1)) if m else len(params)
-            param_types = [self.i64] * arity
-            func_ty = ir.FunctionType(self.i64, param_types)
-        
-        # Reset per-function maps and resolver caches to avoid cross-function collisions
-        try:
-            self.vmap.clear()
-        except Exception:
-            self.vmap = {}
-        # Reset basic-block map per function (block ids are local to function)
-        try:
-            self.bb_map.clear()
-        except Exception:
-            self.bb_map = {}
-        # Reset resolver caches (they key by block name; avoid collisions across functions)
-        try:
-            self.resolver.i64_cache.clear()
-            self.resolver.ptr_cache.clear()
-            self.resolver.f64_cache.clear()
-            if hasattr(self.resolver, '_end_i64_cache'):
-                self.resolver._end_i64_cache.clear()
-            if hasattr(self.resolver, 'string_ids'):
-                self.resolver.string_ids.clear()
-            if hasattr(self.resolver, 'string_literals'):
-                self.resolver.string_literals.clear()
-            if hasattr(self.resolver, 'string_ptrs'):
-                self.resolver.string_ptrs.clear()
-        except Exception:
-            pass
-
-        # Create or reuse function
-        func = None
-        for f in self.module.functions:
-            if f.name == name:
-                func = f
-                break
-        if func is None:
-            func = ir.Function(self.module, func_ty, name=name)
-        
-        # Map parameters to vmap (value_id: 0..arity-1)
-        try:
-            arity = len(func.args)
-            for i in range(arity):
-                self.vmap[i] = func.args[i]
-        except Exception:
-            pass
-
-        # Build predecessor map from control-flow edges
-        self.preds = {}
-        for block_data in blocks:
-            bid = block_data.get("id", 0)
-            self.preds.setdefault(bid, [])
-        for block_data in blocks:
-            src = block_data.get("id", 0)
-            for inst in block_data.get("instructions", []):
-                op = inst.get("op")
-                if op == "jump":
-                    t = inst.get("target")
-                    if t is not None:
-                        self.preds.setdefault(t, []).append(src)
-                elif op == "branch":
-                    th = inst.get("then")
-                    el = inst.get("else")
-                    if th is not None:
-                        self.preds.setdefault(th, []).append(src)
-                    if el is not None:
-                        self.preds.setdefault(el, []).append(src)
-
-        # Create all blocks first
-        for block_data in blocks:
-            bid = block_data.get("id", 0)
-            block_name = f"bb{bid}"
-            bb = func.append_basic_block(block_name)
-            self.bb_map[bid] = bb
-        
-        # Build quick lookup for blocks by id
-        block_by_id: Dict[int, Dict[str, Any]] = {}
-        for block_data in blocks:
-            block_by_id[block_data.get("id", 0)] = block_data
-
-        # Determine entry block: first with no predecessors; fallback to first block
-        entry_bid = None
-        for bid, preds in self.preds.items():
-            if len(preds) == 0:
-                entry_bid = bid
-                break
-        if entry_bid is None and blocks:
-            entry_bid = blocks[0].get("id", 0)
-
-        # Compute a preds-first (approx topological) order
-        visited = set()
-        order: List[int] = []
-
-        def visit(bid: int):
-            if bid in visited:
-                return
-            visited.add(bid)
-            for p in self.preds.get(bid, []):
-                visit(p)
-            order.append(bid)
-
-        if entry_bid is not None:
-            visit(entry_bid)
-        # Include any blocks not reachable from entry
-        for bid in block_by_id.keys():
-            if bid not in visited:
-                visit(bid)
-
-        # Process blocks in the computed order
-        # Prepass: collect producer stringish hints and PHI metadata for all blocks
-        # and create placeholders at each block head so that resolver can safely
-        # return existing PHIs without creating new ones.
-        _setup_phi_placeholders(self, blocks)
-
-        # Optional: if-merge prepass → predeclare PHI for return-merge blocks
-        # Gate with NYASH_LLVM_PREPASS_IFMERGE=1
-        try:
-            if os.environ.get('NYASH_LLVM_PREPASS_IFMERGE') == '1':
-                plan = plan_ret_phi_predeclare(block_by_id)
-                if plan:
-                    # Ensure block_phi_incomings map exists
-                    if not hasattr(self, 'block_phi_incomings') or self.block_phi_incomings is None:
-                        self.block_phi_incomings = {}
-                    for bbid, ret_vid in plan.items():
-                        # Do not pre-materialize PHI here; record only metadata.
-                        # Record declared incoming metadata using the same value-id
-                        # for each predecessor; finalize_phis will resolve per-pred end values.
-                        try:
-                            preds_raw = [p for p in self.preds.get(bbid, []) if p != bbid]
-                        except Exception:
-                            preds_raw = []
-                        # Dedup while preserving order
-                        seen = set()
-                        preds_list = []
-                        for p in preds_raw:
-                            if p not in seen:
-                                preds_list.append(p)
-                                seen.add(p)
-                        try:
-                            # finalize_phis reads pairs as (decl_b, v_src) and maps to nearest predecessor.
-                            # We provide (bb_pred, ret_vid) for all preds.
-                            self.block_phi_incomings.setdefault(int(bbid), {})[int(ret_vid)] = [
-                                (int(p), int(ret_vid)) for p in preds_list
-                            ]
-                        except Exception:
-                            pass
-                        try:
-                            trace_debug(f"[prepass] if-merge: plan metadata at bb{bbid} for v{ret_vid} preds={preds_list}")
-                        except Exception:
-                            pass
-        except Exception:
-            pass
-
-        # Predeclare PHIs for values used in a block but defined in predecessors (multi-pred only).
-        # This keeps PHI nodes grouped at the top and avoids late synthesis during operand resolution.
-        try:
-            from cfg.utils import build_preds_succs
-            local_preds, _ = build_preds_succs(block_by_id)
-            def _collect_defs(block):
-                defs = set()
-                for ins in block.get('instructions') or []:
-                    try:
-                        dstv = ins.get('dst')
-                        if isinstance(dstv, int):
-                            defs.add(int(dstv))
-                    except Exception:
-                        pass
-                return defs
-            def _collect_uses(block):
-                uses = set()
-                for ins in block.get('instructions') or []:
-                    # Minimal keys: lhs/rhs (binop), value (ret/copy), cond (branch), box_val (boxcall)
-                    for k in ('lhs','rhs','value','cond','box_val'):
-                        try:
-                            v = ins.get(k)
-                            if isinstance(v, int):
-                                uses.add(int(v))
-                        except Exception:
-                            pass
-                return uses
-            # Ensure map for declared incomings exists
-            if not hasattr(self, 'block_phi_incomings') or self.block_phi_incomings is None:
-                self.block_phi_incomings = {}
-            for bid, blk in block_by_id.items():
-                # Only multi-pred blocks need PHIs
-                try:
-                    preds_raw = [p for p in local_preds.get(int(bid), []) if p != int(bid)]
-                except Exception:
-                    preds_raw = []
-                # Dedup preds preserve order
-                seen = set(); preds_list = []
-                for p in preds_raw:
-                    if p not in seen: preds_list.append(p); seen.add(p)
-                if len(preds_list) <= 1:
-                    continue
-                defs = _collect_defs(blk)
-                uses = _collect_uses(blk)
-                need = [u for u in uses if u not in defs]
-                if not need:
-                    continue
-                bb0 = self.bb_map.get(int(bid))
-                if bb0 is None:
-                    continue
-                b0 = ir.IRBuilder(bb0)
-                try:
-                    b0.position_at_start(bb0)
-                except Exception:
-                    pass
-                for vid in need:
-                    # Do not create placeholder here; let finalize_phis materialize
-                    # to keep PHIs strictly grouped at block heads and avoid dups.
-                    # Record incoming metadata for finalize_phis (pred -> same vid)
-                    try:
-                        self.block_phi_incomings.setdefault(int(bid), {}).setdefault(int(vid), [])
-                        # Overwrite with dedup list of (pred, vid)
-                        self.block_phi_incomings[int(bid)][int(vid)] = [(int(p), int(vid)) for p in preds_list]
-                    except Exception:
-                        pass
-            # Expose to resolver
-            try:
-                self.resolver.block_phi_incomings = self.block_phi_incomings
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-        # Optional: simple loop prepass → synthesize a structured while body
-        loop_plan = None
-        try:
-            if os.environ.get('NYASH_LLVM_PREPASS_LOOP') == '1':
-                loop_plan = detect_simple_while(block_by_id)
-                if loop_plan is not None:
-                    trace_debug(f"[prepass] detect loop header=bb{loop_plan['header']} then=bb{loop_plan['then']} latch=bb{loop_plan['latch']} exit=bb{loop_plan['exit']}")
-        except Exception:
-            loop_plan = None
-
-        # No predeclared PHIs are materialized; resolver may ignore ret_phi_map
-
-        # Now lower blocks
-        skipped: set[int] = set()
-        if loop_plan is not None:
-            try:
-                for bskip in loop_plan.get('skip_blocks', []):
-                    if bskip != loop_plan.get('header'):
-                        skipped.add(int(bskip))
-            except Exception:
-                pass
-        for bid in order:
-            block_data = block_by_id.get(bid)
-            if block_data is None:
-                continue
-            # If loop prepass applies, lower while once at header and skip loop-internal blocks
-            if loop_plan is not None and bid == loop_plan.get('header'):
-                bb = self.bb_map[bid]
-                builder = ir.IRBuilder(bb)
-                try:
-                    self.resolver.builder = builder
-                    self.resolver.module = self.module
-                except Exception:
-                    pass
-                # Lower while via loopform (if enabled) or regular fallback
-                self.loop_count += 1
-                body_insts = loop_plan.get('body_insts', [])
-                cond_vid = loop_plan.get('cond')
-                from instructions.loopform import lower_while_loopform
-                ok = False
-                try:
-                    # Use a clean per-while vmap context seeded from global placeholders
-                    self._current_vmap = dict(self.vmap)
-                    ok = lower_while_loopform(
-                        builder,
-                        func,
-                        cond_vid,
-                        body_insts,
-                        self.loop_count,
-                        self.vmap,
-                        self.bb_map,
-                        self.resolver,
-                        self.preds,
-                        self.block_end_values,
-                        getattr(self, 'ctx', None),
-                    )
-                except Exception:
-                    ok = False
-                if not ok:
-                    # Prepare resolver backref for instruction dispatcher
-                    try:
-                        self.resolver._owner_lower_instruction = self.lower_instruction
-                    except Exception:
-                        pass
-                    lower_while_regular(builder, func, cond_vid, body_insts,
-                                        self.loop_count, self.vmap, self.bb_map,
-                                        self.resolver, self.preds, self.block_end_values)
-                # Clear while vmap context
-                try:
-                    delattr(self, '_current_vmap')
-                except Exception:
-                    pass
-                # Mark blocks to skip
-                for bskip in loop_plan.get('skip_blocks', []):
-                    skipped.add(bskip)
-                # Ensure skipped original blocks have a valid terminator: branch to while exit
-                try:
-                    exit_name = f"while{self.loop_count}_exit"
-                    exit_bb = None
-                    for bbf in func.blocks:
-                        try:
-                            if str(bbf.name) == exit_name:
-                                exit_bb = bbf
-                                break
-                        except Exception:
-                            pass
-                    if exit_bb is not None:
-                        # Connect while exit to original exit block if available
-                        try:
-                            orig_exit_bb = self.bb_map.get(loop_plan.get('exit'))
-                            if orig_exit_bb is not None and exit_bb.terminator is None:
-                                ibx = ir.IRBuilder(exit_bb)
-                                ibx.branch(orig_exit_bb)
-                        except Exception:
-                            pass
-                        for bskip in loop_plan.get('skip_blocks', []):
-                            if bskip == loop_plan.get('header'):
-                                continue
-                            bb_skip = self.bb_map.get(bskip)
-                            if bb_skip is None:
-                                continue
-                            try:
-                                if bb_skip.terminator is None:
-                                    ib = ir.IRBuilder(bb_skip)
-                                    ib.branch(exit_bb)
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-                continue
-            if bid in skipped:
-                continue
-            bb = self.bb_map[bid]
-            self.lower_block(bb, block_data, func)
-
-        # Provide lifetime hints to resolver (which blocks define which values)
-        try:
-            self.resolver.def_blocks = self.def_blocks
-            # Provide phi metadata for this function to resolver
-            self.resolver.block_phi_incomings = getattr(self, 'block_phi_incomings', {})
-            # Attach a BuildCtx object for future refactors (non-breaking)
-            try:
-                self.ctx = BuildCtx(
-                    module=self.module,
-                    i64=self.i64,
-                    i32=self.i32,
-                    i8=self.i8,
-                    i1=self.i1,
-                    i8p=self.i8p,
-                    vmap=self.vmap,
-                    bb_map=self.bb_map,
-                    preds=self.preds,
-                    block_end_values=self.block_end_values,
-                    resolver=self.resolver,
-                    trace_phi=os.environ.get('NYASH_LLVM_TRACE_PHI') == '1',
-                    verbose=os.environ.get('NYASH_CLI_VERBOSE') == '1',
-                )
-                # Also expose via resolver for convenience until migration completes
-                self.resolver.ctx = self.ctx
-            except Exception:
-                pass
-        except Exception:
-            pass
-        # Finalize PHIs for this function now that all snapshots for it exist
-        _finalize_phis(self)
+            raise
 
 
     def setup_phi_placeholders(self, blocks: List[Dict[str, Any]]):
@@ -1061,7 +657,7 @@ def main():
     # CLI:
     #   llvm_builder.py <input.mir.json> [-o output.o]
     #   llvm_builder.py --dummy [-o output.o]
-    output_file = "nyash_llvm_py.o"
+    output_file = os.path.join('tmp', 'nyash_llvm_py.o')
     args = sys.argv[1:]
     dummy = False
 
@@ -1085,6 +681,10 @@ def main():
         # Emit dummy ny_main
         ir_text = builder._create_dummy_main()
         trace_debug(f"[Python LLVM] Generated dummy IR:\n{ir_text}")
+        try:
+            os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        except Exception:
+            pass
         builder.compile_to_object(output_file)
         print(f"Compiled to {output_file}")
         return
@@ -1100,6 +700,10 @@ def main():
     llvm_ir = builder.build_from_mir(mir_json)
     trace_debug("[Python LLVM] Generated LLVM IR (see NYASH_LLVM_DUMP_IR or tmp/nyash_harness.ll)")
 
+    try:
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+    except Exception:
+        pass
     builder.compile_to_object(output_file)
     print(f"Compiled to {output_file}")
 

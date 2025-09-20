@@ -33,3 +33,11 @@ See also
 ## Testing
 - Rust unit tests: `cargo test`
 - Targeted: e.g., tokenizer/sugar config `cargo test --lib sugar_basic_test -- --nocapture`
+
+## Acceptance Checklist (Phase Freeze)
+- cargo check (workspace) passes
+- Representative smokes are green:
+  - PyVM smokes: `tools/pyvm_stage2_smoke.sh`
+  - LLVM harness smokes: `tools/llvm_smoke.sh release`
+  - Macro goldens: `tools/ci_check_golden.sh`
+- No spec changes (compat maintained); changes are minimal and local

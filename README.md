@@ -14,6 +14,18 @@
 
 ---
 
+Execution Status (Phase Freeze)
+- Active
+  - `--backend llvm` (Python/llvmlite harness; AOT object emit)
+  - `--backend vm` (PyVM harness)
+- Inactive/Sealed
+  - `--backend cranelift`, `--jit-direct` (sealed; use LLVM harness)
+  - Rust VM (legacy opt‑in via features)
+
+Quick pointers
+- Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
+- Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
+
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
 User Macros (Phase 2): `docs/guides/user-macros.md`
 AST JSON v0 (macro/bridge): `docs/reference/ir/ast-json-v0.md`

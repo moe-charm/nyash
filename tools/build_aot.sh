@@ -5,7 +5,7 @@ ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR"
 
 APP=${1:-apps/tests/mir-branch-ret/main.nyash}
-OUT=${2:-app_aot}
+OUT=${2:-tmp/app_aot}
 OBJ_DIR=${OBJ_DIR:-target/aot_objects}
 OBJ_BASENAME=$(basename "$APP" .nyash)
 OBJ_PATH="$OBJ_DIR/$OBJ_BASENAME.o"
@@ -28,6 +28,8 @@ if [[ ! -f "$OBJ_PATH" ]]; then
 fi
 ls -l "$OBJ_PATH"
 
+# Ensure output directory exists
+mkdir -p "$(dirname "$OUT")"
 echo "[4/5] link with nyrt -> $OUT"
 cc "$OBJ_PATH" \
   -L crates/nyrt/target/release \

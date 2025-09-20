@@ -3,6 +3,14 @@
 Updated: 2025‑09‑20
 
 ## Today (Done)
+- Polishing Sprint（非破壊・仕様不変）
+  - main の薄型化（bin→lib 委譲）とテスト import 整流
+  - LLVM Python ビルダ: builders/* に一本化（fallback 除去）
+  - 重要区間の例外ログ化（`NYASH_CLI_VERBOSE=1` 連動）
+  - 生成物の既定出力を `tmp/` に統一（tools/build_llvm.sh, tools/build_aot.sh, llvm_builder.py CLI）
+  - README 冒頭に Execution Status を追記（Active/Inactive の明示）
+  - DEV_QUICKSTART に Acceptance Checklist を追記
+  - lib 内コメントのトーン整流（実装は要点のみ）
 - PeekExpr → If 連鎖の正変換を安定化
   - マクロ側（IfMatchNormalize）での検出を has_kind("PeekExpr") に統一。
   - Local/Assignment/Return/Print の4経路で PeekExpr を If に置換できるよう整備。
@@ -55,6 +63,14 @@ Updated: 2025‑09‑20
 3) 自己ホスト前展開の観測強化（ログ/スモーク）と安定運用
 4) ランタイムcapabilities（io/net/env）のPyVM側実効化は必要になった時点で最小修正
 
+## Polishing Sprint (non‑breaking, minimal)
+- [x] Thin bin entry (src/main.rs): remove duplicate `pub mod` list; use `nyash_rust::runner::NyashRunner` and friends.
+- [x] Adjust main test imports to refer to `nyash_rust::box_trait::*`.
+- [x] Add debug logs in Python LLVM builder for previously silent exceptions (gated by `NYASH_CLI_VERBOSE=1`).
+- [x] LLVM builder delegated only (builders/*); legacy fallback removed with clear debug on failure.
+- [x] Default outputs unified to `tmp/` (tools/build_llvm.sh, tools/build_aot.sh, llvm_builder.py CLI default).
+- [x] No behavior change: keep LLVM/PHI invariants and outputs semantics as-is.
+
 ## Next Milestones
 - DONE: Self‑host 前展開 既定化（auto）
   - 変更多: `NYASH_MACRO_SELFHOST_PRE_EXPAND` 未設定時に、マクロ有効かつ `NYASH_VM_USE_PY=1` で自動ON（安全策付き）。
@@ -75,6 +91,10 @@ Next (short)
 - DONE: for/foreach 正規化（コア正規化パスへ昇格）
   - 形: `for(fn(){init}, cond, fn(){step}, fn(){body})`, `foreach(arr, "x", fn(){body})`
   - 出力スモーク: tools/test/smoke/macro/for_foreach_output_smoke.sh（for: 0,1,2 / foreach: 1,2,3）
+- MacroCtx PoC（子ランナー経路のctx受け渡しを有効化）
+  - ctx JSON: `{ "caps": { "io|net|env": bool } }`
+  - 例マクロ: `apps/macros/examples/macro_ctx_demo.nyash`（identity、stdoutは使わない）
+  - Docs: guides/macro-system.md にMacroCtx節を追記
 - LoopForm MVP‑3: break/continue minimal handling (single‑level)
 - for/foreach pre‑desugaring → LoopForm normalization (limited)
 - LLVM IR hygiene for LoopForm / If / Match — PHI at block head, no empty PHIs (smoke)

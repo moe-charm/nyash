@@ -13,7 +13,7 @@ Compiles a Nyash program with the LLVM backend to an object (.o),
 links it with the NyRT static runtime, and produces a native executable.
 
 Options:
-  -o <output>   Output executable name (default: app)
+  -o <output>   Output executable path (default: tmp/app)
 
 Requirements:
   - LLVM 18 development (llvm-config-18)
@@ -24,7 +24,7 @@ USAGE
 if [[ $# -lt 1 ]]; then usage; exit 1; fi
 
 INPUT=""
-OUT="app"
+OUT="tmp/app"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
@@ -129,6 +129,8 @@ else
   ( cd crates/nyrt && cargo build --release -j 24 >/dev/null )
 fi
 
+# Ensure output directory exists
+mkdir -p "$(dirname "$OUT")"
 echo "[4/4] Linking $OUT ..."
 cc "$OBJ" \
   -L target/release \
