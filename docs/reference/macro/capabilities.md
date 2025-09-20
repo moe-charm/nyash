@@ -14,6 +14,26 @@ Status: Design/PoC. This document defines the capability model for user macros e
 
 Default: all OFF (io=false, net=false, env=false)
 
+## Stable Minimal Box API (macro sandbox)
+User macros executed in the sandbox must not depend on external plugins. The following core Boxes and methods are guaranteed to exist and remain stable for macro authors (MVP scope):
+
+- ConsoleBox
+  - `print/println/log(string)`
+- String (receiver is Python-style string in PyVM sandbox)
+  - `length() -> int`
+  - `substring(start:int, end:int) -> string`
+  - `lastIndexOf(substr:string) -> int`
+  - `esc_json() -> string` (escape for JSON embedding)
+- ArrayBox
+  - `size() -> int`, `get(i:int) -> any`, `set(i:int, v:any)`, `push(v:any)`
+- MapBox
+  - `size() -> int`, `has(key:string) -> bool`, `get(key:string) -> any`, `set(key:string, v:any)`, `toString() -> string`
+
+Notes
+- These APIs are available only inside the macro sandbox child. Application execution (PyVM/LLVM) continues to use the normal plugin system.
+- The sandbox disables plugins by default (`NYASH_DISABLE_PLUGINS=1`) to ensure determinism; only the above minimal Boxes are relied upon by macros.
+- Built-in core normalization (for/foreach → Loop, match → If, Loop tail alignment) does not use Boxes and is not affected by plugin state.
+
 ## Behavior per Capability
 - io=false
   - Disable FileBox and other I/O boxes in the macro sandbox.
@@ -66,4 +86,3 @@ Phase‑2 PoC maps these to the child process environment/sandbox:
 - Keep macros pure (operate only on AST JSON v0) unless there is a strong case for capabilities.
 - Treat `net=true` as exceptional and subject to policy review, due to determinism concerns.
 - Prefer deterministic inputs (versioned data files) if `io=true` is deemed necessary in future.
-
