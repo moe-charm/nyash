@@ -1,0 +1,8 @@
+function main(args) {
+  if 1 {
+    print("x")
+  } ; else {
+    print("y")
+  }
+}
+

@@ -1,0 +1,4 @@
+local s = "hello world"
+local i = s.indexOf("world")
+print(i)
+

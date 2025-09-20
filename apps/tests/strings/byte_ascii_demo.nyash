@@ -1,0 +1,5 @@
+// Byte-ASCII demo: ASCII-only so CP==Byte semantics
+local s = "hello_world_123"
+print(s.length())         // 15
+print(s.indexOf("_"))     // 5
+print(s.substring(6, 11)) // world

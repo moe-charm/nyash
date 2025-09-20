@@ -28,6 +28,9 @@ impl super::MirBuilder {
         // Look for the main() method
         let out = if let Some(main_method) = methods.get("main") {
             if let ASTNode::FunctionDeclaration { params, body, .. } = main_method {
+                // Also materialize a callable function entry "BoxName.main/N" for harness/PyVM
+                let func_name = format!("{}.{}", box_name, "main");
+                let _ = self.lower_static_method_as_function(func_name, params.clone(), body.clone());
                 // Convert the method body to a Program AST node and lower it
                 let program_ast = ASTNode::Program {
                     statements: body.clone(),

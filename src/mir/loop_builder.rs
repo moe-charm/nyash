@@ -208,6 +208,8 @@ impl<'a> LoopBuilder<'a> {
 
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
+        // Scope enter for loop body
+        self.parent_builder.hint_scope_enter(0);
         // Optional safepoint per loop-iteration
         if std::env::var("NYASH_BUILDER_SAFEPOINT_LOOP")
             .ok()
@@ -226,6 +228,8 @@ impl<'a> LoopBuilder<'a> {
         let latch_id = self.current_block()?;
         // Hint: loop latch (no-op sink)
         self.parent_builder.hint_loop_latch();
+        // Scope leave for loop body
+        self.parent_builder.hint_scope_leave(0);
         let latch_snapshot = self.get_current_variable_map();
         // 以前は body_id に保存していたが、複数ブロックのボディや continue 混在時に不正確になるため
         // 実際の latch_id に対してスナップショットを紐づける
@@ -456,6 +460,35 @@ impl<'a> LoopBuilder<'a> {
 
     fn build_statement(&mut self, stmt: ASTNode) -> Result<ValueId, String> {
         match stmt {
+            // Ensure nested bare blocks inside loops are lowered with loop-aware semantics
+            ASTNode::Program { statements, .. } => {
+                let mut last = None;
+                for s in statements.into_iter() {
+                    last = Some(self.build_statement(s)?);
+                    // Stop early if this block has been terminated (e.g., break/continue)
+                    let cur_id = self.current_block()?;
+                    let terminated = {
+                        if let Some(ref fun_ro) = self.parent_builder.current_function {
+                            if let Some(bb) = fun_ro.get_block(cur_id) {
+                                bb.is_terminated()
+                            } else {
+                                false
+                            }
+                        } else {
+                            false
+                        }
+                    };
+                    if terminated {
+                        break;
+                    }
+                }
+                Ok(last.unwrap_or_else(|| {
+                    let void_id = self.new_value();
+                    // Emit a void const to keep SSA consistent when block is empty
+                    let _ = self.emit_const(void_id, ConstValue::Void);
+                    void_id
+                }))
+            }
             ASTNode::If {
                 condition,
                 then_body,

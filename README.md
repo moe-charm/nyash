@@ -28,10 +28,24 @@ Quick pointers
 
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
 User Macros (Phase 2): `docs/guides/user-macros.md`
+Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
+ScopeBox & MIR hints: `docs/guides/scopebox.md`
 AST JSON v0 (macro/bridge): `docs/reference/ir/ast-json-v0.md`
 MIR mode note: default is MIR13 (PHI-off). See `docs/development/mir/MIR13_MODE.md`.
 Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
 ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
+
+Profiles (quick)
+- `--profile dev` → Macros ON (strict), PyVM dev向け設定を適用（必要に応じて環境で上書き可）
+- `--profile lite` → Macros OFF の軽量実行
+  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+
+Specs & Constraints
+- Invariants (must-hold): `docs/reference/invariants.md`
+- Constraints (known/temporary/resolved): `docs/reference/constraints.md`
+- PHI & SSA design: `docs/architecture/phi-and-ssa.md`
+- Testing matrix (spec → tests): `docs/guides/testing-matrix.md`
+- Comparison with other languages: `docs/comparison/nyash-vs-others.md`
 
 ## Table of Contents
 - [Self‑Hosting (Dev Focus)](#self-hosting)

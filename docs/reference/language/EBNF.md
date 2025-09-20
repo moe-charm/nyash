@@ -17,7 +17,7 @@ logic     := compare (('&&' | '||') compare)*
 compare   := sum (( '==' | '!=' | '<' | '>' | '<=' | '>=' ) sum)?
 sum       := term (('+' | '-') term)*
 term      := unary (('*' | '/') unary)*
-unary     := '-' unary | factor
+unary     := ('-' | '!' | 'not') unary | factor
 
 factor    := INT
            | STRING
@@ -50,6 +50,8 @@ args      := expr (',' expr)*
 
 Notes
 - ASI: Newline is the primary statement separator. Do not insert a semicolon between a closed block and a following 'else'.
+- Semicolon (optional): When `NYASH_PARSER_ALLOW_SEMICOLON=1` is set, `;` is accepted as an additional statement separator (equivalent to newline). It is not allowed between `}` and a following `else`.
+- Do‑while: not supported by design. Prefer a single‑entry, pre‑condition loop normalized via sugar (e.g., `repeat N {}` / `until cond {}`) to a `loop` with clear break conditions.
 - Short-circuit: '&&' and '||' must not evaluate the RHS when not needed.
 - Unary minus has higher precedence than '*' and '/'.
 - IDENT names consist of [A-Za-z_][A-Za-z0-9_]*
@@ -92,6 +94,11 @@ block_as_role  := block 'as' ( 'once' | 'birth_once' )? IDENT ':' TYPE
 handler_tail   := ( catch_block )? ( cleanup_block )?
 catch_block    := 'catch' ( '(' ( IDENT IDENT | IDENT )? ')' )? block
 cleanup_block  := 'cleanup' block
+
+; Stage‑3 (Phase 1 via normalization gate NYASH_CATCH_NEW=1)
+; Postfix handlers for expressions and calls
+postfix_catch      := primary_expr 'catch' ( '(' ( IDENT IDENT | IDENT )? ')' )? block
+postfix_cleanup    := primary_expr 'cleanup' block
 ```
 
 Semantics (summary)

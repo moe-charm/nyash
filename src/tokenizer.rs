@@ -101,6 +101,8 @@ pub enum TokenType {
     COMMA,       // ,
     QUESTION,    // ? (postfix result propagation)
     NEWLINE,     // \n
+    // Optional separators
+    SEMICOLON,   // ; (gated by NYASH_PARSER_ALLOW_SEMICOLON)
 
     // 識別子
     IDENTIFIER(String),
@@ -156,6 +158,16 @@ pub struct NyashTokenizer {
 }
 
 impl NyashTokenizer {
+    #[inline]
+    fn allow_semicolon() -> bool {
+        match std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok() {
+            Some(v) => {
+                let lv = v.to_ascii_lowercase();
+                lv == "1" || lv == "true" || lv == "on"
+            }
+            None => false,
+        }
+    }
     #[inline]
     fn strict_12_7() -> bool {
         std::env::var("NYASH_STRICT_12_7").ok().as_deref() == Some("1")
@@ -218,6 +230,11 @@ impl NyashTokenizer {
         let start_column = self.column;
 
         match self.current_char() {
+            // Optional statement separator ';' (gated)
+            Some(';') if Self::allow_semicolon() => {
+                self.advance();
+                return Ok(Token::new(TokenType::SEMICOLON, start_line, start_column));
+            }
             // Block comment should have been skipped by tokenize() pre-loop, but be defensive here
             Some('/') if self.peek_char() == Some('*') => {
                 self.skip_block_comment()?;
@@ -378,6 +395,7 @@ impl NyashTokenizer {
     fn single_char_token(&self, c: char) -> Option<TokenType> {
         // '?' は上位で分岐済み、':' も同様。ここでは純粋な1文字を扱う。
         match c {
+            '!' => Some(TokenType::NOT),
             '<' => Some(TokenType::LESS),
             '>' => Some(TokenType::GREATER),
             '&' => Some(TokenType::BitAnd),

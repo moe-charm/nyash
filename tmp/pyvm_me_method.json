@@ -3,6 +3,75 @@
     {
       "blocks": [
         {
+          "id": 3,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Main("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "Main.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "args": [],
+              "box": 0,
+              "dst": 1,
+              "dst_type": "i64",
+              "method": "length",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "Main.helper/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
           "id": 0,
           "instructions": [
             {
@@ -106,15 +175,15 @@
     {
       "blocks": [
         {
-          "id": 1,
+          "id": 2,
           "instructions": [
             {
-              "args": [],
-              "box": 0,
               "dst": 1,
-              "dst_type": "i64",
-              "method": "length",
-              "op": "boxcall"
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
               "op": "ret",
@@ -123,7 +192,102 @@
           ]
         }
       ],
-      "name": "Main.helper/1",
+      "name": "Main.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 1,
+              "op": "newbox",
+              "type": "ConsoleBox"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "abc"
+              }
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Main.helper/1"
+              }
+            },
+            {
+              "args": [
+                2
+              ],
+              "dst": 3,
+              "func": 4,
+              "op": "call"
+            },
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "n="
+              }
+            },
+            {
+              "dst": 6,
+              "lhs": 5,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 3
+            },
+            {
+              "args": [
+                6
+              ],
+              "box": 1,
+              "dst": 7,
+              "method": "println",
+              "op": "boxcall"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 8
+            }
+          ]
+        }
+      ],
+      "name": "Main.main",
       "params": [
         0
       ]

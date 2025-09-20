@@ -29,7 +29,7 @@ Backward compat (deprecated)
 MacroCtx (MVP)
 - Rust側に最小の `MacroCtx` と `MacroCaps` を用意（将来のAPI統合のため）。
 - フィールド/メソッド（MVP）:
-  - `MacroCtx::from_env()` → 環境からcapabilitiesを組み立て
+  - `MacroCtx::from_env()` → 環境からcapabilitiesを組み立て（親プロセス）
   - `ctx.gensym(prefix)` → 衛生識別子生成
   - `ctx.report(level, message)` → 開発用レポート（標準エラー）
   - `ctx.get_env(key)` → 環境取得（`NYASH_MACRO_CAP_ENV=1` のときのみ）
@@ -88,6 +88,8 @@ CLI プロファイル（推奨）
 
 Notes
 - Built-in child route (stdin JSON -> stdout JSON) remains available when `NYASH_MACRO_BOX_CHILD_RUNNER=0`.
+- Internal child can receive ctx via env: `NYASH_MACRO_CTX_JSON='{"caps":{"io":false,"net":false,"env":true}}'`
+- CLI からも指定可能: `--macro-ctx-json '{"caps":{"io":false,"net":false,"env":true}}'`
 - Strict mode: `NYASH_MACRO_STRICT=1` (default) fails build on macro child error/timeout; set `0` to fallback to identity.
 - Timeout: `NYASH_NY_COMPILER_TIMEOUT_MS` (default `2000`).
 

@@ -1,0 +1,16 @@
+// TestAssertBox: tiny assertions for scripts
+static box TestAssertBox {
+  assert_eq(actual, expected, msg) {
+    if actual == expected { return true }
+    print("[ASSERT_EQ FAIL] " + msg)
+    print("  expected: " + expected)
+    print("  actual  : " + actual)
+    return false
+  }
+  assert_true(cond, msg) {
+    if cond { return true }
+    print("[ASSERT_TRUE FAIL] " + msg)
+    return false
+  }
+}
+

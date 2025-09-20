@@ -3,7 +3,7 @@ use nyash_rust::{mir::MirCompiler, parser::NyashParser};
 use std::{fs, process};
 
 /// Execute using PyVM only (no Rust VM runtime). Emits MIR(JSON) and invokes tools/pyvm_runner.py.
-pub fn execute_pyvm_only(_runner: &NyashRunner, filename: &str) {
+pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
     // Read the file
     let code = match fs::read_to_string(filename) {
         Ok(content) => content,
@@ -12,6 +12,14 @@ pub fn execute_pyvm_only(_runner: &NyashRunner, filename: &str) {
             process::exit(1);
         }
     };
+
+    // Optional using pre-processing (strip lines and register modules)
+    let code = if crate::config::env::enable_using() {
+        match crate::runner::modes::common_util::resolve::strip_using_and_register(runner, &code, filename) {
+            Ok(s) => s,
+            Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
+        }
+    } else { code };
 
     // Parse to AST
     let ast = match NyashParser::parse_from_string(&code) {

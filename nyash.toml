@@ -10,6 +10,13 @@ selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.nyash"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.nyash"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.nyash"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+selfhost.vm.json_cur = "apps/selfhost-vm/boxes/json_cur.nyash"
+selfhost.vm.json = "apps/selfhost-vm/boxes/json_adapter.nyash"
+selfhost.vm.core = "apps/selfhost-vm/boxes/mini_vm_core.nyash"
+selfhost.vm.scan = "apps/selfhost-vm/boxes/mini_vm_scan.nyash"
+selfhost.vm.binop = "apps/selfhost-vm/boxes/mini_vm_binop.nyash"
+selfhost.vm.compare = "apps/selfhost-vm/boxes/mini_vm_compare.nyash"
+selfhost.vm.prints = "apps/selfhost-vm/boxes/mini_vm_prints.nyash"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]

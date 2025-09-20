@@ -1,0 +1,14 @@
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":12}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":34}}}}]}"
+    local k_v = "\"value\":"
+    local i1 = json.indexOf(k_v)
+    local i2 = json.indexOf(k_v, i1 + k_v.length())
+    local d1 = json.substring(i2 + k_v.length(), json.indexOf("}", i2))
+    local i3 = json.indexOf(k_v, i2 + k_v.length())
+    local d2 = json.substring(i3 + k_v.length(), json.indexOf("}", i3))
+    print(d1)
+    print(d2)
+    return 0
+  }
+}

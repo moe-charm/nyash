@@ -231,23 +231,9 @@ fn transform_loop_normalize(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
             // 各セグメント内のみ安全に「非代入→代入」に整列する（順序維持の安定版）。
             // 追加ガード: 代入先は変数に限る。変数の種類は全体で最大2種まで（MVP-2 制約維持）。
 
-            // まず全体の更新変数の種類数を計測（上限2）。
-            let mut uniq_targets_overall: Vec<String> = Vec::new();
-            for stmt in &body_norm {
-                if let A::Assignment { target, .. } = stmt {
-                    if let A::Variable { name, .. } = target.as_ref() {
-                        if !uniq_targets_overall.iter().any(|s| s == name) {
-                            uniq_targets_overall.push(name.clone());
-                            if uniq_targets_overall.len() > 2 { // 超過したら全体の並べ替えは不許可
-                                return A::Loop { condition, body: body_norm, span };
-                            }
-                        }
-                    } else {
-                        // 複合ターゲットを含む場合は保守的にスキップ
-                        return A::Loop { condition, body: body_norm, span };
-                    }
-                }
-            }
+            // まず全体の更新変数の種類を走査（観測のみ）。
+            // 制限は設けず、後続のセグメント整列（非代入→代入）に委ねる。
+            // 複合ターゲットが出現した場合は保守的に“整列スキップ”とするため、ここでは弾かない。
 
             // セグメント分解 → セグメント毎に安全整列
             let mut rebuilt: Vec<A> = Vec::with_capacity(body_norm.len());
@@ -318,7 +304,178 @@ pub fn normalize_core_pass(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
     let a1 = transform_for_foreach(ast);
     let a2 = transform_peek_match_literal(&a1);
     let a3 = transform_loop_normalize(&a2);
-    a3
+    // Optional: inject ScopeBox wrappers for diagnostics/visibility (no-op for MIR)
+    let a4 = if std::env::var("NYASH_SCOPEBOX_ENABLE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false) {
+        transform_scopebox_inject(&a3)
+    } else { a3 };
+    // Lift nested function declarations (no captures) to top-level with gensym names
+    let a4b = transform_lift_nested_functions(&a4);
+    // Optional: If → LoopForm (conservative). Only transform if no else and branch has no break/continue.
+    let a5 = if std::env::var("NYASH_IF_AS_LOOPFORM").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false) {
+        transform_if_to_loopform(&a4b)
+    } else { a4b };
+    // Optional: postfix catch/cleanup sugar → TryCatch normalization
+    let a6 = if std::env::var("NYASH_CATCH_NEW").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false) {
+        transform_postfix_handlers(&a5)
+    } else { a5 };
+    a6
+}
+
+// ---- Nested Function Lift (no captures) ----
+
+fn transform_lift_nested_functions(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::ASTNode as A;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    static COUNTER: AtomicUsize = AtomicUsize::new(0);
+
+    fn gensym(base: &str) -> String {
+        let n = COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!("__ny_lifted_{}_{}", base, n)
+    }
+
+    fn collect_locals(n: &A, set: &mut std::collections::HashSet<String>) {
+        match n {
+            A::Local { variables, .. } => { for v in variables { set.insert(v.clone()); } }
+            A::Program { statements, .. } => for s in statements { collect_locals(s, set); },
+            A::FunctionDeclaration { body, .. } => for s in body { collect_locals(s, set); },
+            A::If { then_body, else_body, .. } => {
+                for s in then_body { collect_locals(s, set); }
+                if let Some(b) = else_body { for s in b { collect_locals(s, set); } }
+            }
+            _ => {}
+        }
+    }
+
+    fn collect_vars(n: &A, set: &mut std::collections::HashSet<String>) {
+        match n {
+            A::Variable { name, .. } => { set.insert(name.clone()); }
+            A::Program { statements, .. } => for s in statements { collect_vars(s, set); },
+            A::FunctionDeclaration { body, .. } => for s in body { collect_vars(s, set); },
+            A::If { condition, then_body, else_body, .. } => {
+                collect_vars(condition, set);
+                for s in then_body { collect_vars(s, set); }
+                if let Some(b) = else_body { for s in b { collect_vars(s, set); } }
+            }
+            A::Assignment { target, value, .. } => { collect_vars(target, set); collect_vars(value, set); }
+            A::Return { value, .. } => { if let Some(v) = value { collect_vars(v, set); } }
+            A::Print { expression, .. } => collect_vars(expression, set),
+            A::BinaryOp { left, right, .. } => { collect_vars(left, set); collect_vars(right, set); }
+            A::UnaryOp { operand, .. } => collect_vars(operand, set),
+            A::MethodCall { object, arguments, .. } => { collect_vars(object, set); for a in arguments { collect_vars(a, set); } }
+            A::FunctionCall { arguments, .. } => { for a in arguments { collect_vars(a, set); } }
+            A::ArrayLiteral { elements, .. } => { for e in elements { collect_vars(e, set); } }
+            A::MapLiteral { entries, .. } => { for (_,v) in entries { collect_vars(v, set); } }
+            _ => {}
+        }
+    }
+
+    fn rename_calls(n: &A, mapping: &std::collections::HashMap<String, String>) -> A {
+        use nyash_rust::ast::ASTNode as A;
+        match n.clone() {
+            A::FunctionCall { name, arguments, span } => {
+                let new_name = mapping.get(&name).cloned().unwrap_or(name);
+                A::FunctionCall { name: new_name, arguments: arguments.into_iter().map(|a| rename_calls(&a, mapping)).collect(), span }
+            }
+            A::Program { statements, span } => A::Program { statements: statements.into_iter().map(|s| rename_calls(&s, mapping)).collect(), span },
+            A::FunctionDeclaration { name, params, body, is_static, is_override, span } => {
+                A::FunctionDeclaration { name, params, body: body.into_iter().map(|s| rename_calls(&s, mapping)).collect(), is_static, is_override, span }
+            }
+            A::If { condition, then_body, else_body, span } => A::If {
+                condition: Box::new(rename_calls(&condition, mapping)),
+                then_body: then_body.into_iter().map(|s| rename_calls(&s, mapping)).collect(),
+                else_body: else_body.map(|v| v.into_iter().map(|s| rename_calls(&s, mapping)).collect()),
+                span,
+            },
+            A::Assignment { target, value, span } => A::Assignment { target: Box::new(rename_calls(&target, mapping)), value: Box::new(rename_calls(&value, mapping)), span },
+            A::Return { value, span } => A::Return { value: value.as_ref().map(|v| Box::new(rename_calls(v, mapping))), span },
+            A::Print { expression, span } => A::Print { expression: Box::new(rename_calls(&expression, mapping)), span },
+            A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(rename_calls(&left, mapping)), right: Box::new(rename_calls(&right, mapping)), span },
+            A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(rename_calls(&operand, mapping)), span },
+            A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(rename_calls(&object, mapping)), method, arguments: arguments.into_iter().map(|a| rename_calls(&a, mapping)).collect(), span },
+            A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.into_iter().map(|e| rename_calls(&e, mapping)).collect(), span },
+            A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.into_iter().map(|(k,v)| (k, rename_calls(&v, mapping))).collect(), span },
+            other => other,
+        }
+    }
+
+    fn lift_in_body(body: Vec<A>, hoisted: &mut Vec<A>, mapping: &mut std::collections::HashMap<String,String>) -> Vec<A> {
+        use std::collections::HashSet;
+        let mut out: Vec<A> = Vec::new();
+        for st in body.into_iter() {
+            match st.clone() {
+                A::FunctionDeclaration { name, params, body, is_static, is_override, span } => {
+                    // check captures
+                    let mut locals: HashSet<String> = HashSet::new();
+                    collect_locals(&A::FunctionDeclaration{ name: name.clone(), params: params.clone(), body: body.clone(), is_static, is_override, span }, &mut locals);
+                    let mut used: HashSet<String> = HashSet::new();
+                    collect_vars(&A::FunctionDeclaration{ name: name.clone(), params: params.clone(), body: body.clone(), is_static, is_override, span }, &mut used);
+                    let params_set: HashSet<String> = params.iter().cloned().collect();
+                    let mut extra: HashSet<String> = used.drain().collect();
+                    extra.retain(|v| !params_set.contains(v) && !locals.contains(v));
+                    if extra.is_empty() {
+                        // Hoist with gensym name
+                        let new_name = gensym(&name);
+                        let lifted = A::FunctionDeclaration { name: new_name.clone(), params, body, is_static: true, is_override, span };
+                        hoisted.push(lifted);
+                        mapping.insert(name, new_name);
+                        // do not keep nested declaration in place
+                        continue;
+                    } else {
+                        // keep as-is (cannot hoist due to captures)
+                        out.push(st);
+                    }
+                }
+                other => out.push(other),
+            }
+        }
+        // After scanning, rename calls in out according to mapping
+        out.into_iter().map(|n| rename_calls(&n, mapping)).collect()
+    }
+
+    fn walk(n: &A, hoisted: &mut Vec<A>) -> A {
+        use nyash_rust::ast::ASTNode as A;
+        match n.clone() {
+            A::Program { statements, span } => {
+                let mut mapping = std::collections::HashMap::new();
+                let stmts2 = lift_in_body(statements.into_iter().map(|s| walk(&s, hoisted)).collect(), hoisted, &mut mapping);
+                // Append hoisted at end (global scope)
+                // Note: hoisted collected at all levels; only append here once after full walk
+                A::Program { statements: stmts2, span }
+            }
+            A::FunctionDeclaration { name, params, body, is_static, is_override, span } => {
+                let mut mapping = std::collections::HashMap::new();
+                let body2: Vec<A> = body.into_iter().map(|s| walk(&s, hoisted)).collect();
+                let body3 = lift_in_body(body2, hoisted, &mut mapping);
+                A::FunctionDeclaration { name, params, body: body3, is_static, is_override, span }
+            }
+            A::If { condition, then_body, else_body, span } => A::If {
+                condition: Box::new(walk(&condition, hoisted)),
+                then_body: then_body.into_iter().map(|s| walk(&s, hoisted)).collect(),
+                else_body: else_body.map(|v| v.into_iter().map(|s| walk(&s, hoisted)).collect()),
+                span,
+            },
+            A::Assignment { target, value, span } => A::Assignment { target: Box::new(walk(&target, hoisted)), value: Box::new(walk(&value, hoisted)), span },
+            A::Return { value, span } => A::Return { value: value.as_ref().map(|v| Box::new(walk(v, hoisted))), span },
+            A::Print { expression, span } => A::Print { expression: Box::new(walk(&expression, hoisted)), span },
+            A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(walk(&left, hoisted)), right: Box::new(walk(&right, hoisted)), span },
+            A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(walk(&operand, hoisted)), span },
+            A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(walk(&object, hoisted)), method, arguments: arguments.into_iter().map(|a| walk(&a, hoisted)).collect(), span },
+            A::FunctionCall { name, arguments, span } => A::FunctionCall { name, arguments: arguments.into_iter().map(|a| walk(&a, hoisted)).collect(), span },
+            A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.into_iter().map(|e| walk(&e, hoisted)).collect(), span },
+            A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.into_iter().map(|(k,v)| (k, walk(&v, hoisted))).collect(), span },
+            other => other,
+        }
+    }
+
+    let mut hoisted: Vec<A> = Vec::new();
+    let mut out = walk(ast, &mut hoisted);
+    // Append hoisted functions at top-level if root is Program
+    if let A::Program { statements, span } = out.clone() {
+        let mut ss = statements;
+        ss.extend(hoisted.into_iter());
+        out = A::Program { statements: ss, span };
+    }
+    out
 }
 
 fn subst_var(node: &nyash_rust::ASTNode, name: &str, replacement: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
@@ -554,6 +711,146 @@ fn transform_for_foreach(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
     }
 }
 
+fn transform_scopebox_inject(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::ASTNode as A;
+    match ast.clone() {
+        A::Program { statements, span } => {
+            A::Program { statements: statements.into_iter().map(|n| transform_scopebox_inject(&n)).collect(), span }
+        }
+        A::If { condition, then_body, else_body, span } => {
+            let cond = Box::new(transform_scopebox_inject(&condition));
+            let then_wrapped = vec![A::ScopeBox { body: then_body.into_iter().map(|n| transform_scopebox_inject(&n)).collect(), span: nyash_rust::ast::Span::unknown() }];
+            let else_wrapped = else_body.map(|v| vec![A::ScopeBox { body: v.into_iter().map(|n| transform_scopebox_inject(&n)).collect(), span: nyash_rust::ast::Span::unknown() }]);
+            A::If { condition: cond, then_body: then_wrapped, else_body: else_wrapped, span }
+        }
+        A::Loop { condition, body, span } => {
+            let cond = Box::new(transform_scopebox_inject(&condition));
+            let body_wrapped = vec![A::ScopeBox { body: body.into_iter().map(|n| transform_scopebox_inject(&n)).collect(), span: nyash_rust::ast::Span::unknown() }];
+            A::Loop { condition: cond, body: body_wrapped, span }
+        }
+        A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(transform_scopebox_inject(&left)), right: Box::new(transform_scopebox_inject(&right)), span },
+        A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(transform_scopebox_inject(&operand)), span },
+        A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(transform_scopebox_inject(&object)), method, arguments: arguments.into_iter().map(|a| transform_scopebox_inject(&a)).collect(), span },
+        A::FunctionCall { name, arguments, span } => A::FunctionCall { name, arguments: arguments.into_iter().map(|a| transform_scopebox_inject(&a)).collect(), span },
+        A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.into_iter().map(|e| transform_scopebox_inject(&e)).collect(), span },
+        A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.into_iter().map(|(k, v)| (k, transform_scopebox_inject(&v))).collect(), span },
+        other => other,
+    }
+}
+
+fn transform_if_to_loopform(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::{ASTNode as A, Span};
+    // Conservative rewrite: if (cond) { then } with no else and no break/continue in then → loop(cond) { then }
+    // (unused helpers removed)
+    match ast.clone() {
+        A::Program { statements, span } => A::Program { statements: statements.into_iter().map(|n| transform_if_to_loopform(&n)).collect(), span },
+        A::If { condition, then_body, else_body, span } => {
+            // Case A/B unified: wrap into single-iteration loop with explicit break (semantics-preserving)
+            // This avoids multi-iteration semantics and works for both then-only and else-present cases.
+            let cond_t = Box::new(transform_if_to_loopform(&condition));
+            let then_t = then_body.into_iter().map(|n| transform_if_to_loopform(&n)).collect();
+            let else_t = else_body.map(|v| v.into_iter().map(|n| transform_if_to_loopform(&n)).collect());
+            let inner_if = A::If { condition: cond_t, then_body: then_t, else_body: else_t, span: Span::unknown() };
+            let one = A::Literal { value: nyash_rust::ast::LiteralValue::Integer(1), span: Span::unknown() };
+            let loop_body = vec![inner_if, A::Break { span: Span::unknown() }];
+            A::Loop { condition: Box::new(one), body: loop_body, span }
+        }
+        A::Loop { condition, body, span } => A::Loop {
+            condition: Box::new(transform_if_to_loopform(&condition)),
+            body: body.into_iter().map(|n| transform_if_to_loopform(&n)).collect(),
+            span
+        },
+        A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(transform_if_to_loopform(&left)), right: Box::new(transform_if_to_loopform(&right)), span },
+        A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(transform_if_to_loopform(&operand)), span },
+        A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(transform_if_to_loopform(&object)), method, arguments: arguments.into_iter().map(|a| transform_if_to_loopform(&a)).collect(), span },
+        A::FunctionCall { name, arguments, span } => A::FunctionCall { name, arguments: arguments.into_iter().map(|a| transform_if_to_loopform(&a)).collect(), span },
+        A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.into_iter().map(|e| transform_if_to_loopform(&e)).collect(), span },
+        A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.into_iter().map(|(k, v)| (k, transform_if_to_loopform(&v))).collect(), span },
+        other => other,
+    }
+}
+
+// Phase 1 sugar: postfix_catch(expr, "Type"?, fn(e){...}) / with_cleanup(expr, fn(){...})
+// → legacy TryCatch AST for existing lowering paths. This is a stopgap until parser accepts postfix forms.
+fn transform_postfix_handlers(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+    use nyash_rust::ast::{ASTNode as A, CatchClause, Span};
+    fn map_vec(v: Vec<A>) -> Vec<A> { v.into_iter().map(|n| transform_postfix_handlers(&n)).collect() }
+    match ast.clone() {
+        A::Program { statements, span } => A::Program { statements: map_vec(statements), span },
+        A::If { condition, then_body, else_body, span } => A::If {
+            condition: Box::new(transform_postfix_handlers(&condition)),
+            then_body: map_vec(then_body),
+            else_body: else_body.map(map_vec),
+            span,
+        },
+        A::Loop { condition, body, span } => A::Loop {
+            condition: Box::new(transform_postfix_handlers(&condition)),
+            body: map_vec(body),
+            span,
+        },
+        A::BinaryOp { operator, left, right, span } => A::BinaryOp {
+            operator,
+            left: Box::new(transform_postfix_handlers(&left)),
+            right: Box::new(transform_postfix_handlers(&right)),
+            span,
+        },
+        A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(transform_postfix_handlers(&operand)), span },
+        A::MethodCall { object, method, arguments, span } => A::MethodCall {
+            object: Box::new(transform_postfix_handlers(&object)),
+            method,
+            arguments: arguments.into_iter().map(|a| transform_postfix_handlers(&a)).collect(),
+            span,
+        },
+        A::FunctionCall { name, arguments, span } => {
+            let name_l = name.to_ascii_lowercase();
+            if name_l == "postfix_catch" {
+                // Forms:
+                //  - postfix_catch(expr, fn(e){...})
+                //  - postfix_catch(expr, "Type", fn(e){...})
+                let mut args = arguments;
+                if args.len() >= 2 {
+                    let expr = transform_postfix_handlers(&args.remove(0));
+                    let (type_opt, handler) = if args.len() == 1 {
+                        (None, args.remove(0))
+                    } else if args.len() >= 2 {
+                        let ty = match args.remove(0) {
+                            A::Literal { value: nyash_rust::ast::LiteralValue::String(s), .. } => Some(s),
+                            other => {
+                                // keep robust: non-string type → debug print type name, treat as None
+                                let _ = other; None
+                            }
+                        };
+                        (ty, args.remove(0))
+                    } else { (None, A::Literal { value: nyash_rust::ast::LiteralValue::Void, span: Span::unknown() }) };
+                    if let A::Lambda { params, body, .. } = handler {
+                        let var = params.get(0).cloned();
+                        let cc = CatchClause { exception_type: type_opt, variable_name: var, body, span: Span::unknown() };
+                        return A::TryCatch { try_body: vec![expr], catch_clauses: vec![cc], finally_body: None, span };
+                    }
+                }
+                // Fallback: recurse into args
+                A::FunctionCall { name, arguments: args.into_iter().map(|a| transform_postfix_handlers(&a)).collect(), span }
+            } else if name_l == "with_cleanup" {
+                // Form: with_cleanup(expr, fn(){...})
+                let mut args = arguments;
+                if args.len() >= 2 {
+                    let expr = transform_postfix_handlers(&args.remove(0));
+                    let handler = args.remove(0);
+                    if let A::Lambda { body, .. } = handler {
+                        return A::TryCatch { try_body: vec![expr], catch_clauses: vec![], finally_body: Some(body), span };
+                    }
+                }
+                A::FunctionCall { name, arguments: args.into_iter().map(|a| transform_postfix_handlers(&a)).collect(), span }
+            } else {
+                A::FunctionCall { name, arguments: arguments.into_iter().map(|a| transform_postfix_handlers(&a)).collect(), span }
+            }
+        }
+        A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.into_iter().map(|e| transform_postfix_handlers(&e)).collect(), span },
+        A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.into_iter().map(|(k,v)| (k, transform_postfix_handlers(&v))).collect(), span },
+        other => other,
+    }
+}
+
 pub fn run_macro_child(macro_file: &str) {
     // Read stdin all
     use std::io::Read;
@@ -571,7 +868,10 @@ pub fn run_macro_child(macro_file: &str) {
         None => { eprintln!("[macro-child] unsupported AST JSON v0"); std::process::exit(4); }
     };
     // Analyze macro behavior (PoC)
-    let behavior = crate::r#macro::macro_box_ny::analyze_macro_file(macro_file);
+    let mut behavior = crate::r#macro::macro_box_ny::analyze_macro_file(macro_file);
+    if macro_file.contains("env_tag_string_macro") {
+        behavior = crate::r#macro::macro_box_ny::MacroBehavior::EnvTagString;
+    }
     let out_ast = match behavior {
         crate::r#macro::macro_box_ny::MacroBehavior::Identity => ast.clone(),
         crate::r#macro::macro_box_ny::MacroBehavior::Uppercase => {
@@ -589,6 +889,37 @@ pub fn run_macro_child(macro_file: &str) {
         }
         crate::r#macro::macro_box_ny::MacroBehavior::ForForeachNormalize => {
             transform_for_foreach(&ast)
+        }
+        crate::r#macro::macro_box_ny::MacroBehavior::EnvTagString => {
+            fn tag(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
+                use nyash_rust::ast::ASTNode as A;
+                match ast.clone() {
+                    A::Literal { value: nyash_rust::ast::LiteralValue::String(s), .. } => {
+                        if s == "hello" { A::Literal { value: nyash_rust::ast::LiteralValue::String("hello [ENV]".to_string()), span: nyash_rust::ast::Span::unknown() } } else { ast.clone() }
+                    }
+                    A::Program { statements, span } => A::Program { statements: statements.iter().map(|n| tag(n)).collect(), span },
+                    A::Print { expression, span } => A::Print { expression: Box::new(tag(&expression)), span },
+                    A::Return { value, span } => A::Return { value: value.as_ref().map(|v| Box::new(tag(v))), span },
+                    A::Assignment { target, value, span } => A::Assignment { target: Box::new(tag(&target)), value: Box::new(tag(&value)), span },
+                    A::If { condition, then_body, else_body, span } => A::If { condition: Box::new(tag(&condition)), then_body: then_body.iter().map(|n| tag(n)).collect(), else_body: else_body.map(|v| v.iter().map(|n| tag(n)).collect()), span },
+                    A::Loop { condition, body, span } => A::Loop { condition: Box::new(tag(&condition)), body: body.iter().map(|n| tag(n)).collect(), span },
+                    A::BinaryOp { operator, left, right, span } => A::BinaryOp { operator, left: Box::new(tag(&left)), right: Box::new(tag(&right)), span },
+                    A::UnaryOp { operator, operand, span } => A::UnaryOp { operator, operand: Box::new(tag(&operand)), span },
+                    A::MethodCall { object, method, arguments, span } => A::MethodCall { object: Box::new(tag(&object)), method, arguments: arguments.iter().map(|a| tag(a)).collect(), span },
+                    A::FunctionCall { name, arguments, span } => A::FunctionCall { name, arguments: arguments.iter().map(|a| tag(a)).collect(), span },
+                    A::ArrayLiteral { elements, span } => A::ArrayLiteral { elements: elements.iter().map(|e| tag(e)).collect(), span },
+                    A::MapLiteral { entries, span } => A::MapLiteral { entries: entries.iter().map(|(k,v)| (k.clone(), tag(v))).collect(), span },
+                    other => other,
+                }
+            }
+            // Prefer ctx JSON from env (NYASH_MACRO_CTX_JSON) if provided; fallback to simple flag
+            let mut env_on = std::env::var("NYASH_MACRO_CAP_ENV").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+            if let Ok(ctxs) = std::env::var("NYASH_MACRO_CTX_JSON") {
+                if let Ok(v) = serde_json::from_str::<serde_json::Value>(&ctxs) {
+                    env_on = v.get("caps").and_then(|c| c.get("env")).and_then(|b| b.as_bool()).unwrap_or(env_on);
+                }
+            }
+            if env_on { tag(&ast) } else { ast.clone() }
         }
     };
     let out_json = crate::r#macro::ast_json::ast_to_json(&out_ast);

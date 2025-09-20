@@ -1,8 +1,9 @@
 # 📚 Nyash Documentation
 
-## 🚀 はじめに
-- **現在のタスク**: [../CURRENT_TASK.md](../CURRENT_TASK.md)
-- **コア概念の速習**: [reference/architecture/nyash_core_concepts.md](reference/architecture/nyash_core_concepts.md)
+## 🚀 はじめに（導線）
+- 現在のタスクと進行状況: ../CURRENT_TASK.md
+- コア概念の速習: reference/architecture/nyash_core_concepts.md
+- 設計ブループリント（文字列/文字コード）: blueprints/strings-utf8-byte.md
 
 ---
 
@@ -47,26 +48,38 @@
 ## 🎯 クイックアクセス
 
 ### すぐ始める
-- [Getting Started](guides/getting-started.md)
-- [Language Guide](guides/language-guide.md)
-- [P2P Guide](guides/p2p-guide.md)
+- guides/getting-started.md
+- guides/language-guide.md
+- guides/p2p-guide.md
 
 ### 技術リファレンス
-- [言語リファレンス](reference/language/LANGUAGE_REFERENCE_2025.md)
-- [アーキテクチャ概要](reference/architecture/TECHNICAL_ARCHITECTURE_2025.md)
-- [実行バックエンド](reference/architecture/execution-backends.md)
-- [GC モードと運用](reference/runtime/gc.md)
-- [プラグインシステム](reference/plugin-system/)
- - [CLIオプション早見表](tools/cli-options.md)
+- reference/language/LANGUAGE_REFERENCE_2025.md
+- reference/language/EBNF.md（演算子: ! 採用 / do-while 非採用）
+- reference/language/strings.md（UTF‑8/Byte 二本柱）
+- reference/architecture/TECHNICAL_ARCHITECTURE_2025.md
+- reference/architecture/execution-backends.md
+- reference/runtime/gc.md
+- reference/plugin-system/
+- tools/cli-options.md（CLI早見表）
  
-### デザイン
-- [設計ノート（入口）](design/)
+### デザイン/ガイド
+- guides/language-core-and-sugar.md（コア最小＋糖衣）
+- guides/loopform.md（ループ正規化）
+- guides/scopebox.md（開発時の可視化）
+- design/（設計ノート入口）
+  - design/flow-blocks.md（矢印フロー／匿名ブロック・設計草案）
+  - ../proposals/scope-reuse.md（スコープ再利用ブロック・MVP提案）
+  - ../reference/language/match-guards.md（ガード連鎖／Range・CharClass設計）
+  - guides/core-principles.md（最小構文・ゼロランタイム・可視化の原則）
 
 ### 開発状況
 - [現在のタスク](../CURRENT_TASK.md)
-- [開発ロードマップ](development/roadmap/)
-- [Phase別計画](development/roadmap/phases/)
-  - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)** - プラグイン革命！
+ - [開発ロードマップ](development/roadmap/)
+ - [Phase別計画](development/roadmap/phases/)
+   - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)**
+   - 🔥 **[Phase 16: マクロ革命](development/roadmap/phases/phase-16-macro-revolution/)**
+   - 🧪 **[Phase 17: LoopForm Self‑Hosting](development/roadmap/phases/phase-17-loopform-selfhost/)**
+   - 🧩 **[Mini‑VM 構築ロードマップ](development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)**
 
 ---
 

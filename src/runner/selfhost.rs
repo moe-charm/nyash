@@ -255,8 +255,11 @@ impl NyashRunner {
                                     process::exit(1);
                                 }
                                 crate::cli_v!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
+                                let allow_top = crate::config::env::entry_allow_toplevel_main();
                                 let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                            else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                            else if allow_top && module.functions.contains_key("main") { "main" }
+                                            else if module.functions.contains_key("main") { eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence."); "main" }
+                                            else { "Main.main" };
                                 let status = std::process::Command::new(py3)
                                     .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
                                     .status()

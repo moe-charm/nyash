@@ -20,6 +20,18 @@ AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
 
+仕様と既知制約
+- 必須不変条件（Invariants）: `docs/reference/invariants.md`
+- 制約（既知/一時/解消済み）: `docs/reference/constraints.md`
+- PHI と SSA の設計: `docs/architecture/phi-and-ssa.md`
+- テスト行列（仕様→テスト対応）: `docs/guides/testing-matrix.md`
+- 他言語との比較: `docs/comparison/nyash-vs-others.md`
+
+プロファイル（クイック）
+- `--profile dev` → マクロON（strict）、PyVM 開発向けの既定を適用（必要に応じて環境で上書き可）
+- `--profile lite` → マクロOFF の軽量実行
+  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)
 - [今すぐ試す（ブラウザ）](#-今すぐブラウザでnyashを試そう)

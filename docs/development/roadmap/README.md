@@ -52,6 +52,10 @@
 
 ### 📖 技術資料
 - **[実行バックエンドガイド](../../reference/architecture/execution-backends.md)** - 3バックエンド使い分け
+- **Self‑Hosting / Mini‑VM ロードマップ**
+  - [Phase 17: LoopForm Self‑Hosting（計画）](phases/phase-17-loopform-selfhost/README.md)
+  - [Mini‑VM 構築ロードマップ（足場）](phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)
+  - 最新の短期タスクは [CURRENT_TASK.md](../../CURRENT_TASK.md) を参照
 - **[コアコンセプト](../nyash_core_concepts.md)** - Everything is Box哲学
 
 ### 🔄 進捗管理

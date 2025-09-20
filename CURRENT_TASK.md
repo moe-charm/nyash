@@ -175,3 +175,17 @@ Next（クリーン経路）
 - 参照実行: PyVM が常時緑、マクロ正規化は pre‑MIR で一度だけ
 - 前展開: `NYASH_MACRO_SELFHOST_PRE_EXPAND=auto`（dev/CI）
 - テスト: VM/goldens は軽量維持、IR は任意ジョブ
+
+## Post‑Freeze Backlog（Docs only）
+- Language: Scope reuse blocks（design） — docs/proposals/scope-reuse.md
+- Language: Flow blocks & `->` piping（design） — docs/design/flow-blocks.md
+- Guards: Range/CharClass sugar（reference） — docs/reference/language/match-guards.md
+- Strings: `toDigitOrNull` / `toIntOrNull`（design note） — docs/reference/language/strings.md
+
+## Nyash VM めど後 — 機能追加リンク（備忘）
+- スコープ再利用ブロック（MVP 提案）: docs/proposals/scope-reuse.md
+- 矢印フロー × 匿名ブロック（設計草案）: docs/design/flow-blocks.md
+- Match Guard の Range/CharClass（参照・設計）: docs/reference/language/match-guards.md
+- String 便利関数（toDigit/Int; 設計）: docs/reference/language/strings.md
+
+Trigger: nyash_vm の安定（主要スモーク緑・自己ホスト経路が日常運用）。達成後に検討→MVP 実装へ。

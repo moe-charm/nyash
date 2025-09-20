@@ -1,0 +1,27 @@
+static box MiniVmTmp {
+  index_of_from(hay, needle, pos) {
+    local tail = hay.substring(pos, hay.length())
+    local rel = tail.indexOf(needle)
+    if rel < 0 { return -1 } else { return pos + rel }
+  }
+}
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":12}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":34}}}}]}"
+    local vm = new MiniVmTmp()
+    local bpos = json.indexOf("\"BinaryOp\"")
+    local k_plus = "\"operator\":\"+\""
+    local opos = vm.index_of_from(json, k_plus, bpos)
+    local k_v = "\"value\":"
+    local p1 = vm.index_of_from(json, k_v, opos)
+    print(p1)
+    local p2 = vm.index_of_from(json, k_v, p1 + k_v.length())
+    print(p2)
+    // digits as substring until '}'
+    local d1 = json.substring(vm.index_of_from(json, k_v, opos) + k_v.length(), vm.index_of_from(json, "}", vm.index_of_from(json, k_v, opos)))
+    local d2 = json.substring(p2 + k_v.length(), vm.index_of_from(json, "}", p2))
+    print(d1)
+    print(d2)
+    return 0
+  }
+}

@@ -443,9 +443,18 @@ impl NyashRunner {
                                 if crate::config::env::cli_verbose() {
                                     eprintln!("[ny-compiler] using PyVM (mvp) → {}", mir_json_path.display());
                                 }
-                                // Determine entry function hint (prefer Main.main if present)
-                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                            else if module.functions.contains_key("main") { "main" } else { "Main.main" };
+                                // Determine entry function (prefer Main.main; top-level main only if allowed)
+                                let allow_top = crate::config::env::entry_allow_toplevel_main();
+                                let entry = if module.functions.contains_key("Main.main") {
+                                    "Main.main"
+                                } else if allow_top && module.functions.contains_key("main") {
+                                    "main"
+                                } else if module.functions.contains_key("main") {
+                                    eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence.");
+                                    "main"
+                                } else {
+                                    "Main.main"
+                                };
                                 let code = self.run_pyvm_harness(&module, "mvp").unwrap_or(1);
                                 println!("Result: {}", code);
                                 std::process::exit(code);

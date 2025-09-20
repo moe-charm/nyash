@@ -1,0 +1,25 @@
+static box Main {
+  _is_digit(ch) { return ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" }
+  _digit_value(ch) { if ch == "0" { return 0 } if ch == "1" { return 1 } if ch == "2" { return 2 } if ch == "3" { return 3 } if ch == "4" { return 4 } if ch == "5" { return 5 } if ch == "6" { return 6 } if ch == "7" { return 7 } if ch == "8" { return 8 } if ch == "9" { return 9 } return 0 }
+  _str_to_int(s) {
+    local i = 0
+    local n = s.length()
+    local acc = 0
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      print(ch)
+      print(me._is_digit(ch))
+      if me._is_digit(ch) {
+        acc = acc * 10 + me._digit_value(ch)
+        i = i + 1
+        continue
+      }
+      break
+    }
+    return acc
+  }
+  main(args) {
+    print(me._str_to_int("12"))
+    return 0
+  }
+}

@@ -1,0 +1,15 @@
+{"kind":"Program","statements":[
+  {"kind":"FunctionDeclaration","name":"f","params":["x"],"body":[{"kind":"Return","value":{"kind":"Variable","name":"x"}}]},
+  {"kind":"FunctionDeclaration","name":"main","params":["args"],"body":[
+    {"kind":"Local","variables":["i"],"inits":[{"kind":"Literal","value":{"type":"int","value":0}}]},
+    {"kind":"Loop","condition":{"kind":"BinaryOp","op":"<","left":{"kind":"Variable","name":"i"},"right":{"kind":"Literal","value":{"type":"int","value":2}}},"body":[
+      {"kind":"TryCatch",
+        "try":[{"kind":"FunctionCall","name":"f","arguments":[{"kind":"Variable","name":"i"}]}],
+        "catch":[{"type":"Error","var":"e","body":[{"kind":"Print","expression":{"kind":"Variable","name":"e"}}]}],
+        "cleanup":[{"kind":"Print","expression":{"kind":"Literal","value":{"type":"string","value":"cleanup"}}}]
+      },
+      {"kind":"Assignment","target":{"kind":"Variable","name":"i"},"value":{"kind":"BinaryOp","op":"+","left":{"kind":"Variable","name":"i"},"right":{"kind":"Literal","value":{"type":"int","value":1}}}}
+    ]}
+  ]}
+]}
+

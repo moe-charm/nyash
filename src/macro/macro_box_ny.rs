@@ -184,7 +184,7 @@ fn expand_indicates_uppercase(body: &Vec<ASTNode>, params: &Vec<String>) -> bool
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize, IfMatchNormalize, ForForeachNormalize }
+pub enum MacroBehavior { Identity, Uppercase, ArrayPrependZero, MapInsertTag, LoopNormalize, IfMatchNormalize, ForForeachNormalize, EnvTagString }
 
 pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     let src = match std::fs::read_to_string(path) { Ok(s) => s, Err(_) => return MacroBehavior::Identity };
@@ -247,6 +247,10 @@ pub fn analyze_macro_file(path: &str) -> MacroBehavior {
     if ast_has_literal_string(&ast, "\"value\":\"UPPER:") || ast_has_method(&ast, "toUpperCase") {
         return MacroBehavior::Uppercase;
     }
+    // Detect env-tag string macro by name literal as fallback
+    if ast_has_literal_string(&ast, "EnvTagString") {
+        return MacroBehavior::EnvTagString;
+    }
     if let ASTNode::Program { statements, .. } = ast {
         for st in statements {
             if let ASTNode::BoxDeclaration { name: _, methods, .. } = st {
@@ -259,6 +263,7 @@ pub fn analyze_macro_file(path: &str) -> MacroBehavior {
                                     if s == "LoopNormalize" { return MacroBehavior::LoopNormalize; }
                                     if s == "IfMatchNormalize" { return MacroBehavior::IfMatchNormalize; }
                                     if s == "ForForeach" { return MacroBehavior::ForForeachNormalize; }
+                                    if s == "EnvTagString" { return MacroBehavior::EnvTagString; }
                                 }
                             }
                         }
@@ -339,6 +344,9 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
             eprintln!("[macro][compat] NYASH_MACRO_BOX_CHILD_RUNNER is deprecated; prefer defaults");
         }
         let mut cmd = std::process::Command::new(exe.clone());
+        // Build MacroCtx JSON once (caps only, MVP)
+        let mctx = crate::r#macro::ctx::MacroCtx::from_env();
+        let ctx_json = format!("{{\"caps\":{{\"io\":{},\"net\":{},\"env\":{}}}}}", mctx.caps.io, mctx.caps.net, mctx.caps.env);
         if use_runner {
             // Synthesize a tiny runner that inlines the macro file and calls MacroBoxSpec.expand
             use std::io::Write as _;
@@ -359,15 +367,15 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
             // Append script args after '--'
             let j = crate::r#macro::ast_json::ast_to_json(ast).to_string();
             cmd.arg("--").arg(j);
-            // Provide MacroCtx as JSON (caps only, MVP)
-            let mctx = crate::r#macro::ctx::MacroCtx::from_env();
-            let ctx_json = format!("{{\"caps\":{{\"io\":{},\"net\":{},\"env\":{}}}}}", mctx.caps.io, mctx.caps.net, mctx.caps.env);
-            cmd.arg(ctx_json);
+            // Provide MacroCtx as JSON (runner takes it as script arg)
+            cmd.arg(ctx_json.clone());
             cmd.stdin(std::process::Stdio::null());
         } else {
             // Internal child mode: --macro-expand-child <macro file> with stdin JSON
             cmd.arg("--macro-expand-child").arg(self.file)
                 .stdin(std::process::Stdio::piped());
+            // Provide MacroCtx via env for internal child
+            cmd.env("NYASH_MACRO_CTX_JSON", ctx_json.clone());
         }
         cmd.stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
@@ -375,6 +383,8 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
         cmd.env("NYASH_VM_USE_PY", "1");
         cmd.env("NYASH_DISABLE_PLUGINS", "1");
         cmd.env("NYASH_SYNTAX_SUGAR_LEVEL", "basic");
+        // Mark sandbox mode explicitly for PyVM capability hooks
+        cmd.env("NYASH_MACRO_SANDBOX", "1");
         // Disable macro system inside child to avoid recursive registration/expansion
         cmd.env("NYASH_MACRO_ENABLE", "0");
         cmd.env_remove("NYASH_MACRO_PATHS");

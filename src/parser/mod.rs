@@ -196,6 +196,11 @@ impl NyashParser {
         let mut statements = Vec::new();
         let mut _statement_count = 0;
 
+        let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
+            let lv = v.to_ascii_lowercase();
+            lv == "1" || lv == "true" || lv == "on"
+        }).unwrap_or(false);
+
         while !self.is_at_end() {
             // EOF tokenはスキップ
             if matches!(self.current_token().token_type, TokenType::EOF) {
@@ -203,7 +208,9 @@ impl NyashParser {
             }
 
             // NEWLINE tokenはスキップ（文の区切りとして使用）
-            if matches!(self.current_token().token_type, TokenType::NEWLINE) {
+            if matches!(self.current_token().token_type, TokenType::NEWLINE)
+                || (allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON))
+            {
                 self.advance();
                 continue;
             }

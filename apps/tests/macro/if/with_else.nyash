@@ -1,0 +1,11 @@
+function main(args) {
+  local x
+  local c = 0
+  if c == 1 {
+    x = 10
+  } else {
+    x = 20
+  }
+  print(x)
+}
+

@@ -1,0 +1,16 @@
+// Utf8CursorBox (MVP): CP-based helpers for StringBox
+// Note: MVP delegates to existing String methods; later replace with true CP scanner.
+static box Utf8CursorBox {
+  // Return number of code points (MVP: uses .length())
+  len_cp(s) { return s.length() }
+
+  // CP-based indexOf (MVP: uses .indexOf)
+  indexOf(s, sub, from) {
+    if from { return s.indexOf(sub, from) }
+    return s.indexOf(sub)
+  }
+
+  // CP-based substring (MVP: uses .substring)
+  substring_cp(s, i, j) { return s.substring(i, j) }
+}
+

@@ -1,0 +1,22 @@
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":12}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":34}}}}]}"
+    local key = "\"expression\":{"
+    local pos = json.indexOf(key)
+    local obj_start = json.indexOf("{", pos)
+    print(obj_start)
+    local n = json.length()
+    local depth = 0
+    local i = obj_start
+    loop (i < n) {
+      local ch = json.substring(i, i+1)
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" {
+        depth = depth - 1
+        if depth == 0 { print(i)  break }
+      }
+      i = i + 1
+    }
+    return 0
+  }
+}

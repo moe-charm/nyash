@@ -1,0 +1,8 @@
+static box Main {
+  main(args) {
+    local s = "12"
+    local ch = s.substring(0, 1)
+    if ch == "1" { print("OK") } else { print("NG") }
+    return 0
+  }
+}

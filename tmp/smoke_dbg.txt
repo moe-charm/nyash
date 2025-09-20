@@ -1,0 +1,95 @@
+[pyvm] run entry=Main.main argv=['{"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]}']
+[pyvm] call Main.main args=[{'__box__': 'ArrayBox', '__arr': ['{"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]}']}]
+[pyvm] branch cond={'__box__': 'ArrayBox', '__arr': ['{"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]}']} -> next=1265
+[pyvm] boxcall recv={'__box__': 'ArrayBox', '__arr': ['{"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]}']} method=size args=[]
+[pyvm] branch cond=1 -> next=1268
+[pyvm] boxcall recv={'__box__': 'ArrayBox', '__arr': ['{"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]}']} method=get args=[0]
+[pyvm] branch cond={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} -> next=1271
+[pyvm] jump -> 1273
+[pyvm] jump -> 1270
+[pyvm] jump -> 1267
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"BinaryOp"']
+[pyvm] branch cond=1 -> next=1274
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"operator":"+"']
+[pyvm] branch cond=1 -> next=1277
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"operator":"+"']
+[pyvm] branch cond=1 -> next=1280
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"value":', 80]
+[pyvm] branch cond=1 -> next=1283
+[pyvm] boxcall recv="value": method=length args=[]
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"value":', 128]
+[pyvm] branch cond=1 -> next=1286
+[pyvm] boxcall recv="value": method=length args=[]
+[pyvm] jump -> 1289
+[pyvm] branch cond=1 -> next=1290
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=substring args=[150, 151]
+[pyvm] branch cond=0 -> next=1293
+[pyvm] jump -> 1294
+[pyvm] branch cond=1 -> next=1296
+[pyvm] jump -> 1289
+[pyvm] branch cond=1 -> next=1290
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=substring args=[1, 2]
+[pyvm] branch cond=0 -> next=1293
+[pyvm] jump -> 1294
+[pyvm] branch cond=0 -> next=1297
+[pyvm] jump -> 1298
+[pyvm] branch cond=0 -> next=1301
+[pyvm] jump -> 1302
+[pyvm] branch cond=0 -> next=1305
+[pyvm] jump -> 1306
+[pyvm] branch cond=0 -> next=1309
+[pyvm] jump -> 1310
+[pyvm] branch cond=0 -> next=1313
+[pyvm] jump -> 1314
+[pyvm] branch cond=0 -> next=1317
+[pyvm] jump -> 1318
+[pyvm] branch cond=0 -> next=1321
+[pyvm] jump -> 1322
+[pyvm] branch cond=0 -> next=1325
+[pyvm] jump -> 1326
+[pyvm] branch cond=0 -> next=1329
+[pyvm] jump -> 1330
+[pyvm] jump -> 1291
+[pyvm] boxcall recv="value": method=length args=[]
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"value":', 150]
+[pyvm] branch cond=1 -> next=1333
+[pyvm] boxcall recv="value": method=length args=[]
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=indexOf args=['"value":', 189]
+[pyvm] branch cond=1 -> next=1336
+[pyvm] boxcall recv="value": method=length args=[]
+[pyvm] jump -> 1339
+[pyvm] branch cond=1 -> next=1340
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=substring args=[211, 212]
+[pyvm] branch cond=0 -> next=1343
+[pyvm] jump -> 1344
+[pyvm] branch cond=0 -> next=1347
+[pyvm] jump -> 1348
+[pyvm] branch cond=0 -> next=1351
+[pyvm] jump -> 1352
+[pyvm] branch cond=1 -> next=1354
+[pyvm] jump -> 1339
+[pyvm] branch cond=1 -> next=1340
+[pyvm] boxcall recv={"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]} method=substring args=[1, 2]
+[pyvm] branch cond=0 -> next=1343
+[pyvm] jump -> 1344
+[pyvm] branch cond=0 -> next=1347
+[pyvm] jump -> 1348
+[pyvm] branch cond=0 -> next=1351
+[pyvm] jump -> 1352
+[pyvm] branch cond=0 -> next=1355
+[pyvm] jump -> 1356
+[pyvm] branch cond=0 -> next=1359
+[pyvm] jump -> 1360
+[pyvm] branch cond=0 -> next=1363
+[pyvm] jump -> 1364
+[pyvm] branch cond=0 -> next=1367
+[pyvm] jump -> 1368
+[pyvm] branch cond=0 -> next=1371
+[pyvm] jump -> 1372
+[pyvm] branch cond=0 -> next=1375
+[pyvm] jump -> 1376
+[pyvm] branch cond=0 -> next=1379
+[pyvm] jump -> 1380
+[pyvm] jump -> 1341
+[pyvm] externcall func=nyash.console.log args=[4]
+[pyvm] ret i64 value=0

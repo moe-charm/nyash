@@ -1,0 +1,12 @@
+function f(x) {
+  return x
+}
+
+function main(args) {
+  local i = 0
+  loop(i < 2) {
+    f(i) catch(e) { print(e) } cleanup { print("cleanup") }
+    i = i + 1
+  }
+}
+

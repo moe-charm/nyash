@@ -1,0 +1,9 @@
+{"kind":"Program","statements":[
+  {"kind":"Local","variables":["arr"],"inits":[{"kind":"Array","elements":[]}]},
+  {"kind":"Local","variables":["__ny_i"],"inits":[{"kind":"Literal","value":{"type":"int","value":0}}]},
+  {"kind":"Loop","condition":{"kind":"BinaryOp","op":"<","left":{"kind":"Variable","name":"__ny_i"},"right":{"kind":"MethodCall","object":{"kind":"Variable","name":"arr"},"method":"size","arguments":[]}},"body":[
+    {"kind":"Print","expression":{"kind":"MethodCall","object":{"kind":"Variable","name":"arr"},"method":"get","arguments":[{"kind":"Variable","name":"__ny_i"}]}},
+    {"kind":"Assignment","target":{"kind":"Variable","name":"__ny_i"},"value":{"kind":"BinaryOp","op":"+","left":{"kind":"Variable","name":"__ny_i"},"right":{"kind":"Literal","value":{"type":"int","value":1}}}}
+  ]}
+]}
+

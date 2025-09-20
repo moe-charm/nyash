@@ -52,8 +52,18 @@ pub trait ParserUtils {
 
     /// NEWLINEトークンをスキップ
     fn skip_newlines(&mut self) {
-        while matches!(self.current_token().token_type, TokenType::NEWLINE) && !self.is_at_end() {
-            self.advance();
+        let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
+            let lv = v.to_ascii_lowercase();
+            lv == "1" || lv == "true" || lv == "on"
+        }).unwrap_or(false);
+        loop {
+            let is_nl = matches!(self.current_token().token_type, TokenType::NEWLINE);
+            let is_sc = allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON);
+            if (is_nl || is_sc) && !self.is_at_end() {
+                self.advance();
+                continue;
+            }
+            break;
         }
     }
 

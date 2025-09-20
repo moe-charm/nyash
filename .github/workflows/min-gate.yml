@@ -88,6 +88,8 @@ jobs:
 
       - name: Macro golden — map escape
         run: bash tools/test/golden/macro/map_esc_user_macro_golden.sh
+      - name: Macro golden — if then → loopform (gated)
+        run: bash tools/test/golden/macro/if_then_loopform_user_macro_golden.sh
 
   macro-smokes-lite:
     runs-on: ubuntu-latest
@@ -118,8 +120,18 @@ jobs:
       - name: Smoke — MIR hints Scope enter/leave
         run: bash tools/test/smoke/mir/hints_trace_smoke.sh
 
-      - name: Smoke — MIR hints JoinResult
-        run: bash tools/test/smoke/mir/hints_join_result_smoke.sh
+      - name: Smoke — MIR hints JoinResult (two vars)
+        run: bash tools/test/smoke/mir/hints_join_result_two_vars_smoke.sh
+      - name: Smoke — MIR hints JoinResult (three vars)
+        run: bash tools/test/smoke/mir/hints_join_result_three_vars_smoke.sh
+      - name: Smoke — MIR scope hints (loop+if)
+        run: bash tools/test/smoke/mir/hints_scope_loop_if_smoke.sh
+      - name: Smoke — ScopeBox enabled (no-op)
+        run: bash tools/test/smoke/mir/scopebox_enable_smoke.sh
+      - name: Smoke — MacroCtx JSON (ctx caps)
+        run: bash tools/test/smoke/macro/macro_ctx_json_smoke.sh
+      - name: Smoke — UTF-8 CP strings (length/indexOf/substring)
+        run: bash tools/test/smoke/strings/utf8_cp_smoke.sh
 
   selfhost-preexpand-smoke:
     runs-on: ubuntu-latest

@@ -252,8 +252,17 @@ impl StringBox {
     }
 
     /// Get string length
+    ///
+    /// Env gate: NYASH_STR_CP=1 → count Unicode scalar values (chars),
+    /// otherwise use UTF-8 byte length (legacy/default).
     pub fn length(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.value.len() as i64))
+        let use_cp = std::env::var("NYASH_STR_CP").ok().as_deref() == Some("1");
+        let n = if use_cp {
+            self.value.chars().count() as i64
+        } else {
+            self.value.len() as i64
+        };
+        Box::new(IntegerBox::new(n))
     }
 
     /// Convert string to integer (parse as i64)

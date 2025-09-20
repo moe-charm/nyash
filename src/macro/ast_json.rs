@@ -38,6 +38,16 @@ pub fn ast_to_json(ast: &ASTNode) -> Value {
             "then": then_body.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>(),
             "else": else_body.map(|v| v.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>()),
         }),
+        ASTNode::TryCatch { try_body, catch_clauses, finally_body, .. } => json!({
+            "kind": "TryCatch",
+            "try": try_body.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>(),
+            "catch": catch_clauses.into_iter().map(|cc| json!({
+                "type": cc.exception_type,
+                "var": cc.variable_name,
+                "body": cc.body.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>()
+            })).collect::<Vec<_>>(),
+            "cleanup": finally_body.map(|v| v.into_iter().map(|s| ast_to_json(&s)).collect::<Vec<_>>())
+        }),
         ASTNode::FunctionDeclaration { name, params, body, is_static, is_override, .. } => json!({
             "kind": "FunctionDeclaration",
             "name": name,
@@ -154,6 +164,20 @@ pub fn json_to_ast(v: &Value) -> Option<ASTNode> {
                 else_expr: Box::new(else_expr),
                 span: Span::unknown(),
             }
+        }
+        "TryCatch" => {
+            let try_b = v.get("try")?.as_array()?.iter().filter_map(json_to_ast).collect::<Vec<_>>();
+            let mut catches = Vec::new();
+            if let Some(arr) = v.get("catch").and_then(|x| x.as_array()) {
+                for c in arr.iter() {
+                    let exc_t = match c.get("type") { Some(t) if !t.is_null() => t.as_str().map(|s| s.to_string()), _ => None };
+                    let var = match c.get("var") { Some(vv) if !vv.is_null() => vv.as_str().map(|s| s.to_string()), _ => None };
+                    let body = c.get("body")?.as_array()?.iter().filter_map(json_to_ast).collect::<Vec<_>>();
+                    catches.push(nyash_rust::ast::CatchClause { exception_type: exc_t, variable_name: var, body, span: Span::unknown() });
+                }
+            }
+            let cleanup = v.get("cleanup").and_then(|cl| cl.as_array().map(|arr| arr.iter().filter_map(json_to_ast).collect::<Vec<_>>()));
+            ASTNode::TryCatch { try_body: try_b, catch_clauses: catches, finally_body: cleanup, span: Span::unknown() }
         }
         _ => return None,
     })

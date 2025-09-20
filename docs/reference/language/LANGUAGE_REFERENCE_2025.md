@@ -27,7 +27,7 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 | `loop` | ループ（唯一の形式） | `loop(condition) { }` |
 | `continue` | ループ継続 | `continue` |
 | `match` | パターンマッチング（構造/型/ガード） | `match value { "A" => 1, _ => 0 }` |
-| `try` | 例外捕獲開始 | `try { }` |
+| `try` | 例外捕獲開始 | `try { }`（非推奨。postfix `catch/cleanup` を使用） |
 | `interface` | インターフェース定義 | `interface Comparable { }` |
 | `once` | **NEW** 遅延評価プロパティ | `once cache: CacheBox { build() }` |
 | `birth_once` | **NEW** 即座評価プロパティ | `birth_once config: ConfigBox { load() }` |
@@ -37,8 +37,8 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 |-------|------|---|
 | `override` | 明示的オーバーライド | `override speak() { }` |
 | `break` | ループ脱出 | `break` |
-| `catch` | 例外処理 | `catch (e) { }` |
-| `cleanup` | 最終処理（finally の後継） | `cleanup { }` |
+| `catch` | 例外処理 | `catch (e) { }`（式/呼び出しの後置も可・Stage‑3） |
+| `cleanup` | 最終処理（finally の後継） | `cleanup { }`（式/呼び出しの後置も可・Stage‑3） |
 | `throw` | 例外発生 | `throw error` |
 | `nowait` | 非同期実行 | `nowait future = task()` |
 | `await` | 待機・結果取得 | `result = await future` |
@@ -55,7 +55,7 @@ Rust製インタープリターによる高性能実行と、直感的な構文�
 ### **演算子・論理**
 | 演算子/キーワード | 用途 | 例 |
 |-------|------|---|
-| `not` | 論理否定 | `not condition` |
+| `not` / `!` | 論理否定 | `not condition` / `!condition` |
 | `and` | 論理積 | `a and b` |
 | `or` | 論理和 | `a or b` |
 | `true`/`false` | 真偽値 | `flag = true` |
@@ -188,9 +188,12 @@ loop(condition) {
     }
 }
 
-# ❌ 削除済み - 使用不可
-while condition { }  # パーサーエラー
-loop() { }          # パーサーエラー
+# ❌ 採用しない構文（設計方針）
+while condition { }      # 先頭条件は `loop(condition){}` へ統一
+do { body } while(cond)  # do‑while は不採用。`repeat/ until` 糖衣で表現し、先頭条件に正規化
+loop() { }               # 無条件ループは `loop(true){}` を意図明確に書く
+
+> 設計メモ: Nyashは「単一入口・先頭条件」の制御フロー規律を重視するため、do‑whileは採用しません。必ず実行の表現は `loop(1)` ラッパーや `repeat/until` 糖衣からゼロコストで正規化します。
 ```
 
 #### **Peek式（Phase 12.7で追加）**
@@ -716,3 +719,20 @@ let [first, second, ...rest] = array
 **🎉 Nyash 2025は、AI協働設計による最先端言語システムとして、シンプルさと強力さを完全に両立しました。**
 
 *最終更新: 2025年9月4日 - Phase 12.7実装済み機能の正確な反映*
+### 2.x 例外・エラーハンドリング（postfix / cleanup）
+
+方針
+- try は非推奨。postfix `catch` と `cleanup` を用いる。
+- `catch` は直前の式/呼び出しで発生した例外を処理。
+- `cleanup` は常に実行（finally の後継）。
+
+例（式レベルの postfix）
+```
+do_work() catch(Error e) { env.console.log(e) }
+open(path) cleanup { env.console.log("close") }
+connect(url)
+  catch(NetworkError e) { env.console.warn(e) }
+  cleanup { env.console.log("done") }
+```
+
+注: Phase 1 は正規化（ゲート `NYASH_CATCH_NEW=1`）で legacy TryCatch へ展開。Phase 2 でパーサが直接受理。

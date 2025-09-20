@@ -3,7 +3,7 @@
 Nyash PyVM runner (scaffold)
 
 Usage:
-  - python3 tools/pyvm_runner.py --in mir.json [--entry Main.main]
+  - python3 tools/pyvm_runner.py --in mir.json [--entry Main.main] [--args-env NYASH_SCRIPT_ARGS_JSON]
 
 Executes MIR(JSON) using a tiny Python interpreter for a minimal opcode set:
   - const/binop/compare/branch/jump/ret
@@ -36,6 +36,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--in", dest="infile", required=True, help="MIR JSON input")
     ap.add_argument("--entry", dest="entry", default="Main.main", help="Entry function (default Main.main)")
+    ap.add_argument("--args-env", dest="args_env", default="NYASH_SCRIPT_ARGS_JSON", help="Env var containing JSON array of argv to pass to entry")
     args = ap.parse_args()
 
     with open(args.infile, "r") as f:
@@ -51,7 +52,19 @@ def main():
         elif "Main.main" in fun_names:
             entry = "Main.main"
 
-    result = vm.run(entry)
+    # Load argv if present
+    argv: list[str] = []
+    if args.args_env:
+        js = os.environ.get(args.args_env)
+        if js:
+            try:
+                arr = json.loads(js)
+                if isinstance(arr, list):
+                    argv = [str(x) if x is not None else "" for x in arr]
+            except Exception:
+                pass
+
+    result = vm.run_args(entry, argv) if argv else vm.run(entry)
     # Exit code convention: integers propagate; bool -> 0/1; else 0
     code = 0
     if isinstance(result, bool):

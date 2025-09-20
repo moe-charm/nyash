@@ -68,10 +68,19 @@ impl StringBox {
     }
 
     /// Find substring and return position (or -1 if not found)
+    /// Env gate: NYASH_STR_CP=1 → return codepoint index; default is byte index
     pub fn find(&self, search: &str) -> Box<dyn NyashBox> {
         use crate::boxes::integer_box::IntegerBox;
         match self.value.find(search) {
-            Some(pos) => Box::new(IntegerBox::new(pos as i64)),
+            Some(byte_pos) => {
+                let use_cp = std::env::var("NYASH_STR_CP").ok().as_deref() == Some("1");
+                let idx = if use_cp {
+                    self.value[..byte_pos].chars().count() as i64
+                } else {
+                    byte_pos as i64
+                };
+                Box::new(IntegerBox::new(idx))
+            }
             None => Box::new(IntegerBox::new(-1)),
         }
     }
@@ -79,6 +88,24 @@ impl StringBox {
     /// Replace all occurrences of old with new
     pub fn replace(&self, old: &str, new: &str) -> Box<dyn NyashBox> {
         Box::new(StringBox::new(self.value.replace(old, new)))
+    }
+
+    /// Return the last index of `search` or -1 if not found.
+    /// Env gate: NYASH_STR_CP=1 → return codepoint index; default is byte index.
+    pub fn lastIndexOf(&self, search: &str) -> Box<dyn NyashBox> {
+        use crate::boxes::integer_box::IntegerBox;
+        match self.value.rfind(search) {
+            Some(byte_pos) => {
+                let use_cp = std::env::var("NYASH_STR_CP").ok().as_deref() == Some("1");
+                let idx = if use_cp {
+                    self.value[..byte_pos].chars().count() as i64
+                } else {
+                    byte_pos as i64
+                };
+                Box::new(IntegerBox::new(idx))
+            }
+            None => Box::new(IntegerBox::new(-1)),
+        }
     }
 
     /// Trim whitespace from both ends

@@ -1,0 +1,47 @@
+using selfhost.vm.scan as MiniVmScan
+
+static box MiniVmCompare {
+  // Compare(lhs int, rhs int) minimal: prints 0/1 and returns next pos or -1
+  try_print_compare_at(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_cp = "\"kind\":\"Compare\""
+    local cpos = scan.index_of_from(json, k_cp, print_pos)
+    if cpos <= 0 || cpos >= end { return -1 }
+    local k_op = "\"operation\":\""
+    local opos = scan.index_of_from(json, k_op, cpos)
+    if opos <= 0 || opos >= end { return -1 }
+    local oi = opos + k_op.length()
+    local oj = scan.index_of_from(json, "\"", oi)
+    if oj <= 0 || oj > end { return -1 }
+    local op = json.substring(oi, oj)
+    // lhs value
+    local k_lhs = "\"lhs\":{\"kind\":\"Literal\""
+    local hl = scan.index_of_from(json, k_lhs, oj)
+    if hl <= 0 || hl >= end { return -1 }
+    local k_v = "\"value\":"
+    local hv = scan.index_of_from(json, k_v, hl)
+    if hv <= 0 || hv >= end { return -1 }
+    local a = scan.read_digits(json, hv + k_v.length())
+    // rhs value
+    local k_rhs = "\"rhs\":{\"kind\":\"Literal\""
+    local hr = scan.index_of_from(json, k_rhs, hl)
+    if hr <= 0 || hr >= end { return -1 }
+    local rv = scan.index_of_from(json, k_v, hr)
+    if rv <= 0 || rv >= end { return -1 }
+    local b = scan.read_digits(json, rv + k_v.length())
+    if !a || !b { return -1 }
+    local ai = scan._str_to_int(a)
+    local bi = scan._str_to_int(b)
+    local res = 0
+    if op == "<"  { if ai <  bi { res = 1 } }
+    if op == "==" { if ai == bi { res = 1 } }
+    if op == "<=" { if ai <= bi { res = 1 } }
+    if op == ">"  { if ai >  bi { res = 1 } }
+    if op == ">=" { if ai >= bi { res = 1 } }
+    if op == "!=" { if ai != bi { res = 1 } }
+    print(res)
+    // advance after rhs object (coarsely)
+    return rv + 1
+  }
+}
+

@@ -1,0 +1,12 @@
+// Phase 1 sugar: method call wrapped by postfix_catch
+box Worker {
+  run() {
+    return 0
+  }
+}
+
+function main(args) {
+  local w = new Worker()
+  postfix_catch(w.run(), "Error", fn(e){ print(e) })
+}
+

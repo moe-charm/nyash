@@ -1,0 +1,4 @@
+for(fn(){ local i = 0 }, i <= 4, fn(){ i = i + 2 }, fn(){
+  print(i)
+})
+

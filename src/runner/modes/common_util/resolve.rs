@@ -1,4 +1,4 @@
-use crate::NyashRunner;
+use crate::runner::NyashRunner;
 
 /// Strip `using` lines and register modules/aliases into the runtime registry.
 /// Returns cleaned source. No-op when `NYASH_ENABLE_USING` is not set.

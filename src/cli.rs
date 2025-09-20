@@ -79,6 +79,8 @@ pub struct CliConfig {
     pub macro_expand_child: Option<String>,
     // Dump expanded AST as JSON and exit
     pub dump_expanded_ast_json: bool,
+    // MacroCtx (caps) JSON for child macro route
+    pub macro_ctx_json: Option<String>,
 }
 
 /// Grouped views (Phase 1: non-breaking). These structs provide a categorized
@@ -288,6 +290,12 @@ impl CliConfig {
                     .long("dump-expanded-ast-json")
                     .help("Dump AST after macro expansion as JSON v0 and exit")
                     .action(clap::ArgAction::SetTrue)
+            )
+            .arg(
+                Arg::new("macro-ctx-json")
+                    .long("macro-ctx-json")
+                    .value_name("JSON")
+                    .help("Provide MacroCtx as JSON string (e.g., {\"caps\":{\"io\":false,\"net\":false,\"env\":true}}) for macro child routes")
             )
             .arg(
                 Arg::new("gc")
@@ -754,11 +762,16 @@ impl CliConfig {
             emit_exe_libs: matches.get_one::<String>("emit-exe-libs").cloned(),
             macro_expand_child: matches.get_one::<String>("macro-expand-child").cloned(),
             dump_expanded_ast_json: matches.get_flag("dump-expanded-ast-json"),
+            macro_ctx_json: matches.get_one::<String>("macro-ctx-json").cloned(),
         };
         // Macro debug gate
         if matches.get_flag("expand") {
             std::env::set_var("NYASH_MACRO_ENABLE", "1");
             std::env::set_var("NYASH_MACRO_TRACE", "1");
+        }
+        // Forward MacroCtx JSON to env for macro child routes, if provided
+        if let Some(ctx) = matches.get_one::<String>("macro-ctx-json") {
+            std::env::set_var("NYASH_MACRO_CTX_JSON", ctx);
         }
         // Profile mapping (non-breaking; users can override afterwards)
         if let Some(p) = matches.get_one::<String>("profile") {
@@ -883,6 +896,7 @@ impl Default for CliConfig {
             emit_exe_libs: None,
             macro_expand_child: None,
             dump_expanded_ast_json: false,
+            macro_ctx_json: None,
         }
     }
 }

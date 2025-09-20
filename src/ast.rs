@@ -558,6 +558,13 @@ pub enum ASTNode {
         span: Span,
     },
 
+    /// ScopeBox（オプション）: 診断/マクロ可視性のためのno-opスコープ。
+    /// 正規化で注入され、MIRビルダがブロックとして処理（意味不変）。
+    ScopeBox {
+        body: Vec<ASTNode>,
+        span: Span,
+    },
+
     /// Outbox変数宣言: outbox x, y, z (static関数内専用)
     Outbox {
         variables: Vec<String>,

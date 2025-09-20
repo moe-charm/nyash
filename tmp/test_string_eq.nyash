@@ -1,0 +1,7 @@
+static box Main {
+  main(args) {
+    local ch = "1"
+    if ch == "1" { print("OK") } else { print("NG") }
+    return 0
+  }
+}

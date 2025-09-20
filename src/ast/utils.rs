@@ -47,6 +47,8 @@ impl ASTNode {
             ASTNode::Lambda { .. } => "Lambda",
             ASTNode::ArrayLiteral { .. } => "ArrayLiteral",
             ASTNode::MapLiteral { .. } => "MapLiteral",
+            // Optional diagnostic-only wrapper
+            ASTNode::ScopeBox { .. } => "ScopeBox",
         }
     }
 
@@ -81,6 +83,9 @@ impl ASTNode {
             ASTNode::Lambda { .. } => ASTNodeType::Expression,
             ASTNode::ArrayLiteral { .. } => ASTNodeType::Expression,
             ASTNode::MapLiteral { .. } => ASTNodeType::Expression,
+
+            // Diagnostic-only wrapper treated as structure
+            ASTNode::ScopeBox { .. } => ASTNodeType::Structure,
 
             // Statement nodes - 実行可能なアクション
             ASTNode::Program { .. } => ASTNodeType::Statement, // プログラム全体
@@ -309,6 +314,7 @@ impl ASTNode {
             ASTNode::MapLiteral { entries, .. } => {
                 format!("MapLiteral({} entries)", entries.len())
             }
+            ASTNode::ScopeBox { .. } => "ScopeBox".to_string(),
         }
     }
 
@@ -355,6 +361,7 @@ impl ASTNode {
             ASTNode::Lambda { span, .. } => *span,
             ASTNode::ArrayLiteral { span, .. } => *span,
             ASTNode::MapLiteral { span, .. } => *span,
+            ASTNode::ScopeBox { span, .. } => *span,
         }
     }
 }

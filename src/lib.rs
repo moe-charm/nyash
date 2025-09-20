@@ -3,12 +3,14 @@
  Provides parser, MIR, backends, runner, and supporting runtime.
 */
 
+// Allow referring to this crate as `nyash_rust` from within the crate, matching external paths.
+extern crate self as nyash_rust;
+
 // WebAssembly support
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-// Provide stubs when legacy interpreter is disabled
-#[cfg(not(feature = "interpreter-legacy"))]
+// Legacy interpreter removed
 mod interpreter_stub;
 
 pub mod ast; // using historical ast.rs
@@ -23,9 +25,6 @@ pub mod environment;
 pub mod exception_box;
 pub mod finalization;
 pub mod instance_v2; // simplified InstanceBox implementation
-#[cfg(feature = "interpreter-legacy")]
-pub mod interpreter;
-#[cfg(not(feature = "interpreter-legacy"))]
 pub mod interpreter { pub use crate::interpreter_stub::*; }
 pub mod method_box;
 pub mod operator_traits; // trait-based operator overloading
@@ -70,6 +69,12 @@ pub mod runtime;
 // Unified Grammar scaffolding
 pub mod grammar;
 pub mod syntax; // syntax sugar config and helpers
+// Execution runner (CLI coordinator)
+pub mod runner;
+
+// Expose the macro engine module under a raw identifier; the source lives under `src/macro/`.
+#[path = "macro/mod.rs"]
+pub mod r#macro;
 
 #[cfg(target_arch = "wasm32")]
 pub mod wasm_test;

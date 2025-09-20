@@ -409,6 +409,25 @@ pub fn try_result_mode() -> bool {
 pub fn method_catch() -> bool {
     std::env::var("NYASH_METHOD_CATCH").ok().as_deref() == Some("1") || parser_stage3()
 }
+
+/// Entry policy: allow top-level `main` resolution in addition to `Main.main`.
+/// Default: false (prefer explicit `static box Main { main(...) }`).
+pub fn entry_allow_toplevel_main() -> bool {
+    match std::env::var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN").ok() {
+        Some(v) => {
+            let v = v.to_ascii_lowercase();
+            v == "1" || v == "true" || v == "on"
+        }
+        None => false,
+    }
+}
+
+/// Parser gate for expression-level postfix catch/cleanup acceptance.
+/// Enabled when Stage-3 gate is on (NYASH_PARSER_STAGE3=1). Separate gate can
+/// be introduced in future if needed, but we keep minimal toggles now.
+pub fn expr_postfix_catch() -> bool {
+    parser_stage3()
+}
 /// Parser gate for Unified Members (stored/computed/once/birth_once).
 /// Default: ON during Phase-15 (set NYASH_ENABLE_UNIFIED_MEMBERS=0|false|off to disable).
 pub fn unified_members() -> bool {

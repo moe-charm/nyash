@@ -1,14 +1,52 @@
 use once_cell::sync::Lazy;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
+use std::net::TcpStream;
 use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
+    atomic::{AtomicBool, AtomicU32, Ordering},
+    Arc, Mutex,
 };
 
-use super::{
-    ClientState, RequestState, ResponseState, ServerState, SockClientState, SockConnState,
-    SockServerState,
-};
+// Local state structs formerly defined in lib.rs
+pub(crate) struct ServerState {
+    pub(crate) running: Arc<AtomicBool>,
+    pub(crate) port: i32,
+    pub(crate) pending: Arc<Mutex<VecDeque<u32>>>, // queue of request ids
+    pub(crate) handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+    pub(crate) start_seq: u32,
+}
+
+pub(crate) struct RequestState {
+    pub(crate) path: String,
+    pub(crate) body: Vec<u8>,
+    pub(crate) response_id: Option<u32>,
+    // For HTTP-over-TCP server: map to an active accepted socket to respond on
+    pub(crate) server_conn_id: Option<u32>,
+    pub(crate) responded: bool,
+}
+
+pub(crate) struct ResponseState {
+    pub(crate) status: i32,
+    pub(crate) headers: HashMap<String, String>,
+    pub(crate) body: Vec<u8>,
+    // For HTTP-over-TCP client: associated socket connection id to read from
+    pub(crate) client_conn_id: Option<u32>,
+    pub(crate) parsed: bool,
+}
+
+pub(crate) struct ClientState;
+
+// Socket types
+pub(crate) struct SockServerState {
+    pub(crate) running: Arc<AtomicBool>,
+    pub(crate) pending: Arc<Mutex<VecDeque<u32>>>,
+    pub(crate) handle: Mutex<Option<std::thread::JoinHandle<()>>>,
+}
+
+pub(crate) struct SockConnState {
+    pub(crate) stream: Mutex<TcpStream>,
+}
+
+pub(crate) struct SockClientState;
 
 pub(crate) static SERVER_INSTANCES: Lazy<Mutex<HashMap<u32, ServerState>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));

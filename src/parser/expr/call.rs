@@ -14,6 +14,44 @@ impl NyashParser {
         let mut expr = self.expr_parse_primary()?;
 
         loop {
+            // Phase 2: expression-level postfix catch/cleanup
+            // Example: foo(bar) catch(Type e) { ... } cleanup { ... }
+            // Guarded by Stage-3 gate to avoid surprising Stage-2 programs.
+            if crate::config::env::expr_postfix_catch()
+                && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
+            {
+                use crate::ast::{CatchClause, Span};
+                // Parse optional single catch, then optional cleanup
+                let mut catch_clauses: Vec<CatchClause> = Vec::new();
+                if self.match_token(&TokenType::CATCH) {
+                    self.advance(); // consume 'catch'
+                    self.consume(TokenType::LPAREN)?;
+                    let (exception_type, exception_var) = self.parse_catch_param()?;
+                    self.consume(TokenType::RPAREN)?;
+                    let catch_body = self.parse_block_statements()?;
+                    catch_clauses.push(CatchClause {
+                        exception_type,
+                        variable_name: exception_var,
+                        body: catch_body,
+                        span: Span::unknown(),
+                    });
+                }
+                let finally_body = if self.match_token(&TokenType::CLEANUP) {
+                    self.advance(); // consume 'cleanup'
+                    Some(self.parse_block_statements()?)
+                } else {
+                    None
+                };
+
+                expr = ASTNode::TryCatch {
+                    try_body: vec![expr],
+                    catch_clauses,
+                    finally_body,
+                    span: Span::unknown(),
+                };
+                // Postfix catch/cleanup binds at the end of a call/chain. Stop further chaining.
+                break;
+            }
             if self.match_token(&TokenType::DOT) {
                 self.advance(); // consume '.'
 

@@ -133,6 +133,9 @@ impl super::MirBuilder {
 
     // Block: sequentially build statements and return last value or Void
     pub(super) fn build_block(&mut self, statements: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Scope hint for bare block (Program)
+        let scope_id = self.current_block.map(|bb| bb.as_u32()).unwrap_or(0);
+        self.hint_scope_enter(scope_id);
         let mut last_value = None;
         for statement in statements {
             last_value = Some(self.build_expression(statement)?);
@@ -142,7 +145,7 @@ impl super::MirBuilder {
                 break;
             }
         }
-        Ok(last_value.unwrap_or_else(|| {
+        let out = last_value.unwrap_or_else(|| {
             let void_val = self.value_gen.next();
             self.emit_instruction(MirInstruction::Const {
                 dst: void_val,
@@ -150,7 +153,12 @@ impl super::MirBuilder {
             })
             .unwrap();
             void_val
-        }))
+        });
+        // Scope leave only if block not already terminated
+        if !self.is_current_block_terminated() {
+            self.hint_scope_leave(scope_id);
+        }
+        Ok(out)
     }
 
     // control-flow build_* moved to control_flow.rs (use cf_* instead)
