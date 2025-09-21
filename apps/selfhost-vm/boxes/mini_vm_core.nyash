@@ -20,44 +20,13 @@ static box MiniVm {
   }
   _str_to_int(s) { return new MiniVmScan()._str_to_int(s) }
   _int_to_str(n) { return new MiniVmScan()._int_to_str(n) }
-  read_digits(json, pos) { return new MiniVmScan().read_digits(json, pos) }
+  read_digits(json, pos) { return new MiniJson().read_digits_from(json, pos) }
   // Read a JSON string starting at position pos (at opening quote); returns the decoded string
-  read_json_string(json, pos) {
-    // Expect opening quote
-    local i = pos
-    local out = ""
-    local n = json.length()
-    if json.substring(i, i+1) == "\"" { i = i + 1 } else { return "" }
-    loop (i < n) {
-      local ch = json.substring(i, i+1)
-      if ch == "\"" { i = i + 1  break }
-      if ch == "\\" {
-        // handle simple escapes for \ and "
-        local nx = json.substring(i+1, i+2)
-        if nx == "\"" { out = out + "\""  i = i + 2  continue }
-        if nx == "\\" { out = out + "\\"  i = i + 2  continue }
-        // Unknown escape: skip backslash and take next as-is
-        i = i + 1
-        continue
-      }
-      out = out + ch
-      i = i + 1
-    }
-    return out
-  }
+  read_json_string(json, pos) { return new MiniJson().read_quoted_from(json, pos) }
   // helper: find needle from position pos
   index_of_from(hay, needle, pos) { return new MiniVmScan().index_of_from(hay, needle, pos) }
   // helper: next non-whitespace character index from pos
-  next_non_ws(json, pos) {
-    local i = pos
-    local n = json.length()
-    loop (i < n) {
-      local ch = json.substring(i, i+1)
-      if ch != " " && ch != "\n" && ch != "\r" && ch != "\t" { return i }
-      i = i + 1
-    }
-    return -1
-  }
+  next_non_ws(json, pos) { return new MiniJson().next_non_ws(json, pos) }
   // ——— Helpers (as box methods) ———
 
   // Minimal: Print(BinaryOp) with operator "+"; supports string+string and int+int
@@ -168,17 +137,15 @@ static box MiniVm {
     if vpos < 0 { return null }
     vpos = vpos + k_val.length()
     if ty == "int" || ty == "i64" || ty == "integer" {
-      // read digits directly
-      local digits = read_digits(json, vpos)
+      // read digits via MiniJson
+      local digits = new MiniJson().read_digits_from(json, vpos)
       return digits
     }
     if ty == "string" {
-      // Find opening and closing quotes (no escape handling in MVP)
+      // read quoted via MiniJson
       local i = index_of_from(json, "\"", vpos)
       if i < 0 { return null }
-      local j = index_of_from(json, "\"", i+1)
-      if j < 0 { return null }
-      return json.substring(i+1, j)
+      return new MiniJson().read_quoted_from(json, i)
     }
     // Other types not supported yet
     return null
@@ -287,6 +254,33 @@ static box MiniVm {
   }
   // (reserved) helper for future robust binop scan
   run(json) {
+    // entry: attempt minimal quick shapes first, then broader routes
+    // Quick path: Program-level Print of a single Literal string/int
+    if json.indexOf("\"kind\":\"Program\"") >= 0 && json.indexOf("\"kind\":\"Print\"") >= 0 {
+      // Literal string
+      if json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\"") >= 0 {
+        local ks = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\""
+        local ps = json.indexOf(ks)
+        if ps >= 0 {
+          local si = ps + ks.length()
+          local sj = json.indexOf("\"", si)
+          if sj >= 0 { print(json.substring(si, sj))  return 0 }
+        }
+      }
+      // Literal int
+      if json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\"") >= 0 {
+        local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+        local pi = json.indexOf(ki)
+        if pi >= 0 {
+          local ii = pi + ki.length()
+          // digits until closing brace
+          local ie = json.indexOf("}", ii)
+          if ie < 0 { ie = ii }
+          local d = json.substring(ii, ie)
+          if d { print(d)  return 0 }
+        }
+      }
+    }
     // Single-purpose fast path for smoke: if BinaryOp '+' exists, try expression-bounded extractor first.
     if json.indexOf("\"BinaryOp\"") >= 0 && json.indexOf("\"operator\":\"+\"") >= 0 {
       // Bind to first Print and extract value×2 within expression bounds
@@ -533,6 +527,222 @@ static box MiniVm {
       }
     }
     return 0
+  }
+
+  // Pure helper: collect minimal print outputs (literals only) into an array
+  collect_prints(json) {
+    // Ported from self-contained smoke (Hardened minimal scanner)
+    local out = new ArrayBox()
+    local pos = 0
+    local guard = 0
+    // DEV trace: flip to 1 for one-run diagnosis; keep 0 for normal
+    local trace = 0
+    local k_print = "\"kind\":\"Print\""
+    loop (true) {
+      guard = guard + 1
+      if guard > 200 { break }
+      local p = index_of_from(json, k_print, pos)
+      if p < 0 { break }
+      // bound current Print slice to [this, next)
+      local obj_start = p
+      local next_p = index_of_from(json, k_print, p + k_print.length())
+      local obj_end = json.length()
+      if next_p > 0 { obj_end = next_p }
+      if trace == 1 { print("[collect][p] "+p)  print("[collect][slice_end] "+obj_end) }
+      if trace == 1 {
+        local k_expr = "\"expression\":{"
+        local epos_dbg = index_of_from(json, k_expr, obj_start)
+        print("[scan][expr] "+epos_dbg)
+        local fc_dbg = index_of_from(json, "\"kind\":\"FunctionCall\"", obj_start)
+        print("[scan][fc] "+fc_dbg)
+        local bo_dbg = index_of_from(json, "\"kind\":\"BinaryOp\"", obj_start)
+        print("[scan][bo] "+bo_dbg)
+        local cp_dbg = index_of_from(json, "\"kind\":\"Compare\"", obj_start)
+        print("[scan][cp] "+cp_dbg)
+        local ts_dbg = index_of_from(json, "\"type\":\"string\"", obj_start)
+        print("[scan][ts] "+ts_dbg)
+        local ti_dbg = index_of_from(json, "\"type\":\"int\"", obj_start)
+        print("[scan][ti] "+ti_dbg)
+        // positions for tight patterns used by branches
+        local ks_pat = "\"type\":\"string\",\"value\":\""
+        print("[scan][ks] "+index_of_from(json, ks_pat, obj_start))
+        local ki_pat = "\"type\":\"int\",\"value\":"
+        print("[scan][ki] "+index_of_from(json, ki_pat, obj_start))
+      }
+
+      // 1) FunctionCall echo/itoa (single literal or empty args)
+      {
+        // Limit search within Print.expression object for stability
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, obj_start)
+        if epos > 0 { if epos < obj_end {
+          local expr_start = index_of_from(json, "{", epos)
+          if expr_start > 0 { if expr_start < obj_end {
+            local expr_end = new MiniVmScan().find_balanced_object_end(json, expr_start)
+            if expr_end > 0 { if expr_end <= obj_end {
+              if trace == 1 { print("[collect][expr] "+expr_start+","+expr_end) }
+              local k_fc = "\"kind\":\"FunctionCall\""
+              local fcp = index_of_from(json, k_fc, expr_start)
+              if fcp > 0 { if fcp < expr_end {
+                local kn = "\"name\":\""
+                local np = index_of_from(json, kn, fcp)
+              if np > 0 { if np < obj_end {
+                local ni = np + kn.length()
+                local nj = index_of_from(json, "\"", ni)
+                if nj > 0 { if nj <= expr_end {
+                  local fname = json.substring(ni, nj)
+                  local ka = "\"arguments\":["
+                  local ap = index_of_from(json, ka, nj)
+                  if ap > 0 { if ap < expr_end {
+                    // detect empty args [] quickly: no type token inside balanced array
+                    local arr_start = index_of_from(json, "[", ap)
+                    local arr_end = new MiniVmScan().find_balanced_array_end(json, arr_start)
+                    if arr_start >= 0 { if arr_end >= 0 { if arr_end <= expr_end {
+                      local kt = "\"type\":\""
+                      local atpos = index_of_from(json, kt, arr_start)
+                      if atpos < 0 || atpos >= arr_end {
+                        if fname == "echo" { out.push("")  pos = obj_end + 1  continue }
+                        if fname == "itoa" { out.push("0")  pos = obj_end + 1  continue }
+                      }
+                    }}}
+                    // string arg
+                    local ks = "\"type\":\"string\",\"value\":\""
+                    local ps = index_of_from(json, ks, ap)
+                    if ps > 0 { if ps < expr_end {
+                      local si = ps + ks.length()
+                      local sj = index_of_from(json, "\"", si)
+                      if sj > 0 { if sj <= expr_end {
+                        local sval = json.substring(si, sj)
+                        if fname == "echo" { out.push(sval)  pos = obj_end + 1  continue }
+                      }}
+                    }}
+                    // int arg
+                    local ki = "\"type\":\"int\",\"value\":"
+                    local pi = index_of_from(json, ki, ap)
+                    if pi > 0 { if pi < expr_end {
+                      local ival = read_digits(json, pi + ki.length())
+                      if ival != "" { if fname == "itoa" { out.push(ival)  pos = obj_end + 1  continue } else { if fname == "echo" { out.push(ival)  pos = obj_end + 1  continue } } }
+                    }}
+                  }}
+                }}
+              }}
+            }}}
+          }}
+        }}
+      }
+
+      // 2) BinaryOp(int '+' int)
+      {
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, obj_start)
+        if epos > 0 { if epos < obj_end {
+          local k_bo = "\"kind\":\"BinaryOp\""
+          local bpos = index_of_from(json, k_bo, epos)
+          if bpos > 0 { if bpos < obj_end {
+            if index_of_from(json, "\"operator\":\"+\"", bpos) > 0 {
+              local k_l = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local lp = index_of_from(json, k_l, bpos)
+              if lp > 0 { if lp < obj_end {
+                local ld = read_digits(json, lp + k_l.length())
+                if ld != "" {
+                  local rp = index_of_from(json, k_r, lp + k_l.length())
+                  if rp > 0 { if rp < obj_end {
+                    local rd = read_digits(json, rp + k_r.length())
+                    if rd != "" { if trace == 1 { print("[hit][bo-typed] "+ld+"+"+rd) } out.push(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  pos = p + k_print.length()  continue }
+                  }}
+                }
+              }}
+              // fallback: two successive 'value' digits within expression bounds
+              local k_v = "\"value\":"
+              local v1 = index_of_from(json, k_v, epos)
+              if v1 > 0 { if v1 < obj_end {
+                local d1 = new MiniJson().read_digits_from(json, v1 + k_v.length())
+                if d1 != "" {
+                  local v2 = index_of_from(json, k_v, v1 + k_v.length())
+                  if v2 > 0 { if v2 < obj_end {
+                    local d2 = new MiniJson().read_digits_from(json, v2 + k_v.length())
+                    if d2 != "" { if trace == 1 { print("[hit][bo-fallback] "+d1+"+"+d2) } out.push(_int_to_str(_str_to_int(d1) + _str_to_int(d2)))  pos = p + k_print.length()  continue }
+                  }}
+                }
+              }}
+            }
+          }}
+        }}
+      }
+
+      // 3) Compare(lhs/rhs ints)
+      {
+        local k_cp = "\"kind\":\"Compare\""
+        local cpos = index_of_from(json, k_cp, obj_start)
+        if cpos > 0 { if cpos < obj_end {
+          local k_op = "\"operation\":\""
+          local opos = index_of_from(json, k_op, cpos)
+          if opos > 0 { if opos < obj_end {
+            local oi = opos + k_op.length()
+            local oj = index_of_from(json, "\"", oi)
+            if oj > 0 { if oj <= obj_end {
+              local op = json.substring(oi, oj)
+              local k_v = "\"value\":"
+              local lhs_v = index_of_from(json, k_v, oj)
+              if lhs_v > 0 { if lhs_v < obj_end {
+                local la = read_digits(json, lhs_v + k_v.length())
+                if la != "" {
+                  local rhs_v = index_of_from(json, k_v, lhs_v + k_v.length())
+                  if rhs_v > 0 { if rhs_v < obj_end {
+                    local rb = read_digits(json, rhs_v + k_v.length())
+                    if rb != "" {
+                      local ai = _str_to_int(la)
+                      local bi = _str_to_int(rb)
+                      local res = 0
+                      if op == "<"  { if ai <  bi { res = 1 } }
+                      if op == "==" { if ai == bi { res = 1 } }
+                      if op == "<=" { if ai <= bi { res = 1 } }
+                      if op == ">"  { if ai >  bi { res = 1 } }
+                      if op == ">=" { if ai >= bi { res = 1 } }
+                      if op == "!=" { if ai != bi { res = 1 } }
+                      out.push(_int_to_str(res))
+                      pos = p + k_print.length()
+                      continue
+                    }
+                  }}
+                }
+              }}
+            }}
+          }}
+        }}
+      }
+
+      // (FunctionCall branch moved earlier)
+
+      // 4) Literal string
+      {
+        local ks = "\"type\":\"string\",\"value\":\""
+        local ps = index_of_from(json, ks, obj_start)
+        if ps > 0 { if ps < obj_end {
+          local si = ps + ks.length()
+          local sj = index_of_from(json, "\"", si)
+          if sj > 0 { if sj <= obj_end {
+            if trace == 1 { print("[hit][str]") }
+            out.push(json.substring(si, sj))  pos = p + k_print.length()  continue
+          }}
+        }}
+      }
+      // 5) Literal int
+      {
+        local ki = "\"type\":\"int\",\"value\":"
+        local pi = index_of_from(json, ki, obj_start)
+        if pi > 0 { if pi < obj_end {
+          local digits = read_digits(json, pi + ki.length())
+          if digits != "" { if trace == 1 { print("[hit][i-lit] "+digits) } out.push(digits)  pos = p + k_print.length()  continue }
+        }}
+      }
+      // Unknown: skip this Print object entirely to avoid stalls and mis-detection
+      // Use coarse slice end (next Print position) when available; fallback to k_print-length step
+      pos = obj_end + 1
+      if pos <= p { pos = p + k_print.length() }
+    }
+    return out
   }
 }
 

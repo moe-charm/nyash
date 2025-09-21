@@ -1,8 +1,12 @@
 using selfhost.vm.scan as MiniVmScan
 using selfhost.vm.binop as MiniVmBinOp
 using selfhost.vm.compare as MiniVmCompare
+// Use the JSON adapter facade for cursor ops (next_non_ws, digits)
+using selfhost.vm.json as MiniJsonLoader
 
 static box MiniVmPrints {
+  // dev trace flag (0=OFF)
+  _trace_enabled() { return 0 }
   // literal string within Print
   try_print_string_value_at(json, end, print_pos) {
     local scan = new MiniVmScan()
@@ -26,21 +30,14 @@ static box MiniVmPrints {
     if obj_start <= 0 || obj_start >= end { return -1 }
     local obj_end = scan.find_balanced_object_end(json, obj_start)
     if obj_end <= 0 || obj_end > end { return -1 }
-    local k_kind = "\"kind\":\"Literal\""
-    local kpos = scan.index_of_from(json, k_kind, obj_start)
-    if kpos <= 0 || kpos >= obj_end { return -1 }
-    local k_type = "\"type\":\""
-    local tpos = scan.index_of_from(json, k_type, kpos)
+    // robust: look for explicit int type within expression object
+    local k_tint = "\"type\":\"int\""
+    local tpos = scan.index_of_from(json, k_tint, obj_start)
     if tpos <= 0 || tpos >= obj_end { return -1 }
-    tpos = tpos + k_type.length()
-    local t_end = scan.index_of_from(json, "\"", tpos)
-    if t_end <= 0 || t_end > obj_end { return -1 }
-    local ty = json.substring(tpos, t_end)
-    if (ty != "int" && ty != "i64" && ty != "integer") { return -1 }
     local k_val2 = "\"value\":"
-    local v2 = scan.index_of_from(json, k_val2, t_end)
+    local v2 = scan.index_of_from(json, k_val2, tpos)
     if v2 <= 0 || v2 >= obj_end { return -1 }
-    local digits = scan.read_digits(json, v2 + k_val2.length())
+    local digits = new MiniVmScan().read_digits(json, v2 + k_val2.length())
     if digits == "" { return -1 }
     print(digits)
     return obj_end + 1
@@ -66,7 +63,7 @@ static box MiniVmPrints {
     local arr_end = scan.find_balanced_array_end(json, arr_start)
     if arr_start <= 0 || arr_end <= 0 || arr_end > end { return -1 }
     // handle empty args []
-    local nn = new MiniJson().next_non_ws(json, arr_start+1)
+    local nn = new MiniJsonLoader().next_non_ws(json, arr_start+1)
     if nn > 0 && nn <= arr_end {
       if json.substring(nn, nn+1) == "]" {
         if fname == "echo" { print("")  return arr_end + 1 }
@@ -115,6 +112,7 @@ static box MiniVmPrints {
     local pos = start
     local printed = 0
     local guard = 0
+    local trace = _trace_enabled()
     loop (true) {
       guard = guard + 1
       if guard > 200 { break }
@@ -125,6 +123,11 @@ static box MiniVmPrints {
       local p_obj_start = scan.index_of_from(json, "{", p)
       local p_obj_end = scan.find_balanced_object_end(json, p_obj_start)
       if p_obj_start <= 0 || p_obj_end <= 0 { p_obj_end = p + k_print.length() }
+      // also compute coarse slice end by next Print marker to guard when object balance is not reliable
+      local next_p = scan.index_of_from(json, k_print, p + k_print.length())
+      local p_slice_end = end
+      if next_p > 0 { p_slice_end = next_p }
+      // dev trace hook (no-op)
       // 1) BinaryOp
       local nextp = bin.try_print_binop_sum_any(json, end, p)
       if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
@@ -138,17 +141,26 @@ static box MiniVmPrints {
     nextp = cmp.try_print_compare_at(json, end, p)
     if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
     // 3) FunctionCall minimal
-    nextp = self.try_print_functioncall_at(json, end, p)
+    nextp = new MiniVmPrints().try_print_functioncall_at(json, end, p)
     if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
     // 4) literal string
-    nextp = self.try_print_string_value_at(json, end, p)
+    nextp = new MiniVmPrints().try_print_string_value_at(json, end, p)
     if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
     // 5) literal int via type
-    nextp = self.try_print_int_value_at(json, end, p)
+    nextp = new MiniVmPrints().try_print_int_value_at(json, end, p)
     if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
-      // Unknown shape: skip forward
-      pos = p + k_print.length()
-      if pos <= p { pos = p + 1 }
+    // 5b) literal int (simple pattern inside current Print object)
+    {
+      local ki = "\"type\":\"int\",\"value\":"
+      local pi = scan.index_of_from(json, ki, p)
+      if pi > 0 { if pi < p_slice_end {
+        local digits = new MiniJsonLoader().read_digits_from(json, pi + ki.length())
+        if digits != "" { print(digits)  printed = printed + 1  pos = p_slice_end + 1  continue }
+      }}
+    }
+      // Unknown shape: skip this Print object entirely to avoid stalls
+      pos = p_obj_end + 1
+      if pos <= p { pos = p + k_print.length() }
     }
     return printed
   }
@@ -178,11 +190,11 @@ static box MiniVmPrints {
     if arr_start < 0 { return 0 }
     local arr_end = new MiniVmScan().find_balanced_array_end(json, arr_start)
     if arr_end < 0 { return 0 }
-    return self.print_prints_in_slice(json, arr_start, arr_end)
+    return new MiniVmPrints().print_prints_in_slice(json, arr_start, arr_end)
   }
 
   // Print all Print-Literal values in Program.statements (string/int only; MVP)
   print_all_print_literals(json) {
-    return self.print_prints_in_slice(json, 0, json.length())
+    return new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
   }
 }
