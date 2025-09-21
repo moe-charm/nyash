@@ -3,13 +3,14 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")"/../../../.. && pwd)
 bin="$root/target/release/nyash"
-src="$root/apps/selfhost-vm/mini_vm.nyash"
+src="$root/apps/selfhost/vm/mini_vm.nyash"
 
 if [ ! -x "$bin" ]; then
   echo "nyash binary not found at $bin; build first (cargo build --release)" >&2
   exit 1
 fi
 
+export NYASH_ENABLE_USING=1
 export NYASH_VM_USE_PY=1
 export NYASH_MINIVM_READ_STDIN=1
 

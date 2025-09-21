@@ -14,7 +14,7 @@
 
 ---
 
-Execution Status (Phase Freeze)
+Execution Status (Feature Additions Pause)
 - Active
   - `--backend llvm` (Python/llvmlite harness; AOT object emit)
   - `--backend vm` (PyVM harness)

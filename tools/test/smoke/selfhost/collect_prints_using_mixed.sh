@@ -10,6 +10,8 @@ cargo build --release -q
 
 export NYASH_ENABLE_USING=1
 export NYASH_VM_USE_PY=1
+# Ensure JSON plugin is loaded (MiniVmPrints uses JsonDocBox/JsonNodeBox)
+export NYASH_LOAD_NY_PLUGINS=1
 # seam safety valve for inlining (default-OFF elsewhere)
 export NYASH_RESOLVE_FIX_BRACES=1
 # keep dedup OFF for stability (resolver dedup is dev-only)
@@ -18,7 +20,7 @@ unset NYASH_RESOLVE_DEDUP_FN || true
 # parser seam guard (default-OFF): ensure 'static box' at top-level is not mistaken for initializer
 export NYASH_PARSER_STATIC_INIT_STRICT=1
 BIN=./target/release/nyash
-APP=apps/selfhost-vm/collect_mixed_using_smoke.nyash
+APP=apps/selfhost/vm/collect_mixed_using_smoke.nyash
 
 out=$("$BIN" --backend vm "$APP")
 

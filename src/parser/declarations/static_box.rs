@@ -176,12 +176,39 @@ impl NyashParser {
                 break;
             }
 
-            // 🔥 static { } ブロックの処理
+            // 🔥 static 初期化子の処理
+            // Gate: NYASH_PARSER_STATIC_INIT_STRICT=1 のとき、
+            //   - 直後が '{' の場合のみ static 初期化子として扱う
+            //   - 直後が 'box' or 'function' の場合は、トップレベル宣言の開始とみなし、この box 本体を閉じる
+            // 既定（ゲートOFF）は従来挙動（常に static { ... } を期待）
             if self.match_token(&TokenType::STATIC) {
-                self.advance(); // consume 'static'
-                let static_body = self.parse_block_statements()?;
-                static_init = Some(static_body);
-                continue;
+                let strict = std::env::var("NYASH_PARSER_STATIC_INIT_STRICT").ok().as_deref() == Some("1");
+                if strict {
+                    match self.peek_token() {
+                        TokenType::LBRACE => {
+                            self.advance(); // consume 'static'
+                            let static_body = self.parse_block_statements()?;
+                            static_init = Some(static_body);
+                            continue;
+                        }
+                        TokenType::BOX | TokenType::FUNCTION => {
+                            // トップレベルの `static box|function` が続くシーム: ここで box を閉じる
+                            break;
+                        }
+                        _ => {
+                            // 不明な形は従来通り initializer として解釈（互換重視）
+                            self.advance();
+                            let static_body = self.parse_block_statements()?;
+                            static_init = Some(static_body);
+                            continue;
+                        }
+                    }
+                } else {
+                    self.advance(); // consume 'static'
+                    let static_body = self.parse_block_statements()?;
+                    static_init = Some(static_body);
+                    continue;
+                }
             }
 
             // initブロックの処理

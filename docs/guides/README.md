@@ -2,6 +2,9 @@
 
 Nyashプログラミング言語の利用者向けガイドとチュートリアルです。
 
+Quick Links
+- Docsの書き方（小さく・リンク駆動・3層）: contributing-docs.md
+
 ## 🚀 はじめに
 - `getting-started.md` - Nyashを始めるためのクイックガイド
 

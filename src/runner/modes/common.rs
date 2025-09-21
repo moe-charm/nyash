@@ -307,7 +307,7 @@ impl NyashRunner {
         };
         // Select selfhost compiler entry
         //   NYASH_NY_COMPILER_PREF=legacy|new|auto (default auto: prefer new when exists)
-        let cand_new = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+        let cand_new = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
         let cand_old = std::path::Path::new("apps/selfhost/parser/ny_parser_v0/main.nyash");
         let pref = std::env::var("NYASH_NY_COMPILER_PREF").ok();
         let parser_prog = match pref.as_deref() {
@@ -505,6 +505,13 @@ impl NyashRunner {
                 Ok(s) => { cleaned_code_owned = s; code_ref = &cleaned_code_owned; }
                 Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
             }
+        }
+        // Optional dev sugar: @name[:T] = expr → local name[:T] = expr (line-head only)
+        let preexpanded_owned;
+        {
+            let s = crate::runner::modes::common_util::resolve::preexpand_at_local(code_ref);
+            preexpanded_owned = s;
+            code_ref = &preexpanded_owned;
         }
 
         // Parse the code with debug fuel limit

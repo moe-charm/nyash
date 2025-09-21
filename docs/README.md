@@ -66,6 +66,11 @@
 - guides/language-core-and-sugar.md（コア最小＋糖衣）
 - guides/loopform.md（ループ正規化）
 - guides/scopebox.md（開発時の可視化）
+- guides/dev-local-alias.md（開発向け: 行頭 @name = expr → local 宣言糖衣）
+ - guides/box-patterns.md（Boxパターン集：Ownership/Lease/Cancel/Capability/Affinity/Observable）
+ - guides/box-design-checklist.md（Box 設計チェックリスト）
+ - proposals/concurrency/boxes.md（並行モデルのBox設計：Routine/Channel/Select/Scope）
+ - reference/concurrency/semantics.md（ブロッキング/close/select/観測の規約）
 - design/（設計ノート入口）
   - design/flow-blocks.md（矢印フロー／匿名ブロック・設計草案）
   - ../proposals/scope-reuse.md（スコープ再利用ブロック・MVP提案）
@@ -79,7 +84,9 @@
    - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)**
    - 🔥 **[Phase 16: マクロ革命](development/roadmap/phases/phase-16-macro-revolution/)**
    - 🧪 **[Phase 17: LoopForm Self‑Hosting](development/roadmap/phases/phase-17-loopform-selfhost/)**
-   - 🧩 **[Mini‑VM 構築ロードマップ](development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)**
+- 🧩 **[Mini‑VM 構築ロードマップ](development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)**
+- 🧭 **Using→Loader 統合（最小設計）**: design/using-loader-integration.md
+ - 🗂️ **Docsの書き方（小さく・リンク駆動）**: guides/contributing-docs.md
 
 ---
 

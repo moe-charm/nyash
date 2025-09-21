@@ -103,13 +103,13 @@ impl NyashRunner {
                 }
             }
         }
-        // Preferred: run Ny selfhost compiler program (apps/selfhost-compiler/compiler.nyash)
+        // Preferred: run Ny selfhost compiler program (apps/selfhost/compiler/compiler.nyash)
         // This avoids inline embedding pitfalls and supports Stage-3 gating via args.
         {
             use crate::runner::modes::common_util::selfhost::{child, json};
             let exe = std::env::current_exe()
                 .unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
-            let parser_prog = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+            let parser_prog = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
             if parser_prog.exists() {
                 // Build extra args forwarded to child program
                 let mut extra: Vec<&str> = Vec::new();
@@ -296,7 +296,7 @@ impl NyashRunner {
             }
             let inline_path = std::path::Path::new("tmp").join("inline_selfhost_emit.nyash");
             let inline_code = format!(
-                "include \"apps/selfhost-compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
+                "include \"apps/selfhost/compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost/compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
                 esc
             );
             if let Err(e) = std::fs::write(&inline_path, inline_code) {

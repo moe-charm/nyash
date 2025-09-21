@@ -1,10 +1,10 @@
 # Nyash ABI Minimal Core and Evolution Strategy
 
 目的
-- 極小コアのみABI凍結し、将来拡張は交渉＋予約＋フォールバックで吸収する。
+- 極小コアのABIを長期安定化（仕様固定）し、将来拡張は交渉＋予約＋フォールバックで吸収する。
 - VM/JIT/プラグインを同じ枠組み（TypeBox + vtable + NyrtValue）に統一する。
 
-最小コア（凍結対象）
+最小コア（安定化対象）
 - NyrtValue: 16B固定 `#[repr(C)]`（`tag:u32 | reserved:u32 | payload:u64`）
 - InstanceHeader: 先頭に `vtbl:*const NyVTable, refcnt:u32, flags:u32`（実体は不透明）
 - NyMethodFn: `fn(ctx:*mut VmCtx, recv:*mut InstanceHeader, args:*const NyrtValue, argc:u32, out:*mut NyrtValue) -> NyStatus`
@@ -66,4 +66,3 @@ typedef struct NyVEntry { NyMethodSig sig; NyMethodFn fn_ptr; } NyVEntry;
 - [ ] `execute_boxcall`: vtable直行→PIC→汎用の三段整備（STRICTガード）。
 - [ ] TypeRegistry: Array/Map/String の "get/set/len" を登録→vtable優先呼び出し。
 - [ ] ABIコンプライアンステストと同一実行テストの設計をdocsに反映。
-

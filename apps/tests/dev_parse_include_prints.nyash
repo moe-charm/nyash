@@ -1,0 +1,9 @@
+using selfhost.vm.prints as MiniVmPrints
+
+static box Main {
+  main(args) {
+    // do nothing; this just forces including MiniVmPrints
+    return 0
+  }
+}
+

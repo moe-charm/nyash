@@ -21,6 +21,7 @@ pub mod optimizer_passes; // optimizer passes (normalize/diagnostics)
 pub mod optimizer_stats; // extracted stats struct
 pub mod passes;
 pub mod printer;
+mod printer_helpers; // internal helpers extracted from printer.rs
 pub mod hints; // scaffold: zero-cost guidance (no-op)
 pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)
 pub mod value_id;

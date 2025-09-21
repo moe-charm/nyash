@@ -1,0 +1,11 @@
+using selfhost.vm.scan as MiniVmScan
+
+static box Main {
+  main(args) {
+    local s = "abc"
+    // twice to check stability
+    print(new MiniVmScan().index_of_from(s, "b", 0))
+    print(new MiniVmScan().index_of_from(s, "b", 0))
+    return 0
+  }
+}

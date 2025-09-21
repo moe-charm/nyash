@@ -37,3 +37,11 @@ Build (Pandoc):
  - note: 各 paper 配下の `out/` は参照専用（生成物は `docs/private/out/` に統一）
 
 **論文ネタ爆発問題**: 43日間で9本の論文級ネタが同時進行中（学術界異常事態）
+
+---
+
+補遺（開発メモ系）
+- Seam‑aware JSON Unification（AI 前処理 × C‑ABI Box 正規化）
+  - main: papers/paper-y-seam-aware-json-unification/README.md
+- Nyash Box → C ABI → Multi‑Language FFI（高レベル実装の多言語配布）
+  - main: papers/paper-z-nyash-box-ffi/README.md

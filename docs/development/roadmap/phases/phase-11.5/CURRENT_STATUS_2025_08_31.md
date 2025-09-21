@@ -5,7 +5,7 @@ Status: Active Development → LLVM Implementation
 
 ## 🎯 本日の大革命：Box-SSA Core-15
 
-### MIR命令セット凍結
+### MIR命令セットの固定
 - 26命令 → **真の15命令**に統一
 - すべてのBox操作を**BoxCall**に集約
 - Everything is Box哲学の完全実現
@@ -27,7 +27,7 @@ Status: Active Development → LLVM Implementation
    - Future/Await基本実装
    - 非同期ランタイム統合
 
-4. **Box-SSA Core-15仕様凍結** (NEW!)
+4. **Box-SSA Core-15仕様固定** (NEW!)
    - MIR 15命令に統一
    - BoxCall万能化
 

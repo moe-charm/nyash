@@ -48,7 +48,7 @@ Bytes: handled by `ByteCursorBox`.
 
 ## Proposed Convenience (design only)
 
-Parsing helpers (sugar; freeze-era design, not implemented):
+Parsing helpers (sugar; documented during feature‑pause, not implemented):
 - `toDigitOrNull(base=10) -> i64 | null`
   - Returns 0..9 when the code point is a decimal digit (or base subset), otherwise `null`.
   - CP based; delegates to `Utf8CursorBox` to read the leading code point.

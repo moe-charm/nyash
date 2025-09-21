@@ -1,0 +1,14 @@
+{
+  "kind": "Program",
+  "statements": [
+    {
+      "kind": "If",
+      "condition": { "kind": "Literal", "value": {"type": "bool", "value": true } },
+      "then": [
+        { "kind": "Print", "expression": {"kind": "Literal", "value": {"type": "string", "value": "yes"} } }
+      ],
+      "else": null
+    }
+  ]
+}
+

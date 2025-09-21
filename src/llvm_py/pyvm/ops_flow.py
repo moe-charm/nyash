@@ -51,10 +51,23 @@ def op_call(owner, fn, inst: Dict[str, Any], regs: Dict[int, Any]) -> Any:
             owner._dbg(f"[pyvm] call -> {fname} args={call_args}")
             result = owner._exec_function(callee, call_args)
         else:
-            # Heuristic resolution: match suffix ".name/arity"
+            # Heuristic resolution: match suffix ".name/arity"; prefer current box context on ties
             arity = len(call_args)
             suffix = f".{fname}/{arity}"
             candidates = [k for k in owner.functions.keys() if k.endswith(suffix)]
+            if len(candidates) > 1:
+                # Prefer the current box if available (MiniVm.* when inside MiniVm.*)
+                try:
+                    cur_box = fn.name.split(".")[0] if "." in fn.name else ""
+                except Exception:
+                    cur_box = ""
+                if cur_box:
+                    scoped = [k for k in candidates if k.startswith(cur_box + ".")]
+                    if len(scoped) == 1:
+                        candidates = scoped
+                # Still multiple: pick the lexicographically first for determinism
+                if len(candidates) > 1:
+                    candidates = [sorted(candidates)[0]]
             if len(candidates) == 1:
                 callee = owner.functions[candidates[0]]
                 owner._dbg(f"[pyvm] call -> {candidates[0]} args={call_args}")

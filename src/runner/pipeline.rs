@@ -33,11 +33,17 @@ impl NyashRunner {
             if let Ok(text) = std::fs::read_to_string("nyash.toml") {
                 if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
                     if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
-                        for (k, v) in mods.iter() {
-                            if let Some(path) = v.as_str() {
-                                pending_modules.push((k.to_string(), path.to_string()));
+                        fn visit(prefix: &str, tbl: &toml::value::Table, out: &mut Vec<(String, String)>) {
+                            for (k, v) in tbl.iter() {
+                                let name = if prefix.is_empty() { k.to_string() } else { format!("{}.{}", prefix, k) };
+                                if let Some(s) = v.as_str() {
+                                    out.push((name, s.to_string()));
+                                } else if let Some(t) = v.as_table() {
+                                    visit(&name, t, out);
+                                }
                             }
                         }
+                        visit("", mods, &mut pending_modules);
                     }
                     if let Some(using_tbl) = doc.get("using").and_then(|v| v.as_table()) {
                         if let Some(paths_arr) = using_tbl.get("paths").and_then(|v| v.as_array()) {

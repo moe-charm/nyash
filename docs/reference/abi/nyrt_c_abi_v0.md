@@ -91,4 +91,4 @@ uint64_t nyplug_array_len(NyBox arr);
 ## 注意
 - 例外/パニックの越境は不可（戻り値/エラーコードで返す）。
 - C++ 側は必ず `extern "C"`、ELF は `visibility("default")`。
-- ABI 破壊変更は `*_v1` などの別シンボルで導入（v0は凍結）。
+- ABI 破壊変更は `*_v1` などの別シンボルで導入（v0は当面固定＝長期安定化）。

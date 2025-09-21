@@ -1,0 +1,26 @@
+// EmitterBox — thin wrapper to emit JSON v0 (extracted)
+box EmitterBox {
+  emit_program(json, usings_json) {
+    if json == null { return json }
+    // Normalize usings payload to at least an empty array so meta.usings is always present
+    local payload = usings_json
+    if payload == null { payload = "[]" }
+    if payload.length() == 0 { payload = "[]" }
+    // Inject meta.usings before closing brace of top-level object
+    local n = json.lastIndexOf("}")
+    if n < 0 { return json }
+    local head = json.substring(0, n)
+    local tail = json.substring(n, json.length())
+    local needs_comma = 1
+    if head.length() == 0 { needs_comma = 0 } else {
+      local last = head.substring(head.length() - 1, head.length())
+      if last == "{" || last == "," { needs_comma = 0 }
+    }
+    if needs_comma == 1 { head = head + "," }
+    return head + "\"meta\":{\"usings\":" + payload + "}" + tail
+  }
+}
+
+static box EmitterStub {
+  main(args) { return 0 }
+}

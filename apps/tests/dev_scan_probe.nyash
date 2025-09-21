@@ -1,0 +1,11 @@
+using selfhost.vm.scan as MiniVmScan
+
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}}]}"
+    local p = new MiniVmScan().index_of_from(json, "\"kind\":\"Print\"", 0)
+    print(p)
+    return 0
+  }
+}
+

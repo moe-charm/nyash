@@ -1,6 +1,6 @@
 # Strings Blueprint — UTF‑8 First, Bytes Separate
 
-Status: active (Phase Freeze compatible)
+Status: active (Feature‑Pause compatible)
 Updated: 2025-09-21
 
 Purpose
@@ -41,7 +41,7 @@ Implementation Plan (staged, non‑breaking)
 
 Transition Gate (Rust dev only)
 - Env `NYASH_STR_CP=1` enables CP semantics for legacy byte-based paths in Rust runtime (e.g., StringBox.length/indexOf/lastIndexOf).
-- Default remains byte in Rust during freeze; PyVM follows CP semantics. CI smokes validate CP behavior via PyVM.
+- Default remains byte in Rust during the feature‑pause; PyVM follows CP semantics. CI smokes validate CP behavior via PyVM.
 
 Related Docs
 - reference/language/strings.md — policy & scope

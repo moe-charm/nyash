@@ -1,0 +1,12 @@
+using selfhost.vm.json as MiniJson
+
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":42}}}]}"
+    local k = "\"value\":"
+    local p = json.indexOf(k)
+    print(new MiniJson().read_digits_from(json, p + k.length()))
+    return 0
+  }
+}
+

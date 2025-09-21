@@ -1,0 +1,16 @@
+using selfhost.vm.core as MiniVm
+
+static box Main {
+  main(args) {
+    @json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":42}}}]}"
+    if args { if args.size() > 0 { @s = args.get(0) if s { json = s } } }
+    print("pre")
+    print(json.length())
+    print(json.indexOf("\"kind\":\"Program\""))
+    print(json.indexOf("\"kind\":\"Print\""))
+    print(json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\""))
+    @code = new MiniVm().run(json)
+    print("post")
+    return code
+  }
+}

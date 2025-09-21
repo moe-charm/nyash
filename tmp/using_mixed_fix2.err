@@ -1,0 +1,14 @@
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/json_cur.nyash tail=<<< = i + 1  continue }\n      if ch == "9" { out = out + ch  i = i + 1  continue }\n      break\n    }\n    return out\n  }\n}\n\n>>>
+[using][seam] prelude_tail=<<<e }\n      if ch == "8" { out = out + ch  i = i + 1  continue }\n      if ch == "9" { out = out + ch  i = i + 1  continue }\n      break\n    }\n    return out\n  }\n}>>>
+[using][seam] body_head   =<<<// Adapter for JSON cursor operations (extracted)\n// Wraps MiniJsonCur and exposes a stable facade\n\nstatic box MiniJson {\n  read_quoted_from(s, pos) {\n    local>>>
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/json_adapter.nyash tail=<<<ts_from(s, pos)\n  }\n  next_non_ws(s, pos) {\n    local cur = new MiniJsonCur()\n    return cur.next_non_ws(s, pos)\n  }\n}\n\n>>>
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/mini_vm_scan.nyash tail=<<<\n        if found >= 2 { return _int_to_str(total) }\n        continue\n      }\n      i = i + 1\n    }\n    return ""\n  }\n}\n>>>
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/mini_vm_binop.nyash tail=<<<length())\n    if d2 == "" { return "" }\n    return scan._int_to_str(scan._str_to_int(d1) + scan._str_to_int(d2))\n  }\n}\n\n>>>
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/mini_vm_compare.nyash tail=<<< == "!=" { if ai != bi { res = 1 } }\n    print(res)\n    // advance after rhs object (coarsely)\n    return rv + 1\n  }\n}\n\n>>>
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/mini_vm_prints.nyash tail=<<<P)\n  print_all_print_literals(json) {\n    return new MiniVmPrints().print_prints_in_slice(json, 0, json.length())\n  }\n}\n>>>
+[using][seam] prelude_tail=<<<n Program.statements (string/int only; MVP)\n  print_all_print_literals(json) {\n    return new MiniVmPrints().print_prints_in_slice(json, 0, json.length())\n  }\n}>>>
+[using][seam] body_head   =<<<\nstatic box MiniVm {\n  _is_digit(ch) {\n    if ch == "0" { return 1 }\n    if ch == "1" { return 1 }\n    if ch == "2" { return 1 }\n    if ch == "3" { return 1 }\n >>>
+[using][seam][inlined] /mnt/c/git/nyash-project/nyash_self_main/apps/selfhost-vm/boxes/mini_vm_core.nyash tail=<<<= p + k_print.length() }\n    }\n    return out\n  }\n}\n\n// Program entry: prefer argv[0] JSON, fallback to embedded sample\n>>>
+[using][seam] prelude_tail=<<<os = obj_end + 1\n      if pos <= p { pos = p + k_print.length() }\n    }\n    return out\n  }\n}\n\n// Program entry: prefer argv[0] JSON, fallback to embedded sample>>>
+[using][seam] body_head   =<<<\nstatic box Main {\n  main(args) {\n    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\">>>
+❌ Parse error: Invalid expression at line 1424

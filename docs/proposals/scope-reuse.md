@@ -1,6 +1,6 @@
 # Scope Reuse Blocks (MVP Proposal)
 
-Status: design-only during freeze (no implementation)
+Status: design-only during the feature‑pause (no implementation)
 
 Summary
 - Give short, reusable logic a name within the current scope without promoting it to a top-level function.
@@ -70,6 +70,5 @@ Tests (syntax-only smokes; design)
 - scope_capture_mut: mutation only allowed when `mut` is present.
 - scope_with_catch_cleanup: postfix catch/cleanup applied at local-function boundary.
 
-Freeze note
-- This is documentation and design intent only. Implementation is deferred until after the freeze.
-
+Pause note
+- This is documentation and design intent only. Implementation is deferred until after the feature‑pause (post‑bootstrap).

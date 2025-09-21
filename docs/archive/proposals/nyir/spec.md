@@ -2,7 +2,7 @@
 
 Purpose
 - Define NyIR (public intermediate representation) as the portable contract for all frontends/backends.
-- Freeze the 25-instruction set, effects, ownership forest, weak semantics, and bus contract.
+- Fix/specify the 25-instruction set, effects, ownership forest, weak semantics, and bus contract (frozen spec).
 
 Status
 - Version: nyir1.0 (draft)

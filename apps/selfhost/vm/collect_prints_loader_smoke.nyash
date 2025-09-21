@@ -1,0 +1,18 @@
+using selfhost.vm.core as MiniVm
+
+static box Main {
+  main(args) {
+    // Mixed shapes (loader-centric)
+    // 1) echo() with empty args -> ""
+    // 2) string literal with quotes inside
+    // 3) itoa() with empty args -> "0"
+    // 4) BinaryOp 8+9
+    // 5) int literal 4
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"C\"}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":8}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":9}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}]}"
+
+    local arr = new MiniVm().collect_prints(json)
+    local i = 0
+    loop (i < arr.size()) { print(arr.get(i))  i = i + 1 }
+    return 0
+  }
+}

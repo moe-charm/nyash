@@ -46,7 +46,7 @@ Phase 11: LLVM AOT（最高性能への挑戦）← 進行中
 
 ## ⚠️ 注意事項（運用方針）
 
-- Core‑15 凍結（第三案）: { Const, UnaryOp, BinOp, Compare, TypeOp, Load, Store, Jump, Branch, Return, Phi, Call, NewBox, BoxCall, ExternCall }
+- Core‑15 仕様固定（第三案）: { Const, UnaryOp, BinOp, Compare, TypeOp, Load, Store, Jump, Branch, Return, Phi, Call, NewBox, BoxCall, ExternCall }
 - 統一ルール: ArrayGet/ArraySet, RefGet/RefSet, PluginInvoke はBoxCallに一本化（Optimizerで正規化、Verifierで禁止）
 - バリア方針: 初期はランタイム関数側で安全に処理、型特化Lowering段でIRへ内挿（write barrier）
 

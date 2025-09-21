@@ -74,3 +74,143 @@ pub enum VerificationError {
         reason: String,
     },
 }
+
+impl std::fmt::Display for VerificationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VerificationError::UndefinedValue {
+                value,
+                block,
+                instruction_index,
+            } => {
+                write!(
+                    f,
+                    "Undefined value {} used in block {} at instruction {}",
+                    value, block, instruction_index
+                )
+            }
+            VerificationError::MultipleDefinition {
+                value,
+                first_block,
+                second_block,
+            } => {
+                write!(
+                    f,
+                    "Value {} defined multiple times: first in block {}, again in block {}",
+                    value, first_block, second_block
+                )
+            }
+            VerificationError::InvalidPhi {
+                phi_value,
+                block,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Invalid phi function {} in block {}: {}",
+                    phi_value, block, reason
+                )
+            }
+            VerificationError::UnreachableBlock { block } => {
+                write!(f, "Unreachable block {}", block)
+            }
+            VerificationError::ControlFlowError { block, reason } => {
+                write!(f, "Control flow error in block {}: {}", block, reason)
+            }
+            VerificationError::DominatorViolation {
+                value,
+                use_block,
+                def_block,
+            } => {
+                write!(
+                    f,
+                    "Value {} used in block {} but defined in non-dominating block {}",
+                    value, use_block, def_block
+                )
+            }
+            VerificationError::MergeUsesPredecessorValue {
+                value,
+                merge_block,
+                pred_block,
+            } => {
+                write!(
+                    f,
+                    "Merge block {} uses predecessor-defined value {} from block {} without Phi",
+                    merge_block, value, pred_block
+                )
+            }
+            VerificationError::InvalidWeakRefSource {
+                weak_ref,
+                block,
+                instruction_index,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Invalid WeakRef source {} in block {} at {}: {}",
+                    weak_ref, block, instruction_index, reason
+                )
+            }
+            VerificationError::InvalidBarrierPointer {
+                ptr,
+                block,
+                instruction_index,
+                reason,
+            } => {
+                write!(
+                    f,
+                    "Invalid Barrier pointer {} in block {} at {}: {}",
+                    ptr, block, instruction_index, reason
+                )
+            }
+            VerificationError::SuspiciousBarrierContext {
+                block,
+                instruction_index,
+                note,
+            } => {
+                write!(
+                    f,
+                    "Suspicious Barrier context in block {} at {}: {}",
+                    block, instruction_index, note
+                )
+            }
+            VerificationError::UnsupportedLegacyInstruction {
+                block,
+                instruction_index,
+                name,
+            } => {
+                write!(
+                    f,
+                    "Unsupported legacy instruction '{}' in block {} at {} (enable rewrite passes)",
+                    name, block, instruction_index
+                )
+            }
+            VerificationError::MissingCheckpointAroundAwait {
+                block,
+                instruction_index,
+                position,
+            } => {
+                write!(
+                    f,
+                    "Missing {} checkpoint around await in block {} at instruction {}",
+                    position, block, instruction_index
+                )
+            }
+            VerificationError::EdgeCopyStrictViolation { block, value, pred_block, reason } => {
+                if let Some(pb) = pred_block {
+                    write!(
+                        f,
+                        "EdgeCopyStrictViolation for value {} at merge block {} from pred {}: {}",
+                        value, block, pb, reason
+                    )
+                } else {
+                    write!(
+                        f,
+                        "EdgeCopyStrictViolation for value {} at merge block {}: {}",
+                        value, block, reason
+                    )
+                }
+            }
+        }
+    }
+}

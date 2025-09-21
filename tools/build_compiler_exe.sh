@@ -46,7 +46,7 @@ LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
 
 # 2) Emit + link compiler.nyash → EXE
 echo "[2/4] Emitting + linking selfhost compiler ..."
-tools/build_llvm.sh apps/selfhost-compiler/compiler.nyash -o "$OUT"
+tools/build_llvm.sh apps/selfhost/compiler/compiler.nyash -o "$OUT"
 
 if [[ "$PACK" == "0" ]]; then
   echo "✅ Built: ./$OUT"
@@ -94,4 +94,3 @@ echo "     (cd $DIST && ./$(basename "$OUT") tmp/sample.nyash > sample.json)"
 echo "     head -n1 sample.json"
 
 exit 0
-

@@ -1,0 +1,282 @@
+static box Main {
+  // --- minimal helpers (self-contained) ---
+  index_of_from(hay, needle, pos) {
+    if pos < 0 { pos = 0 }
+    if pos >= hay.length() { return -1 }
+    local tail = hay.substring(pos, hay.length())
+    local rel = tail.indexOf(needle)
+    if rel < 0 { return -1 }
+    return pos + rel
+  }
+  _is_digit(ch) {
+    if ch == "0" { return 1 }
+    if ch == "1" { return 1 }
+    if ch == "2" { return 1 }
+    if ch == "3" { return 1 }
+    if ch == "4" { return 1 }
+    if ch == "5" { return 1 }
+    if ch == "6" { return 1 }
+    if ch == "7" { return 1 }
+    if ch == "8" { return 1 }
+    if ch == "9" { return 1 }
+    return 0
+  }
+  read_digits(s, pos) {
+    if pos < 0 { return "" }
+    local n = s.length()
+    if pos >= n { return "" }
+    local i = pos
+    local out_start = -1
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if _is_digit(ch) == 1 { if out_start < 0 { out_start = i }  i = i + 1  continue } else { break }
+    }
+    if out_start < 0 { return "" }
+    return s.substring(out_start, i)
+  }
+  find_balanced_object_end(json, idx) {
+    if idx < 0 { return -1 }
+    local n = json.length()
+    if idx >= n { return -1 }
+    local depth = 0
+    local in_str = 0
+    local i = idx
+    local iter = 0
+    loop (i < n) {
+      iter = iter + 1
+      if iter > 5000 { return -1 }
+      local ch = json.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0 }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" { depth = depth - 1  if depth == 0 { return i + 1 } }
+      i = i + 1
+    }
+    return -1
+  }
+  // --- core: collect Print outputs in order ---
+  collect_prints(json) {
+    local out = new ArrayBox()
+    local pos = 0
+    local guard = 0
+    local k_print = "\"kind\":\"Print\""
+    loop (true) {
+      guard = guard + 1
+      if guard > 200 { break }
+      local p = index_of_from(json, k_print, pos)
+      if p < 0 { break }
+      // bound current Print slice as [current_print, next_print)
+      local obj_start = p
+      local next_p = index_of_from(json, k_print, p + k_print.length())
+      local obj_end = json.length()
+      if next_p > 0 { obj_end = next_p }
+
+      // 1) BinaryOp(int '+' int)
+      {
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, obj_start)
+        if epos > 0 { if epos < obj_end {
+          local k_bo = "\"kind\":\"BinaryOp\""
+          local bpos = index_of_from(json, k_bo, epos)
+          if bpos > 0 { if bpos < obj_end {
+            local opok = index_of_from(json, "\"operator\":\"+\"", bpos)
+            if opok > 0 {
+              // typed left/right literal ints
+              local k_l = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local lp = index_of_from(json, k_l, bpos)
+              if lp > 0 { if lp < obj_end {
+                local ld = read_digits(json, lp + k_l.length())
+                if ld != "" {
+                  local rp = index_of_from(json, k_r, lp + k_l.length())
+                  if rp > 0 { if rp < obj_end {
+                    local rd = read_digits(json, rp + k_r.length())
+                    if rd != "" { out.push(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  pos = p + k_print.length()  continue }
+                  }}
+                }
+              }}
+              // fallback: scan two successive '"value":' digits within expression bounds
+              local k_v = "\"value\":"
+              local v1 = index_of_from(json, k_v, epos)
+              if v1 > 0 { if v1 < obj_end {
+                local d1 = read_digits(json, v1 + k_v.length())
+                if d1 != "" {
+                  local v2 = index_of_from(json, k_v, v1 + k_v.length())
+                  if v2 > 0 { if v2 < obj_end {
+                    local d2 = read_digits(json, v2 + k_v.length())
+                    if d2 != "" { out.push(_int_to_str(_str_to_int(d1) + _str_to_int(d2)))  pos = p + k_print.length()  continue }
+                  }}
+                }
+              }}
+            }
+          }}
+        }}
+      }
+
+      // 2) Compare(lhs/rhs ints): prints 1/0
+      {
+        local k_cp = "\"kind\":\"Compare\""
+        local cpos = index_of_from(json, k_cp, obj_start)
+        if cpos > 0 { if cpos < obj_end {
+          local k_op = "\"operation\":\""
+          local opos = index_of_from(json, k_op, cpos)
+          if opos > 0 { if opos < obj_end {
+            local oi = opos + k_op.length()
+            local oj = index_of_from(json, "\"", oi)
+            if oj > 0 { if oj <= obj_end {
+              local op = json.substring(oi, oj)
+              local k_v = "\"value\":"
+              local lhs_v = index_of_from(json, k_v, oj)
+              if lhs_v > 0 { if lhs_v < obj_end {
+                local la = read_digits(json, lhs_v + k_v.length())
+                if la != "" {
+                  local rhs_v = index_of_from(json, k_v, lhs_v + k_v.length())
+                  if rhs_v > 0 { if rhs_v < obj_end {
+                    local rb = read_digits(json, rhs_v + k_v.length())
+                    if rb != "" {
+                      local ai = _str_to_int(la)
+                      local bi = _str_to_int(rb)
+                      local res = 0
+                      if op == "<"  { if ai <  bi { res = 1 } }
+                      if op == "==" { if ai == bi { res = 1 } }
+                      if op == "<=" { if ai <= bi { res = 1 } }
+                      if op == ">"  { if ai >  bi { res = 1 } }
+                      if op == ">=" { if ai >= bi { res = 1 } }
+                      if op == "!=" { if ai != bi { res = 1 } }
+                      out.push(_int_to_str(res))
+                      pos = p + k_print.length()
+                      continue
+                    }
+                  }}
+                }
+              }}
+            }}
+          }}
+        }}
+      }
+
+      // 3) FunctionCall echo/itoa (single literal arg)
+      {
+        local k_fc = "\"kind\":\"FunctionCall\""
+        local fcp = index_of_from(json, k_fc, obj_start)
+        if fcp > 0 { if fcp < obj_end {
+          local kn = "\"name\":\""
+          local np = index_of_from(json, kn, fcp)
+          if np > 0 { if np < obj_end {
+            local ni = np + kn.length()
+            local nj = index_of_from(json, "\"", ni)
+            if nj > 0 { if nj <= obj_end {
+              local fname = json.substring(ni, nj)
+              local ka = "\"arguments\":["
+              local ap = index_of_from(json, ka, nj)
+              if ap > 0 { if ap < obj_end {
+                // string arg
+                local ks = "\"type\":\"string\",\"value\":\""
+                local ps = index_of_from(json, ks, ap)
+                if ps > 0 { if ps < obj_end {
+                  local si = ps + ks.length()
+                  local sj = index_of_from(json, "\"", si)
+                  if sj > 0 { if sj <= obj_end {
+                    local sval = json.substring(si, sj)
+                    if fname == "echo" { out.push(sval)  pos = p + k_print.length()  continue }
+                  }}
+                }}
+                // int arg
+                local ki = "\"type\":\"int\",\"value\":"
+                local pi = index_of_from(json, ki, ap)
+                if pi > 0 { if pi < obj_end {
+                  local ival = read_digits(json, pi + ki.length())
+                  if ival != "" { if fname == "itoa" { out.push(ival)  pos = p + k_print.length()  continue } else { if fname == "echo" { out.push(ival)  pos = p + k_print.length()  continue } } }
+                }}
+              }}
+            }}
+          }}
+        }}
+      }
+
+      // 4) Literal string
+      {
+        local ks = "\"type\":\"string\",\"value\":\""
+        local ps = index_of_from(json, ks, obj_start)
+        if ps > 0 { if ps < obj_end {
+          local si = ps + ks.length()
+          local sj = index_of_from(json, "\"", si)
+          if sj > 0 { if sj <= obj_end { out.push(json.substring(si, sj))  pos = p + k_print.length()  continue }}
+        }}
+      }
+      // 5) Literal int
+      {
+        local ki = "\"type\":\"int\",\"value\":"
+        local pi = index_of_from(json, ki, obj_start)
+        if pi > 0 { if pi < obj_end {
+          local digits = read_digits(json, pi + ki.length())
+          if digits != "" { out.push(digits)  pos = p + k_print.length()  continue }
+        }}
+      }
+      // Unknown: skip ahead
+      pos = p + k_print.length()
+      if pos <= p { pos = p + 1 }
+    }
+    return out
+  }
+  // int<->str (non-negative only)
+  _str_to_int(s) {
+    local n = 0
+    local i = 0
+    loop (i < s.length()) {
+      local ch = s.substring(i, i+1)
+      n = n * 10
+      if ch == "0" { n = n + 0 }
+      if ch == "1" { n = n + 1 }
+      if ch == "2" { n = n + 2 }
+      if ch == "3" { n = n + 3 }
+      if ch == "4" { n = n + 4 }
+      if ch == "5" { n = n + 5 }
+      if ch == "6" { n = n + 6 }
+      if ch == "7" { n = n + 7 }
+      if ch == "8" { n = n + 8 }
+      if ch == "9" { n = n + 9 }
+      i = i + 1
+    }
+    return n
+  }
+  _int_to_str(n) {
+    if n == 0 { return "0" }
+    local s = new ArrayBox()
+    local x = n
+    loop (x > 0) {
+      local d = x % 10
+      if d == 0 { s.push("0") }
+      if d == 1 { s.push("1") }
+      if d == 2 { s.push("2") }
+      if d == 3 { s.push("3") }
+      if d == 4 { s.push("4") }
+      if d == 5 { s.push("5") }
+      if d == 6 { s.push("6") }
+      if d == 7 { s.push("7") }
+      if d == 8 { s.push("8") }
+      if d == 9 { s.push("9") }
+      x = (x - d) / 10
+    }
+    local out = new ArrayBox()
+    local i = s.size() - 1
+    loop (i >= 0) { out.push(s.get(i))  i = i - 1 }
+    local j = 0
+    local acc = ""
+    loop (j < out.size()) { acc = acc + out.get(j)  j = j + 1 }
+    return acc
+  }
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"B\"}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":7}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Compare\",\"operation\":\"<\",\"lhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}},\"rhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":2}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":3}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":5}}}]}"
+
+    local arr = collect_prints(json)
+    local i = 0
+    loop (i < arr.size()) { print(arr.get(i))  i = i + 1 }
+    return 0
+  }
+}

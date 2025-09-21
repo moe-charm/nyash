@@ -5,7 +5,7 @@
 - 最適化は二の次。まずは意味保存（semantics-preserving）を最優先で実現し、可搬性と一貫性を担保する。
 
 中核方針（Core Policy）
-- NyIR Core（26命令）は基本セマンティクス凍結。ExternCallによる外部世界接続を含む。
+- NyIR Core（26命令）は基本セマンティクスを仕様固定。ExternCallによる外部世界接続を含む。
 - 拡張は NyIR-Ext（exceptions/concurrency/atomics）で言語固有機能を段階導入。
 - Everything is Box哲学: 外部ライブラリもBIDによりBox統一インターフェースで利用。
 - 仕様の正本は `docs/nyir/spec.md` に集約（Core＋Ext）。
@@ -41,4 +41,3 @@
 - NyIR 仕様: `spec.md`
 - ABI/BID: `../予定/native-plan/box_ffi_abi.md`
 - 9.10 タスク（Copilot向け）: `../予定/native-plan/issues/phase_9_10_nyir_spec.md`
-

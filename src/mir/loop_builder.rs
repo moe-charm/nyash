@@ -234,8 +234,28 @@ impl<'a> LoopBuilder<'a> {
         // 以前は body_id に保存していたが、複数ブロックのボディや continue 混在時に不正確になるため
         // 実際の latch_id に対してスナップショットを紐づける
         self.block_var_maps.insert(latch_id, latch_snapshot);
-        self.emit_jump(header_id)?;
-        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, header_id, latch_id);
+        // Only jump back to header if the latch block is not already terminated
+        {
+            let need_jump = {
+                if let Some(ref fun_ro) = self.parent_builder.current_function {
+                    if let Some(bb) = fun_ro.get_block(latch_id) {
+                        !bb.is_terminated()
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                }
+            };
+            if need_jump {
+                self.emit_jump(header_id)?;
+                let _ = crate::mir::builder::loops::add_predecessor(
+                    self.parent_builder,
+                    header_id,
+                    latch_id,
+                );
+            }
+        }
 
         // 9. Headerブロックをシール（全predecessors確定）
         self.seal_block(header_id, latch_id)?;

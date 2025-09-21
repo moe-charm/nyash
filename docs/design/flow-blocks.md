@@ -1,6 +1,6 @@
 # Flow Blocks and Arrow Piping (Design Draft)
 
-Status: design-only during freeze (no implementation)
+Status: design-only during the feature‑pause (no implementation)
 
 Goal
 - Make control/data flow visually obvious while keeping the core minimal.
@@ -76,6 +76,5 @@ Tests (syntax-only smokes; design)
 - flow_placeholder: `{f()} -> { process(_) } -> { out(_) }`.
 - flow_if: `if cond -> {A} else -> {B}` behaves like standard if.
 
-Freeze note
-- Documentation and design intent only. Implementation is deferred until after the freeze.
-
+Pause note
+- Documentation and design intent only. Implementation is deferred until after the feature‑pause (post‑bootstrap).

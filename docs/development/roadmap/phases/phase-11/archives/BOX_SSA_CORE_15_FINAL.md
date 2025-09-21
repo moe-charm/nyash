@@ -1,10 +1,10 @@
 # Box-SSA Core-15 最終仕様
 
 Date: 2025-08-31  
-Status: **凍結** (Frozen Specification)  
+Status: **固定** (Frozen Specification)  
 Author: ChatGPT5 + Claude協調
 
-## ✅ 凍結命令セット（正味15個）
+## ✅ 固定命令セット（正味15個）
 
 ```
 { Const, UnaryOp, BinOp, Compare, TypeOp,
@@ -111,7 +111,7 @@ slow_path:
 ## 🚦 実装ロードマップ
 
 ### Phase 1: 仕様更新（即時）
-- [x] このドキュメントで仕様凍結
+- [x] このドキュメントで仕様固定
 - [ ] INSTRUCTION_SET.md を更新
 - [ ] テストの期待値を15に変更
 

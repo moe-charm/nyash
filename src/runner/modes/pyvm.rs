@@ -4,6 +4,7 @@ use std::{fs, process};
 
 /// Execute using PyVM only (no Rust VM runtime). Emits MIR(JSON) and invokes tools/pyvm_runner.py.
 pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
+    if std::env::var("NYASH_PYVM_TRACE").ok().as_deref() == Some("1") { eprintln!("[pyvm] entry"); }
     // Read the file
     let code = match fs::read_to_string(filename) {
         Ok(content) => content,
@@ -14,14 +15,63 @@ pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
     };
 
     // Optional using pre-processing (strip lines and register modules)
-    let code = if crate::config::env::enable_using() {
+    let mut code = if crate::config::env::enable_using() {
         match crate::runner::modes::common_util::resolve::strip_using_and_register(runner, &code, filename) {
             Ok(s) => s,
             Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
         }
     } else { code };
 
+    // Dev sugar pre-expand: line-head @name[:T] = expr → local name[:T] = expr
+    code = crate::runner::modes::common_util::resolve::preexpand_at_local(&code);
+
+    // Normalize logical operators for Stage-2 parser: translate '||'/'&&' to 'or'/'and' outside strings/comments
+    fn normalize_logical_ops(src: &str) -> String {
+        let mut out = String::with_capacity(src.len());
+        let mut it = src.chars().peekable();
+        let mut in_str = false;
+        let mut in_line = false;
+        let mut in_block = false;
+        while let Some(c) = it.next() {
+            if in_line {
+                out.push(c);
+                if c == '\n' { in_line = false; }
+                continue;
+            }
+            if in_block {
+                out.push(c);
+                if c == '*' && matches!(it.peek(), Some('/')) { out.push('/'); it.next(); in_block = false; }
+                continue;
+            }
+            if in_str {
+                out.push(c);
+                if c == '\\' { if let Some(nc) = it.next() { out.push(nc); } continue; }
+                if c == '"' { in_str = false; }
+                continue;
+            }
+            match c {
+                '"' => { in_str = true; out.push(c); }
+                '/' => {
+                    match it.peek() { Some('/') => { out.push('/'); out.push('/'); it.next(); in_line = true; }, Some('*') => { out.push('/'); out.push('*'); it.next(); in_block = true; }, _ => out.push('/') }
+                }
+                '#' => { in_line = true; out.push('#'); }
+                '|' => {
+                    if matches!(it.peek(), Some('|')) { out.push_str(" or "); it.next(); } else if matches!(it.peek(), Some('>')) { out.push('|'); out.push('>'); it.next(); } else { out.push('|'); }
+                }
+                '&' => {
+                    if matches!(it.peek(), Some('&')) { out.push_str(" and "); it.next(); } else { out.push('&'); }
+                }
+                _ => out.push(c),
+            }
+        }
+        out
+    }
+    code = normalize_logical_ops(&code);
+
     // Parse to AST
+    if std::env::var("NYASH_PYVM_DUMP_CODE").ok().as_deref() == Some("1") {
+        eprintln!("[pyvm-code]\n{}", code);
+    }
     let ast = match NyashParser::parse_from_string(&code) {
         Ok(ast) => ast,
         Err(e) => {

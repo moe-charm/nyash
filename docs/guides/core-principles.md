@@ -1,6 +1,6 @@
 # Nyash Core Principles — Minimal Syntax, Zero Runtime, Visual Flow
 
-Status: design-only during freeze (no implementation changes)
+Status: design-only during the feature‑pause (no implementation changes)
 
 Core (one page summary)
 - Minimal syntax: `{ … }` + `->` + `|args|` or `_` for flow; guard chains as the canonical first-match form. No new `match` construct; normalize instead.
@@ -32,12 +32,12 @@ Observability (spec hooks; design-only)
 - `NYASH_SCOPE_TRACE=1|json`: enter/exit + captures (JSONL: `sid`, `caps`, `ret`).
 - `NYASH_FLOW_TRACE=1`: desugared steps like `t0=B0(); t1=B1(t0);`.
 
-Runtime/API additions (docs-only at freeze)
+Runtime/API additions (docs-only during the feature‑pause)
 - `StringBox/Utf8Cursor`: `toDigitOrNull(base=10)`, `toIntOrNull()` — compile to simple comparisons/arithmetic.
 - Guard sugar: Range (`'0'..'9'`) and CharClass (`Digit`, `AZ`, `az`, `Alnum`, `Space`) — compile to bound checks.
 
-Acceptance & guardrails (freeze)
-- “No new grammar beyond sugar” and “no new VM opcodes” as hard rules during freeze.
+Acceptance & guardrails (feature‑pause)
+- “No new grammar beyond sugar” and “no new VM opcodes” as hard rules during the feature‑pause.
 - Golden texts (Ny → MIR fragments) to lock compatibility where practical.
 - Lint proposals are documentation-only: single-use scope, long `->` chains, duplicated side effects.
 
@@ -46,4 +46,3 @@ Related docs
 - design/flow-blocks.md — arrow flow + anonymous blocks
 - reference/language/match-guards.md — guard chains + range/charclass sugar
 - reference/language/strings.md — UTF‑8 first; proposed digit helpers
-

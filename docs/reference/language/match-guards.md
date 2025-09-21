@@ -1,6 +1,6 @@
 # Match Guards — Syntax and Lowering (MVP + Design Notes)
 
-Status: reference + design additions during freeze (no implementation changes)
+Status: reference + design additions during feature‑pause (no implementation changes)
 
 Scope
 - Guarded branches as a readable form of first-match selection.
@@ -37,5 +37,4 @@ Observability (design)
 - `NYASH_FLOW_TRACE=1` may trace how guard chains desugar into if/else.
 
 Notes
-- This page describes existing guard semantics and adds range/charclass as documentation-only sugar during freeze.
-
+- This page describes existing guard semantics and adds range/charclass as documentation-only sugar during the feature‑pause.

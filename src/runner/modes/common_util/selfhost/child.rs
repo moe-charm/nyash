@@ -2,7 +2,7 @@ use std::path::Path;
 
 /// Run a Nyash program as a child (`nyash --backend vm <program>`) and capture the first JSON v0 line.
 /// - `exe`: path to nyash executable
-/// - `program`: path to the Nyash script to run (e.g., apps/selfhost-compiler/compiler.nyash)
+/// - `program`: path to the Nyash script to run (e.g., apps/selfhost/compiler/compiler.nyash)
 /// - `timeout_ms`: kill child after this duration
 /// - `extra_args`: additional args to pass after program (e.g., "--", "--read-tmp")
 /// - `env_remove`: environment variable names to remove for the child
@@ -49,4 +49,3 @@ pub fn run_ny_program_capture_json(
     };
     crate::runner::modes::common_util::selfhost::json::first_json_v0_line(stdout)
 }
-

@@ -49,7 +49,7 @@
 - 最初は、コアな組み込み型はRust実装のまま、新しいプラグインや一部のモジュールをC ABI版で実装していくのが安全な進め方でしょう。
 
 #### 互換性維持とテスト戦略
-- **ABIインターフェースの凍結:** `nyash_ops` の関数シグネチャとセマンティクス（所有権のルールなど）を一度定義したら、それを厳格に守ることが極めて重要です。
+- **ABIインターフェースの仕様固定:** `nyash_ops` の関数シグネチャとセマンティクス（所有権のルールなど）を一度定義したら、それを厳格に守ることが極めて重要です。
 - **大規模なテストスイート:** 移行を成功させるには、テストがすべてを決定します。
   1. **振る舞いの一致テスト:** 同じNyashソースコードを「Rust ABIのみ」「C ABIのみ」「両者混在」の3つのモードで実行し、出力や結果が完全に一致することを検証するテストスイートを構築します。
   2. **ユニットテスト:** Cで実装されたABIの各関数（`create_value`, `retain`, `release`など）を、Cのテストフレームワーク（例: `check`）で徹底的にテストします。
@@ -207,7 +207,7 @@
   - Con: more moving parts, boundary crossings remain.
 
 ### Concrete Next Steps
-- Define and freeze a v0 ABI header:
+- Define and fix (freeze) a v0 ABI header:
   - Add `api_version`, `struct_size`, `nyash_ctx*`, `nyash_allocator*`, `nyash_status`, `nyash_value` 16‑byte layout, `retain/release`, `lookup_selector`, `call`, `error` primitives, and capability bits.
 - Scaffold `plugins/nyash_abi_c/`:
   - Provide a stub provider that returns `NYASH_E_NOT_IMPL` but passes header/version checks; wire it in `nyash.toml`.

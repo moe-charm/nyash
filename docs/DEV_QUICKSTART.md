@@ -34,7 +34,7 @@ See also
 - Rust unit tests: `cargo test`
 - Targeted: e.g., tokenizer/sugar config `cargo test --lib sugar_basic_test -- --nocapture`
 
-## Acceptance Checklist (Phase Freeze)
+## Acceptance Checklist (Feature Additions Pause)
 - cargo check (workspace) passes
 - Representative smokes are green:
   - PyVM smokes: `tools/pyvm_stage2_smoke.sh`

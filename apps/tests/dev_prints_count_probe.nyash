@@ -1,0 +1,11 @@
+using selfhost.vm.prints as MiniVmPrints
+
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"B\"}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":7}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Compare\",\"operation\":\"<\",\"lhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}},\"rhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":2}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":3}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":5}}}]}"
+    local n = new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
+    print(n)
+    return 0
+  }
+}
+

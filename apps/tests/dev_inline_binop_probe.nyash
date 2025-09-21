@@ -1,0 +1,11 @@
+using selfhost.vm.prints as MiniVmPrints
+
+static box Main {
+  main(args) {
+    // Single Print(BinaryOp '+')
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":3}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}}]}"
+    new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
+    return 0
+  }
+}
+

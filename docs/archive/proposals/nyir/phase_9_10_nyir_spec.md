@@ -1,7 +1,7 @@
 # Phase 9.10: NyIR v1 仕様・フォーマット・検証器（公開IRの確立）
 
 目的
-- NyashのMIRを公開IR（NyIR v1）として凍結し、あらゆるフロントエンド/バックエンドの共通契約とする。
+- NyashのMIRを公開IR（NyIR v1）として仕様固定し、あらゆるフロントエンド/バックエンドの共通契約とする。
 - 仕様・テキスト/バイナリフォーマット・厳格検証器・ツール群を整備し、移植性と一貫性を保証する。
 
 成果物（Deliverables）
@@ -15,7 +15,7 @@
 - Golden NyIR: `golden/*.nyir`（代表サンプルを固定、CIで全バックエンド一致を検証）
 
 仕様の要点（NyIR v1）
-- 命令セット: 25命令（Tier-0/1/2）を凍結
+- 命令セット: 25命令（Tier-0/1/2）を仕様固定
   - Tier-0: Const, BinOp, Compare, Branch, Jump, Phi, Call, Return
   - Tier-1: NewBox, BoxFieldLoad, BoxFieldStore, BoxCall, Safepoint, RefGet, RefSet, WeakNew, WeakLoad, WeakCheck, Send, Recv
   - Tier-2: TailCall, Adopt, Release, MemCopy, AtomicFence
@@ -64,7 +64,7 @@ Golden / Differential テスト
 - 10.x: NyIR→LLVM IR（別Phase）
 
 リスク
-- 仕様凍結の硬直化 → 拡張はfeatureビット＋拡張セクションへ
+- 仕様固定の硬直化 → 拡張はfeatureビット＋拡張セクションへ
 - 実装の重複 → Verifier/フォーマットは共有ライブラリ化
 
 最終更新: 2025-08-14

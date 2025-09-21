@@ -1,0 +1,59 @@
+// Self-contained dev smoke for FunctionCall empty-args
+// Goal: echo() -> empty line, itoa() -> 0
+
+static box MiniVm {
+  // simple substring find from position
+  index_of_from(hay, needle, pos) {
+    if pos < 0 { pos = 0 }
+    if pos >= hay.length() { return -1 }
+    local tail = hay.substring(pos, hay.length())
+    local rel = tail.indexOf(needle)
+    if rel < 0 { return -1 } else { return pos + rel }
+  }
+
+  // collect only FunctionCall with empty arguments [] for echo/itoa
+  collect_prints(json) {
+    local out = new ArrayBox()
+    local pos = 0
+    local guard = 0
+    loop (true) {
+      guard = guard + 1
+      if guard > 16 { break }
+      local k_fc = "\"kind\":\"FunctionCall\""
+      local p = index_of_from(json, k_fc, pos)
+      if p < 0 { break }
+      // name
+      local k_n = "\"name\":\""
+      local np = index_of_from(json, k_n, p)
+      if np < 0 { break }
+      local ni = np + k_n.length()
+      local nj = index_of_from(json, "\"", ni)
+      if nj < 0 { break }
+      local fname = json.substring(ni, nj)
+      // args [] detection
+      local k_a = "\"arguments\":["  
+      local ap = index_of_from(json, k_a, nj)
+      if ap < 0 { break }
+      local rb = index_of_from(json, "]", ap)
+      if rb < 0 { break }
+      // no content between '[' and ']'
+      if rb == ap + k_a.length() {
+        if fname == "echo" { out.push("") }
+        if fname == "itoa" { out.push("0") }
+      }
+      pos = rb + 1
+    }
+    return out
+  }
+}
+
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[]}}]}"
+
+    local arr = new MiniVm().collect_prints(json)
+    local i = 0
+    loop (i < arr.size()) { print(arr.get(i))  i = i + 1 }
+    return 0
+  }
+}
