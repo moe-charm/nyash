@@ -1,4 +1,4 @@
-# Current Task — Freeze Polish (Concise)
+# Current Task — Stability Polish (Concise)
 
 Updated: 2025‑09‑21
 
@@ -21,12 +21,29 @@ Updated: 2025‑09‑21
 
 This page is trimmed to reflect the active work only. The previous long form has been archived at `CURRENT_TASK_restored.md`.
 
-Principles (freeze)
+Principles (feature‑pause)
 - Self‑hosting first. Macro normalization pre‑MIR; PyVM semantics are authoritative.
-- New features are paused; allow only bug fixes, docs, smokes/goldens, CI polish.
-- Keep changes minimal/local; no spec changes unless to fix critical issues.
+- Big feature additions are paused until Nyash VM bootstrap completes. Bug fixes, docs, smokes/goldens, CI polish, robustness (spec‑preserving) continue.
+- Keep changes minimal/local; no spec changes unless to fix critical issues, and guard any optional paths behind default‑OFF flags.
 
 ### Delta (since last update)
+- JSON provider（yyjsonベンダリング完了・切替はランタイム）
+  - `plugins/nyash-json-plugin/c/yyjson/{yyjson.h,yyjson.c,LICENSE}` を同梱し、`build.rs + cc` で自己完結ビルド。
+  - env `NYASH_JSON_PROVIDER=serde|yyjson`（既定=serde）。nyash.toml の [env] からも設定可能。
+  - yyjson 経路で parse/root/get/size/at/str/int/bool を実装（TLVタグは従来準拠）。失敗時は安全に serde にフォールバック。
+  - JSON スモーク（parse_ok/err/nested/collect_prints）は serde/yyjson 両経路で緑。専用の yyjson CI ジョブは追加しない（不要）。
+- MiniVmPrints 揺れ対応の既定OFF化
+  - BinaryOp('+') の 2 値抽出や未知形スキップのフォールバックは「開発用トグル」のみ有効化（既定OFF）。
+  - 本線は JSON Box 経路に統一（collect_prints_mixed は JSON ベースのアプリに切替）。
+- Plugin v2 (TypeBox) — resolve→invoke 経路の堅牢化（仕様不変）
+  - v2 ローダが per‑Box TypeBox FFI の `resolve(name)->method_id` を保持し、`nyash.toml` 未定義メソッドでも動的解決→キャッシュ
+  - Unified Host の `resolve_method` も config→TypeBox.resolve の順で解決
+  - 影響範囲はローダ/ホストのみ。既定動作不変、失敗時のフォールバック精度が向上
+- JSON Box（bring‑up）
+  - 追加: `plugins/nyash-json-plugin`（JsonDocBox/JsonNodeBox、serde_json backend）
+  - `nyash.toml` に JsonDocBox/JsonNodeBox の methods を登録（birth/parse/root/error, kind/get/size/at/str/int/bool/fini）
+  - PyVM 経路: `src/llvm_py/pyvm/ops_box.py` に最小シム（JsonDoc/JsonNode）を追加（parse/root/get/size/at/str/int/bool）
+  - Smoke: `tools/test/smoke/selfhost/jsonbox_collect_prints.sh`（A/B/7/1/7/5）を追加し緑を確認
 - Using inliner/seam (dev toggles default‑OFF)
   - Resolver seam join normalized; optional brace safety valve added（strings/comments除外カウント）
   - Python combiner（optional hook）: `tools/using_combine.py` を追加（--fix-braces/--seam-debug など）
@@ -43,17 +60,17 @@ Principles (freeze)
 - CI/Smokes
   - Added UTF‑8 CP smoke (PyVM): `tools/test/smoke/strings/utf8_cp_smoke.sh` using `apps/tests/strings/utf8_cp_demo.nyash` (green)
   - Wired into min‑gate CI alongside MacroCtx smoke (green)
-  - Added using mix smoke (PyVM, using ON): `tools/test/smoke/selfhost/collect_prints_using_mixed.sh` (in progress)
-    - Current: A/B prints OK via MiniVmPrints; ints/compare/binop pending
-    - Use dev flags when reproducing: `NYASH_RESOLVE_FIX_BRACES=1 NYASH_PARSER_STATIC_INIT_STRICT=1`
-    - Goal: fully green (A/B/7/1/7/5) with default‑OFF toggles kept OFF by default
+  - Added using mix smoke (PyVM, using ON): `tools/test/smoke/selfhost/collect_prints_using_mixed.sh` — green
+    - Fix: MiniVmBinOp.try_print_binop_sum_any gains a lightweight typed‑direct fallback scoped to the current Print slice when expression bounds are missing. Spec unchanged; only robustness improved.
+    - Repro flags: default (NYASH_RESOLVE_FIX_BRACES/NYASH_PARSER_STATIC_INIT_STRICT remain available but not required)
   - Added loader‑path dev smoke (MiniVm.collect_prints focus): `tools/test/smoke/selfhost/collect_prints_loader.sh`（任意/開発用）
   - Added empty‑args using smoke (PyVM, using ON): `tools/test/smoke/selfhost/collect_empty_args_using_smoke.sh` (uses seam brace safety valve; default‑OFF)
 - Runtime (Rust)
-  - StringBox.length: CP/Byte gate via env `NYASH_STR_CP=1` (default remains byte length; freeze‑safe)
+  - StringBox.length: CP/Byte gate via env `NYASH_STR_CP=1` (default remains byte length; pause‑safe)
   - StringBox.indexOf/lastIndexOf: CP gate via env `NYASH_STR_CP=1`（既定はByte index; PyVMはCP挙動）
 
 Notes / Risks
+- PyVM はプラグイン未連携のため、JsonBox は最小シムで対応（仕様不変、既定OFFの機能変更なし）。将来的に PyVM→Host ブリッジを導入する場合はデフォルトOFFで段階導入。
 - 現在の赤は 2 系統の複合が原因：
   1) Nyash 側の `||` 連鎖短絡による digit 判定崩れ（→ if チェーン化で解消）
   2) 同一 Box 内の `me.*` 呼びが PyVM で未解決（→ `__me__` ディスパッチ導入）。
@@ -135,7 +152,7 @@ Notes / Risks
 
 Nyash スクリプトの基本ボックス（標準 libs）
 - 既存: `json_cur.nyash`, `string_ext.nyash`, `array_ext.nyash`, `string_builder.nyash`, `test_assert.nyash`, `utf8_cursor.nyash`, `byte_cursor.nyash`
-- 追加候補（凍結順守: libs 配下・任意採用・互換保持）
+- 追加候補（機能追加ポーズ遵守: libs 配下・任意採用・互換保持）
   - MapExtBox（keys/values/entries）
   - PathBox mini（dirname/join の最小）
   - PrintfExt（`StringBuilderBox` 補助）
@@ -162,6 +179,17 @@ Pending / Skipped（未導入・任意）
 - LLVM 重テスト: 手動/任意ジョブのみ（常時スキップ）
 
 ## 80/20 Plan（小粒で高効果）
+
+JSON / Plugin v2（現状に追記）
+- [x] v2 resolve→invoke 配線（TypeBox.resolve フォールバック + キャッシュ）
+- [x] JsonBox methods を nyash.toml に登録
+- [x] PyVM 最小シム（JsonDoc/JsonNode）を追加
+- [x] JSON collect_prints スモーク追加（緑）
+- [x] yyjson ベンダリング＋ノード操作実装（parse/root/get/size/at/str/int/bool）
+- [x] ランタイム切替（env `NYASH_JSON_PROVIDER`）— 既定は serde。yyjson 専用 CI は追加しない。
+- [ ] TLV void タグ整合（任意：共通ヘルパへ寄せる）
+- [ ] method_id キャッシュの統一化（loader 内で Box単位の LRU/Hash で維持）
+- [x] MiniVmPrints フォールバックは開発用トグルのみ（既定OFF）
 
 Checklist（更新済み）
 - [x] Self‑host 前展開の固定スモーク 1 本（upper_string）
@@ -205,7 +233,7 @@ Progress
 - 前展開: `NYASH_MACRO_SELFHOST_PRE_EXPAND=auto`（dev/CI）
 - テスト: VM/goldens は軽量維持、IR は任意ジョブ
 
-## Post‑Freeze Backlog（Docs only）
+## Post‑Bootstrap Backlog（Docs only）
 - Language: Scope reuse blocks（design） — docs/proposals/scope-reuse.md
 - Language: Flow blocks & `->` piping（design） — docs/design/flow-blocks.md
 - Guards: Range/CharClass sugar（reference） — docs/reference/language/match-guards.md
@@ -229,3 +257,9 @@ Trigger: nyash_vm の安定（主要スモーク緑・自己ホスト経路が�
   - MiniVmPrints.print_prints_in_slice の binop/compare/int リテラル境界（obj_end/p_obj_end）を調整
   - ArrayBox 経路の size/get 依存を避け、直接 print する経路の安定化を優先
   - 再現フラグ（開発のみ）: `NYASH_RESOLVE_FIX_BRACES=1 NYASH_PARSER_STATIC_INIT_STRICT=1`
+
+### Next Up (JSON line)
+- TLV void タグの統一（任意）
+- method_id 解決キャッシュの整備・計測
+- YYJSON backend のスケルトン追加（既定OFF・プラグイン切替可能設計）
+- JSON smokes をCI最小ゲートへ追加

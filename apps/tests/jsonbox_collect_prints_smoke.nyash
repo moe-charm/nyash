@@ -1,0 +1,53 @@
+static box Main {
+  main(args) {
+    // JSON v0 Program with mixed Print expressions
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"B\"}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":7}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Compare\",\"operation\":\"<\",\"lhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}},\"rhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":2}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":3}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":5}}}]}"
+
+    local doc = new JsonDocBox()
+    doc.parse(json)
+    local root = doc.root()
+    local stmts = root.get("statements")
+    local n = stmts.size()
+    local i = 0
+    loop (i < n) {
+      local node = stmts.at(i)
+      local expr = node.get("expression")
+      local kind = expr.get("kind").str()
+      if kind == "Literal" {
+        local val = expr.get("value")
+        local ty = val.get("type").str()
+        if ty == "string" { print(val.get("value").str()) } else { print(val.get("value").int()) }
+      } else if kind == "FunctionCall" {
+        local name = expr.get("name").str()
+        // First argument as typed literal object { type, value }
+        local arg0 = expr.get("arguments").at(0).get("value")
+        if name == "echo" {
+          if arg0.get("type").str() == "string" { print(arg0.get("value").str()) } else { print(arg0.get("value").int()) }
+        }
+        if name == "itoa" { print(arg0.get("value").int()) }
+      } else if kind == "Compare" {
+        local op = expr.get("operation").str()
+        local lhs = expr.get("lhs").get("value").get("value").int()
+        local rhs = expr.get("rhs").get("value").get("value").int()
+        if op == "<" {
+          if lhs < rhs { print(1) } else { print(0) }
+        }
+        if op == "==" {
+          if lhs == rhs { print(1) } else { print(0) }
+        }
+        if op == ">" {
+          if lhs > rhs { print(1) } else { print(0) }
+        }
+      } else if kind == "BinaryOp" {
+        local op = expr.get("operator").str()
+        if op == "+" {
+          local left = expr.get("left").get("value").get("value").int()
+          local right = expr.get("right").get("value").get("value").int()
+          print(left + right)
+        }
+      }
+      i = i + 1
+    }
+    return 0
+  }
+}

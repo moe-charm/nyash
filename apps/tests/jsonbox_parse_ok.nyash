@@ -1,0 +1,11 @@
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[]}"
+    local doc = new JsonDocBox()
+    doc.parse(json)
+    local root = doc.root()
+    print(root.get("kind").str())
+    return 0
+  }
+}
+

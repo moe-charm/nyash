@@ -45,6 +45,12 @@ jobs:
       - name: Run PyVM Stage-2 smokes
         run: bash tools/pyvm_stage2_smoke.sh
 
+      - name: JSON smoke — collect_prints (PyVM+plugins)
+        run: bash tools/test/smoke/selfhost/jsonbox_collect_prints.sh
+
+      - name: JSON smoke — parse error (PyVM+plugins)
+        run: bash tools/test/smoke/selfhost/jsonbox_parse_err.sh
+
   macro-golden:
     runs-on: ubuntu-latest
     timeout-minutes: 20

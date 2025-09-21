@@ -94,16 +94,22 @@ impl PluginHost {
         let box_conf = cfg
             .get_box_config(lib_name, box_type, &toml_value)
             .ok_or(BidError::InvalidType)?;
-        let m = box_conf
-            .methods
-            .get(method_name)
-            .ok_or(BidError::InvalidMethod)?;
+        // Prefer config mapping; fallback to loader's TypeBox resolve(name)
+        let (method_id, returns_result) = if let Some(m) = box_conf.methods.get(method_name) {
+            (m.method_id, m.returns_result)
+        } else {
+            let l = self.loader.read().unwrap();
+            let mid = l
+                .resolve_method_id(box_type, method_name)
+                .map_err(|_| BidError::InvalidMethod)?;
+            (mid, false)
+        };
         Ok(MethodHandle {
             lib: lib_name.to_string(),
             box_type: box_type.to_string(),
             type_id: box_conf.type_id,
-            method_id: m.method_id,
-            returns_result: m.returns_result,
+            method_id,
+            returns_result,
         })
     }
 

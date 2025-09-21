@@ -1,0 +1,16 @@
+static box Main {
+  main(args) {
+    local json = "{\"a\":{\"n\":7,\"s\":\"B\"},\"arr\":[1,2,3]}"
+    local doc = new JsonDocBox()
+    doc.parse(json)
+    local root = doc.root()
+    // prints: B, 7, 3, 2
+    print(root.get("a").get("s").str())
+    print(root.get("a").get("n").int())
+    local arr = root.get("arr")
+    print(arr.size())
+    print(arr.at(1).int())
+    return 0
+  }
+}
+

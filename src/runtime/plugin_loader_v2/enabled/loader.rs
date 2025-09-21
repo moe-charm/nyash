@@ -23,6 +23,8 @@ struct LoadedBoxSpec {
     fini_method_id: Option<u32>,
     // Optional Nyash ABI v2 per-box invoke entry (not yet used for calls)
     invoke_id: Option<BoxInvokeFn>,
+    // Optional resolve(name)->method_id provided by NyashTypeBoxFfi
+    resolve_fn: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
 }
 #[derive(Debug, Clone, Copy)]
 struct MethodSpec {
@@ -172,7 +174,7 @@ impl PluginLoaderV2 {
                         }
                         continue;
                     }
-                    // Remember invoke_id in box_specs for (lib_name, box_type)
+                    // Remember invoke_id/resolve in box_specs for (lib_name, box_type)
                     if let Some(invoke_id) = st.invoke_id {
                         let key = (lib_name.to_string(), box_type.to_string());
                         let mut map = self.box_specs.write().map_err(|_| BidError::PluginError)?;
@@ -181,8 +183,10 @@ impl PluginLoaderV2 {
                             methods: HashMap::new(),
                             fini_method_id: None,
                             invoke_id: None,
+                            resolve_fn: None,
                         });
                         entry.invoke_id = Some(invoke_id);
+                        entry.resolve_fn = st.resolve;
                     } else if dbg_on() {
                         eprintln!(
                             "[PluginLoaderV2] WARN: TypeBox present but no invoke_id for {}.{} — plugin should export per-Box invoke",
@@ -309,6 +313,56 @@ impl PluginLoaderV2 {
             invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
             fini_method_id: fini_method,
         })
+    }
+
+    /// Resolve method_id for (box_type, method_name), consulting config first, then TypeBox resolve() if available.
+    pub(crate) fn resolve_method_id(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
+        use std::ffi::CString;
+        let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
+        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let toml_value: toml::Value = super::errors::from_toml(toml::from_str(
+            &std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?,
+        ))?;
+        // 1) config mapping
+        if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
+            if let Some(bc) = cfg.get_box_config(&lib_name, box_type, &toml_value) {
+                if let Some(m) = bc.methods.get(method_name) {
+                    return Ok(m.method_id);
+                }
+            }
+            // 2) v2 TypeBox resolve (and cache)
+            let key = (lib_name.to_string(), box_type.to_string());
+            if let Ok(mut map) = self.box_specs.write() {
+                if let Some(spec) = map.get_mut(&key) {
+                    if let Some(ms) = spec.methods.get(method_name) {
+                        return Ok(ms.method_id);
+                    }
+                    if let Some(res_fn) = spec.resolve_fn {
+                        if let Ok(cstr) = CString::new(method_name) {
+                            let mid = res_fn(cstr.as_ptr());
+                            if mid != 0 {
+                                // Cache minimal MethodSpec (returns_result unknown → false)
+                                spec.methods.insert(
+                                    method_name.to_string(),
+                                    MethodSpec {
+                                        method_id: mid,
+                                        returns_result: false,
+                                    },
+                                );
+                                if dbg_on() {
+                                    eprintln!(
+                                        "[PluginLoaderV2] resolve(name) {}.{} -> id {}",
+                                        box_type, method_name, mid
+                                    );
+                                }
+                                return Ok(mid);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Err(BidError::InvalidMethod)
     }
 
     pub fn construct_existing_instance(
@@ -634,10 +688,19 @@ impl PluginLoaderV2 {
             .get_box_config(lib_name, box_type, &toml_value)
             .ok_or(BidError::InvalidType)?;
         let type_id = box_conf.type_id;
-        let method = box_conf
-            .methods
-            .get(method_name)
-            .ok_or(BidError::InvalidMethod)?;
+        // Resolve method id via config or TypeBox resolve()
+        let method_id = match self.resolve_method_id(box_type, method_name) {
+            Ok(mid) => mid,
+            Err(e) => {
+                if dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] ERR: method resolve failed for {}.{}: {:?}",
+                        box_type, method_name, e
+                    );
+                }
+                return Err(BidError::InvalidMethod);
+            }
+        };
         // Get plugin handle
         let plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
         let _plugin = plugins.get(lib_name).ok_or(BidError::PluginError)?;
@@ -646,7 +709,7 @@ impl PluginLoaderV2 {
         let (_code, out_len, out) = super::host_bridge::invoke_alloc(
             super::super::nyash_plugin_invoke_v2_shim,
             type_id,
-            method.method_id,
+            method_id,
             instance_id,
             &tlv,
         );

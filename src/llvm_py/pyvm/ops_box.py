@@ -22,6 +22,12 @@ def op_newbox(owner, inst: Dict[str, Any], regs: Dict[int, Any]) -> None:
         val = {"__box__": "ArrayBox", "__arr": []}
     elif btype == "MapBox":
         val = {"__box__": "MapBox", "__map": {}}
+    elif btype == "JsonDocBox":
+        # Minimal JsonDocBox (PyVM-only): stores parsed JSON and last error
+        val = {"__box__": "JsonDocBox", "__doc": None, "__err": None}
+    elif btype == "JsonNodeBox":
+        # Minimal JsonNodeBox with empty Null node
+        val = {"__box__": "JsonNodeBox", "__node": None}
     else:
         # Unknown box -> opaque
         val = {"__box__": btype}
@@ -135,7 +141,10 @@ def op_boxcall(owner, fn, inst: Dict[str, Any], regs: Dict[int, Any]) -> None:
     # ArrayBox minimal methods
     elif isinstance(recv, dict) and recv.get("__box__") == "ArrayBox":
         arr = recv.get("__arr", [])
-        if method in ("len", "size"):
+        if method in ("birth",):
+            # No-op initializer for parity with Nyash VM
+            out = 0
+        elif method in ("len", "size"):
             out = len(arr)
         elif method == "get":
             idx = int(args[0]) if args else 0
@@ -184,6 +193,87 @@ def op_boxcall(owner, fn, inst: Dict[str, Any], regs: Dict[int, Any]) -> None:
         else:
             out = None
         recv["__map"] = m
+
+    # JsonDocBox (PyVM-native shim)
+    elif isinstance(recv, dict) and recv.get("__box__") == "JsonDocBox":
+        import json
+        if method == "parse":
+            s = args[0] if args else ""
+            try:
+                recv["__doc"] = json.loads(str(s))
+                recv["__err"] = None
+            except Exception as e:
+                recv["__doc"] = None
+                recv["__err"] = str(e)
+            out = 0
+        elif method == "root":
+            out = {"__box__": "JsonNodeBox", "__node": recv.get("__doc", None)}
+        elif method == "error":
+            out = recv.get("__err") or ""
+        else:
+            out = None
+
+    # JsonNodeBox (PyVM-native shim)
+    elif isinstance(recv, dict) and recv.get("__box__") == "JsonNodeBox":
+        node = recv.get("__node", None)
+        if method == "kind":
+            if node is None:
+                out = "null"
+            elif isinstance(node, bool):
+                out = "bool"
+            elif isinstance(node, int):
+                out = "int"
+            elif isinstance(node, float):
+                out = "real"
+            elif isinstance(node, str):
+                out = "string"
+            elif isinstance(node, list):
+                out = "array"
+            elif isinstance(node, dict):
+                out = "object"
+            else:
+                out = "null"
+        elif method == "get":
+            key = str(args[0]) if args else ""
+            if isinstance(node, dict) and key in node:
+                out = {"__box__": "JsonNodeBox", "__node": node.get(key)}
+            else:
+                out = {"__box__": "JsonNodeBox", "__node": None}
+        elif method == "size":
+            if isinstance(node, list):
+                out = len(node)
+            elif isinstance(node, dict):
+                out = len(node)
+            else:
+                out = 0
+        elif method == "at":
+            try:
+                idx = int(args[0]) if args else 0
+            except Exception:
+                idx = 0
+            if isinstance(node, list) and 0 <= idx < len(node):
+                out = {"__box__": "JsonNodeBox", "__node": node[idx]}
+            else:
+                out = {"__box__": "JsonNodeBox", "__node": None}
+        elif method == "str":
+            if isinstance(node, str):
+                out = node
+            elif isinstance(node, dict) and isinstance(node.get("value"), str):
+                out = node.get("value")
+            else:
+                out = ""
+        elif method == "int":
+            if isinstance(node, int):
+                out = node
+            elif isinstance(node, dict):
+                v = node.get("value")
+                out = int(v) if isinstance(v, int) else 0
+            else:
+                out = 0
+        elif method == "bool":
+            out = bool(node) if isinstance(node, bool) else False
+        else:
+            out = None
 
     elif method == "esc_json":
         s = args[0] if args else ""
@@ -236,4 +326,3 @@ def op_boxcall(owner, fn, inst: Dict[str, Any], regs: Dict[int, Any]) -> None:
         out = None
 
     owner._set(regs, inst.get("dst"), out)
-

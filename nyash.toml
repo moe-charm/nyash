@@ -1,5 +1,9 @@
 [env]
 # Put environment defaults used by tools or examples if needed
+# Enable using resolver by default (can be disabled with NYASH_SKIP_TOML_ENV=1)
+NYASH_ENABLE_USING = "1"
+# Enable dev sugar preexpand for @ local alias (line-head) during parsing
+NYASH_DEV_AT_LOCAL = "1"
 
 [using]
 paths = ["apps", "lib", "."]
@@ -17,6 +21,7 @@ selfhost.vm.scan = "apps/selfhost-vm/boxes/mini_vm_scan.nyash"
 selfhost.vm.binop = "apps/selfhost-vm/boxes/mini_vm_binop.nyash"
 selfhost.vm.compare = "apps/selfhost-vm/boxes/mini_vm_compare.nyash"
 selfhost.vm.prints = "apps/selfhost-vm/boxes/mini_vm_prints.nyash"
+selfhost.vm.seam = "apps/selfhost-vm/boxes/seam_inspector.nyash"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]
@@ -211,6 +216,38 @@ base64Encode = { method_id = 3 }
 base64Decode = { method_id = 4 }
 hexEncode = { method_id = 5 }
 hexDecode = { method_id = 6 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_json_plugin.so"]
+boxes = ["JsonDocBox", "JsonNodeBox"]
+path = "plugins/nyash-json-plugin/target/release/libnyash_json_plugin.so"
+
+[libraries."libnyash_json_plugin.so".JsonDocBox]
+type_id = 70
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonDocBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 1 }
+root = { method_id = 2 }
+error = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox]
+type_id = 71
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox.methods]
+birth = { method_id = 0 }
+kind = { method_id = 1 }
+get = { method_id = 2 }
+size = { method_id = 3 }
+at = { method_id = 4 }
+str = { method_id = 5 }
+int = { method_id = 6 }
+bool = { method_id = 7 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_toml_plugin.so"]
