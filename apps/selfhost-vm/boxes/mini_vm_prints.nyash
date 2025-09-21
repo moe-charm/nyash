@@ -37,7 +37,7 @@ static box MiniVmPrints {
     local k_val2 = "\"value\":"
     local v2 = scan.index_of_from(json, k_val2, tpos)
     if v2 <= 0 || v2 >= obj_end { return -1 }
-    local digits = new MiniVmScan().read_digits(json, v2 + k_val2.length())
+    local digits = scan.read_digits(json, v2 + k_val2.length())
     if digits == "" { return -1 }
     print(digits)
     return obj_end + 1
@@ -137,6 +137,30 @@ static box MiniVmPrints {
       if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
       nextp = bin.try_print_binop_sum_any(json, end, p)
       if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+      // Inline typed sum within this Print BinaryOp('+')
+      {
+        local k_expr = "\"expression\":{"
+        local epos = scan.index_of_from(json, k_expr, p)
+        if epos > 0 { if epos < p_obj_end {
+          if scan.index_of_from(json, "\"kind\":\"BinaryOp\"", epos) > 0 {
+            if scan.index_of_from(json, "\"operator\":\"+\"", epos) > 0 {
+              local k_l = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local lp = scan.index_of_from(json, k_l, epos)
+              if lp > 0 { if lp < p_obj_end {
+                local ld = scan.read_digits(json, lp + k_l.length())
+                if ld != "" {
+                  local rp = scan.index_of_from(json, k_r, lp + k_l.length())
+                  if rp > 0 { if rp < p_obj_end {
+                    local rd = scan.read_digits(json, rp + k_r.length())
+                    if rd != "" { print(new MiniVmScan()._int_to_str(new MiniVmScan()._str_to_int(ld) + new MiniVmScan()._str_to_int(rd)))  printed = printed + 1  pos = p_obj_end + 1  continue }
+                  }}
+                }
+              }}
+            }
+          }
+        }}
+      }
     // 2) Compare
     nextp = cmp.try_print_compare_at(json, end, p)
     if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
@@ -154,8 +178,8 @@ static box MiniVmPrints {
       local ki = "\"type\":\"int\",\"value\":"
       local pi = scan.index_of_from(json, ki, p)
       if pi > 0 { if pi < p_slice_end {
-        local digits = new MiniJsonLoader().read_digits_from(json, pi + ki.length())
-        if digits != "" { print(digits)  printed = printed + 1  pos = p_slice_end + 1  continue }
+        local digits = scan.read_digits(json, pi + ki.length())
+        if digits != "" { print(digits)  printed = printed + 1  pos = p_slice_end  continue }
       }}
     }
       // Unknown shape: skip this Print object entirely to avoid stalls
