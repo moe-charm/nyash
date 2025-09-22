@@ -84,6 +84,7 @@
    - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)**
    - 🔥 **[Phase 16: マクロ革命](development/roadmap/phases/phase-16-macro-revolution/)**
    - 🧪 **[Phase 17: LoopForm Self‑Hosting](development/roadmap/phases/phase-17-loopform-selfhost/)**
+   - 💡 **[Rust所有権統合（候補）](private/ideas/new-features/2025-09-22-rust-ownership-fusion.md)** - Phase 17+候補
 - 🧩 **[Mini‑VM 構築ロードマップ](development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)**
 - 🧭 **Using→Loader 統合（最小設計）**: design/using-loader-integration.md
  - 🗂️ **Docsの書き方（小さく・リンク駆動）**: guides/contributing-docs.md

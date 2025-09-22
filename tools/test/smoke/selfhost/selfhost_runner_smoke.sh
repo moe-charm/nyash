@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Smoke: Stage 0/1 selfhost runner wiring (harness JSON path)
 
-ROOT_DIR=$(cd "$(dirname "$0")/../../.." && pwd)
+ROOT_DIR=$(cd "$(dirname "$0")/../../../.." && pwd)
 cd "$ROOT_DIR"
 
 echo "[smoke] building nyash (release)"

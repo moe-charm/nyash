@@ -56,6 +56,7 @@ Related-Code: src/path/to/file.rs::function_name()
 例：
 - `2025-08-25-vm-andor-shortcircuit.md`
 - `2025-08-26-mir-builder-cleanup.md`
+- `2025-09-22-rust-ownership-fusion.md`（Phase 17候補）
 
 ## 📊 優先度
 
