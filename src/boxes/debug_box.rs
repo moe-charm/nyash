@@ -328,17 +328,18 @@ impl DebugBox {
 
     // --- Phase 1: JIT/Plugin shim tracing ---
     pub fn trace_plugin_calls(&self, on: bool) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        crate::jit::shim_trace::set_enabled(on);
+        // ARCHIVED: JIT functionality moved to archive/jit-cranelift/
         println!(
-            "[DEBUG] JIT shim trace: {}",
+            "[DEBUG] JIT shim trace: {} (JIT ARCHIVED - no-op)",
             if on { "ENABLED" } else { "DISABLED" }
         );
         Ok(Box::new(VoidBox::new()))
     }
 
     pub fn get_jit_events(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let s = crate::jit::shim_trace::snapshot_joined();
-        Ok(Box::new(StringBox::new(s)))
+        // ARCHIVED: JIT functionality moved to archive/jit-cranelift/
+        let s = "[JIT ARCHIVED] No JIT events available - JIT moved to archive/jit-cranelift/";
+        Ok(Box::new(StringBox::new(s.to_string())))
     }
 }
 

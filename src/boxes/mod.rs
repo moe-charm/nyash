@@ -73,12 +73,13 @@ pub mod console_box;
 pub mod debug_config_box;
 pub mod function_box;
 pub mod gc_config_box;
-pub mod jit_config_box;
-pub mod jit_events_box;
-pub mod jit_hostcall_registry_box;
-pub mod jit_policy_box;
-pub mod jit_stats_box;
-pub mod jit_strict_box;
+// ARCHIVED: JIT Box modules moved to archive/jit-cranelift/ during Phase 15
+// pub mod jit_config_box;
+// pub mod jit_events_box;
+// pub mod jit_hostcall_registry_box;
+// pub mod jit_policy_box;
+// pub mod jit_stats_box;
+// pub mod jit_strict_box;
 pub mod map_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod qr_box;

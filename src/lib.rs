@@ -48,7 +48,7 @@ pub mod mir_aot_plan_import {
 
 // Backends
 pub mod backend;
-pub mod jit; // Cranelift JIT subsystem (skeleton)
+// pub mod jit; // ARCHIVED: Cranelift JIT subsystem moved to archive/jit-cranelift/
 pub mod semantics; // Unified semantics trait for MIR evaluation/lowering
 
 pub mod benchmarks;
