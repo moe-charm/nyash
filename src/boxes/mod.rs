@@ -112,12 +112,13 @@ pub use canvas_event_box::CanvasEventBox;
 pub use canvas_loop_box::CanvasLoopBox;
 pub use console_box::ConsoleBox;
 pub use debug_box::DebugBox;
-pub use jit_config_box::JitConfigBox;
-pub use jit_events_box::JitEventsBox;
-pub use jit_hostcall_registry_box::JitHostcallRegistryBox;
-pub use jit_policy_box::JitPolicyBox;
-pub use jit_stats_box::JitStatsBox;
-pub use jit_strict_box::JitStrictBox;
+// ARCHIVED: JIT Box imports moved to archive/jit-cranelift/ during Phase 15
+// pub use jit_config_box::JitConfigBox;
+// pub use jit_events_box::JitEventsBox;
+// pub use jit_hostcall_registry_box::JitHostcallRegistryBox;
+// pub use jit_policy_box::JitPolicyBox;
+// pub use jit_stats_box::JitStatsBox;
+// pub use jit_strict_box::JitStrictBox;
 pub use map_box::MapBox;
 pub use math_box::{FloatBox, MathBox};
 #[cfg(not(target_arch = "wasm32"))]

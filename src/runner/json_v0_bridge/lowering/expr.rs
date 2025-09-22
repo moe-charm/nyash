@@ -232,11 +232,12 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                     });
                 }
             }
-            crate::jit::events::emit_lower(
-                serde_json::json!({ "id":"shortcircuit","op": if is_and {"and"} else {"or"},"rhs_bb":rhs_bb.0,"fall_bb":fall_bb.0,"merge_bb":merge_bb.0 }),
-                "shortcircuit",
-                "<json_v0>",
-            );
+            // ARCHIVED: JIT events moved to archive/jit-cranelift/ during Phase 15
+            // crate::jit::events::emit_lower(
+            //     serde_json::json!({ "id":"shortcircuit","op": if is_and {"and"} else {"or"},"rhs_bb":rhs_bb.0,"fall_bb":fall_bb.0,"merge_bb":merge_bb.0 }),
+            //     "shortcircuit",
+            //     "<json_v0>",
+            // );
             let cdst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(fall_bb) {
                 let cval = if is_and {

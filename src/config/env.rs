@@ -7,8 +7,8 @@ use std::collections::BTreeMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct NyashEnv {
-    /// JIT-related configuration (delegates to jit::config)
-    pub jit: crate::jit::config::JitConfig,
+    // ARCHIVED: JIT-related configuration moved to archive/jit-cranelift/ during Phase 15
+    // pub jit: crate::jit::config::JitConfig,
     /// Arbitrary key-value overrides loaded from nyash.toml [env]
     pub overrides: BTreeMap<String, String>,
 }
@@ -16,13 +16,15 @@ pub struct NyashEnv {
 impl NyashEnv {
     pub fn from_env() -> Self {
         Self {
-            jit: crate::jit::config::JitConfig::from_env(),
+            // ARCHIVED: JIT config during Phase 15
+            // jit: crate::jit::config::JitConfig::from_env(),
             overrides: BTreeMap::new(),
         }
     }
     /// Apply current struct values into process environment
     pub fn apply_env(&self) {
-        self.jit.apply_env();
+        // ARCHIVED: JIT config during Phase 15
+        // self.jit.apply_env();
         for (k, v) in &self.overrides {
             std::env::set_var(k, v);
         }

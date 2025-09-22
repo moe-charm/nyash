@@ -141,8 +141,9 @@ impl GcController {
         match self.mode {
             GcMode::Rc | GcMode::RcCycle | GcMode::STW => {
                 let started = std::time::Instant::now();
-                // Roots: JIT/AOT handle registry snapshot
-                let roots = crate::jit::rt::handles::snapshot_arcs();
+                // Roots: Runtime handle registry snapshot
+                // ARCHIVED: JIT handle implementation moved to archive/jit-cranelift/ during Phase 15
+                let roots: Vec<std::sync::Arc<dyn crate::box_trait::NyashBox>> = Vec::new(); // TODO: Implement handle registry for Phase 15
                 let mut visited: HashSet<u64> = HashSet::new();
                 let mut q: VecDeque<std::sync::Arc<dyn crate::box_trait::NyashBox>> =
                     VecDeque::new();

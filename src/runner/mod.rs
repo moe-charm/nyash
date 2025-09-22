@@ -293,7 +293,15 @@ impl NyashRunner {
 
 impl NyashRunner {
     /// Run a file through independent JIT engine (no VM execute loop)
+    /// ARCHIVED: JIT/Cranelift functionality disabled for Phase 15
     fn run_file_jit_direct(&self, filename: &str) {
+        eprintln!("❌ JIT-direct mode is archived for Phase 15. JIT/Cranelift moved to archive/jit-cranelift/");
+        eprintln!("   Use VM backend instead: nyash {}", filename);
+        eprintln!("   Or use LLVM backend: nyash --backend llvm {}", filename);
+        std::process::exit(1);
+        
+        // Original JIT implementation archived - commented out for Phase 15
+        /*
         use nyash_rust::{mir::MirCompiler, parser::NyashParser};
         use std::fs;
         // Small helper for unified error output (text or JSON)
@@ -653,6 +661,7 @@ impl NyashRunner {
                 std::process::exit(1);
             }
         }
+        */ // End of archived JIT implementation
     }
 }
 

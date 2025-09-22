@@ -49,6 +49,8 @@ pub mod mir_aot_plan_import {
 // Backends
 pub mod backend;
 // pub mod jit; // ARCHIVED: Cranelift JIT subsystem moved to archive/jit-cranelift/
+pub mod jit_stub; // Temporary JIT stub for Phase 15 compilation compatibility
+pub use jit_stub as jit; // Alias for compatibility
 pub mod semantics; // Unified semantics trait for MIR evaluation/lowering
 
 pub mod benchmarks;

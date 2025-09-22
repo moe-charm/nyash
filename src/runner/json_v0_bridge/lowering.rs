@@ -103,20 +103,22 @@ fn strip_phi_functions(f: &mut MirFunction) {
 
 fn lower_break_stmt(f: &mut MirFunction, cur_bb: BasicBlockId, exit_bb: BasicBlockId) {
     jump_with_pred(f, cur_bb, exit_bb);
-    crate::jit::events::emit_lower(
-        serde_json::json!({ "id": "loop_break","exit_bb": exit_bb.0,"decision": "lower" }),
-        "loop",
-        "<json_v0>",
-    );
+    // ARCHIVED: JIT events moved to archive/jit-cranelift/ during Phase 15
+    // crate::jit::events::emit_lower(
+    //     serde_json::json!({ "id": "loop_break","exit_bb": exit_bb.0,"decision": "lower" }),
+    //     "loop",
+    //     "<json_v0>",
+    // );
 }
 
 fn lower_continue_stmt(f: &mut MirFunction, cur_bb: BasicBlockId, cond_bb: BasicBlockId) {
     jump_with_pred(f, cur_bb, cond_bb);
-    crate::jit::events::emit_lower(
-        serde_json::json!({ "id": "loop_continue","cond_bb": cond_bb.0,"decision": "lower" }),
-        "loop",
-        "<json_v0>",
-    );
+    // ARCHIVED: JIT events moved to archive/jit-cranelift/ during Phase 15
+    // crate::jit::events::emit_lower(
+    //     serde_json::json!({ "id": "loop_continue","cond_bb": cond_bb.0,"decision": "lower" }),
+    //     "loop",
+    //     "<json_v0>",
+    // );
 }
 
 

@@ -70,13 +70,18 @@ pub fn tag_of_vm(v: &VMValue) -> &'static str {
     }
 }
 
-/// Wrap a NyashBox object into a handle using JIT handle registry.
+/// Wrap a NyashBox object into a handle using runtime handle registry.
 /// This keeps a single handle mechanism across backends.
-pub fn handle_of(boxref: Arc<dyn NyashBox>) -> Handle {
-    crate::jit::rt::handles::to_handle(boxref)
+/// ARCHIVED: JIT handle implementation moved to archive/jit-cranelift/ during Phase 15
+pub fn handle_of(_boxref: Arc<dyn NyashBox>) -> Handle {
+    // TODO: Implement handle registry for Phase 15 VM/LLVM backends
+    // For now, use a simple 0-handle placeholder
+    0
 }
 
 /// Try to resolve a handle back to a Box object.
-pub fn handle_get(h: Handle) -> Option<Arc<dyn NyashBox>> {
-    crate::jit::rt::handles::get(h)
+/// ARCHIVED: JIT handle implementation moved to archive/jit-cranelift/ during Phase 15
+pub fn handle_get(_h: Handle) -> Option<Arc<dyn NyashBox>> {
+    // TODO: Implement handle registry for Phase 15 VM/LLVM backends
+    None
 }
