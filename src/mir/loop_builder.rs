@@ -7,13 +7,12 @@
 
 use super::{BasicBlockId, ConstValue, MirInstruction, ValueId};
 use crate::ast::ASTNode;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
 // Phase 15 段階的根治戦略：制御フローユーティリティ
 use super::utils::{
     is_current_block_terminated,
     capture_actual_predecessor_and_jump,
-    collect_phi_incoming_if_reachable,
 };
 
 /// 不完全なPhi nodeの情報

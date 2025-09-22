@@ -26,7 +26,7 @@ pub(super) struct LoopContext {
 #[derive(Clone)]
 pub(super) struct BridgeEnv {
     pub(super) throw_enabled: bool,
-    pub(super) mir_no_phi: bool,
+    // フェーズM.2: mir_no_phiフィールド削除（PHI統一で不要）
     pub(super) allow_me_dummy: bool,
     pub(super) me_class: String,
     pub(super) try_result_mode: bool,
@@ -35,13 +35,13 @@ pub(super) struct BridgeEnv {
 impl BridgeEnv {
     pub(super) fn load() -> Self {
         let trm = crate::config::env::try_result_mode();
-        let no_phi = crate::config::env::mir_no_phi();
+        // フェーズM.2: no_phi変数削除
         if crate::config::env::cli_verbose() {
-            eprintln!("[Bridge] load: try_result_mode={} mir_no_phi={}", trm, no_phi);
+            eprintln!("[Bridge] load: try_result_mode={}", trm);
         }
         Self {
             throw_enabled: std::env::var("NYASH_BRIDGE_THROW_ENABLE").ok().as_deref() == Some("1"),
-            mir_no_phi: no_phi,
+            // フェーズM.2: mir_no_phiフィールド削除
             allow_me_dummy: std::env::var("NYASH_BRIDGE_ME_DUMMY").ok().as_deref() == Some("1"),
             me_class: std::env::var("NYASH_BRIDGE_ME_CLASS").unwrap_or_else(|_| "Main".to_string()),
             try_result_mode: trm,
@@ -61,45 +61,7 @@ fn jump_with_pred(f: &mut MirFunction, cur_bb: BasicBlockId, target: BasicBlockI
 
 /// Strip Phi instructions by inserting edge copies on each predecessor.
 /// This normalizes MIR to PHI-off form for downstream harnesses that synthesize PHIs.
-fn strip_phi_functions(f: &mut MirFunction) {
-    // Collect block ids to avoid borrow issues while mutating
-    let block_ids: Vec<BasicBlockId> = f.blocks.keys().copied().collect();
-    for bbid in block_ids {
-        // Snapshot phi instructions at the head
-        let mut phi_entries: Vec<(ValueId, Vec<(BasicBlockId, ValueId)>)> = Vec::new();
-        if let Some(bb) = f.blocks.get(&bbid) {
-            for inst in &bb.instructions {
-                if let MirInstruction::Phi { dst, inputs } = inst {
-                    phi_entries.push((*dst, inputs.clone()));
-                } else {
-                    // PHIs must be at the beginning; once we see non-Phi, stop
-                    break;
-                }
-            }
-        }
-        if phi_entries.is_empty() {
-            continue;
-        }
-        // Insert copies on predecessors
-        for (dst, inputs) in &phi_entries {
-            for (pred, val) in inputs {
-                if let Some(pbb) = f.blocks.get_mut(pred) {
-                    pbb.add_instruction(MirInstruction::Copy { dst: *dst, src: *val });
-                }
-            }
-        }
-        // Remove Phi instructions from the merge block
-        if let Some(bb) = f.blocks.get_mut(&bbid) {
-            let non_phi: Vec<MirInstruction> = bb
-                .instructions
-                .iter()
-                .cloned()
-                .skip_while(|inst| matches!(inst, MirInstruction::Phi { .. }))
-                .collect();
-            bb.instructions = non_phi;
-        }
-    }
-}
+// フェーズM.2: strip_phi_functions()削除 - PHI統一により不要
 
 fn lower_break_stmt(f: &mut MirFunction, cur_bb: BasicBlockId, exit_bb: BasicBlockId) {
     jump_with_pred(f, cur_bb, exit_bb);
@@ -256,10 +218,7 @@ pub(super) fn lower_program(prog: ProgramV0) -> Result<MirModule, String> {
         }
     }
     f.signature.return_type = MirType::Unknown;
-    // PHI-off normalization for Bridge output
-    if env.mir_no_phi {
-        strip_phi_functions(&mut f);
-    }
+    // フェーズM.2: PHI後処理削除 - MirBuilder/LoopBuilderでPHI統一済み
     module.add_function(f);
     Ok(module)
 }

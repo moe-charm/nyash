@@ -36,7 +36,7 @@ use once_cell::sync::OnceCell;
 use std::sync::RwLock;
 
 static GLOBAL_ENV: OnceCell<RwLock<NyashEnv>> = OnceCell::new();
-static PHI_ON_GATED_WARNED: OnceCell<()> = OnceCell::new();
+// フェーズM.2: PHI_ON_GATED_WARNED削除（phi-legacy簡略化により不要）
 
 pub fn current() -> NyashEnv {
     if let Some(lock) = GLOBAL_ENV.get() {
@@ -109,47 +109,13 @@ pub fn await_max_ms() -> u64 {
 }
 
 // ---- MIR PHI / PHI-less (edge-copy) mode ----
-/// Enable MIR PHI non-generation. Bridge/Builder emit edge copies instead of PHI.
-/// Default: PHI-ON when the build supports it (feature `phi-legacy`), otherwise fall back to PHI-OFF.
+/// Enable MIR PHI non-generation for Bridge compatibility mode only.
+/// フェーズM.2: MirBuilder/LoopBuilderでPHI統一済み、Bridge層の互換性制御のみ
+/// Default: PHI-ON (Phase 15 direction), override with NYASH_MIR_NO_PHI=1
 pub fn mir_no_phi() -> bool {
-    match std::env::var("NYASH_MIR_NO_PHI").ok() {
-        Some(v) => {
-            let lv = v.to_ascii_lowercase();
-            let requested_no_phi = !(lv == "0" || lv == "false" || lv == "off");
-            if requested_no_phi {
-                return true;
-            }
-            // PHI-on requested explicitly
-            #[cfg(feature = "phi-legacy")]
-            {
-                return false;
-            }
-            #[cfg(not(feature = "phi-legacy"))]
-            {
-                if PHI_ON_GATED_WARNED.set(()).is_ok() {
-                    eprintln!(
-                        "[nyash] PHI-on requested but disabled in this build (missing 'phi-legacy' feature). Falling back to PHI-off."
-                    );
-                }
-                return true;
-            }
-        }
-        None => {
-            // Default preference: PHI-ON if available
-            #[cfg(feature = "phi-legacy")]
-            {
-                return false;
-            }
-            #[cfg(not(feature = "phi-legacy"))]
-            {
-                if PHI_ON_GATED_WARNED.set(()).is_ok() {
-                    eprintln!(
-                        "[nyash] Default PHI-on requested but build lacks 'phi-legacy' feature; falling back to PHI-off."
-                    );
-                }
-                return true;
-            }
-        }
+    match std::env::var("NYASH_MIR_NO_PHI").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false, // フェーズM.2: デフォルトPHI-ON統一
     }
 }
 

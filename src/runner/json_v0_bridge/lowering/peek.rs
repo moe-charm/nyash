@@ -69,13 +69,8 @@ pub(super) fn lower_peek_expr_with_scope<S: VarScope>(
 
     // Merge result
     let out = f.next_value_id();
-    if env.mir_no_phi {
-        for (pred, val) in phi_inputs {
-            if let Some(bb) = f.get_block_mut(pred) {
-                bb.add_instruction(MirInstruction::Copy { dst: out, src: val });
-            }
-        }
-    } else if let Some(bb) = f.get_block_mut(merge_bb) {
+    // フェーズM.2: PHI統一処理（no_phi分岐削除）
+    if let Some(bb) = f.get_block_mut(merge_bb) {
         let mut inputs = phi_inputs;
         inputs.sort_by_key(|(bbid, _)| bbid.0);
         bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs });

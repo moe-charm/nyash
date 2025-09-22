@@ -21,18 +21,15 @@ pub(super) fn lower_loop_stmt(
             bb.add_instruction(MirInstruction::Jump { target: cond_bb });
         }
     }
-    let no_phi = env.mir_no_phi;
+    // フェーズM.2: no_phi変数削除
     let base_vars = vars.clone();
     let orig_names: Vec<String> = base_vars.keys().cloned().collect();
     let mut phi_map: HashMap<String, ValueId> = HashMap::new();
     for name in &orig_names {
         if let Some(&bval) = base_vars.get(name) {
             let dst = f.next_value_id();
-            if no_phi {
-                if let Some(bb) = f.get_block_mut(cur_bb) {
-                    bb.add_instruction(MirInstruction::Copy { dst, src: bval });
-                }
-            } else if let Some(bb) = f.get_block_mut(cond_bb) {
+            // フェーズM.2: PHI統一処理（no_phi分岐削除）
+            if let Some(bb) = f.get_block_mut(cond_bb) {
                 bb.insert_instruction_after_phis(MirInstruction::Phi {
                     dst,
                     inputs: vec![(cur_bb, bval)],
@@ -69,18 +66,8 @@ pub(super) fn lower_loop_stmt(
         Some(MirInstruction::Jump { target, .. }) if *target == cond_bb
     );
     if backedge_to_cond {
-        if no_phi {
-            for (name, &phi_dst) in &phi_map {
-                if let Some(&latch_val) = body_vars.get(name) {
-                    if let Some(bb) = f.get_block_mut(bend) {
-                        bb.add_instruction(MirInstruction::Copy {
-                            dst: phi_dst,
-                            src: latch_val,
-                        });
-                    }
-                }
-            }
-        } else if let Some(bb) = f.get_block_mut(cond_bb) {
+        // フェーズM.2: PHI統一処理（no_phi分岐削除）
+        if let Some(bb) = f.get_block_mut(cond_bb) {
             for (name, &phi_dst) in &phi_map {
                 if let Some(&latch_val) = body_vars.get(name) {
                     for inst in &mut bb.instructions {

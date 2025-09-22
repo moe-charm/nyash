@@ -276,15 +276,16 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 📝 Update (2025-09-22) ⚡ フェーズM実装大幅進展！PHI一本化によるコード大削減達成
-- ✅ **MirBuilder no_phi_mode完全撤廃！** phi.rs、exprs_peek.rs全分岐をPHI命令一本化
-- ✅ **LoopBuilder no_phi_mode完全撤廃！** 3箇所のedge copy分岐をPHI命令一本化  
-- ✅ **edge_copy関連コード削除！** insert_edge_copy()メソッド含む数十行削減
-- 🔧 **ビルド成功維持！** フェーズS+フェーズM修正でもエラーなしを確認
-- ⏳ **JSON v0 Bridge保留中**: Phase 15重要コンポーネントのため慎重対応予定
-- 🎯 **次の一歩**: collect_prints動作確認→JSON v0 Bridge対応→フェーズM完了
-- 📊 **戦略文書更新**: break-control-flow-strategy.mdの段階的根治計画に沿って実行
-- 🚀 **効果**: 数百行削減によりPhase 15の80k→20k圧縮目標に大きく貢献
+## 📝 Update (2025-09-23) 🚀 フェーズM+M.2完全達成！PHI統一革命完了
+- ✅ **フェーズM.2完全達成！** JSON v0 Bridge層クリーンアップ完了でPHI完全統一実現
+- ✅ **8箇所のno_phi分岐完全削除！** try_catch(3)、ternary(1)、peek(1)、loop_(2)、expr(1)
+- ✅ **strip_phi_functions()削除！** 40行の複雑なPHI→edge-copy後処理撤廃
+- ✅ **config::env::mir_no_phi()大幅簡略化！** 40行→8行、phi-legacy依存完全除去
+- ✅ **未使用コード完全削除！** PHI_ON_GATED_WARNED static、mir_no_phiフィールド等
+- 🔧 **安定性完全確認！** cargo check成功、基本・複雑PHIテスト両方正常動作
+- 📊 **圧縮効果絶大！** フェーズM+M.2で推定500行超削減達成
+- 🎯 **Phase 15準備完了**: MIR層PHI統一により80k→20k行圧縮の主要基盤完成
+- 🚀 **次段階**: collect_prints動作確認→JSON v0 Bridge最終統合→Phase 15完遂
 
 ## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
 - ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ

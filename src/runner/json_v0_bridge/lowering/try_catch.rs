@@ -70,7 +70,8 @@ pub(super) fn lower_try_stmt(
             let catch_clause = &catches[0];
             let mut catch_vars = base_vars.clone();
             if let Some(param) = &catch_clause.param {
-                if !env.mir_no_phi && !incoming_exc.is_empty() {
+                // フェーズM.2: PHI統一処理（no_phi条件削除）
+                if !incoming_exc.is_empty() {
                     let phi_dst = f.next_value_id();
                     if let Some(bb) = f.get_block_mut(catch_bb) {
                         let mut inputs = incoming_exc.clone();
@@ -281,16 +282,8 @@ pub(super) fn lower_try_stmt(
             phi_entries.push((dst, inputs));
             merged_vars.insert(name.clone(), dst);
         }
-        if env.mir_no_phi {
-            // Emit edge copies on predecessors instead of Phi at merge
-            for (dst, inputs) in phi_entries {
-                for (pred, val) in inputs {
-                    if let Some(pbb) = f.get_block_mut(pred) {
-                        pbb.add_instruction(MirInstruction::Copy { dst, src: val });
-                    }
-                }
-            }
-        } else if let Some(bb) = f.get_block_mut(finally_block) {
+        // フェーズM.2: PHI統一処理（no_phi分岐削除）
+        if let Some(bb) = f.get_block_mut(finally_block) {
             for (dst, inputs) in phi_entries {
                 bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs });
             }
@@ -344,15 +337,8 @@ pub(super) fn lower_try_stmt(
             phi_entries.push((dst, inputs));
             merged_vars.insert(name.clone(), dst);
         }
-        if env.mir_no_phi {
-            for (dst, inputs) in phi_entries {
-                for (pred, val) in inputs {
-                    if let Some(pbb) = f.get_block_mut(pred) {
-                        pbb.add_instruction(MirInstruction::Copy { dst, src: val });
-                    }
-                }
-            }
-        } else if let Some(bb) = f.get_block_mut(exit_bb) {
+        // フェーズM.2: PHI統一処理（no_phi分岐削除）
+        if let Some(bb) = f.get_block_mut(exit_bb) {
             for (dst, inputs) in phi_entries {
                 bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs });
             }

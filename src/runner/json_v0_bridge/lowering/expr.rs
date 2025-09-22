@@ -255,14 +255,8 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                 }
             }
             let out = f.next_value_id();
-            if env.mir_no_phi {
-                if let Some(bb) = f.get_block_mut(fall_bb) {
-                    bb.add_instruction(MirInstruction::Copy { dst: out, src: cdst });
-                }
-                if let Some(bb) = f.get_block_mut(rhs_end) {
-                    bb.add_instruction(MirInstruction::Copy { dst: out, src: rval });
-                }
-            } else if let Some(bb) = f.get_block_mut(merge_bb) {
+            // フェーズM.2: PHI統一処理（no_phi分岐削除）
+            if let Some(bb) = f.get_block_mut(merge_bb) {
                 let mut inputs: Vec<(BasicBlockId, ValueId)> = vec![(fall_bb, cdst)];
                 if rhs_end != fall_bb {
                     inputs.push((rhs_end, rval));
