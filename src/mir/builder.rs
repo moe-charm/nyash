@@ -106,8 +106,7 @@ pub struct MirBuilder {
     /// when lowering nested conditionals and to simplify jump generation.
     pub(super) if_merge_stack: Vec<BasicBlockId>,
 
-    /// Whether PHI emission is disabled (edge-copy mode)
-    pub(super) no_phi_mode: bool,
+    // フェーズM: no_phi_modeフィールド削除（常にPHI使用）
 
     // ---- Try/Catch/Cleanup lowering context ----
     /// When true, `return` statements are deferred: they assign to `return_defer_slot`
@@ -133,7 +132,7 @@ impl MirBuilder {
     /// Create a new MIR builder
     pub fn new() -> Self {
         let plugin_method_sigs = plugin_sigs::load_plugin_method_sigs();
-        let no_phi_mode = crate::config::env::mir_no_phi();
+        // フェーズM: no_phi_mode初期化削除
         Self {
             current_module: None,
             current_function: None,
@@ -155,7 +154,7 @@ impl MirBuilder {
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
             if_merge_stack: Vec::new(),
-            no_phi_mode,
+            // フェーズM: no_phi_modeフィールド削除
             return_defer_active: false,
             return_defer_slot: None,
             return_defer_target: None,
@@ -339,48 +338,9 @@ impl MirBuilder {
         }
     }
 
-    pub(super) fn is_no_phi_mode(&self) -> bool {
-        self.no_phi_mode
-    }
+    // フェーズM: is_no_phi_mode()メソッド削除
 
-    /// Insert a Copy instruction into `block_id`, defining `dst` from `src`.
-    /// Skips blocks that terminate via return/throw, and avoids duplicate copies.
-    pub(super) fn insert_edge_copy(
-        &mut self,
-        block_id: BasicBlockId,
-        dst: ValueId,
-        src: ValueId,
-    ) -> Result<(), String> {
-        // No-op self copy guard to avoid useless instructions and accidental reordering issues
-        if dst == src {
-            return Ok(());
-        }
-        if let Some(ref mut function) = self.current_function {
-            let block = function
-                .get_block_mut(block_id)
-                .ok_or_else(|| format!("Basic block {} does not exist", block_id))?;
-            if let Some(term) = &block.terminator {
-                if matches!(
-                    term,
-                    MirInstruction::Return { .. } | MirInstruction::Throw { .. }
-                ) {
-                    return Ok(());
-                }
-            }
-            let already_present = block.instructions.iter().any(|inst| {
-                matches!(inst, MirInstruction::Copy { dst: existing_dst, .. } if *existing_dst == dst)
-            });
-            if !already_present {
-                block.add_instruction(MirInstruction::Copy { dst, src });
-            }
-            if let Some(ty) = self.value_types.get(&src).cloned() {
-                self.value_types.insert(dst, ty);
-            }
-            Ok(())
-        } else {
-            Err("No current function".to_string())
-        }
-    }
+    // フェーズM: insert_edge_copy()メソッド削除（no_phi_mode撤廃により不要）
 
     // moved to builder/utils.rs: ensure_block_exists
 

@@ -45,8 +45,7 @@ pub struct LoopBuilder<'a> {
     /// continue文からの変数スナップショット
     continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
 
-    /// PHI を生成しないモードかどうか
-    no_phi_mode: bool,
+    // フェーズM: no_phi_modeフィールド削除（常にPHI使用）
 }
 
 // (removed) extract_assigned_var_local was a local helper used during
@@ -103,14 +102,14 @@ impl<'a> LoopBuilder<'a> {
     // =============================================================
     /// 新しいループビルダーを作成
     pub fn new(parent: &'a mut super::builder::MirBuilder) -> Self {
-        let no_phi_mode = parent.is_no_phi_mode();
+        // フェーズM: no_phi_mode初期化削除
         Self {
             parent_builder: parent,
             incomplete_phis: HashMap::new(),
             block_var_maps: HashMap::new(),
             loop_header: None,
             continue_snapshots: Vec::new(),
-            no_phi_mode,
+            // フェーズM: no_phi_modeフィールド削除
         }
     }
 
@@ -278,10 +277,7 @@ impl<'a> LoopBuilder<'a> {
 
             incomplete_phis.push(incomplete_phi);
 
-            if self.no_phi_mode {
-                self.parent_builder
-                    .insert_edge_copy(preheader_id, phi_id, value_before)?;
-            }
+            // フェーズM: no_phi_mode分岐削除（常にPHI使用）
 
             // 変数マップを更新（Phi nodeの結果を使用）
             self.update_variable(var_name.clone(), phi_id);
@@ -310,17 +306,8 @@ impl<'a> LoopBuilder<'a> {
 
                 phi.known_inputs.push((latch_id, value_after));
 
-                if self.no_phi_mode {
-                    let mut seen: HashSet<BasicBlockId> = HashSet::new();
-                    for &(pred, val) in &phi.known_inputs {
-                        if seen.insert(pred) {
-                            self.parent_builder
-                                .insert_edge_copy(pred, phi.phi_id, val)?;
-                        }
-                    }
-                } else {
-                    self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
-                }
+                // フェーズM: 常にPHI命令を使用（no_phi_mode分岐削除）
+                self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
                 self.update_variable(phi.var_name.clone(), phi.phi_id);
             }
         }
@@ -601,13 +588,8 @@ impl<'a> LoopBuilder<'a> {
                     }
                     _ => {
                         let phi_id = self.new_value();
-                        if self.no_phi_mode {
-                            for (pred, v) in incomings.iter().copied() {
-                                self.parent_builder.insert_edge_copy(pred, phi_id, v)?;
-                            }
-                        } else {
-                            self.emit_phi_at_block_start(merge_bb, phi_id, incomings)?;
-                        }
+                        // フェーズM: 常にPHI命令を使用（no_phi_mode分岐削除）
+                        self.emit_phi_at_block_start(merge_bb, phi_id, incomings)?;
                         self.parent_builder.variable_map.insert(var_name, phi_id);
                     }
                 }

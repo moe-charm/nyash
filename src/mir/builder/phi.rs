@@ -113,27 +113,15 @@ impl MirBuilder {
                 .as_ref()
                 .and_then(|m| m.get(name).copied())
                 .unwrap_or(pre);
-            if self.is_no_phi_mode() {
-                let merged = self.value_gen.next();
-                // Insert edge copies from then/else exits into merge
-                self.insert_edge_copy(then_exit_block, merged, then_v)?;
-                if let Some(else_exit_block) = else_exit_block_opt {
-                    self.insert_edge_copy(else_exit_block, merged, else_v)?;
-                } else {
-                    // Fallback: if else missing, copy pre value from then as both inputs already cover
-                    self.insert_edge_copy(then_exit_block, merged, then_v)?;
+            // フェーズM: 常にPHI命令を使用（no_phi_mode撤廃）
+            let merged = self.value_gen.next();
+            self.emit_instruction(
+                MirInstruction::Phi {
+                    dst: merged,
+                    inputs: vec![(then_block, then_v), (else_block, else_v)],
                 }
-                self.variable_map.insert(name.to_string(), merged);
-            } else {
-                let merged = self.value_gen.next();
-                self.emit_instruction(
-                    MirInstruction::Phi {
-                        dst: merged,
-                        inputs: vec![(then_block, then_v), (else_block, else_v)],
-                    }
-                )?;
-                self.variable_map.insert(name.to_string(), merged);
-            }
+            )?;
+            self.variable_map.insert(name.to_string(), merged);
         }
         Ok(())
     }
@@ -162,71 +150,7 @@ impl MirBuilder {
             .and_then(|a| extract_assigned_var(a));
         let result_val = self.value_gen.next();
 
-        if self.is_no_phi_mode() {
-            // In PHI-off mode, emit per-predecessor copies into the actual predecessors
-            // of the current (merge) block instead of the entry blocks. This correctly
-            // handles nested conditionals where the then-branch fans out and merges later.
-            let merge_block = self
-                .current_block
-                .ok_or_else(|| "normalize_if_else_phi: no current (merge) block".to_string())?;
-            let preds: Vec<crate::mir::BasicBlockId> = if let Some(ref fun_ro) = self.current_function {
-                if let Some(bb) = fun_ro.get_block(merge_block) {
-                    bb.predecessors.iter().copied().collect()
-                } else {
-                    Vec::new()
-                }
-            } else {
-                Vec::new()
-            };
-            // Prefer explicit exit blocks if provided; fall back to predecessor scan
-            let then_exits: Vec<crate::mir::BasicBlockId> = if let Some(b) = then_exit_block_opt {
-                vec![b]
-            } else {
-                preds.iter().copied().filter(|p| *p != else_block).collect()
-            };
-            let else_exits: Vec<crate::mir::BasicBlockId> = if let Some(b) = else_exit_block_opt {
-                vec![b]
-            } else {
-                preds.iter().copied().filter(|p| *p == else_block).collect()
-            };
-
-            if let Some(var_name) = assigned_var_then.clone() {
-                let else_assigns_same = assigned_var_else
-                    .as_ref()
-                    .map(|s| s == &var_name)
-                    .unwrap_or(false);
-                let then_value_for_var = then_var_map_end
-                    .get(&var_name)
-                    .copied()
-                    .unwrap_or(then_value_raw);
-                let else_value_for_var = if else_assigns_same {
-                    else_var_map_end_opt
-                        .as_ref()
-                        .and_then(|m| m.get(&var_name).copied())
-                        .unwrap_or(else_value_raw)
-                } else {
-                    pre_then_var_value.unwrap_or(else_value_raw)
-                };
-                // Map predecessors: else_block retains else value; others take then value
-                for p in then_exits.iter().copied() {
-                    self.insert_edge_copy(p, result_val, then_value_for_var)?;
-                }
-                for p in else_exits.iter().copied() {
-                    self.insert_edge_copy(p, result_val, else_value_for_var)?;
-                }
-                self.variable_map = pre_if_var_map.clone();
-                self.variable_map.insert(var_name, result_val);
-            } else {
-                for p in then_exits.iter().copied() {
-                    self.insert_edge_copy(p, result_val, then_value_raw)?;
-                }
-                for p in else_exits.iter().copied() {
-                    self.insert_edge_copy(p, result_val, else_value_raw)?;
-                }
-                self.variable_map = pre_if_var_map.clone();
-            }
-            return Ok(result_val);
-        }
+        // フェーズM: no_phi_mode分岐削除（常にPHI命令を使用）
 
         if let Some(var_name) = assigned_var_then.clone() {
             let else_assigns_same = assigned_var_else

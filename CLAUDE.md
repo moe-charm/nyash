@@ -276,6 +276,16 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
+## 📝 Update (2025-09-22) ⚡ フェーズM実装大幅進展！PHI一本化によるコード大削減達成
+- ✅ **MirBuilder no_phi_mode完全撤廃！** phi.rs、exprs_peek.rs全分岐をPHI命令一本化
+- ✅ **LoopBuilder no_phi_mode完全撤廃！** 3箇所のedge copy分岐をPHI命令一本化  
+- ✅ **edge_copy関連コード削除！** insert_edge_copy()メソッド含む数十行削減
+- 🔧 **ビルド成功維持！** フェーズS+フェーズM修正でもエラーなしを確認
+- ⏳ **JSON v0 Bridge保留中**: Phase 15重要コンポーネントのため慎重対応予定
+- 🎯 **次の一歩**: collect_prints動作確認→JSON v0 Bridge対応→フェーズM完了
+- 📊 **戦略文書更新**: break-control-flow-strategy.mdの段階的根治計画に沿って実行
+- 🚀 **効果**: 数百行削減によりPhase 15の80k→20k圧縮目標に大きく貢献
+
 ## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
 - ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ
 - 🔧 **コンパイルエラー全解決！** JITスタブ作成でビルド成功、開発環境復活
@@ -317,17 +327,13 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
 
-## 📝 Update (2025-09-23) 🔧 break制御フロー問題の段階的根治戦略確定！
-- 🎯 **AI協働分析完了！** task+Gemini+codex+ChatGPT Pro最強モードで根本原因完全特定
-- 🔍 **根本問題**: break文が値を返す設計歪み → collect_printsメソッドでnull値返却
-- 🚀 **3段階根治戦略決定**: 
-  - **フェーズS（即効止血）**: PHI incoming修正＋終端ガード徹底
-  - **フェーズM（PHI一本化）**: no_phi_mode撤廃で数百行削減
-  - **フェーズL（根本解決）**: BuildOutcome導入で完全治癒
-- 📊 **期待効果**: 80k→20k圧縮に大きく貢献＋設計歪み根絶
-- 💾 **codex解決策保存**: archive/codex-solutions/に高度な型推論実装を保管
-- 📚 **戦略文書化**: [break-control-flow-strategy.md](docs/development/strategies/break-control-flow-strategy.md)完成
-- 🎯 **次のアクション**: フェーズSから段階的実行開始
+## 📝 Update (2025-09-23) ✅ フェーズS実装完了！break制御フロー根治開始
+- ✅ **フェーズS完了！** PHI incoming修正+終端ガード徹底→重複処理4箇所統一
+- 🔧 **新ユーティリティ**: `src/mir/utils/control_flow.rs`で制御フロー処理統一化
+- 📊 **AI協働成果**: task+Gemini+codex+ChatGPT Pro最強分析→段階的実装戦略確立
+- 🎯 **次段階**: フェーズM(PHI一本化)→数百行削減でPhase 15目標達成へ
+- 📚 **戦略**: [break-control-flow-strategy.md](docs/development/strategies/break-control-flow-strategy.md)
+- 💾 **アーカイブ**: codex高度解決策を`archive/codex-solutions/`に保存
 
 ## 📝 Update (2025-09-14) 🎉 セルフホスティング大前進！
 - ✅ Python LLVM実装が実用レベル到達！（esc_dirname_smoke, min_str_cat_loop, dep_tree_min_string全てPASS）
