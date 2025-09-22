@@ -24,6 +24,8 @@ ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.m
 - 必須不変条件（Invariants）: `docs/reference/invariants.md`
 - 制約（既知/一時/解消済み）: `docs/reference/constraints.md`
 - PHI と SSA の設計: `docs/architecture/phi-and-ssa.md`
+  - 既定のPHI挙動: ビルドが `phi-legacy` を有効化している場合は PHI-ON（推奨）。未有効時は安定性のため PHI-OFF（エッジコピー）にフォールバック。
+  - 実行時切替: `NYASH_MIR_NO_PHI=0`（PHI-ON）、`NYASH_MIR_NO_PHI=1`（PHI-OFF）。
 - テスト行列（仕様→テスト対応）: `docs/guides/testing-matrix.md`
 - 他言語との比較: `docs/comparison/nyash-vs-others.md`
 

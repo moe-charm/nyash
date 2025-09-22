@@ -1,0 +1,12 @@
+// scopebox_inject.nyash — JSON v0 前処理（恒等版）
+// 目的: If.then/else, Loop.body を ScopeBox 相当に包む前処理の導線を提供。
+// 現段階は恒等（identity）。将来段階で安全な包み込みを実装する。
+
+static box ScopeBoxInject {
+  // Apply ScopeBox-style wrapping on JSON v0 text. Returns transformed JSON text.
+  // MVP: identity (no-op)
+  apply(json_text) {
+    return json_text
+  }
+}
+

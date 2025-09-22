@@ -6,7 +6,7 @@ use crate::tokenizer::TokenType;
 
 /// Parse the leading header of a box declaration and return
 /// (name, type_params, extends, implements). Does not consume the opening '{'.
-pub fn parse_header(
+pub(crate) fn parse_header(
     p: &mut NyashParser,
 ) -> Result<(String, Vec<String>, Vec<String>, Vec<String>), ParseError> {
     // Name

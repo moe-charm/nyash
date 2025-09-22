@@ -1,0 +1,21 @@
+// ConsoleStd — minimal standard console helpers (commonized API)
+
+static box ConsoleStd {
+  // print/println/log: convert null to "" and return 0
+  print(x) {
+    if x == null { x = "" }
+    print(x)
+    return 0
+  }
+  println(x) {
+    if x == null { x = "" }
+    print(x)
+    return 0
+  }
+  log(x) {
+    if x == null { x = "" }
+    print(x)
+    return 0
+  }
+}
+

@@ -1,6 +1,6 @@
 # Current Task — Stability Polish (Concise)
 
-Updated: 2025‑09‑21
+Updated: 2025‑09‑22
 
 ## Compressed Snapshot (Short)
 - Strings (UTF‑8/CP vs Byte): baseline done
@@ -27,6 +27,36 @@ Principles (feature‑pause)
 - Keep changes minimal/local; no spec changes unless to fix critical issues, and guard any optional paths behind default‑OFF flags.
 
 ### Delta (since last update)
+- Self‑Host Ny Executor（MIR→Ny 実行器）計画を追加（既定OFF・段階導入）
+  - Docs 追加: `docs/development/roadmap/selfhosting-ny-executor.md`
+  - 目的/原則/フラグ/段階計画/受け入れ/ロールバック/リスクを整理
+  - 既定は PyVM。`NYASH_SELFHOST_EXEC=1` で Ny Executor に委譲（当面 no‑op→順次実装）
+  - Stage 0 実装: スカフォールド + ランナー配線（既定OFF/no‑op）
+    - 追加: `apps/selfhost-runtime/{runner.nyash,mir_loader.nyash,ops_core.nyash,ops_calls.nyash,boxes_std.nyash}`（雛形）
+    - 配線: `src/runner/modes/pyvm.rs` に `NYASH_SELFHOST_EXEC=1` 検出時の Ny ランナー呼び出し（子には同フラグを継承しない）
+    - 受け入れ: cargo check 緑。既定挙動不変。フラグONで no‑op 実行（exit 0）可能。
+  - Stage 1 一部: MIR(JSON v0) の最小ローダ実装（要約抽出のみ）
+    - `apps/selfhost-runtime/mir_loader.nyash`: FileBox で読込→JsonDocBox で parse→version/kind/body_len を要約
+    - `apps/selfhost-runtime/runner.nyash`: args[0] の JSON を読み、{version:0, kind:"Program"} を検証（NGは非0exit）
+    - v0 とハーネスJSON（{"functions":…}）の両フォーマットを受理。`--trace` で v0 要約/stmt数、ハーネス要約（functions数）を出力
+- Smoke 追加（任意実行）: `tools/test/smoke/selfhost/selfhost_runner_smoke.sh`
+ - Identity 確認スモーク（Selfhost Compiler 直呼び）
+   - ScopeBox: `tools/test/smoke/selfhost/scopebox_identity_smoke.sh`
+   - LoopForm: `tools/test/smoke/selfhost/loopform_identity_smoke.sh`
+  - Selfhost Compiler 前処理導線（既定OFF）
+    - 追加: `apps/lib/{scopebox_inject.nyash,loopform_normalize.nyash}`（恒等版・将来拡張の足場）
+    - 配線: `apps/selfhost/compiler/compiler.nyash` が `--scopebox`/`--loopform` を受理して JSON を前処理
+    - Runner 側: `src/runner/selfhost.rs` が env→子引数にマップ（`NYASH_SCOPEBOX_ENABLE=1` → `--scopebox`、`NYASH_LOOPFORM_NORMALIZE=1` → `--loopform`）
+    - 任意: `NYASH_SELFHOST_CHILD_ARGS` で追加引数を透過
+- ループ内 if 合流の PHI 決定を MIR で正規化（仕様不変・堅牢化）
+  - 変更: `src/mir/loop_builder.rs`
+    - then/else の代入変数を再帰収集→合流で変数ごとに PHI/直バインドを決定
+    - 到達ブランチのみ incoming に採用（break/continue 終端は除外）
+    - `no_phi_mode` では到達 pred に対して edge‑copy を生成（意味論等価）
+  - 効果: i/printed 等のキャリア変数が合流後に正しく統一。無限ループ/古い SSA 値混入の根治
+- MiniVmPrints（JSON 経路）: 出力総数のカウントを安定化（仕様不変）
+  - 各 Print ステートメントでの実出力回数を 1 回だけ加算するよう整理（Compare を 1/0 直接 print に）
+  - 代表プローブ: A/B/7/1/7/5 → count=6 を確認（PyVM と一致）
 - JSON provider（yyjsonベンダリング完了・切替はランタイム）
   - `plugins/nyash-json-plugin/c/yyjson/{yyjson.h,yyjson.c,LICENSE}` を同梱し、`build.rs + cc` で自己完結ビルド。
   - env `NYASH_JSON_PROVIDER=serde|yyjson`（既定=serde）。nyash.toml の [env] からも設定可能。
@@ -191,6 +221,48 @@ JSON / Plugin v2（現状に追記）
 - [ ] method_id キャッシュの統一化（loader 内で Box単位の LRU/Hash で維持）
 - [x] MiniVmPrints フォールバックは開発用トグルのみ（既定OFF）
 
+### Box Std Lib（lib化計画・共通化）
+
+目的
+- VM/PyVM/自己ホスト実行器で共通に使える“最小面の標準箱”を apps/lib に蒸留し、名前と戻り値を統一する（意味論不変・既定OFF）。
+
+置き場（Ny libs）
+- `apps/lib/boxes/{console_std.nyash,string_std.nyash,array_std.nyash,map_std.nyash,path_std.nyash,json_std.nyash}`（段階追加）
+
+導線/トグル（既定OFF）
+- 優先度切替（自己ホスト実行器のみ）：`NYASH_SELFHOST_BOX_PREF=plugin|ny`（既定=plugin）
+  - `plugin`: 既存のプラグイン/シムを優先（後方互換）
+  - `ny`: lib/boxes 実装を優先（プラグイン未定義メソッドは安全フォールバック）
+- 導入は include/using ベース（採用側のみ差し替え、広域リネームは行わない）
+
+優先順位（段階導入）
+1) P1（高頻度・最小面）
+   - ConsoleBox: `print/println/log` → i64（status）
+   - String: `length/substring/indexOf/lastIndexOf/esc_json`
+   - ArrayBox: `size/len/get/set/push/toString`
+   - MapBox: `size/has/get/set/toString`
+2) P2（周辺ユーティリティ）
+   - PathBox: `dirname/join`（POSIX 風）
+   - JsonDocBox/JsonNodeBox adaptor: plugin へ薄ラップ（PyVM シムと同名）
+3) P3（補助）
+   - StringBuilderBox（最小）/ Pattern helpers（既存 libs を整理）
+
+受け入れ基準
+- 既定OFFで挙動不変（pref=plugin）。`pref=ny` 時も VM/LLVM/PyVM の出力一致。
+- 代表スモーク（strings/array/map/path/json）を green。未実装メソッドは no-op/None で安全に退避。
+
+ロールバック/リスク
+- ロールバックは `NYASH_SELFHOST_BOX_PREF=plugin` で即時復帰。
+- 命名衝突は採用側の include/using に限定（既存ファイルの広域変更は行わない）。
+
+TODO（段階タスク）
+- [ ] P1: console_std/string_std/array_std/map_std の雛形を追加（apps/lib/boxes/）
+- [ ] P1: 自己ホスト実行器の BoxCall ディスパッチに `NYASH_SELFHOST_BOX_PREF` を導入（既定=plugin）
+- [ ] P1: strings/array/map の最小スモークを selfhost 経路で追加
+- [ ] P2: path_std/json_std の雛形とアダプタ（プラグイン優先のラップ）
+- [ ] P2: path/json のスモーク（dirname/join、parse/root/get/size/at/str/int/bool）
+- [ ] P3: string_builder_std と tests の軽量追加（任意）
+
 Checklist（更新済み）
 - [x] Self‑host 前展開の固定スモーク 1 本（upper_string）
 - [x] MacroCtx ctx JSON スモーク 1 本（CI 組み込み）
@@ -263,3 +335,24 @@ Trigger: nyash_vm の安定（主要スモーク緑・自己ホスト経路が�
 - method_id 解決キャッシュの整備・計測
 - YYJSON backend のスケルトン追加（既定OFF・プラグイン切替可能設計）
 - JSON smokes をCI最小ゲートへ追加
+- Self‑Host（自己ホスト実行器）
+  - [ ] Stage 0: フラグ/ランナー配線のみ（no‑op Ny runner）
+  - [ ] Stage 1: MIR ローダ（JSON→構造体）
+  - [ ] Stage 2: コア命令（const/binop/compare/branch/jump/ret/phi）
+  - [ ] Stage 3: call/externcall/boxcall（MVP）
+  - [ ] Stage 4: Array/Map 最小メソッド
+  - [ ] Stage 5: using/seam 代表ケース安定化
+  - [ ] Stage 6: パリティハーネス/CI（非ブロッキング→昇格）
+
+### Self‑Host フラグ/戻し手順（記録）
+- フラグ（既定OFF）
+  - `NYASH_SELFHOST_EXEC=1`: Ny Executor を有効化
+  - `NYASH_SELFHOST_TRACE=1`: 追跡ログ
+  - `NYASH_SELFHOST_STEP_MAX`: ステップ上限
+  - `NYASH_SELFHOST_STRICT=1`: 厳格モード
+- ロールバック: フラグ OFF で即 PyVM に復帰（既定）。差分は最小・局所で導入。
+
+### Notes (Stage 0 wiring)
+- Rust 側は MIR(JSON) を `tmp/nyash_selfhost_mir.json` に出力→Ny ランナー（apps/selfhost-runtime/runner.nyash）へ引き渡し。
+- 子プロセスへは `NYASH_SELFHOST_EXEC` を伝播しない（再帰配線を防止）。
+- 現段階の Ny ランナーは no‑op で 0 を返す。次ステージでローダ/ディスパッチを追加。

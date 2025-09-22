@@ -6,7 +6,7 @@ use crate::tokenizer::TokenType;
 
 /// Try to parse a method declaration starting at `method_name` (already consumed identifier).
 /// Returns Some(method_node) when parsed; None when not applicable (i.e., next token is not '(').
-pub fn try_parse_method(
+pub(crate) fn try_parse_method(
     p: &mut NyashParser,
     method_name: String,
     is_override: bool,

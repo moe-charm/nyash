@@ -225,13 +225,12 @@ fn resolve_type_from_value(
     def_map: &std::collections::HashMap<ValueId, (super::basic_block::BasicBlockId, usize)>,
     id: ValueId,
 ) -> Option<MirType> {
-    use super::instruction::ConstValue;
     if let Some((bb, idx)) = def_map.get(&id).copied() {
         if let Some(block) = function.blocks.get(&bb) {
             if idx < block.instructions.len() {
                 match &block.instructions[idx] {
                     MirInstruction::Const {
-                        value: ConstValue::String(s),
+                        value: crate::mir::ConstValue::String(s),
                         ..
                     } => {
                         return Some(map_type_name(s));
@@ -244,7 +243,7 @@ fn resolve_type_from_value(
                             if let Some(sblock) = function.blocks.get(&sbb) {
                                 if sidx < sblock.instructions.len() {
                                     if let MirInstruction::Const {
-                                        value: ConstValue::String(s),
+                                        value: crate::mir::ConstValue::String(s),
                                         ..
                                     } = &sblock.instructions[sidx]
                                     {
@@ -313,7 +312,7 @@ fn diagnose_unlowered_type_ops(
                             if let Some(b) = function.blocks.get(&bb) {
                                 if idx < b.instructions.len() {
                                     if let MirInstruction::Const {
-                                        value: super::instruction::ConstValue::String(s),
+                                        value: crate::mir::ConstValue::String(s),
                                         ..
                                     } = &b.instructions[idx]
                                     {

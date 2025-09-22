@@ -41,7 +41,7 @@ pub fn diagnose_unlowered_type_ops(
                             if let Some(b) = function.blocks.get(&bb) {
                                 if idx < b.instructions.len() {
                                     if let MirInstruction::Const {
-                                        value: crate::mir::instruction::ConstValue::String(s),
+                    value: crate::mir::ConstValue::String(s),
                                         ..
                                     } = &b.instructions[idx]
                                     {

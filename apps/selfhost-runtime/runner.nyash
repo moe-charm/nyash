@@ -1,0 +1,92 @@
+// Ny Executor — Stage 1 entry (silent by default)
+// Reads MIR(JSON v0) from args[0], parses minimal summary, and exits 0 on success.
+// No side-effects; prints nothing unless later stages add tracing.
+
+include "apps/selfhost-runtime/mir_loader.nyash"
+include "apps/selfhost-runtime/ops_calls.nyash"
+include "apps/lib/boxes/console_std.nyash"
+include "apps/lib/boxes/string_std.nyash"
+include "apps/lib/boxes/array_std.nyash"
+include "apps/lib/boxes/map_std.nyash"
+
+static box Main {
+  main(args) {
+    @path = null
+    if args { if args.size() > 0 { @p = args.get(0) if p { path = p } } }
+    @box_pref = "plugin"
+    // parse optional args like --trace / --box-pref=ny
+    if args { if args.size() > 1 {
+      @i = 1
+      while i < args.size() {
+        @flagx = args.get(i)
+        if flagx && flagx.length() > 0 {
+          if flagx == "--trace" { /* handled later */ }
+          else {
+            @kpos = flagx.indexOf("--box-pref=")
+            if kpos == 0 {
+              @val = flagx.substring(11, flagx.length())
+              if val == "ny" || val == "plugin" { box_pref = val }
+            }
+          }
+        }
+        i = i + 1
+      }
+    } }
+    if !path { return 0 }
+
+    @loader = new MirLoader()
+    @sum = loader.load_summary(path)
+    if !sum { return 1 }
+
+    // Optional ad-hoc trace (development only): pass "--trace" in args
+    @trace_env = "0"
+    // NOTE: env access is not available inside Ny script; placeholder for future
+    //       we emulate it with CLI arg for now.
+    if args { if args.size() > 1 {
+      @flag = args.get(1)
+      if flag == "--trace" {
+        @fmt = sum.get("format")
+        if fmt == "v0_program" {
+          @ver0 = sum.get("version")
+          @kind0 = sum.get("kind")
+          @blen0 = sum.get("body_len")
+          print("[selfhost] v0 summary: version=" + ver0 + ", kind=" + kind0 + ", body_len=" + blen0)
+          @k = loader.summarize_stmt_kinds( loader.parse_root( loader.read_file(path) ) )
+          if k {
+            @s = ""
+            function app(name, n) { if n > 0 { if s.length() > 0 { s = s + "," } s = s + name + "=" + n } }
+            app("Return", k.get("Return"))
+            app("Expr", k.get("Expr"))
+            app("Local", k.get("Local"))
+            app("If", k.get("If"))
+            app("Loop", k.get("Loop"))
+            app("Break", k.get("Break"))
+            app("Continue", k.get("Continue"))
+            app("Try", k.get("Try"))
+            app("Extern", k.get("Extern"))
+            if s.length() > 0 { print("[selfhost] body stmt counts: " + s) }
+          }
+        } else if fmt == "harness" {
+          @flen = sum.get("functions_len")
+          print("[selfhost] harness summary: functions=" + flen)
+        } else {
+          print("[selfhost] unknown JSON format")
+        }
+      }
+    } }
+
+    // Initialize BoxCall policy (skeleton)
+    @oc = new OpsCalls()
+    oc.set_pref(box_pref)
+
+    // Basic schema guard for v0 Program
+    @fmt2 = sum.get("format")
+    if fmt2 == "v0_program" {
+      @ver = sum.get("version")
+      @kind = sum.get("kind")
+      if ver != 0 { return 2 }
+      if kind != "Program" { return 3 }
+    }
+    return 0
+  }
+}

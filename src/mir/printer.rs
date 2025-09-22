@@ -338,10 +338,6 @@ impl MirPrinter {
         output
     }
 
-    fn format_dst(&self, dst: &ValueId, types: &HashMap<ValueId, MirType>) -> String {
-        printer_helpers::format_dst(dst, types)
-    }
-
     /// Format a single instruction
     fn format_instruction(
         &self,

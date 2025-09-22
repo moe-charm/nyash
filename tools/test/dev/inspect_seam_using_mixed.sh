@@ -30,6 +30,16 @@ unset NYASH_PYVM_DUMP_CODE
 unset NYASH_RESOLVE_SEAM_DEBUG
 unset NYASH_RESOLVE_FIX_BRACES
 unset NYASH_RESOLVE_DEDUP_BOX
-"$BIN" --backend vm "$APP_INS"
+
+# Run inspector and capture output
+OUT=$("$BIN" --backend vm "$APP_INS")
+echo "$OUT"
+
+# CI guard: brace delta must be zero after FIX_BRACES normalization in the dump
+echo "[dev] assert: prelude_brace_delta==0" >&2
+echo "$OUT" | grep -q "^prelude_brace_delta=0$" || {
+  echo "[error] prelude_brace_delta is not zero" >&2
+  exit 1
+}
 
 popd >/dev/null

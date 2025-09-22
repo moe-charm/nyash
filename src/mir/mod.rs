@@ -14,6 +14,7 @@ pub mod function;
 pub mod instruction;
 pub mod instruction_kinds; // small kind-specific metadata (Const/BinOp)
 pub mod instruction_introspection; // Introspection helpers for tests (instruction names)
+pub mod types; // core MIR enums (ConstValue, Ops, MirType)
 pub mod loop_api; // Minimal LoopBuilder facade (adapter-ready)
 pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod optimizer;
@@ -33,9 +34,9 @@ pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use builder::MirBuilder;
 pub use effect::{Effect, EffectMask};
 pub use function::{FunctionSignature, MirFunction, MirModule};
-pub use instruction::{
-    BarrierOp, BinaryOp, CompareOp, ConstValue, MirInstruction, MirType, TypeOpKind, UnaryOp,
-    WeakRefOp,
+pub use instruction::MirInstruction;
+pub use types::{
+    BarrierOp, BinaryOp, CompareOp, ConstValue, MirType, TypeOpKind, UnaryOp, WeakRefOp,
 };
 pub use optimizer::MirOptimizer;
 pub use printer::MirPrinter;

@@ -11,7 +11,7 @@ use crate::mir::{BinaryOp, CompareOp, EffectMask, MirInstruction as I, MirModule
 ///     Not x    => Compare(Eq, x, Const false)
 ///     BitNot x => BinOp(BitXor, x, Const(-1))
 pub fn normalize_pure_core13(_opt: &mut MirOptimizer, module: &mut MirModule) -> OptimizationStats {
-    use crate::mir::instruction::ConstValue;
+    use crate::mir::types::ConstValue;
     let mut stats = OptimizationStats::new();
     for (_fname, function) in &mut module.functions {
         for (_bb, block) in &mut function.blocks {
@@ -43,7 +43,7 @@ pub fn normalize_pure_core13(_opt: &mut MirOptimizer, module: &mut MirModule) ->
                         // prepend type name as Const String
                         let ty_id = ValueId::new(function.next_value_id);
                         function.next_value_id += 1;
-                        out.push(I::Const { dst: ty_id, value: ConstValue::String(box_type) });
+                        out.push(I::Const { dst: ty_id, value: crate::mir::ConstValue::String(box_type) });
                         let mut call_args = Vec::with_capacity(1 + args.len());
                         call_args.push(ty_id);
                         call_args.append(&mut args);
@@ -61,19 +61,19 @@ pub fn normalize_pure_core13(_opt: &mut MirOptimizer, module: &mut MirModule) ->
                             crate::mir::UnaryOp::Neg => {
                                 let zero = ValueId::new(function.next_value_id);
                                 function.next_value_id += 1;
-                                out.push(I::Const { dst: zero, value: ConstValue::Integer(0) });
+                                out.push(I::Const { dst: zero, value: crate::mir::ConstValue::Integer(0) });
                                 out.push(I::BinOp { dst, op: BinaryOp::Sub, lhs: zero, rhs: operand });
                             }
                             crate::mir::UnaryOp::Not => {
                                 let f = ValueId::new(function.next_value_id);
                                 function.next_value_id += 1;
-                                out.push(I::Const { dst: f, value: ConstValue::Bool(false) });
+                                out.push(I::Const { dst: f, value: crate::mir::ConstValue::Bool(false) });
                                 out.push(I::Compare { dst, op: CompareOp::Eq, lhs: operand, rhs: f });
                             }
                             crate::mir::UnaryOp::BitNot => {
                                 let all1 = ValueId::new(function.next_value_id);
                                 function.next_value_id += 1;
-                                out.push(I::Const { dst: all1, value: ConstValue::Integer(-1) });
+                                out.push(I::Const { dst: all1, value: crate::mir::ConstValue::Integer(-1) });
                                 out.push(I::BinOp { dst, op: BinaryOp::BitXor, lhs: operand, rhs: all1 });
                             }
                         }

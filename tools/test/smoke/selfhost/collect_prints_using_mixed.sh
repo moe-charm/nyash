@@ -36,4 +36,15 @@ if [[ "$out" != "$expected" ]]; then
 fi
 
 echo "[smoke] OK: collect_prints using + mixed order" >&2
+
+# Seam hygiene check: ensure prelude_brace_delta==0 on the dump
+NYASH_PYVM_DUMP_CODE=1 NYASH_RESOLVE_SEAM_DEBUG=1 NYASH_RESOLVE_FIX_BRACES=1 NYASH_RESOLVE_DEDUP_BOX=1 \
+  "$BIN" --backend vm "$APP" >/dev/null 2>&1 || true
+INS_OUT=$("$BIN" --backend vm apps/tests/dev_seam_inspect_dump.nyash)
+echo "$INS_OUT" | grep -q "^prelude_brace_delta=0$" || {
+  echo "[smoke] FAIL: seam prelude_brace_delta is not zero" >&2
+  echo "$INS_OUT" >&2
+  exit 1
+}
+echo "[smoke] OK: seam prelude brace delta == 0" >&2
 popd >/dev/null

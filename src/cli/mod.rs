@@ -6,7 +6,6 @@ mod args;
 mod groups;
 mod utils;
 
-use groups::*;
 
 /// Command-line configuration structure
 #[derive(Debug, Clone)]
@@ -217,4 +216,3 @@ mod tests {
         assert_eq!(config.iterations, 10);
     }
 }
-

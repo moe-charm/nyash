@@ -4,7 +4,7 @@ use crate::parser::common::ParserUtils;
 use crate::tokenizer::TokenType;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MemberKind {
+pub(crate) enum MemberKind {
     Field,
     Method,
     Constructor,
@@ -14,7 +14,7 @@ pub enum MemberKind {
 }
 
 /// Decide member kind via simple lookahead (scaffold placeholder)
-pub fn classify_member(p: &mut NyashParser) -> Result<MemberKind, ParseError> {
+pub(crate) fn classify_member(p: &mut NyashParser) -> Result<MemberKind, ParseError> {
     // block-first: { body } as (once|birth_once)? name : Type
     if crate::config::env::unified_members() && p.match_any_token(&[TokenType::LBRACE]) {
         return Ok(MemberKind::PropertyComputed);

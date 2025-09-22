@@ -31,7 +31,10 @@ User Macros (Phase 2): `docs/guides/user-macros.md`
 Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
 ScopeBox & MIR hints: `docs/guides/scopebox.md`
 AST JSON v0 (macro/bridge): `docs/reference/ir/ast-json-v0.md`
-MIR mode note: default is MIR13 (PHI-off). See `docs/development/mir/MIR13_MODE.md`.
+MIR mode note: Default PHI behavior
+- Default is PHI-ON when the build enables `phi-legacy` (recommended). Otherwise it falls back to PHI‑OFF (edge‑copy) for stability.
+- Force at runtime: `NYASH_MIR_NO_PHI=0` (PHI‑ON), `NYASH_MIR_NO_PHI=1` (PHI‑OFF).
+- See `docs/architecture/phi-and-ssa.md`.
 Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
 ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
 

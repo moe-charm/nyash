@@ -239,7 +239,7 @@ pub fn normalize_legacy_instructions(
                         value,
                         expected_type,
                     } => {
-                        let ty = crate::mir::instruction::MirType::Box(expected_type.clone());
+                        let ty = crate::mir::MirType::Box(expected_type.clone());
                         *term = I::TypeOp {
                             dst: *dst,
                             op: TypeOpKind::Check,
@@ -370,7 +370,7 @@ pub fn normalize_ref_field_access(
                         function.next_value_id += 1;
                         out.push(I::Const {
                             dst: new_id,
-                            value: crate::mir::instruction::ConstValue::String(field),
+                            value: crate::mir::ConstValue::String(field),
                         });
                         out.push(I::BoxCall {
                             dst: Some(dst),
@@ -391,7 +391,7 @@ pub fn normalize_ref_field_access(
                         function.next_value_id += 1;
                         out.push(I::Const {
                             dst: new_id,
-                            value: crate::mir::instruction::ConstValue::String(field),
+                            value: crate::mir::ConstValue::String(field),
                         });
                         out.push(I::Barrier {
                             op: BarrierOp::Write,
@@ -423,7 +423,7 @@ pub fn normalize_ref_field_access(
                         function.next_value_id += 1;
                         block.instructions.push(I::Const {
                             dst: new_id,
-                            value: crate::mir::instruction::ConstValue::String(field),
+                            value: crate::mir::ConstValue::String(field),
                         });
                         I::BoxCall {
                             dst: Some(dst),
@@ -443,7 +443,7 @@ pub fn normalize_ref_field_access(
                         function.next_value_id += 1;
                         block.instructions.push(I::Const {
                             dst: new_id,
-                            value: crate::mir::instruction::ConstValue::String(field),
+                            value: crate::mir::ConstValue::String(field),
                         });
                         block.instructions.push(I::Barrier {
                             op: BarrierOp::Write,

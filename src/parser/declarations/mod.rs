@@ -9,5 +9,6 @@ pub mod box_definition;
 pub mod box_def;
 pub mod dependency_helpers;
 pub mod static_box;
+pub mod static_def;
 
 // Re-export commonly used items

@@ -98,6 +98,44 @@ pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
         if removed > 0 { crate::cli_v!("[PyVM] escape_elide_barriers: removed {} barriers", removed); }
     }
 
+    // Optional: delegate to Ny selfhost executor (Stage 0 scaffold: no-op)
+    if std::env::var("NYASH_SELFHOST_EXEC").ok().as_deref() == Some("1") {
+        // Emit MIR JSON to a temp file and invoke Ny runner script.
+        let tmp_dir = std::path::Path::new("tmp");
+        let _ = std::fs::create_dir_all(tmp_dir);
+        let mir_json_path = tmp_dir.join("nyash_selfhost_mir.json");
+        if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&compile_result.module, &mir_json_path) {
+            eprintln!("❌ Selfhost MIR JSON emit error: {}", e);
+            process::exit(1);
+        }
+        // Resolve nyash executable and runner path
+        let exe = std::env::current_exe().unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
+        let runner = std::path::Path::new("apps/selfhost-runtime/runner.nyash");
+        if !runner.exists() {
+            eprintln!("❌ Selfhost runner missing: {}", runner.display());
+            process::exit(1);
+        }
+        let mut cmd = std::process::Command::new(&exe);
+        cmd.arg("--backend").arg("vm")
+            .arg(runner)
+            .arg("--")
+            .arg(mir_json_path.display().to_string());
+        // Optional: pass box pref to child (ny|plugin)
+        if let Ok(pref) = std::env::var("NYASH_SELFHOST_BOX_PREF") {
+            let p = pref.to_lowercase();
+            if p == "ny" || p == "plugin" {
+                cmd.arg(format!("--box-pref={}", p));
+            }
+        }
+        let status = cmd
+            // Avoid recursive selfhost delegation inside the child.
+            .env_remove("NYASH_SELFHOST_EXEC")
+            .status()
+            .unwrap_or_else(|e| { eprintln!("❌ spawn selfhost runner failed: {}", e); std::process::exit(1); });
+        let code = status.code().unwrap_or(1);
+        process::exit(code);
+    }
+
     // Delegate to common PyVM harness
     match crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&compile_result.module, "pyvm") {
         Ok(code) => { process::exit(code); }

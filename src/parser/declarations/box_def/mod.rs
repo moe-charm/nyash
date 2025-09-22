@@ -10,14 +10,16 @@ use crate::parser::{NyashParser, ParseError};
 
 pub mod header;
 pub mod members;
+pub mod validators;
+pub mod interface;
 
 /// Facade to host the staged migration.
-pub struct BoxDefParserFacade;
+pub(crate) struct BoxDefParserFacade;
 
 impl BoxDefParserFacade {
     /// Entry planned: parse full box declaration (header + members).
     /// Not wired yet; use NyashParser::parse_box_declaration for now.
-    pub fn parse_box(_p: &mut NyashParser) -> Result<ASTNode, ParseError> {
+    pub(crate) fn parse_box(_p: &mut NyashParser) -> Result<ASTNode, ParseError> {
         Err(ParseError::UnexpectedToken {
             found: crate::tokenizer::TokenType::EOF,
             expected: "box declaration (facade not wired)".to_string(),

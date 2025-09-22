@@ -1,0 +1,51 @@
+// OpsCalls — Selfhost runtime BoxCall dispatcher (skeleton)
+// - pref: "plugin" (default) or "ny" (use lib std boxes)
+
+box OpsCalls {
+  pref
+
+  birth() { me.pref = "plugin" return 0 }
+  set_pref(p) {
+    if p == "ny" { me.pref = "ny" } else { me.pref = "plugin" }
+    return 0
+  }
+
+  // Dispatch method call on receiver `recv` by policy.
+  // MVP: when pref=ny and method is recognized, route to lib wrappers; otherwise call receiver method.
+  dispatch(recv, method, args) {
+    if me.pref == "ny" {
+      // Console
+      if method == "print" { return new ConsoleStd().print(args.get(0)) }
+      if method == "println" { return new ConsoleStd().println(args.get(0)) }
+      if method == "log" { return new ConsoleStd().log(args.get(0)) }
+      // String
+      if method == "length" { return new StringStd().length(recv) }
+      if method == "substring" { return new StringStd().substring(recv, args.get(0), args.get(1)) }
+      if method == "indexOf" { return new StringStd().indexOf(recv, args.get(0), args.get(1)) }
+      if method == "lastIndexOf" { return new StringStd().lastIndexOf(recv, args.get(0), args.get(1)) }
+      if method == "esc_json" { return new StringStd().esc_json(args.get(0)) }
+      // Array
+      if method == "size" { return new ArrayStd().size(recv) }
+      if method == "len" { return new ArrayStd().len(recv) }
+      if method == "get" { return new ArrayStd().get(recv, args.get(0)) }
+      if method == "set" { return new ArrayStd().set(recv, args.get(0), args.get(1)) }
+      if method == "push" { return new ArrayStd().push(recv, args.get(0)) }
+      if method == "toString" { return new ArrayStd().toString(recv) }
+      // Map
+      if method == "size" { return new MapStd().size(recv) }
+      if method == "has" { return new MapStd().has(recv, args.get(0)) }
+      if method == "get" { return new MapStd().get(recv, args.get(0)) }
+      if method == "set" { return new MapStd().set(recv, args.get(0), args.get(1)) }
+      if method == "toString" { return new MapStd().toString(recv) }
+    }
+    // Fallback: direct method invocation on receiver
+    // Note: This will route to plugin or built-in box implementations.
+    if args == null { return recv[method]() }
+    local a0 = args.get(0)
+    local a1 = args.get(1)
+    local a2 = args.get(2)
+    // call with up to 3 args (MVP)
+    return recv[method](a0, a1, a2)
+  }
+}
+

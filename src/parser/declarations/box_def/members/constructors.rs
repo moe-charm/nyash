@@ -7,7 +7,7 @@ use crate::tokenizer::TokenType;
 /// Try to parse a constructor at current position.
 /// Supported: `init(...) {}`, `pack(...) {}`, `birth(...) {}`.
 /// Returns Ok(Some((key, node))) when a constructor was parsed and consumed.
-pub fn try_parse_constructor(
+pub(crate) fn try_parse_constructor(
     p: &mut NyashParser,
     is_override: bool,
 ) -> Result<Option<(String, ASTNode)>, ParseError> {

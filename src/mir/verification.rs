@@ -4,10 +4,9 @@
  * Implements dominance checking, SSA verification, and semantic analysis
  */
 
-use super::{BasicBlockId, MirFunction, MirModule, ValueId};
+use super::{MirFunction, MirModule};
 use crate::debug::log as dlog;
 use crate::mir::verification_types::VerificationError;
-use std::collections::HashMap;
 mod cfg;
 mod dom;
 mod awaits;

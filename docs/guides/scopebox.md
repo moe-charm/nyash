@@ -6,6 +6,7 @@ Overview
 How to enable
 - Inject ScopeBox wrappers during core normalization by setting:
   - `NYASH_SCOPEBOX_ENABLE=1`
+  - Selfhost compiler path: Runner maps `NYASH_SCOPEBOX_ENABLE=1` to child arg `--scopebox` and applies a JSON prepass via `apps/lib/scopebox_inject.nyash`（現状は恒等: 構文確認のみ）。
 - Injection points:
   - If.then / If.else bodies
   - Loop.body
@@ -29,3 +30,5 @@ MIR Scope Hints (unified env)
 Zero-cost policy
 - ScopeBox is removed implicitly during MIR lowering (treated as a block). ScopeEnter/ScopeLeave hints are observational only. Execution and IR are unchanged.
 
+Notes (Selfhost path)
+- 当面は JSON v0 に `ScopeBox` 型は導入しない（互換維持）。前処理は恒等（identity）から開始し、将来は安全な包み込み/ヒント付与を検討する。

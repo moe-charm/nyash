@@ -1,0 +1,33 @@
+// ArrayStd — minimal standard array helpers (commonized API)
+
+static box ArrayStd {
+  size(a) {
+    if a == null { return 0 }
+    // support both size/len
+    if a.size { return a.size() }
+    if a.len { return a.len() }
+    return 0
+  }
+  len(a) { return me.size(a) }
+  get(a, i) {
+    if a == null { return null }
+    if a.get { return a.get(i) }
+    return null
+  }
+  set(a, i, v) {
+    if a == null { return 0 }
+    if a.set { a.set(i, v) return 0 }
+    return 0
+  }
+  push(a, v) {
+    if a == null { return 0 }
+    if a.push { return a.push(v) }
+    return 0
+  }
+  toString(a) {
+    if a == null { return "[]" }
+    if a.toString { return a.toString() }
+    return "[]"
+  }
+}
+

@@ -1,0 +1,32 @@
+// MapStd — minimal standard map helpers (commonized API)
+
+static box MapStd {
+  size(m) {
+    if m == null { return 0 }
+    if m.size { return m.size() }
+    return 0
+  }
+  has(m, key) {
+    if m == null { return 0 }
+    if m.has { return m.has(key) }
+    // fallback: compare get() to null
+    if m.get { return m.get(key) != null ? 1 : 0 }
+    return 0
+  }
+  get(m, key) {
+    if m == null { return null }
+    if m.get { return m.get(key) }
+    return null
+  }
+  set(m, key, val) {
+    if m == null { return 0 }
+    if m.set { m.set(key, val) return 0 }
+    return 0
+  }
+  toString(m) {
+    if m == null { return "{}" }
+    if m.toString { return m.toString() }
+    return "{}"
+  }
+}
+

@@ -13,6 +13,9 @@ include "apps/selfhost-compiler/boxes/debug_box.nyash"
 include "apps/selfhost-compiler/boxes/parser_box.nyash"
 include "apps/selfhost-compiler/boxes/emitter_box.nyash"
 include "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+// Prepass libs (ScopeBox/LoopForm)
+include "apps/lib/scopebox_inject.nyash"
+include "apps/lib/loopform_normalize.nyash"
 
 static box Main {
   // ---- IO helper ----
@@ -117,14 +120,34 @@ static box Main {
       ast_json = me.parse_program(src, stage3_mode)
     }
 
+    // Optional prepasses driven by CLI flags (mapped from env by runner)
+    local do_scopebox = 0
+    local do_loopform = 0
+    if args != null {
+      local alen3 = args.length()
+      local i3 = 0
+      loop(i3 < alen3) {
+        local a3 = args.get(i3)
+        if a3 == "--scopebox" { do_scopebox = 1 }
+        if a3 == "--loopform" { do_loopform = 1 }
+        i3 = i3 + 1
+      }
+    }
+
     if emit_mir == 1 {
       // Lower minimal AST to MIR JSON (Return(Int) only for MVP)
       local mir = new MirEmitterBoxMod.MirEmitterBox()
-      json = mir.emit_mir_min(ast_json)
+      local aj = ast_json
+      if do_scopebox == 1 { aj = new ScopeBoxInject().apply(aj) }
+      if do_loopform == 1 { aj = new LoopFormNormalize().apply(aj) }
+      json = mir.emit_mir_min(aj)
     } else {
       // Emit Stage‑1 JSON with metadata
       local emitter = new EmitterBoxMod.EmitterBox()
-      json = emitter.emit_program(ast_json, me._usings)
+      local aj2 = ast_json
+      if do_scopebox == 1 { aj2 = new ScopeBoxInject().apply(aj2) }
+      if do_loopform == 1 { aj2 = new LoopFormNormalize().apply(aj2) }
+      json = emitter.emit_program(aj2, me._usings)
     }
 
     // Output JSON

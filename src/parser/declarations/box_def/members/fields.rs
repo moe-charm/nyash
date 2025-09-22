@@ -12,7 +12,7 @@ use std::collections::HashMap;
 /// - `name: Type => expr`              → computed property (getter function generated)
 /// - `name: Type { ... } [catch|cleanup]` → computed property block with optional postfix handlers
 /// Returns Ok(true) when this function consumed and handled the construct; Ok(false) if not applicable.
-pub fn try_parse_header_first_field_or_property(
+pub(crate) fn try_parse_header_first_field_or_property(
     p: &mut NyashParser,
     fname: String,
     methods: &mut HashMap<String, ASTNode>,
@@ -85,5 +85,106 @@ pub fn try_parse_header_first_field_or_property(
 
     // Default: treat as a plain field when unified-members gate didn't match any special form
     fields.push(fname);
+    Ok(true)
+}
+
+/// Parse a visibility block or a single header-first property with visibility prefix.
+/// Handles:
+/// - `public { a, b, c }`  → pushes to fields/public_fields
+/// - `private { ... }`      → pushes to fields/private_fields
+/// - `public name: Type ...` (delegates to header-first field/property)
+/// Returns Ok(true) if consumed, Ok(false) if visibility keyword not matched.
+pub(crate) fn try_parse_visibility_block_or_single(
+    p: &mut NyashParser,
+    visibility: &str,
+    methods: &mut HashMap<String, ASTNode>,
+    fields: &mut Vec<String>,
+    public_fields: &mut Vec<String>,
+    private_fields: &mut Vec<String>,
+    last_method_name: &mut Option<String>,
+) -> Result<bool, ParseError> {
+    if visibility != "public" && visibility != "private" {
+        return Ok(false);
+    }
+    if p.match_token(&TokenType::LBRACE) {
+        p.advance();
+        p.skip_newlines();
+        while !p.match_token(&TokenType::RBRACE) && !p.is_at_end() {
+            if let TokenType::IDENTIFIER(fname) = &p.current_token().token_type {
+                let fname = fname.clone();
+                if visibility == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
+                fields.push(fname);
+                p.advance();
+                if p.match_token(&TokenType::COMMA) { p.advance(); }
+                p.skip_newlines();
+                continue;
+            }
+            return Err(ParseError::UnexpectedToken {
+                expected: "identifier in visibility block".to_string(),
+                found: p.current_token().token_type.clone(),
+                line: p.current_token().line,
+            });
+        }
+        p.consume(TokenType::RBRACE)?;
+        p.skip_newlines();
+        return Ok(true);
+    }
+    if let TokenType::IDENTIFIER(n) = &p.current_token().token_type {
+        let fname = n.clone();
+        p.advance();
+        if try_parse_header_first_field_or_property(p, fname.clone(), methods, fields)? {
+            if visibility == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
+            *last_method_name = None;
+            p.skip_newlines();
+            return Ok(true);
+        } else {
+            if visibility == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
+            fields.push(fname);
+            p.skip_newlines();
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Parse `init { ... }` non-call block to collect initializable fields and weak flags.
+/// Returns Ok(true) if consumed; Ok(false) if no `init {` at current position.
+pub(crate) fn parse_init_block_if_any(
+    p: &mut NyashParser,
+    init_fields: &mut Vec<String>,
+    weak_fields: &mut Vec<String>,
+) -> Result<bool, ParseError> {
+    if !(p.match_token(&TokenType::INIT) && p.peek_token() != &TokenType::LPAREN) {
+        return Ok(false);
+    }
+    p.advance(); // consume 'init'
+    p.consume(TokenType::LBRACE)?;
+    while !p.match_token(&TokenType::RBRACE) && !p.is_at_end() {
+        p.skip_newlines();
+        if p.match_token(&TokenType::RBRACE) {
+            break;
+        }
+        let is_weak = if p.match_token(&TokenType::WEAK) {
+            p.advance();
+            true
+        } else {
+            false
+        };
+        if let TokenType::IDENTIFIER(field_name) = &p.current_token().token_type {
+            init_fields.push(field_name.clone());
+            if is_weak {
+                weak_fields.push(field_name.clone());
+            }
+            p.advance();
+            if p.match_token(&TokenType::COMMA) { p.advance(); }
+        } else {
+            return Err(ParseError::UnexpectedToken {
+                expected: if is_weak { "field name after 'weak'" } else { "field name" }.to_string(),
+                found: p.current_token().token_type.clone(),
+                line: p.current_token().line,
+            });
+        }
+    }
+    p.consume(TokenType::RBRACE)?;
     Ok(true)
 }

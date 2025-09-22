@@ -75,7 +75,7 @@ pub fn build_simple_loop<L: LoopBuilderApi>(
     let void_id = lb.new_value();
     lb.emit(MirInstruction::Const {
         dst: void_id,
-        value: super::instruction::ConstValue::Void,
+        value: crate::mir::ConstValue::Void,
     })?;
     Ok(void_id)
 }

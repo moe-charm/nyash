@@ -112,14 +112,39 @@ impl NyashRunner {
             let parser_prog = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
             if parser_prog.exists() {
                 // Build extra args forwarded to child program
-                let mut extra: Vec<&str> = Vec::new();
+                let mut extra_owned: Vec<String> = Vec::new();
                 if crate::config::env::ny_compiler_min_json() {
-                    extra.extend(["--", "--min-json"]);
+                    extra_owned.push("--".to_string());
+                    extra_owned.push("--min-json".to_string());
                 }
-                extra.extend(["--", "--read-tmp"]);
+                extra_owned.push("--".to_string());
+                extra_owned.push("--read-tmp".to_string());
                 if crate::config::env::ny_compiler_stage3() {
-                    extra.extend(["--", "--stage3"]);
+                    extra_owned.push("--".to_string());
+                    extra_owned.push("--stage3".to_string());
                 }
+                // Optional: map env toggles to child args (prepasses)
+                if std::env::var("NYASH_SCOPEBOX_ENABLE").ok().as_deref() == Some("1") {
+                    extra_owned.push("--".to_string());
+                    extra_owned.push("--scopebox".to_string());
+                }
+                if std::env::var("NYASH_LOOPFORM_NORMALIZE").ok().as_deref() == Some("1") {
+                    extra_owned.push("--".to_string());
+                    extra_owned.push("--loopform".to_string());
+                }
+                // Optional: developer-provided child args passthrough (space-separated)
+                if let Ok(raw) = std::env::var("NYASH_SELFHOST_CHILD_ARGS") {
+                    let items: Vec<String> = raw
+                        .split(' ')
+                        .filter(|s| !s.trim().is_empty())
+                        .map(|s| s.to_string())
+                        .collect();
+                    if !items.is_empty() {
+                        extra_owned.push("--".to_string());
+                        for it in items { extra_owned.push(it); }
+                    }
+                }
+                let extra: Vec<&str> = extra_owned.iter().map(|s| s.as_str()).collect();
                 let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                 if let Some(line) = child::run_ny_program_capture_json(
                     &exe,

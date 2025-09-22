@@ -50,6 +50,7 @@ check_case "apps/tests/macro/loopform/two_vars.nyash"
 check_case "apps/tests/macro/loopform/with_continue.nyash"
 check_case "apps/tests/macro/loopform/with_break.nyash"
 check_case "apps/tests/llvm_phi_mix.nyash"
+check_case "apps/tests/loop_if_phi_continue.nyash"
 
 if [ "$fails" -ne 0 ]; then
   exit 2

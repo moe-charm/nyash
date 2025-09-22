@@ -126,8 +126,12 @@ for / foreach の糖衣と正規化（概要）
   - `tools/test/golden/macro/loop_two_vars_user_macro_golden.sh`
  - 出力一致スモーク（VM）
    - `tools/test/smoke/macro/loop_two_vars_output_smoke.sh`
-- 自己ホスト前展開（PyVM 経由）
+ - 自己ホスト前展開（PyVM 経由）
   - `NYASH_VM_USE_PY=1 NYASH_USE_NY_COMPILER=1 NYASH_MACRO_ENABLE=1 NYASH_MACRO_PATHS=apps/macros/examples/loop_normalize_macro.nyash ./target/release/nyash --macro-preexpand --backend vm apps/tests/macro/loopform/simple.nyash`
+
+Selfhost compiler prepass（恒等→最小正規化）
+- Runner が `NYASH_LOOPFORM_NORMALIZE=1` を `--loopform` にマップして子に渡し、`apps/lib/loopform_normalize.nyash` の前処理を適用（現状は恒等）。
+- 既定OFF。将来、キー順正規化→簡易キャリア整列を段階的に追加する。
 
 実装メモ（内蔵変換ルート / Rust）
 - 既定のマクロ実行は internal‑child（Rust内蔵）です。LoopNormalize は以下の保守的なガードで正規化します。

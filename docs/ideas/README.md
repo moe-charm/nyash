@@ -22,6 +22,7 @@ language/
 ├── concurrency/           # 並行性Box (設計完了・docs化済み)
 ├── flow-blocks/          # フロー演算子 (設計完了・docs化済み)  
 ├── scope-reuse/          # スコープ演算子 (設計完了・docs化済み)
+├── pure-functional-blocks.md # []純粋関数型ブロック vs {}通常ブロック (NEW!)
 ├── pattern-matching/     # パターンマッチング拡張
 ├── async-await/          # 非同期構文Sugar
 └── metaprogramming/      # メタプログラミング機能
@@ -76,6 +77,7 @@ experimental/
 
 ### 🔥 高優先度（Post‑Bootstrap 即実装）
 - **CAX (C-ABI Explorer)**: 革新的デバッグツール（世界初）
+- **Pure Functional []Blocks**: 純粋関数型ブロック vs 通常{}ブロック (NEW!)
 - **Nyash Self-VM**: Python/Rust VM統一化
 - **Flow Blocks**: 設計完了、実装のみ
 - **Concurrency Boxes**: Go超越の並行性

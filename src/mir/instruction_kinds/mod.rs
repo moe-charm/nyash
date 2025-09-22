@@ -6,9 +6,10 @@
 //! in `MirInstruction`.
 
 use super::{BasicBlockId, ConstValue, Effect, EffectMask, ValueId};
-use crate::mir::instruction::{
-    BarrierOp as MirBarrierOp, BinaryOp as MirBinOp, MirInstruction, MirType,
-    TypeOpKind as MirTypeOpKind, WeakRefOp as MirWeakRefOp,
+use crate::mir::instruction::MirInstruction;
+use crate::mir::types::{
+    BarrierOp as MirBarrierOp, BinaryOp as MirBinOp, MirType, TypeOpKind as MirTypeOpKind,
+    WeakRefOp as MirWeakRefOp,
 };
 
 // Local macro utilities for generating InstructionMeta boilerplate.
@@ -114,6 +115,13 @@ pub fn effects_via_meta(i: &MirInstruction) -> Option<EffectMask> {
     if let Some(k) = JumpInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = PrintInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = DebugInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = TypeCheckInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = CopyInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = NopInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = ThrowInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = CatchInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = SafepointInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = FunctionNewInst::from_mir(i) { return Some(k.effects()); }
     None
 }
 
@@ -136,6 +144,13 @@ pub fn dst_via_meta(i: &MirInstruction) -> Option<ValueId> {
     if let Some(_k) = PrintInst::from_mir(i) { return None; }
     if let Some(_k) = DebugInst::from_mir(i) { return None; }
     if let Some(k) = CallLikeInst::from_mir(i) { return k.dst(); }
+    if let Some(k) = TypeCheckInst::from_mir(i) { return k.dst(); }
+    if let Some(k) = CopyInst::from_mir(i) { return k.dst(); }
+    if let Some(_k) = NopInst::from_mir(i) { return None; }
+    if let Some(_k) = ThrowInst::from_mir(i) { return None; }
+    if let Some(k) = CatchInst::from_mir(i) { return k.dst(); }
+    if let Some(_k) = SafepointInst::from_mir(i) { return None; }
+    if let Some(k) = FunctionNewInst::from_mir(i) { return k.dst(); }
     None
 }
 
@@ -158,6 +173,13 @@ pub fn used_via_meta(i: &MirInstruction) -> Option<Vec<ValueId>> {
     if let Some(k) = PrintInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = DebugInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = CallLikeInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = TypeCheckInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = CopyInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = NopInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = ThrowInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = CatchInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = SafepointInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = FunctionNewInst::from_mir(i) { return Some(k.used()); }
     None
 }
 
@@ -369,6 +391,17 @@ inst_meta! {
     }
 }
 
+// ---- FunctionNew ---- (macro-generated)
+inst_meta! {
+    pub struct FunctionNewInst { dst: ValueId, captures: Vec<(String, ValueId)>, me: Option<ValueId> }
+    => {
+        from_mir = |i| match i { MirInstruction::FunctionNew { dst, captures, me, .. } => Some(FunctionNewInst { dst: *dst, captures: captures.clone(), me: *me }), _ => None };
+        effects = |_: &Self| EffectMask::PURE.add(Effect::Alloc);
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| { let mut v: Vec<ValueId> = s.captures.iter().map(|(_, id)| *id).collect(); if let Some(m) = s.me { v.push(m); } v };
+    }
+}
+
 // ---- Store ---- (macro-generated)
 inst_meta! {
     pub struct StoreInst { value: ValueId, ptr: ValueId }
@@ -443,6 +476,72 @@ inst_meta! {
         effects = |_: &Self| EffectMask::PURE.add(Effect::Debug);
         dst = |_: &Self| None;
         used = |s: &Self| vec![s.value];
+    }
+}
+
+// ---- TypeCheck ---- (macro-generated)
+inst_meta! {
+    pub struct TypeCheckInst { dst: ValueId, value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::TypeCheck { dst, value, .. } => Some(TypeCheckInst { dst: *dst, value: *value }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.value];
+    }
+}
+
+// ---- Copy ---- (macro-generated)
+inst_meta! {
+    pub struct CopyInst { dst: ValueId, src: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Copy { dst, src } => Some(CopyInst { dst: *dst, src: *src }), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |s: &Self| Some(s.dst);
+        used = |s: &Self| vec![s.src];
+    }
+}
+
+// ---- Nop ---- (macro-generated)
+inst_meta! {
+    pub struct NopInst { }
+    => {
+        from_mir = |i| match i { MirInstruction::Nop => Some(NopInst {}), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |_: &Self| None;
+        used = |_: &Self| Vec::new();
+    }
+}
+
+// ---- Throw ---- (macro-generated)
+inst_meta! {
+    pub struct ThrowInst { exception: ValueId, effects_mask: EffectMask }
+    => {
+        from_mir = |i| match i { MirInstruction::Throw { exception, effects } => Some(ThrowInst { exception: *exception, effects_mask: *effects }), _ => None };
+        effects = |s: &Self| s.effects_mask;
+        dst = |_: &Self| None;
+        used = |s: &Self| vec![s.exception];
+    }
+}
+
+// ---- Catch ---- (macro-generated)
+inst_meta! {
+    pub struct CatchInst { exception_value: ValueId }
+    => {
+        from_mir = |i| match i { MirInstruction::Catch { exception_value, .. } => Some(CatchInst { exception_value: *exception_value }), _ => None };
+        effects = |_: &Self| EffectMask::CONTROL;
+        dst = |s: &Self| Some(s.exception_value);
+        used = |_: &Self| Vec::new();
+    }
+}
+
+// ---- Safepoint ---- (macro-generated)
+inst_meta! {
+    pub struct SafepointInst { }
+    => {
+        from_mir = |i| match i { MirInstruction::Safepoint => Some(SafepointInst {}), _ => None };
+        effects = |_: &Self| EffectMask::PURE;
+        dst = |_: &Self| None;
+        used = |_: &Self| Vec::new();
     }
 }
 

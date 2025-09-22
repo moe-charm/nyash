@@ -29,6 +29,7 @@ mod jit_direct;
 mod selfhost;
 mod tasks;
 mod trace;
+mod plugins;
 
 // v2 plugin system imports
 use nyash_rust::runner_plugin_init;
@@ -37,7 +38,7 @@ use nyash_rust::runtime;
 
 /// Resolve a using target according to priority: modules > relative > using-paths
 /// Returns Ok(resolved_path_or_token). On strict mode, ambiguous matches cause error.
-use pipeline::resolve_using_target;
+// use pipeline::resolve_using_target; // resolved within helpers; avoid unused warning
 
 /// Main execution coordinator
 pub struct NyashRunner {
@@ -47,6 +48,7 @@ pub struct NyashRunner {
 /// Minimal task runner: read nyash.toml [env] and [tasks], run the named task via shell
 use tasks::run_named_task;
 
+#[cfg(not(feature = "jit-direct-only"))]
 impl NyashRunner {
     /// Create a new runner with the given configuration
     pub fn new(config: CliConfig) -> Self {
@@ -55,402 +57,8 @@ impl NyashRunner {
 
     /// Run Nyash based on the configuration
     pub fn run(&self) {
-        // Macro sandbox child mode: --macro-expand-child <file>
-        if let Some(ref macro_file) = self.config.macro_expand_child {
-            crate::runner::modes::macro_child::run_macro_child(macro_file);
-            return;
-        }
-        // Build system (MVP): nyash --build <nyash.toml>
-        let groups = self.config.as_groups();
-        if let Some(cfg_path) = groups.build.path.clone() {
-            if let Err(e) = self.run_build_mvp(&cfg_path) {
-                eprintln!("❌ build error: {}", e);
-                std::process::exit(1);
-            }
-            return;
-        }
-        // Using/module overrides pre-processing
-        let mut using_ctx = self.init_using_context();
-        let mut pending_using: Vec<(String, Option<String>)> = Vec::new();
-        // CLI --using SPEC entries (SPEC: 'ns', 'ns as Alias', '"path" as Alias')
-        for spec in &groups.input.cli_usings {
-            let s = spec.trim();
-            if s.is_empty() {
-                continue;
-            }
-            let (target, alias) = if let Some(pos) = s.find(" as ") {
-                (
-                    s[..pos].trim().to_string(),
-                    Some(s[pos + 4..].trim().to_string()),
-                )
-            } else {
-                (s.to_string(), None)
-            };
-            // Normalize quotes for path
-            let is_path = target.starts_with('"')
-                || target.starts_with("./")
-                || target.starts_with('/')
-                || target.ends_with(".nyash");
-            if is_path {
-                let path = target.trim_matches('"').to_string();
-                let name = alias.clone().unwrap_or_else(|| {
-                    std::path::Path::new(&path)
-                        .file_stem()
-                        .and_then(|s| s.to_str())
-                        .unwrap_or("module")
-                        .to_string()
-                });
-                pending_using.push((name, Some(path)));
-            } else {
-                pending_using.push((target, alias));
-            }
-        }
-        for (ns, path) in using_ctx.pending_modules.iter() {
-            let sb = crate::box_trait::StringBox::new(path.clone());
-            crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
-        }
-        // Stage-1: Optional dependency tree bridge (log-only)
-        if let Ok(dep_path) = std::env::var("NYASH_DEPS_JSON") {
-            match std::fs::read_to_string(&dep_path) {
-                Ok(s) => {
-                    let bytes = s.as_bytes().len();
-                    // Try to extract quick hints without failing
-                    let mut root_info = String::new();
-                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
-                        if let Some(r) = v.get("root_path").and_then(|x| x.as_str()) {
-                            root_info = format!(" root='{}'", r);
-                        }
-                    }
-                    crate::cli_v!(
-                        "[deps] loaded {} bytes from{} {}",
-                        bytes,
-                        if root_info.is_empty() { "" } else { ":" },
-                        root_info
-                    );
-                }
-                Err(e) => {
-                    crate::cli_v!("[deps] read error: {}", e);
-                }
-            }
-        }
-
-        // Phase-15: JSON IR v0 bridge (stdin/file)
-        if self.try_run_json_v0_pipe() {
-            return;
-        }
-        // Run named task from nyash.toml (MVP)
-        if let Some(task) = groups.run_task.clone() {
-            if let Err(e) = run_named_task(&task) {
-                eprintln!("❌ Task error: {}", e);
-                process::exit(1);
-            }
-            return;
-        }
-        // Verbose CLI flag maps to env for downstream helpers/scripts
-        if groups.debug.cli_verbose {
-            std::env::set_var("NYASH_CLI_VERBOSE", "1");
-        }
-        // GC mode forwarding: map CLI --gc to NYASH_GC_MODE for downstream runtimes
-        if let Some(ref m) = groups.gc_mode {
-            if !m.trim().is_empty() {
-                std::env::set_var("NYASH_GC_MODE", m);
-            }
-        }
-        // Script-level env directives (special comments) — parse early
-        // Supported:
-        //   // @env KEY=VALUE
-        //   // @jit-debug           (preset: exec, threshold=1, events+trace)
-        //   // @plugin-builtins     (NYASH_USE_PLUGIN_BUILTINS=1)
-        if let Some(ref filename) = groups.input.file {
-            if let Ok(code) = fs::read_to_string(filename) {
-                // Apply script-level directives and lint
-                let strict_fields =
-                    std::env::var("NYASH_FIELDS_TOP_STRICT").ok().as_deref() == Some("1");
-                if let Err(e) = cli_directives::apply_cli_directives_from_source(
-                    &code,
-                    strict_fields,
-                groups.debug.cli_verbose,
-                ) {
-                    eprintln!("❌ Lint/Directive error: {}", e);
-                    std::process::exit(1);
-                }
-
-                // Env overrides for using rules
-                // Merge late env overrides (if any)
-                if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
-                    for p in paths.split(':') {
-                        let p = p.trim();
-                        if !p.is_empty() {
-                            using_ctx.using_paths.push(p.to_string());
-                        }
-                    }
-                }
-                if let Ok(mods) = std::env::var("NYASH_MODULES") {
-                    for ent in mods.split(',') {
-                        if let Some((k, v)) = ent.split_once('=') {
-                            let k = k.trim();
-                            let v = v.trim();
-                            if !k.is_empty() && !v.is_empty() {
-                                using_ctx
-                                    .pending_modules
-                                    .push((k.to_string(), v.to_string()));
-                            }
-                        }
-                    }
-                }
-
-                // Apply pending modules to registry as StringBox (path or ns token)
-                for (ns, path) in using_ctx.pending_modules.iter() {
-                    let sb = nyash_rust::box_trait::StringBox::new(path.clone());
-                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
-                }
-                // Resolve pending using with clear precedence and ambiguity handling
-                let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
-                let verbose = crate::config::env::cli_verbose();
-                let ctx = std::path::Path::new(filename).parent();
-                for (ns, alias) in pending_using.iter() {
-                    let value = match resolve_using_target(
-                        ns,
-                        false,
-                        &using_ctx.pending_modules,
-                        &using_ctx.using_paths,
-                        &using_ctx.aliases,
-                        ctx,
-                        strict,
-                        verbose,
-                    ) {
-                        Ok(v) => v,
-                        Err(e) => {
-                            eprintln!("❌ using: {}", e);
-                            std::process::exit(1);
-                        }
-                    };
-                    let sb = nyash_rust::box_trait::StringBox::new(value.clone());
-                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
-                    if let Some(a) = alias {
-                        let sb2 = nyash_rust::box_trait::StringBox::new(value);
-                        nyash_rust::runtime::modules_registry::set(a.clone(), Box::new(sb2));
-                    }
-                }
-            }
-        }
-
-        // If strict mode requested via env, ensure handle-only shim behavior is enabled
-        if std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
-            if std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().is_none() {
-                std::env::set_var("NYASH_JIT_ARGS_HANDLE_ONLY", "1");
-            }
-            // Enforce JIT-only by default in strict mode unless explicitly overridden
-            if std::env::var("NYASH_JIT_ONLY").ok().is_none() {
-                std::env::set_var("NYASH_JIT_ONLY", "1");
-            }
-        }
-
-        // 🏭 Phase 9.78b: Initialize unified registry
-        runtime::init_global_unified_registry();
-
-        // Try to initialize BID plugins from nyash.toml (best-effort)
-        // Allow disabling during snapshot/CI via NYASH_DISABLE_PLUGINS=1
-        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
-            runner_plugin_init::init_bid_plugins();
-            // Build BoxIndex after plugin host is initialized
-            crate::runner::box_index::refresh_box_index();
-        }
-        // Allow interpreter to create plugin-backed boxes via unified registry
-        // Opt-in by default for FileBox/TOMLBox which are required by ny-config and similar tools.
-        if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() {
-            std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
-        }
-        // Merge FileBox,TOMLBox with defaults if present
-        let mut override_types: Vec<String> =
-            if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
-                list.split(',')
-                    .map(|s| s.trim().to_string())
-                    .filter(|s| !s.is_empty())
-                    .collect()
-            } else {
-                vec!["ArrayBox".into(), "MapBox".into()]
-            };
-        for t in ["FileBox", "TOMLBox"] {
-            if !override_types.iter().any(|x| x == t) {
-                override_types.push(t.into());
-            }
-        }
-        std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
-
-        // Opt-in: load Ny script plugins listed in nyash.toml [ny_plugins]
-        if groups.load_ny_plugins
-            || std::env::var("NYASH_LOAD_NY_PLUGINS").ok().as_deref() == Some("1")
-        {
-            if let Ok(text) = std::fs::read_to_string("nyash.toml") {
-                if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
-                    if let Some(np) = doc.get("ny_plugins") {
-                        let mut list: Vec<String> = Vec::new();
-                        if let Some(arr) = np.as_array() {
-                            for v in arr {
-                                if let Some(s) = v.as_str() {
-                                    list.push(s.to_string());
-                                }
-                            }
-                        } else if let Some(tbl) = np.as_table() {
-                            for (_k, v) in tbl {
-                                if let Some(s) = v.as_str() {
-                                    list.push(s.to_string());
-                                } else if let Some(arr) = v.as_array() {
-                                    for e in arr {
-                                        if let Some(s) = e.as_str() {
-                                            list.push(s.to_string());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if !list.is_empty() {
-                            let list_only =
-                                std::env::var("NYASH_NY_PLUGINS_LIST_ONLY").ok().as_deref()
-                                    == Some("1");
-                            println!("🧩 Ny script plugins ({}):", list.len());
-                            for p in list {
-                                if list_only {
-                                    println!("  • {}", p);
-                                    continue;
-                                }
-                                // Execute each script best-effort via interpreter
-                                match std::fs::read_to_string(&p) {
-                                    Ok(code) => {
-                                        match nyash_rust::parser::NyashParser::parse_from_string(
-                                            &code,
-                                        ) {
-                                            Ok(ast) => {
-                                                let mut interpreter =
-                                                    nyash_rust::interpreter::NyashInterpreter::new(
-                                                    );
-                                                match interpreter.execute(ast) {
-                                                    Ok(_) => println!("[ny_plugins] {}: OK", p),
-                                                    Err(e) => {
-                                                        println!(
-                                                            "[ny_plugins] {}: FAIL ({})",
-                                                            p, e
-                                                        );
-                                                        // continue to next
-                                                    }
-                                                }
-                                            }
-                                            Err(e) => {
-                                                println!("[ny_plugins] {}: FAIL (parse: {})", p, e);
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        println!("[ny_plugins] {}: FAIL (read: {})", p, e);
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Optional: enable VM stats via CLI flags
-        if groups.backend.vm_stats {
-            std::env::set_var("NYASH_VM_STATS", "1");
-        }
-        if groups.backend.vm_stats_json {
-            // Prefer explicit JSON flag over any default
-            std::env::set_var("NYASH_VM_STATS_JSON", "1");
-        }
-        // Optional: JIT controls via CLI flags (centralized)
-        {
-            // CLI opt-in for JSONL events
-            if groups.backend.jit.events {
-                std::env::set_var("NYASH_JIT_EVENTS", "1");
-            }
-            if groups.backend.jit.events_compile {
-                std::env::set_var("NYASH_JIT_EVENTS_COMPILE", "1");
-            }
-            if groups.backend.jit.events_runtime {
-                std::env::set_var("NYASH_JIT_EVENTS_RUNTIME", "1");
-            }
-            if let Some(ref p) = groups.backend.jit.events_path {
-                std::env::set_var("NYASH_JIT_EVENTS_PATH", p);
-            }
-            let mut jc = nyash_rust::jit::config::JitConfig::from_env();
-            jc.exec |= groups.backend.jit.exec;
-            jc.stats |= groups.backend.jit.stats;
-            jc.stats_json |= groups.backend.jit.stats_json;
-            jc.dump |= groups.backend.jit.dump;
-            if groups.backend.jit.threshold.is_some() {
-                jc.threshold = groups.backend.jit.threshold;
-            }
-            jc.phi_min |= groups.backend.jit.phi_min;
-            jc.hostcall |= groups.backend.jit.hostcall;
-            jc.handle_debug |= groups.backend.jit.handle_debug;
-            jc.native_f64 |= groups.backend.jit.native_f64;
-            jc.native_bool |= groups.backend.jit.native_bool;
-            // If observability is enabled and no threshold is provided, force threshold=1 so lowering runs and emits events
-            let events_on = std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1")
-                || std::env::var("NYASH_JIT_EVENTS_COMPILE").ok().as_deref() == Some("1")
-                || std::env::var("NYASH_JIT_EVENTS_RUNTIME").ok().as_deref() == Some("1");
-            if events_on && jc.threshold.is_none() {
-                jc.threshold = Some(1);
-            }
-            if groups.backend.jit.only {
-                std::env::set_var("NYASH_JIT_ONLY", "1");
-            }
-            // Apply runtime capability probe (e.g., disable b1 ABI if unsupported)
-            let caps = nyash_rust::jit::config::probe_capabilities();
-            jc = nyash_rust::jit::config::apply_runtime_caps(jc, caps);
-            // Optional DOT emit via CLI (ensures dump is on when path specified)
-            if let Some(path) = &groups.emit.emit_cfg {
-                std::env::set_var("NYASH_JIT_DOT", path);
-                jc.dump = true;
-            }
-            // Persist to env (CLI parity) and set as current
-            jc.apply_env();
-            nyash_rust::jit::config::set_current(jc.clone());
-        }
-        // Architectural pivot: JIT is compiler-only (EXE/AOT). Ensure VM runtime does not dispatch to JIT
-        // unless explicitly requested via independent JIT mode, or when emitting AOT objects.
-        if !groups.compile_native && !groups.backend.jit.direct {
-            // When AOT object emission is requested, allow JIT to run for object generation
-            let aot_obj = std::env::var("NYASH_AOT_OBJECT_OUT").ok();
-            if aot_obj.is_none() || aot_obj.as_deref() == Some("") {
-                // Force-disable runtime JIT execution path for VM/Interpreter flows
-                std::env::set_var("NYASH_JIT_EXEC", "0");
-            }
-        }
-        // Benchmark mode - can run without a file
-        if groups.benchmark {
-            println!("📊 Nyash Performance Benchmark Suite");
-            println!("====================================");
-            println!("Running {} iterations per test...", groups.iterations);
-            println!();
-            #[cfg(feature = "vm-legacy")]
-            {
-                self.execute_benchmark_mode();
-                return;
-            }
-            #[cfg(not(feature = "vm-legacy"))]
-            {
-                eprintln!(
-                    "❌ Benchmark mode requires VM backend. Rebuild with --features vm-legacy."
-                );
-                std::process::exit(1);
-            }
-        }
-
-        if let Some(ref filename) = groups.input.file {
-            // Independent JIT direct mode (no VM execute path)
-            if groups.backend.jit.direct {
-                self.run_file_jit_direct(filename);
-                return;
-            }
-            // Delegate file-mode execution to modes::common dispatcher
-            self.run_file(filename);
-        } else {
-            demos::run_all_demos();
-        }
+        // New behavior-preserving delegator
+        self.run_refactored();
     }
 
     // init_bid_plugins moved to runner_plugin_init.rs
@@ -463,6 +71,223 @@ impl NyashRunner {
     /// Minimal AOT build pipeline driven by nyash.toml (mvp)
     fn run_build_mvp(&self, cfg_path: &str) -> Result<(), String> {
         build::run_build_mvp_impl(self, cfg_path)
+    }
+}
+
+#[cfg(not(feature = "jit-direct-only"))]
+impl NyashRunner {
+    /// New behavior-preserving refactor of run(): structured into smaller helpers
+    fn run_refactored(&self) {
+        // Early: macro child
+        if let Some(ref macro_file) = self.config.macro_expand_child {
+            crate::runner::modes::macro_child::run_macro_child(macro_file);
+            return;
+        }
+        let groups = self.config.as_groups();
+        // Early: build
+        if let Some(cfg_path) = groups.build.path.clone() {
+            if let Err(e) = self.run_build_mvp(&cfg_path) {
+                eprintln!("❌ build error: {}", e);
+                std::process::exit(1);
+            }
+            return;
+        }
+        // Preprocess usings and directives (includes dep-tree log)
+        self.preprocess_usings_and_directives(&groups);
+        // JSON v0 bridge
+        if self.try_run_json_v0_pipe() { return; }
+        // Named task
+        if let Some(task) = groups.run_task.clone() {
+            if let Err(e) = run_named_task(&task) {
+                eprintln!("❌ Task error: {}", e);
+                process::exit(1);
+            }
+            return;
+        }
+        // Common env + runtime/plugins
+        self.apply_common_env(&groups);
+        self.init_runtime_and_plugins(&groups);
+        // Backend config + policy
+        self.configure_backend(&groups);
+        self.enforce_runtime_jit_policy(&groups);
+        // Benchmark
+        if self.maybe_run_benchmark(&groups) { return; }
+        // Dispatch
+        self.dispatch_entry(&groups);
+    }
+
+    // ---- Helpers (extracted from original run) ----
+
+    fn preprocess_usings_and_directives(&self, groups: &crate::cli::CliGroups) {
+        use pipeline::resolve_using_target;
+        // Initialize UsingContext (defaults + nyash.toml + env)
+        let mut using_ctx = self.init_using_context();
+        // Collect CLI --using SPEC into (target, alias)
+        let mut pending_using: Vec<(String, Option<String>)> = Vec::new();
+        for spec in &groups.input.cli_usings {
+            let s = spec.trim();
+            if s.is_empty() { continue; }
+            let (target, alias) = if let Some(pos) = s.find(" as ") {
+                (s[..pos].trim().to_string(), Some(s[pos + 4..].trim().to_string()))
+            } else { (s.to_string(), None) };
+            let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+            if is_path {
+                let path = target.trim_matches('"').to_string();
+                let name = alias.clone().unwrap_or_else(|| {
+                    std::path::Path::new(&path).file_stem().and_then(|s| s.to_str()).unwrap_or("module").to_string()
+                });
+                pending_using.push((name, Some(path)));
+            } else {
+                pending_using.push((target, alias));
+            }
+        }
+        // Apply pending modules (from context) to registry as StringBox
+        for (ns, path) in using_ctx.pending_modules.iter() {
+            let sb = crate::box_trait::StringBox::new(path.clone());
+            crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+        }
+        // Optional dependency tree bridge (log-only)
+        if let Ok(dep_path) = std::env::var("NYASH_DEPS_JSON") {
+            match std::fs::read_to_string(&dep_path) {
+                Ok(s) => {
+                    let bytes = s.as_bytes().len();
+                    let mut root_info = String::new();
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&s) {
+                        if let Some(r) = v.get("root_path").and_then(|x| x.as_str()) {
+                            root_info = format!(" root='{}'", r);
+                        }
+                    }
+                    crate::cli_v!("[deps] loaded {} bytes from{} {}", bytes, if root_info.is_empty() { "" } else { ":" }, root_info);
+                }
+                Err(e) => { crate::cli_v!("[deps] read error: {}", e); }
+            }
+        }
+        // If a file is provided, apply script-level directives and late using/env merges
+        if let Some(ref filename) = groups.input.file {
+            if let Ok(code) = fs::read_to_string(filename) {
+                // Apply directives and lint
+                let strict_fields = std::env::var("NYASH_FIELDS_TOP_STRICT").ok().as_deref() == Some("1");
+                if let Err(e) = cli_directives::apply_cli_directives_from_source(&code, strict_fields, groups.debug.cli_verbose) {
+                    eprintln!("❌ Lint/Directive error: {}", e);
+                    std::process::exit(1);
+                }
+                // Late env overrides (paths/modules)
+                if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
+                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_ctx.using_paths.push(p.to_string()); } }
+                }
+                if let Ok(mods) = std::env::var("NYASH_MODULES") {
+                    for ent in mods.split(',') {
+                        if let Some((k, v)) = ent.split_once('=') {
+                            let k = k.trim(); let v = v.trim();
+                            if !k.is_empty() && !v.is_empty() { using_ctx.pending_modules.push((k.to_string(), v.to_string())); }
+                        }
+                    }
+                }
+                // Re-apply pending modules in case env added more (idempotent)
+                for (ns, path) in using_ctx.pending_modules.iter() {
+                    let sb = nyash_rust::box_trait::StringBox::new(path.clone());
+                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                }
+                // Resolve CLI --using entries against context and register values (with aliasing)
+                let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+                let verbose = crate::config::env::cli_verbose();
+                let ctx = std::path::Path::new(filename).parent();
+                for (ns, alias) in pending_using.iter() {
+                    let value = match resolve_using_target(ns, false, &using_ctx.pending_modules, &using_ctx.using_paths, &using_ctx.aliases, ctx, strict, verbose) {
+                        Ok(v) => v,
+                        Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
+                    };
+                    let sb = nyash_rust::box_trait::StringBox::new(value.clone());
+                    nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                    if let Some(a) = alias {
+                        let sb2 = nyash_rust::box_trait::StringBox::new(value);
+                        nyash_rust::runtime::modules_registry::set(a.clone(), Box::new(sb2));
+                    }
+                }
+            }
+        }
+    }
+
+    /// Apply early environment toggles that affect CLI behavior and VM stats.
+    /// Side effects: sets `NYASH_CLI_VERBOSE`, `NYASH_GC_MODE` when specified by CLI groups.
+    fn apply_common_env(&self, groups: &crate::cli::CliGroups) {
+        if groups.debug.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }
+        if let Some(ref m) = groups.gc_mode { if !m.trim().is_empty() { std::env::set_var("NYASH_GC_MODE", m); } }
+    }
+
+    // init_runtime_and_plugins moved to runner/plugins.rs
+
+    /// Configure backend knobs (VM/JIT) from CLI flags and env, merging with runtime capabilities.
+    /// Side effects: writes environment variables for flags and applies JIT config via nyash_rust::jit::config.
+    fn configure_backend(&self, groups: &crate::cli::CliGroups) {
+        if groups.backend.vm_stats { std::env::set_var("NYASH_VM_STATS", "1"); }
+        if groups.backend.vm_stats_json { std::env::set_var("NYASH_VM_STATS_JSON", "1"); }
+        {
+            if groups.backend.jit.events { std::env::set_var("NYASH_JIT_EVENTS", "1"); }
+            if groups.backend.jit.events_compile { std::env::set_var("NYASH_JIT_EVENTS_COMPILE", "1"); }
+            if groups.backend.jit.events_runtime { std::env::set_var("NYASH_JIT_EVENTS_RUNTIME", "1"); }
+            if let Some(ref p) = groups.backend.jit.events_path { std::env::set_var("NYASH_JIT_EVENTS_PATH", p); }
+            let mut jc = nyash_rust::jit::config::JitConfig::from_env();
+            jc.exec |= groups.backend.jit.exec;
+            jc.stats |= groups.backend.jit.stats;
+            jc.stats_json |= groups.backend.jit.stats_json;
+            jc.dump |= groups.backend.jit.dump;
+            if groups.backend.jit.threshold.is_some() { jc.threshold = groups.backend.jit.threshold; }
+            jc.phi_min |= groups.backend.jit.phi_min;
+            jc.hostcall |= groups.backend.jit.hostcall;
+            jc.handle_debug |= groups.backend.jit.handle_debug;
+            jc.native_f64 |= groups.backend.jit.native_f64;
+            jc.native_bool |= groups.backend.jit.native_bool;
+            let events_on = std::env::var("NYASH_JIT_EVENTS").ok().as_deref() == Some("1")
+                || std::env::var("NYASH_JIT_EVENTS_COMPILE").ok().as_deref() == Some("1")
+                || std::env::var("NYASH_JIT_EVENTS_RUNTIME").ok().as_deref() == Some("1");
+            if events_on && jc.threshold.is_none() { jc.threshold = Some(1); }
+            if groups.backend.jit.only { std::env::set_var("NYASH_JIT_ONLY", "1"); }
+            let caps = nyash_rust::jit::config::probe_capabilities();
+            jc = nyash_rust::jit::config::apply_runtime_caps(jc, caps);
+            if let Some(path) = &groups.emit.emit_cfg { std::env::set_var("NYASH_JIT_DOT", path); jc.dump = true; }
+            jc.apply_env();
+            nyash_rust::jit::config::set_current(jc.clone());
+        }
+        if std::env::var("NYASH_JIT_STRICT").ok().as_deref() == Some("1") {
+            if std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().is_none() { std::env::set_var("NYASH_JIT_ARGS_HANDLE_ONLY", "1"); }
+            if std::env::var("NYASH_JIT_ONLY").ok().is_none() { std::env::set_var("NYASH_JIT_ONLY", "1"); }
+        }
+    }
+
+    /// Enforce runtime policy for JIT execution when AOT object output is absent.
+    /// Side effects: may set `NYASH_JIT_EXEC=0` when policy requires.
+    fn enforce_runtime_jit_policy(&self, groups: &crate::cli::CliGroups) {
+        if !groups.compile_native && !groups.backend.jit.direct {
+            let aot_obj = std::env::var("NYASH_AOT_OBJECT_OUT").ok();
+            if aot_obj.is_none() || aot_obj.as_deref() == Some("") {
+                std::env::set_var("NYASH_JIT_EXEC", "0");
+            }
+        }
+    }
+
+    /// Optionally run the benchmark suite and exit, depending on CLI flags.
+    /// Returns true when a benchmark run occurred.
+    fn maybe_run_benchmark(&self, groups: &crate::cli::CliGroups) -> bool {
+        if groups.benchmark {
+            println!("📊 Nyash Performance Benchmark Suite");
+            println!("====================================");
+            println!("Running {} iterations per test...", groups.iterations);
+            println!();
+            #[cfg(feature = "vm-legacy")]
+            { self.execute_benchmark_mode(); return true; }
+            #[cfg(not(feature = "vm-legacy"))]
+            { eprintln!("❌ Benchmark mode requires VM backend. Rebuild with --features vm-legacy."); std::process::exit(1); }
+        }
+        false
+    }
+
+    /// Final dispatch to selected execution mode (file/JIT-direct or demos).
+    fn dispatch_entry(&self, groups: &crate::cli::CliGroups) {
+        if let Some(ref filename) = groups.input.file {
+            if groups.backend.jit.direct { self.run_file_jit_direct(filename); return; }
+            self.run_file(filename);
+        } else { demos::run_all_demos(); }
     }
 }
 

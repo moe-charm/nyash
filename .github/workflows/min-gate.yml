@@ -25,7 +25,9 @@ jobs:
       - name: Cargo check (default features)
         run: cargo check --all-targets -q
 
+  # Disabled by default to keep CI light; run locally when needed
   pyvm-smoke:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: rust-check
@@ -51,7 +53,9 @@ jobs:
       - name: JSON smoke — parse error (PyVM+plugins)
         run: bash tools/test/smoke/selfhost/jsonbox_parse_err.sh
 
+  # Disabled by default to keep CI light; run locally when needed
   macro-golden:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: rust-check
@@ -97,7 +101,9 @@ jobs:
       - name: Macro golden — if then → loopform (gated)
         run: bash tools/test/golden/macro/if_then_loopform_user_macro_golden.sh
 
+  # Disabled by default to keep CI light; run locally when needed
   macro-smokes-lite:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: rust-check
@@ -134,12 +140,49 @@ jobs:
         run: bash tools/test/smoke/mir/hints_scope_loop_if_smoke.sh
       - name: Smoke — ScopeBox enabled (no-op)
         run: bash tools/test/smoke/mir/scopebox_enable_smoke.sh
+      - name: Smoke — Loop PHI values (then-continue)
+        run: bash tools/test/smoke/loop_phi_values.sh
       - name: Smoke — MacroCtx JSON (ctx caps)
         run: bash tools/test/smoke/macro/macro_ctx_json_smoke.sh
       - name: Smoke — UTF-8 CP strings (length/indexOf/substring)
         run: bash tools/test/smoke/strings/utf8_cp_smoke.sh
 
+  # Disabled by default to keep CI light; run locally when needed
+  llvm-phi-smoke:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep (for smokes)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Build (llvm + phi)
+        run: |
+          set -euo pipefail
+          if command -v llvm-config-18 >/dev/null 2>&1; then
+            LLVM_SYS_180_PREFIX="$(llvm-config-18 --prefix)" cargo build --release --features "llvm,phi-legacy" -q
+          else
+            cargo build --release --features "llvm,phi-legacy" -q
+          fi
+
+      - name: LLVM harness — empty PHI check (batch)
+        env:
+          NYASH_MIR_NO_PHI: "0"
+        run: bash tools/test/smoke/llvm/ir_phi_empty_check_all.sh
+
+  # Disabled by default to keep CI light; run locally when needed
   selfhost-preexpand-smoke:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: rust-check

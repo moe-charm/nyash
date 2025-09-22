@@ -11,6 +11,78 @@ use crate::ast::{ASTNode, CatchClause, Span};
 use crate::tokenizer::TokenType;
 
 impl NyashParser {
+    /// Parse a standalone block `{ ... }` and optional postfix `catch/cleanup` sequence.
+    /// Returns Program(body) when no postfix keywords follow.
+    fn parse_standalone_block_statement(&mut self) -> Result<ASTNode, ParseError> {
+        // Parse the block body first
+        let try_body = self.parse_block_statements()?;
+
+        // Allow whitespace/newlines between block and postfix keywords
+        self.skip_newlines();
+
+        if crate::config::env::block_postfix_catch()
+            && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
+        {
+            // Parse at most one catch, then optional cleanup
+            let mut catch_clauses: Vec<CatchClause> = Vec::new();
+            if self.match_token(&TokenType::CATCH) {
+                self.advance(); // consume 'catch'
+                self.consume(TokenType::LPAREN)?;
+                let (exception_type, exception_var) = self.parse_catch_param()?;
+                self.consume(TokenType::RPAREN)?;
+                let catch_body = self.parse_block_statements()?;
+                catch_clauses.push(CatchClause {
+                    exception_type,
+                    variable_name: exception_var,
+                    body: catch_body,
+                    span: Span::unknown(),
+                });
+
+                // Single‑catch policy (MVP): disallow multiple catch in postfix form
+                self.skip_newlines();
+                if self.match_token(&TokenType::CATCH) {
+                    let line = self.current_token().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "single catch only after standalone block".to_string(),
+                        line,
+                    });
+                }
+            }
+
+            // Optional cleanup
+            let finally_body = if self.match_token(&TokenType::CLEANUP) {
+                self.advance(); // consume 'cleanup'
+                Some(self.parse_block_statements()?)
+            } else {
+                None
+            };
+
+            Ok(ASTNode::TryCatch {
+                try_body,
+                catch_clauses,
+                finally_body,
+                span: Span::unknown(),
+            })
+        } else {
+            // No postfix keywords. If gate is on, enforce MVP static check:
+            // direct top-level `throw` inside the standalone block must be followed by catch
+            if crate::config::env::block_postfix_catch()
+                && try_body.iter().any(|n| matches!(n, ASTNode::Throw { .. }))
+            {
+                let line = self.current_token().line;
+                return Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "block with direct 'throw' must be followed by 'catch'".to_string(),
+                    line,
+                });
+            }
+            Ok(ASTNode::Program {
+                statements: try_body,
+                span: Span::unknown(),
+            })
+        }
+    }
     /// Helper: parse a block `{ stmt* }` and return its statements
     pub(super) fn parse_block_statements(&mut self) -> Result<Vec<ASTNode>, ParseError> {
         self.consume(TokenType::LBRACE)?;
@@ -23,6 +95,151 @@ impl NyashParser {
         }
         self.consume(TokenType::RBRACE)?;
         Ok(body)
+    }
+
+    /// Grouped: declarations (box/interface/global/function/static/import)
+    fn parse_declaration_statement(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::BOX => self.parse_box_declaration(),
+            TokenType::IMPORT => self.parse_import(),
+            TokenType::INTERFACE => self.parse_interface_box_declaration(),
+            TokenType::GLOBAL => self.parse_global_var(),
+            TokenType::FUNCTION => self.parse_function_declaration(),
+            TokenType::STATIC => self.parse_static_declaration(),
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "declaration statement".to_string(),
+                    line,
+                })
+            }
+        }
+    }
+
+    /// Grouped: control flow (if/loop/break/continue/return)
+    fn parse_control_flow_statement(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::IF => self.parse_if(),
+            TokenType::LOOP => self.parse_loop(),
+            TokenType::BREAK => self.parse_break(),
+            TokenType::CONTINUE => self.parse_continue(),
+            TokenType::RETURN => self.parse_return(),
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "control-flow statement".to_string(),
+                    line,
+                })
+            }
+        }
+    }
+
+    /// Grouped: IO/module-ish (print/nowait/include)
+    fn parse_io_module_statement(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::PRINT => self.parse_print(),
+            TokenType::NOWAIT => self.parse_nowait(),
+            TokenType::INCLUDE => self.parse_include(),
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "io/module statement".to_string(),
+                    line,
+                })
+            }
+        }
+    }
+
+    /// Grouped: variable-related (local/outbox)
+    fn parse_variable_declaration_statement(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::LOCAL => self.parse_local(),
+            TokenType::OUTBOX => self.parse_outbox(),
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "variable declaration".to_string(),
+                    line,
+                })
+            }
+        }
+    }
+
+    /// Grouped: exception (try/throw) with gate checks preserved
+    fn parse_exception_statement(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::TRY => {
+                if crate::config::env::parser_stage3() {
+                    self.parse_try_catch()
+                } else {
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_PARSER_STAGE3=1 to use 'try'".to_string(),
+                        line: self.current_token().line,
+                    })
+                }
+            }
+            TokenType::THROW => {
+                if crate::config::env::parser_stage3() {
+                    self.parse_throw()
+                } else {
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_PARSER_STAGE3=1 to use 'throw'".to_string(),
+                        line: self.current_token().line,
+                    })
+                }
+            }
+            _ => {
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken {
+                    found: self.current_token().token_type.clone(),
+                    expected: "try/throw".to_string(),
+                    line,
+                })
+            }
+        }
+    }
+
+    /// Error helpers for standalone postfix keywords (catch/cleanup)
+    fn parse_postfix_catch_cleanup_error(&mut self) -> Result<ASTNode, ParseError> {
+        match &self.current_token().token_type {
+            TokenType::CATCH => {
+                if crate::config::env::block_postfix_catch() {
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "postfix 'catch' is only allowed immediately after a standalone block: { ... } catch (...) { ... } (wrap if/else/loop in a standalone block)".to_string(),
+                        line: self.current_token().line,
+                    })
+                } else {
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_BLOCK_CATCH=1 (or NYASH_PARSER_STAGE3=1) to use postfix 'catch' after a standalone block".to_string(),
+                        line: self.current_token().line,
+                    })
+                }
+            }
+            TokenType::CLEANUP => {
+                if crate::config::env::block_postfix_catch() {
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "postfix 'cleanup' is only allowed immediately after a standalone block: { ... } cleanup { ... }".to_string(),
+                        line: self.current_token().line,
+                    })
+                } else {
+                    Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "enable NYASH_BLOCK_CATCH=1 (or NYASH_PARSER_STAGE3=1) to use postfix 'cleanup' after a standalone block".to_string(),
+                        line: self.current_token().line,
+                    })
+                }
+            }
+            _ => unreachable!(),
+        }
     }
 
     /// Helper: parse catch parameter inside parentheses (after '(' consumed)
@@ -66,149 +283,22 @@ impl NyashParser {
         // For grammar diff: capture starting token to classify statement keyword
         let start_tok = self.current_token().token_type.clone();
         let result = match &start_tok {
-            TokenType::LBRACE => {
-                // Standalone block (Phase 15.5): may be followed by block‑postfix catch/finally
-                // Only enabled under gate; otherwise treat as error via expression fallback
-                // Parse the block body first
-                let try_body = self.parse_block_statements()?;
-
-                // Allow whitespace/newlines between block and postfix keywords
-                self.skip_newlines();
-
-                if crate::config::env::block_postfix_catch()
-                    && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
-                {
-                    // Parse at most one catch, then optional cleanup
-                    let mut catch_clauses: Vec<CatchClause> = Vec::new();
-                    if self.match_token(&TokenType::CATCH) {
-                        self.advance(); // consume 'catch'
-                        self.consume(TokenType::LPAREN)?;
-                        let (exception_type, exception_var) = self.parse_catch_param()?;
-                        self.consume(TokenType::RPAREN)?;
-                        let catch_body = self.parse_block_statements()?;
-                        catch_clauses.push(CatchClause {
-                            exception_type,
-                            variable_name: exception_var,
-                            body: catch_body,
-                            span: Span::unknown(),
-                        });
-
-                        // Single‑catch policy (MVP): disallow multiple catch in postfix form
-                        self.skip_newlines();
-                        if self.match_token(&TokenType::CATCH) {
-                            let line = self.current_token().line;
-                            return Err(ParseError::UnexpectedToken {
-                                found: self.current_token().token_type.clone(),
-                                expected: "single catch only after standalone block".to_string(),
-                                line,
-                            });
-                        }
-                    }
-
-                    // Optional cleanup
-                    let finally_body = if self.match_token(&TokenType::CLEANUP) {
-                        self.advance(); // consume 'cleanup'
-                        Some(self.parse_block_statements()?)
-                    } else {
-                        None
-                    };
-
-                    Ok(ASTNode::TryCatch {
-                        try_body,
-                        catch_clauses,
-                        finally_body,
-                        span: Span::unknown(),
-                    })
-                } else {
-                    // No postfix keywords. If gate is on, enforce MVP static check:
-                    // direct top-level `throw` inside the standalone block must be followed by catch
-                    if crate::config::env::block_postfix_catch()
-                        && try_body.iter().any(|n| matches!(n, ASTNode::Throw { .. }))
-                    {
-                        let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken {
-                            found: self.current_token().token_type.clone(),
-                            expected: "block with direct 'throw' must be followed by 'catch'".to_string(),
-                            line,
-                        });
-                    }
-                    Ok(ASTNode::Program {
-                        statements: try_body,
-                        span: Span::unknown(),
-                    })
-                }
-            }
-            TokenType::BOX => self.parse_box_declaration(),
-            TokenType::IMPORT => self.parse_import(),
-            TokenType::INTERFACE => self.parse_interface_box_declaration(),
-            TokenType::GLOBAL => self.parse_global_var(),
-            TokenType::FUNCTION => self.parse_function_declaration(),
-            TokenType::STATIC => {
-                self.parse_static_declaration() // 🔥 静的宣言 (function/box)
-            }
-            TokenType::IF => self.parse_if(),
-            TokenType::LOOP => self.parse_loop(),
-            TokenType::BREAK => self.parse_break(),
-            TokenType::CONTINUE => self.parse_continue(),
-            TokenType::RETURN => self.parse_return(),
-            TokenType::PRINT => self.parse_print(),
-            TokenType::NOWAIT => self.parse_nowait(),
-            TokenType::INCLUDE => self.parse_include(),
-            TokenType::LOCAL => self.parse_local(),
-            TokenType::OUTBOX => self.parse_outbox(),
-            TokenType::TRY => {
-                if crate::config::env::parser_stage3() {
-                    self.parse_try_catch()
-                } else {
-                    Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "enable NYASH_PARSER_STAGE3=1 to use 'try'".to_string(),
-                        line: self.current_token().line,
-                    })
-                }
-            }
-            TokenType::THROW => {
-                if crate::config::env::parser_stage3() {
-                    self.parse_throw()
-                } else {
-                    Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "enable NYASH_PARSER_STAGE3=1 to use 'throw'".to_string(),
-                        line: self.current_token().line,
-                    })
-                }
-            }
-            TokenType::CATCH => {
-                // Provide a friendlier error when someone writes: if { .. } catch { .. }
-                if crate::config::env::block_postfix_catch() {
-                    Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "postfix 'catch' is only allowed immediately after a standalone block: { ... } catch (...) { ... } (wrap if/else/loop in a standalone block)".to_string(),
-                        line: self.current_token().line,
-                    })
-                } else {
-                    Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "enable NYASH_BLOCK_CATCH=1 (or NYASH_PARSER_STAGE3=1) to use postfix 'catch' after a standalone block".to_string(),
-                        line: self.current_token().line,
-                    })
-                }
-            }
-            TokenType::CLEANUP => {
-                if crate::config::env::block_postfix_catch() {
-                    Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "postfix 'cleanup' is only allowed immediately after a standalone block: { ... } cleanup { ... }".to_string(),
-                        line: self.current_token().line,
-                    })
-                } else {
-                    Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "enable NYASH_BLOCK_CATCH=1 (or NYASH_PARSER_STAGE3=1) to use postfix 'cleanup' after a standalone block".to_string(),
-                        line: self.current_token().line,
-                    })
-                }
-            }
+            TokenType::LBRACE => self.parse_standalone_block_statement(),
+            TokenType::BOX
+            | TokenType::IMPORT
+            | TokenType::INTERFACE
+            | TokenType::GLOBAL
+            | TokenType::FUNCTION
+            | TokenType::STATIC => self.parse_declaration_statement(),
+            TokenType::IF
+            | TokenType::LOOP
+            | TokenType::BREAK
+            | TokenType::CONTINUE
+            | TokenType::RETURN => self.parse_control_flow_statement(),
+            TokenType::PRINT | TokenType::NOWAIT | TokenType::INCLUDE => self.parse_io_module_statement(),
+            TokenType::LOCAL | TokenType::OUTBOX => self.parse_variable_declaration_statement(),
+            TokenType::TRY | TokenType::THROW => self.parse_exception_statement(),
+            TokenType::CATCH | TokenType::CLEANUP => self.parse_postfix_catch_cleanup_error(),
             TokenType::USING => self.parse_using(),
             TokenType::FROM => {
                 // 🔥 from構文: from Parent.method(args) または from Parent.constructor(args)

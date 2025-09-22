@@ -106,8 +106,9 @@ pub fn await_max_ms() -> u64 {
         .unwrap_or(5000)
 }
 
-// ---- MIR PHI-less (edge-copy) mode ----
+// ---- MIR PHI / PHI-less (edge-copy) mode ----
 /// Enable MIR PHI non-generation. Bridge/Builder emit edge copies instead of PHI.
+/// Default: PHI-ON when the build supports it (feature `phi-legacy`), otherwise fall back to PHI-OFF.
 pub fn mir_no_phi() -> bool {
     match std::env::var("NYASH_MIR_NO_PHI").ok() {
         Some(v) => {
@@ -116,7 +117,7 @@ pub fn mir_no_phi() -> bool {
             if requested_no_phi {
                 return true;
             }
-            // PHI-on requested
+            // PHI-on requested explicitly
             #[cfg(feature = "phi-legacy")]
             {
                 return false;
@@ -131,8 +132,22 @@ pub fn mir_no_phi() -> bool {
                 return true;
             }
         }
-        // Default: ON for MIR13 stability (PHI generation off by default)
-        None => true,
+        None => {
+            // Default preference: PHI-ON if available
+            #[cfg(feature = "phi-legacy")]
+            {
+                return false;
+            }
+            #[cfg(not(feature = "phi-legacy"))]
+            {
+                if PHI_ON_GATED_WARNED.set(()).is_ok() {
+                    eprintln!(
+                        "[nyash] Default PHI-on requested but build lacks 'phi-legacy' feature; falling back to PHI-off."
+                    );
+                }
+                return true;
+            }
+        }
     }
 }
 

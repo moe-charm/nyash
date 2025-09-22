@@ -1,0 +1,12 @@
+// loopform_normalize.nyash — ループ正規化前処理（恒等版）
+// 目的: while 等を安定化（キー順・簡易キャリア整列）。
+// 現段階は恒等（identity）。将来段階で安全な最小正規化を実装する。
+
+static box LoopFormNormalize {
+  // Apply LoopForm normalization on JSON v0 text. Returns transformed JSON text.
+  // MVP: identity (no-op)
+  apply(json_text) {
+    return json_text
+  }
+}
+

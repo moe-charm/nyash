@@ -69,7 +69,7 @@ pub fn check_weakref_and_barrier(function: &MirFunction) -> Result<(), Vec<Verif
                 | MirInstruction::BarrierWrite { ptr } => {
                     if let Some((_db, _di, def_inst)) = def_map.get(ptr) {
                         if let MirInstruction::Const {
-                            value: crate::mir::instruction::ConstValue::Void,
+                    value: crate::mir::ConstValue::Void,
                             ..
                         } = def_inst
                         {
