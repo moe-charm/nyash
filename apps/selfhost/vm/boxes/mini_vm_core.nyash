@@ -599,11 +599,17 @@ static box MiniVm {
                   if trace == 1 { print("[collect][fname] '"+fname+"'") }
                   local ka = "\"arguments\":["
                   local ap = index_of_from(json, ka, nj)
-                  if ap > 0 { if ap < expr_end {
+                  if ap <= 0 {
+                    local ka0 = "\"arguments\":"
+                    local ap0 = index_of_from(json, ka0, nj)
+                    if ap0 >= 0 { if ap0 < expr_end { ap = ap0 } }
+                  }
+                  if ap >= 0 { if ap < expr_end {
                     // detect empty args [] quickly: no type token inside balanced array
                     local arr_start = index_of_from(json, "[", ap)
-                    local arr_end = new MiniVmScan().find_balanced_array_end(json, arr_start)
-                    if arr_start >= 0 { if arr_end >= 0 { if arr_end <= expr_end {
+                    if arr_start >= 0 { if arr_start < expr_end {
+                      local arr_end = new MiniVmScan().find_balanced_array_end(json, arr_start)
+                      if arr_end >= 0 { if arr_end <= expr_end {
                       local kt = "\"type\":\""
                       local atpos = index_of_from(json, kt, arr_start)
                       if trace == 1 { print("[collect][empty_check] atpos="+atpos+" arr_bounds=["+arr_start+","+arr_end+"]") }
@@ -612,7 +618,7 @@ static box MiniVm {
                         if fname == "echo" { out.push("")  pos = obj_end  continue }
                         if fname == "itoa" { out.push("0")  pos = obj_end  continue }
                       }
-                    }}}
+                    }}}}
                     // string arg
                     local ks = "\"type\":\"string\",\"value\":\""
                     local ps = index_of_from(json, ks, ap)
