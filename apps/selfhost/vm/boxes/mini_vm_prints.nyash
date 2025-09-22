@@ -1,8 +1,8 @@
-using selfhost.vm.scan as MiniVmScan
-using selfhost.vm.binop as MiniVmBinOp
-using selfhost.vm.compare as MiniVmCompare
+using selfhost.common.mini_vm_scan as MiniVmScan
+using selfhost.common.mini_vm_binop as MiniVmBinOp
+using selfhost.common.mini_vm_compare as MiniVmCompare
 // Use the JSON adapter facade for cursor ops (next_non_ws, digits)
-using selfhost.vm.json as MiniJsonLoader
+using selfhost.vm.boxes.json_cur as MiniJsonLoader
 
 static box MiniVmPrints {
   // dev trace flag (0=OFF)

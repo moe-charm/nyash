@@ -690,7 +690,7 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
     }
     let box_type = box_type.unwrap_or_default();
     // Resolve method_id via PluginHost
-    let mh = if let Ok(host) = plugin_loader_unified::get_global_plugin_host().read() {
+    let mh = if let Ok(host) = crate::runtime::plugin_loader_unified::get_global_plugin_host().read() {
         host.resolve_method(&box_type, method)
     } else {
         events::emit_runtime(
