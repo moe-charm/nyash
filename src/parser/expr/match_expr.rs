@@ -48,19 +48,24 @@ impl NyashParser {
                 }
                 self.consume(TokenType::FatArrow)?;
                 let expr = if self.match_token(&TokenType::LBRACE) {
-                    // ブロックを式として扱う（最後の文の値が返る）
-                    self.advance(); // consume '{'
-                    let mut stmts: Vec<ASTNode> = Vec::new();
-                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                        self.skip_newlines();
-                        if !self.match_token(&TokenType::RBRACE) {
-                            stmts.push(self.parse_statement()?);
+                    if self.is_object_literal() {
+                        // オブジェクトリテラルとして処理
+                        self.parse_expression()?
+                    } else {
+                        // ブロックを式として扱う（最後の文の値が返る）
+                        self.advance(); // consume '{'
+                        let mut stmts: Vec<ASTNode> = Vec::new();
+                        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                            self.skip_newlines();
+                            if !self.match_token(&TokenType::RBRACE) {
+                                stmts.push(self.parse_statement()?);
+                            }
                         }
-                    }
-                    self.consume(TokenType::RBRACE)?;
-                    ASTNode::Program {
-                        statements: stmts,
-                        span: Span::unknown(),
+                        self.consume(TokenType::RBRACE)?;
+                        ASTNode::Program {
+                            statements: stmts,
+                            span: Span::unknown(),
+                        }
                     }
                 } else {
                     // 値アームは通常の式全体を受理
@@ -104,17 +109,22 @@ impl NyashParser {
                         } else { None };
                         self.consume(TokenType::FatArrow)?;
                         let body = if self.match_token(&TokenType::LBRACE) {
-                            self.advance(); // consume '{'
-                            let mut stmts: Vec<ASTNode> = Vec::new();
-                            while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                                self.skip_newlines();
-                                if !self.match_token(&TokenType::RBRACE) {
-                                    let st = self.parse_statement()?;
-                                    stmts.push(st);
+                            if self.is_object_literal() {
+                                // オブジェクトリテラルとして処理
+                                self.parse_expression()?
+                            } else {
+                                self.advance(); // consume '{'
+                                let mut stmts: Vec<ASTNode> = Vec::new();
+                                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                                    self.skip_newlines();
+                                    if !self.match_token(&TokenType::RBRACE) {
+                                        let st = self.parse_statement()?;
+                                        stmts.push(st);
+                                    }
                                 }
+                                self.consume(TokenType::RBRACE)?;
+                                ASTNode::Program { statements: stmts, span: Span::unknown() }
                             }
-                            self.consume(TokenType::RBRACE)?;
-                            ASTNode::Program { statements: stmts, span: Span::unknown() }
                         } else {
                             // 値アームは通常の式全体を受理
                             self.parse_expression()?
@@ -144,17 +154,22 @@ impl NyashParser {
                     } else { None };
                     self.consume(TokenType::FatArrow)?;
                     let expr = if self.match_token(&TokenType::LBRACE) {
-                        self.advance(); // consume '{'
-                        let mut stmts: Vec<ASTNode> = Vec::new();
-                        while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                            self.skip_newlines();
-                            if !self.match_token(&TokenType::RBRACE) {
-                                let st = self.parse_statement()?;
-                                stmts.push(st);
+                        if self.is_object_literal() {
+                            // オブジェクトリテラルとして処理
+                            self.parse_expression()?
+                        } else {
+                            self.advance(); // consume '{'
+                            let mut stmts: Vec<ASTNode> = Vec::new();
+                            while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                                self.skip_newlines();
+                                if !self.match_token(&TokenType::RBRACE) {
+                                    let st = self.parse_statement()?;
+                                    stmts.push(st);
+                                }
                             }
+                            self.consume(TokenType::RBRACE)?;
+                            ASTNode::Program { statements: stmts, span: Span::unknown() }
                         }
-                        self.consume(TokenType::RBRACE)?;
-                        ASTNode::Program { statements: stmts, span: Span::unknown() }
                     } else {
                         // 値アームは通常の式全体を受理
                         self.parse_expression()?
@@ -307,6 +322,20 @@ impl NyashParser {
             statements: vec![scr_local, else_node],
             span: Span::unknown(),
         })
+    }
+
+    /// オブジェクトリテラル判定: { IDENTIFIER : または { STRING : の場合はtrue
+    fn is_object_literal(&self) -> bool {
+        // 副作用を避けるためcurrent_token()を使用
+        if !matches!(self.current_token().token_type, TokenType::LBRACE) {
+            return false;
+        }
+        match self.peek_token() {
+            TokenType::IDENTIFIER(_) | TokenType::STRING(_) => {
+                matches!(self.peek_nth_token(2), TokenType::COLON)
+            }
+            _ => false
+        }
     }
 
     // match 用の最小リテラルパーサ（式は受け付けない）

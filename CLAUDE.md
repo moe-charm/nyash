@@ -276,16 +276,18 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 📝 Update (2025-09-23) 🚀 フェーズM+M.2完全達成！PHI統一革命完了
-- ✅ **フェーズM.2完全達成！** JSON v0 Bridge層クリーンアップ完了でPHI完全統一実現
-- ✅ **8箇所のno_phi分岐完全削除！** try_catch(3)、ternary(1)、peek(1)、loop_(2)、expr(1)
-- ✅ **strip_phi_functions()削除！** 40行の複雑なPHI→edge-copy後処理撤廃
-- ✅ **config::env::mir_no_phi()大幅簡略化！** 40行→8行、phi-legacy依存完全除去
-- ✅ **未使用コード完全削除！** PHI_ON_GATED_WARNED static、mir_no_phiフィールド等
-- 🔧 **安定性完全確認！** cargo check成功、基本・複雑PHIテスト両方正常動作
-- 📊 **圧縮効果絶大！** フェーズM+M.2で推定500行超削減達成
-- 🎯 **Phase 15準備完了**: MIR層PHI統一により80k→20k行圧縮の主要基盤完成
-- 🚀 **次段階**: collect_prints動作確認→JSON v0 Bridge最終統合→Phase 15完遂
+## 📝 Update (2025-09-23) ✅ Step 1完了！peek→match統一 Step 2開始
+- ✅ **フェーズM+M.2完全達成！** PHI統一革命でcollect_prints問題根本解決
+- ✅ **Step 1完全達成！** match式オブジェクトリテラル判定修正完了
+  - **修正完了**: `src/parser/expr/match_expr.rs` の `is_object_literal()` メソッド追加
+  - **副作用修正**: `match_token()` → `current_token()` で副作用除去
+  - **動作確認**: 単行match式 + オブジェクトリテラル ✅ 完全動作
+  - **発見**: 複数行パース未対応（後回し決定）
+- 🚀 **Step 2開始準備！** peek→match完全統一でアーキテクチャクリーンアップ
+  - **対象ファイル**: `json_v0_bridge/ast.rs`, `lowering/peek.rs` → `match_expr.rs`
+  - **統一効果**: AI理解向上・ドキュメント整合性・保守性向上・ソースコード美化
+  - **作業順序**: claude.md更新→todo調整→commit→peek構造体→match構造体完全移行
+- 🎯 **アーキテクチャ美化**: ややこしいpeek/match混在状況の完全解消へ
 
 ## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
 - ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ
