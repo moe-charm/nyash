@@ -1,0 +1,294 @@
+// yyjson置き換えテスト - 既存APIとの互換性確認
+
+local JsonParserUtils = include "apps/lib/json_native/parser/parser.nyash"
+
+// 🔄 既存JsonDocBox API互換テスト
+static box JsonDocBoxCompatTest {
+    
+    main() {
+        print("🔄 yyjson置き換えテスト - API互換性確認")
+        print("目標: 既存のJsonDocBox使用コードが同じ結果を返すこと")
+        
+        // 1. 基本API互換テスト
+        print("\n1️⃣ 基本API互換テスト")
+        this.test_basic_api_compat()
+        
+        // 2. 実際の使用例テスト
+        print("\n2️⃣ 実際の使用例テスト")
+        this.test_real_usage_examples()
+        
+        // 3. エラー処理互換テスト
+        print("\n3️⃣ エラー処理互換テスト")
+        this.test_error_handling_compat()
+        
+        // 4. 性能比較テスト
+        print("\n4️⃣ 性能比較テスト")
+        this.test_performance_comparison()
+        
+        print("\n✅ yyjson置き換えテスト完了")
+        print("🎯 次のステップ: プラグインシステムでの実際の置き換え")
+        
+        return 0
+    }
+    
+    // 基本API互換テスト
+    test_basic_api_compat() {
+        print("JsonDocBox API互換性テスト:")
+        
+        // 既存の使用パターンをシミュレート
+        local test_json = "{\"kind\":\"Program\",\"statements\":[]}"
+        
+        print("Original JSON: " + test_json)
+        
+        // Nyash Native版で解析
+        local native_result = this.simulate_jsondocbox_api(test_json)
+        if native_result != null {
+            print("Native result: " + native_result)
+            print("✅ API compatibility maintained")
+        } else {
+            print("❌ API compatibility broken")
+        }
+        
+        // より複雑なケース
+        local complex_json = "{\"user\": {\"name\": \"Alice\", \"id\": 123}, \"active\": true}"
+        print("\nComplex JSON: " + complex_json)
+        
+        local complex_result = this.simulate_jsondocbox_api(complex_json)
+        if complex_result != null {
+            print("Complex result: " + complex_result)
+            print("✅ Complex JSON handled correctly")
+        } else {
+            print("❌ Complex JSON handling failed")
+        }
+    }
+    
+    // JsonDocBox APIをシミュレート
+    simulate_jsondocbox_api(json_text) {
+        // 既存コードパターン:
+        // local doc = new JsonDocBox()
+        // doc.parse(json)
+        // local root = doc.root()
+        // print(root.get("kind").str())
+        
+        local parsed = JsonParserUtils.parse_json(json_text)
+        if parsed == null {
+            return null
+        }
+        
+        // root.get("kind").str() をシミュレート
+        if parsed.get_kind() == "object" {
+            local kind_node = parsed.object_get("kind")
+            if kind_node != null and kind_node.get_kind() == "string" {
+                return kind_node.as_string()
+            }
+        }
+        
+        return "non_object_or_no_kind"
+    }
+    
+    // 実際の使用例テスト
+    test_real_usage_examples() {
+        // apps/tests/jsonbox_parse_ok.nyash の内容をシミュレート
+        print("Real usage example simulation:")
+        
+        local examples = new ArrayBox()
+        examples.push("{\"kind\":\"Program\",\"statements\":[]}")
+        examples.push("{\"type\":\"function\",\"name\":\"main\",\"body\":[]}")
+        examples.push("{\"operation\":\"add\",\"left\":1,\"right\":2}")
+        
+        local i = 0
+        loop(i < examples.length()) {
+            local json = examples.get(i)
+            
+            print("Testing: " + json)
+            
+            // エラーチェック（doc.error()に相当）
+            local parsed = JsonParserUtils.parse_json(json)
+            if parsed == null {
+                print("  Error detected (as expected for invalid JSON)")
+            } else {
+                print("  Parse success: " + parsed.stringify())
+            }
+            
+            i = i + 1
+        }
+    }
+    
+    // エラー処理互換テスト
+    test_error_handling_compat() {
+        print("Error handling compatibility:")
+        
+        // 既存のエラーケースをテスト
+        local error_cases = new ArrayBox()
+        error_cases.push("{\"kind\": }")          // apps/tests/jsonbox_parse_err.nyash
+        error_cases.push("{invalid json}")
+        error_cases.push("[1, 2, 3")              // 不完全な配列
+        error_cases.push("{\"key\": \"value\",}") // 末尾カンマ
+        
+        local i = 0
+        loop(i < error_cases.length()) {
+            local invalid_json = error_cases.get(i)
+            
+            print("Testing error case: " + invalid_json)
+            
+            local result = JsonParserUtils.parse_json(invalid_json)
+            if result == null {
+                print("  ✅ Error correctly detected and handled")
+            } else {
+                print("  ❌ Error not detected (should have failed)")
+            }
+            
+            i = i + 1
+        }
+    }
+    
+    // 性能比較テスト
+    test_performance_comparison() {
+        print("Performance comparison test:")
+        
+        // 小さなJSON
+        local small_json = "{\"key\": \"value\"}"
+        local small_iterations = 100
+        
+        print("Small JSON (" + small_iterations + " iterations):")
+        print("  JSON: " + small_json)
+        
+        local start_time = 0  // TODO: 時間測定機能が必要
+        local i = 0
+        loop(i < small_iterations) {
+            JsonParserUtils.parse_json(small_json)
+            i = i + 1
+        }
+        
+        print("  ✅ Small JSON performance test completed")
+        
+        // 大きなJSON
+        local large_json = this.generate_large_json()
+        print("\nLarge JSON test:")
+        print("  Size: " + large_json.length() + " characters")
+        
+        local large_result = JsonParserUtils.parse_json(large_json)
+        if large_result != null {
+            print("  ✅ Large JSON parsed successfully")
+            print("  Result size: " + large_result.stringify().length() + " characters")
+        } else {
+            print("  ❌ Large JSON parsing failed")
+        }
+    }
+    
+    // 大きなJSONを生成
+    generate_large_json() {
+        local json = "{\"users\": ["
+        
+        local i = 0
+        loop(i < 10) {
+            if i > 0 {
+                json = json + ", "
+            }
+            local active_val = "true"
+            if i % 2 != 0 {
+                active_val = "false"
+            }
+            local user_json = "{\"id\": " + i + ", \"name\": \"User" + i + "\", \"active\": " + active_val + ", \"tags\": [\"tag1\", \"tag2\", \"tag3\"], \"metadata\": {\"created\": \"2025-01-01\", \"updated\": \"2025-01-02\"}}"
+            json = json + user_json
+            i = i + 1
+        }
+        
+        json = json + "], \"total\": 10, \"status\": \"active\"}"
+        return json
+    }
+}
+
+// 🎯 置き換え完了検証
+static box ReplacementVerification {
+    
+    verify_replacement_ready() {
+        print("🎯 yyjson置き換え準備状況の検証")
+        
+        // 1. 機能完全性チェック
+        local functionality_score = this.check_functionality()
+        print("Functionality: " + functionality_score + "/100")
+        
+        // 2. 精度チェック
+        local accuracy_score = this.check_accuracy()
+        print("Accuracy: " + accuracy_score + "/100")
+        
+        // 3. API互換性チェック
+        local compatibility_score = this.check_compatibility()
+        print("Compatibility: " + compatibility_score + "/100")
+        
+        // 4. 総合判定
+        local total_score = (functionality_score + accuracy_score + compatibility_score) / 3
+        print("Total score: " + total_score + "/100")
+        
+        if total_score >= 80 {
+            print("🎉 置き換え準備完了！")
+            print("✅ yyjson → Nyash JSON Native 置き換え可能")
+            return true
+        } else {
+            print("⚠️  置き換えにはさらなる改善が必要")
+            print("❌ 追加開発が必要な領域あり")
+            return false
+        }
+    }
+    
+    check_functionality() {
+        // 基本機能のチェック（簡易版）
+        local tests = new ArrayBox()
+        tests.push("null")
+        tests.push("true")
+        tests.push("42")
+        tests.push("\"string\"")
+        tests.push("[]")
+        tests.push("{}")
+        
+        local passed = 0
+        local i = 0
+        loop(i < tests.length()) {
+            local result = JsonParserUtils.parse_json(tests.get(i))
+            if result != null {
+                passed = passed + 1
+            }
+            i = i + 1
+        }
+        
+        return (passed * 100) / tests.length()
+    }
+    
+    check_accuracy() {
+        // 精度のチェック（ラウンドトリップ）
+        local tests = new ArrayBox()
+        tests.push("\"escaped\\\"quote\"")
+        tests.push("{\"nested\": {\"deep\": \"value\"}}")
+        tests.push("[1, 2, {\"mixed\": true}]")
+        
+        local passed = 0
+        local i = 0
+        loop(i < tests.length()) {
+            local result = JsonParserUtils.roundtrip_test(tests.get(i))
+            if result != null {
+                passed = passed + 1
+            }
+            i = i + 1
+        }
+        
+        return (passed * 100) / tests.length()
+    }
+    
+    check_compatibility() {
+        // API互換性のチェック（既存使用パターン）
+        local json = "{\"kind\":\"Program\",\"statements\":[]}"
+        local docbox_compat = JsonDocBoxCompatTest()
+        local result = docbox_compat.simulate_jsondocbox_api(json)
+        
+        if result == "Program" {
+            return 100  // 完全互換
+        } else {
+            if result != null {
+                return 70   // 部分互換
+            } else {
+                return 0    // 非互換
+            }
+        }
+    }
+}

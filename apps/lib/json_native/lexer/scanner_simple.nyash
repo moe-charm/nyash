@@ -1,0 +1,111 @@
+// JsonScanner — 簡易版（現在のNyash制限内で動作）
+// 責務: 文字単位での読み取り・位置管理
+
+// 🔍 JSON文字スキャナー（Everything is Box）
+static box JsonScannerModule {
+    create_scanner(input_text) {
+        return new JsonScanner(input_text)
+    }
+}
+
+box JsonScanner {
+    text: StringBox        // 入力文字列
+    position: IntegerBox   // 現在位置
+    length: IntegerBox     // 文字列長
+    
+    birth(input_text) {
+        me.text = input_text
+        me.position = 0
+        me.length = input_text.length()
+    }
+    
+    // ===== 基本読み取りメソッド =====
+    
+    // 現在文字を取得（EOF時は空文字列）
+    current() {
+        if me.position >= me.length {
+            return ""  // EOF
+        }
+        return me.text.substring(me.position, me.position + 1)
+    }
+    
+    // 次の文字を先読み（位置は移動しない）
+    peek() {
+        if me.position + 1 >= me.length {
+            return ""  // EOF
+        }
+        return me.text.substring(me.position + 1, me.position + 2)
+    }
+    
+    // 1文字進む
+    advance() {
+        if me.position < me.length {
+            local ch = me.current()
+            me.position = me.position + 1
+            return ch
+        }
+        return ""  // EOF
+    }
+    
+    // ===== 状態チェックメソッド =====
+    
+    // EOFかどうか
+    is_eof() {
+        return me.position >= me.length
+    }
+    
+    // 現在位置を取得
+    get_position() {
+        return me.position
+    }
+    
+    // ===== 簡易空白スキップ =====
+    
+    // 空白をスキップ（内蔵判定）
+    skip_whitespace() {
+        loop(not me.is_eof()) {
+            local ch = me.current()
+            if not me.is_whitespace_char(ch) {
+                break
+            }
+            me.advance()
+        }
+    }
+    
+    // 空白文字判定（内蔵）
+    is_whitespace_char(ch) {
+        return ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    }
+    
+    // 指定文字列にマッチするかチェック
+    match_string(expected) {
+        if expected.length() > me.remaining() {
+            return false
+        }
+        
+        local i = 0
+        loop(i < expected.length()) {
+            local pos = me.position + i
+            if pos >= me.length {
+                return false
+            }
+            local actual = me.text.substring(pos, pos + 1)
+            local expect = expected.substring(i, i + 1)
+            if actual != expect {
+                return false
+            }
+            i = i + 1
+        }
+        return true
+    }
+    
+    // 残り文字数
+    remaining() {
+        return me.length - me.position
+    }
+    
+    // デバッグ情報
+    to_string() {
+        return "Scanner(pos:" + me.position + "/" + me.length + ")"
+    }
+}

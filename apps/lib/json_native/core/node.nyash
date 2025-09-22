@@ -1,0 +1,301 @@
+// JsonNode — Everything is Box JSON実装の核心
+// 80/20ルール適用: まず動くもの → 後で最適化
+// 美しいモジュラー設計: Utilsを活用してDRY原則を実践
+
+local StringUtils = include "apps/lib/json_native/utils/string.nyash"
+local EscapeUtils = include "apps/lib/json_native/utils/escape.nyash"
+
+// 🌟 JSON値を表現するBox（Everything is Box原則）
+static box JsonNode {
+    
+    // ===== ファクトリーメソッド =====
+    
+    // null値を作成
+    create_null() {
+        local node = new JsonNode()
+        node.kind = "null"
+        node.value = null
+        return node
+    }
+    
+    // bool値を作成
+    create_bool(b) {
+        local node = new JsonNode()
+        node.kind = "bool"
+        node.value = b
+        return node
+    }
+    
+    // int値を作成
+    create_int(i) {
+        local node = new JsonNode()
+        node.kind = "int"
+        node.value = i
+        return node
+    }
+    
+    // string値を作成
+    create_string(s) {
+        local node = new JsonNode()
+        node.kind = "string"
+        node.value = s
+        return node
+    }
+    
+    // array値を作成
+    create_array() {
+        local node = new JsonNode()
+        node.kind = "array"
+        node.value = new ArrayBox()
+        return node
+    }
+    
+    // object値を作成
+    create_object() {
+        local node = new JsonNode()
+        node.kind = "object"
+        node.value = new MapBox()
+        return node
+    }
+    
+    // ===== メインAPI =====
+    
+    // JSON文字列を解析（簡易版）
+    parse(json_text) {
+        // TODO: 本格的なレクサー・パーサーは後で実装
+        // まずは超シンプルな実装で動作確認
+        
+        // 空白をトリム（美しいモジュラー設計）
+        local text = StringUtils.trim(json_text)
+        
+        // null
+        if text == "null" {
+            return this.create_null()
+        }
+        
+        // boolean
+        if text == "true" {
+            return this.create_bool(true)
+        }
+        if text == "false" {
+            return this.create_bool(false)
+        }
+        
+        // 数値（Utils活用で美しく）
+        if StringUtils.is_integer(text) {
+            local num = StringUtils.parse_integer(text)
+            return this.create_int(num)
+        }
+        
+        // 文字列（エスケープ処理対応）
+        if StringUtils.starts_with(text, "\"") and StringUtils.ends_with(text, "\"") {
+            local content = EscapeUtils.unquote_string(text)
+            return this.create_string(content)
+        }
+        
+        // 配列（超シンプル版）
+        if StringUtils.starts_with(text, "[") and StringUtils.ends_with(text, "]") {
+            local array_node = this.create_array()
+            // TODO: 要素のパース処理は後で実装
+            return array_node
+        }
+        
+        // オブジェクト（超シンプル版）
+        if StringUtils.starts_with(text, "{") and StringUtils.ends_with(text, "}") {
+            local object_node = this.create_object()
+            // TODO: キー・バリューのパース処理は後で実装
+            return object_node
+        }
+        
+        // パースエラー
+        return this.create_null()
+    }
+    
+    // ===== アクセッサーメソッド =====
+    
+    // 値の種類を取得
+    get_kind() {
+        return me.kind
+    }
+    
+    // bool値として取得
+    as_bool() {
+        if me.kind == "bool" {
+            return me.value
+        }
+        return false
+    }
+    
+    // int値として取得
+    as_int() {
+        if me.kind == "int" {
+            return me.value
+        }
+        return 0
+    }
+    
+    // string値として取得
+    as_string() {
+        if me.kind == "string" {
+            return me.value
+        }
+        return ""
+    }
+    
+    // 配列のサイズを取得
+    array_size() {
+        if me.kind == "array" {
+            return me.value.length()
+        }
+        return 0
+    }
+    
+    // 配列の要素を取得
+    array_get(index) {
+        if me.kind == "array" {
+            return me.value.get(index)
+        }
+        return null
+    }
+    
+    // 配列に要素を追加
+    array_push(node) {
+        if me.kind == "array" {
+            me.value.push(node)
+        }
+    }
+    
+    // オブジェクトのキーを取得
+    object_get(key) {
+        if me.kind == "object" {
+            return me.value.get(key)
+        }
+        return null
+    }
+    
+    // オブジェクトに値を設定
+    object_set(key, node) {
+        if me.kind == "object" {
+            me.value.set(key, node)
+        }
+    }
+    
+    // オブジェクトのキー一覧を取得
+    object_keys() {
+        if me.kind == "object" {
+            return me.value.keys()
+        }
+        return new ArrayBox()
+    }
+    
+    // ===== JSON文字列化 =====
+    
+    // JSON文字列に変換
+    stringify() {
+        if me.kind == "null" {
+            return "null"
+        } else {
+            if me.kind == "bool" {
+                if me.value {
+                    return "true"
+                } else {
+                    return "false"
+                }
+            } else {
+                if me.kind == "int" {
+                    return "" + me.value
+                } else {
+                    if me.kind == "string" {
+                        return EscapeUtils.quote_string(me.value)
+                    } else {
+                        if me.kind == "array" {
+                            local parts = new ArrayBox()
+                            local i = 0
+                            loop(i < me.value.length()) {
+                                local elem = me.value.get(i)
+                                parts.push(elem.stringify())
+                                i = i + 1
+                            }
+                            return "[" + StringUtils.join(parts, ",") + "]"
+                        } else {
+                            if me.kind == "object" {
+                                local parts = new ArrayBox()
+                                local keys = me.value.keys()
+                                local i = 0
+                                loop(i < keys.length()) {
+                                    local key = keys.get(i)
+                                    local val = me.value.get(key)
+                                    local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
+                                    parts.push(pair)
+                                    i = i + 1
+                                }
+                                return "{" + StringUtils.join(parts, ",") + "}"
+                            } else {
+                                return "null"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // ===== ヘルパーメソッド =====
+    // 美しいモジュラー設計により、重複コードを削除
+    // 全ての文字列処理はStringUtils、エスケープ処理はEscapeUtilsに委譲
+}
+
+// 🎯 動作確認用のインスタンス生成
+box JsonNodeInstance {
+    kind: StringBox
+    value: Box
+    
+    birth() {
+        me.kind = "null"
+        me.value = null
+    }
+    
+    // インスタンスメソッドとして静的メソッドを呼び出し
+    get_kind() { return me.kind }
+    as_bool() { 
+        if me.kind == "bool" {
+            return me.value
+        }
+        return false
+    }
+    as_int() { 
+        if me.kind == "int" {
+            return me.value
+        }
+        return 0
+    }
+    as_string() { 
+        if me.kind == "string" {
+            return me.value
+        }
+        return ""
+    }
+    stringify() { 
+        if me.kind == "null" {
+            return "null"
+        } else {
+            if me.kind == "bool" {
+                if me.value {
+                    return "true"
+                } else {
+                    return "false"
+                }
+            } else {
+                if me.kind == "int" {
+                    return "" + me.value
+                } else {
+                    if me.kind == "string" {
+                        return "\"" + me.value + "\""
+                    } else {
+                        return "null"
+                    }
+                }
+            }
+        }
+    }
+}
