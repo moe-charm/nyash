@@ -537,13 +537,14 @@ static box MiniVm {
     local guard = 0
     // DEV trace: flip to 1 for one-run diagnosis; keep 0 for normal
     local trace = 0
+    if trace == 1 { print("[collect][start] method entry") }
     local k_print = "\"kind\":\"Print\""
     loop (true) {
       guard = guard + 1
-      if guard > 200 { break }
+      if guard > 200 { if trace == 1 { print("[collect][guard_break] guard="+guard) } break }
       local p = index_of_from(json, k_print, pos)
       if trace == 1 { print("[collect][loop] pos="+pos+" p="+p+" guard="+guard) }
-      if p < 0 { break }
+      if p < 0 { if trace == 1 { print("[collect][p_break] p="+p) } break }
       // bound current Print slice to [this, next)
       local obj_start = p
       local next_p = index_of_from(json, k_print, p + k_print.length())
@@ -756,6 +757,7 @@ static box MiniVm {
       pos = obj_end + 1
       if pos <= p { pos = p + k_print.length() }
     }
+    if trace == 1 { print("[collect][loop_exit] guard="+guard+" out.size="+out.size()) }
     if trace == 1 { print("[collect][return] out.size="+out.size()) }
     return out
   }
