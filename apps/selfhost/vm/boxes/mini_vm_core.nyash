@@ -745,3 +745,4 @@ static box MiniVm {
     return out
   }
 }
+}
