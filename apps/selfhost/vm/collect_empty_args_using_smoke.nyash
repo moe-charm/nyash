@@ -2,9 +2,7 @@ using selfhost.vm.boxes.mini_vm_core as MiniVm
 
 static box Main {
   main(args) {
-    local json = "{\"kind\":\"Program\",\"statements\":["
-      + "{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[]}},"
-      + "{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[]}}]}"
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[]}}]}"
 
     local arr = new MiniVm().collect_prints(json)
     local i = 0
