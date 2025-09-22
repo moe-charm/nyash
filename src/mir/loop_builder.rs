@@ -549,7 +549,7 @@ impl<'a> LoopBuilder<'a> {
                 }
                 let then_var_map_end = self.get_current_variable_map();
                 // Only jump to merge if not already terminated (e.g., continue/break)
-                {
+                let then_reaches_merge = {
                     let cur_id = self.current_block()?;
                     let need_jump = {
                         if let Some(ref fun_ro) = self.parent_builder.current_function {
@@ -564,8 +564,11 @@ impl<'a> LoopBuilder<'a> {
                     };
                     if need_jump {
                         self.emit_jump(merge_bb)?;
+                        true
+                    } else {
+                        false
                     }
-                }
+                };
 
                 // else
                 self.set_current_block(else_bb)?;
@@ -593,7 +596,7 @@ impl<'a> LoopBuilder<'a> {
                     }
                     else_var_map_end_opt = Some(self.get_current_variable_map());
                 }
-                {
+                let else_reaches_merge = {
                     let cur_id = self.current_block()?;
                     let need_jump = {
                         if let Some(ref fun_ro) = self.parent_builder.current_function {
@@ -608,8 +611,11 @@ impl<'a> LoopBuilder<'a> {
                     };
                     if need_jump {
                         self.emit_jump(merge_bb)?;
+                        true
+                    } else {
+                        false
                     }
-                }
+                };
 
                 // Continue at merge
                 self.set_current_block(merge_bb)?;
@@ -657,14 +663,29 @@ impl<'a> LoopBuilder<'a> {
                         .or_else(|| pre_then_var_value.get(&var_name).copied());
 
                     if let (Some(tv), Some(ev)) = (then_val, else_val) {
-                        let phi_id = self.new_value();
-                        if self.no_phi_mode {
-                            self.parent_builder.insert_edge_copy(then_bb, phi_id, tv)?;
-                            self.parent_builder.insert_edge_copy(else_bb, phi_id, ev)?;
-                        } else {
-                            self.emit_phi_at_block_start(merge_bb, phi_id, vec![(then_bb, tv), (else_bb, ev)])?;
+                        // Build incoming list only for predecessors that actually reach merge
+                        let mut incomings: Vec<(BasicBlockId, ValueId)> = Vec::new();
+                        if then_reaches_merge { incomings.push((then_bb, tv)); }
+                        if else_reaches_merge { incomings.push((else_bb, ev)); }
+                        match incomings.len() {
+                            0 => { /* neither branch reaches merge: nothing to bind */ }
+                            1 => {
+                                // Single predecessor reaching merge: no PHI needed
+                                let (_pred, v) = incomings[0];
+                                self.parent_builder.variable_map.insert(var_name, v);
+                            }
+                            _ => {
+                                let phi_id = self.new_value();
+                                if self.no_phi_mode {
+                                    for (pred, v) in incomings.iter().copied() {
+                                        self.parent_builder.insert_edge_copy(pred, phi_id, v)?;
+                                    }
+                                } else {
+                                    self.emit_phi_at_block_start(merge_bb, phi_id, incomings)?;
+                                }
+                                self.parent_builder.variable_map.insert(var_name, phi_id);
+                            }
                         }
-                        self.parent_builder.variable_map.insert(var_name, phi_id);
                     }
                 }
                 let void_id = self.new_value();
