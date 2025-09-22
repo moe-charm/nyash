@@ -391,28 +391,28 @@ a / b           // 除算（ゼロ除算エラー対応済み）
 a + b, a - b, a * b  // 加算・減算・乗算
 ```
 
-### 🎯 peek式（パターンマッチング）
+### 🎯 match式（パターンマッチング）
 ```nyash
 // 値を返す式として使用
-local dv = peek d {
+local dv = match d {
     "0" => 0,
     "1" => 1,
     "2" => 2,
-    else => 0
+    _ => 0
 }
 
 // ブロックで複雑な処理も可能
-local result = peek status {
+local result = match status {
     "success" => { log("OK"); 200 }
     "error" => { log("NG"); 500 }
-    else => 404
+    _ => 404
 }
 
 // 文として使用（値を捨てる）
-peek action {
+match action {
     "save" => save_data()
     "load" => load_data()
-    else => print("Unknown")
+    _ => print("Unknown")
 }
 ```
 

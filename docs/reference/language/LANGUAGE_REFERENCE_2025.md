@@ -196,14 +196,14 @@ loop() { }               # 無条件ループは `loop(true){}` を意図明確�
 > 設計メモ: Nyashは「単一入口・先頭条件」の制御フロー規律を重視するため、do‑whileは採用しません。必ず実行の表現は `loop(1)` ラッパーや `repeat/until` 糖衣からゼロコストで正規化します。
 ```
 
-#### **Peek式（Phase 12.7で追加）**
+#### **Match式（Phase 12.7で追加）**
 ```nyash
 # パターンマッチング風の分岐
 local result = match value {
     "A" => 100,
     "B" => 200,
     "C" => 300,
-    else => 0  # else必須
+    _ => 0  # _はデフォルトパターン
 }
 
 # 文の形式も可
@@ -215,7 +215,7 @@ match status {
     "success" => {
         print("All good")
     },
-    else => {
+    _ => {
         print("Unknown status")
     }
 }
