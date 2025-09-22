@@ -166,7 +166,10 @@ pub fn strip_using_and_register(
                 }
                 if let Ok(abs) = std::fs::canonicalize(&p) { p = abs; }
                 let key = p.to_string_lossy().to_string();
-                if visited.contains(&key) { continue; }
+                if visited.contains(&key) { 
+                    if verbose { eprintln!("[using] skipping already visited: {}", key); }
+                    continue; 
+                }
                 visited.insert(key.clone());
                 if let Ok(text) = std::fs::read_to_string(&p) {
                     let inlined = strip_and_inline(runner, &text, &key, visited)?;

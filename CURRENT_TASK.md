@@ -39,7 +39,18 @@ Principles (feature‑pause)
     - `apps/selfhost-runtime/mir_loader.nyash`: FileBox で読込→JsonDocBox で parse→version/kind/body_len を要約
     - `apps/selfhost-runtime/runner.nyash`: args[0] の JSON を読み、{version:0, kind:"Program"} を検証（NGは非0exit）
     - v0 とハーネスJSON（{"functions":…}）の両フォーマットを受理。`--trace` で v0 要約/stmt数、ハーネス要約（functions数）を出力
+- **P1 標準箱のlib化完了**（既定OFF・段階導入）
+  - 薄ラッパlib実装: `apps/lib/boxes/{console_std.nyash,string_std.nyash,array_std.nyash,map_std.nyash}`（恒等の薄ラッパ）
+  - 自己ホスト実行器の導線: `src/runner/modes/pyvm.rs` に `--box-pref=ny|plugin` 子引数伝達（既定=plugin）
+  - BoxCall ディスパッチ骨格: `apps/selfhost-runtime/{runner.nyash,ops_calls.nyash}` でpref解析・初期化
+- **ScopeBox/LoopForm 前処理完了**（恒等・導線ON）
+  - 前処理本体（恒等apply）: `apps/lib/{scopebox_inject.nyash,loopform_normalize.nyash}`
+  - Selfhost Compiler適用: `apps/selfhost/compiler/compiler.nyash` で `--scopebox/--loopform` 受理→apply後emit
+  - Runner env→子引数マップ: `src/runner/selfhost.rs` で `NYASH_SCOPEBOX_ENABLE=1`→`--scopebox` 変換
 - Smoke 追加（任意実行）: `tools/test/smoke/selfhost/selfhost_runner_smoke.sh`
+- **恒等性確認スモーク追加**:
+  - ScopeBox恒等: `tools/test/smoke/selfhost/scopebox_identity_smoke.sh`
+  - LoopForm恒等: `tools/test/smoke/selfhost/loopform_identity_smoke.sh`
  - Identity 確認スモーク（Selfhost Compiler 直呼び）
    - ScopeBox: `tools/test/smoke/selfhost/scopebox_identity_smoke.sh`
    - LoopForm: `tools/test/smoke/selfhost/loopform_identity_smoke.sh`
@@ -256,12 +267,23 @@ JSON / Plugin v2（現状に追記）
 - 命名衝突は採用側の include/using に限定（既存ファイルの広域変更は行わない）。
 
 TODO（段階タスク）
-- [ ] P1: console_std/string_std/array_std/map_std の雛形を追加（apps/lib/boxes/）
-- [ ] P1: 自己ホスト実行器の BoxCall ディスパッチに `NYASH_SELFHOST_BOX_PREF` を導入（既定=plugin）
-- [ ] P1: strings/array/map の最小スモークを selfhost 経路で追加
+- [x] P1: console_std/string_std/array_std/map_std の雛形を追加（apps/lib/boxes/）
+- [x] P1: 自己ホスト実行器の BoxCall ディスパッチに `NYASH_SELFHOST_BOX_PREF` を導入（既定=plugin）
+- [x] ScopeBox/LoopForm 前処理（恒等版）実装＋スモーク
+- [ ] **今すぐ推奨**: 恒等性スモーク実行（実装検証）
+  - `tools/test/smoke/selfhost/scopebox_identity_smoke.sh`
+  - `tools/test/smoke/selfhost/loopform_identity_smoke.sh`  
+  - `tools/test/smoke/selfhost/selfhost_runner_smoke.sh`
+- [ ] P1: strings/array/map の最小スモークを selfhost 経路で追加（pref=ny）
 - [ ] P2: path_std/json_std の雛形とアダプタ（プラグイン優先のラップ）
 - [ ] P2: path/json のスモーク（dirname/join、parse/root/get/size/at/str/int/bool）
 - [ ] P3: string_builder_std と tests の軽量追加（任意）
+
+**次フェーズ推奨順序**（小粒・安全）:
+1. ScopeBox 前処理実装（安全包み込み。JSON v0互換維持、If/Loop に "ヒント用余剰キー" 付与）
+2. LoopForm 前処理実装（キー順正規化→安全な末尾整列）
+3. P1 箱スモーク（pref=ny での一致確認）
+4. Stage‑2（自己ホスト実行器）: const/ret/branch 骨格＋exit code パリティ
 
 Checklist（更新済み）
 - [x] Self‑host 前展開の固定スモーク 1 本（upper_string）
