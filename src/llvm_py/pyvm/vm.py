@@ -53,6 +53,10 @@ class PyVM:
     def __init__(self, program: Dict[str, Any]):
         self.functions: Dict[str, Function] = {}
         self._debug = os.environ.get('NYASH_PYVM_DEBUG') in ('1','true','on')
+        # Targeted trace controls (default OFF)
+        self._trace_fn = os.environ.get('NYASH_PYVM_TRACE_FN')
+        self._trace_reg = os.environ.get('NYASH_PYVM_TRACE_REG')  # string compare
+        self._cur_fn: Optional[str] = None
         for f in program.get("functions", []):
             name = f.get("name")
             params = [int(p) for p in f.get("params", [])]
@@ -121,7 +125,14 @@ class PyVM:
     def _set(self, regs: Dict[int, Any], dst: Optional[int], val: Any) -> None:
         if dst is None:
             return
-        regs[int(dst)] = val
+        rid = int(dst)
+        regs[rid] = val
+        try:
+            if self._trace_fn and self._cur_fn == self._trace_fn:
+                if self._trace_reg is None or self._trace_reg == str(rid):
+                    self._dbg(f"[pyvm][set] fn={self._cur_fn} r{rid}={val}")
+        except Exception:
+            pass
 
     def _truthy(self, v: Any) -> bool:
         if isinstance(v, bool):
@@ -189,6 +200,7 @@ class PyVM:
         return self._exec_function(fn, call_args)
 
     def _exec_function(self, fn: Function, args: List[Any]) -> Any:
+        self._cur_fn = fn.name
         self._dbg(f"[pyvm] call {fn.name} args={args}")
         # Intrinsic fast path for small helpers used in smokes
         ok, ret = self._try_intrinsic(fn.name, args)

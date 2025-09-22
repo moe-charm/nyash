@@ -115,39 +115,60 @@ static box MiniVmPrints {
       // Attempt plugin route in a guarded block
       @printed = 0
       @ok = 0
+      @dbg = _trace_enabled()
       // new JsonDocBox()/JsonNodeBox are provided by the JSON plugin
       @doc = new JsonDocBox()
       doc.parse(json)
+      if dbg == 1 {
+        @perr = doc.error()
+        if perr == "" { print("[json] parse ok") } else { print("[json] parse err=" + perr) }
+      }
       @root = doc.root()
+      if dbg == 1 {
+        @rkind = root.kind()
+        print("[json] root.kind=" + rkind)
+      }
       if root {
         @stmts = root.get("statements")
+        if dbg == 1 {
+          @skind = stmts.kind()
+          @ssize = stmts.size()
+          print("[json] stmts.kind=" + skind + " size=" + new MiniVmScan()._int_to_str(ssize))
+        }
         if stmts {
           @n = stmts.size()
           @i = 0
           loop (i < n) {
+            if dbg == 1 {
+              print("[json] loop i=" + new MiniVmScan()._int_to_str(i) + "/" + new MiniVmScan()._int_to_str(n))
+              if i > 1000 { print("[json] debug guard: break loop at i>1000")  break }
+            }
             @node = stmts.at(i)
             if !node { i = i + 1  continue }
             @expr = node.get("expression")
             if !expr { i = i + 1  continue }
             @k = expr.get("kind").str()
+            if dbg == 1 { print("[json] expr.kind=" + k) }
             if k == "Literal" {
               @val = expr.get("value")
               if val {
                 @ty = val.get("type").str()
                 if ty == "string" { print(val.get("value").str()) } else { print(val.get("value").int()) }
-                printed = printed + 1
               }
+              printed = printed + 1
               i = i + 1
               continue
             }
             if k == "FunctionCall" {
               @name = expr.get("name").str()
+              if dbg == 1 { print("[json] func name=" + name) }
               @args = expr.get("arguments")
               if !args { i = i + 1  continue }
               @asz = args.size()
               if asz <= 0 {
-                if name == "echo" { print("")  printed = printed + 1 }
-                if name == "itoa" { print("0")  printed = printed + 1 }
+                if name == "echo" { print("") }
+                if name == "itoa" { print("0") }
+                printed = printed + 1
                 i = i + 1
                 continue
               }
@@ -156,31 +177,37 @@ static box MiniVmPrints {
                 if arg0v {
                   @t = arg0v.get("type").str()
                   if t == "string" { print(arg0v.get("value").str()) } else { print(arg0v.get("value").int()) }
-                  printed = printed + 1
                 }
+                printed = printed + 1
+                if dbg == 1 { print("[json] before inc i=" + new MiniVmScan()._int_to_str(i)) }
                 i = i + 1
+                if dbg == 1 { print("[json] after inc i=" + new MiniVmScan()._int_to_str(i)) }
                 continue
               }
               if name == "itoa" {
-                if arg0v { print(arg0v.get("value").int())  printed = printed + 1 }
+                if arg0v { print(arg0v.get("value").int()) }
+                printed = printed + 1
+                if dbg == 1 { print("[json] before inc i=" + new MiniVmScan()._int_to_str(i)) }
                 i = i + 1
+                if dbg == 1 { print("[json] after inc i=" + new MiniVmScan()._int_to_str(i)) }
                 continue
               }
+              printed = printed + 1
+              if dbg == 1 { print("[json] before inc i=" + new MiniVmScan()._int_to_str(i)) }
               i = i + 1
+              if dbg == 1 { print("[json] after inc i=" + new MiniVmScan()._int_to_str(i)) }
               continue
             }
             if k == "Compare" {
               @op = expr.get("operation").str()
               @lhs = expr.get("lhs").get("value").get("value").int()
               @rhs = expr.get("rhs").get("value").get("value").int()
-              @res = 0
-              if op == "<"  { if lhs <  rhs { res = 1 } }
-              if op == "==" { if lhs == rhs { res = 1 } }
-              if op == "<=" { if lhs <= rhs { res = 1 } }
-              if op == ">"  { if lhs >  rhs { res = 1 } }
-              if op == ">=" { if lhs >= rhs { res = 1 } }
-              if op == "!=" { if lhs != rhs { res = 1 } }
-              print(res)
+              if op == "<"  { if lhs <  rhs { print(1) } else { print(0) } }
+              if op == "==" { if lhs == rhs { print(1) } else { print(0) } }
+              if op == "<=" { if lhs <= rhs { print(1) } else { print(0) } }
+              if op == ">"  { if lhs >  rhs { print(1) } else { print(0) } }
+              if op == ">=" { if lhs >= rhs { print(1) } else { print(0) } }
+              if op == "!=" { if lhs != rhs { print(1) } else { print(0) } }
               printed = printed + 1
               i = i + 1
               continue
@@ -196,6 +223,7 @@ static box MiniVmPrints {
                 continue
               }
             }
+            // Unknown expression kind: treat as a no-op; do not count
             i = i + 1
           }
           ok = 1
@@ -204,10 +232,12 @@ static box MiniVmPrints {
       // Prefer plugin result whenever JSON route ran (ok==1). Even if printed==0,
       // return early to avoid falling back to the heuristic scanner which can loop
       // on malformed inputs or seam-edge cases.
+      if dbg == 1 { print("[json] plugin_ok=" + new MiniVmScan()._int_to_str(ok) + " printed=" + new MiniVmScan()._int_to_str(printed)) }
       if ok == 1 { return printed }
     }
 
     // Fallback: text scanner（開発用）
+    if _trace_enabled() == 1 { print("[json] fallback engaged") }
     local scan = new MiniVmScan()
     local bin = new MiniVmBinOp()
     local cmp = new MiniVmCompare()
