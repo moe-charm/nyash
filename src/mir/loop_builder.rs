@@ -9,6 +9,13 @@ use super::{BasicBlockId, ConstValue, MirInstruction, ValueId};
 use crate::ast::ASTNode;
 use std::collections::{HashMap, HashSet};
 
+// Phase 15 段階的根治戦略：制御フローユーティリティ
+use super::utils::{
+    is_current_block_terminated,
+    capture_actual_predecessor_and_jump,
+    collect_phi_incoming_if_reachable,
+};
+
 /// 不完全なPhi nodeの情報
 #[derive(Debug, Clone)]
 struct IncompletePhi {
@@ -516,34 +523,17 @@ impl<'a> LoopBuilder<'a> {
         self.set_current_block(then_bb)?;
         for s in then_body.iter().cloned() {
             let _ = self.build_statement(s)?;
-            // Stop if block terminated
-            let cur_id = self.current_block()?;
-            let terminated = {
-                if let Some(ref fun_ro) = self.parent_builder.current_function {
-                    if let Some(bb) = fun_ro.get_block(cur_id) { bb.is_terminated() } else { false }
-                } else { false }
-            };
-            if terminated { break; }
+            // フェーズS修正：統一終端検出ユーティリティ使用
+            if is_current_block_terminated(self.parent_builder)? { 
+                break; 
+            }
         }
         let then_var_map_end = self.get_current_variable_map();
-        // Only jump to merge if not already terminated (e.g., continue/break)
-        // Capture the actual predecessor block that reaches merge (entry block may not be the exit).
-        let then_pred_to_merge: Option<BasicBlockId> = {
-            let cur_id = self.current_block()?;
-            let need_jump = {
-                if let Some(ref fun_ro) = self.parent_builder.current_function {
-                    if let Some(bb) = fun_ro.get_block(cur_id) { !bb.is_terminated() } else { false }
-                } else { false }
-            };
-            if need_jump {
-                // Emit the edge now; record the real predecessor (cur_id), not the entry then_bb.
-                self.emit_jump(merge_bb)?;
-                Some(cur_id)
-            } else {
-                // Terminated path (e.g., continue/break) — no incoming to merge.
-                None
-            }
-        };
+        // フェーズS修正：最強モード指摘の「実到達predecessor捕捉」を統一
+        let then_pred_to_merge = capture_actual_predecessor_and_jump(
+            self.parent_builder, 
+            merge_bb
+        )?;
 
         // else branch
         self.set_current_block(else_bb)?;
@@ -551,30 +541,18 @@ impl<'a> LoopBuilder<'a> {
         if let Some(es) = else_body.clone() {
             for s in es.into_iter() {
                 let _ = self.build_statement(s)?;
-                let cur_id = self.current_block()?;
-                let terminated = {
-                    if let Some(ref fun_ro) = self.parent_builder.current_function {
-                        if let Some(bb) = fun_ro.get_block(cur_id) { bb.is_terminated() } else { false }
-                    } else { false }
-                };
-                if terminated { break; }
+                // フェーズS修正：統一終端検出ユーティリティ使用
+                if is_current_block_terminated(self.parent_builder)? { 
+                    break; 
+                }
             }
             else_var_map_end_opt = Some(self.get_current_variable_map());
         }
-        let else_pred_to_merge: Option<BasicBlockId> = {
-            let cur_id = self.current_block()?;
-            let need_jump = {
-                if let Some(ref fun_ro) = self.parent_builder.current_function {
-                    if let Some(bb) = fun_ro.get_block(cur_id) { !bb.is_terminated() } else { false }
-                } else { false }
-            };
-            if need_jump {
-                self.emit_jump(merge_bb)?;
-                Some(cur_id)
-            } else {
-                None
-            }
-        };
+        // フェーズS修正：else branchでも統一実到達predecessor捕捉
+        let else_pred_to_merge = capture_actual_predecessor_and_jump(
+            self.parent_builder, 
+            merge_bb
+        )?;
 
         // Continue at merge
         self.set_current_block(merge_bb)?;

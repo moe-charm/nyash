@@ -255,6 +255,14 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
 # JSON IR出力
 NYASH_DUMP_JSON_IR=1 ./target/release/nyash program.nyash
 
+# MIR出力（重要！）
+NYASH_DUMP_MIR=1 ./target/release/nyash program.nyash
+NYASH_VM_DUMP_MIR=1 ./target/release/nyash program.nyash  # VM実行時
+./target/release/nyash --dump-mir program.nyash            # フラグ版
+
+# PyVMデバッグ
+NYASH_PYVM_DEBUG=1 ./target/release/nyash program.nyash
+
 # パーサー無限ループ対策
 ./target/release/nyash --debug-fuel 1000 program.nyash
 
@@ -277,19 +285,28 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 - 🎯 **AI協働デバッグ**: Claude+ChatGPT修正+系統的トレースの完璧な連携実現
 - 📋 詳細: JITアーカイブは `archive/jit-cranelift/` に完全移動、復活手順も完備
 
-## 📝 Update (2025-09-22) 🎯 Phase 15 JSON Native実装導入＆調査継続中
+## 📝 Update (2025-09-22) 🎯 Phase 15 重要バグ発見＆根本原因解明完了！
 - ✅ **using systemパーサー問題完全解決！** `NYASH_RESOLVE_FIX_BRACES=1`でブレースバランス自動修正
 - 🆕 **JSON Native実装を導入！** 別Claude Code君の`feature/phase15-nyash-json-native`から`apps/lib/json_native/`取り込み完了
 - 🔧 **ChatGPTの統合実装承認！** JSON読み込み処理統合は正しい方向性、技術的に高度
+- 🐛 **重大バグ完全解明！**
+  - **問題**: `collect_prints`メソッドで`break`の後のコードが実行されずnullを返す
+  - **根本原因判明**: `src/mir/loop_builder.rs`の`do_break()`が`switch_to_unreachable_block_with_void()`を呼び、break後のコードをunreachableとマーク
+  - **MIR解析結果**: 
+    - Block 1394, 1407: 直接Block 1388（null return）にジャンプ
+    - Block 1730: 正常なArrayBox return
+    - レジスタ2: `new ArrayBox()`、レジスタ751: `const 0`（null）
+  - **デバッグ環境変数**: `NYASH_DUMP_JSON_IR=1`, `NYASH_PYVM_DEBUG=1`でMIR/PyVM詳細追跡可能
+  - **一時解決策**: `break`→`finished = 1`フラグに置き換え（根治が必要）
 - 📊 **現在の状況**:
   - using systemパーサーエラー: ✅ 完全解決
-  - collect_prints()処理: ✅ echo/itoa正常動作
+  - collect_prints()根本原因: ✅ loop_builder.rs特定完了
   - JSON Native: 📦 取り込み済み（match式互換性の課題あり）
-  - 🔍 **調査中**: collect_prints()戻り値の異常終了問題（Codex/Task並行調査中）
 - 🎯 **技術成果**: 
-  - Task先生の調査により、using system統合の複雑な技術課題を解決
-  - JSON Native実装（yyjson置き換え）の基盤完成度90%
-- 🚀 **Phase 15セルフホスティング**: 主要障害を克服、JSON Native統合準備中！
+  - PyVM内蔵Box（ArrayBox等）の早期リターンバグ修正
+  - MIR JSON解析によるbreak/continue制御フロー問題の完全解明
+  - loop_builder.rsのdo_break()修正が必要（次のタスク）
+- 🚀 **Phase 15セルフホスティング**: MIRレベルの問題も特定済み、修正準備完了！
 
 ## 📝 Update (2025-09-18) 🌟 Property System革命達成！
 - ✅ **Property System革命完了！** ChatGPT5×Claude×Codexの協働により、stored/computed/once/birth_once統一構文完成！
@@ -299,6 +316,18 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 - 📚 **完全ドキュメント化**: README.md導線、実装戦略、技術仕様すべて完備
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
+
+## 📝 Update (2025-09-23) 🔧 break制御フロー問題の段階的根治戦略確定！
+- 🎯 **AI協働分析完了！** task+Gemini+codex+ChatGPT Pro最強モードで根本原因完全特定
+- 🔍 **根本問題**: break文が値を返す設計歪み → collect_printsメソッドでnull値返却
+- 🚀 **3段階根治戦略決定**: 
+  - **フェーズS（即効止血）**: PHI incoming修正＋終端ガード徹底
+  - **フェーズM（PHI一本化）**: no_phi_mode撤廃で数百行削減
+  - **フェーズL（根本解決）**: BuildOutcome導入で完全治癒
+- 📊 **期待効果**: 80k→20k圧縮に大きく貢献＋設計歪み根絶
+- 💾 **codex解決策保存**: archive/codex-solutions/に高度な型推論実装を保管
+- 📚 **戦略文書化**: [break-control-flow-strategy.md](docs/development/strategies/break-control-flow-strategy.md)完成
+- 🎯 **次のアクション**: フェーズSから段階的実行開始
 
 ## 📝 Update (2025-09-14) 🎉 セルフホスティング大前進！
 - ✅ Python LLVM実装が実用レベル到達！（esc_dirname_smoke, min_str_cat_loop, dep_tree_min_string全てPASS）

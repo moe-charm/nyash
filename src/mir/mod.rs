@@ -18,6 +18,7 @@ pub mod types; // core MIR enums (ConstValue, Ops, MirType)
 pub mod loop_api; // Minimal LoopBuilder facade (adapter-ready)
 pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod optimizer;
+pub mod utils; // Phase 15 control flow utilities for root treatment
 pub mod optimizer_passes; // optimizer passes (normalize/diagnostics)
 pub mod optimizer_stats; // extracted stats struct
 pub mod passes;
@@ -44,6 +45,13 @@ pub use slot_registry::{BoxTypeId, MethodSlot};
 pub use value_id::{LocalId, ValueId, ValueIdGenerator};
 pub use verification::MirVerifier;
 pub use verification_types::VerificationError;
+// Phase 15 control flow utilities (段階的根治戦略)
+pub use utils::{
+    is_current_block_terminated,
+    capture_actual_predecessor_and_jump,
+    collect_phi_incoming_if_reachable,
+    execute_statement_with_termination_check,
+};
 
 /// MIR compilation result
 #[derive(Debug, Clone)]
