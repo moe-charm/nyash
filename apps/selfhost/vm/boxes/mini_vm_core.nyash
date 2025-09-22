@@ -542,13 +542,14 @@ static box MiniVm {
       guard = guard + 1
       if guard > 200 { break }
       local p = index_of_from(json, k_print, pos)
+      if trace == 1 { print("[collect][loop] pos="+pos+" p="+p+" guard="+guard) }
       if p < 0 { break }
       // bound current Print slice to [this, next)
       local obj_start = p
       local next_p = index_of_from(json, k_print, p + k_print.length())
       local obj_end = json.length()
       if next_p > 0 { obj_end = next_p }
-      if trace == 1 { print("[collect][p] "+p)  print("[collect][slice_end] "+obj_end) }
+      if trace == 1 { print("[collect][p] "+p)  print("[collect][next_p] "+next_p)  print("[collect][slice_end] "+obj_end) }
       if trace == 1 {
         local k_expr = "\"expression\":{"
         local epos_dbg = index_of_from(json, k_expr, obj_start)
@@ -583,14 +584,19 @@ static box MiniVm {
               if trace == 1 { print("[collect][expr] "+expr_start+","+expr_end) }
               local k_fc = "\"kind\":\"FunctionCall\""
               local fcp = index_of_from(json, k_fc, expr_start)
+              if trace == 1 { print("[collect][fc_in_expr] "+fcp+" (bounds "+expr_start+","+expr_end+")") }
               if fcp > 0 { if fcp < expr_end {
+                if trace == 1 { print("[collect][fc_found] entering function call handler") }
                 local kn = "\"name\":\""
                 local np = index_of_from(json, kn, fcp)
+                if trace == 1 { print("[collect][name_search] "+np+" (obj_end "+obj_end+")") }
               if np > 0 { if np < obj_end {
                 local ni = np + kn.length()
                 local nj = index_of_from(json, "\"", ni)
+                if trace == 1 { print("[collect][name_bounds] "+ni+","+nj+" (expr_end "+expr_end+")") }
                 if nj > 0 { if nj <= expr_end {
                   local fname = json.substring(ni, nj)
+                  if trace == 1 { print("[collect][fname] '"+fname+"'") }
                   local ka = "\"arguments\":["
                   local ap = index_of_from(json, ka, nj)
                   if ap > 0 { if ap < expr_end {
@@ -600,9 +606,11 @@ static box MiniVm {
                     if arr_start >= 0 { if arr_end >= 0 { if arr_end <= expr_end {
                       local kt = "\"type\":\""
                       local atpos = index_of_from(json, kt, arr_start)
+                      if trace == 1 { print("[collect][empty_check] atpos="+atpos+" arr_bounds=["+arr_start+","+arr_end+"]") }
                       if atpos < 0 || atpos >= arr_end {
-                        if fname == "echo" { out.push("")  pos = obj_end + 1  continue }
-                        if fname == "itoa" { out.push("0")  pos = obj_end + 1  continue }
+                        if trace == 1 { print("[collect][empty_args] fname='"+fname+"'") }
+                        if fname == "echo" { out.push("")  pos = obj_end  continue }
+                        if fname == "itoa" { out.push("0")  pos = obj_end  continue }
                       }
                     }}}
                     // string arg
@@ -742,6 +750,7 @@ static box MiniVm {
       pos = obj_end + 1
       if pos <= p { pos = p + k_print.length() }
     }
+    if trace == 1 { print("[collect][return] out.size="+out.size()) }
     return out
   }
 }

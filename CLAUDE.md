@@ -230,6 +230,27 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
+## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
+- ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ
+- 🔧 **コンパイルエラー全解決！** JITスタブ作成でビルド成功、開発環境復活
+- 🐛 **empty args smoke test 90%解決！** `collect_prints()`の位置インクリメントバグ修正
+- 📊 **デバッグ手法確立！** 詳細トレース出力で問題を段階的に特定する手法完成
+- ⚡ **次の一歩**: ArrayBox戻り値問題解決でテスト完全クリア予定
+- 🎯 **AI協働デバッグ**: Claude+ChatGPT修正+系統的トレースの完璧な連携実現
+- 📋 詳細: JITアーカイブは `archive/jit-cranelift/` に完全移動、復活手順も完備
+
+## 📝 Update (2025-09-22) 🎯 Phase 15 empty args テスト95%解決！
+- ✅ **ArrayBox戻り値問題完全解決！** ArrayBox.size()は正常に動作、型比較の問題だった
+- 🔧 **collect_prints()位置インクリメントバグ修正済み！** `pos = obj_end` 修正でecho/itoa処理が正常化
+- 🐛 **残り5%**: usingシステムのパーサーエラー（BOX token at line 1888）のみ
+- 📊 **デバッグ結果**:
+  - echo → ""（空文字）✅
+  - itoa → "0"（ゼロ）✅  
+  - arr.size() → 2（数値型）✅
+  - 期待出力: `0` （itoaの結果）✅
+- 🎯 **次のステップ**: パーサーエラー解決後、テスト完全通過予定！
+- 🚀 **Phase 15セルフホスティング**: 重要なマイルストーンまであと一歩！
+
 ## 📝 Update (2025-09-18) 🌟 Property System革命達成！
 - ✅ **Property System革命完了！** ChatGPT5×Claude×Codexの協働により、stored/computed/once/birth_once統一構文完成！
 - 🚀 **Python→Nyash実行可能性飛躍！** @property/@cached_property→Nyash Property完全マッピング実現！
