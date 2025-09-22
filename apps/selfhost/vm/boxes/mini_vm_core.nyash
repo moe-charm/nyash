@@ -1,8 +1,8 @@
-using selfhost.vm.json as MiniJson
-using selfhost.vm.scan as MiniVmScan
-using selfhost.vm.binop as MiniVmBinOp
-using selfhost.vm.compare as MiniVmCompare
-using selfhost.vm.prints as MiniVmPrints
+using selfhost.vm.boxes.json_cur as MiniJson
+using selfhost.common.mini_vm_scan as MiniVmScan
+using selfhost.common.mini_vm_binop as MiniVmBinOp
+using selfhost.common.mini_vm_compare as MiniVmCompare
+using selfhost.vm.boxes.mini_vm_prints as MiniVmPrints
 
 static box MiniVm {
   _is_digit(ch) {
@@ -745,5 +745,3 @@ static box MiniVm {
     return out
   }
 }
-
-// Program entry: prefer argv[0] JSON, fallback to embedded sample

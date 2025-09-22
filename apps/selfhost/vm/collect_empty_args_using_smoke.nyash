@@ -1,4 +1,4 @@
-using selfhost.vm.core as MiniVm
+using selfhost.vm.boxes.mini_vm_core as MiniVm
 
 static box Main {
   main(args) {

@@ -1,5 +1,5 @@
-using selfhost.vm.core as MiniVm
-using selfhost.vm.prints as MiniVmPrints
+using selfhost.vm.boxes.mini_vm_core as MiniVm
+using selfhost.vm.boxes.mini_vm_prints as MiniVmPrints
 
 static box Main {
   main(args) {
