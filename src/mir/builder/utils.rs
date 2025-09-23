@@ -81,6 +81,35 @@ impl super::MirBuilder {
         args: Vec<super::ValueId>,
         effects: super::EffectMask,
     ) -> Result<(), String> {
+        // Check environment variable for unified call usage
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL")
+            .unwrap_or_else(|_| "0".to_string()) != "0";
+
+        if use_unified {
+            // Use unified call emission for BoxCall
+            // First, try to determine the box type
+            let mut box_type: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
+            if box_type.is_none() {
+                if let Some(t) = self.value_types.get(&box_val) {
+                    match t {
+                        super::MirType::String => box_type = Some("StringBox".to_string()),
+                        super::MirType::Box(name) => box_type = Some(name.clone()),
+                        _ => {}
+                    }
+                }
+            }
+
+            // Use emit_unified_call with Method target
+            let target = super::builder_calls::CallTarget::Method {
+                box_type,
+                method: method.clone(),
+                receiver: box_val,
+            };
+
+            return self.emit_unified_call(dst, target, args);
+        }
+
+        // Legacy implementation
         self.emit_instruction(super::MirInstruction::BoxCall {
             dst,
             box_val,

@@ -2,7 +2,7 @@
 
 Updated: 2025‑09‑24
 
-## 🎯 **現在進行中: MIR Call命令統一実装 Phase 3.3**
+## 🎯 **現在進行中: MIR Call命令統一実装 Phase 3.5**
 **ChatGPT5 Pro A++設計による6種類Call命令→1つのMirCallへの統一作業**
 
 ### ✅ **Phase 1-2完了済み**（2025-09-24）
@@ -27,9 +27,21 @@ Updated: 2025‑09‑24
   - ExternCall(env.console.log)→Callee::Global(print)への完全移行
   - `build_function_call`で`emit_unified_call`使用
 
-### 🔧 **Phase 3.3進行中**: emit_box_or_plugin_call統一化
-- **現状**: BoxCall命令を統一Call化作業中
-- **次のステップ**: Python LLVM dispatch統一（最大削減機会）
+### ✅ **Phase 3.3完了**: emit_box_or_plugin_call統一化（2025-09-24）
+- [x] **emit_box_or_plugin_call統一実装完了**
+  - 環境変数`NYASH_MIR_UNIFIED_CALL=1`で切り替え可能
+  - BoxCallをCallTarget::Methodとして統一Call化
+  - MIRダンプで`call_method Box.method() [recv: %n]`形式出力確認
+
+### 🔧 **Phase 3.4進行中**: Python LLVM dispatch統一（2025-09-24）
+- [x] **Python側のmir_call.py実装**
+  - 統一MirCall処理ハンドラ作成（`src/llvm_py/instructions/mir_call.py`）
+  - 6種類のCalleeパターンに対応（Global/Method/Constructor/Closure/Value/Extern）
+  - 環境変数`NYASH_MIR_UNIFIED_CALL=1`で切り替え可能
+- [x] **instruction_lower.py更新**
+  - `op == "mir_call"`の統一分岐を追加
+  - 既存の個別処理との互換性維持
+- **次のステップ**: Phase 3.5 Rust側JSON出力対応
 
 ### 📊 **マスタープラン進捗**（2025-09-24）
 - **4つの実行器特定**: MIR Builder/VM/Python LLVM/mini-vm

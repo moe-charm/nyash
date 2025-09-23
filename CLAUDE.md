@@ -238,15 +238,16 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm program.nyash
 - `NYASH_USING_PROFILE=dev|smoke|debug` でプロファイル化
 - または `--using-mode=dev` CLIフラグで統合
 
-## 📝 Update (2025-09-24) 🚀 MIR Call命令統一Phase 3.1-3.2完了！
+## 📝 Update (2025-09-24) 🚀 MIR Call命令統一Phase 3.1-3.3完了！
 - ✅ **Phase 1-2完了** - MIR基盤構築と統一メソッド実装
   - **定義外部化**: `src/mir/definitions/call_unified.rs`（297行）
   - **統一メソッド**: `emit_unified_call()`＋便利メソッド3種実装済み
   - **環境変数制御**: `NYASH_MIR_UNIFIED_CALL=1`で切り替え可能
-- ✅ **Phase 3.1-3.2完了** - 基本関数の統一Call移行成功！
+- ✅ **Phase 3.1-3.3完了** - 基本関数とBoxCallの統一Call移行成功！
   - **indirect call**: `build_indirect_call_expression`で`CallTarget::Value`使用
   - **print関数**: `call_global print()`として統一（ExternCall→Callee::Global）
   - **function call**: `build_function_call`で`CallTarget::Global`使用
+  - **BoxCall統一**: `emit_box_or_plugin_call`で`CallTarget::Method`使用
   - **実行確認**: `env NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --dump-mir`で動作確認済み
 - 📊 **マスタープラン進捗** - 4つの実行器で完全統一へ
   - **削減見込み**: 7,372行 → 5,468行（**26%削減**）

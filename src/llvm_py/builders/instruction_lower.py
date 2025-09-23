@@ -19,6 +19,7 @@ from instructions.safepoint import lower_safepoint
 from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
 from instructions.controlflow.while_ import lower_while_regular
+from instructions.mir_call import lower_mir_call  # New unified handler
 
 
 def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
@@ -80,6 +81,12 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
                       owner.resolver, builder.block, owner.preds, owner.block_end_values, owner.bb_map,
                       meta={"cmp_kind": cmp_kind} if cmp_kind else None,
                       ctx=getattr(owner, 'ctx', None))
+
+    elif op == "mir_call":
+        # Unified MIR Call handling
+        mir_call = inst.get("mir_call", {})
+        dst = inst.get("dst")
+        lower_mir_call(owner, builder, mir_call, dst, vmap_ctx, owner.resolver)
 
     elif op == "call":
         func_name = inst.get("func")
