@@ -133,7 +133,12 @@ pub fn verify_edge_copy_strict() -> bool {
 
 // ---- LLVM harness toggle (llvmlite) ----
 pub fn llvm_use_harness() -> bool {
-    std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1")
+    // Phase 15: デフォルトON（LLVMバックエンドはPythonハーネス使用）
+    // NYASH_LLVM_USE_HARNESS=0 で明示的に無効化可能
+    match std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() {
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true, // デフォルト: ON（ハーネス使用）
+    }
 }
 
 // ---- Phase 11.8 MIR cleanup toggles ----
@@ -323,7 +328,20 @@ pub fn cli_verbose() -> bool {
     std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1")
 }
 pub fn enable_using() -> bool {
-    std::env::var("NYASH_ENABLE_USING").ok().as_deref() == Some("1")
+    // Phase 15: デフォルトON（using systemはメイン機能）
+    // NYASH_ENABLE_USING=0 で明示的に無効化可能
+    match std::env::var("NYASH_ENABLE_USING").ok().as_deref() {
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true, // デフォルト: ON
+    }
+}
+pub fn resolve_fix_braces() -> bool {
+    // Phase 15: デフォルトON（using時のブレース均等修正が必須）
+    // NYASH_RESOLVE_FIX_BRACES=0 で明示的に無効化可能
+    match std::env::var("NYASH_RESOLVE_FIX_BRACES").ok().as_deref() {
+        Some("0") | Some("false") | Some("off") => false,
+        _ => enable_using(), // using有効時は自動でON
+    }
 }
 pub fn vm_use_py() -> bool {
     std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1")

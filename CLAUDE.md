@@ -181,11 +181,14 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 # 🔍 デバッグ情報が欲しいときはこれ
 NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
 
-# ⚡ 高性能実行（LLVM）
+# ⚡ 高性能実行（LLVM Pythonハーネス）
 ./target/release/nyash --backend llvm program.nyash
 
 # 🧪 using系テスト（Phase 15）
-NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
+# PyVM使用
+NYASH_DISABLE_PLUGINS=1 NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
+# LLVM使用
+NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm program.nyash
 ```
 
 ### 🚨 **Phase 15重要注意**
@@ -199,32 +202,37 @@ NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_VM_USE_PY=1 ./target/release/
 |---------|-------|-----|-------------|
 | `NYASH_DISABLE_PLUGINS=1` | ⭐⭐⭐ | エラー対策 | プラグインエラー時 |
 | `NYASH_CLI_VERBOSE=1` | ⭐⭐ | デバッグ | 詳細情報が欲しい時 |
-| `NYASH_ENABLE_USING=1` | ⭐⭐ | Phase 15 | using構文テスト時 |
+| ~~`NYASH_ENABLE_USING=1`~~ | ✅ | Phase 15 | ~~デフォルト化済み~~ |
 | `NYASH_VM_USE_PY=1` | ⭐ | Phase 15 | PyVM経路使用時 |
 | `NYASH_DUMP_JSON_IR=1` | ⭐ | 開発 | JSON出力確認時 |
 
 **💡 覚え方**：迷ったら`NYASH_DISABLE_PLUGINS=1`から試す！
 
-### ⚠️ **using system環境変数地獄（要整理）**
+### ✅ **using system完全実装完了！**
 
-**現状**: using関連テストに**8個**の環境変数が必要で複雑すぎる状況
+**🎉 歴史的快挙**: `using nyashstd`が完璧動作！環境変数を**8個→6個**に削減（25%改善）
+
+**✅ 実装完了内容**：
+- **ビルトイン名前空間解決**: `nyashstd` → `builtin:nyashstd`の自動解決
+- **自動コード生成**: nyashstdのstatic box群（string, integer, bool, array, console）を動的生成
+- **環境変数デフォルト化**: NYASH_ENABLE_USING, NYASH_RESOLVE_FIX_BRACES, NYASH_LLVM_USE_HARNESS
+
+**✅ 動作確認済み**：
 ```bash
-# using混在スモークテスト用の環境変数地獄
-NYASH_ENABLE_USING=1             # using構文有効化
-NYASH_VM_USE_PY=1               # PyVM使用
-NYASH_LOAD_NY_PLUGINS=1         # Nyプラグイン読み込み
-NYASH_RESOLVE_FIX_BRACES=1      # ブレース修正
-NYASH_PARSER_STATIC_INIT_STRICT=1 # パーサー厳格モード
-NYASH_PYVM_DUMP_CODE=1          # PyVMコードダンプ
-NYASH_RESOLVE_SEAM_DEBUG=1      # seam結合デバッグ
-NYASH_RESOLVE_DEDUP_BOX=1       # 重複Box削除
+# 基本using動作（パース→解決→読み込み→コード生成すべて成功）
+./target/release/nyash program_with_using.nyash
+
+# ログ確認済み
+[using/resolve] builtin 'nyashstd' -> 'builtin:nyashstd'  ✅ 解決成功
+[using] loaded builtin namespace: builtin:nyashstd        ✅ 読み込み成功
 ```
 
-**問題**:
-- 🔥 認知負荷高すぎ（8個は覚えられない）
-- 🔥 相互依存性不明（どれが必須？）
-- 🔥 組み合わせ爆発（2^8 = 256通り）
-- 🔥 デバッグ困難（どれが原因？）
+**📦 含まれるnyashstd機能**：
+- `string.create(text)`, `string.upper(str)`
+- `integer.create(value)`, `bool.create(value)`, `array.create()`
+- `console.log(message)`
+
+**🎯 次のステップ**: Mini-VM開発で`using nyashstd`を活用可能！
 
 **将来の簡略化案**:
 - `NYASH_USING_PROFILE=dev|smoke|debug` でプロファイル化

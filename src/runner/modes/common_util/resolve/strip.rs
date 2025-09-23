@@ -1,6 +1,56 @@
 use crate::runner::NyashRunner;
 use std::collections::HashSet;
 
+/// Generate content for built-in namespaces like builtin:nyashstd
+fn generate_builtin_namespace_content(namespace_key: &str) -> String {
+    match namespace_key {
+        "builtin:nyashstd" => {
+            // Generate Nyash code that provides nyashstd functionality
+            // This exposes the built-in stdlib boxes as regular Nyash static boxes
+            format!(r#"
+// Built-in nyashstd namespace (auto-generated)
+static box string {{
+    create(text) {{
+        return new StringBox(text)
+    }}
+    upper(str) {{
+        return new StringBox(str.upper())
+    }}
+}}
+
+static box integer {{
+    create(value) {{
+        return new IntegerBox(value)
+    }}
+}}
+
+static box bool {{
+    create(value) {{
+        return new BoolBox(value)
+    }}
+}}
+
+static box array {{
+    create() {{
+        return new ArrayBox()
+    }}
+}}
+
+static box console {{
+    log(message) {{
+        print(message)
+        return null
+    }}
+}}
+"#)
+        }
+        _ => {
+            // Unknown built-in namespace
+            format!("// Unknown built-in namespace: {}\n", namespace_key)
+        }
+    }
+}
+
 /// Strip `using` lines and register modules/aliases into the runtime registry.
 /// Returns cleaned source. No-op when `NYASH_ENABLE_USING` is not set.
 #[allow(dead_code)]
@@ -14,7 +64,7 @@ pub fn strip_using_and_register(
     }
     // Optional external combiner (default OFF): NYASH_USING_COMBINER=1
     if std::env::var("NYASH_USING_COMBINER").ok().as_deref() == Some("1") {
-        let fix_braces = std::env::var("NYASH_RESOLVE_FIX_BRACES").ok().as_deref() == Some("1");
+        let fix_braces = crate::config::env::resolve_fix_braces();
         let dedup_box = std::env::var("NYASH_RESOLVE_DEDUP_BOX").ok().as_deref() == Some("1");
         let dedup_fn = std::env::var("NYASH_RESOLVE_DEDUP_FN").ok().as_deref() == Some("1");
         let seam_dbg = std::env::var("NYASH_RESOLVE_SEAM_DEBUG").ok().as_deref() == Some("1");
@@ -176,6 +226,14 @@ pub fn strip_using_and_register(
                     prelude.push_str(&inlined);
                     prelude.push_str("\n");
                     crate::runner::modes::common_util::resolve::seam::log_inlined_tail(&key, &inlined, seam_dbg);
+                } else if key.starts_with("builtin:") {
+                    // Handle built-in namespaces like builtin:nyashstd
+                    let builtin_content = generate_builtin_namespace_content(&key);
+                    prelude.push_str(&builtin_content);
+                    prelude.push_str("\n");
+                    if verbose {
+                        eprintln!("[using] loaded builtin namespace: {}", key);
+                    }
                 } else if verbose {
                     eprintln!("[using] warn: could not read {}", p.display());
                 }

@@ -242,7 +242,16 @@ pub(super) fn resolve_using_target(
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
-    // 2) build candidate list: relative then using-paths
+    // 2) Special handling for built-in namespaces
+    if tgt == "nyashstd" {
+        let out = "builtin:nyashstd".to_string();
+        if trace {
+            crate::runner::trace::log(format!("[using/resolve] builtin '{}' -> '{}'", tgt, out));
+        }
+        crate::runner::box_index::cache_put(&key, out.clone());
+        return Ok(out);
+    }
+    // 3) build candidate list: relative then using-paths
     let rel = tgt.replace('.', "/") + ".nyash";
     let mut cand: Vec<String> = Vec::new();
     if let Some(dir) = context_dir {
