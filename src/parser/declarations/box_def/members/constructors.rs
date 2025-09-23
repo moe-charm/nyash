@@ -36,7 +36,6 @@ pub(crate) fn try_parse_constructor(
         }
         p.consume(TokenType::RPAREN)?;
         let mut body = p.parse_block_statements()?;
-        p.skip_newlines();
         // Optional postfix catch/cleanup (method-level gate)
         if p.match_token(&TokenType::CATCH) || p.match_token(&TokenType::CLEANUP) {
             let mut catch_clauses: Vec<crate::ast::CatchClause> = Vec::new();
@@ -52,7 +51,6 @@ pub(crate) fn try_parse_constructor(
                     body: catch_body,
                     span: Span::unknown(),
                 });
-                p.skip_newlines();
                 if p.match_token(&TokenType::CATCH) {
                     let line = p.current_token().line;
                     return Err(ParseError::UnexpectedToken {

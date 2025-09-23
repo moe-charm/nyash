@@ -34,7 +34,6 @@ pub(crate) fn parse_header(
                 p.advance();
                 if p.match_token(&TokenType::COMMA) {
                     p.advance();
-                    p.skip_newlines();
                 }
             } else {
                 return Err(ParseError::UnexpectedToken {
@@ -66,7 +65,6 @@ pub(crate) fn parse_header(
         }
         while p.match_token(&TokenType::COMMA) {
             p.advance(); // consume ','
-            p.skip_newlines();
             if let TokenType::IDENTIFIER(parent) = &p.current_token().token_type {
                 parents.push(parent.clone());
                 p.advance();

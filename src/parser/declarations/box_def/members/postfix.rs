@@ -30,7 +30,6 @@ pub(crate) fn wrap_with_optional_postfix(
             body: catch_body,
             span: Span::unknown(),
         });
-        p.skip_newlines();
         if p.match_token(&TokenType::CATCH) {
             let line = p.current_token().line;
             return Err(ParseError::UnexpectedToken {
@@ -78,7 +77,6 @@ pub(crate) fn try_parse_method_postfix_after_last_method(
             body: catch_body,
             span: Span::unknown(),
         });
-        p.skip_newlines();
         if p.match_token(&TokenType::CATCH) {
             let line = p.current_token().line;
             return Err(ParseError::UnexpectedToken {

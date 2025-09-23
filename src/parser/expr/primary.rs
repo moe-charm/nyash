@@ -297,7 +297,6 @@ impl NyashParser {
                 self.consume(TokenType::LBRACE)?;
                 let mut body: Vec<ASTNode> = Vec::new();
                 while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    self.skip_newlines();
                     if !self.match_token(&TokenType::RBRACE) {
                         body.push(self.parse_statement()?);
                     }

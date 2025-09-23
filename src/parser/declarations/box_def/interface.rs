@@ -25,12 +25,10 @@ pub(crate) fn parse_interface_box(p: &mut NyashParser) -> Result<ASTNode, ParseE
     };
 
     p.consume(TokenType::LBRACE)?;
-    p.skip_newlines(); // ブレース後の改行をスキップ
 
     let mut methods = HashMap::new();
 
     while !p.match_token(&TokenType::RBRACE) && !p.is_at_end() {
-        p.skip_newlines(); // ループ開始時に改行をスキップ
         if let TokenType::IDENTIFIER(method_name) = &p.current_token().token_type {
             let method_name = method_name.clone();
             p.advance();
@@ -64,9 +62,6 @@ pub(crate) fn parse_interface_box(p: &mut NyashParser) -> Result<ASTNode, ParseE
                 };
 
                 methods.insert(method_name, method_decl);
-
-                // メソッド宣言後の改行をスキップ
-                p.skip_newlines();
             } else {
                 let line = p.current_token().line;
                 return Err(ParseError::UnexpectedToken {

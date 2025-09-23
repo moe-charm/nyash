@@ -129,7 +129,6 @@ pub(crate) fn try_parse_block_first_property(
     }
     // 1) Parse block body first
     let mut final_body = p.parse_block_statements()?;
-    p.skip_newlines();
 
     // 2) Expect 'as'
     if let TokenType::IDENTIFIER(kw) = &p.current_token().token_type {

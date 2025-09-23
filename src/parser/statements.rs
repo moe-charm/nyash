@@ -17,9 +17,6 @@ impl NyashParser {
         // Parse the block body first
         let try_body = self.parse_block_statements()?;
 
-        // Allow whitespace/newlines between block and postfix keywords
-        self.skip_newlines();
-
         if crate::config::env::block_postfix_catch()
             && (self.match_token(&TokenType::CATCH) || self.match_token(&TokenType::CLEANUP))
         {
@@ -39,7 +36,6 @@ impl NyashParser {
                 });
 
                 // Single‑catch policy (MVP): disallow multiple catch in postfix form
-                self.skip_newlines();
                 if self.match_token(&TokenType::CATCH) {
                     let line = self.current_token().line;
                     return Err(ParseError::UnexpectedToken {
@@ -88,7 +84,6 @@ impl NyashParser {
         self.consume(TokenType::LBRACE)?;
         let mut body = Vec::new();
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines();
             if !self.match_token(&TokenType::RBRACE) {
                 body.push(self.parse_statement()?);
             }
@@ -473,8 +468,6 @@ impl NyashParser {
     /// return文をパース
     pub(super) fn parse_return(&mut self) -> Result<ASTNode, ParseError> {
         self.advance(); // consume 'return'
-                        // 許容: 改行をスキップしてから式有無を判定
-        self.skip_newlines();
         // returnの後に式があるかチェック（RBRACE/EOFなら値なし）
         let value = if self.is_at_end() || self.match_token(&TokenType::RBRACE) {
             None
