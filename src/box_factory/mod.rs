@@ -71,6 +71,15 @@ impl UnifiedBoxRegistry {
         let mut cache = self.type_cache.write().unwrap();
         // Reserved core types that must remain builtin-owned
         fn is_reserved_type(name: &str) -> bool {
+            // Phase 15.5: 環境変数でプラグイン優先モード時は保護解除
+            if std::env::var("NYASH_USE_PLUGIN_BUILTINS").is_ok() {
+                if let Ok(types) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+                    if types.split(',').any(|t| t.trim() == name) {
+                        return false;  // 予約型として扱わない
+                    }
+                }
+            }
+
             matches!(
                 name,
                 // Core value types

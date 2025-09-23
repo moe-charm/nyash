@@ -12,27 +12,35 @@ Updated: 2025‑09‑24
 ### ✅ **重要な発見：既存システムが完全実装済み！**
 - **環境変数制御**: `NYASH_USE_PLUGIN_BUILTINS=1` + `NYASH_PLUGIN_OVERRIDE_TYPES="StringBox,IntegerBox"`
 - **実装箇所**: `src/box_factory/mod.rs:119-143`に完全な優先度制御システム
-- **結論**: 新規実装不要、既存機能の活用が鍵
+- **課題発見**: 予約型保護（src/box_factory/mod.rs:73-86）がプラグイン登録を阻止
+- **解決策**: 環境変数で予約型保護を条件付き解除
+
+### 🎯 **最終目標**
+**3層構造→2層構造への完全移行**
+```
+現状: コアBox（nyrt） + プラグインBox + ユーザーBox
+最終: プラグインBox（デフォルト） + ユーザーBox
+```
 
 ### 実装フェーズ計画
-#### Phase A: プラグイン版動作確認（1週目）
-- [ ] 環境変数制御のドキュメント作成
-- [ ] プラグイン版StringBox/IntegerBox/ArrayBox/MapBoxの動作テスト
-- [ ] パフォーマンス測定（FFIオーバーヘッド確認）
+#### Phase A: 予約型保護解除（1週目）
+- [ ] `src/box_factory/mod.rs`の`is_reserved_type()`修正
+- [ ] 環境変数で条件付き保護解除実装
+- [ ] プラグイン版StringBox/IntegerBox動作確認
 
 #### Phase B: MIRビルダー統一（2週目）
 - [ ] `src/mir/builder.rs`の特別扱い削除（行407-424）
 - [ ] `src/mir/builder/utils.rs`の型推論削除（行134-156）
 - [ ] すべてのBoxを`MirType::Box(name)`として統一
 
-#### Phase C: nyrt実装削除（3週目）
-- [ ] `crates/nyrt/src/lib.rs`からコアBox関数削除（約300行）
-- [ ] `crates/nyrt/src/plugin/array.rs`削除（143行）
-- [ ] `crates/nyrt/src/plugin/string.rs`削除（173行）
+#### Phase C: 完全統一（3週目）
+- [ ] 予約型保護の完全削除
+- [ ] nyrt実装削除（約600行）
+- [ ] デフォルト動作をプラグインBox化
+- [ ] 環境変数を廃止（プラグインがデフォルト）
 
 #### Phase D: Nyashコード化（将来）
 - [ ] `apps/lib/core_boxes/`にNyash実装作成
-- [ ] StringBox, IntegerBox, ArrayBox, MapBoxのNyash版実装
 - [ ] 静的リンクによる性能最適化
 
 ### ✅ **MIR Call命令統一実装完了済み**（2025-09-24）

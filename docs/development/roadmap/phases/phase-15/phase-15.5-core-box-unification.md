@@ -11,12 +11,14 @@
 - **特別扱い削除**: MIRビルダー/バックエンドから約100行
 - **全体寄与**: Phase 15目標（80k→20k）の約1%
 
-## 📊 現状の3層構造（削除対象）
+## 📊 構造変更の全体像
+
+### 現状（3層構造）
 ```
-1. コアBox（nyrt内蔵）← 削除対象
+1. コアBox（nyrt内蔵）← 完全削除
    - StringBox, IntegerBox, BoolBox
    - ArrayBox, MapBox
-   - 特別な最適化パス
+   - 特別な最適化パス・予約型保護
 
 2. プラグインBox（.so/.dll）
    - FileBox, NetBox, ConsoleBox等
@@ -26,22 +28,36 @@
    - アプリケーション固有Box
 ```
 
+### 最終形（2層構造）
+```
+1. プラグインBox（.so/.dll）← デフォルト動作
+   - StringBox, IntegerBox（元コア）
+   - FileBox, NetBox等（既存プラグイン）
+   - 統一されたFFI TypeBox v2インターフェース
+
+2. ユーザー定義Box（Nyashコード）
+   - アプリケーション固有Box
+   - 将来：StringBox等もNyashコード実装
+```
+
 ## 🚀 実装計画
 
-### Phase A: プラグイン版動作確認（1週目）
+### Phase A: 予約型保護解除（1週目）
 
-#### 1. 環境変数制御の実装
+#### 1. 予約型保護の条件付き解除
 ```rust
-// src/mir/builder/utils.rs に追加
-fn get_box_provider(box_type: &str) -> BoxProvider {
-    if env::var("NYASH_USE_PLUGIN_CORE_BOXES").is_ok() {
-        // プラグイン版を優先
-        if plugin_registry::exists(box_type) {
-            return BoxProvider::Plugin(box_type);
+// src/box_factory/mod.rs: is_reserved_type()修正
+fn is_reserved_type(name: &str) -> bool {
+    // 環境変数でプラグイン優先モード時は保護解除
+    if std::env::var("NYASH_USE_PLUGIN_BUILTINS").is_ok() {
+        if let Ok(types) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+            if types.split(',').any(|t| t.trim() == name) {
+                return false;  // 予約型として扱わない
+            }
         }
     }
-    // nyrt内蔵にフォールバック
-    BoxProvider::Builtin(box_type)
+
+    matches!(name, "StringBox" | "IntegerBox" | ...)
 }
 ```
 
@@ -90,9 +106,21 @@ match class.as_str() {
 MirType::Box(class.to_string())
 ```
 
-### Phase C: nyrt実装削除（3週目）
+### Phase C: 完全統一（3週目）
 
-#### 削除対象
+#### 1. 予約型保護の完全削除
+```rust
+// src/box_factory/mod.rs: 予約型保護を完全削除
+// この関数を削除またはコメントアウト
+// fn is_reserved_type(name: &str) -> bool { ... }
+
+// 登録処理から予約型チェックを削除
+// if is_reserved_type(type_name) && !factory.is_builtin_factory() {
+//     continue; // この部分を削除
+// }
+```
+
+#### 2. nyrt実装削除
 1. **crates/nyrt/src/lib.rs**
    - StringBox関連: 約150行
    - IntegerBox関連: 約50行
@@ -105,6 +133,12 @@ MirType::Box(class.to_string())
 
 3. **src/backend/llvm/compiler/codegen/instructions/newbox.rs**
    - コアBox最適化パス削除
+
+#### 3. デフォルト動作の確立
+```bash
+# 環境変数なしでプラグインBox使用
+./target/release/nyash test.nyash  # StringBox = プラグイン版
+```
 
 ### Phase D: Nyashコード実装（将来）
 

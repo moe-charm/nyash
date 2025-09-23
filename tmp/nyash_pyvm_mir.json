@@ -1,311 +1,157 @@
 {
-  "capabilities": [
-    "unified_call",
-    "phi",
-    "effects",
-    "callee_typing"
-  ],
   "functions": [
     {
       "blocks": [
         {
-          "id": 3,
+          "id": 0,
           "instructions": [
             {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "op": "ret",
-              "value": 2
-            }
-          ]
-        }
-      ],
-      "name": "TestUnifiedCall.equals/1",
-      "params": [
-        0,
-        1
-      ]
-    },
-    {
-      "blocks": [
-        {
-          "id": 2,
-          "instructions": [
-            {
-              "dst": 1,
+              "dst": 0,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "TestUnifiedCall("
+                "value": "=== StringBox詳細診断 ==="
               }
             },
             {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": ")"
-              }
-            },
-            {
-              "dst": 3,
-              "lhs": 1,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 2
-            },
-            {
-              "op": "ret",
-              "value": 3
-            }
-          ]
-        }
-      ],
-      "name": "TestUnifiedCall.toString/0",
-      "params": [
-        0
-      ]
-    },
-    {
-      "blocks": [
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "=== 統一Call基本テスト開始 ==="
-              }
-            },
-            {
+              "args": [
+                0
+              ],
               "dst": null,
-              "mir_call": {
-                "args": [
-                  1
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "1. Global Call: print関数"
-              }
-            },
-            {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  2
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Hello Unified Call!"
-              }
-            },
-            {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  3
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "2. Value Call: 将来実装予定"
-              }
-            },
-            {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  4
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
-              "dst": 5,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "3. Method Call: StringBoxメソッド"
-              }
-            },
-            {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  5
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "args": [],
-              "dst": 6,
+              "dst": 1,
               "op": "newbox",
               "type": "StringBox"
             },
             {
-              "dst": 7,
+              "dst": 2,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "test"
+                "value": "StringBox作成完了"
               }
             },
             {
-              "dst": 8,
-              "mir_call": {
-                "args": [
-                  7
-                ],
-                "callee": {
-                  "box_name": "StringBox",
-                  "method": "set",
-                  "receiver": 6,
-                  "type": "Method"
+              "args": [
+                2
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
                 },
-                "effects": [],
-                "flags": {}
+                "value": "type_name: ["
+              }
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": 4,
+              "method": "type_name",
+              "op": "boxcall"
+            },
+            {
+              "dst": 5,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
               },
-              "op": "mir_call"
+              "lhs": 3,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 4
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "]"
+              }
+            },
+            {
+              "dst": 7,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 5,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 6
+            },
+            {
+              "args": [
+                7
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [],
+              "box": 1,
+              "dst": 8,
+              "method": "get",
+              "op": "boxcall"
             },
             {
               "dst": 9,
-              "mir_call": {
-                "args": [],
-                "callee": {
-                  "box_name": "StringBox",
-                  "method": "get",
-                  "receiver": 6,
-                  "type": "Method"
-                },
-                "effects": [],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
-              "dst": 10,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "StringBox result: "
+                "value": "初期get()の長さ: "
               }
             },
             {
-              "dst": 11,
-              "lhs": 10,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 9
+              "args": [],
+              "box": 8,
+              "dst": 10,
+              "dst_type": "i64",
+              "method": "length",
+              "op": "boxcall"
             },
             {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  11
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
+              "dst": 11,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
               },
-              "op": "mir_call"
+              "lhs": 9,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 10
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "dst": 12,
@@ -315,46 +161,19 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "4. Constructor Call: new演算子"
+                "value": "初期get()の内容: ["
               }
             },
             {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  12
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
-              "args": [],
               "dst": 13,
-              "op": "newbox",
-              "type": "ArrayBox"
-            },
-            {
-              "dst": null,
-              "mir_call": {
-                "args": [],
-                "callee": {
-                  "box_name": "ArrayBox",
-                  "method": "birth",
-                  "receiver": 13,
-                  "type": "Method"
-                },
-                "effects": [],
-                "flags": {}
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
               },
-              "op": "mir_call"
+              "lhs": 12,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 8
             },
             {
               "dst": 14,
@@ -364,53 +183,27 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "ArrayBox created successfully"
+                "value": "]"
               }
-            },
-            {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  14
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
             },
             {
               "dst": 15,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "5. Extern Call: 将来実装予定"
-              }
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 13,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 14
             },
             {
+              "args": [
+                15
+              ],
               "dst": null,
-              "mir_call": {
-                "args": [
-                  15
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "dst": 16,
@@ -420,93 +213,137 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "6. Closure Call: 将来実装予定"
+                "value": "Test Value"
               }
             },
             {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  16
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
+              "args": [
+                16
+              ],
+              "box": 1,
               "dst": 17,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "=== 統一Call基本テスト完了 ==="
-              }
+              "method": "set",
+              "op": "boxcall"
             },
             {
-              "dst": null,
-              "mir_call": {
-                "args": [
-                  17
-                ],
-                "callee": {
-                  "name": "print",
-                  "type": "Global"
-                },
-                "effects": [
-                  "IO"
-                ],
-                "flags": {}
-              },
-              "op": "mir_call"
-            },
-            {
+              "args": [],
+              "box": 1,
               "dst": 18,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 19,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "success"
+                "value": "set後get()の長さ: "
               }
             },
             {
-              "op": "ret",
-              "value": 18
-            }
-          ]
-        }
-      ],
-      "name": "TestUnifiedCall.main/0",
-      "params": [
-        0
-      ]
-    },
-    {
-      "blocks": [
-        {
-          "id": 0,
-          "instructions": [
+              "args": [],
+              "box": 18,
+              "dst": 20,
+              "dst_type": "i64",
+              "method": "length",
+              "op": "boxcall"
+            },
             {
-              "dst": 4,
+              "dst": 21,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 19,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 20
+            },
+            {
+              "args": [
+                21
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 22,
               "op": "const",
               "value": {
-                "type": "void",
-                "value": 0
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "set後get()の内容: ["
               }
             },
             {
+              "dst": 23,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 22,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 18
+            },
+            {
+              "dst": 24,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "]"
+              }
+            },
+            {
+              "dst": 25,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 23,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 24
+            },
+            {
+              "args": [
+                25
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 26,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== 診断完了 ==="
+              }
+            },
+            {
+              "args": [
+                26
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
               "op": "ret",
-              "value": 4
+              "value": 26
             }
           ]
         }
@@ -514,15 +351,5 @@
       "name": "main",
       "params": []
     }
-  ],
-  "metadata": {
-    "build_time": "Phase 15.5 Development",
-    "features": [
-      "mir_call_unification",
-      "json_v1_schema"
-    ],
-    "generator": "nyash-rust",
-    "phase": "15.5"
-  },
-  "schema_version": "1.0"
+  ]
 }
