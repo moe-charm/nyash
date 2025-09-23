@@ -77,13 +77,15 @@ impl super::MirBuilder {
         args: Vec<ValueId>,
     ) -> Result<(), String> {
         // Check environment variable for unified call usage
-        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL")
-            .unwrap_or_else(|_| "0".to_string()) != "0";
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
 
         if !use_unified {
             // Fall back to legacy implementation
             return self.emit_legacy_call(dst, target, args);
         }
+
+        // Debug: Confirm unified call path is taken
+        eprintln!("🔍 emit_unified_call: Using unified call for target: {:?}", target);
 
         // Convert CallTarget to Callee
         let callee = match target {
@@ -152,10 +154,13 @@ impl super::MirBuilder {
         let legacy_call = MirInstruction::Call {
             dst: mir_call.dst,
             func: ValueId::new(0), // Dummy value for legacy compatibility
-            callee: Some(mir_call.callee),
+            callee: Some(mir_call.callee.clone()),
             args: mir_call.args,
             effects: mir_call.effects,
         };
+
+        // Debug: Confirm callee field is set
+        eprintln!("🔍 Generated Call with callee: {:?}", legacy_call);
 
         self.emit_instruction(legacy_call)
     }

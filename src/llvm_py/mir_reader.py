@@ -116,27 +116,56 @@ def parse_instruction(data: Dict[str, Any]) -> MirInstruction:
     return instr
 
 class MIRReader:
-    """MIR JSON reader wrapper"""
+    """MIR JSON reader wrapper - supports v0 and v1 schema"""
     def __init__(self, mir_json: Dict[str, Any]):
         self.mir_json = mir_json
         self.functions = None
+        self.schema_version = self._detect_schema_version()
+        self.capabilities = self._extract_capabilities()
+
+    def _detect_schema_version(self) -> str:
+        """Detect JSON schema version (v0 or v1)"""
+        return self.mir_json.get("schema_version", "0.0")
+
+    def _extract_capabilities(self) -> List[str]:
+        """Extract capabilities from v1 schema"""
+        if self.schema_version.startswith("1."):
+            return self.mir_json.get("capabilities", [])
+        return []
+
+    def supports_unified_call(self) -> bool:
+        """Check if JSON supports unified mir_call instructions"""
+        return "unified_call" in self.capabilities
         
     def get_functions(self) -> List[Dict[str, Any]]:
-        """Get functions in the expected format for llvm_builder"""
+        """Get functions in the expected format for llvm_builder - supports v0/v1 schema"""
         if self.functions is not None:
             return self.functions
-        
+
         # Convert from the existing JSON format to what llvm_builder expects
         self.functions = []
-        
-        funcs = self.mir_json.get("functions", [])
+
+        # Phase 15.5: v1 schema support
+        if self.schema_version.startswith("1."):
+            # v1 schema: {"schema_version": "1.0", "functions": [...]}
+            funcs = self.mir_json.get("functions", [])
+        else:
+            # v0 schema: {"functions": [...]} (legacy)
+            funcs = self.mir_json.get("functions", [])
+
         if isinstance(funcs, list):
-            # Already in list format
+            # Already in list format (standard)
             self.functions = funcs
         elif isinstance(funcs, dict):
-            # Convert dict format to list
+            # Convert dict format to list (legacy format)
             for name, func_data in funcs.items():
                 func_data["name"] = name
                 self.functions.append(func_data)
-        
+
         return self.functions
+
+    def get_metadata(self) -> Dict[str, Any]:
+        """Get v1 schema metadata (empty dict for v0)"""
+        if self.schema_version.startswith("1."):
+            return self.mir_json.get("metadata", {})
+        return {}

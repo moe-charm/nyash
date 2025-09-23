@@ -61,10 +61,24 @@ Updated: 2025‑09‑24
   - `NYASH_MIR_UNIFIED_CALL=1`: `call_global print()`統一形式
   - `NYASH_MIR_UNIFIED_CALL=0`: `extern_call env.console.log()`従来形式
 
-### 🔄 **Week 2進行中**: JSON出力統一（Phase A核心）
-- [ ] **mir_json_emit統一Call対応** - v1スキーマ実装 🔄
-- [ ] **スキーマ情報追加** - ヘッダー・バージョン・機能情報
-- [ ] **Python側v1対応** - instruction_lower.pyのv1処理
+### 🚨 **Week 2重要バグ発覚**: Phase A未完了状態発見（2025-09-24）
+**包括的スモークテストでcalleeフィールド設定不整合発覚**
+
+- [x] **統一Callヘルパー実装** - `emit_unified_mir_call()`完成 ✅
+- [x] **mir_json_emit表面対応** - ヘルパー統合済み（但し条件不整合） ⚠️
+- [x] **JSON v1スキーマ完成** - ヘッダー・バージョン・機能情報完備 ✅
+- [x] **Python側v1統一処理** - instruction_lower.py mir_call分岐追加 ✅
+
+### 🔍 **発見した根本問題**
+- **MIR表示**: `call_global print()` ✅ 正しく表示
+- **calleeフィールド**: `callee.is_some()` = false ❌ **未設定**
+- **JSON出力**: 条件判定失敗→v0フォールバック ❌ `"op": "call"`のまま
+
+### 🎯 **Phase A真の完成タスク**
+- [ ] **calleeフィールド適切設定** - MIR Builder生成時の修正 🔄
+- [ ] **JSON統一Call実生成** - 条件通過確認＋mir_call形式出力
+- [ ] **FileBoxプラグイン統一Call対応** - 実用プラグインで動作確認
+- [ ] **全6種Callee型検証** - Global/Method/Constructor/Closure/Value/Extern
 - [x] **実際のLLVMハーネステスト** - モックルート回避完全成功！ ✅
   - 環境変数設定確立: `NYASH_MIR_UNIFIED_CALL=1 + NYASH_LLVM_USE_HARNESS=1`
   - オブジェクトファイル生成成功: `/tmp/unified_test.o` (1240 bytes)
@@ -72,11 +86,12 @@ Updated: 2025‑09‑24
   - **CLAUDE.md更新**: モックルート回避設定を明記
 - **詳細**: [Phase A計画](docs/development/roadmap/phases/phase-15.5/migration-phases.md#📋-phase-a-json出力統一今すぐ実装)
 
-### 📊 **マスタープラン進捗**（2025-09-24）
+### 📊 **マスタープラン進捗修正**（2025-09-24 バグ発覚後）
 - **4つの実行器特定**: MIR Builder/VM/Python LLVM/mini-vm
-- **削減見込み**: 7,372行 → 5,468行（26%削減）
-- **処理パターン**: 24 → 4（83%削減）
-- **Phase 15寄与**: 全体目標の約7%
+- **削減見込み**: 7,372行 → 5,468行（26%削減） - **要实装修正**
+- **処理パターン**: 24 → 4（83%削減） - **要calleeフィールド完成**
+- **Phase 15寄与**: 全体目標の約7% - **Phase A真の完成必須**
+- **FileBoxプラグイン**: 実用統一Call対応の最重要検証ケース
 - **詳細**: [mir-call-unification-master-plan.md](docs/development/roadmap/phases/phase-15/mir-call-unification-master-plan.md)
 
 ### ✅ **完了済み基盤タスク**

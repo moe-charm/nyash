@@ -1,8 +1,101 @@
 use serde_json::json;
+use crate::mir::definitions::call_unified::Callee;
 
 /// Emit MIR JSON for Python harness/PyVM.
 /// The JSON schema matches tools/llvmlite_harness.py expectations and is
 /// intentionally minimal for initial scaffolding.
+///
+/// Phase 15.5: Supports both v0 (legacy separate ops) and v1 (unified mir_call) formats
+
+/// Helper: Create JSON v1 root with schema information
+/// Includes version, capabilities, metadata for advanced MIR features
+fn create_json_v1_root(functions: serde_json::Value) -> serde_json::Value {
+    json!({
+        "schema_version": "1.0",
+        "capabilities": [
+            "unified_call",      // Phase 15.5: Unified MirCall support
+            "phi",              // SSA Phi functions
+            "effects",          // Effect tracking for optimization
+            "callee_typing"     // Type-safe call target resolution
+        ],
+        "metadata": {
+            "generator": "nyash-rust",
+            "phase": "15.5",
+            "build_time": "Phase 15.5 Development",
+            "features": ["mir_call_unification", "json_v1_schema"]
+        },
+        "functions": functions
+    })
+}
+
+/// Helper: Emit unified mir_call JSON (v1 format)
+/// Supports all 6 Callee types in a single unified JSON structure
+fn emit_unified_mir_call(
+    dst: Option<u32>,
+    callee: &Callee,
+    args: &[u32],
+    effects: &[&str],
+) -> serde_json::Value {
+    let mut call_obj = json!({
+        "op": "mir_call",
+        "dst": dst,
+        "mir_call": {
+            "args": args,
+            "effects": effects,
+            "flags": {}
+        }
+    });
+
+    // Generate Callee-specific mir_call structure
+    match callee {
+        Callee::Global(name) => {
+            call_obj["mir_call"]["callee"] = json!({
+                "type": "Global",
+                "name": name
+            });
+        }
+        Callee::Method { box_name, method, receiver } => {
+            call_obj["mir_call"]["callee"] = json!({
+                "type": "Method",
+                "box_name": box_name,
+                "method": method,
+                "receiver": receiver.map(|v| v.as_u32())
+            });
+        }
+        Callee::Constructor { box_type } => {
+            call_obj["mir_call"]["callee"] = json!({
+                "type": "Constructor",
+                "box_type": box_type
+            });
+        }
+        Callee::Closure { params, captures, me_capture } => {
+            let captures_json: Vec<_> = captures.iter()
+                .map(|(name, vid)| json!([name, vid.as_u32()]))
+                .collect();
+            call_obj["mir_call"]["callee"] = json!({
+                "type": "Closure",
+                "params": params,
+                "captures": captures_json,
+                "me_capture": me_capture.map(|v| v.as_u32())
+            });
+        }
+        Callee::Value(vid) => {
+            call_obj["mir_call"]["callee"] = json!({
+                "type": "Value",
+                "function_value": vid.as_u32()
+            });
+        }
+        Callee::Extern(name) => {
+            call_obj["mir_call"]["callee"] = json!({
+                "type": "Extern",
+                "name": name
+            });
+        }
+    }
+
+    call_obj
+}
+
 pub fn emit_mir_json_for_harness(
     module: &nyash_rust::mir::MirModule,
     path: &std::path::Path,
@@ -213,10 +306,27 @@ pub fn emit_mir_json_for_harness(
                             insts.push(obj);
                         }
                         I::Call {
-                            dst, func, args, ..
+                            dst, func, callee, args, effects, ..
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
+                            // Phase 15.5: Unified Call support with environment variable control
+                            let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+                            if use_unified && callee.is_some() {
+                                // v1: Unified mir_call format
+                                let effects_str: Vec<&str> = if effects.is_io() { vec!["IO"] } else { vec![] };
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let unified_call = emit_unified_mir_call(
+                                    dst.map(|v| v.as_u32()),
+                                    callee.as_ref().unwrap(),
+                                    &args_u32,
+                                    &effects_str,
+                                );
+                                insts.push(unified_call);
+                            } else {
+                                // v0: Legacy call format (fallback)
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
+                            }
                         }
                         I::ExternCall {
                             dst,
@@ -321,7 +431,17 @@ pub fn emit_mir_json_for_harness(
         let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
         funs.push(json!({"name": name, "params": params, "blocks": blocks}));
     }
-    let root = json!({"functions": funs});
+
+    // Phase 15.5: JSON v1 schema with environment variable control
+    let use_v1_schema = std::env::var("NYASH_JSON_SCHEMA_V1").unwrap_or_default() == "1"
+                     || std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+    let root = if use_v1_schema {
+        create_json_v1_root(json!(funs))
+    } else {
+        json!({"functions": funs})  // v0 legacy format
+    };
+
     std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
         .map_err(|e| format!("write mir json: {}", e))
 }
