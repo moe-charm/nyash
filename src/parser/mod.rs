@@ -18,9 +18,11 @@
 
 // サブモジュール宣言
 mod common;
+mod cursor; // TokenCursor: 改行処理を一元管理
 mod declarations;
 pub mod entry_sugar; // helper to parse with sugar level
 mod expr;
+mod expr_cursor; // TokenCursorを使用した式パーサー（実験的）
 mod expressions;
 mod items;
 mod statements;

@@ -397,20 +397,25 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
 
-## 📝 Update (2025-09-24) ✅ 改行処理Phase 0 Quick Fix完了！
-- ✅ **複数行match式パース成功！** たった5箇所の修正で複数行オブジェクトリテラル完全動作
-  - **修正箇所**:
-    1. `primary.rs`: COLON前後とCOMMA判定前にskip_newlines()追加（3箇所）
-    2. `match_expr.rs`: is_object_literal()関数を改行対応（lookahead改良）
+## 📝 Update (2025-09-24) ✅ 改行処理Phase 0 & Phase 1基本実装完了！
+- ✅ **Phase 0 Quick Fix完了！** たった5箇所の修正で複数行オブジェクトリテラル完全動作
+  - `primary.rs`: COLON前後とCOMMA判定前にskip_newlines()追加（3箇所）
+  - `match_expr.rs`: is_object_literal()関数を改行対応（lookahead改良）
   - **必須環境変数**: `NYASH_SYNTAX_SUGAR_LEVEL=full`（IDENTIFIERキー使用のため）
   - **テスト結果**: MapBox正常出力 `{'__box__': 'MapBox', '__map': {'value': 42, 'name': 'answer'}}`
+- 🎯 **Phase 1 TokenCursor基本実装完了！** 改行処理を一元管理する仕組み構築
+  - **新規実装ファイル**:
+    1. `src/parser/cursor.rs`: TokenCursor本体（230行）- モード制御・深度追跡・自動改行処理
+    2. `src/parser/expr_cursor.rs`: TokenCursor版式パーサー（250行）- 実験的実装
+  - **主要機能**:
+    - NewlineMode（Stmt/Expr）による文脈認識改行処理
+    - ブレース/パーレン/ブラケット深度の自動追跡
+    - 行継続判定（演算子・カンマ等）
+    - with_expr_mode/with_stmt_mode によるモード一時切り替え
+  - **ビルド成功**: warning のみでエラーなし
 - 🎯 **セミコロンモード確認完了！** `NYASH_PARSER_ALLOW_SEMICOLON=1`で動作確認
-  - セミコロンと改行を自由に混在可能
-  - JavaScript/Go風の書き方も完全サポート
 - 📚 **改行処理戦略ドキュメント完成**: [newline-handling-strategy.md](docs/development/strategies/newline-handling-strategy.md)
-  - 3段階実装計画（Phase 0: Quick Fix ✅, Phase 1: TokenCursor, Phase 2: LASI）
-  - ChatGPT Pro提案のTokenCursorサンプルコード含む
-- 🚀 **次の実装**: Phase 1 TokenCursor導入で改行処理を根本解決へ
+- 🚀 **次の実装**: Phase 2 LASI前処理でトークン正規化（Phase 15後）
 
 ## 📝 Update (2025-09-23) ✅ フェーズS実装完了！break制御フロー根治開始
 - ✅ **フェーズS完了！** PHI incoming修正+終端ガード徹底→重複処理4箇所統一
