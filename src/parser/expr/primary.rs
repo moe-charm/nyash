@@ -73,9 +73,12 @@ impl NyashParser {
                             });
                         }
                     };
+                    self.skip_newlines(); // Phase 0 Quick Fix: COLON前に改行スキップ
                     self.consume(TokenType::COLON)?;
+                    self.skip_newlines(); // Phase 0 Quick Fix: 値パース前に改行スキップ
                     let value_expr = self.parse_expression()?;
                     entries.push((key, value_expr));
+                    self.skip_newlines(); // Phase 0 Quick Fix: COMMA判定前に改行スキップ
                     if self.match_token(&TokenType::COMMA) {
                         self.advance();
                         self.skip_newlines();

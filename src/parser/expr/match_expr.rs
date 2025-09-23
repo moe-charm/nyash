@@ -330,9 +330,19 @@ impl NyashParser {
         if !matches!(self.current_token().token_type, TokenType::LBRACE) {
             return false;
         }
-        match self.peek_token() {
+        // Phase 0 Quick Fix: 改行をスキップして判定
+        let mut lookahead_idx = 1;
+        while matches!(self.peek_nth_token(lookahead_idx), TokenType::NEWLINE) {
+            lookahead_idx += 1;
+        }
+        match self.peek_nth_token(lookahead_idx) {
             TokenType::IDENTIFIER(_) | TokenType::STRING(_) => {
-                matches!(self.peek_nth_token(2), TokenType::COLON)
+                // 次のトークンも改行をスキップして判定
+                lookahead_idx += 1;
+                while matches!(self.peek_nth_token(lookahead_idx), TokenType::NEWLINE) {
+                    lookahead_idx += 1;
+                }
+                matches!(self.peek_nth_token(lookahead_idx), TokenType::COLON)
             }
             _ => false
         }

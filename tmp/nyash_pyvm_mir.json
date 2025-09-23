@@ -18,101 +18,65 @@
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 0
+                "value": 2
               }
             },
             {
               "dst": 2,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
             },
             {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 5,
-              "incoming": [
-                [
-                  0,
-                  0
-                ],
-                [
-                  5,
-                  6
-                ]
+              "args": [
+                2
               ],
-              "op": "phi"
-            },
-            {
-              "dst": 4,
-              "incoming": [
-                [
-                  2,
-                  0
-                ],
-                [
-                  12,
-                  6
-                ]
-              ],
-              "op": "phi"
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "dst": 3,
-              "incoming": [
-                [
-                  1,
-                  0
-                ],
-                [
-                  3,
-                  6
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "dst": 6,
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 1
+                "value": 10
               }
             },
             {
-              "cond": 6,
-              "else": 3,
-              "op": "branch",
-              "then": 2
-            }
-          ]
-        },
-        {
-          "id": 2,
-          "instructions": [
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 20
+              }
+            },
             {
-              "cond": 5,
-              "else": 5,
-              "op": "branch",
-              "then": 4
-            }
-          ]
-        },
-        {
-          "id": 3,
-          "instructions": [
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 30
+              }
+            },
+            {
+              "dst": 6,
+              "lhs": 3,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 4
+            },
+            {
+              "dst": 7,
+              "lhs": 6,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 5
+            },
             {
               "args": [
-                4
+                7
               ],
               "dst": null,
               "func": "nyash.console.log",
@@ -120,116 +84,7 @@
             },
             {
               "op": "ret",
-              "value": 4
-            }
-          ]
-        },
-        {
-          "id": 4,
-          "instructions": [
-            {
-              "cond": 3,
-              "else": 8,
-              "op": "branch",
-              "then": 7
-            }
-          ]
-        },
-        {
-          "id": 5,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 6
-            }
-          ]
-        },
-        {
-          "id": 6,
-          "instructions": [
-            {
-              "dst": 12,
-              "incoming": [
-                [
-                  9,
-                  10
-                ],
-                [
-                  4,
-                  5
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "op": "jump",
-              "target": 1
-            }
-          ]
-        },
-        {
-          "id": 7,
-          "instructions": [
-            {
-              "dst": 7,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 8,
-          "instructions": [
-            {
-              "dst": 8,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 2
-              }
-            },
-            {
-              "op": "jump",
-              "target": 9
-            }
-          ]
-        },
-        {
-          "id": 9,
-          "instructions": [
-            {
-              "dst": 9,
-              "incoming": [
-                [
-                  7,
-                  7
-                ],
-                [
-                  8,
-                  8
-                ]
-              ],
-              "op": "phi"
-            },
-            {
-              "op": "jump",
-              "target": 3
-            }
-          ]
-        },
-        {
-          "id": 10,
-          "instructions": [
-            {
-              "op": "jump",
-              "target": 6
+              "value": 7
             }
           ]
         }

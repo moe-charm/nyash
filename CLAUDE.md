@@ -328,7 +328,7 @@ NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/nyash gemini_test_case.
 jq '.functions[0].blocks' mir.json  # ブロック構造確認
 ```
 
-## 📝 Update (2025-09-23) ✅ PHIバグ完全修正！Exit PHI実装でループ制御フロー完成
+## 📝 Update (2025-09-23) ✅ PHIバグ修正&改行処理戦略決定！
 - 🎉 **PHIバグ根本解決完了！** Exit PHI生成実装でループ後の変数値が正しく伝播
   - **修正前**: gemini_test_case期待値2→実際0（初期値に戻る）
   - **修正後**: 期待値2が正しく出力 ✅
@@ -338,15 +338,23 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
     3. `create_exit_phis()`メソッド新規実装
   - **MIR確認**: `bb3: %15 = phi [%4, bb1], [%9, bb9]` exit PHI正常生成
   - **全テスト合格**: 0回実行、複数break、continue混在すべて✅
+  - **コミット済み**: `e5c0665` でリモートに反映
+- 🎯 **改行処理TokenCursor戦略決定！** ChatGPT分析でアーキテクチャ設計完了
+  - **問題**: match式の複数行オブジェクトリテラルでパースエラー
+  - **根本原因**: `skip_newlines()`が散在、手動呼び出しが必要
+  - **解決策**: 3段階実装戦略
+    1. **Phase 0**: Quick Fix - primary.rsに最小限のskip_newlines追加（30分）
+    2. **Phase 1**: TokenCursor導入 - モード制御で自動改行処理（今週）
+    3. **Phase 2**: LASI前処理 - トークン正規化で完全解決（将来）
+  - **設計原則**:
+    - セミコロンオプショナル（改行もセミコロンも文区切り）
+    - コンテキスト認識（ブレース内は改行自動無視）
+    - 環境変数地獄の回避（コンテキストベース制御）
 - ✅ **フェーズM+M.2完全達成！** PHI統一革命でcollect_prints問題根本解決
-- ✅ **Step 1-3完全達成！** match式/peek統一/改行処理すべて完了
-  - match式オブジェクトリテラル判定修正 ✅
-  - peek→match完全統一（15ファイル） ✅
-  - 複数行パース問題解決策特定 ✅
-- 🚀 **ChatGPT Pro協働成功！** 最強分析でExit PHI欠落を特定
-  - 完璧な原因分析（ヘッダPHI○、exit PHI×）
-  - スコープ化された美しい実装提案
-  - 段階的修正戦略で確実な実装
+- 🚀 **ChatGPT Pro協働成功！**
+  - Exit PHI欠落の完璧な原因分析
+  - TokenCursorの実装可能なサンプルコード提供
+  - 段階的修正戦略で確実な実装パス提示
 
 ## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
 - ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ
@@ -388,6 +396,21 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
 - 📚 **完全ドキュメント化**: README.md導線、実装戦略、技術仕様すべて完備
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
+
+## 📝 Update (2025-09-24) ✅ 改行処理Phase 0 Quick Fix完了！
+- ✅ **複数行match式パース成功！** たった5箇所の修正で複数行オブジェクトリテラル完全動作
+  - **修正箇所**:
+    1. `primary.rs`: COLON前後とCOMMA判定前にskip_newlines()追加（3箇所）
+    2. `match_expr.rs`: is_object_literal()関数を改行対応（lookahead改良）
+  - **必須環境変数**: `NYASH_SYNTAX_SUGAR_LEVEL=full`（IDENTIFIERキー使用のため）
+  - **テスト結果**: MapBox正常出力 `{'__box__': 'MapBox', '__map': {'value': 42, 'name': 'answer'}}`
+- 🎯 **セミコロンモード確認完了！** `NYASH_PARSER_ALLOW_SEMICOLON=1`で動作確認
+  - セミコロンと改行を自由に混在可能
+  - JavaScript/Go風の書き方も完全サポート
+- 📚 **改行処理戦略ドキュメント完成**: [newline-handling-strategy.md](docs/development/strategies/newline-handling-strategy.md)
+  - 3段階実装計画（Phase 0: Quick Fix ✅, Phase 1: TokenCursor, Phase 2: LASI）
+  - ChatGPT Pro提案のTokenCursorサンプルコード含む
+- 🚀 **次の実装**: Phase 1 TokenCursor導入で改行処理を根本解決へ
 
 ## 📝 Update (2025-09-23) ✅ フェーズS実装完了！break制御フロー根治開始
 - ✅ **フェーズS完了！** PHI incoming修正+終端ガード徹底→重複処理4箇所統一
