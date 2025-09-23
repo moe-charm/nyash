@@ -154,7 +154,7 @@ impl NyashParser {
                 };
 
                 // Wrap with peek: peek expr { null => null, else => access(expr) }
-                expr = ASTNode::PeekExpr {
+                expr = ASTNode::MatchExpr {
                     scrutinee: Box::new(expr.clone()),
                     arms: vec![(
                         crate::ast::LiteralValue::Null,

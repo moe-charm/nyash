@@ -14,7 +14,7 @@ pub(super) mod loop_;
 pub(super) mod try_catch;
 pub(super) mod expr;
 pub(super) mod ternary; // placeholder (not wired)
-pub(super) mod peek; // placeholder (not wired)
+pub(super) mod match_expr; // placeholder (not wired)
 pub(super) mod throw_ctx; // thread-local ctx for Result-mode throw routing
 
 #[derive(Clone, Copy)]

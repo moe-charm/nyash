@@ -46,7 +46,9 @@ impl NyashParser {
                 let ident_key_on = std::env::var("NYASH_ENABLE_MAP_IDENT_KEY").ok().as_deref()
                     == Some("1")
                     || sugar_level.as_deref() == Some("full");
+                self.skip_newlines();
                 while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+                    self.skip_newlines();
                     let key = match &self.current_token().token_type {
                         TokenType::STRING(s) => {
                             let v = s.clone();
@@ -76,8 +78,10 @@ impl NyashParser {
                     entries.push((key, value_expr));
                     if self.match_token(&TokenType::COMMA) {
                         self.advance();
+                        self.skip_newlines();
                     }
                 }
+                self.skip_newlines();
                 self.consume(TokenType::RBRACE)?;
                 Ok(ASTNode::MapLiteral {
                     entries,

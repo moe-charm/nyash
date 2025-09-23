@@ -42,7 +42,7 @@ pub(super) fn transform_postfix_handlers(ast: &nyash_rust::ASTNode) -> nyash_rus
 }
 
 // Core normalization pass used by runners (always-on when macros enabled).
-// Order matters: for/foreach → match(PeekExpr) → loop tail alignment.
+// Order matters: for/foreach → match(MatchExpr) → loop tail alignment.
 pub fn normalize_core_pass(ast: &nyash_rust::ASTNode) -> nyash_rust::ASTNode {
     let a1 = transform_for_foreach(ast);
     let a2 = transform_peek_match_literal(&a1);

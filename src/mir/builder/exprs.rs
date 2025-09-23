@@ -85,7 +85,7 @@ impl super::MirBuilder {
                 self.build_qmark_propagate_expression(*expression.clone())
             }
 
-            ASTNode::PeekExpr {
+            ASTNode::MatchExpr {
                 scrutinee,
                 arms,
                 else_expr,

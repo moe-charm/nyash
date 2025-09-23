@@ -88,8 +88,8 @@ pub fn ast_to_json(ast: &ASTNode) -> Value {
             "kind":"Map",
             "entries": entries.into_iter().map(|(k,v)| json!({"k":k,"v":ast_to_json(&v)})).collect::<Vec<_>>()
         }),
-        ASTNode::PeekExpr { scrutinee, arms, else_expr, .. } => json!({
-            "kind":"PeekExpr",
+        ASTNode::MatchExpr { scrutinee, arms, else_expr, .. } => json!({
+            "kind":"MatchExpr",
             "scrutinee": ast_to_json(&scrutinee),
             "arms": arms.into_iter().map(|(lit, body)| json!({
                 "literal": {
@@ -147,7 +147,7 @@ pub fn json_to_ast(v: &Value) -> Option<ASTNode> {
         "Map" => ASTNode::MapLiteral { entries: v.get("entries")?.as_array()?.iter().filter_map(|e| {
             Some((e.get("k")?.as_str()?.to_string(), json_to_ast(e.get("v")?)?))
         }).collect(), span: Span::unknown() },
-        "PeekExpr" => {
+        "MatchExpr" => {
             let scr = json_to_ast(v.get("scrutinee")?)?;
             let arms_json = v.get("arms")?.as_array()?.iter();
             let mut arms = Vec::new();
@@ -158,7 +158,7 @@ pub fn json_to_ast(v: &Value) -> Option<ASTNode> {
                 arms.push((lit, body));
             }
             let else_expr = json_to_ast(v.get("else")?)?;
-            ASTNode::PeekExpr {
+            ASTNode::MatchExpr {
                 scrutinee: Box::new(scr),
                 arms,
                 else_expr: Box::new(else_expr),

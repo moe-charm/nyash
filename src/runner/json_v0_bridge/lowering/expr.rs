@@ -1,7 +1,7 @@
 use super::merge::new_block;
 use super::BridgeEnv;
 use super::ternary;
-use super::peek;
+use super::match_expr;
 use crate::mir::{
     BasicBlockId, BinaryOp, ConstValue, EffectMask, MirFunction, MirInstruction, ValueId,
 };
@@ -395,8 +395,8 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
         }
         ExprV0::Ternary { cond, then, r#else } =>
             ternary::lower_ternary_expr_with_scope(env, f, cur_bb, cond, then, r#else, vars),
-        ExprV0::Peek { scrutinee, arms, r#else } =>
-            peek::lower_peek_expr_with_scope(env, f, cur_bb, scrutinee, arms, r#else, vars),
+        ExprV0::Match { scrutinee, arms, r#else } =>
+            match_expr::lower_match_expr_with_scope(env, f, cur_bb, scrutinee, arms, r#else, vars),
     }
 }
 

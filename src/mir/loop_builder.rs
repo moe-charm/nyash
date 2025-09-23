@@ -455,20 +455,8 @@ impl<'a> LoopBuilder<'a> {
                 let mut last = None;
                 for s in statements.into_iter() {
                     last = Some(self.build_statement(s)?);
-                    // Stop early if this block has been terminated (e.g., break/continue)
-                    let cur_id = self.current_block()?;
-                    let terminated = {
-                        if let Some(ref fun_ro) = self.parent_builder.current_function {
-                            if let Some(bb) = fun_ro.get_block(cur_id) {
-                                bb.is_terminated()
-                            } else {
-                                false
-                            }
-                        } else {
-                            false
-                        }
-                    };
-                    if terminated {
+                    // フェーズS修正：統一終端検出ユーティリティ使用
+                    if is_current_block_terminated(self.parent_builder)? {
                         break;
                     }
                 }

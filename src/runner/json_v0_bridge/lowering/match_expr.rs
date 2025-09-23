@@ -1,17 +1,17 @@
-//! Peek/expr-block lowering for JSON v0 bridge.
+//! Match/expr-block lowering for JSON v0 bridge.
 
 use super::merge::new_block;
 use super::BridgeEnv;
 use crate::mir::{BasicBlockId, CompareOp, ConstValue, MirFunction, MirInstruction, ValueId};
-use super::super::ast::{ExprV0, PeekArmV0};
+use super::super::ast::{ExprV0, MatchArmV0};
 use super::expr::{lower_expr_with_scope, VarScope};
 
-pub(super) fn lower_peek_expr_with_scope<S: VarScope>(
+pub(super) fn lower_match_expr_with_scope<S: VarScope>(
     env: &BridgeEnv,
     f: &mut MirFunction,
     cur_bb: BasicBlockId,
     scrutinee: &ExprV0,
-    arms: &[PeekArmV0],
+    arms: &[MatchArmV0],
     else_expr: &ExprV0,
     vars: &mut S,
 ) -> Result<(ValueId, BasicBlockId), String> {

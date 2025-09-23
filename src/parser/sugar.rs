@@ -84,12 +84,12 @@ fn rewrite(ast: ASTNode) -> ASTNode {
             operand: Box::new(rewrite(*operand)),
             span,
         },
-        ASTNode::PeekExpr {
+        ASTNode::MatchExpr {
             scrutinee,
             arms,
             else_expr,
             span,
-        } => ASTNode::PeekExpr {
+        } => ASTNode::MatchExpr {
             scrutinee: Box::new(rewrite(*scrutinee)),
             arms: arms.into_iter().map(|(l, e)| (l, rewrite(e))).collect(),
             else_expr: Box::new(rewrite(*else_expr)),

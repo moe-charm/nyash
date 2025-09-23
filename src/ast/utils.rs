@@ -43,7 +43,7 @@ impl ASTNode {
             ASTNode::Throw { .. } => "Throw",
             ASTNode::AwaitExpression { .. } => "AwaitExpression",
             ASTNode::QMarkPropagate { .. } => "QMarkPropagate",
-            ASTNode::PeekExpr { .. } => "PeekExpr",
+            ASTNode::MatchExpr { .. } => "MatchExpr",
             ASTNode::Lambda { .. } => "Lambda",
             ASTNode::ArrayLiteral { .. } => "ArrayLiteral",
             ASTNode::MapLiteral { .. } => "MapLiteral",
@@ -78,7 +78,7 @@ impl ASTNode {
             ASTNode::FromCall { .. } => ASTNodeType::Expression,
             ASTNode::ThisField { .. } => ASTNodeType::Expression,
             ASTNode::MeField { .. } => ASTNodeType::Expression,
-            ASTNode::PeekExpr { .. } => ASTNodeType::Expression,
+            ASTNode::MatchExpr { .. } => ASTNodeType::Expression,
             ASTNode::QMarkPropagate { .. } => ASTNodeType::Expression,
             ASTNode::Lambda { .. } => ASTNodeType::Expression,
             ASTNode::ArrayLiteral { .. } => ASTNodeType::Expression,
@@ -303,7 +303,7 @@ impl ASTNode {
             ASTNode::AwaitExpression { expression, .. } => {
                 format!("Await({:?})", expression)
             }
-            ASTNode::PeekExpr { .. } => "PeekExpr".to_string(),
+            ASTNode::MatchExpr { .. } => "MatchExpr".to_string(),
             ASTNode::QMarkPropagate { .. } => "QMarkPropagate".to_string(),
             ASTNode::Lambda { params, body, .. } => {
                 format!("Lambda({} params, {} statements)", params.len(), body.len())
@@ -356,7 +356,7 @@ impl ASTNode {
             ASTNode::FunctionCall { span, .. } => *span,
             ASTNode::Call { span, .. } => *span,
             ASTNode::AwaitExpression { span, .. } => *span,
-            ASTNode::PeekExpr { span, .. } => *span,
+            ASTNode::MatchExpr { span, .. } => *span,
             ASTNode::QMarkPropagate { span, .. } => *span,
             ASTNode::Lambda { span, .. } => *span,
             ASTNode::ArrayLiteral { span, .. } => *span,

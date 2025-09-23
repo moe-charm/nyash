@@ -58,7 +58,7 @@ pub(super) struct CatchV0 {
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
-pub(super) struct PeekArmV0 {
+pub(super) struct MatchArmV0 {
     pub(super) label: String,
     pub(super) expr: ExprV0,
 }
@@ -120,9 +120,9 @@ pub(super) enum ExprV0 {
         #[serde(rename = "else")]
         r#else: Box<ExprV0>,
     },
-    Peek {
+    Match {
         scrutinee: Box<ExprV0>,
-        arms: Vec<PeekArmV0>,
+        arms: Vec<MatchArmV0>,
         #[serde(rename = "else")]
         r#else: Box<ExprV0>,
     },

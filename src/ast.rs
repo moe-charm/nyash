@@ -126,8 +126,8 @@ pub enum ExpressionNode {
     MeExpression {
         span: Span,
     },
-    /// peek式: peek <expr> { lit => expr, ... else => expr }
-    PeekExpr {
+    /// match式: match <expr> { lit => expr, ... else => expr }
+    MatchExpr {
         scrutinee: Box<ASTNode>,
         arms: Vec<(LiteralValue, ASTNode)>,
         else_expr: Box<ASTNode>,
@@ -398,8 +398,8 @@ pub enum ASTNode {
         span: Span,
     },
 
-    /// peek式: peek <expr> { lit => expr, ... else => expr }
-    PeekExpr {
+    /// match式: match <expr> { lit => expr, ... else => expr }
+    MatchExpr {
         scrutinee: Box<ASTNode>,
         arms: Vec<(LiteralValue, ASTNode)>,
         else_expr: Box<ASTNode>,

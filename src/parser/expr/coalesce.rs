@@ -23,7 +23,7 @@ impl NyashParser {
             self.advance();
             let rhs = self.expr_parse_or()?;
             let scr = expr;
-            expr = ASTNode::PeekExpr {
+            expr = ASTNode::MatchExpr {
                 scrutinee: Box::new(scr.clone()),
                 arms: vec![(crate::ast::LiteralValue::Null, rhs)],
                 else_expr: Box::new(scr),

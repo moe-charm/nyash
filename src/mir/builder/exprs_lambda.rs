@@ -123,7 +123,7 @@ impl super::MirBuilder {
                 ASTNode::AwaitExpression { expression, .. } => {
                     collect_vars(expression, used, locals);
                 }
-                ASTNode::PeekExpr {
+                ASTNode::MatchExpr {
                     scrutinee,
                     arms,
                     else_expr,

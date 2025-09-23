@@ -118,7 +118,7 @@ pub(super) fn collect_free_vars(
         ASTNode::AwaitExpression { expression, .. } => {
             collect_free_vars(expression, used, locals);
         }
-        ASTNode::PeekExpr {
+        ASTNode::MatchExpr {
             scrutinee,
             arms,
             else_expr,

@@ -11,10 +11,10 @@ fn parse_match_with_block_arm() {
         }
     "#;
     let ast = NyashParser::parse_from_string(src).expect("parse ok");
-    // Quick structural check: ensure AST contains PeekExpr and Program nodes inside arms
+    // Quick structural check: ensure AST contains MatchExpr and Program nodes inside arms
     fn find_peek(ast: &crate::ast::ASTNode) -> bool {
         match ast {
-            crate::ast::ASTNode::PeekExpr { arms, else_expr, .. } => {
+            crate::ast::ASTNode::MatchExpr { arms, else_expr, .. } => {
                 // Expect at least one Program arm
                 let has_block = arms.iter().any(|(_, e)| matches!(e, crate::ast::ASTNode::Program { .. }));
                 let else_is_block = matches!(**else_expr, crate::ast::ASTNode::Program { .. });

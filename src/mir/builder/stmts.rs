@@ -1,6 +1,7 @@
 use super::{ConstValue, Effect, EffectMask, MirInstruction, ValueId};
 use crate::ast::{ASTNode, CallExpr};
 use crate::mir::TypeOpKind;
+use crate::mir::utils::is_current_block_terminated;
 
 impl super::MirBuilder {
     // Print statement: env.console.log(value) with early TypeOp handling
@@ -141,7 +142,7 @@ impl super::MirBuilder {
             last_value = Some(self.build_expression(statement)?);
             // If the current block was terminated by this statement (e.g., return/throw),
             // do not emit any further instructions for this block.
-            if self.is_current_block_terminated() {
+            if is_current_block_terminated(self)? {
                 break;
             }
         }

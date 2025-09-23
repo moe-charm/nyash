@@ -66,24 +66,27 @@ def op_boxcall(owner, fn, inst: Dict[str, Any], regs: Dict[int, Any]) -> None:
                 return
 
     # User-defined box: dispatch to lowered function if available (Box.method/N)
+    # Skip built-in boxes (ArrayBox, MapBox, etc.) to let them fall through to their implementations
     if isinstance(recv, dict) and isinstance(method, str) and "__box__" in recv:
         box_name = recv.get("__box__")
-        cand = f"{box_name}.{method}/{len(args)}"
-        callee = owner.functions.get(cand)
-        if callee is not None:
-            owner._dbg(f"[pyvm] boxcall dispatch -> {cand} args={args}")
-            out = owner._exec_function(callee, args)
-            owner._set(regs, inst.get("dst"), out)
-            return
-        else:
-            if owner._debug:
-                prefix = f"{box_name}.{method}/"
-                cands = sorted([k for k in owner.functions.keys() if k.startswith(prefix)])
-                if cands:
-                    owner._dbg(f"[pyvm] boxcall unresolved: '{cand}' — available: {cands}")
-                else:
-                    any_for_box = sorted([k for k in owner.functions.keys() if k.startswith(f"{box_name}.")])
-                    owner._dbg(f"[pyvm] boxcall unresolved: '{cand}' — no candidates; methods for {box_name}: {any_for_box}")
+        # Skip built-in boxes - let them fall through to built-in implementations below
+        if box_name not in ("ArrayBox", "MapBox", "ConsoleBox", "FileBox", "PathBox", "JsonDocBox", "JsonNodeBox"):
+            cand = f"{box_name}.{method}/{len(args)}"
+            callee = owner.functions.get(cand)
+            if callee is not None:
+                owner._dbg(f"[pyvm] boxcall dispatch -> {cand} args={args}")
+                out = owner._exec_function(callee, args)
+                owner._set(regs, inst.get("dst"), out)
+                return
+            else:
+                if owner._debug:
+                    prefix = f"{box_name}.{method}/"
+                    cands = sorted([k for k in owner.functions.keys() if k.startswith(prefix)])
+                    if cands:
+                        owner._dbg(f"[pyvm] boxcall unresolved: '{cand}' — available: {cands}")
+                    else:
+                        any_for_box = sorted([k for k in owner.functions.keys() if k.startswith(f"{box_name}.")])
+                        owner._dbg(f"[pyvm] boxcall unresolved: '{cand}' — no candidates; methods for {box_name}: {any_for_box}")
 
     # ConsoleBox methods
     if method in ("print", "println", "log") and owner._is_console(recv):

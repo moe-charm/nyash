@@ -193,7 +193,7 @@ impl NyashParser {
         })?;
 
         if !saw_type_arm && !saw_guard {
-            // 既存の Lower を活用するため PeekExpr に落とす（型パターンが無い場合のみ）
+            // 既存の Lower を活用するため MatchExpr に落とす（型パターンが無い場合のみ）
             let mut lit_arms: Vec<(LiteralValue, ASTNode)> = Vec::new();
             for arm in arms_any.into_iter() {
                 match arm {
@@ -206,7 +206,7 @@ impl NyashParser {
                     MatchArm::Type { .. } => unreachable!(),
                 }
             }
-            return Ok(ASTNode::PeekExpr {
+            return Ok(ASTNode::MatchExpr {
                 scrutinee: Box::new(scrutinee),
                 arms: lit_arms,
                 else_expr: Box::new(else_expr),

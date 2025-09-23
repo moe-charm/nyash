@@ -1,0 +1,14 @@
+local cond1 = true
+local cond2 = false
+local x = 0
+loop(true) {
+    if(cond1) {
+        if(cond2) {
+            x = 1
+        } else {
+            x = 2
+        }
+        break
+    }
+}
+print(x)

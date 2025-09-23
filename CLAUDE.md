@@ -276,18 +276,32 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 📝 Update (2025-09-23) ✅ Step 1完了！peek→match統一 Step 2開始
+## 📝 Update (2025-09-23) 🚨 重大PHI命令バグ発見！Step 4改行処理も課題
 - ✅ **フェーズM+M.2完全達成！** PHI統一革命でcollect_prints問題根本解決
 - ✅ **Step 1完全達成！** match式オブジェクトリテラル判定修正完了
   - **修正完了**: `src/parser/expr/match_expr.rs` の `is_object_literal()` メソッド追加
   - **副作用修正**: `match_token()` → `current_token()` で副作用除去
   - **動作確認**: 単行match式 + オブジェクトリテラル ✅ 完全動作
-  - **発見**: 複数行パース未対応（後回し決定）
-- 🚀 **Step 2開始準備！** peek→match完全統一でアーキテクチャクリーンアップ
-  - **対象ファイル**: `json_v0_bridge/ast.rs`, `lowering/peek.rs` → `match_expr.rs`
-  - **統一効果**: AI理解向上・ドキュメント整合性・保守性向上・ソースコード美化
-  - **作業順序**: claude.md更新→todo調整→commit→peek構造体→match構造体完全移行
-- 🎯 **アーキテクチャ美化**: ややこしいpeek/match混在状況の完全解消へ
+- ✅ **Step 2完全達成！** peek→match完全統一でアーキテクチャクリーンアップ完了
+  - **統一完了**: 15ファイルで `PeekExpr` → `MatchExpr` 一括置換完了
+  - **ファイル移行**: `lowering/peek.rs` → `match_expr.rs` 完全移行
+  - **コンパイル成功**: エラーゼロで正常ビルド完了
+  - **動作確認**: match式テスト正常動作 ✅
+  - **効果**: AI理解性向上・コードベース一貫性・保守性大幅向上
+- ✅ **Step 3完全達成！** Task先生による複数行パース問題根本原因特定完了
+  - **原因特定**: オブジェクトリテラルパーサーの改行スキップ不足（`src/parser/expr/primary.rs`）
+  - **修正箇所**: L49、L77-79に `skip_newlines()` 追加で解決可能
+  - **工数**: 30分以内の簡単修正
+- 🤔 **Step 4課題発見！** 改行処理アーキテクチャの美しさ問題
+  - **問題**: `skip_newlines()` を各所に散りばめる方法は美しくない
+  - **課題**: 保守性・一貫性・見落としリスク・設計の美しさ
+  - **方針**: Gemini 3相談でアーキテクチャ根本改善検討
+- 🚨 **重大発見！** PHI命令処理バグ（gemini_test_case: 期待値2→実際0）
+  - **問題**: フェーズM+M.2のPHI統一作業でループ後変数マージに回帰バグ
+  - **詳細**: PHI命令は正しく動作（v8→2）だが、print時に間違ったPHI（v4→0）参照
+  - **根本原因**: ループ脱出後の変数PHI接続が初期値を参照している
+  - **影響**: Phase 15セルフホスティング基盤の重大バグ
+  - **次のアクション**: ChatGPT相談でMIRビルダー修正戦略立案
 
 ## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
 - ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ

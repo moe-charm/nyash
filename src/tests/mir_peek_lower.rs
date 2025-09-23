@@ -4,7 +4,7 @@ use crate::ast::{ASTNode, LiteralValue, Span};
 #[test]
 fn mir_lowering_of_peek_expr() {
     // Build AST: peek 2 { 1 => 10, 2 => 20, else => 30 }
-    let ast = ASTNode::PeekExpr {
+    let ast = ASTNode::MatchExpr {
         scrutinee: Box::new(ASTNode::Literal { value: LiteralValue::Integer(2), span: Span::unknown() }),
         arms: vec![
             (LiteralValue::Integer(1), ASTNode::Literal { value: LiteralValue::Integer(10), span: Span::unknown() }),

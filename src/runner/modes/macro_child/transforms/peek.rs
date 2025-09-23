@@ -2,7 +2,7 @@ fn map_expr_to_stmt(e: nyash_rust::ASTNode) -> nyash_rust::ASTNode { e }
 
 fn transform_peek_to_if_expr(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
     use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
-    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+    if let A::MatchExpr { scrutinee, arms, else_expr, .. } = peek {
         let mut conds_bodies: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
         for (lit, body) in arms { conds_bodies.push((lit.clone(), (*body).clone())); }
         let mut current: A = *(*else_expr).clone();
@@ -19,7 +19,7 @@ fn transform_peek_to_if_expr(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::A
 
 fn transform_peek_to_if_stmt_assign(peek: &nyash_rust::ASTNode, target: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
     use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
-    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+    if let A::MatchExpr { scrutinee, arms, else_expr, .. } = peek {
         let mut pairs: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
         for (lit, body) in arms { pairs.push((lit.clone(), (*body).clone())); }
         let mut current: A = *(*else_expr).clone();
@@ -36,7 +36,7 @@ fn transform_peek_to_if_stmt_assign(peek: &nyash_rust::ASTNode, target: &nyash_r
 
 fn transform_peek_to_if_stmt_return(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
     use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
-    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+    if let A::MatchExpr { scrutinee, arms, else_expr, .. } = peek {
         let mut pairs: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
         for (lit, body) in arms { pairs.push((lit.clone(), (*body).clone())); }
         let mut current: A = *(*else_expr).clone();
@@ -53,7 +53,7 @@ fn transform_peek_to_if_stmt_return(peek: &nyash_rust::ASTNode) -> Option<nyash_
 
 fn transform_peek_to_if_stmt_print(peek: &nyash_rust::ASTNode) -> Option<nyash_rust::ASTNode> {
     use nyash_rust::ast::{ASTNode as A, BinaryOperator, Span};
-    if let A::PeekExpr { scrutinee, arms, else_expr, .. } = peek {
+    if let A::MatchExpr { scrutinee, arms, else_expr, .. } = peek {
         let mut pairs: Vec<(nyash_rust::ast::LiteralValue, A)> = Vec::new();
         for (lit, body) in arms { pairs.push((lit.clone(), (*body).clone())); }
         let mut current: A = *(*else_expr).clone();

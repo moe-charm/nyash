@@ -16,7 +16,7 @@ fn safe_access_field_and_method() {
     // a = user?.profile
     match &program[0] {
         ASTNode::Assignment { value, .. } => match value.as_ref() {
-            ASTNode::PeekExpr {
+            ASTNode::MatchExpr {
                 scrutinee,
                 else_expr,
                 ..
@@ -36,7 +36,7 @@ fn safe_access_field_and_method() {
                     other => panic!("else not field access, got {:?}", other),
                 }
             }
-            other => panic!("expected PeekExpr, got {:?}", other),
+            other => panic!("expected MatchExpr, got {:?}", other),
         },
         other => panic!("expected assignment, got {:?}", other),
     }
@@ -44,7 +44,7 @@ fn safe_access_field_and_method() {
     // b = user?.m(1)
     match &program[1] {
         ASTNode::Assignment { value, .. } => match value.as_ref() {
-            ASTNode::PeekExpr {
+            ASTNode::MatchExpr {
                 scrutinee,
                 else_expr,
                 ..
@@ -70,7 +70,7 @@ fn safe_access_field_and_method() {
                     other => panic!("else not method call, got {:?}", other),
                 }
             }
-            other => panic!("expected PeekExpr, got {:?}", other),
+            other => panic!("expected MatchExpr, got {:?}", other),
         },
         other => panic!("expected assignment, got {:?}", other),
     }

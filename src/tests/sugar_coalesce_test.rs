@@ -21,7 +21,7 @@ fn coalesce_peek_rewrite() {
     }
 
     match assign.1.as_ref() {
-        ASTNode::PeekExpr {
+        ASTNode::MatchExpr {
             scrutinee,
             arms,
             else_expr,
@@ -42,6 +42,6 @@ fn coalesce_peek_rewrite() {
                 _ => panic!("else not a"),
             }
         }
-        other => panic!("expected PeekExpr, got {:?}", other),
+        other => panic!("expected MatchExpr, got {:?}", other),
     }
 }
