@@ -42,7 +42,6 @@ pub(super) fn builder_debug_log(msg: &str) {
     }
 }
 
-// Lightweight helpers moved from builder.rs to reduce file size
 impl super::MirBuilder {
     /// Ensure a basic block exists in the current function
     pub(crate) fn ensure_block_exists(&mut self, block_id: BasicBlockId) -> Result<(), String> {
@@ -69,7 +68,6 @@ impl super::MirBuilder {
     }
 }
 
-// Call/Type/WeakRef emission helpers (moved from builder.rs)
 impl super::MirBuilder {
     /// Emit a Box method call or plugin call (unified BoxCall)
     pub(super) fn emit_box_or_plugin_call(

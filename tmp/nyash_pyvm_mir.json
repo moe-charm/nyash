@@ -1,45 +1,171 @@
 {
+  "capabilities": [
+    "unified_call",
+    "phi",
+    "effects",
+    "callee_typing"
+  ],
   "functions": [
     {
       "blocks": [
         {
-          "id": 0,
+          "id": 3,
           "instructions": [
             {
-              "args": [],
-              "dst": 0,
-              "op": "newbox",
-              "type": "MathBox"
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
-              "args": [],
-              "box": 0,
-              "dst": null,
-              "method": "birth",
-              "op": "boxcall"
-            },
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "TestUnifiedCall.equals/1",
+      "params": [
+        0,
+        1
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
             {
               "dst": 1,
               "op": "const",
               "value": {
-                "type": "f64",
-                "value": 42.0
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "TestUnifiedCall("
               }
             },
             {
               "dst": 2,
-              "kind": "neg",
-              "op": "unop",
-              "src": 1
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
             },
             {
-              "args": [
-                2
-              ],
-              "box": 0,
               "dst": 3,
-              "method": "abs",
-              "op": "boxcall"
+              "lhs": 1,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 2
+            },
+            {
+              "op": "ret",
+              "value": 3
+            }
+          ]
+        }
+      ],
+      "name": "TestUnifiedCall.toString/0",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== 統一Call基本テスト開始 ==="
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  1
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1. Global Call: print関数"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  2
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Hello Unified Call!"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  3
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
             },
             {
               "dst": 4,
@@ -49,102 +175,338 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "abs(-42.0) = "
+                "value": "2. Value Call: 将来実装予定"
               }
             },
             {
-              "args": [
-                4
-              ],
               "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "args": [
-                3
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "mir_call": {
+                "args": [
+                  4
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
             },
             {
               "dst": 5,
               "op": "const",
               "value": {
-                "type": "f64",
-                "value": 1.57
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "3. Method Call: StringBoxメソッド"
               }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  5
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
             },
             {
               "args": [],
               "dst": 6,
-              "func": 0,
-              "op": "call"
+              "op": "newbox",
+              "type": "StringBox"
             },
             {
-              "args": [],
-              "dst": null,
-              "func": 0,
-              "op": "call"
-            },
-            {
-              "args": [
-                5
-              ],
               "dst": 7,
-              "func": 0,
-              "op": "call"
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "test"
+              }
             },
             {
               "dst": 8,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
+              "mir_call": {
+                "args": [
+                  7
+                ],
+                "callee": {
+                  "box_name": "StringBox",
+                  "method": "set",
+                  "receiver": 6,
+                  "type": "Method"
                 },
-                "value": "sin(pi/2) ≈ "
-              }
-            },
-            {
-              "args": [
-                8
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "args": [
-                7
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
             },
             {
               "dst": 9,
+              "mir_call": {
+                "args": [],
+                "callee": {
+                  "box_name": "StringBox",
+                  "method": "get",
+                  "receiver": 6,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 10,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "Unified call test completed!"
+                "value": "StringBox result: "
               }
             },
             {
-              "args": [
-                9
-              ],
+              "dst": 11,
+              "lhs": 10,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 9
+            },
+            {
               "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "mir_call": {
+                "args": [
+                  11
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "4. Constructor Call: new演算子"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  12
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "args": [],
+              "dst": 13,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [],
+                "callee": {
+                  "box_name": "ArrayBox",
+                  "method": "birth",
+                  "receiver": 13,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 14,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "ArrayBox created successfully"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  14
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 15,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "5. Extern Call: 将来実装予定"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  15
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 16,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "6. Closure Call: 将来実装予定"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  16
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 17,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== 統一Call基本テスト完了 ==="
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  17
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "success"
+              }
             },
             {
               "op": "ret",
-              "value": 9
+              "value": 18
+            }
+          ]
+        }
+      ],
+      "name": "TestUnifiedCall.main/0",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "void",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 4
             }
           ]
         }
@@ -152,5 +514,15 @@
       "name": "main",
       "params": []
     }
-  ]
+  ],
+  "metadata": {
+    "build_time": "Phase 15.5 Development",
+    "features": [
+      "mir_call_unification",
+      "json_v1_schema"
+    ],
+    "generator": "nyash-rust",
+    "phase": "15.5"
+  },
+  "schema_version": "1.0"
 }

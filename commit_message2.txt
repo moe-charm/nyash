@@ -1,0 +1,31 @@
+feat: Python LLVM統一MirCall処理基盤実装（Phase 3.4）
+
+## 実装内容
+- Python LLVM向け統一MirCallハンドラ実装
+- instruction_lower.pyに統一分岐追加
+- 環境変数による段階的移行サポート
+
+## 新規ファイル
+- src/llvm_py/instructions/mir_call.py
+  - 6種類のCalleeパターン対応（Global/Method/Constructor/Closure/Value/Extern）
+  - 既存のlower_call/boxcall/externcall等を内部で再利用
+  - NYASH_MIR_UNIFIED_CALL=1で有効化
+
+## 変更ファイル
+- src/llvm_py/builders/instruction_lower.py
+  - `op == "mir_call"`の統一分岐を追加
+  - 既存の個別処理との互換性維持
+
+## 技術詳細
+ChatGPT5 Pro A++設計による統一Call命令実装の第2段階。
+Python LLVM側で6種類のCall系命令を1つのmir_call処理に集約。
+これにより約800行（instructions/内の3ファイル）の削減準備が完了。
+
+## 次のステップ
+- Phase 3.5: Rust側のJSON出力対応
+- Phase 4: 旧実装の削除とリファクタリング
+
+Phase 15セルフホスティング目標（80k→20k行）への重要な一歩。
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>

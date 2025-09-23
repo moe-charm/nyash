@@ -1,0 +1,37 @@
+feat: MIR Call命令統一Phase 3.3完了 - BoxCall統一実装
+
+## 実装内容
+- emit_box_or_plugin_call関数に統一Call対応を追加
+- NYASH_MIR_UNIFIED_CALL=1で段階的移行可能
+- BoxCallをCallTarget::Methodとして統一Call化
+
+## 技術詳細
+- src/mir/builder/utils.rs: emit_box_or_plugin_call修正
+  - Box型推論ロジックを追加（value_origin_newbox/value_types参照）
+  - emit_unified_callメソッドを使用してMethod呼び出しを生成
+  - 環境変数による新旧実装の切り替え機能実装
+
+## MIR出力の変化
+Before (BoxCall命令):
+```
+call %1.upper()
+call %3.push(%4)
+```
+
+After (統一Call命令):
+```
+call_method StringBox.upper() [recv: %1]
+call_method ArrayBox.push(%4) [recv: %3]
+```
+
+## Phase 3進捗
+- Phase 3.1: ✅ indirect call統一
+- Phase 3.2: ✅ print/基本関数統一
+- Phase 3.3: ✅ BoxCall統一（本コミット）
+- Phase 3.4: 次ステップ（Python LLVM統一）
+
+ChatGPT5 Pro A++設計による段階的移行戦略の一環として実装。
+後方互換性を保ちながら、26%のコード削減を目指す。
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>

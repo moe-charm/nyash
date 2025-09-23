@@ -43,7 +43,6 @@ pub(crate) enum PropertyKind {
     BirthOnce,
 }
 
-// moved helpers to builder/utils.rs
 
 /// MIR builder for converting AST to SSA form
 pub struct MirBuilder {
@@ -187,7 +186,6 @@ impl MirBuilder {
         self.hint_sink.loop_carrier(vars.into_iter().map(|s| s.into()).collect::<Vec<_>>());
     }
 
-    // moved to builder_calls.rs: lower_method_as_function
 
     /// Build a complete MIR module from AST
     pub fn build_module(&mut self, ast: ASTNode) -> Result<MirModule, String> {
@@ -196,7 +194,6 @@ impl MirBuilder {
         self.finalize_module(result_value)
     }
 
-    // prepare_module/lower_root/finalize_module moved to builder/lifecycle.rs
 
     /// Build an expression and return its value ID
     pub(super) fn build_expression(&mut self, ast: ASTNode) -> Result<ValueId, String> {
@@ -204,7 +201,6 @@ impl MirBuilder {
         self.build_expression_impl(ast)
     }
 
-    // build_expression_impl_legacy moved to builder/exprs_legacy.rs (legacy body removed)
 
     /// Build a literal value
     pub(super) fn build_literal(&mut self, literal: LiteralValue) -> Result<ValueId, String> {
@@ -239,8 +235,6 @@ impl MirBuilder {
         Ok(dst)
     }
 
-    // build_binary_op moved to builder/ops.rs
-    // build_unary_op moved to builder/ops.rs
 
     /// Build variable access
     pub(super) fn build_variable_access(&mut self, name: String) -> Result<ValueId, String> {
@@ -265,15 +259,7 @@ impl MirBuilder {
         Ok(value_id)
     }
 
-    // build_function_call_legacy removed (use builder_calls::build_function_call)
 
-    // build_print_statement_legacy moved to builder/stmts.rs
-
-    // build_block_legacy moved to builder/stmts.rs
-
-    // build_if_statement_legacy moved to builder/stmts.rs
-
-    // extract_assigned_var moved to builder/stmts.rs (as module helper)
 
     /// Emit an instruction to the current basic block
     pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
@@ -343,21 +329,6 @@ impl MirBuilder {
 
     // フェーズM: insert_edge_copy()メソッド削除（no_phi_mode撤廃により不要）
 
-    // moved to builder/utils.rs: ensure_block_exists
-
-    // build_loop_statement_legacy moved to builder/stmts.rs
-
-    // build_try_catch_statement_legacy moved to builder/stmts.rs
-
-    // build_throw_statement_legacy moved to builder/stmts.rs
-
-    // build_local_statement_legacy moved to builder/stmts.rs
-
-    // build_return_statement_legacy moved to builder/stmts.rs
-
-    // moved to builder/decls.rs: build_static_main_box
-
-    // moved to builder/fields.rs: build_field_access
 
     /// Build new expression: new ClassName(arguments)
     pub(super) fn build_new_expression(
@@ -472,9 +443,6 @@ impl MirBuilder {
         Ok(dst)
     }
 
-    // moved to builder/fields.rs: build_field_assignment
-
-    // moved to builder/utils.rs: start_new_block
 
     /// Check if the current basic block is terminated
     fn is_current_block_terminated(&self) -> bool {
@@ -486,27 +454,12 @@ impl MirBuilder {
         false
     }
 
-    // convert_binary_operator moved to builder/ops.rs
-    // convert_unary_operator moved to builder/ops.rs
 
-    // build_nowait_statement_legacy moved to builder/stmts.rs
 
-    // build_await_expression_legacy moved to builder/stmts.rs
 
-    // build_me_expression_legacy moved to builder/stmts.rs
 
-    // build_method_call_legacy removed (use builder_calls::build_method_call)
-
-    // parse_type_name_to_mir_legacy removed (use builder_calls::parse_type_name_to_mir)
-    // extract_string_literal_legacy removed (use builder_calls::extract_string_literal)
-    // build_from_expression_legacy removed (use builder_calls::build_from_expression)
-
-    // lower_static_method_as_function_legacy removed (use builder_calls::lower_static_method_as_function)
-
-    // moved to builder/decls.rs: build_box_declaration
 }
 
-// BinaryOpType moved to builder/ops.rs
 
 impl Default for MirBuilder {
     fn default() -> Self {
@@ -514,4 +467,3 @@ impl Default for MirBuilder {
     }
 }
 
-// Unit tests moved to `tests/mir_builder_unit.rs` to keep this file lean

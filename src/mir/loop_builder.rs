@@ -50,9 +50,6 @@ pub struct LoopBuilder<'a> {
     // フェーズM: no_phi_modeフィールド削除（常にPHI使用）
 }
 
-// (removed) extract_assigned_var_local was a local helper used during
-// diagnostics and is no longer referenced. Keep the file lean and avoid
-// dead_code warnings.
 
 impl<'a> LoopBuilder<'a> {
     // =============================================================

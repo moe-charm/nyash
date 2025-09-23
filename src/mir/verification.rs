@@ -15,7 +15,6 @@ mod legacy;
 mod utils;
 mod ssa;
 
-// VerificationError moved to crate::mir::verification_types
 
 /// MIR verifier for SSA form and semantic correctness
 pub struct MirVerifier {
@@ -317,7 +316,6 @@ impl MirVerifier {
         self.errors.clear();
     }
 
-    // Wrapper helpers removed; use verification::utils directly at call sites
 }
 
 impl Default for MirVerifier {
@@ -326,7 +324,6 @@ impl Default for MirVerifier {
     }
 }
 
-// Display impl moved to verification_types.rs
 
 #[cfg(test)]
 mod tests {}

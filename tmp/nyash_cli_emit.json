@@ -1,9 +1,15 @@
 {
+  "capabilities": [
+    "unified_call",
+    "phi",
+    "effects",
+    "callee_typing"
+  ],
   "functions": [
     {
       "blocks": [
         {
-          "id": 0,
+          "id": 1,
           "instructions": [
             {
               "dst": 1,
@@ -13,14 +19,25 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "main"
+                "value": "=== FileBox統一Callテスト開始 ==="
               }
             },
             {
-              "args": [],
-              "dst": 0,
-              "func": 1,
-              "op": "call"
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  1
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
             },
             {
               "dst": 2,
@@ -30,16 +47,542 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "no using test"
+                "value": "1. FileBox Constructor Call"
               }
             },
             {
-              "args": [
-                2
-              ],
               "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "mir_call": {
+                "args": [
+                  2
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "args": [],
+              "dst": 3,
+              "op": "newbox",
+              "type": "FileBox"
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [],
+                "callee": {
+                  "box_name": "FileBox",
+                  "method": "birth",
+                  "receiver": 3,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "FileBox created via unified call"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  4
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "2. FileBox Method Call - exists"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  5
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "test.txt"
+              }
+            },
+            {
+              "dst": 7,
+              "mir_call": {
+                "args": [
+                  6
+                ],
+                "callee": {
+                  "box_name": "FileBox",
+                  "method": "exists",
+                  "receiver": 3,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "FileBox.exists() called via unified call"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  8
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "3. FileBox Method Call - open (テスト)"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  9
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "/tmp/test_unified.txt"
+              }
+            },
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "w"
+              }
+            },
+            {
+              "dst": 12,
+              "mir_call": {
+                "args": [
+                  10,
+                  11
+                ],
+                "callee": {
+                  "box_name": "FileBox",
+                  "method": "open",
+                  "receiver": 3,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 13,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "FileBox.open() called via unified call"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  13
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 14,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "4. FileBox Method Call - write"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  14
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 15,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Hello Unified Call FileBox!"
+              }
+            },
+            {
+              "dst": 16,
+              "mir_call": {
+                "args": [
+                  15
+                ],
+                "callee": {
+                  "box_name": "FileBox",
+                  "method": "write",
+                  "receiver": 3,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 17,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "FileBox.write() called via unified call"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  17
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "5. FileBox Method Call - close"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  18
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 19,
+              "mir_call": {
+                "args": [],
+                "callee": {
+                  "box_name": "FileBox",
+                  "method": "close",
+                  "receiver": 3,
+                  "type": "Method"
+                },
+                "effects": [],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 20,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "FileBox.close() called via unified call"
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  20
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 21,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== FileBox統一Callテスト完了 ==="
+              }
+            },
+            {
+              "dst": null,
+              "mir_call": {
+                "args": [
+                  21
+                ],
+                "callee": {
+                  "name": "print",
+                  "type": "Global"
+                },
+                "effects": [
+                  "IO"
+                ],
+                "flags": {}
+              },
+              "op": "mir_call"
+            },
+            {
+              "dst": 22,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "filebox_success"
+              }
+            },
+            {
+              "op": "ret",
+              "value": 22
+            }
+          ]
+        }
+      ],
+      "name": "TestFileBoxUnified.main/0",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "void",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 4
+            }
+          ]
+        }
+      ],
+      "name": "main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "TestFileBoxUnified("
+              }
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 3,
+              "lhs": 1,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 2
+            },
+            {
+              "op": "ret",
+              "value": 3
+            }
+          ]
+        }
+      ],
+      "name": "TestFileBoxUnified.toString/0",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
               "op": "ret",
@@ -48,8 +591,21 @@
           ]
         }
       ],
-      "name": "main",
-      "params": []
+      "name": "TestFileBoxUnified.equals/1",
+      "params": [
+        0,
+        1
+      ]
     }
-  ]
+  ],
+  "metadata": {
+    "build_time": "Phase 15.5 Development",
+    "features": [
+      "mir_call_unification",
+      "json_v1_schema"
+    ],
+    "generator": "nyash-rust",
+    "phase": "15.5"
+  },
+  "schema_version": "1.0"
 }

@@ -176,7 +176,6 @@ impl super::MirBuilder {
         Ok(out)
     }
 
-    // control-flow build_* moved to control_flow.rs (use cf_* instead)
 
     // Local declarations with optional initializers
     pub(super) fn build_local_statement(
@@ -318,4 +317,3 @@ impl super::MirBuilder {
         Ok(me_value)
     }
 }
-// use crate::mir::loop_api::LoopBuilderApi; // no longer needed here

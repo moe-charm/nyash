@@ -3,8 +3,107 @@
     {
       "blocks": [
         {
-          "id": 0,
+          "id": 3,
           "instructions": [
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 2
+              }
+            },
+            {
+              "dst": 4,
+              "lhs": 2,
+              "op": "compare",
+              "operation": "<",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 5,
+              "op": "branch",
+              "then": 4
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "dst": 5,
+              "lhs": 2,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 3
+            },
+            {
+              "op": "jump",
+              "target": 6
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 6
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 7,
+              "incoming": [
+                [
+                  5,
+                  4
+                ],
+                [
+                  2,
+                  5
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "op": "ret",
+              "value": 7
+            }
+          ]
+        }
+      ],
+      "name": "Main.main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Main("
+              }
+            },
             {
               "dst": 1,
               "op": "const",
@@ -13,62 +112,138 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "main"
+                "value": ")"
               }
             },
             {
-              "args": [],
-              "dst": 0,
-              "func": 1,
-              "op": "call"
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
             },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "Main.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
             {
               "dst": 2,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "=== using デフォルト化テスト ==="
+                "type": "i64",
+                "value": 1
               }
-            },
-            {
-              "args": [
-                2
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
             },
             {
               "dst": 3,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "usingがデフォルトで有効か確認"
+                "type": "i64",
+                "value": 2
               }
             },
             {
-              "args": [
-                3
+              "dst": 4,
+              "lhs": 2,
+              "op": "compare",
+              "operation": "<",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 8,
+              "op": "branch",
+              "then": 7
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "instructions": [
+            {
+              "dst": 5,
+              "lhs": 2,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 3
+            },
+            {
+              "op": "jump",
+              "target": 9
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 9
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "instructions": [
+            {
+              "dst": 7,
+              "incoming": [
+                [
+                  5,
+                  7
+                ],
+                [
+                  2,
+                  8
+                ]
               ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "op": "phi"
             },
             {
               "op": "ret",
-              "value": 3
+              "value": 7
             }
           ]
         }
       ],
       "name": "main",
       "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "Main.equals/1",
+      "params": [
+        0
+      ]
     }
   ]
 }

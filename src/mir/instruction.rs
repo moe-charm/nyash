@@ -10,7 +10,6 @@ use crate::mir::types::{
     BarrierOp, BinaryOp, CompareOp, ConstValue, MirType, TypeOpKind, UnaryOp, WeakRefOp,
 };
 
-// use crate::value::NyashValue;  // Commented out to avoid circular dependency
 use std::fmt;
 
 // Kind-specific metadata (non-functional refactor scaffolding)
@@ -302,7 +301,6 @@ pub enum MirInstruction {
     },
 }
 
-// types moved to crate::mir::types
 
 impl MirInstruction {
     /// Get the effect mask for this instruction
@@ -529,7 +527,6 @@ impl MirInstruction {
     }
 }
 
-// enums TypeOpKind/WeakRefOp/BarrierOp moved to crate::mir::types
 
 impl ConstValue {
     /*
@@ -691,7 +688,6 @@ impl fmt::Display for MirInstruction {
     }
 }
 
-// Display for ConstValue moved to crate::mir::types
 
 
 #[cfg(test)]

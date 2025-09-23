@@ -84,8 +84,6 @@ impl super::MirBuilder {
             return self.emit_legacy_call(dst, target, args);
         }
 
-        // Debug: Confirm unified call path is taken
-        eprintln!("🔍 emit_unified_call: Using unified call for target: {:?}", target);
 
         // Convert CallTarget to Callee
         let callee = match target {
@@ -159,8 +157,6 @@ impl super::MirBuilder {
             effects: mir_call.effects,
         };
 
-        // Debug: Confirm callee field is set
-        eprintln!("🔍 Generated Call with callee: {:?}", legacy_call);
 
         self.emit_instruction(legacy_call)
     }

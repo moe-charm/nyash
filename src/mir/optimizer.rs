@@ -10,7 +10,6 @@
 
 use super::{MirFunction, MirInstruction, MirModule, MirType, ValueId};
 use crate::mir::optimizer_stats::OptimizationStats;
-// std::collections imports removed (local DCE/CSE impls deleted)
 
 /// MIR optimization passes
 pub struct MirOptimizer {
@@ -123,7 +122,6 @@ impl MirOptimizer {
         stats
     }
 
-    /// Core-13 "pure" normalization notes moved to optimizer_passes::normalize_core13_pure
 
 
     /// Convert instruction to string key for CSE
@@ -137,7 +135,6 @@ impl MirOptimizer {
             MirInstruction::Compare { op, lhs, rhs, .. } => {
                 format!("cmp_{:?}_{}_{}", op, lhs.as_u32(), rhs.as_u32())
             }
-            // BoxFieldLoad removed from instruction set
             // MirInstruction::BoxFieldLoad { box_val, field, .. } => format!("boxload_{}_{}", box_val.as_u32(), field),
             MirInstruction::Call { func, args, .. } => {
                 let args_str = args
@@ -151,7 +148,6 @@ impl MirOptimizer {
         }
     }
 
-    // Reorder/Intrinsics/BoxField passes moved to optimizer_passes/* modules
 }
 
 impl MirOptimizer {
@@ -267,7 +263,6 @@ impl Default for MirOptimizer {
     }
 }
 
-// OptimizationStats moved to crate::mir::optimizer_stats
 
 /// Diagnostics: identify unlowered type-ops embedded as strings in Call/BoxCall
 #[allow(dead_code)]
