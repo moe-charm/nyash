@@ -148,14 +148,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
     let _ = std::fs::create_dir_all(&obj_dir);
     let obj_path = obj_dir.join("main.o");
     if aot == "llvm" {
-        if std::env::var("LLVM_SYS_180_PREFIX").ok().is_none()
-            && std::env::var("LLVM_SYS_181_PREFIX").ok().is_none()
-        {
-            return Err(
-                "LLVM 18 not configured. Set LLVM_SYS_180_PREFIX or install LLVM 18 (llvm-config)"
-                    .into(),
-            );
-        }
+        // llvmliteハーネス使用によりLLVM_SYS_180_PREFIX不要
         std::env::set_var("NYASH_LLVM_OBJ_OUT", &obj_path);
         println!("[emit] LLVM object → {}", obj_path.display());
         let status = std::process::Command::new(

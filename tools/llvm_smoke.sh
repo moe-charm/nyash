@@ -17,10 +17,18 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
-# Resolve LLVM 18 prefix once and export for both 180/181 variants used by llvm-sys
-_LLVMPREFIX=$(llvm-config-18 --prefix)
-export LLVM_SYS_181_PREFIX="${_LLVMPREFIX}"
-export LLVM_SYS_180_PREFIX="${_LLVMPREFIX}"
+# Conditional LLVM prefix setup based on feature
+LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+  # Legacy inkwell needs LLVM_SYS_180_PREFIX
+  _LLVMPREFIX=$(llvm-config-18 --prefix)
+  export LLVM_SYS_181_PREFIX="${_LLVMPREFIX}"
+  export LLVM_SYS_180_PREFIX="${_LLVMPREFIX}"
+  echo "[llvm-smoke] Using legacy inkwell with LLVM_SYS_180_PREFIX=${_LLVMPREFIX}" >&2
+else
+  # llvm-harness (default) doesn't need LLVM_SYS_180_PREFIX
+  echo "[llvm-smoke] Using llvm-harness (LLVM_SYS_180_PREFIX not required)" >&2
+fi
 
 # --- AOT smoke: apps/ny-llvm-bitops (bitwise & shift operations) ---
 if [[ "${NYASH_LLVM_BITOPS_SMOKE:-0}" == "1" ]]; then
@@ -41,9 +49,8 @@ else
   echo "[llvm-smoke] skipping ny-llvm-bitops (set NYASH_LLVM_BITOPS_SMOKE=1 to enable)" >&2
 fi
 
-echo "[llvm-smoke] building nyash (${MODE}, feature=llvm)..." >&2
-# Support both llvm-sys 180/181 by exporting both prefixes to the same value
-cargo build -q ${MODE:+--${MODE}} --features llvm
+echo "[llvm-smoke] building nyash (${MODE}, feature=${LLVM_FEATURE})..." >&2
+cargo build -q ${MODE:+--${MODE}} --features "${LLVM_FEATURE}"
 
 echo "[llvm-smoke] running --backend llvm on examples/llvm11_core_smoke.nyash ..." >&2
 rm -f "$OBJ"

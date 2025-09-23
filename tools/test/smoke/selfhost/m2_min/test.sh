@@ -6,9 +6,16 @@ source "$ROOT/tools/test/lib/shlib.sh"
 
 build_nyash_release
 
-# Skip when LLVM toolchain is not available (either llvm-config-18 or LLVM_SYS_180_PREFIX)
-if ! command -v llvm-config-18 >/dev/null 2>&1 && [[ -z "${LLVM_SYS_180_PREFIX:-}" ]]; then
-  echo "[SKIP] selfhost M2 minimal: LLVM18 not available"; exit 0
+# Skip when LLVM toolchain is not available
+if ! command -v llvm-config-18 >/dev/null 2>&1; then
+  # For llvm-harness (default), we only need llvm-config-18
+  # For llvm-inkwell-legacy, we also need LLVM_SYS_180_PREFIX
+  LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+  if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" && -z "${LLVM_SYS_180_PREFIX:-}" ]]; then
+    echo "[SKIP] selfhost M2 minimal: LLVM18 not available for legacy inkwell"; exit 0
+  elif [[ "$LLVM_FEATURE" != "llvm-inkwell-legacy" ]]; then
+    echo "[SKIP] selfhost M2 minimal: llvm-config-18 not available"; exit 0
+  fi
 fi
 
 build_ny_llvmc || { echo "[SKIP] selfhost M2 minimal: ny-llvmc not built"; exit 0; }

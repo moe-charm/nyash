@@ -44,12 +44,18 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
 fi
 
 echo "[1/4] Building nyash (feature selectable) ..."
-_LLVMPREFIX=$(llvm-config-18 --prefix)
 # Select LLVM feature: default harness (llvm), or legacy inkwell when NYASH_LLVM_FEATURE=llvm-inkwell-legacy
 LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
 # Use 24 threads for parallel build
-LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+  # Legacy inkwell需要LLVM_SYS_180_PREFIX
+  _LLVMPREFIX=$(llvm-config-18 --prefix)
+  LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+    CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
+else
+  # llvm-harness（デフォルト）はLLVM_SYS_180_PREFIX不要
   CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
+fi
 
 echo "[2/4] Emitting object (.o) via LLVM backend ..."
 # Default object output path under target/aot_objects
@@ -100,12 +106,13 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
   esac
   if [[ "$COMPILER_MODE" == "harness" ]]; then
     if [[ "${NYASH_LLVM_FEATURE:-llvm}" == "llvm-inkwell-legacy" ]]; then
-      # Legacy path: do not use harness
+      # Legacy path: do not use harness (LLVM_SYS_180_PREFIX needed)
+      _LLVMPREFIX=$(llvm-config-18 --prefix)
       NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
         ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
     else
-      # Harness path (Python llvmlite)
-      NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+      # Harness path (Python llvmlite - LLVM_SYS_180_PREFIX不要)
+      NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 \
         ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
     fi
   fi

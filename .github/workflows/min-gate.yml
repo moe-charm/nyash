@@ -169,11 +169,8 @@ jobs:
       - name: Build (llvm + phi)
         run: |
           set -euo pipefail
-          if command -v llvm-config-18 >/dev/null 2>&1; then
-            LLVM_SYS_180_PREFIX="$(llvm-config-18 --prefix)" cargo build --release --features "llvm,phi-legacy" -q
-          else
-            cargo build --release --features "llvm,phi-legacy" -q
-          fi
+          # llvm feature（llvm-harness）はLLVM_SYS_180_PREFIX不要
+          cargo build --release --features "llvm,phi-legacy" -q
 
       - name: LLVM harness — empty PHI check (batch)
         env:

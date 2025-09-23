@@ -7,11 +7,18 @@ set -euo pipefail
 SCRIPT=${1:-apps/tests/loop_if_phi.nyash}
 
 echo "[phi-empty-check] building nyash (llvm features)" >&2
-LLVM_PREFIX=${LLVM_SYS_180_PREFIX:-$(command -v llvm-config-18 >/dev/null 2>&1 && llvm-config-18 --prefix || true)}
-if [[ -n "${LLVM_PREFIX}" ]]; then
-  LLVM_SYS_180_PREFIX="${LLVM_PREFIX}" cargo build --release --features llvm >/dev/null
+LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+  # Legacy inkwell needs LLVM_SYS_180_PREFIX
+  LLVM_PREFIX=${LLVM_SYS_180_PREFIX:-$(command -v llvm-config-18 >/dev/null 2>&1 && llvm-config-18 --prefix || true)}
+  if [[ -n "${LLVM_PREFIX}" ]]; then
+    LLVM_SYS_180_PREFIX="${LLVM_PREFIX}" cargo build --release --features "${LLVM_FEATURE}" >/dev/null
+  else
+    cargo build --release --features "${LLVM_FEATURE}" >/dev/null
+  fi
 else
-  cargo build --release --features llvm >/dev/null
+  # llvm-harness (default) doesn't need LLVM_SYS_180_PREFIX
+  cargo build --release --features "${LLVM_FEATURE}" >/dev/null
 fi
 
 IR_OUT=tmp/nyash_harness.ll
