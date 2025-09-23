@@ -50,20 +50,26 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
      - [ ] local/if/loop/call/method/new/var/logical/compare
      - [ ] PHI 合流は Bridge に委譲（If/Loop）
      - [ ] Smokes: nested if / loop 累積 / and/or × if/loop
-5) PHI 自動化は Phase‑15 後（LoopForm = MIR18）
+5) Phase 15.5: Core Box Unification（3層→2層革命）🎯
+   - コアBox（nyrt内蔵）削除、プラグインBox/ユーザーBoxの2層に統一
+   - 環境変数制御で段階的移行: `NYASH_USE_PLUGIN_CORE_BOXES=1`
+   - 削減目標: 約700行（nyrt実装600行 + 特別扱い100行）
+   - DLL動作確認→Nyashコード化の安全な移行戦略
+   - 詳細: [phase-15.5-core-box-unification.md](phase-15.5-core-box-unification.md)
+6) PHI 自動化は Phase‑15 後（LoopForm = MIR18）
    - Phase‑15: 現行の Bridge‑PHI を維持し、E2E 緑とパリティを最優先
    - MIR18 (LoopForm): LoopForm 強化＋逆Loweringで PHI を自動生成（合流点の定型化）
-6) Bootstrap loop (c0→c1→c1')
+7) Bootstrap loop (c0→c1→c1')
    - Use existing trace/hash harness to compare parity; add optional CI gate
    - **This achieves self-hosting!** Nyash compiles Nyash
-7) VM Layer in Nyash (Phase 15.4) ⚡
+8) VM Layer in Nyash (Phase 15.4) ⚡
    - Implement MIR interpreter in Nyash (13 core instructions)
    - Dynamic dispatch via MapBox for instruction handlers
    - BoxCall/ExternCall bridge to existing infrastructure
    - Optional LLVM JIT acceleration for hot paths
    - Enable instant execution without compilation
    - Expected: 5000 lines for complete VM implementation
-6) Plugins CI split (継続)
+9) Plugins CI split (継続)
    - Core always‑on (JIT, plugins disabled); Plugins as optional job (strict off by default)
 
 ## Later (incremental)
