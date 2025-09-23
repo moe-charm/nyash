@@ -44,6 +44,9 @@ pub struct LoopBuilder<'a> {
     /// continue文からの変数スナップショット
     continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
 
+    /// break文からの変数スナップショット（exit PHI生成用）
+    exit_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
+
     // フェーズM: no_phi_modeフィールド削除（常にPHI使用）
 }
 
@@ -75,6 +78,11 @@ impl<'a> LoopBuilder<'a> {
 
     /// Handle a `break` statement: jump to loop exit and continue in a fresh unreachable block.
     fn do_break(&mut self) -> Result<ValueId, String> {
+        // Snapshot variables at break point for exit PHI generation
+        let snapshot = self.get_current_variable_map();
+        let cur_block = self.current_block()?;
+        self.exit_snapshots.push((cur_block, snapshot));
+
         if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
             self.jump_with_pred(exit_bb)?;
         }
@@ -108,6 +116,7 @@ impl<'a> LoopBuilder<'a> {
             block_var_maps: HashMap::new(),
             loop_header: None,
             continue_snapshots: Vec::new(),
+            exit_snapshots: Vec::new(),  // exit PHI用のスナップショット
             // フェーズM: no_phi_modeフィールド削除
         }
     }
@@ -235,8 +244,12 @@ impl<'a> LoopBuilder<'a> {
         // 9. Headerブロックをシール（全predecessors確定）
         self.seal_block(header_id, latch_id)?;
 
-        // 10. ループ後の処理
+        // 10. ループ後の処理 - Exit PHI生成
         self.set_current_block(after_loop_id)?;
+
+        // Exit PHIの生成 - break時点での変数値を統一
+        self.create_exit_phis(header_id, after_loop_id)?;
+
         // Pop loop context
         crate::mir::builder::loops::pop_loop_context(self.parent_builder);
 
@@ -313,6 +326,54 @@ impl<'a> LoopBuilder<'a> {
 
         // ブロックをシール済みとしてマーク
         self.mark_block_sealed(block_id)?;
+
+        Ok(())
+    }
+
+    /// Exitブロックで変数のPHIを生成（breakポイントでの値を統一）
+    fn create_exit_phis(&mut self, header_id: BasicBlockId, exit_id: BasicBlockId) -> Result<(), String> {
+        // 全変数名を収集（exit_snapshots内のすべての変数）
+        let mut all_vars = std::collections::HashSet::new();
+
+        // Header直行ケース（0回実行）の変数を収集
+        let header_vars = self.get_current_variable_map();
+        for var_name in header_vars.keys() {
+            all_vars.insert(var_name.clone());
+        }
+
+        // break時点の変数を収集
+        for (_, snapshot) in &self.exit_snapshots {
+            for var_name in snapshot.keys() {
+                all_vars.insert(var_name.clone());
+            }
+        }
+
+        // 各変数に対してExit PHIを生成
+        for var_name in all_vars {
+            let mut phi_inputs = Vec::new();
+
+            // Header直行ケース（0回実行）の入力
+            if let Some(header_value) = header_vars.get(&var_name) {
+                phi_inputs.push((header_id, *header_value));
+            }
+
+            // 各breakポイントからの入力
+            for (block_id, snapshot) in &self.exit_snapshots {
+                if let Some(value) = snapshot.get(&var_name) {
+                    phi_inputs.push((*block_id, *value));
+                }
+            }
+
+            // PHI入力が2つ以上なら、PHIノードを生成
+            if phi_inputs.len() > 1 {
+                let phi_dst = self.new_value();
+                self.emit_phi_at_block_start(exit_id, phi_dst, phi_inputs)?;
+                self.update_variable(var_name, phi_dst);
+            } else if phi_inputs.len() == 1 {
+                // 単一入力なら直接使用（最適化）
+                self.update_variable(var_name, phi_inputs[0].1);
+            }
+        }
 
         Ok(())
     }

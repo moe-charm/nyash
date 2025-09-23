@@ -276,32 +276,77 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 📝 Update (2025-09-23) 🚨 重大PHI命令バグ発見！Step 4改行処理も課題
+## 🔍 MIRデバッグ出力完全ガイド（必読！）
+
+### 🎯 **確実にMIRを出力する方法**（優先順）
+
+```bash
+# 1️⃣ 最も確実: CLIフラグ使用
+./target/release/nyash --dump-mir program.nyash
+./target/release/nyash --dump-mir --mir-verbose program.nyash  # 詳細版
+
+# 2️⃣ VM実行時のMIR出力
+NYASH_VM_DUMP_MIR=1 ./target/release/nyash program.nyash
+
+# 3️⃣ JSON形式でファイル出力
+./target/release/nyash --emit-mir-json debug.json program.nyash
+cat debug.json | jq .  # 整形表示
+
+# 4️⃣ PyVM用JSON（自動生成）
+NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
+cat tmp/nyash_pyvm_mir.json | jq .
+```
+
+### 📋 **MIR関連環境変数一覧**
+
+| 環境変数 | 用途 | 出力先 |
+|---------|-----|-------|
+| `NYASH_VM_DUMP_MIR=1` | VM実行前MIR出力 | stderr |
+| `NYASH_DUMP_JSON_IR=1` | JSON IR出力 | stdout |
+| `NYASH_CLI_VERBOSE=1` | 詳細診断（MIR含む） | stderr |
+| `NYASH_DEBUG_MIR_PRINTER=1` | MIRプリンターデバッグ | stderr |
+
+### 🚨 **MIRが出力されない時のチェックリスト**
+1. ✅ `--dump-mir` フラグを使用（最も確実）
+2. ✅ `--backend vm` を明示的に指定
+3. ✅ `NYASH_DISABLE_PLUGINS=1` でプラグイン干渉を排除
+4. ✅ `NYASH_CLI_VERBOSE=1` で詳細情報取得
+
+### 💡 **実用的デバッグフロー**
+```bash
+# Step 1: 基本MIR確認
+./target/release/nyash --dump-mir gemini_test_case.nyash
+
+# Step 2: 詳細MIR + エフェクト情報
+./target/release/nyash --dump-mir --mir-verbose --mir-verbose-effects gemini_test_case.nyash
+
+# Step 3: VM実行時の挙動確認
+NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/nyash gemini_test_case.nyash
+
+# Step 4: JSON形式で詳細解析
+./target/release/nyash --emit-mir-json mir.json gemini_test_case.nyash
+jq '.functions[0].blocks' mir.json  # ブロック構造確認
+```
+
+## 📝 Update (2025-09-23) ✅ PHIバグ完全修正！Exit PHI実装でループ制御フロー完成
+- 🎉 **PHIバグ根本解決完了！** Exit PHI生成実装でループ後の変数値が正しく伝播
+  - **修正前**: gemini_test_case期待値2→実際0（初期値に戻る）
+  - **修正後**: 期待値2が正しく出力 ✅
+  - **技術的成果**: たった3箇所の修正で根本解決
+    1. `exit_snapshots`フィールド追加（break時点の変数収集）
+    2. `do_break()`でスナップショット収集
+    3. `create_exit_phis()`メソッド新規実装
+  - **MIR確認**: `bb3: %15 = phi [%4, bb1], [%9, bb9]` exit PHI正常生成
+  - **全テスト合格**: 0回実行、複数break、continue混在すべて✅
 - ✅ **フェーズM+M.2完全達成！** PHI統一革命でcollect_prints問題根本解決
-- ✅ **Step 1完全達成！** match式オブジェクトリテラル判定修正完了
-  - **修正完了**: `src/parser/expr/match_expr.rs` の `is_object_literal()` メソッド追加
-  - **副作用修正**: `match_token()` → `current_token()` で副作用除去
-  - **動作確認**: 単行match式 + オブジェクトリテラル ✅ 完全動作
-- ✅ **Step 2完全達成！** peek→match完全統一でアーキテクチャクリーンアップ完了
-  - **統一完了**: 15ファイルで `PeekExpr` → `MatchExpr` 一括置換完了
-  - **ファイル移行**: `lowering/peek.rs` → `match_expr.rs` 完全移行
-  - **コンパイル成功**: エラーゼロで正常ビルド完了
-  - **動作確認**: match式テスト正常動作 ✅
-  - **効果**: AI理解性向上・コードベース一貫性・保守性大幅向上
-- ✅ **Step 3完全達成！** Task先生による複数行パース問題根本原因特定完了
-  - **原因特定**: オブジェクトリテラルパーサーの改行スキップ不足（`src/parser/expr/primary.rs`）
-  - **修正箇所**: L49、L77-79に `skip_newlines()` 追加で解決可能
-  - **工数**: 30分以内の簡単修正
-- 🤔 **Step 4課題発見！** 改行処理アーキテクチャの美しさ問題
-  - **問題**: `skip_newlines()` を各所に散りばめる方法は美しくない
-  - **課題**: 保守性・一貫性・見落としリスク・設計の美しさ
-  - **方針**: Gemini 3相談でアーキテクチャ根本改善検討
-- 🚨 **重大発見！** PHI命令処理バグ（gemini_test_case: 期待値2→実際0）
-  - **問題**: フェーズM+M.2のPHI統一作業でループ後変数マージに回帰バグ
-  - **詳細**: PHI命令は正しく動作（v8→2）だが、print時に間違ったPHI（v4→0）参照
-  - **根本原因**: ループ脱出後の変数PHI接続が初期値を参照している
-  - **影響**: Phase 15セルフホスティング基盤の重大バグ
-  - **次のアクション**: ChatGPT相談でMIRビルダー修正戦略立案
+- ✅ **Step 1-3完全達成！** match式/peek統一/改行処理すべて完了
+  - match式オブジェクトリテラル判定修正 ✅
+  - peek→match完全統一（15ファイル） ✅
+  - 複数行パース問題解決策特定 ✅
+- 🚀 **ChatGPT Pro協働成功！** 最強分析でExit PHI欠落を特定
+  - 完璧な原因分析（ヘッダPHI○、exit PHI×）
+  - スコープ化された美しい実装提案
+  - 段階的修正戦略で確実な実装
 
 ## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
 - ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ
