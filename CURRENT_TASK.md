@@ -1,18 +1,41 @@
-# Current Task — MIR Architecture Revolution (Design Innovation)
+# Current Task — Phase 15.5 Core Box Unification (3層→2層革命)
 
 Updated: 2025‑09‑24
 
-## 🎯 **現在進行中: Phase 15.5 JSON v0中心化・統一Call基盤革命**
-**セルフホスティング前の基盤アーキテクチャ大改革**
+## 🎯 **現在進行中: Phase 15.5 Core Box Unification**
+**コアBox（nyrt内蔵）削除による3層→2層アーキテクチャ革命**
 
-📋 **詳細ドキュメント**: [Phase 15.5 README](docs/development/roadmap/phases/phase-15.5/README.md)
-- 📊 **進捗追跡**: [実装状況](docs/development/roadmap/phases/phase-15.5/implementation-status.md)
-- 🛡️ **戦略**: [段階移行計画](docs/development/roadmap/phases/phase-15.5/migration-phases.md) | [リスク分析](docs/development/roadmap/phases/phase-15.5/risk-analysis.md)
+📋 **詳細ドキュメント**: [Phase 15.5 Core Box Unification](docs/development/roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
+- 📊 **削減目標**: 約700行（nyrt実装600行 + 特別扱い100行）
+- 🛡️ **戦略**: DLL動作確認 → Nyashコード化の段階的移行
 
-### MIR Call命令統一実装 (Phase A進行中)
-**ChatGPT5 Pro A++設計による6種類Call命令→1つのMirCallへの統一作業**
+### ✅ **重要な発見：既存システムが完全実装済み！**
+- **環境変数制御**: `NYASH_USE_PLUGIN_BUILTINS=1` + `NYASH_PLUGIN_OVERRIDE_TYPES="StringBox,IntegerBox"`
+- **実装箇所**: `src/box_factory/mod.rs:119-143`に完全な優先度制御システム
+- **結論**: 新規実装不要、既存機能の活用が鍵
 
-### ✅ **Phase 1-2完了済み**（2025-09-24）
+### 実装フェーズ計画
+#### Phase A: プラグイン版動作確認（1週目）
+- [ ] 環境変数制御のドキュメント作成
+- [ ] プラグイン版StringBox/IntegerBox/ArrayBox/MapBoxの動作テスト
+- [ ] パフォーマンス測定（FFIオーバーヘッド確認）
+
+#### Phase B: MIRビルダー統一（2週目）
+- [ ] `src/mir/builder.rs`の特別扱い削除（行407-424）
+- [ ] `src/mir/builder/utils.rs`の型推論削除（行134-156）
+- [ ] すべてのBoxを`MirType::Box(name)`として統一
+
+#### Phase C: nyrt実装削除（3週目）
+- [ ] `crates/nyrt/src/lib.rs`からコアBox関数削除（約300行）
+- [ ] `crates/nyrt/src/plugin/array.rs`削除（143行）
+- [ ] `crates/nyrt/src/plugin/string.rs`削除（173行）
+
+#### Phase D: Nyashコード化（将来）
+- [ ] `apps/lib/core_boxes/`にNyash実装作成
+- [ ] StringBox, IntegerBox, ArrayBox, MapBoxのNyash版実装
+- [ ] 静的リンクによる性能最適化
+
+### ✅ **MIR Call命令統一実装完了済み**（2025-09-24）
 - [x] **MIR定義の外部化とモジュール化**
   - `src/mir/definitions/`ディレクトリ作成
   - `call_unified.rs`: MirCall/CallFlags/Callee統一定義（297行）

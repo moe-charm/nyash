@@ -240,23 +240,18 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm program.nyash
 - `NYASH_USING_PROFILE=dev|smoke|debug` でプロファイル化
 - または `--using-mode=dev` CLIフラグで統合
 
-## 📝 Update (2025-09-24) 🚀 MIR Call命令統一Phase 3.1-3.3完了！
-- ✅ **Phase 1-2完了** - MIR基盤構築と統一メソッド実装
-  - **定義外部化**: `src/mir/definitions/call_unified.rs`（297行）
-  - **統一メソッド**: `emit_unified_call()`＋便利メソッド3種実装済み
+## 📝 Update (2025-09-24) 🚀 Phase 15.5 Core Box Unification計画策定！
+- ✅ **Phase 15.5計画完成** - コアBox削除→2層構造への革命
+  - **3層→2層**: コアBox（nyrt内蔵）削除、プラグイン/ユーザーBoxのみに
+  - **削減目標**: 約700行（nyrt実装600行 + 特別扱い100行）
+  - **既存システム発見**: `NYASH_USE_PLUGIN_BUILTINS=1`と`NYASH_PLUGIN_OVERRIDE_TYPES`が完全実装済み
+  - **実装戦略**: DLL動作確認→Nyashコード化の段階的移行
+  - **詳細ドキュメント**: [phase-15.5-core-box-unification.md](docs/development/roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
+- ✅ **MIR Call命令統一Phase 3.1-3.3完了**
+  - **統一メソッド**: `emit_unified_call()`実装済み
   - **環境変数制御**: `NYASH_MIR_UNIFIED_CALL=1`で切り替え可能
-- ✅ **Phase 3.1-3.3完了** - 基本関数とBoxCallの統一Call移行成功！
-  - **indirect call**: `build_indirect_call_expression`で`CallTarget::Value`使用
-  - **print関数**: `call_global print()`として統一（ExternCall→Callee::Global）
-  - **function call**: `build_function_call`で`CallTarget::Global`使用
-  - **BoxCall統一**: `emit_box_or_plugin_call`で`CallTarget::Method`使用
-  - **実行確認**: `env NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --dump-mir`で動作確認済み
-- 📊 **マスタープラン進捗** - 4つの実行器で完全統一へ
   - **削減見込み**: 7,372行 → 5,468行（**26%削減**）
-  - **処理パターン**: 24 → 4（**83%削減**）
-  - **Phase 15寄与**: 全体目標の約7%（重要な柱）
-  - **詳細ドキュメント**: [mir-call-unification-master-plan.md](docs/development/roadmap/phases/phase-15/mir-call-unification-master-plan.md)
-- 🎯 **6種類→1種類**: Call/BoxCall/PluginInvoke/ExternCall/NewBox/NewClosure → **MirCall**
+  - **6種類→1種類**: Call/BoxCall/PluginInvoke/ExternCall/NewBox/NewClosure → **MirCall**
 
 ## 🧪 テストスクリプト参考集（既存のを活用しよう！）
 ```bash
