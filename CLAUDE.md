@@ -31,7 +31,9 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 ### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-**現在のフェーズ：Phase 15 (Nyashセルフホスティング - 80k→20k行への革命的圧縮)**
+**現在のフェーズ：Phase 15.5 (JSON v0中心化・統一Call基盤革命) → Phase 15 (Nyashセルフホスティング - 80k→20k行への革命的圧縮)**
+
+📋 **Phase 15.5アーキテクチャ革命**: [Phase 15.5 README](docs/development/roadmap/phases/phase-15.5/README.md)
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 
@@ -340,6 +342,13 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 
 # Python/llvmliteハーネス使用（開発中）
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
+
+# 🚀 **Phase 15.5統一Call完全動作確認済み設定** (2025-09-24)
+# ❌ モックルート回避 - 実際のLLVMハーネス使用
+NYASH_MIR_UNIFIED_CALL=1 NYASH_DISABLE_PLUGINS=1 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_OBJ_OUT=/tmp/output.o ./target/release/nyash --backend llvm program.nyash
+
+# 🔧 Python側で統一Call処理（llvmlite直接実行）
+cd src/llvm_py && NYASH_MIR_UNIFIED_CALL=1 ./venv/bin/python llvm_builder.py input.json -o output.o
 ```
 
 ## 🔍 MIRデバッグ出力完全ガイド（必読！）

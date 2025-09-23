@@ -2,7 +2,14 @@
 
 Updated: 2025‑09‑24
 
-## 🎯 **現在進行中: MIR Call命令統一実装 Phase 3.5**
+## 🎯 **現在進行中: Phase 15.5 JSON v0中心化・統一Call基盤革命**
+**セルフホスティング前の基盤アーキテクチャ大改革**
+
+📋 **詳細ドキュメント**: [Phase 15.5 README](docs/development/roadmap/phases/phase-15.5/README.md)
+- 📊 **進捗追跡**: [実装状況](docs/development/roadmap/phases/phase-15.5/implementation-status.md)
+- 🛡️ **戦略**: [段階移行計画](docs/development/roadmap/phases/phase-15.5/migration-phases.md) | [リスク分析](docs/development/roadmap/phases/phase-15.5/risk-analysis.md)
+
+### MIR Call命令統一実装 (Phase A進行中)
 **ChatGPT5 Pro A++設計による6種類Call命令→1つのMirCallへの統一作業**
 
 ### ✅ **Phase 1-2完了済み**（2025-09-24）
@@ -33,7 +40,7 @@ Updated: 2025‑09‑24
   - BoxCallをCallTarget::Methodとして統一Call化
   - MIRダンプで`call_method Box.method() [recv: %n]`形式出力確認
 
-### 🔧 **Phase 3.4進行中**: Python LLVM dispatch統一（2025-09-24）
+### ✅ **Phase 3.4完了**: Python LLVM dispatch統一（2025-09-24）
 - [x] **Python側のmir_call.py実装**
   - 統一MirCall処理ハンドラ作成（`src/llvm_py/instructions/mir_call.py`）
   - 6種類のCalleeパターンに対応（Global/Method/Constructor/Closure/Value/Extern）
@@ -41,7 +48,29 @@ Updated: 2025‑09‑24
 - [x] **instruction_lower.py更新**
   - `op == "mir_call"`の統一分岐を追加
   - 既存の個別処理との互換性維持
-- **次のステップ**: Phase 3.5 Rust側JSON出力対応
+
+### ✅ **Week 1完了**: llvmlite革命達成（2025-09-24）
+- [x] **真の統一実装完成** - デリゲート方式→核心ロジック内蔵へ完全移行
+  - `lower_global_call()`: call.py核心ロジック完全移植
+  - `lower_method_call()`: boxcall.py Everything is Box完全実装
+  - `lower_extern_call()`: externcall.py C ABI完全対応
+  - `lower_constructor_call()`: newbox.py全Box種類対応
+  - `lower_closure_creation()`: パラメータ＋キャプチャ完全実装
+  - `lower_value_call()`: 動的関数値呼び出し完全実装
+- [x] **環境変数制御完璧動作**
+  - `NYASH_MIR_UNIFIED_CALL=1`: `call_global print()`統一形式
+  - `NYASH_MIR_UNIFIED_CALL=0`: `extern_call env.console.log()`従来形式
+
+### 🔄 **Week 2進行中**: JSON出力統一（Phase A核心）
+- [ ] **mir_json_emit統一Call対応** - v1スキーマ実装 🔄
+- [ ] **スキーマ情報追加** - ヘッダー・バージョン・機能情報
+- [ ] **Python側v1対応** - instruction_lower.pyのv1処理
+- [x] **実際のLLVMハーネステスト** - モックルート回避完全成功！ ✅
+  - 環境変数設定確立: `NYASH_MIR_UNIFIED_CALL=1 + NYASH_LLVM_USE_HARNESS=1`
+  - オブジェクトファイル生成成功: `/tmp/unified_test.o` (1240 bytes)
+  - 統一Call→実際のLLVM処理確認: `print`シンボル生成確認
+  - **CLAUDE.md更新**: モックルート回避設定を明記
+- **詳細**: [Phase A計画](docs/development/roadmap/phases/phase-15.5/migration-phases.md#📋-phase-a-json出力統一今すぐ実装)
 
 ### 📊 **マスタープラン進捗**（2025-09-24）
 - **4つの実行器特定**: MIR Builder/VM/Python LLVM/mini-vm
