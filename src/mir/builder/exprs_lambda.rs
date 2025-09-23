@@ -2,7 +2,7 @@ use super::ValueId;
 use crate::ast::ASTNode;
 
 impl super::MirBuilder {
-    // Lambda lowering to FunctionNew
+    // Lambda lowering to NewClosure
     pub(super) fn build_lambda_expression(
         &mut self,
         params: Vec<String>,
@@ -163,7 +163,7 @@ impl super::MirBuilder {
         }
         let me = self.variable_map.get("me").copied();
         let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::FunctionNew {
+        self.emit_instruction(super::MirInstruction::NewClosure {
             dst,
             params: params.clone(),
             body: body.clone(),

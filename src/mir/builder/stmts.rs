@@ -122,13 +122,27 @@ impl super::MirBuilder {
 
         let value = self.build_expression(expression)?;
         super::utils::builder_debug_log(&format!("fallback print value={}", value));
-        self.emit_instruction(MirInstruction::ExternCall {
-            dst: None,
-            iface_name: "env.console".to_string(),
-            method_name: "log".to_string(),
-            args: vec![value],
-            effects: EffectMask::PURE.add(Effect::Io),
-        })?;
+
+        // Phase 3.2: Use unified call for print statements
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+        if use_unified {
+            // New unified path - treat print as global function
+            self.emit_unified_call(
+                None,  // print returns nothing
+                super::builder_calls::CallTarget::Global("print".to_string()),
+                vec![value],
+            )?;
+        } else {
+            // Legacy path - use ExternCall
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: None,
+                iface_name: "env.console".to_string(),
+                method_name: "log".to_string(),
+                args: vec![value],
+                effects: EffectMask::PURE.add(Effect::Io),
+            })?;
+        }
         Ok(value)
     }
 

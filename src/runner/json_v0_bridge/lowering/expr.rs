@@ -340,6 +340,7 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                 bb.add_instruction(MirInstruction::Call {
                     dst: Some(dst),
                     func: fun_val,
+                    callee: None, // JSON bridge - use legacy resolution
                     args: arg_ids,
                     effects: EffectMask::READ,
                 });

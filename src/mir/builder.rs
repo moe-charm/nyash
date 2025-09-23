@@ -13,6 +13,7 @@ use crate::ast::{ASTNode, LiteralValue};
 use std::collections::HashMap;
 use std::collections::HashSet;
 mod builder_calls;
+mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
 mod decls; // declarations lowering split
 mod exprs; // expression lowering split
 mod exprs_call; // call(expr)

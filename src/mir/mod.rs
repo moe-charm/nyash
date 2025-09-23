@@ -9,6 +9,7 @@
 pub mod aot_plan_import;
 pub mod basic_block;
 pub mod builder;
+pub mod definitions;  // Unified MIR definitions (MirCall, Callee, etc.)
 pub mod effect;
 pub mod function;
 pub mod instruction;
@@ -33,6 +34,7 @@ pub mod verification_types; // extracted error types // Optimization subpasses (
 // Re-export main types for easy access
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};
 pub use builder::MirBuilder;
+pub use definitions::{Callee, CallFlags, MirCall};  // Unified call definitions
 pub use effect::{Effect, EffectMask};
 pub use function::{FunctionSignature, MirFunction, MirModule};
 pub use instruction::MirInstruction;

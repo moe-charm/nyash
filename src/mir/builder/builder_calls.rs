@@ -1,6 +1,9 @@
 // Extracted call-related builders from builder.rs to keep files lean
 use super::{Effect, EffectMask, FunctionSignature, MirInstruction, MirType, ValueId};
 use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
+use crate::mir::definitions::call_unified::{Callee, CallFlags, MirCall};
+use crate::mir::definitions::call_unified::migration;
+use super::call_resolution;
 
 fn contains_value_return(nodes: &[ASTNode]) -> bool {
     fn node_has_value_return(node: &ASTNode) -> bool {
@@ -38,7 +41,268 @@ fn contains_value_return(nodes: &[ASTNode]) -> bool {
 }
 use crate::mir::{slot_registry, TypeOpKind};
 
+/// Call target specification for emit_unified_call
+/// Provides type-safe target resolution at the builder level
+#[derive(Debug, Clone)]
+pub enum CallTarget {
+    /// Global function (print, panic, etc.)
+    Global(String),
+    /// Method call (box.method)
+    Method {
+        box_type: Option<String>,  // None = infer from value
+        method: String,
+        receiver: ValueId,
+    },
+    /// Constructor (new BoxType)
+    Constructor(String),
+    /// External function (nyash.*)
+    Extern(String),
+    /// Dynamic function value
+    Value(ValueId),
+    /// Closure creation
+    Closure {
+        params: Vec<String>,
+        captures: Vec<(String, ValueId)>,
+        me_capture: Option<ValueId>,
+    },
+}
+
 impl super::MirBuilder {
+    /// Unified call emission - replaces all emit_*_call methods
+    /// ChatGPT5 Pro A++ design for complete call unification
+    pub fn emit_unified_call(
+        &mut self,
+        dst: Option<ValueId>,
+        target: CallTarget,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        // Check environment variable for unified call usage
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL")
+            .unwrap_or_else(|_| "0".to_string()) != "0";
+
+        if !use_unified {
+            // Fall back to legacy implementation
+            return self.emit_legacy_call(dst, target, args);
+        }
+
+        // Convert CallTarget to Callee
+        let callee = match target {
+            CallTarget::Global(name) => {
+                // Check if it's a built-in function
+                if call_resolution::is_builtin_function(&name) {
+                    Callee::Global(name)
+                } else if call_resolution::is_extern_function(&name) {
+                    Callee::Extern(name)
+                } else {
+                    return Err(format!("Unknown global function: {}", name));
+                }
+            },
+            CallTarget::Method { box_type, method, receiver } => {
+                let inferred_box_type = box_type.unwrap_or_else(|| {
+                    // Try to infer box type from value origin or type annotation
+                    self.value_origin_newbox.get(&receiver)
+                        .cloned()
+                        .or_else(|| {
+                            self.value_types.get(&receiver)
+                                .and_then(|t| match t {
+                                    MirType::Box(box_name) => Some(box_name.clone()),
+                                    _ => None,
+                                })
+                        })
+                        .unwrap_or_else(|| "UnknownBox".to_string())
+                });
+
+                Callee::Method {
+                    box_name: inferred_box_type,
+                    method,
+                    receiver: Some(receiver),
+                }
+            },
+            CallTarget::Constructor(box_type) => {
+                Callee::Constructor { box_type }
+            },
+            CallTarget::Extern(name) => {
+                Callee::Extern(name)
+            },
+            CallTarget::Value(func_val) => {
+                Callee::Value(func_val)
+            },
+            CallTarget::Closure { params, captures, me_capture } => {
+                Callee::Closure { params, captures, me_capture }
+            },
+        };
+
+        // Create MirCall instruction
+        let effects = self.compute_call_effects(&callee);
+        let flags = if callee.is_constructor() {
+            CallFlags::constructor()
+        } else {
+            CallFlags::new()
+        };
+
+        let mir_call = MirCall {
+            dst,
+            callee,
+            args,
+            flags,
+            effects,
+        };
+
+        // For Phase 2: Convert to legacy Call instruction with new callee field
+        let legacy_call = MirInstruction::Call {
+            dst: mir_call.dst,
+            func: ValueId::new(0), // Dummy value for legacy compatibility
+            callee: Some(mir_call.callee),
+            args: mir_call.args,
+            effects: mir_call.effects,
+        };
+
+        self.emit_instruction(legacy_call)
+    }
+
+    /// Legacy call fallback - preserves existing behavior
+    fn emit_legacy_call(
+        &mut self,
+        dst: Option<ValueId>,
+        target: CallTarget,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        match target {
+            CallTarget::Method { receiver, method, .. } => {
+                // Use existing emit_box_or_plugin_call
+                self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO)
+            },
+            CallTarget::Constructor(box_type) => {
+                // Use existing NewBox
+                let dst = dst.ok_or("Constructor must have destination")?;
+                self.emit_instruction(MirInstruction::NewBox {
+                    dst,
+                    box_type,
+                    args,
+                })
+            },
+            CallTarget::Extern(name) => {
+                // Use existing ExternCall
+                let parts: Vec<&str> = name.splitn(2, '.').collect();
+                let (iface, method) = if parts.len() == 2 {
+                    (parts[0].to_string(), parts[1].to_string())
+                } else {
+                    ("nyash".to_string(), name)
+                };
+
+                self.emit_instruction(MirInstruction::ExternCall {
+                    dst,
+                    iface_name: iface,
+                    method_name: method,
+                    args,
+                    effects: EffectMask::IO,
+                })
+            },
+            CallTarget::Global(name) => {
+                // Create a string constant for the function name
+                let name_const = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const {
+                    dst: name_const,
+                    value: super::ConstValue::String(name),
+                })?;
+
+                self.emit_instruction(MirInstruction::Call {
+                    dst,
+                    func: name_const,
+                    callee: None, // Legacy mode
+                    args,
+                    effects: EffectMask::IO,
+                })
+            },
+            CallTarget::Value(func_val) => {
+                self.emit_instruction(MirInstruction::Call {
+                    dst,
+                    func: func_val,
+                    callee: None, // Legacy mode
+                    args,
+                    effects: EffectMask::IO,
+                })
+            },
+            CallTarget::Closure { params, captures, me_capture } => {
+                let dst = dst.ok_or("Closure creation must have destination")?;
+                self.emit_instruction(MirInstruction::NewClosure {
+                    dst,
+                    params,
+                    body: vec![], // Empty body for now
+                    captures,
+                    me: me_capture,
+                })
+            },
+        }
+    }
+
+    /// Compute effects for a call based on its callee
+    fn compute_call_effects(&self, callee: &Callee) -> EffectMask {
+        match callee {
+            Callee::Global(name) => {
+                match name.as_str() {
+                    "print" | "error" => EffectMask::IO,
+                    "panic" | "exit" => EffectMask::IO.add(Effect::Control),
+                    _ => EffectMask::IO,
+                }
+            },
+            Callee::Method { method, .. } => {
+                match method.as_str() {
+                    "birth" => EffectMask::PURE.add(Effect::Alloc),
+                    _ => EffectMask::READ,
+                }
+            },
+            Callee::Constructor { .. } => EffectMask::PURE.add(Effect::Alloc),
+            Callee::Closure { .. } => EffectMask::PURE.add(Effect::Alloc),
+            Callee::Extern(_) => EffectMask::IO,
+            Callee::Value(_) => EffectMask::IO, // Conservative
+        }
+    }
+    // Phase 2 Migration: Convenience methods that use emit_unified_call
+
+    /// Emit a global function call (print, panic, etc.)
+    pub fn emit_global_call(
+        &mut self,
+        dst: Option<ValueId>,
+        name: String,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        self.emit_unified_call(dst, CallTarget::Global(name), args)
+    }
+
+    /// Emit a method call (box.method)
+    pub fn emit_method_call(
+        &mut self,
+        dst: Option<ValueId>,
+        receiver: ValueId,
+        method: String,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        self.emit_unified_call(
+            dst,
+            CallTarget::Method {
+                box_type: None, // Auto-infer
+                method,
+                receiver,
+            },
+            args,
+        )
+    }
+
+    /// Emit a constructor call (new BoxType)
+    pub fn emit_constructor_call(
+        &mut self,
+        dst: ValueId,
+        box_type: String,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        self.emit_unified_call(
+            Some(dst),
+            CallTarget::Constructor(box_type),
+            args,
+        )
+    }
+
     /// Try handle math.* function in function-style (sin/cos/abs/min/max).
     /// Returns Some(result) if handled, otherwise None.
     fn try_handle_math_function(
@@ -73,14 +337,14 @@ impl super::MirBuilder {
         }
         // new MathBox()
         let math_recv = self.value_gen.next();
-        if let Err(e) = self.emit_instruction(MirInstruction::NewBox { dst: math_recv, box_type: "MathBox".to_string(), args: vec![] }) { return Some(Err(e)); }
+        if let Err(e) = self.emit_constructor_call(math_recv, "MathBox".to_string(), vec![]) { return Some(Err(e)); }
         self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
         // birth()
         let birt_mid = slot_registry::resolve_slot_by_type_name("MathBox", "birth");
-        if let Err(e) = self.emit_box_or_plugin_call(None, math_recv, "birth".to_string(), birt_mid, vec![], EffectMask::READ) { return Some(Err(e)); }
+        if let Err(e) = self.emit_method_call(None, math_recv, "birth".to_string(), vec![]) { return Some(Err(e)); }
         // call method
         let dst = self.value_gen.next();
-        if let Err(e) = self.emit_box_or_plugin_call(Some(dst), math_recv, name.to_string(), None, math_args, EffectMask::READ) { return Some(Err(e)); }
+        if let Err(e) = self.emit_method_call(Some(dst), math_recv, name.to_string(), math_args) { return Some(Err(e)); }
         Some(Ok(dst))
     }
 
@@ -155,9 +419,78 @@ impl super::MirBuilder {
         let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
         let fun_val = self.value_gen.next();
         if let Err(e) = self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name) }) { return Some(Err(e)); }
-        if let Err(e) = self.emit_instruction(MirInstruction::Call { dst: Some(result_id), func: fun_val, args: arg_values, effects: EffectMask::READ.add(Effect::ReadHeap) }) { return Some(Err(e)); }
+        if let Err(e) = self.emit_instruction(MirInstruction::Call {
+            dst: Some(result_id),
+            func: fun_val,
+            callee: None, // Legacy math function - use old resolution
+            args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap)
+        }) { return Some(Err(e)); }
         Some(Ok(result_id))
     }
+
+    // === ChatGPT5 Pro Design: Type-safe Call Resolution System ===
+
+    /// Resolve function call target to type-safe Callee
+    /// Implements the core logic of compile-time function resolution
+    fn resolve_call_target(&self, name: &str) -> Result<super::super::Callee, String> {
+        // 1. Check for built-in/global functions first
+        if self.is_builtin_function(name) {
+            return Ok(super::super::Callee::Global(name.to_string()));
+        }
+
+        // 2. Check for static box method in current context
+        if let Some(box_name) = &self.current_static_box {
+            if self.has_method(box_name, name) {
+                // Warn about potential self-recursion using external helper
+                if super::call_resolution::is_commonly_shadowed_method(name) {
+                    eprintln!("{}", super::call_resolution::generate_self_recursion_warning(box_name, name));
+                }
+
+                return Ok(super::super::Callee::Method {
+                    box_name: box_name.clone(),
+                    method: name.to_string(),
+                    receiver: None, // Static method call
+                });
+            }
+        }
+
+        // 3. Check for local variable containing function value
+        if self.variable_map.contains_key(name) {
+            let value_id = self.variable_map[name];
+            return Ok(super::super::Callee::Value(value_id));
+        }
+
+        // 4. Check for external/host functions
+        if self.is_extern_function(name) {
+            return Ok(super::super::Callee::Extern(name.to_string()));
+        }
+
+        // 5. Resolution failed - this prevents runtime string-based resolution
+        Err(format!("Unresolved function: '{}'. {}", name, super::call_resolution::suggest_resolution(name)))
+    }
+
+    /// Check if function name is a built-in global function
+    fn is_builtin_function(&self, name: &str) -> bool {
+        super::call_resolution::is_builtin_function(name)
+    }
+
+    /// Check if current static box has the specified method
+    fn has_method(&self, box_name: &str, method: &str) -> bool {
+        // TODO: Implement proper method registry lookup
+        // For now, use simple heuristics for common cases
+        match box_name {
+            "ConsoleStd" => matches!(method, "print" | "println" | "log"),
+            "StringBox" => matches!(method, "upper" | "lower" | "length"),
+            _ => false, // Conservative: assume no method unless explicitly known
+        }
+    }
+
+    /// Check if function name is an external/host function
+    fn is_extern_function(&self, name: &str) -> bool {
+        super::call_resolution::is_extern_function(name)
+    }
+
     // Build function call: name(args)
     pub(super) fn build_function_call(
         &mut self,
@@ -189,25 +522,50 @@ impl super::MirBuilder {
 
         if let Some(res) = self.try_handle_math_function(&name, raw_args) { return res; }
 
-        let dst = self.value_gen.next();
-
-        // Default: call via fully-qualified function name string
+        // Build argument values
         let mut arg_values = Vec::new();
         for a in args {
             arg_values.push(self.build_expression(a)?);
         }
-        let fun_val = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: fun_val,
-            value: super::ConstValue::String(name),
-        })?;
-        self.emit_instruction(MirInstruction::Call {
-            dst: Some(dst),
-            func: fun_val,
-            args: arg_values,
-            effects: EffectMask::READ.add(Effect::ReadHeap),
-        })?;
-        Ok(dst)
+
+        // Phase 3.2: Use unified call for basic functions like print
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+        if use_unified {
+            // New unified path - use emit_unified_call with Global target
+            let dst = self.value_gen.next();
+            self.emit_unified_call(
+                Some(dst),
+                CallTarget::Global(name),
+                arg_values,
+            )?;
+            Ok(dst)
+        } else {
+            // Legacy path
+            let dst = self.value_gen.next();
+
+            // === ChatGPT5 Pro Design: Type-safe function call resolution ===
+
+            // Resolve call target using new type-safe system
+            let callee = self.resolve_call_target(&name)?;
+
+            // Legacy compatibility: Create dummy func value for old systems
+            let fun_val = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const {
+                dst: fun_val,
+                value: super::ConstValue::String(name.clone()),
+            })?;
+
+            // Emit new-style Call with type-safe callee
+            self.emit_instruction(MirInstruction::Call {
+                dst: Some(dst),
+                func: fun_val,                  // Legacy compatibility
+                callee: Some(callee),           // New type-safe resolution
+                args: arg_values,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+            Ok(dst)
+        }
     }
 
     // Build method call: object.method(arguments)

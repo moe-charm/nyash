@@ -13,13 +13,30 @@ impl super::MirBuilder {
         for a in arguments {
             arg_ids.push(self.build_expression_impl(a)?);
         }
-        let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::Call {
-            dst: Some(dst),
-            func: callee_id,
-            args: arg_ids,
-            effects: super::EffectMask::PURE,
-        })?;
-        Ok(dst)
+
+        // Phase 3.1: Use unified call with CallTarget::Value for indirect calls
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+        if use_unified {
+            // New unified path - use emit_unified_call with Value target
+            let dst = self.value_gen.next();
+            self.emit_unified_call(
+                Some(dst),
+                super::builder_calls::CallTarget::Value(callee_id),
+                arg_ids,
+            )?;
+            Ok(dst)
+        } else {
+            // Legacy path - keep for compatibility
+            let dst = self.value_gen.next();
+            self.emit_instruction(super::MirInstruction::Call {
+                dst: Some(dst),
+                func: callee_id,
+                callee: None, // Legacy call expression - use old resolution
+                args: arg_ids,
+                effects: super::EffectMask::PURE,
+            })?;
+            Ok(dst)
+        }
     }
 }

@@ -63,6 +63,7 @@ pub fn format_instruction(
         MirInstruction::Call {
             dst,
             func,
+            callee,
             args,
             effects: _,
         } => {
@@ -72,18 +73,51 @@ pub fn format_instruction(
                 .collect::<Vec<_>>()
                 .join(", ");
 
-            if let Some(dst) = dst {
-                format!(
-                    "{} call {}({})",
-                    format_dst(dst, types),
-                    func,
-                    args_str
-                )
+            // ✅ MIRダンプCallee表示改良 - ChatGPT5 Pro革命！
+            let call_display = if let Some(callee_info) = callee {
+                match callee_info {
+                    super::Callee::Global(name) => {
+                        format!("call_global {}({})", name, args_str)
+                    }
+                    super::Callee::Method { box_name, method, receiver } => {
+                        if let Some(recv) = receiver {
+                            format!("call_method {}.{}({}) [recv: {}]", box_name, method, args_str, recv)
+                        } else {
+                            format!("call_method {}.{}({})", box_name, method, args_str)
+                        }
+                    }
+                    super::Callee::Constructor { box_type } => {
+                        format!("call_constructor {}({})", box_type, args_str)
+                    }
+                    super::Callee::Closure { params, captures, me_capture } => {
+                        let params_str = params.join(", ");
+                        let captures_str = captures.iter()
+                            .map(|(name, val)| format!("{}={}", name, val))
+                            .collect::<Vec<_>>()
+                            .join(", ");
+                        let me_str = me_capture.map_or(String::new(), |v| format!(" [me={}]", v));
+                        format!("call_closure ({}) [captures: {}]{}",
+                            params_str, captures_str, me_str)
+                    }
+                    super::Callee::Value(func_val) => {
+                        format!("call_value {}({})", func_val, args_str)
+                    }
+                    super::Callee::Extern(extern_name) => {
+                        format!("call_extern {}({})", extern_name, args_str)
+                    }
+                }
             } else {
-                format!("call {}({})", func, args_str)
+                // LEGACY: 従来の表示（後方互換性）
+                format!("call_legacy {}({})", func, args_str)
+            };
+
+            if let Some(dst) = dst {
+                format!("{} {}", format_dst(dst, types), call_display)
+            } else {
+                call_display
             }
         }
-        MirInstruction::FunctionNew {
+        MirInstruction::NewClosure {
             dst,
             params,
             body,
@@ -99,7 +133,7 @@ pub fn format_instruction(
             let me_s = me.map(|m| format!(" me={}", m)).unwrap_or_default();
             let cap_s = if c.is_empty() { String::new() } else { format!(" [{}]", c) };
             format!(
-                "{} function_new ({}) {{...{}}}{}{}",
+                "{} new_closure ({}) {{...{}}}{}{}",
                 format_dst(dst, types),
                 p,
                 body.len(),

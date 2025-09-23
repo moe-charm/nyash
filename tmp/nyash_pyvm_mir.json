@@ -9,114 +9,119 @@
               "args": [],
               "dst": 0,
               "op": "newbox",
-              "type": "MapBox"
+              "type": "MathBox"
+            },
+            {
+              "args": [],
+              "box": 0,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
             },
             {
               "dst": 1,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "name"
+                "type": "f64",
+                "value": 42.0
               }
             },
             {
               "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Nyash"
-              }
+              "kind": "neg",
+              "op": "unop",
+              "src": 1
             },
             {
               "args": [
-                1,
                 2
               ],
               "box": 0,
-              "dst": null,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
               "dst": 3,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "version"
-              }
+              "method": "abs",
+              "op": "boxcall"
             },
             {
               "dst": 4,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 15
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "abs(-42.0) = "
               }
             },
             {
               "args": [
-                3,
                 4
               ],
-              "box": 0,
               "dst": null,
-              "method": "set",
-              "op": "boxcall"
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [
+                3
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "dst": 5,
               "op": "const",
               "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "isBox"
-              }
-            },
-            {
-              "dst": 6,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "args": [
-                5,
-                6
-              ],
-              "box": 0,
-              "dst": null,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "dst": 7,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "features"
+                "type": "f64",
+                "value": 1.57
               }
             },
             {
               "args": [],
+              "dst": 6,
+              "func": 0,
+              "op": "call"
+            },
+            {
+              "args": [],
+              "dst": null,
+              "func": 0,
+              "op": "call"
+            },
+            {
+              "args": [
+                5
+              ],
+              "dst": 7,
+              "func": 0,
+              "op": "call"
+            },
+            {
               "dst": 8,
-              "op": "newbox",
-              "type": "MapBox"
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "sin(pi/2) ≈ "
+              }
+            },
+            {
+              "args": [
+                8
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [
+                7
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
             },
             {
               "dst": 9,
@@ -126,88 +131,12 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "fast"
-              }
-            },
-            {
-              "dst": 10,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
+                "value": "Unified call test completed!"
               }
             },
             {
               "args": [
-                9,
-                10
-              ],
-              "box": 8,
-              "dst": null,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "dst": 11,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "safe"
-              }
-            },
-            {
-              "dst": 12,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "args": [
-                11,
-                12
-              ],
-              "box": 8,
-              "dst": null,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "args": [
-                7,
-                8
-              ],
-              "box": 0,
-              "dst": null,
-              "method": "set",
-              "op": "boxcall"
-            },
-            {
-              "args": [
-                0
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 13,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "IDENTIFIERキーがデフォルトで使える！"
-              }
-            },
-            {
-              "args": [
-                13
+                9
               ],
               "dst": null,
               "func": "nyash.console.log",
@@ -215,7 +144,7 @@
             },
             {
               "op": "ret",
-              "value": 13
+              "value": 9
             }
           ]
         }

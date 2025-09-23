@@ -5,9 +5,11 @@
  */
 
 use super::{Effect, EffectMask, ValueId};
+use crate::mir::definitions::Callee;  // Import Callee from unified definitions
 use crate::mir::types::{
     BarrierOp, BinaryOp, CompareOp, ConstValue, MirType, TypeOpKind, UnaryOp, WeakRefOp,
 };
+
 // use crate::value::NyashValue;  // Commented out to avoid circular dependency
 use std::fmt;
 
@@ -60,19 +62,25 @@ pub enum MirInstruction {
     Store { value: ValueId, ptr: ValueId },
 
     // === Function Calls ===
-    /// Call a function
-    /// `%dst = call %func(%args...)`
+    /// Call a function with type-safe target resolution
+    /// `%dst = call %func(%args...)` (legacy)
+    /// `%dst = call Global("print")(%args...)` (new)
+    ///
+    /// Phase 1 Migration: Both func and callee fields present
+    /// - callee: Some(_) -> Use new type-safe resolution (preferred)
+    /// - callee: None -> Fall back to legacy string-based resolution
     Call {
         dst: Option<ValueId>,
-        func: ValueId,
+        func: ValueId,              // Legacy: string-based resolution (deprecated)
+        callee: Option<Callee>,     // New: type-safe resolution (preferred)
         args: Vec<ValueId>,
         effects: EffectMask,
     },
 
     /// Create a function value (FunctionBox) from params/body and optional captures
-    /// `%dst = function_new [params] {body} [captures...]`
+    /// `%dst = new_closure [params] {body} [captures...]`
     /// Minimal lowering support: captures may be empty; 'me' is optional.
-    FunctionNew {
+    NewClosure {
         dst: ValueId,
         params: Vec<String>,
         body: Vec<crate::ast::ASTNode>,
@@ -370,7 +378,7 @@ impl MirInstruction {
             // Phase 9.7: External Function Calls
             MirInstruction::ExternCall { effects, .. } => *effects, // Use provided effect mask
             // Function value construction: treat as pure with allocation
-            MirInstruction::FunctionNew { .. } => EffectMask::PURE.add(Effect::Alloc),
+            MirInstruction::NewClosure { .. } => EffectMask::PURE.add(Effect::Alloc),
         }
     }
 
@@ -399,7 +407,7 @@ impl MirInstruction {
             | MirInstruction::WeakRef { dst, .. }
             | MirInstruction::FutureNew { dst, .. }
             | MirInstruction::Await { dst, .. } => Some(*dst),
-            MirInstruction::FunctionNew { dst, .. } => Some(*dst),
+            MirInstruction::NewClosure { dst, .. } => Some(*dst),
 
             MirInstruction::Call { dst, .. }
             | MirInstruction::BoxCall { dst, .. }
@@ -472,7 +480,7 @@ impl MirInstruction {
                 used.extend(args);
                 used
             }
-            MirInstruction::FunctionNew { captures, me, .. } => {
+            MirInstruction::NewClosure { captures, me, .. } => {
                 let mut used: Vec<ValueId> = Vec::new();
                 used.extend(captures.iter().map(|(_, v)| *v));
                 if let Some(m) = me {
@@ -576,6 +584,7 @@ impl fmt::Display for MirInstruction {
             MirInstruction::Call {
                 dst,
                 func,
+                callee: _, // TODO: Use callee for type-safe resolution display
                 args,
                 effects,
             } => {

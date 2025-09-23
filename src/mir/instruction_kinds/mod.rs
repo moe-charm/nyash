@@ -121,7 +121,7 @@ pub fn effects_via_meta(i: &MirInstruction) -> Option<EffectMask> {
     if let Some(k) = ThrowInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = CatchInst::from_mir(i) { return Some(k.effects()); }
     if let Some(k) = SafepointInst::from_mir(i) { return Some(k.effects()); }
-    if let Some(k) = FunctionNewInst::from_mir(i) { return Some(k.effects()); }
+    if let Some(k) = NewClosureInst::from_mir(i) { return Some(k.effects()); }
     None
 }
 
@@ -150,7 +150,7 @@ pub fn dst_via_meta(i: &MirInstruction) -> Option<ValueId> {
     if let Some(_k) = ThrowInst::from_mir(i) { return None; }
     if let Some(k) = CatchInst::from_mir(i) { return k.dst(); }
     if let Some(_k) = SafepointInst::from_mir(i) { return None; }
-    if let Some(k) = FunctionNewInst::from_mir(i) { return k.dst(); }
+    if let Some(k) = NewClosureInst::from_mir(i) { return k.dst(); }
     None
 }
 
@@ -179,7 +179,7 @@ pub fn used_via_meta(i: &MirInstruction) -> Option<Vec<ValueId>> {
     if let Some(k) = ThrowInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = CatchInst::from_mir(i) { return Some(k.used()); }
     if let Some(k) = SafepointInst::from_mir(i) { return Some(k.used()); }
-    if let Some(k) = FunctionNewInst::from_mir(i) { return Some(k.used()); }
+    if let Some(k) = NewClosureInst::from_mir(i) { return Some(k.used()); }
     None
 }
 
@@ -391,11 +391,11 @@ inst_meta! {
     }
 }
 
-// ---- FunctionNew ---- (macro-generated)
+// ---- NewClosure ---- (macro-generated)
 inst_meta! {
-    pub struct FunctionNewInst { dst: ValueId, captures: Vec<(String, ValueId)>, me: Option<ValueId> }
+    pub struct NewClosureInst { dst: ValueId, captures: Vec<(String, ValueId)>, me: Option<ValueId> }
     => {
-        from_mir = |i| match i { MirInstruction::FunctionNew { dst, captures, me, .. } => Some(FunctionNewInst { dst: *dst, captures: captures.clone(), me: *me }), _ => None };
+        from_mir = |i| match i { MirInstruction::NewClosure { dst, captures, me, .. } => Some(NewClosureInst { dst: *dst, captures: captures.clone(), me: *me }), _ => None };
         effects = |_: &Self| EffectMask::PURE.add(Effect::Alloc);
         dst = |s: &Self| Some(s.dst);
         used = |s: &Self| { let mut v: Vec<ValueId> = s.captures.iter().map(|(_, id)| *id).collect(); if let Some(m) = s.me { v.push(m); } v };

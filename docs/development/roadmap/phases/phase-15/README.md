@@ -48,6 +48,58 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 
 #### IfForm（構造化 if）— Builder 内部モデル（追加）
 - 目的: if/merge を構造化フォームで生成し、PHI‑off/PHI‑on の両経路で安定合流を得る。
+
+### 🚀 **Phase 15.4: MIR Call革新（2025-09-23 NEW）**
+**シャドウイングバグからの設計革命 - ChatGPT5 Pro協働成果**
+
+#### 📋 **革新の背景**
+- **発端**: PyVM無限ループ問題（ConsoleStd.print内でのprint()再帰呼び出し）
+- **発見**: 根本原因は実行時文字列解決によるスコープ曖昧性
+- **昇華**: ChatGPT5 Pro提案により表面修正→根本的アーキテクチャ改良へ
+
+#### 🎯 **技術革新内容**
+```rust
+// ❌ 従来（問題構造）
+Call { func: ValueId /* "print"文字列 */, args }
+
+// ✅ 革新後（型付き解決）
+enum Callee {
+    Global(String),      // nyash.builtin.print
+    Method { box_name, method, receiver },
+    Value(ValueId),      // 関数値（最小限）
+    Extern(String),      // C ABI
+}
+Call { callee: Callee, args }
+```
+
+#### 📈 **Phase 15目標への直接寄与**
+
+1. **80k→20k行削減目標**
+   - Phase 1のみ: ~1,500行削減（目標の7.5%）
+   - 全Phase完了: ~4,500行削減（目標の22.5%）
+   - 実行時解決ロジック・エラー処理・デバッグコードの大幅簡略化
+
+2. **セルフホスティング安定化**
+   - using system連携: built-in namespace統合
+   - PyVM最適化: 型付き呼び出しによる高速化
+   - LLVM最適化: 静的解決による最適化機会拡大
+
+3. **Everything is Box哲学強化**
+   - コンパイル時型安全性の確立
+   - Box間の呼び出し関係の明確化
+   - デバッグ・保守性の劇的向上
+
+#### 🛡️ **実装戦略（3段階・破壊的変更なし）**
+- **Phase 1**: 最小変更（2-3日）→即実装可能
+- **Phase 2**: HIR導入（1-2週間）→コンパイル時解決確立
+- **Phase 3**: 言語仕様統合（1ヶ月）→完全修飾名システム
+
+#### 📊 **成功指標**
+- [ ] シャドウイング無限再帰の完全排除
+- [ ] 全既存テストの破壊なし（グリーン維持）
+- [ ] MIRダンプの可読性向上
+- [ ] パフォーマンス向上（実行時オーバーヘッド削減）
+- [ ] using systemとの完全統合
 - 規約（PHI‑off 既定）:
   - merge 内に copy は置かない。then/else の pred へ edge_copy のみを挿入（self‑copy は No‑Op）。
   - 分岐直前に pre_if_snapshot を取得し、then/else は snapshot ベースで独立構築。merge で snapshot を基底に戻す。

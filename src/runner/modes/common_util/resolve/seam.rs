@@ -35,7 +35,7 @@ pub fn log_prelude_body_seam(prelude_clean: &str, body: &str, seam_dbg: bool) {
 /// Apply optional seam safety: append missing '}' for unmatched '{' in prelude
 /// When `trace` is true, emits a short note with delta count.
 pub fn fix_prelude_braces_if_enabled(prelude_clean: &str, combined: &mut String, trace: bool) {
-    if std::env::var("NYASH_RESOLVE_FIX_BRACES").ok().as_deref() != Some("1") {
+    if !crate::config::env::resolve_fix_braces() {
         return;
     }
     // compute { } delta ignoring strings and comments

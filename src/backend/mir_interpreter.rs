@@ -12,7 +12,7 @@ use crate::backend::abi_util::{eq_vm, to_bool_vm};
 use crate::backend::vm::{VMError, VMValue};
 use crate::box_trait::NyashBox;
 use crate::mir::{
-    BasicBlockId, BinaryOp, CompareOp, ConstValue, MirFunction, MirInstruction, MirModule, ValueId,
+    BasicBlockId, BinaryOp, Callee, CompareOp, ConstValue, MirFunction, MirInstruction, MirModule, ValueId,
 };
 
 pub struct MirInterpreter {
@@ -401,6 +401,28 @@ impl MirInterpreter {
                     | MirInstruction::Barrier { .. }
                     | MirInstruction::Safepoint
                     | MirInstruction::Nop => {}
+                    MirInstruction::Call {
+                        dst,
+                        func,
+                        callee,
+                        args,
+                        ..
+                    } => {
+                        // VM実行器Callee対応 - ChatGPT5 Pro MIR革命の最終1%！
+
+                        // Phase 1: 段階移行サポート - callee型安全解決を優先、フォールバックで従来解決
+                        let call_result = if let Some(callee_type) = callee {
+                            // NEW: 型安全Callee解決（ChatGPT5 Pro設計）
+                            self.execute_callee_call(callee_type, args)?
+                        } else {
+                            // LEGACY: 従来の文字列ベース解決（func: ValueId）
+                            self.execute_legacy_call(*func, args)?
+                        };
+
+                        if let Some(d) = dst {
+                            self.regs.insert(*d, call_result);
+                        }
+                    }
                     // Unimplemented but recognized — return clear error for visibility
                     other => {
                         return Err(VMError::InvalidInstruction(format!(
@@ -521,5 +543,170 @@ impl MirInterpreter {
                 )))
             }
         })
+    }
+
+    /// NEW: Callee型安全解決（ChatGPT5 Pro設計）
+    fn execute_callee_call(&mut self, callee: &Callee, args: &[ValueId]) -> Result<VMValue, VMError> {
+        match callee {
+            Callee::Global(func_name) => {
+                // グローバル関数呼び出し（nyash.builtin.print等）
+                self.execute_global_function(func_name, args)
+            }
+            Callee::Method { box_name, method, receiver } => {
+                // メソッド呼び出し（StringBox.concat等）
+                if let Some(recv_id) = receiver {
+                    let recv_val = self.reg_load(*recv_id)?;
+                    self.execute_method_call(&recv_val, method, args)
+                } else {
+                    Err(VMError::InvalidInstruction(format!(
+                        "Method call {}.{} missing receiver",
+                        box_name, method
+                    )))
+                }
+            }
+            Callee::Constructor { box_type } => {
+                // コンストラクタ呼び出し（NewBox相当）
+                // TODO: 実際のBox生成実装（Phase 2で実装）
+                Err(VMError::InvalidInstruction(format!(
+                    "Constructor calls not yet implemented for {}",
+                    box_type
+                )))
+            }
+            Callee::Closure { params: _, captures: _, me_capture: _ } => {
+                // クロージャ生成（NewClosure相当）
+                // TODO: クロージャ生成実装（Phase 2で実装）
+                Err(VMError::InvalidInstruction(
+                    "Closure creation not yet implemented in VM".into()
+                ))
+            }
+            Callee::Value(func_val_id) => {
+                // 第一級関数呼び出し（クロージャ等）
+                let _func_val = self.reg_load(*func_val_id)?;
+                // TODO: 第一級関数呼び出し実装（Phase 2で拡張）
+                Err(VMError::InvalidInstruction(
+                    "First-class function calls not yet implemented in VM".into()
+                ))
+            }
+            Callee::Extern(extern_name) => {
+                // 外部C ABI関数呼び出し
+                self.execute_extern_function(extern_name, args)
+            }
+        }
+    }
+
+    /// LEGACY: 従来の文字列ベース解決（後方互換性）
+    fn execute_legacy_call(&mut self, func_id: ValueId, args: &[ValueId]) -> Result<VMValue, VMError> {
+        // 従来の実装: func_idから関数名を取得して呼び出し
+        // 簡易実装 - 実際には関数テーブルやシンボル解決が必要
+        Err(VMError::InvalidInstruction(format!(
+            "Legacy function call (ValueId: {}) not implemented in VM interpreter. Please use Callee-typed calls.",
+            func_id
+        )))
+    }
+
+    /// グローバル関数実行（nyash.builtin.*）
+    fn execute_global_function(&mut self, func_name: &str, args: &[ValueId]) -> Result<VMValue, VMError> {
+        match func_name {
+            "nyash.builtin.print" | "print" => {
+                if let Some(arg_id) = args.get(0) {
+                    let val = self.reg_load(*arg_id)?;
+                    println!("{}", val.to_string());
+                }
+                Ok(VMValue::Void)
+            }
+            "nyash.console.log" => {
+                if let Some(arg_id) = args.get(0) {
+                    let val = self.reg_load(*arg_id)?;
+                    println!("{}", val.to_string());
+                }
+                Ok(VMValue::Void)
+            }
+            "nyash.builtin.error" => {
+                if let Some(arg_id) = args.get(0) {
+                    let val = self.reg_load(*arg_id)?;
+                    eprintln!("Error: {}", val.to_string());
+                }
+                Ok(VMValue::Void)
+            }
+            _ => Err(VMError::InvalidInstruction(format!(
+                "Unknown global function: {}",
+                func_name
+            )))
+        }
+    }
+
+    /// メソッド呼び出し実行
+    fn execute_method_call(&mut self, receiver: &VMValue, method: &str, args: &[ValueId]) -> Result<VMValue, VMError> {
+        // 受信オブジェクトの型に基づいてメソッド実行
+        match receiver {
+            VMValue::String(s) => {
+                match method {
+                    "length" => Ok(VMValue::Integer(s.len() as i64)),
+                    "concat" => {
+                        if let Some(arg_id) = args.get(0) {
+                            let arg_val = self.reg_load(*arg_id)?;
+                            let new_str = format!("{}{}", s, arg_val.to_string());
+                            Ok(VMValue::String(new_str))
+                        } else {
+                            Err(VMError::InvalidInstruction("concat requires 1 argument".into()))
+                        }
+                    }
+                    _ => Err(VMError::InvalidInstruction(format!(
+                        "Unknown String method: {}",
+                        method
+                    )))
+                }
+            }
+            VMValue::BoxRef(box_ref) => {
+                // プラグインBox経由でメソッド呼び出し
+                if let Some(p) = box_ref.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                    let host = host.read().unwrap();
+                    let mut argv: Vec<Box<dyn crate::box_trait::NyashBox>> = Vec::new();
+                    for a in args {
+                        argv.push(self.reg_load(*a)?.to_nyash_box());
+                    }
+                    match host.invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv) {
+                        Ok(Some(ret)) => Ok(VMValue::from_nyash_box(ret)),
+                        Ok(None) => Ok(VMValue::Void),
+                        Err(e) => Err(VMError::InvalidInstruction(format!(
+                            "Plugin method {}.{} failed: {:?}",
+                            p.box_type, method, e
+                        )))
+                    }
+                } else {
+                    Err(VMError::InvalidInstruction(format!(
+                        "Method {} not supported on BoxRef({})",
+                        method, box_ref.type_name()
+                    )))
+                }
+            }
+            _ => Err(VMError::InvalidInstruction(format!(
+                "Method {} not supported on {:?}",
+                method, receiver
+            )))
+        }
+    }
+
+    /// 外部関数実行（C ABI）
+    fn execute_extern_function(&mut self, extern_name: &str, args: &[ValueId]) -> Result<VMValue, VMError> {
+        match extern_name {
+            "exit" => {
+                let code = if let Some(arg_id) = args.get(0) {
+                    self.reg_load(*arg_id)?.as_integer().unwrap_or(0)
+                } else { 0 };
+                std::process::exit(code as i32);
+            }
+            "panic" => {
+                let msg = if let Some(arg_id) = args.get(0) {
+                    self.reg_load(*arg_id)?.to_string()
+                } else { "VM panic".to_string() };
+                panic!("{}", msg);
+            }
+            _ => Err(VMError::InvalidInstruction(format!(
+                "Unknown extern function: {}",
+                extern_name
+            )))
+        }
     }
 }

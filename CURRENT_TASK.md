@@ -1,30 +1,152 @@
-# Current Task — Stability Polish (Concise)
+# Current Task — MIR Architecture Revolution (Design Innovation)
 
-Updated: 2025‑09‑22
+Updated: 2025‑09‑24
 
-## Compressed Snapshot (Short)
-- Strings (UTF‑8/CP vs Byte): baseline done
-  - [x] PyVM CP smokes (length/indexOf/lastIndexOf/substring)
-  - [x] ASCII Byte smoke
-  - [x] Rust CP gate (`NYASH_STR_CP=1`) for length/indexOf/lastIndexOf
-  - [x] Docs: blueprint updated with CP gate
-- Mini‑VM BinOp(+): stabilization in progress（safe pathのみで緑化へ）
-  - [x] Removed global digit-sum fallbacks（ハング源を除去）
-  - [x] Added typed/token/value-pair probes（仕様不変）
-  - [x] Expression‑bounded extractor（Print.expression の `{…}` で value×2 決定的抽出）
-  - [x] Main.fast‑path: BinaryOp('+') を早期に 2 値抽出→加算→即 return
-  - [x] PyVM: `__me__` ディスパッチ（同一Box内メソッド呼びの安全化）
-  - [x] PyVM: `String.substring` の None 引数を安全化（None→既定値）
-  - [x] Mini‑VM 内の me 呼びを完全撤去（関数呼びに統一）/ substring 前の index ガード徹底
-  - [x] 代表スモーク（int+int=46）を緑化（print_prints_in_slice の無限ループ回避を含む）
-- CI: keep min-gate light (MacroCtx/selfhost-preexpand/UTF‑8/ScopeBox) — all green
+## 🎯 **現在進行中: MIR Call命令統一実装 Phase 3.3**
+**ChatGPT5 Pro A++設計による6種類Call命令→1つのMirCallへの統一作業**
+
+### ✅ **Phase 1-2完了済み**（2025-09-24）
+- [x] **MIR定義の外部化とモジュール化**
+  - `src/mir/definitions/`ディレクトリ作成
+  - `call_unified.rs`: MirCall/CallFlags/Callee統一定義（297行）
+  - Constructor/Closureバリアント追加完了
+  - VM実行器・MIRダンプ対応済み
+- [x] **統一Callメソッド実装完了**
+  - `emit_unified_call()`実装（CallTarget→Callee変換）
+  - 便利メソッド3種実装（emit_global/method/constructor_call）
+  - Math関数で実使用開始（builder_calls.rs:340-347）
+  - 環境変数切り替え`NYASH_MIR_UNIFIED_CALL=1`実装済み
+  - **ビルドエラー: 0** ✅
+
+### ✅ **Phase 3.1-3.2完了**（2025-09-24）
+- [x] **Phase 3.1: build_indirect_call_expression統一移行**
+  - `CallTarget::Value`使用でindirect call実装
+  - 環境変数切り替えで段階移行対応
+- [x] **Phase 3.2: print等基本関数のCallee型適用**
+  - print文を`call_global print()`として統一出力
+  - ExternCall(env.console.log)→Callee::Global(print)への完全移行
+  - `build_function_call`で`emit_unified_call`使用
+
+### 🔧 **Phase 3.3進行中**: emit_box_or_plugin_call統一化
+- **現状**: BoxCall命令を統一Call化作業中
+- **次のステップ**: Python LLVM dispatch統一（最大削減機会）
+
+### 📊 **マスタープラン進捗**（2025-09-24）
+- **4つの実行器特定**: MIR Builder/VM/Python LLVM/mini-vm
+- **削減見込み**: 7,372行 → 5,468行（26%削減）
+- **処理パターン**: 24 → 4（83%削減）
+- **Phase 15寄与**: 全体目標の約7%
+- **詳細**: [mir-call-unification-master-plan.md](docs/development/roadmap/phases/phase-15/mir-call-unification-master-plan.md)
+
+### ✅ **完了済み基盤タスク**
+- [x] **PyVM無限ループ完全解決**（シャドウイングバグ修正）
+- [x] **using system完全実装**（環境変数8→6に削減）
+- [x] **Callee型Phase 1実装完了**（2025-09-23）
+  - Callee enum追加（Global/Method/Value/Extern）
+  - VM実行器対応完了
+  - MIRダンプ改良（call_global等の明確表示）
+
+## 🚀 **MIR Call命令統一革新（改名後に実施）**
+**ChatGPT5 Pro A++設計案採用による根本的Call系命令統一**
+
+### 🚀 **Phase 15.5: MIR Call命令完全統一（A++案）**
+**問題**: 6種類のCall系命令が乱立（Call/BoxCall/PluginInvoke/ExternCall/NewBox/NewClosure）
+**解決**: ChatGPT5 Pro A++案で1つのMirCallに統一
+
+#### 📋 **実装ロードマップ（段階的移行）**
+- [x] **Phase 1: 構造定義**（✅ 2025-09-24完了）
+  - Callee enum拡張（Constructor/Closure追加済み）
+  - MirCall構造体追加（call_unified.rsに実装）
+  - CallFlags/EffectMask整備（完了）
+- [ ] **Phase 2: ビルダー移行**（来週）
+  - emit_call()統一メソッド
+  - 旧命令→MirCallブリッジ
+  - HIR名前解決統合
+- [ ] **Phase 3: 実行器対応**（再来週）
+  - VM/PyVM/LLVM対応
+  - MIRダンプ完全更新
+  - 旧命令削除
+
+#### 🎯 **A++設計仕様**
+```rust
+// 唯一のCall命令
+struct MirCall {
+    dst: Option<ValueId>,
+    callee: Callee,
+    args: Vec<ValueId>,      // receiverは含まない
+    flags: CallFlags,        // tail/noreturn等
+    effects: EffectMask,     // Pure/IO/Host/Sandbox
+}
+
+// 改良版Callee（receiverを含む）
+enum Callee {
+    Global(FunctionId),
+    Extern(ExternId),
+    Method {
+        box_id: BoxId,
+        method: MethodId,
+        receiver: ValueId,    // ← receiverをここに
+    },
+    Value(ValueId),
+}
+```
+
+### 📊 **現状整理**
+- **ドキュメント**: [call-instructions-current.md](docs/reference/mir/call-instructions-current.md)
+- **Call系6種類**: 統一待ち状態
+- **移行計画**: 段階的ブリッジで安全に移行
+
+## 🔮 **Phase 16: using×Callee統合（将来課題）**
+**usingシステムとCallee型の完全統合**
+
+### 📋 **統合計画**
+- [ ] **現状の問題**
+  - usingとCalleeが分離（別々に動作）
+  - `nyash.*`と`using nyashstd`が混在
+  - 名前解決が2段階（using→Callee）
+
+- [ ] **統合後の理想**
+  ```nyash
+  // namespace経由の解決
+  using nyash.console as Console
+  Console.log("hello")  // → Callee::Global("Console.log")
+
+  // 明示的インポート
+  using nyashstd::print
+  print("hello")        // → Callee::Global("print")
+
+  // 完全修飾
+  nyash.console.log("hello") // → Callee::Extern("nyash.console.log")
+  ```
+
+- [ ] **実装ステップ**
+  1. HIRでusing解決結果を保持
+  2. MirBuilderでusing情報を参照
+  3. Callee生成時にnamespace考慮
+  4. スコープ演算子`::`実装
+
+### 📊 **改行処理の状況**（参考）
+- Phase 0-2: ✅ 完了（skip_newlines()根絶済み）
+- Phase 3 TokenCursor: 準備済み（将来オプション）
+
+### 📊 **従来タスク（継続）**
+- Strings (UTF‑8/CP vs Byte): ✅ baseline done
+- Mini‑VM BinOp(+): ✅ stabilization complete
+- CI: ✅ all green (MacroCtx/selfhost-preexpand/UTF‑8/ScopeBox)
 
 This page is trimmed to reflect the active work only. The previous long form has been archived at `CURRENT_TASK_restored.md`.
 
-Principles (feature‑pause)
+## 🎯 **設計革新原則**（Architecture Revolution）
+- **バグを設計の糧に**: シャドウイングバグから根本的アーキテクチャ改良へ昇華
+- **ChatGPT5 Pro協働**: 人間の限界を超えた設計洞察の積極活用
+- **段階的移行**: 破壊的変更回避（`Option<Callee>`で互換性保持）
+- **コンパイル時解決**: 実行時文字列解決の排除→パフォーマンス・安全性向上
+- **Phase 15統合**: セルフホスティング安定化への直接寄与
+
+## 📚 **継続原則**（feature‑pause）
 - Self‑hosting first. Macro normalization pre‑MIR; PyVM semantics are authoritative.
-- Big feature additions are paused until Nyash VM bootstrap completes. Bug fixes, docs, smokes/goldens, CI polish, robustness (spec‑preserving) continue.
-- Keep changes minimal/local; no spec changes unless to fix critical issues, and guard any optional paths behind default‑OFF flags.
+- 設計革新以外の大型機能追加は一時停止。バグ修正・docs・スモーク・CI・堅牢性は継続。
+- 最小限変更維持。仕様変更は重大問題修正時のみ、オプション経路はdefault‑OFFフラグで保護。
 
 ### Delta (since last update)
 - Self‑Host Ny Executor（MIR→Ny 実行器）計画を追加（既定OFF・段階導入）
