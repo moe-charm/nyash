@@ -124,9 +124,9 @@ python3 -m http.server 8010
 cargo build --release --features cranelift-jit
 ./target/release/nyash --backend vm --compile-native program.nyash -o program.exe
 
-# LLVM (開発中)
+# LLVM（llvmliteハーネス - LLVM_SYS_180_PREFIX不要！）
 cargo build --release --features llvm
-./target/release/nyash --aot program.nyash -o program.exe
+./target/release/nyash --backend llvm program.nyash
 ```
 
 ### 🎯 **実証済みビルド方法** (2025-09-10完全成功)
@@ -146,8 +146,8 @@ cargo build --release --features llvm
 cargo build --release --features cranelift-jit -j 24
 ./target/release/nyash program.nyash
 
-# 2. LLVM MIR14 - 211警告、0エラー ✅  
-env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24
+# 2. LLVM（llvmliteハーネス）- 19警告、0エラー ✅
+cargo build --release --features llvm -j 24  # LLVM_SYS_180_PREFIX不要！
 ./target/release/nyash --backend llvm program.nyash
 
 # 3. プラグインテスト実証済み ✅
@@ -269,8 +269,9 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm program.nyash
 ./target/release/nyash --dump-mir apps/tests/loop_min_while.nyash
 ./target/release/nyash --dump-mir apps/tests/esc_dirname_smoke.nyash
 
-# 統一Call テスト
-env NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --dump-mir test_simple_call.nyash
+# 統一Call テスト（Phase A完成！）
+NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --dump-mir test_simple_call.nyash
+NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --emit-mir-json test.json test.nyash
 ```
 
 ## 🚀 よく使う実行コマンド（忘れやすい）
