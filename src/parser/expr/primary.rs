@@ -43,9 +43,10 @@ impl NyashParser {
                 self.advance();
                 let mut entries: Vec<(String, ASTNode)> = Vec::new();
                 let sugar_level = std::env::var("NYASH_SYNTAX_SUGAR_LEVEL").ok();
+                // デフォルトでIDENTIFIERキーを許可（basicが明示的に指定された場合のみ無効）
                 let ident_key_on = std::env::var("NYASH_ENABLE_MAP_IDENT_KEY").ok().as_deref()
                     == Some("1")
-                    || sugar_level.as_deref() == Some("full");
+                    || sugar_level.as_deref() != Some("basic");  // basic以外は全て許可（デフォルト含む）
                 self.skip_newlines();
                 while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
                     self.skip_newlines();
@@ -67,7 +68,7 @@ impl NyashParser {
                                 expected: if ident_key_on {
                                     "string or identifier key in map literal".to_string()
                                 } else {
-                                    "string key in map literal".to_string()
+                                    "string key in map literal (set NYASH_SYNTAX_SUGAR_LEVEL=full for identifier keys)".to_string()
                                 },
                                 line,
                             });

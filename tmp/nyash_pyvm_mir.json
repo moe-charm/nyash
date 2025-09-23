@@ -6,42 +6,52 @@
           "id": 0,
           "instructions": [
             {
+              "args": [],
               "dst": 0,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
+              "op": "newbox",
+              "type": "MapBox"
             },
             {
               "dst": 1,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 2
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "name"
               }
             },
             {
               "dst": 2,
-              "lhs": 0,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 1
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Nyash"
+              }
             },
             {
               "args": [
+                1,
                 2
               ],
+              "box": 0,
               "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
+              "method": "set",
+              "op": "boxcall"
             },
             {
               "dst": 3,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 10
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "version"
               }
             },
             {
@@ -49,34 +59,155 @@
               "op": "const",
               "value": {
                 "type": "i64",
-                "value": 20
+                "value": 15
               }
+            },
+            {
+              "args": [
+                3,
+                4
+              ],
+              "box": 0,
+              "dst": null,
+              "method": "set",
+              "op": "boxcall"
             },
             {
               "dst": 5,
               "op": "const",
               "value": {
-                "type": "i64",
-                "value": 30
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "isBox"
               }
             },
             {
               "dst": 6,
-              "lhs": 3,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 4
-            },
-            {
-              "dst": 7,
-              "lhs": 6,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 5
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
             },
             {
               "args": [
-                7
+                5,
+                6
+              ],
+              "box": 0,
+              "dst": null,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "features"
+              }
+            },
+            {
+              "args": [],
+              "dst": 8,
+              "op": "newbox",
+              "type": "MapBox"
+            },
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "fast"
+              }
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "args": [
+                9,
+                10
+              ],
+              "box": 8,
+              "dst": null,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "safe"
+              }
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "args": [
+                11,
+                12
+              ],
+              "box": 8,
+              "dst": null,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                7,
+                8
+              ],
+              "box": 0,
+              "dst": null,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                0
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 13,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "IDENTIFIERキーがデフォルトで使える！"
+              }
+            },
+            {
+              "args": [
+                13
               ],
               "dst": null,
               "func": "nyash.console.log",
@@ -84,7 +215,7 @@
             },
             {
               "op": "ret",
-              "value": 7
+              "value": 13
             }
           ]
         }

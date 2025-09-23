@@ -397,12 +397,16 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
 
-## 📝 Update (2025-09-24) ✅ 改行処理Phase 0 & Phase 1基本実装完了！
+## 📝 Update (2025-09-24) ✅ 改行処理実装＆IDENTIFIERキーのデフォルト化！
+- ✅ **IDENTIFIERキーがデフォルトで使える！** 環境変数不要で快適開発
+  - **変更前**: `NYASH_SYNTAX_SUGAR_LEVEL=full`が必須（面倒）
+  - **変更後**: デフォルトで`{name: "value"}`が書ける！
+  - **厳密モード**: `NYASH_SYNTAX_SUGAR_LEVEL=basic`で文字列キーのみに制限可能
+  - **実装**: `primary.rs`で`sugar_level != "basic"`をデフォルト判定
 - ✅ **Phase 0 Quick Fix完了！** たった5箇所の修正で複数行オブジェクトリテラル完全動作
   - `primary.rs`: COLON前後とCOMMA判定前にskip_newlines()追加（3箇所）
   - `match_expr.rs`: is_object_literal()関数を改行対応（lookahead改良）
-  - **必須環境変数**: `NYASH_SYNTAX_SUGAR_LEVEL=full`（IDENTIFIERキー使用のため）
-  - **テスト結果**: MapBox正常出力 `{'__box__': 'MapBox', '__map': {'value': 42, 'name': 'answer'}}`
+  - **テスト結果**: MapBox正常出力（環境変数なしで動作！）
 - 🎯 **Phase 1 TokenCursor基本実装完了！** 改行処理を一元管理する仕組み構築
   - **新規実装ファイル**:
     1. `src/parser/cursor.rs`: TokenCursor本体（230行）- モード制御・深度追跡・自動改行処理
