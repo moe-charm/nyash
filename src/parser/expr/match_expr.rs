@@ -24,10 +24,10 @@ impl NyashParser {
         let mut default_expr: Option<ASTNode> = None;
 
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines();
+            // skip_newlines削除: brace_depth > 0なので自動スキップ
             while self.match_token(&TokenType::COMMA) || self.match_token(&TokenType::NEWLINE) {
                 self.advance();
-                self.skip_newlines();
+                // skip_newlines削除: brace_depth > 0なので自動スキップ
             }
             if self.match_token(&TokenType::RBRACE) {
                 break;
@@ -56,7 +56,7 @@ impl NyashParser {
                         self.advance(); // consume '{'
                         let mut stmts: Vec<ASTNode> = Vec::new();
                         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                            self.skip_newlines();
+                            // skip_newlines削除: brace_depth > 0なので自動スキップ
                             if !self.match_token(&TokenType::RBRACE) {
                                 stmts.push(self.parse_statement()?);
                             }
@@ -116,7 +116,7 @@ impl NyashParser {
                                 self.advance(); // consume '{'
                                 let mut stmts: Vec<ASTNode> = Vec::new();
                                 while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                                    self.skip_newlines();
+                                    // skip_newlines削除: brace_depth > 0なので自動スキップ
                                     if !self.match_token(&TokenType::RBRACE) {
                                         let st = self.parse_statement()?;
                                         stmts.push(st);
@@ -161,7 +161,7 @@ impl NyashParser {
                             self.advance(); // consume '{'
                             let mut stmts: Vec<ASTNode> = Vec::new();
                             while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                                self.skip_newlines();
+                                // skip_newlines削除: brace_depth > 0なので自動スキップ
                                 if !self.match_token(&TokenType::RBRACE) {
                                     let st = self.parse_statement()?;
                                     stmts.push(st);
@@ -182,7 +182,7 @@ impl NyashParser {
             while self.match_token(&TokenType::COMMA) || self.match_token(&TokenType::NEWLINE) {
                 self.advance();
             }
-            self.skip_newlines();
+            // skip_newlines削除: brace_depth > 0なので自動スキップ
         }
 
         self.consume(TokenType::RBRACE)?;
