@@ -40,7 +40,6 @@ pub(crate) fn try_parse_header_first_field_or_property(
             p.advance();
             let _init_expr = p.parse_expression()?; // P0: parse and discard
             fields.push(fname);
-            p.skip_newlines();
             return Ok(true);
         }
         // name: Type => expr  → computed property (getter method with return expr)
@@ -61,7 +60,6 @@ pub(crate) fn try_parse_header_first_field_or_property(
                 span: Span::unknown(),
             };
             methods.insert(getter_name, method);
-            p.skip_newlines();
             return Ok(true);
         }
         // name: Type { ... } [postfix]
@@ -78,7 +76,6 @@ pub(crate) fn try_parse_header_first_field_or_property(
                 span: Span::unknown(),
             };
             methods.insert(getter_name, method);
-            p.skip_newlines();
             return Ok(true);
         }
     }
@@ -108,7 +105,6 @@ pub(crate) fn try_parse_visibility_block_or_single(
     }
     if p.match_token(&TokenType::LBRACE) {
         p.advance();
-        p.skip_newlines();
         while !p.match_token(&TokenType::RBRACE) && !p.is_at_end() {
             if let TokenType::IDENTIFIER(fname) = &p.current_token().token_type {
                 let fname = fname.clone();
@@ -116,7 +112,6 @@ pub(crate) fn try_parse_visibility_block_or_single(
                 fields.push(fname);
                 p.advance();
                 if p.match_token(&TokenType::COMMA) { p.advance(); }
-                p.skip_newlines();
                 continue;
             }
             return Err(ParseError::UnexpectedToken {
@@ -126,7 +121,6 @@ pub(crate) fn try_parse_visibility_block_or_single(
             });
         }
         p.consume(TokenType::RBRACE)?;
-        p.skip_newlines();
         return Ok(true);
     }
     if let TokenType::IDENTIFIER(n) = &p.current_token().token_type {
@@ -135,12 +129,10 @@ pub(crate) fn try_parse_visibility_block_or_single(
         if try_parse_header_first_field_or_property(p, fname.clone(), methods, fields)? {
             if visibility == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
             *last_method_name = None;
-            p.skip_newlines();
             return Ok(true);
         } else {
             if visibility == "public" { public_fields.push(fname.clone()); } else { private_fields.push(fname.clone()); }
             fields.push(fname);
-            p.skip_newlines();
             return Ok(true);
         }
     }
@@ -160,7 +152,6 @@ pub(crate) fn parse_init_block_if_any(
     p.advance(); // consume 'init'
     p.consume(TokenType::LBRACE)?;
     while !p.match_token(&TokenType::RBRACE) && !p.is_at_end() {
-        p.skip_newlines();
         if p.match_token(&TokenType::RBRACE) {
             break;
         }

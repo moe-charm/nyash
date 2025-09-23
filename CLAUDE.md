@@ -397,27 +397,26 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
 
-## 📝 Update (2025-09-24) ✅ 改行処理Smart advance完全実装！skip_newlines()削減開始
-- 🎉 **改行処理Phase 0-1完全達成！** ChatGPT Pro戦略に基づく段階的実装が成功
-  - **Phase 0 Quick Fix**: ✅ 完了（primary.rsに緊急対応）
-  - **Phase 1 Smart advance**: ✅ 完全実装＆デフォルト有効化
-  - **Phase 2 TokenCursor**: 基盤実装済み、部分適用中
-  - **Phase 3 LASI前処理**: 将来計画として整理
-- ✅ **Smart advance()機能の完成！** 深度追跡による自動改行処理
-  - **深度追跡実装**: `depth_tracking.rs`で括弧深度（paren/brace/bracket）を自動管理
-  - **デフォルト有効化**: 環境変数不要！`NYASH_SMART_ADVANCE=0`で無効化可能
-  - **賢い行継続判定**:
-    - 演算子後の改行を自動スキップ
-    - 次行が演算子で始まる場合もスキップ（`.toUpperCase()`形式対応）
-    - 括弧内では常に改行を無視
-- ⚡ **skip_newlines()削減開始！** 48箇所→40箇所（17%削減）
-  - **削除完了**: primary.rsのオブジェクトリテラル内8箇所
-  - **残り40箇所**: 段階的削除計画策定中
-  - **最終目標**: skip_newlines()完全排除でコード品質向上
-- 🧪 **テスト結果**: 全ケース成功！
-  - 文区切り、演算子行継続、括弧内改行、オブジェクトリテラル、次行演算子すべて✅
-- 📚 **改行処理戦略ドキュメント**: [newline-handling-strategy.md](docs/development/strategies/newline-handling-strategy.md)
-- 🚀 **次のステップ**: 残り40箇所のskip_newlines()削除→TokenCursor本格活用
+## 📝 Update (2025-09-24) ✅ 改行処理革命Phase 2-B完了！実用レベル到達
+- 🎯 **改行処理革命Phase 2-B完了！** Box宣言系ファイルから14箇所のskip_newlines()完全削除
+  - **削除実績**: 48→35→21箇所（41%削減達成！）
+  - **対象ファイル**: fields.rs(9箇所)、box_definition.rs(3箇所)、static_box.rs(2箇所)
+  - **テスト結果**: OR付きmatch式、複数行宣言、Box定義すべて完璧動作✅
+- ✅ **Smart advance()実用化成功！** 深度追跡で自動改行処理が完璧に機能
+  - **環境変数**: `NYASH_SMART_ADVANCE=1`で完全制御、`NYASH_DISABLE_PLUGINS=1`推奨
+  - **対応構文**: match式OR（`1 | 2`）、複数行パターン、Box宣言すべて対応
+- 🔧 **ORパターンバグも同時修正！** exprs_peek.rsでInteger/Boolean型マッチング実装
+  - **修正前**: `1 | 2 => "found"`が動作せず（String型のみサポート）
+  - **修正後**: 全リテラル型（Integer/Bool/Float/Null/Void）完全対応✅
+- 📊 **改行処理戦略の段階的成果**:
+  - **Phase 0**: Quick Fix ✅ 完了（即効性）
+  - **Phase 1**: Smart advance() ✅ 基本実装完了（大幅改善）
+  - **Phase 2-A**: match式系統 ✅ 完了（6箇所削除）
+  - **Phase 2-B**: Box宣言系統 ✅ 完了（14箇所削除、41%削減）
+  - **Phase 2-C**: 次の目標（更なる削減へ）
+- 🎉 **技術的成果**: 手動スキップ依存からコンテキスト認識自動処理への移行成功
+- 📚 **改行処理戦略ドキュメント**: [skip-newlines-removal-plan.md](docs/development/strategies/skip-newlines-removal-plan.md)
+- 🚀 **次のタスク**: Phase 2-C実装→残り21箇所の系統的削除継続
 
 ## 📝 Update (2025-09-23) ✅ フェーズS実装完了！break制御フロー根治開始
 - ✅ **フェーズS完了！** PHI incoming修正+終端ガード徹底→重複処理4箇所統一

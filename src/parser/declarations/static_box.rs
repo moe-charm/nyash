@@ -18,7 +18,6 @@ impl NyashParser {
             crate::parser::declarations::static_def::header::parse_static_header(self)?;
 
         self.consume(TokenType::LBRACE)?;
-        self.skip_newlines(); // ブレース後の改行をスキップ
 
         let mut fields = Vec::new();
         let mut methods = HashMap::new();
@@ -30,7 +29,6 @@ impl NyashParser {
         // Track last inserted method name to allow postfix catch/cleanup fallback parsing
         let mut last_method_name: Option<String> = None;
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines(); // ループ開始時に改行をスキップ
 
             // Fallback: method-level postfix catch/cleanup immediately following a method
             if crate::parser::declarations::box_def::members::postfix::try_parse_method_postfix_after_last_method(

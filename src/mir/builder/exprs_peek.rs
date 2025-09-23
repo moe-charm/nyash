@@ -75,25 +75,31 @@ impl super::MirBuilder {
 
             // In current dispatch block, compare and branch
             self.start_new_block(cur_dispatch)?;
-            if let LiteralValue::String(s) = label {
-                let lit_id = self.value_gen.next();
-                self.emit_instruction(super::MirInstruction::Const {
-                    dst: lit_id,
-                    value: super::ConstValue::String(s),
-                })?;
-                let cond_id = self.value_gen.next();
-                self.emit_instruction(super::MirInstruction::Compare {
-                    dst: cond_id,
-                    op: super::CompareOp::Eq,
-                    lhs: scr_val,
-                    rhs: lit_id,
-                })?;
-                self.emit_instruction(super::MirInstruction::Branch {
-                    condition: cond_id,
-                    then_bb: then_block,
-                    else_bb: else_target,
-                })?;
-            }
+            let lit_id = self.value_gen.next();
+            let const_value = match label {
+                LiteralValue::String(s) => super::ConstValue::String(s),
+                LiteralValue::Integer(i) => super::ConstValue::Integer(i),
+                LiteralValue::Bool(b) => super::ConstValue::Bool(b),
+                LiteralValue::Float(f) => super::ConstValue::Float(f),
+                LiteralValue::Null => super::ConstValue::Null,
+                LiteralValue::Void => super::ConstValue::Void,
+            };
+            self.emit_instruction(super::MirInstruction::Const {
+                dst: lit_id,
+                value: const_value,
+            })?;
+            let cond_id = self.value_gen.next();
+            self.emit_instruction(super::MirInstruction::Compare {
+                dst: cond_id,
+                op: super::CompareOp::Eq,
+                lhs: scr_val,
+                rhs: lit_id,
+            })?;
+            self.emit_instruction(super::MirInstruction::Branch {
+                condition: cond_id,
+                then_bb: then_block,
+                else_bb: else_target,
+            })?;
 
             // then arm
             self.start_new_block(then_block)?;

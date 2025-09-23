@@ -116,7 +116,6 @@ impl NyashParser {
             box_header::parse_header(self)?;
 
         self.consume(TokenType::LBRACE)?;
-        self.skip_newlines(); // ブレース後の改行をスキップ
 
         let mut fields = Vec::new();
         let mut methods = HashMap::new();
@@ -130,7 +129,6 @@ impl NyashParser {
 
         let mut last_method_name: Option<String> = None;
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines(); // ループ開始時に改行をスキップ
             // 分類（段階移行用の観測）: 将来の分岐移譲のための前処理
             if crate::config::env::parser_stage3() {
                 if let Ok(kind) = crate::parser::declarations::box_def::members::common::classify_member(self) {
@@ -189,7 +187,6 @@ impl NyashParser {
                         &mut birth_once_props,
                     )? {
                         last_method_name = None; // do not attach method-level postfix here
-                        self.skip_newlines();
                         continue;
                     }
                 }
