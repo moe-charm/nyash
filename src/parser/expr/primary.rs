@@ -47,9 +47,9 @@ impl NyashParser {
                 let ident_key_on = std::env::var("NYASH_ENABLE_MAP_IDENT_KEY").ok().as_deref()
                     == Some("1")
                     || sugar_level.as_deref() != Some("basic");  // basic以外は全て許可（デフォルト含む）
-                self.skip_newlines();
+                // skip_newlines削除: brace_depth > 0なので自動スキップされる
                 while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    self.skip_newlines();
+                    // skip_newlines削除: brace_depth > 0なので自動スキップされる
                     let key = match &self.current_token().token_type {
                         TokenType::STRING(s) => {
                             let v = s.clone();
@@ -74,18 +74,18 @@ impl NyashParser {
                             });
                         }
                     };
-                    self.skip_newlines(); // Phase 0 Quick Fix: COLON前に改行スキップ
+                    // skip_newlines削除: brace_depth > 0なので自動スキップされる
                     self.consume(TokenType::COLON)?;
-                    self.skip_newlines(); // Phase 0 Quick Fix: 値パース前に改行スキップ
+                    // skip_newlines削除: brace_depth > 0なので自動スキップされる
                     let value_expr = self.parse_expression()?;
                     entries.push((key, value_expr));
-                    self.skip_newlines(); // Phase 0 Quick Fix: COMMA判定前に改行スキップ
+                    // skip_newlines削除: brace_depth > 0なので自動スキップされる
                     if self.match_token(&TokenType::COMMA) {
                         self.advance();
-                        self.skip_newlines();
+                        // skip_newlines削除: brace_depth > 0なので自動スキップされる
                     }
                 }
-                self.skip_newlines();
+                // skip_newlines削除: brace_depth > 0なので自動スキップされる
                 self.consume(TokenType::RBRACE)?;
                 Ok(ASTNode::MapLiteral {
                     entries,

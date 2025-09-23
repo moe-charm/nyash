@@ -20,6 +20,7 @@
 mod common;
 mod cursor; // TokenCursor: 改行処理を一元管理
 mod declarations;
+mod depth_tracking; // Phase 1: 深度追跡機能（Smart advance用）
 pub mod entry_sugar; // helper to parse with sugar level
 mod expr;
 mod expr_cursor; // TokenCursorを使用した式パーサー（実験的）
@@ -138,22 +139,13 @@ pub struct NyashParser {
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// 🔥 デバッグ燃料：無限ループ検出用制限値 (None = 無制限)
     pub(super) debug_fuel: Option<usize>,
+    /// Phase 1: Smart advance用深度カウンタ（改行自動スキップ判定）
+    pub(super) paren_depth: usize,   // ()
+    pub(super) brace_depth: usize,   // {}
+    pub(super) bracket_depth: usize, // []
 }
 
-// Implement ParserUtils trait
-impl ParserUtils for NyashParser {
-    fn tokens(&self) -> &Vec<Token> {
-        &self.tokens
-    }
-
-    fn current(&self) -> usize {
-        self.current
-    }
-
-    fn current_mut(&mut self) -> &mut usize {
-        &mut self.current
-    }
-}
+// ParserUtils trait implementation is in depth_tracking.rs
 
 impl NyashParser {
     /// 新しいパーサーを作成
@@ -163,6 +155,9 @@ impl NyashParser {
             current: 0,
             static_box_dependencies: std::collections::HashMap::new(),
             debug_fuel: Some(100_000), // デフォルト値
+            paren_depth: 0,
+            brace_depth: 0,
+            bracket_depth: 0,
         }
     }
 

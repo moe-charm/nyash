@@ -397,29 +397,27 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
 - 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
 
-## 📝 Update (2025-09-24) ✅ 改行処理実装＆IDENTIFIERキーのデフォルト化！
-- ✅ **IDENTIFIERキーがデフォルトで使える！** 環境変数不要で快適開発
-  - **変更前**: `NYASH_SYNTAX_SUGAR_LEVEL=full`が必須（面倒）
-  - **変更後**: デフォルトで`{name: "value"}`が書ける！
-  - **厳密モード**: `NYASH_SYNTAX_SUGAR_LEVEL=basic`で文字列キーのみに制限可能
-  - **実装**: `primary.rs`で`sugar_level != "basic"`をデフォルト判定
-- ✅ **Phase 0 Quick Fix完了！** たった5箇所の修正で複数行オブジェクトリテラル完全動作
-  - `primary.rs`: COLON前後とCOMMA判定前にskip_newlines()追加（3箇所）
-  - `match_expr.rs`: is_object_literal()関数を改行対応（lookahead改良）
-  - **テスト結果**: MapBox正常出力（環境変数なしで動作！）
-- 🎯 **Phase 1 TokenCursor基本実装完了！** 改行処理を一元管理する仕組み構築
-  - **新規実装ファイル**:
-    1. `src/parser/cursor.rs`: TokenCursor本体（230行）- モード制御・深度追跡・自動改行処理
-    2. `src/parser/expr_cursor.rs`: TokenCursor版式パーサー（250行）- 実験的実装
-  - **主要機能**:
-    - NewlineMode（Stmt/Expr）による文脈認識改行処理
-    - ブレース/パーレン/ブラケット深度の自動追跡
-    - 行継続判定（演算子・カンマ等）
-    - with_expr_mode/with_stmt_mode によるモード一時切り替え
-  - **ビルド成功**: warning のみでエラーなし
-- 🎯 **セミコロンモード確認完了！** `NYASH_PARSER_ALLOW_SEMICOLON=1`で動作確認
-- 📚 **改行処理戦略ドキュメント完成**: [newline-handling-strategy.md](docs/development/strategies/newline-handling-strategy.md)
-- 🚀 **次の実装**: Phase 2 LASI前処理でトークン正規化（Phase 15後）
+## 📝 Update (2025-09-24) ✅ 改行処理Smart advance完全実装！skip_newlines()削減開始
+- 🎉 **改行処理Phase 0-1完全達成！** ChatGPT Pro戦略に基づく段階的実装が成功
+  - **Phase 0 Quick Fix**: ✅ 完了（primary.rsに緊急対応）
+  - **Phase 1 Smart advance**: ✅ 完全実装＆デフォルト有効化
+  - **Phase 2 TokenCursor**: 基盤実装済み、部分適用中
+  - **Phase 3 LASI前処理**: 将来計画として整理
+- ✅ **Smart advance()機能の完成！** 深度追跡による自動改行処理
+  - **深度追跡実装**: `depth_tracking.rs`で括弧深度（paren/brace/bracket）を自動管理
+  - **デフォルト有効化**: 環境変数不要！`NYASH_SMART_ADVANCE=0`で無効化可能
+  - **賢い行継続判定**:
+    - 演算子後の改行を自動スキップ
+    - 次行が演算子で始まる場合もスキップ（`.toUpperCase()`形式対応）
+    - 括弧内では常に改行を無視
+- ⚡ **skip_newlines()削減開始！** 48箇所→40箇所（17%削減）
+  - **削除完了**: primary.rsのオブジェクトリテラル内8箇所
+  - **残り40箇所**: 段階的削除計画策定中
+  - **最終目標**: skip_newlines()完全排除でコード品質向上
+- 🧪 **テスト結果**: 全ケース成功！
+  - 文区切り、演算子行継続、括弧内改行、オブジェクトリテラル、次行演算子すべて✅
+- 📚 **改行処理戦略ドキュメント**: [newline-handling-strategy.md](docs/development/strategies/newline-handling-strategy.md)
+- 🚀 **次のステップ**: 残り40箇所のskip_newlines()削除→TokenCursor本格活用
 
 ## 📝 Update (2025-09-23) ✅ フェーズS実装完了！break制御フロー根治開始
 - ✅ **フェーズS完了！** PHI incoming修正+終端ガード徹底→重複処理4箇所統一

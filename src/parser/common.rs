@@ -43,10 +43,74 @@ pub trait ParserUtils {
         }
     }
 
-    /// 位置を1つ進める
+    /// 位置を1つ進める（改行自動スキップ対応）
     fn advance(&mut self) {
         if !self.is_at_end() {
+            // 現在のトークンで深度を更新（進める前）
+            self.update_depth_before_advance();
+
             *self.current_mut() += 1;
+
+            // 新しいトークンで深度を更新（進めた後）
+            self.update_depth_after_advance();
+
+            // Phase 1: Smart advance - コンテキストに応じて改行を自動スキップ
+            if self.should_auto_skip_newlines() {
+                self.skip_newlines_internal();
+            }
+        }
+    }
+
+    /// advance前の深度更新（閉じ括弧の処理）
+    fn update_depth_before_advance(&mut self) {
+        // デフォルト実装は何もしない（NyashParserでオーバーライド）
+    }
+
+    /// advance後の深度更新（開き括弧の処理）
+    fn update_depth_after_advance(&mut self) {
+        // デフォルト実装は何もしない（NyashParserでオーバーライド）
+    }
+
+    /// 改行を自動スキップすべきか判定
+    fn should_auto_skip_newlines(&self) -> bool {
+        // 環境変数でSmart advanceを有効化
+        if std::env::var("NYASH_SMART_ADVANCE").ok().as_deref() != Some("1") {
+            return false;
+        }
+
+        // 現在のトークンがブレースやパーレンの後の場合
+        if self.current() > 0 {
+            let prev_token = &self.tokens()[self.current() - 1].token_type;
+            match prev_token {
+                TokenType::LBRACE | TokenType::LPAREN | TokenType::LBRACK => return true,
+                // 演算子の後（行継続）
+                TokenType::PLUS | TokenType::MINUS | TokenType::MULTIPLY |
+                TokenType::DIVIDE | TokenType::MODULO |
+                TokenType::AND | TokenType::OR |
+                TokenType::DOT | TokenType::DoubleColon |
+                TokenType::COMMA | TokenType::FatArrow => return true,
+                _ => {}
+            }
+        }
+
+        false
+    }
+
+    /// 内部用改行スキップ（再帰防止）
+    fn skip_newlines_internal(&mut self) {
+        let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
+            let lv = v.to_ascii_lowercase();
+            lv == "1" || lv == "true" || lv == "on"
+        }).unwrap_or(false);
+
+        while !self.is_at_end() {
+            let is_nl = matches!(self.current_token().token_type, TokenType::NEWLINE);
+            let is_sc = allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON);
+            if is_nl || is_sc {
+                *self.current_mut() += 1;  // advance()を使わず直接更新（再帰防止）
+            } else {
+                break;
+            }
         }
     }
 
