@@ -8,6 +8,5 @@ use std::collections::HashMap;
 use std::io::Write as IoWrite;
 use std::net::TcpStream;
 use std::sync::Mutex;
-use std::time::Duration;
 
 include!("client_impl.rs");

@@ -4,6 +4,7 @@ use std::os::raw::c_char;
 
 // ============ FFI Types ============
 
+#[allow(dead_code)]
 #[repr(C)]
 pub struct NyashMethodInfo {
     pub method_id: u32,
@@ -11,6 +12,7 @@ pub struct NyashMethodInfo {
     pub signature: u32,
 }
 
+#[allow(dead_code)]
 #[repr(C)]
 pub struct NyashPluginInfo {
     pub type_id: u32,

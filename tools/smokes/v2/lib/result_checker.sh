@@ -107,23 +107,49 @@ check_json() {
 # パリティテスト：VM vs LLVM比較
 check_parity() {
     local program="$1"
-    local test_name="${2:-parity_test}"
-    local timeout="${3:-30}"
+    local code=""
+    local test_name
+    local timeout
+
+    if [ "$program" = "-c" ]; then
+        code="$2"
+        test_name="${3:-parity_test}"
+        timeout="${4:-30}"
+    else
+        test_name="${2:-parity_test}"
+        timeout="${3:-30}"
+    fi
 
     local vm_output llvm_output vm_exit llvm_exit
 
-    # Rust VM実行
-    if vm_output=$(timeout "$timeout" bash -c "NYASH_DISABLE_PLUGINS=1 ./target/release/nyash '$program' 2>&1"); then
-        vm_exit=0
+    # Rust VM 実行
+    if [ "$program" = "-c" ]; then
+        if vm_output=$(timeout "$timeout" bash -c "NYASH_DISABLE_PLUGINS=1 ./target/release/nyash -c \"$code\" 2>&1"); then
+            vm_exit=0
+        else
+            vm_exit=$?
+        fi
     else
-        vm_exit=$?
+        if vm_output=$(timeout "$timeout" bash -c "NYASH_DISABLE_PLUGINS=1 ./target/release/nyash \"$program\" 2>&1"); then
+            vm_exit=0
+        else
+            vm_exit=$?
+        fi
     fi
 
-    # LLVM実行
-    if llvm_output=$(timeout "$timeout" bash -c "NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm '$program' 2>&1"); then
-        llvm_exit=0
+    # LLVM（Pythonハーネス）実行
+    if [ "$program" = "-c" ]; then
+        if llvm_output=$(timeout "$timeout" bash -c "NYASH_LLVM_USE_HARNESS=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm -c \"$code\" 2>&1"); then
+            llvm_exit=0
+        else
+            llvm_exit=$?
+        fi
     else
-        llvm_exit=$?
+        if llvm_output=$(timeout "$timeout" bash -c "NYASH_LLVM_USE_HARNESS=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm \"$program\" 2>&1"); then
+            llvm_exit=0
+        else
+            llvm_exit=$?
+        fi
     fi
 
     # 終了コード比較

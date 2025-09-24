@@ -10,6 +10,8 @@ use super::common::ParserUtils;
 use super::{NyashParser, ParseError};
 use crate::ast::{ASTNode, Span, UnaryOperator};
 use crate::tokenizer::TokenType;
+use crate::parser::cursor::TokenCursor;
+use crate::parser::expr_cursor::ExprParserWithCursor;
 
 // Debug macros are now imported from the parent module via #[macro_export]
 use crate::must_advance;
@@ -22,6 +24,16 @@ fn is_sugar_enabled() -> bool {
 impl NyashParser {
     /// 式をパース (演算子優先順位あり)
     pub(super) fn parse_expression(&mut self) -> Result<ASTNode, ParseError> {
+        // Experimental bridge: Opt-in TokenCursor path (Phase 15.5 newline refactor)
+        // Guard: NYASH_PARSER_TOKEN_CURSOR=1
+        if std::env::var("NYASH_PARSER_TOKEN_CURSOR").ok().as_deref() == Some("1") {
+            let mut cursor = TokenCursor::new(&self.tokens);
+            cursor.set_position(self.current);
+            let ast = ExprParserWithCursor::parse_expression(&mut cursor)?;
+            // Reflect consumed position back to legacy parser index
+            self.current = cursor.position();
+            return Ok(ast);
+        }
         self.parse_pipeline()
     }
 

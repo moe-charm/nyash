@@ -45,10 +45,12 @@ pub fn write_tlv_bool(v: bool, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(TLV_TAG_BOOL, &b)], result, result_len)
 }
 
+#[allow(dead_code)]
 pub fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(TLV_TAG_STRING, s.as_bytes())], result, result_len)
 }
 
+#[allow(dead_code)]
 pub fn write_tlv_handle(
     type_id: u32,
     instance_id: u32,
@@ -164,6 +166,7 @@ pub fn tlv_parse_string(data: &[u8]) -> Result<String, ()> {
     tlv_parse_string_at(data, &mut pos)
 }
 
+#[allow(dead_code)]
 pub fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
     let (_, argc, mut pos) = tlv_parse_header(data)?;
     if argc < 1 {
@@ -197,6 +200,7 @@ pub fn tlv_parse_handle(data: &[u8]) -> Result<(u32, u32), ()> {
     Ok((type_id, instance_id))
 }
 
+#[allow(dead_code)]
 pub fn tlv_parse_one_string(data: &[u8]) -> Result<String, ()> {
     let (_, argc, mut pos) = tlv_parse_header(data)?;
     if argc < 1 {
@@ -205,6 +209,7 @@ pub fn tlv_parse_one_string(data: &[u8]) -> Result<String, ()> {
     tlv_parse_string_at(data, &mut pos)
 }
 
+#[allow(dead_code)]
 pub fn tlv_parse_string_and_bytes(data: &[u8]) -> Result<(String, Vec<u8>), ()> {
     let (_, argc, mut pos) = tlv_parse_header(data)?;
     if argc < 2 {

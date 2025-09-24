@@ -34,7 +34,7 @@ local score
 score = 75
 if score >= 80 {
     print("A")
-} elseif score >= 60 {
+} else if score >= 60 {
     print("B")
 } else {
     print("C")
@@ -70,8 +70,12 @@ test_if_with_and() {
 local x, y
 x = 5
 y = 10
-if x > 0 and y > 0 {
-    print("both positive")
+if x > 0 {
+    if y > 0 {
+        print("both positive")
+    } else {
+        print("not both positive")
+    }
 } else {
     print("not both positive")
 }

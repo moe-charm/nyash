@@ -24,6 +24,7 @@ impl FileBoxInstance {
         }
     }
 
+    #[allow(dead_code)]
     pub fn with_path(path: String) -> Self {
         Self {
             file: None,
@@ -41,11 +42,13 @@ pub static INSTANCES: Lazy<Mutex<HashMap<u32, FileBoxInstance>>> =
 pub static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 /// Allocate a new instance ID
+#[allow(dead_code)]
 pub fn allocate_instance_id() -> u32 {
     INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed)
 }
 
 /// Store an instance with the given ID
+#[allow(dead_code)]
 pub fn store_instance(id: u32, instance: FileBoxInstance) -> Result<(), &'static str> {
     match INSTANCES.lock() {
         Ok(mut map) => {
@@ -57,6 +60,7 @@ pub fn store_instance(id: u32, instance: FileBoxInstance) -> Result<(), &'static
 }
 
 /// Remove an instance by ID
+#[allow(dead_code)]
 pub fn remove_instance(id: u32) -> Option<FileBoxInstance> {
     match INSTANCES.lock() {
         Ok(mut map) => map.remove(&id),
@@ -65,6 +69,7 @@ pub fn remove_instance(id: u32) -> Option<FileBoxInstance> {
 }
 
 /// Get mutable access to an instance
+#[allow(dead_code)]
 pub fn with_instance_mut<F, R>(id: u32, f: F) -> Result<R, &'static str>
 where
     F: FnOnce(&mut FileBoxInstance) -> R,
@@ -79,6 +84,7 @@ where
 }
 
 /// Get access to an instance
+#[allow(dead_code)]
 pub fn with_instance<F, R>(id: u32, f: F) -> Result<R, &'static str>
 where
     F: FnOnce(&FileBoxInstance) -> R,

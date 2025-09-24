@@ -3,6 +3,7 @@
 
 # 共通ライブラリ読み込み（必須）
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+source "$(dirname "$0")/../../../lib/result_checker.sh"
 
 # 環境チェック（必須）
 require_env || exit 2

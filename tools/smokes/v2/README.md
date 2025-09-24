@@ -175,6 +175,25 @@ run_test "test_name" {
 - ログ保存: `artifacts/smokes/<timestamp>/`
 - タイムアウト: プロファイル別設定
 
+### 追加ポリシー（テストの“積み”方針）
+- Quick/Core: 目安 12〜16 本。意味論の軽量ガードのみ（< 0.5s/本）
+  - 増やす基準: バグ/回帰が出たとき“最小再現”を1本追加
+  - 既存と同型のバリエーションは増やさない（効果逓減を避ける）
+- Integration/Parity: 目安 8〜10 本。代表構文の VM ↔ LLVM ハーネス一致
+  - 増やす基準: LLVM 側の修正で差分が出る領域のみ 1 本追加
+- Plugins: 1〜3 本/プラグイン。環境依存は必ず SKIP ガード
+  - 例: FileBox 未ロード時は SKIP（エラーメッセージをマッチして回避）
+
+### ノイズ抑止と共通フィルタ
+実行出力のノイズは `lib/test_runner.sh` の `filter_noise` に集約して管理する。
+新しいノイズが出たらフィルタへ追加し、各テスト個別の `grep -v` は増やさない。
+
+### LLVM パリティ（Python ハーネス）
+- Integration の `check_parity` は LLVM 実行時に `NYASH_LLVM_USE_HARNESS=1` を自動付与して llvmlite ハーネスで検証する。
+- 使い方（例）:
+  - `check_parity -c 'print("Hello")' "hello_parity"`
+  - 同一コードを VM と LLVM で実行し、終了コードと整形後の標準出力を比較する。
+
 ## 💡 トラブルシューティング
 
 ### よくあるエラー

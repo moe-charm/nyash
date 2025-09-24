@@ -26,6 +26,44 @@ Addendum (2025‑09‑26 2nd half)
 
 ---
 
+## Phase 15.5 – 改行（ASI）処理リファクタ再開と TokenCursor 統一計画（2025‑09‑26）
+
+目的
+- 改行スキップ/行継続/括弧深度の判定を TokenCursor に一元化し、既存の二重経路（ParserUtils/depth_tracking/parser_enhanced）を段階撤去する。
+
+現状（スキャン要約）
+- 本命: `src/parser/cursor.rs`（TokenCursor — NewlineMode と括弧深度で一元管理）
+- 旧来: `src/parser/common.rs`（ParserUtils.advance + skip_newlines_internal）/ `src/parser/depth_tracking.rs`
+- 実験: `src/parser/parser_enhanced.rs`（thread‑local）
+- TokenCursor 利用は `expr_cursor.rs`/`nyash_parser_v2.rs`（実験）、本線は旧来経路が多い
+
+小粒ロードマップ（仕様不変・Guard 付き）
+1) Bridge（完了）: `NYASH_PARSER_TOKEN_CURSOR=1` で式パースを TokenCursor に委譲（デフォルトOFF）
+   - 実装: `src/parser/expressions.rs:parse_expression` に実験経路を追加し、`ExprParserWithCursor` を呼び、消費位置を同期
+2) 式レイヤ段階移行: primary/compare/logic/term/factor/call/coalesce/match_expr を順に TokenCursor に寄せる
+   - 呼び元（文レイヤ）は薄いラッパで接続（挙動は不変）
+3) 旧来撤去（最終）: `common.rs` の skip 系、`depth_tracking.rs`、`parser_enhanced.rs` を段階削除
+   - 削除は“参照 0” になってから。互換性に触れないこと
+
+受け入れ条件
+- quick/core と integration/parity の追加スモークが緑（PHI/分岐/ループ/比較/連結）
+- LLVM は Python ハーネスで parity を確認（`NYASH_LLVM_USE_HARNESS=1`）
+- 既定挙動は不変（TokenCursor 経路は環境変数で opt‑in のみ）
+
+進捗（本コミット時点）
+- [x] Bridge 実装: `NYASH_PARSER_TOKEN_CURSOR=1` で TokenCursor による式パースが動作
+- [x] スモーク拡充: quick/core（PHI/比較/ループ/0除算） + integration（parity 代表）
+- [x] PHI 修正: incoming pred を then/else の exit ブロックに統一（VM 未定義値を根治）
+- [x] PHI 検証（dev）: 重複 pred/自己参照/CFG preds 含有の debug アサート追加
+- [x] テストランナー: 出力ノイズの共通フィルタ化（filter_noise）
+
+次アクション
+- [ ] Step‑2: primary.rs を TokenCursor 経路へ寄せる（ラッパ＋内部実装の段階移行）
+- [ ] Step‑2: compare/logic/term までを一括寄せ → quick/core 再実行
+- [ ] Step‑3: 旧来 skip 系の参照数ゼロを確認 → 段階撤去 PR を用意
+
+---
+
 ## 📦 JSON Native（yyjson 置き換え）計画 — 進行メモ（2025‑09‑26）
 
 目的

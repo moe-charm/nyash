@@ -66,12 +66,14 @@ pub(crate) static RESPONSE_ID: AtomicU32 = AtomicU32::new(1);
 pub(crate) static CLIENT_ID: AtomicU32 = AtomicU32::new(1);
 pub(crate) static SOCK_SERVER_ID: AtomicU32 = AtomicU32::new(1);
 pub(crate) static SOCK_CONN_ID: AtomicU32 = AtomicU32::new(1);
+#[allow(dead_code)]
 pub(crate) static SOCK_CLIENT_ID: AtomicU32 = AtomicU32::new(1);
 
 pub(crate) static SOCK_SERVERS: Lazy<Mutex<HashMap<u32, SockServerState>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 pub(crate) static SOCK_CONNS: Lazy<Mutex<HashMap<u32, SockConnState>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
+#[allow(dead_code)]
 pub(crate) static SOCK_CLIENTS: Lazy<Mutex<HashMap<u32, SockClientState>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
@@ -111,6 +113,7 @@ pub(crate) fn next_sock_conn_id() -> u32 {
 }
 
 #[inline]
+#[allow(dead_code)]
 pub(crate) fn next_sock_client_id() -> u32 {
     SOCK_CLIENT_ID.fetch_add(1, Ordering::Relaxed)
 }

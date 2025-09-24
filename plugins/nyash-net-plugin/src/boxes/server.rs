@@ -2,7 +2,7 @@ use crate::abi::NyashTypeBoxFfi;
 use crate::consts::*;
 use crate::ffi::{self, slice};
 use crate::http_helpers;
-use crate::state::{self, RequestState, ResponseState, ServerState, SockConnState};
+use crate::state::{self, RequestState, ServerState, SockConnState};
 use crate::tlv;
 use std::collections::VecDeque;
 use std::net::TcpListener;

@@ -67,6 +67,43 @@ pub(super) fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
 }
 
 impl MirBuilder {
+    #[inline]
+    #[cfg(debug_assertions)]
+    fn debug_verify_phi_inputs(&self, inputs: &Vec<(BasicBlockId, ValueId)>) {
+        use std::collections::HashSet;
+        if let Some(cur_bb) = self.current_block {
+            let mut seen = HashSet::new();
+            for (pred, _v) in inputs.iter() {
+                debug_assert_ne!(
+                    *pred, cur_bb,
+                    "PHI incoming predecessor must not be the merge block itself"
+                );
+                debug_assert!(
+                    seen.insert(*pred),
+                    "Duplicate PHI incoming predecessor detected: {:?}",
+                    pred
+                );
+            }
+            // Ensure all incoming predecessors are known CFG predecessors of the merge block
+            if let Some(func) = &self.current_function {
+                if let Some(block) = func.blocks.get(&cur_bb) {
+                    for (pred, _v) in inputs.iter() {
+                        debug_assert!(
+                            block.predecessors.contains(pred),
+                            "PHI incoming pred {:?} is not a predecessor of merge bb {:?}",
+                            pred,
+                            cur_bb
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[inline]
+    #[cfg(not(debug_assertions))]
+    fn debug_verify_phi_inputs(&self, _inputs: &Vec<(BasicBlockId, ValueId)>) {}
+
     /// Merge all variables modified in then/else relative to pre_if_snapshot.
     /// In PHI-off mode inserts edge copies from branch exits to merge. In PHI-on mode emits Phi.
     /// `skip_var` allows skipping a variable already merged elsewhere (e.g., bound to an expression result).
@@ -74,8 +111,8 @@ impl MirBuilder {
         &mut self,
         then_block: super::BasicBlockId,
         else_block: super::BasicBlockId,
-        _then_exit_block: super::BasicBlockId,
-        _else_exit_block_opt: Option<super::BasicBlockId>,
+        then_exit_block: super::BasicBlockId,
+        else_exit_block_opt: Option<super::BasicBlockId>,
         pre_if_snapshot: &std::collections::HashMap<String, super::ValueId>,
         then_map_end: &std::collections::HashMap<String, super::ValueId>,
         else_map_end_opt: &Option<std::collections::HashMap<String, super::ValueId>>,
@@ -114,13 +151,13 @@ impl MirBuilder {
                 .and_then(|m| m.get(name).copied())
                 .unwrap_or(pre);
             // フェーズM: 常にPHI命令を使用（no_phi_mode撤廃）
+            // incoming の predecessor は "実際に merge に遷移してくる出口ブロック" を使用する
+            let then_pred = then_exit_block;
+            let else_pred = else_exit_block_opt.unwrap_or(else_block);
             let merged = self.value_gen.next();
-            self.emit_instruction(
-                MirInstruction::Phi {
-                    dst: merged,
-                    inputs: vec![(then_block, then_v), (else_block, else_v)],
-                }
-            )?;
+            let inputs = vec![(then_pred, then_v), (else_pred, else_v)];
+            self.debug_verify_phi_inputs(&inputs);
+            self.emit_instruction(MirInstruction::Phi { dst: merged, inputs })?;
             self.variable_map.insert(name.to_string(), merged);
         }
         Ok(())
@@ -131,8 +168,8 @@ impl MirBuilder {
         &mut self,
         then_block: BasicBlockId,
         else_block: BasicBlockId,
-        _then_exit_block_opt: Option<BasicBlockId>,
-        _else_exit_block_opt: Option<BasicBlockId>,
+        then_exit_block_opt: Option<BasicBlockId>,
+        else_exit_block_opt: Option<BasicBlockId>,
         then_value_raw: ValueId,
         else_value_raw: ValueId,
         pre_if_var_map: &HashMap<String, ValueId>,
@@ -171,22 +208,22 @@ impl MirBuilder {
                 // Else doesn't assign: use pre-if value if available
                 pre_then_var_value.unwrap_or(else_value_raw)
             };
+            // predecessor を then/else の exit ブロックに揃える
+            let then_pred = then_exit_block_opt.unwrap_or(then_block);
+            let else_pred = else_exit_block_opt.unwrap_or(else_block);
             // Emit Phi for the assigned variable and bind it
-            self.emit_instruction(MirInstruction::Phi {
-                dst: result_val,
-                inputs: vec![
-                    (then_block, then_value_for_var),
-                    (else_block, else_value_for_var),
-                ],
-            })?;
+            let inputs = vec![(then_pred, then_value_for_var), (else_pred, else_value_for_var)];
+            self.debug_verify_phi_inputs(&inputs);
+            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
             self.variable_map = pre_if_var_map.clone();
             self.variable_map.insert(var_name, result_val);
         } else {
             // No variable assignment pattern detected – just emit Phi for expression result
-            self.emit_instruction(MirInstruction::Phi {
-                dst: result_val,
-                inputs: vec![(then_block, then_value_raw), (else_block, else_value_raw)],
-            })?;
+            let then_pred = then_exit_block_opt.unwrap_or(then_block);
+            let else_pred = else_exit_block_opt.unwrap_or(else_block);
+            let inputs = vec![(then_pred, then_value_raw), (else_pred, else_value_raw)];
+            self.debug_verify_phi_inputs(&inputs);
+            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
             // Merge variable map conservatively to pre-if snapshot (no new bindings)
             self.variable_map = pre_if_var_map.clone();
         }
