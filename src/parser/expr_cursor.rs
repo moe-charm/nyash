@@ -116,12 +116,12 @@ impl ExprParserWithCursor {
 
     /// 乗算式をパース
     fn parse_multiplicative_expr(cursor: &mut TokenCursor) -> Result<ASTNode, ParseError> {
-        let mut left = Self::parse_postfix_expr(cursor)?;
+        let mut left = Self::parse_unary_expr(cursor)?;
 
         while let Some(op) = Self::match_multiplicative_op(cursor) {
             let op_line = cursor.current().line;
             cursor.advance();
-            let right = Self::parse_postfix_expr(cursor)?;
+            let right = Self::parse_unary_expr(cursor)?;
             left = ASTNode::BinaryOp {
                 operator: op,
                 left: Box::new(left),
@@ -131,6 +131,34 @@ impl ExprParserWithCursor {
         }
 
         Ok(left)
+    }
+
+    /// 単項演算子（- / not）
+    fn parse_unary_expr(cursor: &mut TokenCursor) -> Result<ASTNode, ParseError> {
+        // match式は旧系にあるが、ここでは単項の最小対応に限定
+        match &cursor.current().token_type {
+            TokenType::MINUS => {
+                let op_line = cursor.current().line;
+                cursor.advance();
+                let operand = Self::parse_unary_expr(cursor)?;
+                Ok(ASTNode::UnaryOp {
+                    operator: crate::ast::UnaryOperator::Minus,
+                    operand: Box::new(operand),
+                    span: Span::new(op_line, 0, op_line, 0),
+                })
+            }
+            TokenType::NOT => {
+                let op_line = cursor.current().line;
+                cursor.advance();
+                let operand = Self::parse_unary_expr(cursor)?;
+                Ok(ASTNode::UnaryOp {
+                    operator: crate::ast::UnaryOperator::Not,
+                    operand: Box::new(operand),
+                    span: Span::new(op_line, 0, op_line, 0),
+                })
+            }
+            _ => Self::parse_postfix_expr(cursor),
+        }
     }
 
     /// 後置（フィールドアクセス・関数/メソッド呼び出し）をパース
