@@ -1,6 +1,9 @@
 mod errors;
+mod extern_functions;
+mod ffi_bridge;
 mod globals;
 mod host_bridge;
+mod instance_manager;
 mod loader;
 mod types;
 

@@ -17,18 +17,18 @@ fn dbg_on() -> bool {
 // (alias imported from host_bridge)
 
 #[derive(Debug, Clone, Default)]
-struct LoadedBoxSpec {
-    type_id: Option<u32>,
-    methods: HashMap<String, MethodSpec>,
-    fini_method_id: Option<u32>,
+pub(super) struct LoadedBoxSpec {
+    pub(super) type_id: Option<u32>,
+    pub(super) methods: HashMap<String, MethodSpec>,
+    pub(super) fini_method_id: Option<u32>,
     // Optional Nyash ABI v2 per-box invoke entry (not yet used for calls)
     invoke_id: Option<BoxInvokeFn>,
     // Optional resolve(name)->method_id provided by NyashTypeBoxFfi
-    resolve_fn: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub(super) resolve_fn: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
 }
 #[derive(Debug, Clone, Copy)]
-struct MethodSpec {
-    method_id: u32,
+pub(super) struct MethodSpec {
+    pub(super) method_id: u32,
     returns_result: bool,
 }
 
@@ -587,127 +587,8 @@ impl PluginLoaderV2 {
         method_name: &str,
         args: &[Box<dyn NyashBox>],
     ) -> BidResult<Option<Box<dyn NyashBox>>> {
-        match (iface_name, method_name) {
-            ("env.console", "log") => {
-                for a in args {
-                    println!("{}", a.to_string_box().value);
-                }
-                Ok(None)
-            }
-            ("env.result", "ok") => {
-                // Wrap the first argument as Result.Ok; if missing, use Void
-                let v = args.get(0).map(|b| b.clone_box()).unwrap_or_else(|| Box::new(crate::box_trait::VoidBox::new()));
-                Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_ok(v))))
-            }
-            ("env.result", "err") => {
-                // Wrap the first argument as Result.Err; if missing, synthesize a StringBox("Error")
-                let e: Box<dyn NyashBox> = args
-                    .get(0)
-                    .map(|b| b.clone_box())
-                    .unwrap_or_else(|| Box::new(crate::box_trait::StringBox::new("Error")));
-                Ok(Some(Box::new(crate::boxes::result::NyashResultBox::new_err(e))))
-            }
-            ("env.modules", "set") => {
-                if args.len() >= 2 {
-                    let key = args[0].to_string_box().value;
-                    let val = args[1].clone_box();
-                    crate::runtime::modules_registry::set(key, val);
-                }
-                Ok(None)
-            }
-            ("env.modules", "get") => {
-                if let Some(k) = args.get(0) {
-                    let key = k.to_string_box().value;
-                    if let Some(v) = crate::runtime::modules_registry::get(&key) {
-                        return Ok(Some(v));
-                    }
-                }
-                Ok(Some(Box::new(crate::box_trait::VoidBox::new())))
-            }
-            ("env.task", "cancelCurrent") => {
-                let tok = crate::runtime::global_hooks::current_group_token();
-                tok.cancel();
-                Ok(None)
-            }
-            ("env.task", "currentToken") => {
-                let tok = crate::runtime::global_hooks::current_group_token();
-                let tb = crate::boxes::token_box::TokenBox::from_token(tok);
-                Ok(Some(Box::new(tb)))
-            }
-            ("env.debug", "trace") => {
-                if std::env::var("NYASH_DEBUG_TRACE").ok().as_deref() == Some("1") {
-                    for a in args {
-                        eprintln!("[debug.trace] {}", a.to_string_box().value);
-                    }
-                }
-                Ok(None)
-            }
-            ("env.runtime", "checkpoint") => {
-                if crate::config::env::runtime_checkpoint_trace() {
-                    eprintln!("[runtime.checkpoint] reached");
-                }
-                crate::runtime::global_hooks::safepoint_and_poll();
-                Ok(None)
-            }
-            ("env.future", "new") | ("env.future", "birth") => {
-                let fut = crate::boxes::future::FutureBox::new();
-                if let Some(v) = args.get(0) {
-                    fut.set_result(v.clone_box());
-                }
-                Ok(Some(Box::new(fut)))
-            }
-            ("env.future", "set") => {
-                if args.len() >= 2 {
-                    if let Some(fut) = args[0]
-                        .as_any()
-                        .downcast_ref::<crate::boxes::future::FutureBox>()
-                    {
-                        fut.set_result(args[1].clone_box());
-                    }
-                }
-                Ok(None)
-            }
-            ("env.future", "await") => {
-                use crate::boxes::result::NyashResultBox;
-                if let Some(arg) = args.get(0) {
-                    if let Some(fut) = arg
-                        .as_any()
-                        .downcast_ref::<crate::boxes::future::FutureBox>()
-                    {
-                        let max_ms: u64 = crate::config::env::await_max_ms();
-                        let start = std::time::Instant::now();
-                        let mut spins = 0usize;
-                        while !fut.ready() {
-                            crate::runtime::global_hooks::safepoint_and_poll();
-                            std::thread::yield_now();
-                            spins += 1;
-                            if spins % 1024 == 0 {
-                                std::thread::sleep(std::time::Duration::from_millis(1));
-                            }
-                            if start.elapsed() >= std::time::Duration::from_millis(max_ms) {
-                                let err = crate::box_trait::StringBox::new("Timeout");
-                                return Ok(Some(Box::new(NyashResultBox::new_err(Box::new(err)))));
-                            }
-                        }
-                        return match fut.wait_and_get() {
-                            Ok(v) => Ok(Some(Box::new(NyashResultBox::new_ok(v)))),
-                            Err(e) => {
-                                let err = crate::box_trait::StringBox::new(format!("Error: {}", e));
-                                Ok(Some(Box::new(NyashResultBox::new_err(Box::new(err)))))
-                            }
-                        };
-                    } else {
-                        return Ok(Some(Box::new(NyashResultBox::new_ok(arg.clone_box()))));
-                    }
-                }
-                Ok(Some(Box::new(
-                    crate::boxes::result::NyashResultBox::new_err(Box::new(
-                        crate::box_trait::StringBox::new("InvalidArgs"),
-                    )),
-                )))
-            }
-            _ => Err(BidError::PluginError),
-        }
+        // Delegate to the extracted extern_functions module
+        super::extern_functions::extern_call(iface_name, method_name, args)
     }
 
     fn resolve_method_id_from_file(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
@@ -768,6 +649,8 @@ impl PluginLoaderV2 {
         Ok((bc.type_id, m.method_id, m.returns_result))
     }
 
+    // Moved to ffi_bridge.rs
+    #[cfg(never)]
     pub fn invoke_instance_method(
         &self,
         box_type: &str,
@@ -900,6 +783,8 @@ impl PluginLoaderV2 {
         Ok(Some(Box::new(crate::box_trait::VoidBox::new())))
     }
 
+    // Moved to instance_manager.rs
+    #[cfg(never)]
     pub fn create_box(
         &self,
         box_type: &str,
@@ -996,6 +881,8 @@ impl PluginLoaderV2 {
         Ok(Box::new(bx))
     }
 
+    // Moved to instance_manager.rs
+    #[cfg(never)]
     /// Shutdown singletons: finalize and clear all singleton handles
     pub fn shutdown_singletons(&self) {
         let mut map = self.singletons.write().unwrap();
