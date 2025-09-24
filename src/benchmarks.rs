@@ -9,13 +9,9 @@
 
 #[cfg(feature = "wasm-backend")]
 use crate::backend::WasmBackend;
-#[cfg(feature = "vm-legacy")]
-use crate::backend::VM;
-// use crate::interpreter::NyashInterpreter; // Legacy interpreter removed
-// use crate::mir::MirCompiler; // not used in Phase-15 (PyVM primary)
-use crate::parser::NyashParser;
+// VM import removed with vm-legacy
+// Interpreter and MirCompiler removed
 use std::fs;
-use std::time::Instant;
 
 #[derive(Debug)]
 pub struct BenchmarkResult {
@@ -51,15 +47,9 @@ impl BenchmarkSuite {
             // Test if file exists and is readable
             if let Ok(source) = fs::read_to_string(file_path) {
                 // Run on all backends
-                // Interpreter benchmark disabled - legacy interpreter removed
-                // if let Ok(interpreter_result) = self.run_interpreter_benchmark(name, &source) {
-                //     results.push(interpreter_result);
-                // }
+                // Interpreter benchmark removed with legacy interpreter
 
-                #[cfg(feature = "vm-legacy")]
-                if let Ok(vm_result) = self.run_vm_benchmark(name, &source) {
-                    results.push(vm_result);
-                }
+                // VM benchmark removed with vm-legacy
 
                 #[cfg(feature = "wasm-backend")]
                 if let Ok(wasm_result) = self.run_wasm_benchmark(name, &source) {
@@ -73,78 +63,16 @@ impl BenchmarkSuite {
         results
     }
 
-    /// Run benchmark on interpreter backend (DISABLED - legacy interpreter removed)
+    // Interpreter benchmark removed with legacy interpreter
+
+    // VM benchmark removed with vm-legacy
     #[allow(dead_code)]
-    fn run_interpreter_benchmark(
+    fn run_vm_benchmark(
         &self,
         _name: &str,
         _source: &str,
     ) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
-        Err("Interpreter benchmark disabled - legacy interpreter removed".into())
-
-        /*
-        let mut total_duration = 0.0;
-
-        for i in 0..self.iterations {
-            let start = Instant::now();
-
-            // Parse and execute
-            let ast = NyashParser::parse_from_string(source)?;
-            let mut interpreter = NyashInterpreter::new();
-            let _result = interpreter.execute(ast)?;
-
-            let duration = start.elapsed();
-            total_duration += duration.as_secs_f64() * 1000.0; // Convert to ms
-
-            if i == 0 {
-                println!("  📊 Interpreter: First run completed");
-            }
-        }
-
-        Ok(BenchmarkResult {
-            name: name.to_string(),
-            backend: "Interpreter".to_string(),
-            duration_ms: total_duration,
-            iterations: self.iterations,
-            avg_duration_ms: total_duration / (self.iterations as f64),
-        })
-        */
-    }
-
-    /// Run benchmark on VM backend
-    #[cfg(feature = "vm-legacy")]
-    fn run_vm_benchmark(
-        &self,
-        name: &str,
-        source: &str,
-    ) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
-        let mut total_duration = 0.0;
-
-        for i in 0..self.iterations {
-            let start = Instant::now();
-
-            // Parse -> MIR -> VM
-            let ast = NyashParser::parse_from_string(source)?;
-            let mut compiler = MirCompiler::new();
-            let compile_result = compiler.compile(ast)?;
-            let mut vm = VM::new();
-            let _result = vm.execute_module(&compile_result.module)?;
-
-            let duration = start.elapsed();
-            total_duration += duration.as_secs_f64() * 1000.0; // Convert to ms
-
-            if i == 0 {
-                println!("  🏎️ VM: First run completed");
-            }
-        }
-
-        Ok(BenchmarkResult {
-            name: name.to_string(),
-            backend: "VM".to_string(),
-            duration_ms: total_duration,
-            iterations: self.iterations,
-            avg_duration_ms: total_duration / (self.iterations as f64),
-        })
+        Err("VM benchmark removed with vm-legacy".into())
     }
 
     /// Run benchmark on WASM backend

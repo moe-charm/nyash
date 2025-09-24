@@ -1,10 +1,8 @@
-#[cfg(feature = "vm-legacy")]
-pub mod bench;
+// bench module removed with vm-legacy
 pub mod llvm;
 pub mod mir;
 pub mod vm_fallback;
-#[cfg(feature = "vm-legacy")]
-pub mod vm;
+// vm module removed with vm-legacy
 pub mod pyvm;
 pub mod macro_child;
 

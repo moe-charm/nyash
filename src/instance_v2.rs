@@ -12,7 +12,6 @@
 
 use crate::ast::ASTNode;
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, SharedNyashBox, StringBox};
-// use crate::interpreter::NyashInterpreter; // レガシー互換用 - removed
 use crate::value::NyashValue;
 use std::any::Any;
 use std::collections::HashMap;

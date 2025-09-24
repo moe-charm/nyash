@@ -10,8 +10,6 @@ extern crate self as nyash_rust;
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
-// Legacy interpreter removed
-
 pub mod ast; // using historical ast.rs
 pub mod box_arithmetic;
 pub mod box_factory; // unified Box Factory
@@ -24,7 +22,6 @@ pub mod environment;
 pub mod exception_box;
 pub mod finalization;
 pub mod instance_v2; // simplified InstanceBox implementation
-// pub mod interpreter removed - legacy interpreter deleted
 pub mod method_box;
 pub mod operator_traits; // trait-based operator overloading
 pub mod parser; // using historical parser.rs
@@ -47,9 +44,7 @@ pub mod mir_aot_plan_import {
 
 // Backends
 pub mod backend;
-// pub mod jit; // ARCHIVED: Cranelift JIT subsystem moved to archive/jit-cranelift/
-pub mod jit_stub; // Temporary JIT stub for Phase 15 compilation compatibility
-pub use jit_stub as jit; // Alias for compatibility
+// JIT functionality archived to archive/jit-cranelift/
 pub mod semantics; // Unified semantics trait for MIR evaluation/lowering
 
 pub mod benchmarks;
@@ -93,7 +88,6 @@ pub use box_factory::RuntimeError;
 pub use parser::{NyashParser, ParseError};
 pub use tokenizer::{NyashTokenizer, Token, TokenType};
 pub use type_box::{MethodSignature, TypeBox, TypeRegistry}; // 🌟 TypeBox exports
-                                                            // pub use instance::InstanceBox;  // 旧実装
 pub use boxes::console_box::ConsoleBox;
 pub use boxes::debug_box::DebugBox;
 pub use boxes::map_box::MapBox;
@@ -108,5 +102,4 @@ pub use method_box::{BoxType, EphemeralInstance, FunctionDefinition, MethodBox};
 
 pub use value::NyashValue;
 
-// WASM support temporarily disabled - legacy interpreter removed
-// TODO: Implement WASM support using VM or LLVM backends
+// WASM support to be reimplemented with VM/LLVM backends

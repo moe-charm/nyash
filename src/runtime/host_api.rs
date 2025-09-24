@@ -10,48 +10,9 @@
 use crate::box_trait::NyashBox;
 
 // ===== TLS: current VM pointer during plugin invoke =====
-// When legacy VM is enabled, keep a real pointer for write barriers.
-#[cfg(feature = "vm-legacy")]
-thread_local! {
-    static CURRENT_VM: std::cell::Cell<*mut crate::backend::vm::VM> = std::cell::Cell::new(std::ptr::null_mut());
-}
-#[cfg(feature = "vm-legacy")]
-pub fn set_current_vm(ptr: *mut crate::backend::vm::VM) {
-    CURRENT_VM.with(|c| c.set(ptr));
-}
-#[cfg(feature = "vm-legacy")]
-pub fn clear_current_vm() {
-    CURRENT_VM.with(|c| c.set(std::ptr::null_mut()));
-}
-#[cfg(feature = "vm-legacy")]
-#[allow(dead_code)]
-fn with_current_vm_mut<F, R>(f: F) -> Option<R>
-where
-    F: FnOnce(&mut crate::backend::vm::VM) -> R,
-{
-    CURRENT_VM.with(|c| {
-        let p = c.get();
-        if p.is_null() {
-            None
-        } else {
-            Some(unsafe { f(&mut *p) })
-        }
-    })
-}
-
-// When legacy VM is disabled, provide stubs (no GC barriers).
-#[cfg(not(feature = "vm-legacy"))]
+// VM-legacy feature removed - provide stubs only
 pub fn set_current_vm(_ptr: *mut ()) {}
-#[cfg(not(feature = "vm-legacy"))]
 pub fn clear_current_vm() {}
-#[cfg(not(feature = "vm-legacy"))]
-#[allow(dead_code)]
-fn with_current_vm_mut<F, R>(_f: F) -> Option<R>
-where
-    F: FnOnce(&mut ()) -> R,
-{
-    None
-}
 
 // ===== Utilities: TLV encode helpers (single-value) =====
 fn tlv_encode_one(val: &crate::backend::vm::VMValue) -> Vec<u8> {
@@ -220,16 +181,7 @@ pub extern "C" fn nyrt_host_call_name(
                     crate::backend::vm::VMValue::String(s) => s.clone(),
                     v => v.to_string(),
                 };
-                // Barrier: use current VM runtime if available
-                #[cfg(feature = "vm-legacy")]
-                {
-                    let _ = with_current_vm_mut(|vm| {
-                        crate::backend::gc_helpers::gc_write_barrier_site(
-                            vm.runtime_ref(),
-                            "HostAPI.setField",
-                        );
-                    });
-                }
+                // VM-legacy removed - no GC barrier needed
                 // Accept primitives only for now
                 let nv_opt = match argv[1].clone() {
                     crate::backend::vm::VMValue::Integer(i) => {
@@ -291,15 +243,7 @@ pub extern "C" fn nyrt_host_call_name(
                     crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
                     _ => Box::new(crate::box_trait::VoidBox::new()),
                 };
-                #[cfg(feature = "vm-legacy")]
-                {
-                    let _ = with_current_vm_mut(|vm| {
-                        crate::backend::gc_helpers::gc_write_barrier_site(
-                            vm.runtime_ref(),
-                            "HostAPI.Array.set",
-                        );
-                    });
-                }
+                // VM-legacy removed - no GC barrier needed
                 let out = arr.set(Box::new(crate::box_trait::IntegerBox::new(idx)), vb);
                 let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
                 let buf = tlv_encode_one(&vmv);
@@ -428,15 +372,7 @@ pub extern "C" fn nyrt_host_call_slot(
                             crate::backend::vm::VMValue::String(s) => s.clone(),
                             v => v.to_string(),
                         };
-                        #[cfg(feature = "vm-legacy")]
-                        {
-                            let _ = with_current_vm_mut(|vm| {
-                                crate::backend::gc_helpers::gc_write_barrier_site(
-                                    vm.runtime_ref(),
-                                    "HostAPI.setField",
-                                );
-                            });
-                        }
+                        // VM-legacy removed - no GC barrier needed
                         let nv_opt = match argv[1].clone() {
                             crate::backend::vm::VMValue::Integer(i) => {
                                 Some(crate::value::NyashValue::Integer(i))
@@ -521,15 +457,7 @@ pub extern "C" fn nyrt_host_call_slot(
                                 crate::backend::vm::VMValue::BoxRef(b) => b.share_box(),
                                 _ => Box::new(crate::box_trait::VoidBox::new()),
                             };
-                            #[cfg(feature = "vm-legacy")]
-                            {
-                                let _ = with_current_vm_mut(|vm| {
-                                    crate::backend::gc_helpers::gc_write_barrier_site(
-                                        vm.runtime_ref(),
-                                        "HostAPI.Array.set",
-                                    );
-                                });
-                            }
+                            // VM-legacy removed - no GC barrier needed
                             let out = arr.set(Box::new(crate::box_trait::IntegerBox::new(idx)), vb);
                             let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
                             let buf = tlv_encode_one(&vmv);
