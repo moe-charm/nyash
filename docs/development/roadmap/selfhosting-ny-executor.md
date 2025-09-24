@@ -17,7 +17,7 @@
 - `NYASH_SELFHOST_TRACE=1`: Ny Executor の構造化ログ（JSON lines or 整形文字列）。
 - `NYASH_SELFHOST_STEP_MAX=<int>`: 1 実行あたりの最大命令数（既定 200000 相当）。
 - `NYASH_SELFHOST_STRICT=1`: 厳格モード（型/値のチェックを強化、未知 extern を拒否）。
-- 参考: `NYASH_MIR_NO_PHI=1`（開発用。Edge Copy 経路の確認に使用）
+- 参考: `NYASH_MIR_NO_PHI=1`（開発用。既定PHI-onからレガシー edge-copy 経路へ切り替えるときに使用）
 
 ## 構成（新規 Ny ファイル）
 - `apps/selfhost-runtime/`

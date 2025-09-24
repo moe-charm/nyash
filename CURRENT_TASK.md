@@ -22,6 +22,33 @@ Updated: 2025‑09‑24
 3. **Phase 1**: ✅ StrictPluginFirstデフォルト化
 4. **Phase 1**: ✅ 環境変数制御: `NYASH_BOX_FACTORY_POLICY`
 
+## 🎉 **Phase 2.4 NyRT→NyKernel Architecture Revolution 100%完了！**
+
+### ✅ **ChatGPT5 Pro設計 × codex技術力 = 完璧な成果**
+**実装期間**: 2025-09-24 完全達成
+**技術革命**: 3つの重大問題を同時解決
+
+#### **🔧 1. アーキテクチャ変更完了**
+- **完全移行**: `crates/nyrt` → `crates/nyash_kernel`
+- **プラグインファースト**: `with_legacy_vm_args` 11箇所完全削除
+- **コード削減**: 42%削除可能関数特定（ChatGPT5 Pro分析）
+
+#### **🔧 2. LLVM ExternCall Print問題根本解決**
+- **問題**: LLVM EXEで`print()`出力されない（VMは正常）
+- **真因**: 引数変換で文字列ポインタ後のnull上書きバグ
+- **修正**: `src/llvm_py/instructions/externcall.py:152-154`保護ロジック
+- **検証**: ✅ `🎉 ExternCall print修正テスト！` 完璧出力確認
+
+#### **🔧 3. リンク統合完了**
+- **ライブラリ更新**: `libnyrt.a` → `libnyash_kernel.a`
+- **ビルドシステム**: `tools/build_llvm.sh` 完全対応
+- **実行確認**: Python LLVM → リンク → 実行パイプライン成功
+
+### **🏆 codex先生の技術的貢献**
+1. **根本原因特定**: 名前解決 vs 引数変換の正確な分析
+2. **最小差分修正**: 既存コード破壊なしの外科手術レベル修正
+3. **包括的検証**: 再現→修正→確認の完璧なフロー
+
 ### **📋 次世代戦略ロードマップ: 安全な移行完成へ**
 
 #### **🧪 Phase 2.0: スモークテスト充実** (次のタスク)

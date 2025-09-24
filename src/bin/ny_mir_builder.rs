@@ -64,7 +64,7 @@ fn main() {
     let nyrt_dir = matches
         .get_one::<String>("nyrt")
         .map(|s| s.to_string())
-        .unwrap_or("crates/nyrt".to_string());
+        .unwrap_or("crates/nyash_kernel".to_string());
 
     // Determine sibling nyash binary path (target dir)
     let nyash_bin = current_dir_bin("nyash");
@@ -202,7 +202,7 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
         // Prefer lld-link, then link.exe, fallback to cc
         let nyrt_release = format!("{}/target/release", nyrt_dir.replace('\\', "/"));
         let lib_nyrt_lib = format!("{}/nyrt.lib", nyrt_release);
-        let lib_nyrt_a = format!("{}/libnyrt.a", nyrt_release);
+        let lib_nyrt_a = format!("{}/libnyash_kernel.a", nyrt_release);
         if which::which("lld-link").is_ok() {
             let mut args: Vec<String> = Vec::new();
             args.push(format!("/OUT:{}", out_path));
@@ -243,7 +243,7 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
         let status = PCommand::new("cc")
             .args([obj_path])
             .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args(["-lnyrt", "-o", out_path])
+            .args(["-lnyash_kernel", "-o", out_path])
             .status()
             .map_err(|e| e.to_string())?;
         if status.success() {
@@ -257,7 +257,7 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
             .args([obj_path])
             .args(["-L", "target/release"])
             .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args(["-Wl,--whole-archive", "-lnyrt", "-Wl,--no-whole-archive"])
+            .args(["-Wl,--whole-archive", "-lnyash_kernel", "-Wl,--no-whole-archive"])
             .args(["-lpthread", "-ldl", "-lm", "-o", out_path])
             .status()
             .map_err(|e| e.to_string())?;

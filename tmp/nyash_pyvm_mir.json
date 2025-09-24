@@ -3,7 +3,7 @@
     {
       "blocks": [
         {
-          "id": 0,
+          "id": 3,
           "instructions": [
             {
               "dst": 0,
@@ -13,7 +13,7 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "Normal string"
+                "value": "Test Plugin System"
               }
             },
             {
@@ -25,13 +25,210 @@
               "op": "externcall"
             },
             {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Hello"
+              }
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": " World"
+              }
+            },
+            {
+              "dst": 3,
+              "lhs": 1,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 2
+            },
+            {
+              "args": [
+                3
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
               "op": "ret",
-              "value": 0
+              "value": 4
+            }
+          ]
+        }
+      ],
+      "name": "Main.main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "Main.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Test Plugin System"
+              }
+            },
+            {
+              "args": [
+                0
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Hello"
+              }
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": " World"
+              }
+            },
+            {
+              "dst": 3,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 1,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 2
+            },
+            {
+              "args": [
+                3
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 4
             }
           ]
         }
       ],
       "name": "main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Main("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "Main.toString/0",
       "params": []
     }
   ]

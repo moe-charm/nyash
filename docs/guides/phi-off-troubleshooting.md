@@ -2,6 +2,8 @@
 
 Scope: MIR PHI-off (edge-copy) policy with LLVM harness PHI synthesis.
 
+> Phase‑15 では PHI-on が既定だよ。このガイドは `NYASH_MIR_NO_PHI=1` を明示してレガシー edge-copy モードを再現しているときだけ参照してね。
+
 Symptoms and Hints
 
 - Merge block contains self-copy to merged value
@@ -23,4 +25,3 @@ Tools
 - JSON trace: set `NYASH_LLVM_TRACE_PHI=1` and `NYASH_LLVM_TRACE_OUT=<path>`
 - One-shot: `tools/phi_trace_run.sh <app.nyash> [--strict-zero]`
 - Strict verifier (PHI-off): `NYASH_VERIFY_EDGE_COPY_STRICT=1 cargo test --lib`
-

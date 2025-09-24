@@ -45,8 +45,26 @@ def lower_externcall(
                 bb_map = ctx.bb_map
         except Exception:
             pass
+    # Normalize extern target names
     # Accept full symbol names (e.g., "nyash.console.log", "nyash.string.len_h").
+    # Also accept legacy/environment names and map them to kernel exports.
     llvm_name = func_name
+    try:
+        if func_name.startswith("env.console."):
+            # Map env.console.* → nyash.console.* (kernel exports)
+            method = func_name.split(".")[-1]
+            # println maps to log for now
+            if method == "println":
+                method = "log"
+            llvm_name = f"nyash.console.{method}"
+        elif func_name == "println" or func_name == "print":
+            # Bare println/print fallback
+            llvm_name = "nyash.console.log"
+        elif func_name.startswith("nyash.console.") and func_name.endswith("println"):
+            # Normalize nyash.console.println → nyash.console.log
+            llvm_name = "nyash.console.log"
+    except Exception:
+        pass
 
     i8 = ir.IntType(8)
     i64 = ir.IntType(64)
@@ -161,7 +179,8 @@ def lower_externcall(
                             except Exception:
                                 pass
                 else:
-                    aval = ir.Constant(expected_ty, None)
+                    # used_string_h2p was true: keep the resolved pointer (do not null it)
+                    pass
             elif isinstance(expected_ty, ir.IntType) and expected_ty.width == 64:
                 # Need i64
                 if hasattr(aval, 'type'):

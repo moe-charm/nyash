@@ -4,6 +4,8 @@
 要旨
 Nyashは「Everything is Box」哲学を核に、14命令（MIR14）の最小IRでInterpreter/VM/JIT/AOT/GUIを目指してきた。本稿ではPhase‑15における設計判断として、MIR側のPHI生成を停止（PHI‑off, エッジコピー合流）し、PHI形成をLLVMハーネス側に委譲する方針を採用した経緯と効果を報告する。現在の評価範囲はPyVM（意味論リファレンス）とLLVM/llvmlite（AOT/EXEハーネス）に限定し、両者のパリティおよびLLVM側の性能・安定性を中心に示す。
 
+> 更新メモ（2025-09-26）: Phase‑15 では PHI-on（MIR14）が既定に復帰したよ。この資料はPHI-off方針をアーカイブとして残しているよ。現行のポリシーは `docs/reference/mir/phi_policy.md` を参照してね。
+
 ## 1. はじめに
 最小IRで多様な実行形態を統一する挑戦では、IRの表現力と実装コストの均衡が鍵となる。Nyashは命令の削減（27→13→14）とAPI統一（BoxCall）でIRを簡素に保ちつつ、評価基準をPyVM意味論とLLVM生成物に絞ることで、開発・検証速度を高めた。
 
@@ -18,8 +20,8 @@ Nyashは「Everything is Box」哲学を核に、14命令（MIR14）の最小IR�
 - LLVM: ブロック先頭にPHIを形成（typed incoming）、if‑merge前宣言等で安定性向上
 - 不変条件（LLVM側）: PHIはブロック先頭にのみ配置、incomingは型付き `i64 <v>, %bb`（詳細: `docs/reference/mir/phi_invariants.md`）
 - トグル:
-  - 既定: `NYASH_MIR_NO_PHI=1`（PHI‑off）
-  - 開発: `--features phi-legacy` かつ `NYASH_MIR_NO_PHI=0` でPHI‑on実験
+  - 既定: `NYASH_MIR_NO_PHI=0`（PHI-on）
+  - レガシー再現: `NYASH_MIR_NO_PHI=1`（PHI-off） + `NYASH_VERIFY_ALLOW_NO_PHI=1`
 
 ## 4. 実装概要（評価対象）
 - PyVM: JSON v0→MIR実行の意味論基準。短絡やtruthy規約の基準線
@@ -51,4 +53,3 @@ AI協働（ChatGPT/Gemini）とコミュニティ貢献に感謝する。
 
 ### キーワード
 ミニマルIR, SSA, PHI合成, LLVM, PyVM, BoxCall, 統一実行
-

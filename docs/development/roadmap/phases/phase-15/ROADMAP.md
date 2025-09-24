@@ -63,6 +63,8 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
    - 環境変数制御で段階的移行: `NYASH_USE_PLUGIN_CORE_BOXES=1`
    - 削減目標: 約700行（nyrt実装600行 + 特別扱い100行）
    - DLL動作確認→Nyashコード化の安全な移行戦略
+   - **using構文完全実装**: compiler.nyashのusing構文パース問題解決
+   - **LLVM ExternCall改善**: print出力問題修正（LLVMバックエンド）
    - 詳細: [phase-15.5-core-box-unification.md](phase-15.5-core-box-unification.md)
 6) PHI 自動化は Phase‑15 後（LoopForm = MIR18）
    - Phase‑15: 現行の Bridge‑PHI を維持し、E2E 緑とパリティを最優先

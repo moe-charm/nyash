@@ -11,11 +11,11 @@ Normalization of println/print
 
 Backend Behavior
 - LLVM/AOT (EXE-first):
-  - `env.console.log` lowers to NyRT exports and links statically.
+  - `env.console.log` is normalized in the LLVM builder to kernel exports and links statically.
   - Primary mapping uses pointer-API when possible to avoid handle churn:
     - `nyash.console.log(i8*) -> i64`
-    - Fallback to handle-API helpers if only a handle is available.
-  - Runtime result line: NyRT prints `Result: <code>` after `ny_main()` returns. Set `NYASH_NYRT_SILENT_RESULT=1` to suppress for tests.
+    - Fallback to handle-API helpers (`nyash.string.to_i8p_h`) if only a handle is available.
+  - Runtime result line: the kernel prints `Result: <code>` after `ny_main()` returns. Set `NYASH_NYRT_SILENT_RESULT=1` to suppress for tests.
 - PyVM:
   - Accepts `env.console.log/warn/error` and writes to stdout (MVP). Return is `0` when a destination is present.
 - JIT:
@@ -24,7 +24,7 @@ Backend Behavior
 MIR JSON v0 Encoding
 - Instruction shape:
   - `{ "op": "externcall", "func": "env.console.log", "args": [<vid>], "dst": <vid|null>, "dst_type": "i64"? }`
-  - Builder may also emit `"func": "nyash.console.log"` in some paths; both are accepted by backends.
+- Builder may also emit `"func": "nyash.console.log"` in some paths; both are accepted by backends. The LLVM builder maps `env.console.*` to `nyash.console.*` automatically.
 
 Key Fields (JSON v0, minimal)
 - `op`: literal `"externcall"`.

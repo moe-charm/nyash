@@ -10,7 +10,7 @@
 手順（推奨ランナー）
 1) LLVM curated
    - 実行: `tools/smokes/curated_llvm.sh [--phi-off]`
-   - `--phi-off`: `NYASH_MIR_NO_PHI=1` を有効化し、検証を緩和
+   - 既定は PHI-on（MIR14）で走るよ。`--phi-off` を付けたときだけ `NYASH_MIR_NO_PHI=1` をセットしてレガシー edge-copy モードへ切り替えるよ。
 2) PHI 不変条件パリティ
    - 実行: `tools/smokes/curated_phi_invariants.sh`
    - PyVM と llvmlite の stdout/exit code を比較
@@ -29,7 +29,7 @@
 
 便利フラグ
 - `NYASH_LLVM_USE_HARNESS=1`: llvmlite ハーネス経由
-- `NYASH_MIR_NO_PHI=1`, `NYASH_VERIFY_ALLOW_NO_PHI=1`: PHI 無しモード
+- `NYASH_MIR_NO_PHI=1`, `NYASH_VERIFY_ALLOW_NO_PHI=1`: レガシー PHI-off（edge-copy）モード。Phase‑15 では明示指定が必要だよ。
 
 検証
 - 0 で成功、非 0 で失敗（CI 連携可）

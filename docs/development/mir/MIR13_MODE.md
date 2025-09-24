@@ -1,50 +1,49 @@
-MIR13 Mode (PHI-off by default)
+MIR13 Mode (legacy PHI-off fallback)
 
 Overview
-- Goal: Stabilize execution by turning off PHI emission in the Bridge/Builder and letting the LLVM (llvmlite) layer synthesize PHIs as needed.
-- Default: MIR13 is ON by default (PHI-off). Use env flags to flip.
+- Goal: Retain the Phase‑14 edge-copy compatibility path for debugging historical MIR dumps or diagnosing SSA regressions.
+- Default: MIR14 (PHI-on) now ships as the standard. MIR13 must be explicitly enabled through environment flags.
 
-Why
-- Fewer SSA obligations in the front-end (Bridge/Builder) reduces CFG corner cases (short‑circuit, nested if/loop merges).
-- Centralizes SSA invariants in a single place (llvmlite resolver/finalizer), improving correctness and maintenance.
+Why keep MIR13 around?
+- Reproducibility: Some archived JSON v0 fixtures were captured before PHI-on shipped. MIR13 allows replaying them without regeneration.
+- Diagnostics: Edge-copy runs make it easier to isolate builder regressions by removing PHI synthesis from the equation.
+- Tooling parity: Certain scripts still compare MIR13 traces; they will be retired once PHI-on parity checks are complete.
 
 Flags and Behavior
-- NYASH_MIR_NO_PHI (default: 1)
-  - 1: Bridge/Builder emit edge copies instead of PHIs at merges (MIR13).
-  - 0: Bridge/Builder may emit PHIs (MIR14 experimental).
-- NYASH_VERIFY_ALLOW_NO_PHI (default: 1)
-  - Relaxes verifier checks that assume PHIs at merges.
+- NYASH_MIR_NO_PHI (default: 0)
+  - 0: Builders emit PHIs at merge heads (MIR14, default).
+  - 1: Builders drop PHIs and insert per-predecessor edge copies (MIR13 fallback).
+- NYASH_VERIFY_ALLOW_NO_PHI (default: 0 unless PHI-off is requested)
+  - Set this to 1 together with `NYASH_MIR_NO_PHI=1` when you intentionally relax SSA verification.
 - NYASH_LLVM_USE_HARNESS=1 (AOT via llvmlite harness)
-  - Resolver/finalizer synthesize PHIs at block heads when needed.
+  - In MIR13 mode the harness synthesizes PHIs. In MIR14 it simply validates incoming edges.
 
 LLVM (llvmlite) Responsibilities
-- setup_phi_placeholders(): predeclare JSON‑provided PHIs and collect incoming metadata.
-- block_end_values: snapshot per block end to materialize predecessor values (dominance‑safe).
-- finalize_phis(): wire incoming edges for declared PHIs at block heads.
-- Resolver.resolve_i64():
-  - single‑pred: take predecessor end value;
-  - multi‑pred + declared PHI: reuse placeholder at block head;
-  - multi‑pred + no PHI: synthesize a localization PHI at the current block head (MIR13 compatibility);
-  - avoids reusing non‑dominating vmap values across blocks.
+- `setup_phi_placeholders()`: still records declared PHIs; in MIR13 mode it creates placeholders for later wiring.
+- `block_end_values`: snapshots per block end to materialize predecessor values (dominance-safe).
+- `finalize_phis()`: wires incoming edges for declared PHIs; when MIR13 runs, it creates PHIs on the fly to recover SSA.
+- `Resolver.resolve_i64()`:
+  - single-pred: take predecessor end value;
+  - multi-pred + declared PHI: reuse the placeholder at the block head;
+  - multi-pred + no PHI: synthesize a localization PHI at the current block head (MIR13 compatibility);
+  - avoids reusing non-dominating vmap values across blocks.
 
 Bridge/Builder (JSON v0) Behavior
-- If/Loop/Try are lowered without PHIs when MIR13 is ON; merges are performed with edge copies (merge_var_maps) and the final value is reconstituted by the LLVM layer if needed.
-- Helper split for readability (no behavior change):
-  - lowering/{if_else.rs, loop_.rs, try_catch.rs, merge.rs}
+- MIR14 (default): If/Loop/Try placements emit PHIs up front; loop latches, break/continue, and structured joins have explicit incoming pairs.
+- MIR13 (fallback): Merges are performed with edge copies (`merge_var_maps`). Use only when reproducing historical issues.
 
 Testing
-- Curated LLVM (default = PHI‑off):
-  - tools/smokes/curated_llvm.sh  (use --phi-on to exercise MIR14)
+- Curated LLVM (default = PHI-on):
+  - `tools/smokes/curated_llvm.sh`  (add `--phi-off` to exercise MIR13)
 - PHI invariants/parity (AOT vs PyVM):
-  - tools/pyvm_vs_llvmlite.sh (default compares exit code; use CMP_STRICT=1 for stdout+exit)
+  - `tools/pyvm_vs_llvmlite.sh` (default compares exit code; use `CMP_STRICT=1` for stdout+exit)
 - Bridge/PyVM:
-  - tools/selfhost_stage2_bridge_smoke.sh
+  - `tools/selfhost_stage2_bridge_smoke.sh`
 
-How to Force PHI‑on (MIR14 experimental)
-- Set: NYASH_MIR_NO_PHI=0 and run tools/smokes/curated_llvm.sh --phi-on
-- Known: loop_if_phi may trip dominance issues in PHI‑on; MIR13 is the recommended default.
+How to Force PHI-off (MIR13 fallback)
+- Set: `NYASH_MIR_NO_PHI=1 NYASH_VERIFY_ALLOW_NO_PHI=1` and run `tools/smokes/curated_llvm.sh --phi-off`
+- Label the run as legacy in `CURRENT_TASK.md` if results inform shared debugging.
 
 Known Limitations (current)
-- No full tracing GC; object lifetime is managed via handle registries and Arc lifetimes.
-- PHI‑on path is still being refined for some control‑flow patterns.
-
+- MIR13 no longer receives new feature work; expect missing coverage for recent LoopForm updates.
+- PHI-on is the supported path. MIR13 bugs are fixed only when they block diagnostics.

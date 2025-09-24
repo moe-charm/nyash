@@ -100,7 +100,7 @@ Call { callee: Callee, args }
 - [ ] MIRダンプの可読性向上
 - [ ] パフォーマンス向上（実行時オーバーヘッド削減）
 - [ ] using systemとの完全統合
-- 規約（PHI‑off 既定）:
+- 規約（PHI 合流）:
   - merge 内に copy は置かない。then/else の pred へ edge_copy のみを挿入（self‑copy は No‑Op）。
   - 分岐直前に pre_if_snapshot を取得し、then/else は snapshot ベースで独立構築。merge で snapshot を基底に戻す。
   - 差分検出で“変更された変数のみ”をマージ対象にする。

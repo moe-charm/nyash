@@ -1,36 +1,24 @@
-/*!
- * LLVM Backend Module (legacy, inkwell) - Compile MIR to LLVM IR for AOT execution
- *
- * This module provides LLVM-based compilation of Nyash MIR to native code.
- * Phase 9.78 PoC implementation focused on minimal support.
- */
+//! LLVM Legacy Backend (Deprecated)
+//!
+//! This module has been archived and is no longer supported.
+//! Please use the Python LLVM harness instead.
 
+#[cfg(feature = "llvm-inkwell-legacy")]
+compile_error!(
+    "LLVM Inkwell Legacy backend is no longer supported. \
+    Please use the Python LLVM harness with --backend llvm or NYASH_LLVM_USE_HARNESS=1. \
+    Legacy code archived at: docs/archive/backends/llvm-inkwell-legacy/"
+);
+
+// Stub exports for compilation compatibility
 pub mod box_types;
 pub mod compiler;
 pub mod context;
 
-use crate::box_trait::NyashBox;
-use crate::mir::function::MirModule;
-
-/// Compile MIR module to object file and execute
-pub fn compile_and_execute(
-    mir_module: &MirModule,
-    output_path: &str,
-) -> Result<Box<dyn NyashBox>, String> {
-    let mut compiler = compiler::LLVMCompiler::new()?;
-    compiler.compile_and_execute(mir_module, output_path)
+pub fn compile_and_execute(_program: &str) -> Result<(), String> {
+    Err("LLVM Legacy backend deprecated. Use Python LLVM harness.".to_string())
 }
 
-/// Compile MIR module to object file only
-pub fn compile_to_object(mir_module: &MirModule, output_path: &str) -> Result<(), String> {
-    let compiler = compiler::LLVMCompiler::new()?;
-    compiler.compile_module(mir_module, output_path)
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_llvm_module_creation() {
-        assert!(true);
-    }
+pub fn compile_to_object(_program: &str) -> Result<Vec<u8>, String> {
+    Err("LLVM Legacy backend deprecated. Use Python LLVM harness.".to_string())
 }

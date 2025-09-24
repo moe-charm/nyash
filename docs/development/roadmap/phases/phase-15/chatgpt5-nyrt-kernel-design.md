@@ -14,6 +14,7 @@
 - **Plugin-First統一**: 旧VM依存システム完全根絶
 - **ビルド成功**: libnyash_kernel.a完全生成（0エラー・0警告）
 - **参照更新**: build_llvm.sh, ny-llvmc等すべて完了
+- **🎯 ExternCall修正**: LLVM EXE print出力問題根本解決（codex技術力）
 
 ### 📊 **詳細実装データ**
 ```

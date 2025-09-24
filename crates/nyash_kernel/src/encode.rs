@@ -1,14 +1,11 @@
-// ✂️ REMOVED: Legacy VM encoding system - part of 42% deletable functions
-// This entire encoding system was replaced by Plugin-First architecture
-// Legacy VMValue and with_legacy_vm_args no longer available
+// Plugin-First architecture encoding system
+// Simplified encoding that works directly with plugins and handles
 
 use nyash_rust::runtime::plugin_loader_v2::PluginBoxV2;
 
 /// Simplified encoding for Plugin-First architecture (replaces legacy VM encoding)
 pub(crate) fn nyrt_encode_from_legacy_at(_buf: &mut Vec<u8>, _pos: usize) {
-    // ✂️ REMOVED: Legacy VM argument processing
-    // This function is no longer needed in Plugin-First architecture
-    // All encoding now handled directly through unified plugin system
+    // No-op: Plugin-First architecture handles encoding directly through unified plugin system
 }
 
 /// Simplified encoding for Plugin-First architecture (replaces legacy encoding)
@@ -64,6 +61,6 @@ pub(crate) fn nyrt_encode_arg_or_legacy(buf: &mut Vec<u8>, val: i64, _pos: usize
             }
         }
     }
-    // ✂️ REMOVED: Legacy VM fallback - directly encode as i64 in Plugin-First architecture
+    // Fallback: encode as i64 for non-plugin objects
     nyash_rust::runtime::plugin_ffi_common::encode::i64(buf, val);
 }

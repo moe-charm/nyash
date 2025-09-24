@@ -32,9 +32,9 @@ Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
 ScopeBox & MIR hints: `docs/guides/scopebox.md`
 AST JSON v0 (macro/bridge): `docs/reference/ir/ast-json-v0.md`
 MIR mode note: Default PHI behavior
-- Default is PHI-ON when the build enables `phi-legacy` (recommended). Otherwise it falls back to PHI‑OFF (edge‑copy) for stability.
-- Force at runtime: `NYASH_MIR_NO_PHI=0` (PHI‑ON), `NYASH_MIR_NO_PHI=1` (PHI‑OFF).
-- See `docs/architecture/phi-and-ssa.md`.
+- Phase‑15 ships PHI‑ON by default. Builders emit SSA `Phi` nodes at merges for loops, break/continue, and structured control flow.
+- Legacy PHI‑off fallback: set `NYASH_MIR_NO_PHI=1` (pair with `NYASH_VERIFY_ALLOW_NO_PHI=1` if you need relaxed verification).
+- See `docs/reference/mir/phi_policy.md` for rationale and troubleshooting.
 Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
 ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
 

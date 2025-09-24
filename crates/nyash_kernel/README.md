@@ -73,6 +73,32 @@ let host = get_global_plugin_host().read()?;
 host.create_box(type_name, &args)?
 ```
 
+### 🔥 **ExternCall Print修正** (codex技術力)
+
+**Phase 2.4で解決した重大問題**: LLVM EXEで`print()`出力されない
+
+#### 問題の詳細
+- **症状**: VM実行は正常、LLVM EXEは無音
+- **根本原因**: `src/llvm_py/instructions/externcall.py`の引数変換バグ
+- **技術詳細**: 文字列ハンドル→ポインタ変換後にnull上書き
+
+#### 修正内容
+```python
+# src/llvm_py/instructions/externcall.py:152-154
+else:
+    # used_string_h2p was true: keep the resolved pointer (do not null it)
+    pass
+```
+
+#### 検証結果
+```bash
+/tmp/direct_python_test_fixed
+# 出力:
+# 🎉 ExternCall print修正テスト！
+# codex先生の名前解決修正確認
+# Result: 0
+```
+
 ## Usage
 
 ### For LLVM Backend
@@ -98,12 +124,13 @@ cargo build --release -p nyash_kernel
 3. **C ABI Clean**: Stable interface for LLVM/VM integration
 4. **Zero Legacy**: Complete removal of VM-dependent code paths
 
-## ChatGPT5 × Claude Collaboration
+## ChatGPT5 × codex × Claude Collaboration
 
 This kernel represents a historic achievement in AI-assisted architecture design:
-- **Design**: ChatGPT5 Pro architectural analysis
-- **Implementation**: Claude systematic implementation
-- **Result**: 100% successful architecture revolution
+- **Design**: ChatGPT5 Pro architectural analysis (42% reduction strategy)
+- **Implementation**: Claude systematic implementation (11 locations)
+- **Debugging**: codex root cause analysis (ExternCall print fix)
+- **Result**: 100% successful architecture revolution + critical bug resolution
 
 ## Integration
 

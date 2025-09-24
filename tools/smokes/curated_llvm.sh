@@ -5,9 +5,10 @@ set -euo pipefail
 if [[ "${NYASH_CLI_VERBOSE:-0}" == "1" ]]; then set -x; fi
 
 # Usage:
-#   tools/smokes/curated_llvm.sh [--phi-on] [--with-if-merge] [--with-loop-prepass]
+#   tools/smokes/curated_llvm.sh [--phi-off] [--with-if-merge] [--with-loop-prepass]
 # Notes:
-#   - Default is PHI-off (edge-copy) with harness on.
+#   - Default is PHI-on (MIR14) with harness on.
+#   - `--phi-off` switches to the legacy edge-copy mode.
 #   - Flags are independent and can be combined.
 
 ROOT_DIR=$(cd "$(dirname "$0")/../.." && pwd)
@@ -22,8 +23,8 @@ fi
 export NYASH_LLVM_USE_HARNESS=1
 
 # Defaults
-export NYASH_MIR_NO_PHI=${NYASH_MIR_NO_PHI:-1}
-export NYASH_VERIFY_ALLOW_NO_PHI=${NYASH_VERIFY_ALLOW_NO_PHI:-1}
+export NYASH_MIR_NO_PHI=${NYASH_MIR_NO_PHI:-0}
+export NYASH_VERIFY_ALLOW_NO_PHI=${NYASH_VERIFY_ALLOW_NO_PHI:-0}
 unset NYASH_LLVM_PREPASS_IFMERGE || true
 unset NYASH_LLVM_PREPASS_LOOP || true
 
@@ -33,9 +34,15 @@ WITH_LOOP=0
 # Parse flags
 for arg in "$@"; do
   case "$arg" in
+    --phi-off)
+      export NYASH_MIR_NO_PHI=1
+      export NYASH_VERIFY_ALLOW_NO_PHI=1
+      echo "[curated-llvm] PHI-off (edge-copy legacy) enabled" >&2
+      ;;
     --phi-on)
       export NYASH_MIR_NO_PHI=0
-      echo "[curated-llvm] PHI-on (JSON PHI + finalize) enabled" >&2
+      export NYASH_VERIFY_ALLOW_NO_PHI=0
+      echo "[curated-llvm] PHI-on (SSA builder) enforced" >&2
       ;;
     --with-if-merge)
       WITH_IFMERGE=1
@@ -48,12 +55,14 @@ for arg in "$@"; do
       echo "[curated-llvm] loop prepass enabled" >&2
       ;;
     -h|--help)
-      echo "Usage: $0 [--phi-on] [--with-if-merge] [--with-loop-prepass]"; exit 0 ;;
+      echo "Usage: $0 [--phi-off] [--with-if-merge] [--with-loop-prepass]"; exit 0 ;;
   esac
 done
 
-if [[ "${NYASH_MIR_NO_PHI}" == "1" ]]; then
-  echo "[curated-llvm] PHI-off (edge-copy) enabled" >&2
+if [[ "${NYASH_MIR_NO_PHI}" == "0" ]]; then
+  echo "[curated-llvm] PHI-on (SSA builder) running" >&2
+else
+  echo "[curated-llvm] PHI-off (edge-copy legacy) active" >&2
 fi
 
 run() {

@@ -1,5 +1,9 @@
-// legacy box type id helpers placeholder; refer to archived implementation if needed
+//! Deprecated LLVM Legacy Box Types
+//! Archived at: docs/archive/backends/llvm-inkwell-legacy/
 
-pub fn load_box_type_ids() -> std::collections::HashMap<String, u32> {
-    std::collections::HashMap::new()
-}
+#[cfg(feature = "llvm-inkwell-legacy")]
+compile_error!("LLVM Inkwell Legacy backend deprecated. Use Python LLVM harness.");
+
+// Stub exports for compatibility
+pub struct BoxType;
+pub struct LegacyBoxImpl;

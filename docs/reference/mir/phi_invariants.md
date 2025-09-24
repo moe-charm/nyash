@@ -1,7 +1,7 @@
 # MIR PHI Invariants
 
 Note
-- Default policy is PHI‑off at MIR level. These invariants apply to the dev‑only PHI‑on mode and to how LLVM synthesizes PHIs from predecessor copies. See also `phi_policy.md`.
+- Phase‑15 では PHI‑on が既定だよ。この資料の不変条件は MIR ビルダーが生成する PHI と、レガシーで `NYASH_MIR_NO_PHI=1` を指定したときに LLVM が補完するケースの両方へ適用するよ。詳しくは `phi_policy.md` を参照してね。
 
 Scope: Builder/Bridge, PyVM, llvmlite (AOT)
 

@@ -58,9 +58,9 @@ Notes
 - ハーネスは自律（外部状態に依存しない）。エラーは即 stderr に詳細を出す。
 
 PHI Policy（要点）
-- 既定は PHI‑off（`NYASH_MIR_NO_PHI=1`）。Builder/Bridge は pred への edge‑copy のみを生成。
-- llvmlite ハーネスは pred 情報から PHI を合成する。
-- 開発確認で PHI‑on にする場合は `NYASH_MIR_NO_PHI=0`（dev‑only）。詳細は `docs/reference/mir/phi_policy.md` を参照。
+- Phase‑15 の既定は PHI‑on。MIR 側で SSA `Phi` を生成し、ハーネスは incoming の検証と最終 IR への反映だけを行う。
+- レガシー互換のために PHI‑off が必要なケースでは `NYASH_MIR_NO_PHI=1` を明示してね（ハーネスは旧 edge-copy 互換ルートで補完する）。
+- 詳細と背景は `docs/reference/mir/phi_policy.md` を参照。
 
 Schema Validation（任意）
 - JSON v0 のスキーマは `docs/reference/mir/json_v0.schema.json` にあるよ。

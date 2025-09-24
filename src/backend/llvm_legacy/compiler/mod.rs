@@ -1,33 +1,11 @@
-use crate::box_trait::NyashBox;
-use crate::mir::ValueId;
-use std::collections::HashMap;
-
-pub struct LLVMCompiler {
-    values: HashMap<ValueId, Box<dyn NyashBox>>,
-}
-
-#[cfg(not(feature = "llvm-inkwell-legacy"))]
-mod mock;
-#[cfg(not(feature = "llvm-inkwell-legacy"))]
-pub use mock::*;
+//! Deprecated LLVM Legacy Compiler
+//! Archived at: docs/archive/backends/llvm-inkwell-legacy/
 
 #[cfg(feature = "llvm-inkwell-legacy")]
-mod aot;
-#[cfg(feature = "llvm-inkwell-legacy")]
-mod codegen;
-#[cfg(feature = "llvm-inkwell-legacy")]
-mod helpers;
-#[cfg(feature = "llvm-inkwell-legacy")]
-mod interpreter;
-#[cfg(feature = "llvm-inkwell-legacy")]
-pub use aot::*;
+compile_error!("LLVM Inkwell Legacy backend deprecated. Use Python LLVM harness.");
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_llvm_module_creation() {
-        assert!(true);
-    }
+// Stub exports for compatibility
+pub struct LegacyCompiler;
+pub fn compile_mir(_mir: &str) -> Result<(), String> {
+    Err("LLVM Legacy compiler deprecated. Use Python LLVM harness.".to_string())
 }
