@@ -7,7 +7,7 @@
 
 use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
 use crate::boxes::ArrayBox;
-use crate::interpreter::RuntimeError;
+use crate::box_factory::RuntimeError;
 use std::collections::HashMap;
 
 /// 組み込み標準ライブラリ

@@ -1,7 +1,5 @@
 #[cfg(feature = "vm-legacy")]
 pub mod bench;
-#[cfg(feature = "interpreter-legacy")]
-pub mod interpreter;
 pub mod llvm;
 pub mod mir;
 #[cfg(feature = "vm-legacy")]

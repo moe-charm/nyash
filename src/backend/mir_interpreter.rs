@@ -595,7 +595,7 @@ impl MirInterpreter {
     }
 
     /// LEGACY: 従来の文字列ベース解決（後方互換性）
-    fn execute_legacy_call(&mut self, func_id: ValueId, args: &[ValueId]) -> Result<VMValue, VMError> {
+    fn execute_legacy_call(&mut self, func_id: ValueId, _args: &[ValueId]) -> Result<VMValue, VMError> {
         // 従来の実装: func_idから関数名を取得して呼び出し
         // 簡易実装 - 実際には関数テーブルやシンボル解決が必要
         Err(VMError::InvalidInstruction(format!(

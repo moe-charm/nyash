@@ -131,27 +131,9 @@ impl super::MirBuilder {
                 if let Some(mt) = self.plugin_method_sigs.get(&(bt.clone(), method.clone())) {
                     self.value_types.insert(d, mt.clone());
                 } else {
-                    let inferred: Option<super::MirType> = match (bt.as_str(), method.as_str()) {
-                        ("StringBox", "length") | ("StringBox", "len") => {
-                            Some(super::MirType::Integer)
-                        }
-                        ("StringBox", "is_empty") => Some(super::MirType::Bool),
-                        ("StringBox", "charCodeAt") => Some(super::MirType::Integer),
-                        ("StringBox", "substring")
-                        | ("StringBox", "concat")
-                        | ("StringBox", "replace")
-                        | ("StringBox", "trim")
-                        | ("StringBox", "toUpper")
-                        | ("StringBox", "toLower") => Some(super::MirType::String),
-                        ("ArrayBox", "length") => Some(super::MirType::Integer),
-                        ("MapBox", "size") => Some(super::MirType::Integer),
-                        ("MapBox", "has") => Some(super::MirType::Bool),
-                        ("MapBox", "get") => Some(super::MirType::Box("Any".to_string())),
-                        _ => None,
-                    };
-                    if let Some(mt) = inferred {
-                        self.value_types.insert(d, mt);
-                    }
+                    // Phase 15.5: Unified plugin-based type resolution
+                    // Former core boxes (StringBox, ArrayBox, MapBox) now use plugin_method_sigs only
+                    // No special hardcoded inference - all boxes treated uniformly
                 }
             }
         }

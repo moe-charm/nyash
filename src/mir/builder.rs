@@ -403,25 +403,10 @@ impl MirBuilder {
             box_type: class.clone(),
             args: arg_values.clone(),
         })?;
-        // Annotate primitive boxes
-        match class.as_str() {
-            "IntegerBox" => {
-                self.value_types.insert(dst, super::MirType::Integer);
-            }
-            "FloatBox" => {
-                self.value_types.insert(dst, super::MirType::Float);
-            }
-            "BoolBox" => {
-                self.value_types.insert(dst, super::MirType::Bool);
-            }
-            "StringBox" => {
-                self.value_types.insert(dst, super::MirType::String);
-            }
-            other => {
-                self.value_types
-                    .insert(dst, super::MirType::Box(other.to_string()));
-            }
-        }
+        // Phase 15.5: Unified box type handling
+        // All boxes (including former core boxes) are treated uniformly as Box types
+        self.value_types
+            .insert(dst, super::MirType::Box(class.clone()));
 
         // Record origin for optimization: dst was created by NewBox of class
         self.value_origin_newbox.insert(dst, class.clone());

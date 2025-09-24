@@ -8,7 +8,7 @@
 
 use super::BoxFactory;
 use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
-use crate::interpreter::RuntimeError;
+use super::RuntimeError;
 
 /// Factory for builtin Box types
 pub struct BuiltinBoxFactory;

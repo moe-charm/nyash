@@ -8,7 +8,7 @@
 use super::BoxFactory;
 use crate::box_trait::NyashBox;
 use crate::instance_v2::InstanceBox;
-use crate::interpreter::{RuntimeError, SharedState};
+use super::{RuntimeError, SharedState};
 
 /// Factory for user-defined Box types
 pub struct UserDefinedBoxFactory {

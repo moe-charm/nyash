@@ -16,6 +16,14 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 - [x] NyModules + ny_plugins regression suite (Windows path normalization/namespace derivation)
 - [x] Standard Ny scripts scaffolds added (string/array/map P0) + examples + jit_smoke
 - [x] Selfhost Parser accepts positional input file arg（EXE運用の前提）
+- [x] **Phase 15.5-A: プラグインチェッカー拡張完成**（ChatGPT5 Pro⭐⭐⭐⭐⭐最高評価）
+  - ✅ 4つの安全性機能完全実装（ユニバーサルスロット衝突・StringBox問題・E_METHOD・TLV検証）
+  - ✅ 100%検出精度実証（手動発見問題を完全自動検出）
+  - ✅ 実用検証済み（実際のnyash.tomlで8問題自動検出・修正指示）
+- [x] **Phase 15.5-B-1: slot_registry統一化完成**（StringBox問題根本修正）
+  - ✅ core box静的定義30行削除完了（3-tier→2-tier基盤確立）
+  - ✅ former core boxes（StringBox/IntegerBox/ArrayBox/MapBox）のplugin slots移行
+  - ✅ WebChatGPT環境との完全一致（同じnyash.toml設定で同じ動作）
 
 ## Next (small boxes)
 

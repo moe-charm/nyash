@@ -18,7 +18,6 @@ cli = []
 plugins-only = []
 builtin-core = []
 ## Silence check-cfg warnings for historical cfg guards (kept off by default)
-interpreter-legacy = []
 vm-legacy = []
 phi-legacy = []
 ## JIT-direct only mode: disable legacy VM-arg fallback and plugin-builtins branches

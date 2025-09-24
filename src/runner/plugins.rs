@@ -52,16 +52,8 @@ impl NyashRunner {
                                 if list_only { println!("  • {}", p); continue; }
                                 match std::fs::read_to_string(&p) {
                                     Ok(code) => {
-                                        match nyash_rust::parser::NyashParser::parse_from_string(&code) {
-                                            Ok(ast) => {
-                                                let mut interpreter = nyash_rust::interpreter::NyashInterpreter::new();
-                                                match interpreter.execute(ast) {
-                                                    Ok(_) => println!("[ny_plugins] {}: OK", p),
-                                                    Err(e) => println!("[ny_plugins] {}: FAIL ({})", p, e),
-                                                }
-                                            }
-                                            Err(e) => println!("[ny_plugins] {}: FAIL (parse: {})", p, e),
-                                        }
+                                        // Legacy interpreter removed - ny_plugins execution disabled
+                                        println!("[ny_plugins] {}: SKIP (legacy interpreter removed)", p);
                                     }
                                     Err(e) => println!("[ny_plugins] {}: FAIL (read: {})", p, e),
                                 }

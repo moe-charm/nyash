@@ -31,9 +31,23 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 ### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-**現在のフェーズ：Phase 15.5 (JSON v0中心化・統一Call基盤革命) → Phase 15 (Nyashセルフホスティング - 80k→20k行への革命的圧縮)**
+**現在のフェーズ：Phase 15 (Nyashセルフホスティング実行器統一化 - Rust VM + LLVM 2本柱体制)**
 
-📋 **Phase 15.5アーキテクチャ革命**: [Phase 15.5 README](docs/development/roadmap/phases/phase-15.5/README.md)
+### 🏆 **Phase 15.5完了！アーキテクチャ革命達成**
+- ✅ **Core Box Unification**: 3-tier → 2-tier 統一化完了
+- ✅ **MIRビルダー統一化**: 約40行の特別処理削除
+- ✅ **プラグインチェッカー**: ChatGPT5 Pro設計の安全性機能実装
+- ✅ **StringBox問題根本解決**: slot_registry統一による完全修正
+
+### 🚀 **Phase 15戦略確定: Rust VM + LLVM 2本柱**
+```
+【Rust VM】  開発・デバッグ・検証用（712行、高品質・型安全）
+【LLVM】     本番・最適化・配布用（Python/llvmlite、実証済み）
+【PyVM】     JSON v0ブリッジ専用（セルフホスティング・using処理のみ）
+【削除完了】 レガシーインタープリター（~350行削除済み）
+```
+
+📋 **詳細計画**: [Phase 15.5 README](docs/development/roadmap/phases/phase-15.5/README.md) | [CURRENT_TASK.md](CURRENT_TASK.md)
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 
@@ -50,122 +64,98 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 
 ## 🚀 クイックスタート
 
-### 🎯 実行方式選択 (重要!)
-- **[実行バックエンド完全ガイド](docs/reference/architecture/execution-backends.md)** 
-  - インタープリター（開発・デバッグ）/ VM（高速実行）/ WASM（Web配布）
-  - ⚡ **ベンチマーク機能**: `--benchmark` で3バックエンド性能比較
-- **[ビルド方法完全ガイド](docs/guides/build/)** - プラットフォーム別ビルド手順
-
-
-### 🚀 JIT セルフホスト クイックスタート (Phase 15)
+### 🎯 **2本柱実行方式** (推奨!)
 ```bash
-# コアビルド (JIT)
-cargo build --release --features cranelift-jit
+# 🔧 開発・デバッグ・検証用 (Rust VM)
+./target/release/nyash program.nyash
+./target/release/nyash --backend vm program.nyash
 
-# コアスモーク (プラグイン無効)
-NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh
+# ⚡ 本番・最適化・配布用 (LLVM)
+./target/release/nyash --backend llvm program.nyash
 
-# ラウンドトリップ (パーサーパイプ + JSON)
+# 🛡️ プラグインエラー対策
+NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+
+# 🔍 詳細診断
+NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+```
+
+### 🚀 **Phase 15 セルフホスティング専用**
+```bash
+# JSON v0ブリッジ（PyVM特殊用途）
+NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
+
+# using処理確認
+./target/release/nyash --enable-using program_with_using.nyash
+
+# ラウンドトリップテスト
 ./tools/ny_roundtrip_smoke.sh
-
-# Nyコンパイラ MVP経路 (Phase 15.3実装中!)
-NYASH_USE_NY_COMPILER=1 ./target/release/nyash program.nyash
-
-# JSON v0 Bridge経由実行（完成済み）
-python tools/ny_parser_mvp.py program.nyash | ./target/release/nyash --ny-parser-pipe
 ```
 
 ### 🐧 Linux/WSL版
 ```bash
-# ビルドと実行
-cargo build --release --features cranelift-jit
+# 標準ビルド（2本柱対応）
+cargo build --release
+
+# 開発・デバッグ実行（Rust VM）
 ./target/release/nyash program.nyash
 
-# 高速VM実行
-./target/release/nyash --backend vm program.nyash
-
-# WASM生成
-./target/release/nyash --compile-wasm program.nyash
+# 本番・最適化実行（LLVM）
+./target/release/nyash --backend llvm program.nyash
 ```
 
 ### 🪟 Windows版
 ```bash
-# クロスコンパイルでWindows実行ファイル生成
-cargo install cargo-xwin
-cargo xwin build --target x86_64-pc-windows-msvc --release
+# Windows実行ファイル生成
+cargo build --release --target x86_64-pc-windows-msvc
 
-# 生成された実行ファイル (4.1MB)
+# 生成された実行ファイル
 target/x86_64-pc-windows-msvc/release/nyash.exe
 ```
 
-### 🌐 WebAssembly版（2種類）
-
-#### 1️⃣ **Rust→WASM（ブラウザでNyashインタープリター実行）**
+### 🌐 **WASM/AOT版**（開発中）
 ```bash
-# WASMビルド（ルートディレクトリで実行）
-wasm-pack build --target web
+# ⚠️ WASM機能: レガシーインタープリター削除により一時無効
+# TODO: VM/LLVMベースのWASM実装に移行予定
 
-# 開発サーバー起動
-python3 -m http.server 8010
-
-# ブラウザでアクセス
-# http://localhost:8010/nyash_playground.html
+# LLVM AOTコンパイル（実験的）
+./target/release/nyash --backend llvm program.nyash  # 実行時最適化
 ```
 
-#### 2️⃣ **Nyash→MIR→WASM（Nyashプログラムをコンパイル）**
+### 🎯 **2本柱ビルド方法** (2025-09-24更新)
+
+#### 🔨 **標準ビルド**（推奨）
 ```bash
-# NyashコードをWASMにコンパイル（WAT形式で出力）
-./target/release/nyash --compile-wasm program.nyash -o output.wat
+# 標準ビルド（2本柱対応）
+cargo build --release
+
+# LLVM機能付きビルド（本番用）
+env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm
 ```
 
-#### 3️⃣ **Nyash→AOT/Native（Cranelift/LLVM）**
+#### 📝 **2本柱テスト実行**
 ```bash
-# Cranelift JIT
-cargo build --release --features cranelift-jit
-./target/release/nyash --backend vm --compile-native program.nyash -o program.exe
-
-# LLVM（llvmliteハーネス - LLVM_SYS_180_PREFIX不要！）
-cargo build --release --features llvm
-./target/release/nyash --backend llvm program.nyash
-```
-
-### 🎯 **実証済みビルド方法** (2025-09-10完全成功)
-
-#### 🔨 ビルドスクリプト（24スレッド並列・無制限時間）
-```bash
-# JIT (Cranelift) ビルド - 1-2分
-./build_jit.sh
-
-# LLVM MIR14 ビルド - 3-5分  
-./build_llvm.sh
-```
-
-#### 📝 手動ビルドコマンド
-```bash
-# 1. JIT (Cranelift) - 127警告、0エラー ✅
-cargo build --release --features cranelift-jit -j 24
+# 1. Rust VM実行 ✅（開発・デバッグ用）
+cargo build --release
 ./target/release/nyash program.nyash
 
-# 2. LLVM（llvmliteハーネス）- 19警告、0エラー ✅
-cargo build --release --features llvm -j 24  # LLVM_SYS_180_PREFIX不要！
+# 2. LLVM実行 ✅（本番・最適化用）
+env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm
 ./target/release/nyash --backend llvm program.nyash
 
 # 3. プラグインテスト実証済み ✅
-# CounterBox (3080バイト)
+# CounterBox
 echo 'local c = new CounterBox(); c.inc(); c.inc(); print(c.get())' > test.nyash
 ./target/release/nyash --backend llvm test.nyash
 
-# MathBox (2040バイト)  
-echo 'local m = new MathBox(); print(m.sqrt(16))' > test.nyash
-./target/release/nyash --backend llvm test.nyash
-
-# StringBox (3288バイト)
+# StringBox
 echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.nyash
-./target/release/nyash --backend llvm test.nyash
+./target/release/nyash test.nyash
+
 ```
 
 ⚠️ **ビルド時間の注意**:
-- JITビルド: 1-2分（高速）
+- 標準ビルド: 1-2分（高速）
 - LLVMビルド: 3-5分（時間がかかる）
 - 必ず十分な時間設定で実行してください
 
@@ -174,41 +164,41 @@ echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.nyash
 ### 😵 **迷ったらこれ！**（Claude Code専用）
 
 ```bash
-# 🎯 基本実行（まずこれ）
+# 🎯 基本実行（まずこれ）- Rust VM
 ./target/release/nyash program.nyash
 
-# 🐛 エラーが出たらこれ（プラグイン無効）
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
-
-# 🔍 デバッグ情報が欲しいときはこれ
-NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
-
-# ⚡ 高性能実行（LLVM Pythonハーネス）
+# ⚡ 本番・最適化実行 - LLVM
 ./target/release/nyash --backend llvm program.nyash
 
-# 🧪 using系テスト（Phase 15）
-# PyVM使用
-NYASH_DISABLE_PLUGINS=1 NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
-# LLVM使用
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm program.nyash
+# 🛡️ プラグインエラー対策（緊急時のみ）
+NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+
+# 🔍 詳細診断情報
+NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+
+# ⚠️ PyVM特殊用途（JSON v0ブリッジ・セルフホスト専用）
+NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 ```
 
-### 🚨 **Phase 15重要注意**
-- ❌ **JIT/Cranelift現在無効化済み**（`--backend cranelift`使用不可）
-- ✅ **VM（デフォルト）**と**LLVM**のみ安定動作
-- 🎯 **基本はVM、高性能が欲しい時はLLVM**
+### 🚨 **Phase 15戦略確定**
+- ✅ **Rust VM + LLVM 2本柱体制**（開発集中）
+- ✅ **PyVM特化保持**（JSON v0ブリッジ・using処理のみ）
+- ✅ **レガシーインタープリター削除完了**（~350行削除済み）
+- 🎯 **基本はRust VM、本番はLLVM、特殊用途のみPyVM**
 
-### 📊 **環境変数優先度マトリックス**（Claude向け）
+### 📊 **環境変数優先度マトリックス**（Phase 15戦略版）
 
 | 環境変数 | 必須度 | 用途 | 使用タイミング |
 |---------|-------|-----|-------------|
-| `NYASH_DISABLE_PLUGINS=1` | ⭐⭐⭐ | エラー対策 | プラグインエラー時 |
-| `NYASH_CLI_VERBOSE=1` | ⭐⭐ | デバッグ | 詳細情報が欲しい時 |
-| ~~`NYASH_ENABLE_USING=1`~~ | ✅ | Phase 15 | ~~デフォルト化済み~~ |
-| `NYASH_VM_USE_PY=1` | ⭐ | Phase 15 | PyVM経路使用時 |
-| `NYASH_DUMP_JSON_IR=1` | ⭐ | 開発 | JSON出力確認時 |
+| `NYASH_CLI_VERBOSE=1` | ⭐⭐⭐ | 詳細診断 | デバッグ時 |
+| `NYASH_DISABLE_PLUGINS=1` | ⭐⭐ | エラー対策 | プラグインエラー時 |
+| `NYASH_SELFHOST_EXEC=1` | ⭐ | セルフホスト | JSON v0ブリッジ専用 |
+| ~~`NYASH_VM_USE_PY=1`~~ | ⚠️ | PyVM特殊用途 | ~~開発者明示のみ~~ |
+| ~~`NYASH_ENABLE_USING=1`~~ | ✅ | using処理 | ~~デフォルト化済み~~ |
 
-**💡 覚え方**：迷ったら`NYASH_DISABLE_PLUGINS=1`から試す！
+**💡 2本柱戦略**：基本は`./target/release/nyash`（Rust VM）、本番は`--backend llvm`！
+
+**⚠️ PyVM使用制限**: [PyVM使用ガイドライン](docs/reference/pyvm-usage-guidelines.md)で適切な用途を確認
 
 ### ✅ **using system完全実装完了！**
 
@@ -240,13 +230,19 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm program.nyash
 - `NYASH_USING_PROFILE=dev|smoke|debug` でプロファイル化
 - または `--using-mode=dev` CLIフラグで統合
 
-## 📝 Update (2025-09-24) 🚀 Phase 15.5 Core Box Unification計画策定！
-- ✅ **Phase 15.5計画完成** - コアBox削除→2層構造への革命
-  - **3層→2層**: コアBox（nyrt内蔵）削除、プラグイン/ユーザーBoxのみに
-  - **削減目標**: 約700行（nyrt実装600行 + 特別扱い100行）
-  - **既存システム発見**: `NYASH_USE_PLUGIN_BUILTINS=1`と`NYASH_PLUGIN_OVERRIDE_TYPES`が完全実装済み
-  - **実装戦略**: DLL動作確認→Nyashコード化の段階的移行
-  - **詳細ドキュメント**: [phase-15.5-core-box-unification.md](docs/development/roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
+## 📝 Update (2025-09-24) 🎉 Phase 15実行器統一化戦略確定！
+- ✅ **Phase 15.5-B-2 MIRビルダー統一化完了**（約40行特別処理削除）
+- ✅ **Rust VM現状調査完了**（Task先生による詳細分析）
+  - **712行の高品質実装**（vs PyVM 1074行）
+  - **MIR14完全対応**、Callee型実装済み
+  - **gdb/lldbデバッグ可能**、型安全設計
+- ✅ **実行器戦略確定: Rust VM + LLVM 2本柱**
+  - **Rust VM**: 開発・デバッグ・検証用
+  - **LLVM**: 本番・最適化・配布用
+  - **レガシーインタープリター**: 完全アーカイブ（~1,500行削減）
+  - **PyVM**: 段階的保守化（マクロシステム等）
+- ✅ **MIRインタープリターバグ修正**（feature gate問題解決）
+- ✅ **スモークテスト作り直し計画確定**（プラグインBox仕様＋2実行器マトリックス検証）
 - ✅ **MIR Call命令統一Phase 3.1-3.3完了**
   - **統一メソッド**: `emit_unified_call()`実装済み
   - **環境変数制御**: `NYASH_MIR_UNIFIED_CALL=1`で切り替え可能

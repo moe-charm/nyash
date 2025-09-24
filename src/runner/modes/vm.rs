@@ -4,7 +4,7 @@ use nyash_rust::{
     backend::VM,
     box_factory::user_defined::UserDefinedBoxFactory,
     core::model::BoxDeclaration as CoreBoxDecl,
-    interpreter::SharedState,
+    box_factory::SharedState,
     mir::MirCompiler,
     parser::NyashParser,
     runtime::{NyashRuntime, NyashRuntimeBuilder},

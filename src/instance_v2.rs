@@ -12,7 +12,7 @@
 
 use crate::ast::ASTNode;
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, SharedNyashBox, StringBox};
-use crate::interpreter::NyashInterpreter; // レガシー互換用
+// use crate::interpreter::NyashInterpreter; // レガシー互換用 - removed
 use crate::value::NyashValue;
 use std::any::Any;
 use std::collections::HashMap;
@@ -225,7 +225,6 @@ impl InstanceBox {
     pub fn get_weak_field(
         &self,
         field_name: &str,
-        _interpreter: &NyashInterpreter,
     ) -> Option<NyashValue> {
         self.get_field_ng(field_name)
     }

@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::MirInterpreter, runtime::{NyashRuntime, NyashRuntimeBuilder}, interpreter::SharedState, box_factory::user_defined::UserDefinedBoxFactory};
+use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::MirInterpreter, runtime::{NyashRuntime, NyashRuntimeBuilder}, box_factory::{SharedState, user_defined::UserDefinedBoxFactory}};
 use std::{fs, process};
 use std::sync::Arc;
 
@@ -100,4 +100,3 @@ impl NyashRunner {
         let _ = runtime; // reserved for future GC/safepoint integration
     }
 }
-#![cfg(feature = "interpreter-legacy")]

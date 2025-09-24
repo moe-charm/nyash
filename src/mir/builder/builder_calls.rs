@@ -2,7 +2,6 @@
 use super::{Effect, EffectMask, FunctionSignature, MirInstruction, MirType, ValueId};
 use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
 use crate::mir::definitions::call_unified::{Callee, CallFlags, MirCall};
-use crate::mir::definitions::call_unified::migration;
 use super::call_resolution;
 
 fn contains_value_return(nodes: &[ASTNode]) -> bool {
@@ -39,7 +38,7 @@ fn contains_value_return(nodes: &[ASTNode]) -> bool {
 
     nodes.iter().any(node_has_value_return)
 }
-use crate::mir::{slot_registry, TypeOpKind};
+use crate::mir::TypeOpKind;
 
 /// Call target specification for emit_unified_call
 /// Provides type-safe target resolution at the builder level
@@ -341,7 +340,6 @@ impl super::MirBuilder {
         if let Err(e) = self.emit_constructor_call(math_recv, "MathBox".to_string(), vec![]) { return Some(Err(e)); }
         self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
         // birth()
-        let birt_mid = slot_registry::resolve_slot_by_type_name("MathBox", "birth");
         if let Err(e) = self.emit_method_call(None, math_recv, "birth".to_string(), vec![]) { return Some(Err(e)); }
         // call method
         let dst = self.value_gen.next();
@@ -643,13 +641,13 @@ impl super::MirBuilder {
     // Map a user-facing type name to MIR type
     pub(super) fn parse_type_name_to_mir(name: &str) -> super::MirType {
         match name {
-            // Primitive families
-            "Integer" | "Int" | "I64" | "IntegerBox" | "IntBox" => super::MirType::Integer,
-            "Float" | "F64" | "FloatBox" => super::MirType::Float,
-            "Bool" | "Boolean" | "BoolBox" => super::MirType::Bool,
-            "String" | "StringBox" => super::MirType::String,
+            // Core primitive types only (no Box suffixes)
+            "Integer" | "Int" | "I64" => super::MirType::Integer,
+            "Float" | "F64" => super::MirType::Float,
+            "Bool" | "Boolean" => super::MirType::Bool,
+            "String" => super::MirType::String,
             "Void" | "Unit" => super::MirType::Void,
-            // Fallback: treat as user box type
+            // Phase 15.5: All Box types (including former core IntegerBox, StringBox, etc.) treated uniformly
             other => super::MirType::Box(other.to_string()),
         }
     }

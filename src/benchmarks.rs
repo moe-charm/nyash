@@ -11,7 +11,7 @@
 use crate::backend::WasmBackend;
 #[cfg(feature = "vm-legacy")]
 use crate::backend::VM;
-use crate::interpreter::NyashInterpreter;
+// use crate::interpreter::NyashInterpreter; // Legacy interpreter removed
 // use crate::mir::MirCompiler; // not used in Phase-15 (PyVM primary)
 use crate::parser::NyashParser;
 use std::fs;
@@ -51,9 +51,10 @@ impl BenchmarkSuite {
             // Test if file exists and is readable
             if let Ok(source) = fs::read_to_string(file_path) {
                 // Run on all backends
-                if let Ok(interpreter_result) = self.run_interpreter_benchmark(name, &source) {
-                    results.push(interpreter_result);
-                }
+                // Interpreter benchmark disabled - legacy interpreter removed
+                // if let Ok(interpreter_result) = self.run_interpreter_benchmark(name, &source) {
+                //     results.push(interpreter_result);
+                // }
 
                 #[cfg(feature = "vm-legacy")]
                 if let Ok(vm_result) = self.run_vm_benchmark(name, &source) {
@@ -72,12 +73,16 @@ impl BenchmarkSuite {
         results
     }
 
-    /// Run benchmark on interpreter backend
+    /// Run benchmark on interpreter backend (DISABLED - legacy interpreter removed)
+    #[allow(dead_code)]
     fn run_interpreter_benchmark(
         &self,
-        name: &str,
-        source: &str,
+        _name: &str,
+        _source: &str,
     ) -> Result<BenchmarkResult, Box<dyn std::error::Error>> {
+        Err("Interpreter benchmark disabled - legacy interpreter removed".into())
+
+        /*
         let mut total_duration = 0.0;
 
         for i in 0..self.iterations {
@@ -103,6 +108,7 @@ impl BenchmarkSuite {
             iterations: self.iterations,
             avg_duration_ms: total_duration / (self.iterations as f64),
         })
+        */
     }
 
     /// Run benchmark on VM backend

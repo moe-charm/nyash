@@ -1,7 +1,7 @@
 //! Runner demo helpers (moved out of mod.rs to reduce file size)
 use nyash_rust::ast::ASTNode;
 use nyash_rust::box_trait::{AddBox, BoolBox, BoxCore, IntegerBox, NyashBox, StringBox, VoidBox};
-use nyash_rust::interpreter::NyashInterpreter;
+// use nyash_rust::interpreter::NyashInterpreter; // Legacy interpreter removed
 use nyash_rust::parser::NyashParser;
 use nyash_rust::tokenizer::NyashTokenizer;
 
@@ -92,50 +92,9 @@ pub(super) fn demo_parser_system() {
 
 pub(super) fn demo_interpreter_system() {
     println!("\n🎭 7. Interpreter System:");
-    // Simple execution test
-    let simple_code = r#"
-    local x
-    x = 42
-    return x
-    "#;
-    println!("  📝 Simple Variable Test:");
-    println!("    Code: {}", simple_code.trim());
-    match NyashParser::parse_from_string(simple_code) {
-        Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new();
-            match interpreter.execute(ast) {
-                Ok(result) => {
-                    println!("    ✅ Result: {}", result.to_string_box().value);
-                }
-                Err(e) => {
-                    println!("    ❌ Execution error: {}", e);
-                }
-            }
-        }
-        Err(e) => println!("    ❌ Parse error: {}", e),
-    }
-    // Expression evaluation test
-    let expr_code = r#"
-    local result
-    result = 10 + 32
-    return result
-    "#;
-    println!("\n  ⚡ Expression Evaluation Test:");
-    println!("    Code: {}", expr_code.trim());
-    match NyashParser::parse_from_string(expr_code) {
-        Ok(ast) => {
-            let mut interpreter = NyashInterpreter::new();
-            match interpreter.execute(ast) {
-                Ok(result) => {
-                    println!("    ✅ Result: {}", result.to_string_box().value);
-                }
-                Err(e) => {
-                    println!("    ❌ Execution error: {}", e);
-                }
-            }
-        }
-        Err(e) => println!("    ❌ Parse error: {}", e),
-    }
+    println!("  ⚠️  Legacy interpreter removed - use VM or LLVM backends instead");
+    println!("  💡 Try: ./target/release/nyash --backend vm program.nyash");
+    println!("  💡 Try: ./target/release/nyash --backend llvm program.nyash");
 }
 
 /// Run all demo sections (moved from runner/mod.rs)
@@ -148,7 +107,7 @@ pub(super) fn run_all_demos() {
     demo_environment_system();
     demo_tokenizer_system();
     demo_parser_system();
-    demo_interpreter_system();
+    // demo_interpreter_system(); // Disabled - legacy interpreter removed
     println!("\n🎉 All Box operations completed successfully!");
     println!("Memory safety guaranteed by Rust's borrow checker! 🛡️");
 }

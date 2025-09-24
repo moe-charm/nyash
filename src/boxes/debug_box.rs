@@ -101,7 +101,7 @@
 
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox, VoidBox};
 use crate::instance_v2::InstanceBox;
-use crate::interpreter::RuntimeError;
+use crate::box_factory::RuntimeError;
 use chrono::Local;
 use std::any::Any;
 use std::collections::HashMap;

@@ -33,7 +33,7 @@ selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.nyash"
 [libraries]
 [libraries."libnyash_filebox_plugin.so"]
 boxes = ["FileBox"]
-path = "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so"
+path = "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so"
 
 [libraries."libnyash_filebox_plugin.so".FileBox]
 type_id = 6
@@ -53,7 +53,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_path_plugin.so"]
 boxes = ["PathBox"]
-path = "plugins/nyash-path-plugin/target/release/libnyash_path_plugin.so"
+path = "plugins/nyash-path-plugin/libnyash_path_plugin.so"
 
 [libraries."libnyash_path_plugin.so".PathBox]
 type_id = 55
@@ -72,7 +72,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_math_plugin.so"]
 boxes = ["MathBox", "TimeBox"]
-path = "plugins/nyash-math-plugin/target/release/libnyash_math_plugin.so"
+path = "plugins/nyash-math-plugin/libnyash_math_plugin.so"
 
 [libraries."libnyash_math_plugin.so".MathBox]
 type_id = 50
@@ -99,7 +99,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_regex_plugin.so"]
 boxes = ["RegexBox"]
-path = "plugins/nyash-regex-plugin/target/release/libnyash_regex_plugin.so"
+path = "plugins/nyash-regex-plugin/libnyash_regex_plugin.so"
 
 [libraries."libnyash_regex_plugin.so".RegexBox]
 type_id = 52
@@ -117,7 +117,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so"]
 boxes = ["ClientBox", "ResponseBox", "RequestBox", "ServerBox", "SockServerBox", "SockClientBox", "SockConnBox"]
-path = "plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so"
+path = "plugins/nyash-net-plugin/libnyash_net_plugin.so"
 
 [libraries."libnyash_net_plugin.so".ClientBox]
 type_id = 23
@@ -207,7 +207,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_encoding_plugin.so"]
 boxes = ["EncodingBox"]
-path = "plugins/nyash-encoding-plugin/target/release/libnyash_encoding_plugin.so"
+path = "plugins/nyash-encoding-plugin/libnyash_encoding_plugin.so"
 
 [libraries."libnyash_encoding_plugin.so".EncodingBox]
 type_id = 53
@@ -226,7 +226,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_json_plugin.so"]
 boxes = ["JsonDocBox", "JsonNodeBox"]
-path = "plugins/nyash-json-plugin/target/release/libnyash_json_plugin.so"
+path = "plugins/nyash-json-plugin/libnyash_json_plugin.so"
 
 [libraries."libnyash_json_plugin.so".JsonDocBox]
 type_id = 70
@@ -258,7 +258,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_toml_plugin.so"]
 boxes = ["TOMLBox"]
-path = "plugins/nyash-toml-plugin/target/release/libnyash_toml_plugin.so"
+path = "plugins/nyash-toml-plugin/libnyash_toml_plugin.so"
 
 [libraries."libnyash_toml_plugin.so".TOMLBox]
 type_id = 54
@@ -275,7 +275,7 @@ fini = { method_id = 4294967295 }
 # Python (v2 TypeBox) plugins
 [libraries."libnyash_python_plugin.so"]
 boxes = ["PyRuntimeBox", "PyObjectBox"]
-path = "plugins/nyash-python-plugin/target/release/libnyash_python_plugin.so"
+path = "plugins/nyash-python-plugin/libnyash_python_plugin.so"
 
 [libraries."libnyash_python_plugin.so".PyRuntimeBox]
 type_id = 40
@@ -308,7 +308,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_parser_plugin.so"]
 boxes = ["PythonParserBox"]
-path = "plugins/nyash-python-parser-plugin/target/release/libnyash_python_parser_plugin.so"
+path = "plugins/nyash-python-parser-plugin/libnyash_python_parser_plugin.so"
 
 [libraries."libnyash_python_parser_plugin.so".PythonParserBox]
 type_id = 60
@@ -322,7 +322,7 @@ fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_compiler_plugin.so"]
 boxes = ["PythonCompilerBox"]
-path = "plugins/nyash-python-compiler-plugin/target/release/libnyash_python_compiler_plugin.so"
+path = "plugins/nyash-python-compiler-plugin/libnyash_python_compiler_plugin.so"
 
 [libraries."libnyash_python_compiler_plugin.so".PythonCompilerBox]
 type_id = 61
@@ -336,7 +336,7 @@ fini = { method_id = 4294967295 }
 # StringBox Plugin (Core Box replacement)
 [libraries."libnyash_string_plugin.so"]
 boxes = ["StringBox"]
-path = "target/release/libnyash_string_plugin.so"
+path = "plugins/nyash-string-plugin/libnyash_string_plugin.so"
 
 [libraries."libnyash_string_plugin.so".StringBox]
 type_id = 10
@@ -363,7 +363,7 @@ fini = { method_id = 4294967295 }
 # IntegerBox Plugin (Core Box replacement)
 [libraries."libnyash_integer_plugin.so"]
 boxes = ["IntegerBox"]
-path = "target/release/libnyash_integer_plugin.so"
+path = "plugins/nyash-integer-plugin/libnyash_integer_plugin.so"
 
 [libraries."libnyash_integer_plugin.so".IntegerBox]
 type_id = 12

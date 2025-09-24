@@ -5,7 +5,7 @@ mod tests {
 
     use crate::backend::VM;
     use crate::box_trait::NyashBox;
-    use crate::interpreter::RuntimeError;
+    use crate::box_factory::RuntimeError;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,

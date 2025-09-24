@@ -11,9 +11,27 @@
  */
 
 use crate::box_trait::NyashBox;
-use crate::interpreter::RuntimeError;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+
+/// Runtime error types for Box operations
+#[derive(Debug, thiserror::Error)]
+pub enum RuntimeError {
+    #[error("invalid operation: {message}")]
+    InvalidOperation { message: String },
+    #[error("type error: {message}")]
+    TypeError { message: String },
+}
+
+/// Shared state for interpreter context (legacy compatibility)
+#[derive(Debug, Default, Clone)]
+pub struct SharedState;
+
+impl SharedState {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 /// Unified interface for all Box creation
 pub trait BoxFactory: Send + Sync {

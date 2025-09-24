@@ -141,18 +141,6 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
                 super::modes::pyvm::execute_pyvm_only(runner, filename);
             }
         }
-        "interpreter" => {
-            eprintln!("⚠ interpreter backend is legacy and deprecated. Use 'vm' (PyVM/LLVM) instead.");
-            #[cfg(feature = "vm-legacy")]
-            {
-                runner.execute_vm_mode(filename);
-            }
-            #[cfg(not(feature = "vm-legacy"))]
-            {
-                // Legacy VM disabled; route to PyVM-only runner
-                super::modes::pyvm::execute_pyvm_only(runner, filename);
-            }
-        }
         #[cfg(feature = "cranelift-jit")]
         "jit-direct" => {
             crate::cli_v!("⚡ Nyash JIT-Direct Backend - Executing file: {} ⚡", filename);
@@ -172,7 +160,7 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             runner.execute_llvm_mode(filename);
         }
         other => {
-            eprintln!("❌ Unknown backend: {}. Use 'vm' or 'llvm' (or 'interpreter' legacy).", other);
+            eprintln!("❌ Unknown backend: {}. Use 'vm' or 'llvm'.", other);
             std::process::exit(2);
         }
     }

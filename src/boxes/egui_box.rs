@@ -34,7 +34,7 @@
  */
 
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
-use crate::interpreter::RuntimeError;
+use crate::box_factory::RuntimeError;
 use eframe::{self, egui, epaint::Vec2};
 use std::any::Any;
 use std::sync::{Arc, RwLock};
