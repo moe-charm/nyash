@@ -53,6 +53,9 @@
 #![allow(non_snake_case)]
 
 // 各Boxモジュールを宣言
+// 🎯 Phase 3リファクタリング: 基本Box実装を分離したモジュール
+pub mod basic;
+
 pub mod bool_box;
 pub mod debug_box;
 pub mod integer_box;
