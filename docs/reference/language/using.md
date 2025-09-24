@@ -1,6 +1,57 @@
 # using — Imports and Namespaces (Phase 15+)
 
+**実装状況**: Phase 15.5後に本格実装予定 | 基本ドット記法は実装済み
+
 Status: Accepted (Runner‑side resolution). Selfhost parser accepts using as no‑op and attaches `meta.usings` for future use.
+
+## 🎯 設計思想：Everything has Namespace
+
+### **核心コンセプト**
+すべてのBox、関数、メンバーが明確な名前空間を持ち、衝突・曖昧性を根本解決。
+
+```nyash
+// ✅ 実装済み：ドット記法
+network.HttpClient()         // プラグイン修飾名
+plugin.network.HttpClient() // フルパス
+
+// 🚧 Phase 15.5後：明示的スコープ演算子
+::print("global")           // グローバルスコープ
+builtin::StringBox("test")  // 内蔵版明示
+plugin::StringBox("test")   // プラグイン版明示
+```
+
+### **MIR Callee革新との統合**
+[MIR Callee革新設計](../../development/architecture/mir-callee-revolution.md)と完全統合：
+
+```rust
+// Phase 1: 型安全関数呼び出し（実装済み）
+pub enum Callee {
+    Global(String),          // ::print, global::func
+    Method { box_name, method, receiver }, // obj.method()
+    Extern(String),          // nyash.console.log
+    Value(ValueId),          // 第一級関数
+}
+
+// Phase 3: 完全修飾名対応（Phase 15.5後）
+pub enum QualifiedCallee {
+    Qualified { namespace: Vec<String>, name: String },
+    Scoped { scope: ScopeKind, name: String },
+}
+```
+
+## 📊 実装状況
+
+### ✅ **現在実装済み**
+- **ドット記法**: `plugin.BoxName`、`namespace.member`
+- **using基本構文**: ファイルトップでの宣言
+- **エイリアス**: `using long.path as Alias`
+- **プラグイン修飾**: `network.HttpClient`
+
+### 🚧 **Phase 15.5後実装予定**
+- **built-in namespace**: `builtin.StringBox` vs `plugin.StringBox`
+- **完全修飾名**: `nyash.builtin.print`、`std.console.log`
+- **スコープ演算子**: `::global_func`、`Type::static_method`
+- **厳密解決**: コンパイル時名前空間検証
 
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.
@@ -100,10 +151,25 @@ Runner Configuration
 - Selfhost pipeline keeps child stdout quiet and extracts JSON only: `NYASH_JSON_ONLY=1` (set by Runner automatically for child)
 - Selfhost emits `meta.usings` automatically when present; no additional flags required.
 
+## 🔗 関連ドキュメント
+
+### **設計・アーキテクチャ**
+- [MIR Callee革新設計](../../development/architecture/mir-callee-revolution.md) - 型安全関数呼び出し
+- [Phase 15.5 Core Box統一](../../development/roadmap/phases/phase-15.5/README.md) - プラグイン統一計画
+- [Box Factory設計](../../reference/architecture/box-factory-design.md) - builtin vs plugin優先順位
+
+### **実装ガイド**
+- [Callee実装ロードマップ](../../development/roadmap/phases/phase-15/mir-callee-implementation-roadmap.md)
+- [プラグインシステム](../../reference/plugin-system/) - プラグイン開発ガイド
+- [完全言語リファレンス](../LANGUAGE_REFERENCE_2025.md) - 全構文仕様
+
+## 📝 実装ノート
+
 Notes
 - Phase 15 keeps resolution in the Runner to minimize parser complexity. Future phases may leverage `meta.usings` for compiler decisions.
 - Unknown fields in the top‑level JSON (like `meta`) are ignored by the current bridge.
- - 未解決時（非strict）は実行を継続し、`NYASH_RESOLVE_TRACE=1` で候補を提示。strict時はエラーで候補を表示。
+- 未解決時（非strict）は実行を継続し、`NYASH_RESOLVE_TRACE=1` で候補を提示。strict時はエラーで候補を表示。
+- **Phase 15.5完了により、現代的な名前空間システムを実現予定**
 
 ## Include/Export (Phase 1)
 

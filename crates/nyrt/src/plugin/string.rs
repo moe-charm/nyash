@@ -153,7 +153,7 @@ pub extern "C" fn nyash_string_to_i8p_h(handle: i64) -> *mut i8 {
         let raw = Box::into_raw(boxed) as *mut u8;
         return raw as *mut i8;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         let s = obj.to_string_box().value;
         let mut bytes = s.into_bytes();
         bytes.push(0);

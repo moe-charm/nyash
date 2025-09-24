@@ -63,7 +63,7 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
     let mut encode_handle = |h: i64| {
         if h > 0 {
-            if let Some(obj) = handles::get(h as u64) {
+            if let Some(obj) = handles::get(h) {
                 if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                     let host = nyash_rust::runtime::get_global_plugin_host();
                     if let Ok(hg) = host.read() {
@@ -125,16 +125,16 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
                     use nyash_rust::backend::vm::VMValue as V;
                     match v {
                         V::String(s) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, s)
+                            nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
                         }
                         V::Integer(i) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, *i)
+                            nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, i)
                         }
                         V::Float(f) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, *f)
+                            nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, f)
                         }
                         V::Bool(b) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, *b)
+                            nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, b)
                         }
                         V::BoxRef(bx) => {
                             if let Some(pb) = bx.as_any().downcast_ref::<PluginBoxV2>() {

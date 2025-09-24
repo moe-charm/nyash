@@ -15,7 +15,7 @@ pub struct Receiver {
 pub fn resolve_receiver_for_a0(a0: i64) -> Option<Receiver> {
     // 1) Handle registry (preferred)
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 return Some(Receiver {
                     instance_id: p.instance_id(),

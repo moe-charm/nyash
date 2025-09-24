@@ -7,7 +7,7 @@ pub extern "C" fn nyash_instance_get_field_h(handle: i64, name: *const i8) -> i6
     }
     let name = unsafe { std::ffi::CStr::from_ptr(name) };
     let Ok(field) = name.to_str() else { return 0 };
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle) {
         if let Some(inst) = obj
             .as_any()
             .downcast_ref::<nyash_rust::instance_v2::InstanceBox>()
@@ -31,13 +31,13 @@ pub extern "C" fn nyash_instance_set_field_h(handle: i64, name: *const i8, val_h
     }
     let name = unsafe { std::ffi::CStr::from_ptr(name) };
     let Ok(field) = name.to_str() else { return 0 };
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle) {
         if let Some(inst) = obj
             .as_any()
             .downcast_ref::<nyash_rust::instance_v2::InstanceBox>()
         {
             if val_h > 0 {
-                if let Some(val) = nyash_rust::jit::rt::handles::get(val_h as u64) {
+                if let Some(val) = nyash_rust::jit::rt::handles::get(val_h) {
                     let shared: nyash_rust::box_trait::SharedNyashBox = std::sync::Arc::clone(&val);
                     let _ = inst.set_field(field, shared);
                     return 0;

@@ -21,7 +21,7 @@ pub extern "C" fn nyash_future_spawn_method_h(
     let mut invoke: Option<
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_h as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_h) {
         if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
             instance_id = p.instance_id();
             real_type_id = p.inner.type_id;
@@ -56,7 +56,7 @@ pub extern "C" fn nyash_future_spawn_method_h(
             }
             8 => {
                 if v > 0 {
-                    if let Some(obj) = nyash_rust::jit::rt::handles::get(v as u64) {
+                    if let Some(obj) = nyash_rust::jit::rt::handles::get(v) {
                         if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                             // Try common coercions: String/Integer to TLV primitives
                             let host = nyash_rust::runtime::get_global_plugin_host();
@@ -245,7 +245,7 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     }
     // Resolve receiver invoke and type id/name
     let (instance_id, real_type_id, invoke) =
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 (p.instance_id(), p.inner.type_id, Some(p.inner.invoke_fn))
             } else {
@@ -265,7 +265,7 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     // Determine method name string (from a1 handle→StringBox, or a1 as C string pointer, or legacy VM args)
     let mut method_name: Option<String> = None;
     if a1 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a1 as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(a1) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 if p.box_type == "StringBox" {
                     // Limit the lifetime of the read guard to this inner block by avoiding an outer binding
@@ -326,16 +326,16 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
                 use nyash_rust::backend::vm::VMValue;
                 match v {
                     VMValue::String(s) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::string(dst, s)
+                        nyash_rust::runtime::plugin_ffi_common::encode::string(dst, &s)
                     }
                     VMValue::Integer(i) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::i64(dst, *i)
+                        nyash_rust::runtime::plugin_ffi_common::encode::i64(dst, i)
                     }
                     VMValue::Float(f) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::f64(dst, *f)
+                        nyash_rust::runtime::plugin_ffi_common::encode::f64(dst, f)
                     }
                     VMValue::Bool(b) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::bool(dst, *b)
+                        nyash_rust::runtime::plugin_ffi_common::encode::bool(dst, b)
                     }
                     VMValue::BoxRef(b) => {
                         if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
@@ -390,7 +390,7 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     let mut encode_arg_into = |dst: &mut Vec<u8>, val: i64, pos: usize| {
         let mut appended = false;
         if val > 0 {
-            if let Some(obj) = nyash_rust::jit::rt::handles::get(val as u64) {
+            if let Some(obj) = nyash_rust::jit::rt::handles::get(val) {
                 if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                     let host = nyash_rust::runtime::get_global_plugin_host();
                     if let Ok(hg) = host.read() {

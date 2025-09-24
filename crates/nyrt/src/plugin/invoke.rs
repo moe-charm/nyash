@@ -78,7 +78,7 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 invoke = Some(p.inner.invoke_fn);
@@ -127,16 +127,16 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
             if let Some(v) = args.get(arg_pos) {
                 match v {
                     nyash_rust::backend::vm::VMValue::String(s) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, s)
+                        nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
                     }
                     nyash_rust::backend::vm::VMValue::Integer(i) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, *i)
+                        nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, i)
                     }
                     nyash_rust::backend::vm::VMValue::Float(f) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, *f)
+                        nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, f)
                     }
                     nyash_rust::backend::vm::VMValue::Bool(b) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, *b)
+                        nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, b)
                     }
                     nyash_rust::backend::vm::VMValue::BoxRef(b) => {
                         if let Some(bufbox) = b
@@ -261,7 +261,7 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 type_id = p.inner.type_id;
@@ -325,16 +325,16 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
                 use nyash_rust::backend::vm::VMValue as V;
                 match v {
                     V::String(s) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, s)
+                        nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
                     }
                     V::Integer(i) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, *i)
+                        nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, i)
                     }
                     V::Float(f) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, *f)
+                        nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, f)
                     }
                     V::Bool(b) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, *b)
+                        nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, b)
                     }
                     V::BoxRef(b) => {
                         if let Some(bufbox) = b
@@ -465,7 +465,7 @@ pub extern "C" fn nyash_plugin_invoke_by_name_i64(
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if recv_handle > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_handle as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_handle) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 type_id = p.inner.type_id;
@@ -603,7 +603,7 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0 as u64) {
+        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 real_type_id = p.inner.type_id;
@@ -627,7 +627,7 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
         }
         8 => {
             if val > 0 {
-                if let Some(obj) = nyash_rust::jit::rt::handles::get(val as u64) {
+                if let Some(obj) = nyash_rust::jit::rt::handles::get(val) {
                     if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                         nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
                             &mut buf,
@@ -705,7 +705,7 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
     let mut invoke: Option<
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_h as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_h) {
         if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
             instance_id = p.instance_id();
             real_type_id = p.inner.type_id;
@@ -736,7 +736,7 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
                 nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, f);
             }
             8 => {
-                if let Some(obj) = nyash_rust::jit::rt::handles::get(vals[i] as u64) {
+                if let Some(obj) = nyash_rust::jit::rt::handles::get(vals[i]) {
                     if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                         nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
                             &mut buf,

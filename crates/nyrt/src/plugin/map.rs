@@ -10,7 +10,7 @@ pub extern "C" fn nyash_map_size_h(handle: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
@@ -43,7 +43,7 @@ pub extern "C" fn nyash_map_get_h(handle: i64, key: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
@@ -71,13 +71,13 @@ pub extern "C" fn nyash_map_get_hh(handle: i64, key_any: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
         {
             let key_box: Box<dyn NyashBox> = if key_any > 0 {
-                if let Some(k) = handles::get(key_any as u64) {
+                if let Some(k) = handles::get(key_any) {
                     k.clone_box()
                 } else {
                     Box::new(IntegerBox::new(key_any))
@@ -107,14 +107,14 @@ pub extern "C" fn nyash_map_set_h(handle: i64, key: i64, val: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
         {
             let kbox: Box<dyn NyashBox> = Box::new(IntegerBox::new(key));
             let vbox: Box<dyn NyashBox> = if val > 0 {
-                if let Some(o) = handles::get(val as u64) {
+                if let Some(o) = handles::get(val) {
                     o.clone_box()
                 } else {
                     Box::new(IntegerBox::new(val))
@@ -148,13 +148,13 @@ pub extern "C" fn nyash_map_set_hh(handle: i64, key_any: i64, val_any: i64) -> i
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
         {
             let kbox: Box<dyn NyashBox> = if key_any > 0 {
-                if let Some(k) = handles::get(key_any as u64) {
+                if let Some(k) = handles::get(key_any) {
                     k.clone_box()
                 } else {
                     Box::new(IntegerBox::new(key_any))
@@ -163,7 +163,7 @@ pub extern "C" fn nyash_map_set_hh(handle: i64, key_any: i64, val_any: i64) -> i
                 Box::new(IntegerBox::new(key_any))
             };
             let vbox: Box<dyn NyashBox> = if val_any > 0 {
-                if let Some(v) = handles::get(val_any as u64) {
+                if let Some(v) = handles::get(val_any) {
                     v.clone_box()
                 } else {
                     Box::new(IntegerBox::new(val_any))
@@ -188,13 +188,13 @@ pub extern "C" fn nyash_map_has_hh(handle: i64, key_any: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
         {
             let kbox: Box<dyn NyashBox> = if key_any > 0 {
-                if let Some(k) = handles::get(key_any as u64) {
+                if let Some(k) = handles::get(key_any) {
                     k.clone_box()
                 } else {
                     Box::new(IntegerBox::new(key_any))
@@ -218,7 +218,7 @@ pub extern "C" fn nyash_map_has_h(handle: i64, key: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(map) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()

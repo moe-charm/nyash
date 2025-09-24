@@ -19,7 +19,7 @@ pub extern "C" fn nyash_console_log_export(ptr: *const i8) -> i64 {
 pub extern "C" fn nyash_console_log_handle(handle: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
     eprintln!("DEBUG: handle={}", handle);
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         let s = obj.to_string_box().value;
         println!("{}", s);
     } else {
@@ -36,7 +36,7 @@ pub extern "C" fn nyash_console_warn_handle(handle: i64) -> i64 {
         return 0;
     }
 
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle) {
         let s = obj.to_string_box().value;
         eprintln!("WARN: {}", s);
     } else {
@@ -52,7 +52,7 @@ pub extern "C" fn nyash_console_error_handle(handle: i64) -> i64 {
         return 0;
     }
 
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle) {
         let s = obj.to_string_box().value;
         eprintln!("ERROR: {}", s);
     } else {
@@ -68,7 +68,7 @@ pub extern "C" fn nyash_debug_trace_handle(handle: i64) -> i64 {
         return 0;
     }
 
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle as u64) {
+    if let Some(obj) = nyash_rust::jit::rt::handles::get(handle) {
         let s = obj.to_string_box().value;
         eprintln!("TRACE: {}", s);
     } else {

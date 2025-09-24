@@ -9,22 +9,54 @@ Updated: 2025‑09‑24
 - **Phase 15.5 実装成果**: [Phase 15.5 Core Box Unification](docs/development/roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
 - **プラグインチェッカー**: [Plugin Tester Guide](docs/reference/plugin-system/plugin-tester.md)
 
-## 🚨 **緊急タスク: BuiltinBoxFactory問題解決（最優先）**
+## 🎉 **歴史的成果: Phase 15.5 "Everything is Plugin" 革命完了！**
 
-### **問題**: StringBox/IntegerBoxプラグインが何日も動作しない
+### **🏆 何十日間の問題、完全解決達成！**
+**問題**: StringBox/IntegerBoxプラグインが何十日も動作しない
 **根本原因**: `builtin > user > plugin` の優先順位でプラグインが到達されない
+**🚀 解決**: FactoryPolicy実装 + StrictPluginFirst デフォルト化
 
-### **✅ 戦略決定完了**: ChatGPT + ユーザーアイデア統合4段階戦略
-1. **Phase 0 (今日)**: 分離・準備 - 実装を個別ファイルに分離（削除簡単化）
-2. **Phase 1 (1-2日)**: 即座遮断 - strict_plugin_firstデフォルト・到達禁止ガード
-3. **Phase 2 (2-3週)**: 段階削除 - String→Integer→Bool→Array→Map→Console順
-4. **Phase 3 (完成)**: 完全削除 - "Everything is Plugin" 実現
+### **✅ 完了した革命的実装** (コミット: `f62c8695`)
+1. **Phase 0**: ✅ `builtin_impls/` 分離実装完了（削除準備）
+2. **Phase 1**: ✅ FactoryPolicy system完全実装（3戦略）
+3. **Phase 1**: ✅ StrictPluginFirstデフォルト化
+4. **Phase 1**: ✅ 環境変数制御: `NYASH_BOX_FACTORY_POLICY`
 
-### **📋 実装中タスク**
-- [ ] **Phase 0.1**: `builtin_impls/`ディレクトリ作成・実装分離
-- [ ] **Phase 0.2**: FactoryPolicy enum実装
-- [ ] **Phase 1.1**: strict_plugin_firstデフォルト化
-- [ ] **Phase 1.2**: 到達禁止ガード実装
+### **📋 次世代戦略ロードマップ: 安全な移行完成へ**
+
+#### **🧪 Phase 2.0: スモークテスト充実** (次のタスク)
+**目標**: プラグイン動作の完全検証体制確立
+- スモークテスト拡張: plugin_priority.sh, plugin_fallback.sh 新規作成
+- 全プラグイン動作確認: StringBox/IntegerBox/FileBox/ConsoleBox/MathBox
+- エラーハンドリング検証: プラグインなし時の適切なフォールバック
+- 環境変数制御テスト: `NYASH_BOX_FACTORY_POLICY` 切り替え検証
+
+#### **⚡ Phase 2.1: Rust VM動的プラグイン検証**
+**目標**: 開発・デバッグ時の動的プラグイン完全対応
+- VM実行での動的プラグイン: `./target/release/nyash --backend vm`
+- 動的.so読み込み: `dlopen()` による実行時読み込み完全対応
+- M_BIRTH/M_FINI ライフサイクル管理完全動作
+- デバッグ支援: プラグイン読み込み状況詳細ログ
+
+#### **🚀 Phase 2.2: LLVM静的プラグイン検証**
+**目標**: 本番・配布用単一バイナリ生成完全対応
+- LLVM静的リンク: `./target/release/nyash --backend llvm`
+- 単一実行ファイル生成: `./tools/build_llvm.sh program.nyash -o program.exe`
+- 最適化: LLVMによる関数インライン化・最適化確認
+- 配布便利性: プラグイン依存なしの単一ファイル配布確立
+
+#### **🗑️ Phase 2.3: builtin_impls/段階削除**
+**目標**: "Everything is Plugin"完全実現
+**削除順序**: string_box.rs → integer_box.rs → bool_box.rs → array_box.rs → map_box.rs → console_box.rs(最後)
+- 各削除前: プラグイン動作100%確認
+- 削除後: スモークテスト実行でデグレ防止
+- 段階コミット: 各Box削除ごとに個別コミット
+
+#### **🏆 Phase 3: レガシー完全削除**
+**最終目標**: BuiltinBoxFactory完全削除
+- `src/box_factory/builtin.rs` 削除
+- `src/box_factory/builtin_impls/` ディレクトリ削除
+- 関連テスト・ドキュメント更新完了
 
 ---
 
@@ -40,7 +72,13 @@ Updated: 2025‑09‑24
 6. **✅ スモークテストv2システム完全実装**（3段階プロファイル、共通ライブラリ、自動環境検出）
 7. **✅ 名前空間設計書統合完了**（using.md拡充・CLAUDE.mdリンク整備）
 8. **✅ BuiltinBoxFactory問題根本原因特定**（Task先生+ChatGPT戦略策定完了）
-9. **🚧 プラグインBox前提のテスト作成中**（Core Box廃止後の新テスト体系）
+9. **🎉 Phase 15.5 "Everything is Plugin" 革命完了！**（何十日間の問題根本解決）
+   - FactoryPolicy システム完全実装 (StrictPluginFirst/CompatPluginFirst/BuiltinFirst)
+   - プラグイン優先デフォルト化: `plugins > user > builtin`
+   - builtin_impls/ 分離実装完了（段階削除準備）
+   - 環境変数制御: `NYASH_BOX_FACTORY_POLICY` 実装
+   - StringBox/IntegerBox プラグイン優先動作確認済み 🚀
+10. **📋 次世代戦略ロードマップ策定完了**（Phase 2.0-3.0 安全移行計画）
 
 ---
 

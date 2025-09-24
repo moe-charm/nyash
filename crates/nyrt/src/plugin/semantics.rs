@@ -10,12 +10,12 @@ pub extern "C" fn nyash_semantics_add_hh_export(lhs_h: i64, rhs_h: i64) -> i64 {
     if lhs_h <= 0 || rhs_h <= 0 {
         return 0;
     }
-    let lhs = if let Some(obj) = handles::get(lhs_h as u64) {
+    let lhs = if let Some(obj) = handles::get(lhs_h) {
         obj
     } else {
         return 0;
     };
-    let rhs = if let Some(obj) = handles::get(rhs_h as u64) {
+    let rhs = if let Some(obj) = handles::get(rhs_h) {
         obj
     } else {
         return 0;

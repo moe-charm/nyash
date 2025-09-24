@@ -13,7 +13,7 @@ pub extern "C" fn nyash_string_len_h(handle: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
     if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
         let present = if handle > 0 {
-            handles::get(handle as u64).is_some()
+            handles::get(handle).is_some()
         } else {
             false
         };
@@ -25,7 +25,7 @@ pub extern "C" fn nyash_string_len_h(handle: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(sb) = obj
             .as_any()
             .downcast_ref::<nyash_rust::box_trait::StringBox>()
@@ -46,7 +46,7 @@ pub extern "C" fn nyash_string_charcode_at_h_export(handle: i64, idx: i64) -> i6
     if handle <= 0 {
         return -1;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(sb) = obj
             .as_any()
             .downcast_ref::<nyash_rust::box_trait::StringBox>()
@@ -71,7 +71,7 @@ pub extern "C" fn nyash_string_concat_hh_export(a_h: i64, b_h: i64) -> i64 {
     };
     let to_s = |h: i64| -> String {
         if h > 0 {
-            if let Some(o) = handles::get(h as u64) {
+            if let Some(o) = handles::get(h) {
                 return o.to_string_box().value;
             }
         }
@@ -91,7 +91,7 @@ pub extern "C" fn nyash_string_eq_hh_export(a_h: i64, b_h: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
     let to_s = |h: i64| -> String {
         if h > 0 {
-            if let Some(o) = handles::get(h as u64) {
+            if let Some(o) = handles::get(h) {
                 return o.to_string_box().value;
             }
         }
@@ -111,7 +111,7 @@ pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64
     if h <= 0 {
         return 0;
     }
-    let s = if let Some(obj) = handles::get(h as u64) {
+    let s = if let Some(obj) = handles::get(h) {
         if let Some(sb) = obj.as_any().downcast_ref::<StringBox>() {
             sb.value.clone()
         } else {
@@ -146,7 +146,7 @@ pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64
 pub extern "C" fn nyash_string_lastindexof_hh_export(h: i64, n: i64) -> i64 {
     use nyash_rust::{box_trait::StringBox, jit::rt::handles};
     let hay = if h > 0 {
-        if let Some(o) = handles::get(h as u64) {
+        if let Some(o) = handles::get(h) {
             if let Some(sb) = o.as_any().downcast_ref::<StringBox>() {
                 sb.value.clone()
             } else {
@@ -159,7 +159,7 @@ pub extern "C" fn nyash_string_lastindexof_hh_export(h: i64, n: i64) -> i64 {
         String::new()
     };
     let nee = if n > 0 {
-        if let Some(o) = handles::get(n as u64) {
+        if let Some(o) = handles::get(n) {
             if let Some(sb) = o.as_any().downcast_ref::<StringBox>() {
                 sb.value.clone()
             } else {
@@ -298,7 +298,7 @@ pub extern "C" fn nyash_env_box_new_i64x(
     let mut argv: Vec<Box<dyn NyashBox>> = Vec::new();
     let push_val = |dst: &mut Vec<Box<dyn NyashBox>>, v: i64| {
         if v > 0 {
-            if let Some(obj) = handles::get(v as u64) {
+            if let Some(obj) = handles::get(v) {
                 dst.push(obj.share_box());
                 return;
             }
@@ -334,7 +334,7 @@ pub extern "C" fn nyash_string_lt_hh_export(a_h: i64, b_h: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
     let to_s = |h: i64| -> String {
         if h > 0 {
-            if let Some(o) = handles::get(h as u64) {
+            if let Some(o) = handles::get(h) {
                 return o.to_string_box().value;
             }
         }
@@ -353,7 +353,7 @@ pub extern "C" fn nyash_any_length_h_export(handle: i64) -> i64 {
     use nyash_rust::jit::rt::handles;
     if std::env::var("NYASH_JIT_TRACE_LEN").ok().as_deref() == Some("1") {
         let present = if handle > 0 {
-            handles::get(handle as u64).is_some()
+            handles::get(handle).is_some()
         } else {
             false
         };
@@ -365,7 +365,7 @@ pub extern "C" fn nyash_any_length_h_export(handle: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(arr) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
@@ -407,7 +407,7 @@ pub extern "C" fn nyash_any_is_empty_h_export(handle: i64) -> i64 {
     if handle <= 0 {
         return 1;
     }
-    if let Some(obj) = handles::get(handle as u64) {
+    if let Some(obj) = handles::get(handle) {
         if let Some(arr) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
@@ -891,7 +891,7 @@ mod tests {
         let handle = handles::to_handle(arc) as i64;
         let h = nyash_plugin_invoke3_tagged_i64(1, 0, 0, handle, 0, 0, 0, 0, 0, 0, 0, 0);
         assert!(h > 0);
-        let obj = handles::get(h as u64).unwrap();
+        let obj = handles::get(h).unwrap();
         let sb = obj.as_any().downcast_ref::<StringBox>().unwrap();
         assert_eq!(sb.value, "hi");
     }

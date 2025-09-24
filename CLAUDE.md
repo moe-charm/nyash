@@ -808,6 +808,25 @@ Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
 # → それでも不明 → ソース確認
 ```
 
+## 🔧 重要設計書（迷子防止ガイド）
+
+**設計書がすぐ見つからない問題を解決！**
+
+### 🏗️ **アーキテクチャ核心**
+- **[名前空間・using system](docs/reference/language/using.md)** ⭐超重要 - ドット記法・スコープ演算子・Phase 15.5計画
+- **[MIR Callee革新](docs/development/architecture/mir-callee-revolution.md)** - 関数呼び出し型安全化・シャドウイング解決
+- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
+
+### 📋 **Phase 15.5重要資料**
+- **[Core Box統一計画](docs/development/roadmap/phases/phase-15.5/README.md)** - builtin vs plugin問題
+- **[Box Factory設計](docs/reference/architecture/box-factory-design.md)** - 優先順位問題・解決策
+- **[Callee実装ロードマップ](docs/development/roadmap/phases/phase-15/mir-callee-implementation-roadmap.md)**
+
+### 📖 **完全リファレンス**
+- **[言語仕様](docs/reference/language/LANGUAGE_REFERENCE_2025.md)** - 全構文・セマンティクス
+- **[プラグインシステム](docs/reference/plugin-system/)** - プラグイン開発ガイド
+- **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)** - 現在進捗
+
 ## 🔧 開発サポート
 
 ### 🎛️ 重要フラグ一覧（Phase 15）

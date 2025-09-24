@@ -26,11 +26,24 @@ Phase 15.5でCore Box完全削除後のNyashテストシステム。すべての
 - **制御構文**: `if`, `loop`, `break`, `continue`
 
 ### ⚠️ 既知の問題
-- **StringBox**: メソッド呼び出しが動作しない
-  - `new StringBox("test")` → オブジェクト生成は成功
-  - `.toString()` → 空文字列を返す
-  - `.length()` → エラーで中断
-- **IntegerBox**: 同様の問題
+
+#### StringBox/IntegerBox プラグイン回帰（2025-09-24）
+- **症状**: Phase 15.5でCore Box削除後、プラグイン版が正しく動作しない
+  - `new StringBox("test")` → オブジェクト生成は成功（ハンドル返却）
+  - `.toString()` → 空文字列を返す（データ保存失敗）
+  - `.length()` → 0を返す（内部状態が空）
+  - `.get()` → 空文字列を返す
+- **IntegerBox**: 同様の問題（値の保存・取得が失敗）
+
+#### 根本原因（Codex調査による）
+- **TypeBox v2 resolveブランチの欠落**: birthおよびtoStringメソッドの解決パスが未実装
+- **method_id衝突**: 0-3は予約済み（toString/type/equals/clone）だが、修正後も動作せず
+- **プラグインインボケーション**: nyash_plugin_invokeは呼ばれているが、TLV形式の応答処理に問題
+
+#### 緩和策
+1. **基本機能テストに集中**: 算術演算、制御構文、文字列リテラルは正常動作
+2. **他のプラグインBox使用**: FileBox、PathBox等は動作する可能性あり
+3. **デバッグ用環境変数**: `NYASH_CLI_VERBOSE=1`で詳細ログ確認
 
 ## 🔧 テスト環境設定
 

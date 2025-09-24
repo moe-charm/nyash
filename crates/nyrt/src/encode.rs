@@ -7,11 +7,11 @@ pub(crate) fn nyrt_encode_from_legacy_at(buf: &mut Vec<u8>, pos: usize) {
         if let Some(v) = args.get(pos) {
             match v {
                 VMValue::String(s) => {
-                    nyash_rust::runtime::plugin_ffi_common::encode::string(buf, s)
+                    nyash_rust::runtime::plugin_ffi_common::encode::string(buf, &s)
                 }
-                VMValue::Integer(i) => nyash_rust::runtime::plugin_ffi_common::encode::i64(buf, *i),
-                VMValue::Float(f) => nyash_rust::runtime::plugin_ffi_common::encode::f64(buf, *f),
-                VMValue::Bool(b) => nyash_rust::runtime::plugin_ffi_common::encode::bool(buf, *b),
+                VMValue::Integer(i) => nyash_rust::runtime::plugin_ffi_common::encode::i64(buf, i),
+                VMValue::Float(f) => nyash_rust::runtime::plugin_ffi_common::encode::f64(buf, f),
+                VMValue::Bool(b) => nyash_rust::runtime::plugin_ffi_common::encode::bool(buf, b),
                 VMValue::BoxRef(b) => {
                     if let Some(bufbox) = b
                         .as_any()
@@ -81,7 +81,7 @@ pub(crate) fn nyrt_encode_from_legacy_at(buf: &mut Vec<u8>, pos: usize) {
 pub(crate) fn nyrt_encode_arg_or_legacy(buf: &mut Vec<u8>, val: i64, pos: usize) {
     use nyash_rust::jit::rt::handles;
     if val > 0 {
-        if let Some(obj) = handles::get(val as u64) {
+        if let Some(obj) = handles::get(val) {
             if let Some(bufbox) = obj
                 .as_any()
                 .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
