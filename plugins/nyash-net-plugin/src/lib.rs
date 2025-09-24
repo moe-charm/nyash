@@ -2,6 +2,7 @@
 //! Provides ServerBox/RequestBox/ResponseBox/ClientBox and socket variants.
 //! Pure in-process HTTP over localhost for E2E of BoxRef args/returns.
 
+use crate::state::{ClientState, RequestState, ResponseState, ServerState, SockConnState};
 use once_cell::sync::Lazy;
 use std::collections::{HashMap, VecDeque};
 use std::io::Write as IoWrite;
@@ -11,7 +12,6 @@ use std::sync::{
     Arc, Mutex,
 };
 use std::time::Duration;
-use crate::state::{ClientState, RequestState, ResponseState, ServerState, SockConnState};
 
 // ===== Simple logger (enabled when NYASH_NET_LOG=1) =====
 static LOG_ON: Lazy<bool> = Lazy::new(|| std::env::var("NYASH_NET_LOG").unwrap_or_default() == "1");
@@ -234,7 +234,9 @@ extern "C" fn sockserver_invoke_id(
     result: *mut u8,
     result_len: *mut usize,
 ) -> i32 {
-    unsafe { sockets::sock_server_invoke(method_id, instance_id, args, args_len, result, result_len) }
+    unsafe {
+        sockets::sock_server_invoke(method_id, instance_id, args, args_len, result, result_len)
+    }
 }
 #[no_mangle]
 pub static nyash_typebox_SockServerBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
@@ -268,7 +270,9 @@ extern "C" fn sockclient_invoke_id(
     result: *mut u8,
     result_len: *mut usize,
 ) -> i32 {
-    unsafe { sockets::sock_client_invoke(method_id, instance_id, args, args_len, result, result_len) }
+    unsafe {
+        sockets::sock_client_invoke(method_id, instance_id, args, args_len, result, result_len)
+    }
 }
 #[no_mangle]
 pub static nyash_typebox_SockClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
@@ -1012,7 +1016,8 @@ unsafe fn client_invoke(
             let body_len = body.len();
             // Create client response handle
             let resp_id = state::next_response_id();
-            let (_h, _p, req_bytes) = http_helpers::build_http_request("POST", &url, Some(&body), resp_id);
+            let (_h, _p, req_bytes) =
+                http_helpers::build_http_request("POST", &url, Some(&body), resp_id);
             let mut tcp_ok = false;
             if let Ok(mut stream) = TcpStream::connect(format!("{}:{}", host, port)) {
                 let _ = stream.write_all(&req_bytes);
@@ -1086,9 +1091,9 @@ unsafe fn client_invoke(
 
 // ===== Helpers =====
 use ffi::slice;
-mod tlv;
 mod http_helpers;
 mod sockets;
+mod tlv;
 
 // ===== HTTP helpers =====
 // moved

@@ -169,4 +169,3 @@ fn test_longest_match_sequences() {
     assert!(matches!(kinds[3], TokenType::RANGE));
     assert!(matches!(kinds[4], TokenType::DOT));
 }
-

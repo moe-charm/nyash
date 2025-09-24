@@ -27,7 +27,7 @@ const M_FROM_UTF8: u32 = 5; // fromUtf8(data: String|Bytes) -> Handle(new)
 const M_TO_UTF8: u32 = 6; // toUtf8() -> String
 const M_FINI: u32 = u32::MAX;
 
-const TYPE_ID_STRING: u32 = 10;  // Match nyash.toml type_id
+const TYPE_ID_STRING: u32 = 10; // Match nyash.toml type_id
 
 struct StrInstance {
     s: String,
@@ -222,7 +222,7 @@ extern "C" fn string_resolve(name: *const c_char) -> u32 {
         "charCodeAt" => M_CHAR_CODE_AT,
         "concat" => M_CONCAT,
         "fromUtf8" => M_FROM_UTF8,
-        "toUtf8" | "toString" => M_TO_UTF8,  // Map toString to toUtf8
+        "toUtf8" | "toString" => M_TO_UTF8, // Map toString to toUtf8
         _ => 0,
     }
 }
@@ -264,10 +264,16 @@ extern "C" fn string_invoke_id(
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
                         let len = inst.s.len();
-                        eprintln!("[StringBox] Found instance, string={:?}, len={}", inst.s, len);
+                        eprintln!(
+                            "[StringBox] Found instance, string={:?}, len={}",
+                            inst.s, len
+                        );
                         return write_tlv_i64(len as i64, result, result_len);
                     } else {
-                        eprintln!("[StringBox] Instance {} not found in INST map!", instance_id);
+                        eprintln!(
+                            "[StringBox] Instance {} not found in INST map!",
+                            instance_id
+                        );
                         return E_HANDLE;
                     }
                 } else {

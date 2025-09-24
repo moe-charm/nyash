@@ -61,4 +61,3 @@ pub(crate) const M_CONN_SEND: u32 = 1; // bytes/string -> void
 pub(crate) const M_CONN_RECV: u32 = 2; // -> bytes
 pub(crate) const M_CONN_CLOSE: u32 = 3; // -> void
 pub(crate) const M_CONN_RECV_TIMEOUT: u32 = 4; // ms -> bytes (empty if timeout)
-

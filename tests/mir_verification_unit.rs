@@ -160,7 +160,10 @@ fn test_merge_use_before_phi_detected() {
 
     let mut verifier = MirVerifier::new();
     let res = verifier.verify_function(&f);
-    assert!(res.is_err(), "Verifier should error on merge use without phi");
+    assert!(
+        res.is_err(),
+        "Verifier should error on merge use without phi"
+    );
     let errs = res.err().unwrap();
     assert!(
         errs.iter().any(|e| matches!(
@@ -320,4 +323,3 @@ fn test_loop_nested_if_phi() {
         mir_text
     );
 }
-

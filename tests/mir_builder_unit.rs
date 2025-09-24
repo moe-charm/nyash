@@ -1,5 +1,5 @@
+use nyash_rust::ast::{ASTNode, BinaryOperator, LiteralValue, Span};
 use nyash_rust::mir::MirBuilder;
-use nyash_rust::ast::{ASTNode, LiteralValue, BinaryOperator, Span};
 
 #[test]
 fn test_literal_building() {
@@ -64,4 +64,3 @@ fn test_if_statement_building() {
     let stats = function.stats();
     assert!(stats.phi_count >= 1);
 }
-

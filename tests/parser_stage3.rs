@@ -23,7 +23,10 @@ fn stage3_disabled_rejects_try_and_throw() {
 
         let code_throw = "throw 1";
         let res_throw = NyashParser::parse_from_string(code_throw);
-        assert!(res_throw.is_err(), "throw should be rejected when gate is off");
+        assert!(
+            res_throw.is_err(),
+            "throw should be rejected when gate is off"
+        );
     });
 }
 
@@ -32,7 +35,11 @@ fn stage3_enabled_accepts_throw() {
     with_env("NYASH_PARSER_STAGE3", Some("1"), || {
         let code = "throw (1 + 2)";
         let res = NyashParser::parse_from_string(code);
-        assert!(res.is_ok(), "throw should parse when gate is on: {:?}", res.err());
+        assert!(
+            res.is_ok(),
+            "throw should parse when gate is on: {:?}",
+            res.err()
+        );
     });
 }
 
@@ -62,4 +69,3 @@ fn stage3_enabled_accepts_try_catch_variants() {
         assert!(NyashParser::parse_from_string(code3).is_ok());
     });
 }
-

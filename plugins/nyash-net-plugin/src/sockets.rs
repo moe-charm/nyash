@@ -1,14 +1,19 @@
 use std::collections::VecDeque;
 use std::io::{Read, Write as IoWrite};
 use std::net::{TcpListener, TcpStream};
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use std::time::Duration;
 
 use crate::consts::*;
 use crate::state::{self, SockConnState, SockServerState};
 
 // Utilities provided by parent module
-fn logf(s: String) { super::net_log(&s); }
+fn logf(s: String) {
+    super::net_log(&s);
+}
 
 pub(crate) unsafe fn sock_server_invoke(
     m: u32,
@@ -51,7 +56,9 @@ pub(crate) unsafe fn sock_server_invoke(
                                     let conn_id = state::next_sock_conn_id();
                                     state::SOCK_CONNS.lock().unwrap().insert(
                                         conn_id,
-                                        SockConnState { stream: Mutex::new(stream) },
+                                        SockConnState {
+                                            stream: Mutex::new(stream),
+                                        },
                                     );
                                     logf(format!("sock:accept conn_id={}", conn_id));
                                     pending.lock().unwrap().push_back(conn_id);
@@ -161,7 +168,9 @@ pub(crate) unsafe fn sock_client_invoke(
                     let conn_id = state::next_sock_conn_id();
                     state::SOCK_CONNS.lock().unwrap().insert(
                         conn_id,
-                        SockConnState { stream: Mutex::new(stream) },
+                        SockConnState {
+                            stream: Mutex::new(stream),
+                        },
                     );
                     logf(format!("sock:connect ok conn_id={}", conn_id));
                     crate::tlv::write_tlv_handle(T_SOCK_CONN, conn_id, res, res_len)
@@ -190,7 +199,8 @@ pub(crate) unsafe fn sock_conn_invoke(
             crate::tlv::write_u32(0, res, res_len)
         }
         M_CONN_SEND => {
-            let bytes = crate::tlv::tlv_parse_bytes(super::ffi::slice(args, args_len)).unwrap_or_default();
+            let bytes =
+                crate::tlv::tlv_parse_bytes(super::ffi::slice(args, args_len)).unwrap_or_default();
             if let Some(conn) = state::SOCK_CONNS.lock().unwrap().get(&id) {
                 if let Ok(mut s) = conn.stream.lock() {
                     let _ = s.write_all(&bytes);
@@ -229,11 +239,17 @@ pub(crate) unsafe fn sock_conn_invoke(
                     match resv {
                         Ok(n) => {
                             buf.truncate(n);
-                            logf(format!("sock:recvTimeout id={} n={} ms={}", id, n, timeout_ms));
+                            logf(format!(
+                                "sock:recvTimeout id={} n={} ms={}",
+                                id, n, timeout_ms
+                            ));
                             return crate::tlv::write_tlv_bytes(&buf, res, res_len);
                         }
                         Err(e) => {
-                            logf(format!("sock:recvTimeout error id={} ms={} err={:?}", id, timeout_ms, e));
+                            logf(format!(
+                                "sock:recvTimeout error id={} ms={} err={:?}",
+                                id, timeout_ms, e
+                            ));
                             return E_ERR;
                         }
                     }
@@ -249,4 +265,3 @@ pub(crate) unsafe fn sock_conn_invoke(
         _ => E_INV_METHOD,
     }
 }
-

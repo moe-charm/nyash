@@ -42,7 +42,9 @@ fn golden_transforms() {
     assert!(root.exists(), "missing tests/golden/transforms directory");
     for entry in fs::read_dir(root).expect("scan golden dirs") {
         let entry = entry.expect("dir entry");
-        if !entry.file_type().expect("ft").is_dir() { continue; }
+        if !entry.file_type().expect("ft").is_dir() {
+            continue;
+        }
         let case_dir = entry.path();
         let in_path = case_dir.join("in.json");
         let out_path = case_dir.join("out.golden.json");
@@ -68,9 +70,10 @@ fn golden_transforms() {
             let exp_s = serde_json::to_string_pretty(&expected).unwrap();
             panic!(
                 "Golden mismatch in {}\n--- expected\n{}\n--- got\n{}\n",
-                case_dir.display(), exp_s, got_s
+                case_dir.display(),
+                exp_s,
+                got_s
             );
         }
     }
 }
-

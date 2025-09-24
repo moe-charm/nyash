@@ -257,7 +257,11 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
             .args([obj_path])
             .args(["-L", "target/release"])
             .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args(["-Wl,--whole-archive", "-lnyash_kernel", "-Wl,--no-whole-archive"])
+            .args([
+                "-Wl,--whole-archive",
+                "-lnyash_kernel",
+                "-Wl,--no-whole-archive",
+            ])
             .args(["-lpthread", "-ldl", "-lm", "-o", out_path])
             .status()
             .map_err(|e| e.to_string())?;

@@ -72,7 +72,12 @@ fn main() -> Result<()> {
         run_harness_dummy(&harness_path, &obj_path)
             .with_context(|| "failed to run harness in dummy mode")?;
         if emit_exe {
-            link_executable(&obj_path, &args.out, args.nyrt.as_ref(), args.libs.as_deref())?;
+            link_executable(
+                &obj_path,
+                &args.out,
+                args.nyrt.as_ref(),
+                args.libs.as_deref(),
+            )?;
             println!("[ny-llvmc] executable written: {}", args.out.display());
         } else {
             println!("[ny-llvmc] dummy object written: {}", obj_path.display());
@@ -119,7 +124,12 @@ fn main() -> Result<()> {
         )
     })?;
     if emit_exe {
-        link_executable(&obj_path, &args.out, args.nyrt.as_ref(), args.libs.as_deref())?;
+        link_executable(
+            &obj_path,
+            &args.out,
+            args.nyrt.as_ref(),
+            args.libs.as_deref(),
+        )?;
         println!("[ny-llvmc] executable written: {}", args.out.display());
     } else {
         println!("[ny-llvmc] object written: {}", obj_path.display());
@@ -170,7 +180,12 @@ fn ensure_python() -> Result<()> {
     }
 }
 
-fn link_executable(obj: &Path, out_exe: &Path, nyrt_dir_opt: Option<&PathBuf>, extra_libs: Option<&str>) -> Result<()> {
+fn link_executable(
+    obj: &Path,
+    out_exe: &Path,
+    nyrt_dir_opt: Option<&PathBuf>,
+    extra_libs: Option<&str>,
+) -> Result<()> {
     // Resolve nyRT static lib
     let nyrt_dir = if let Some(dir) = nyrt_dir_opt {
         dir.clone()
@@ -178,21 +193,39 @@ fn link_executable(obj: &Path, out_exe: &Path, nyrt_dir_opt: Option<&PathBuf>, e
         // try target/release then crates/nyash_kernel/target/release
         let a = PathBuf::from("target/release");
         let b = PathBuf::from("crates/nyash_kernel/target/release");
-        if a.join("libnyash_kernel.a").exists() { a } else { b }
+        if a.join("libnyash_kernel.a").exists() {
+            a
+        } else {
+            b
+        }
     };
     let libnyrt = nyrt_dir.join("libnyash_kernel.a");
     if !libnyrt.exists() {
-        bail!("libnyash_kernel.a not found in {} (use --nyrt to specify)", nyrt_dir.display());
+        bail!(
+            "libnyash_kernel.a not found in {} (use --nyrt to specify)",
+            nyrt_dir.display()
+        );
     }
 
     // Choose a C linker
-    let linker = ["cc", "clang", "gcc"].into_iter().find(|c| Command::new(c).arg("--version").output().map(|o| o.status.success()).unwrap_or(false)).unwrap_or("cc");
+    let linker = ["cc", "clang", "gcc"]
+        .into_iter()
+        .find(|c| {
+            Command::new(c)
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        })
+        .unwrap_or("cc");
 
     let mut cmd = Command::new(linker);
     cmd.arg("-o").arg(out_exe);
     cmd.arg(obj);
     // Whole-archive libnyash_kernel to ensure all objects are linked
-    cmd.arg("-Wl,--whole-archive").arg(&libnyrt).arg("-Wl,--no-whole-archive");
+    cmd.arg("-Wl,--whole-archive")
+        .arg(&libnyrt)
+        .arg("-Wl,--no-whole-archive");
     // Common libs on Linux
     cmd.arg("-ldl").arg("-lpthread").arg("-lm");
     if let Some(extras) = extra_libs {

@@ -149,11 +149,17 @@ pub fn parse_client_response_into(resp_id: u32, conn_id: u32) {
                 let mut tmp = [0u8; 2048];
                 loop {
                     match s.read(&mut tmp) {
-                        Ok(0) => { return; }
+                        Ok(0) => {
+                            return;
+                        }
                         Ok(n) => {
                             buf.extend_from_slice(&tmp[..n]);
-                            if find_header_end(&buf).is_some() { break; }
-                            if buf.len() > 256 * 1024 { break; }
+                            if find_header_end(&buf).is_some() {
+                                break;
+                            }
+                            if buf.len() > 256 * 1024 {
+                                break;
+                            }
                         }
                         Err(_) => return,
                     }
@@ -191,7 +197,9 @@ pub fn parse_client_response_into(resp_id: u32, conn_id: u32) {
                 }
             }
         }
-        if should_remove { map.remove(&conn_id); }
+        if should_remove {
+            map.remove(&conn_id);
+        }
     }
     if let Some(rp) = state::RESPONSES.lock().unwrap().get_mut(&resp_id) {
         rp.status = status;
@@ -201,4 +209,3 @@ pub fn parse_client_response_into(resp_id: u32, conn_id: u32) {
         rp.client_conn_id = None;
     }
 }
-

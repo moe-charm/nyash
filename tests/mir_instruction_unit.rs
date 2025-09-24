@@ -1,6 +1,4 @@
-use nyash_rust::mir::{
-    BinaryOp, ConstValue, Effect, EffectMask, MirInstruction, ValueId,
-};
+use nyash_rust::mir::{BinaryOp, ConstValue, Effect, EffectMask, MirInstruction, ValueId};
 
 #[test]
 fn test_const_instruction() {
@@ -152,4 +150,3 @@ fn test_extern_call_instruction() {
     assert_eq!(void_inst.dst_value(), None);
     assert_eq!(void_inst.used_values(), vec![arg1]);
 }
-
