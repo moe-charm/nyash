@@ -96,7 +96,10 @@ pub trait ParserUtils {
         false
     }
 
-    /// 内部用改行スキップ（再帰防止）
+/// 内部用改行スキップ（再帰防止）
+///
+/// LEGACY NOTE (Phase 15.5): 改行処理は TokenCursor での一元管理へ移行中。
+/// 既存パスの互換維持のため残置。参照ゼロ後に撤去予定。
     fn skip_newlines_internal(&mut self) {
         let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
             let lv = v.to_ascii_lowercase();
@@ -115,6 +118,8 @@ pub trait ParserUtils {
     }
 
     /// NEWLINEトークンをスキップ
+    ///
+    /// LEGACY NOTE: 直接の呼び出しは推奨しない。TokenCursor への移行を優先。
     fn skip_newlines(&mut self) {
         let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
             let lv = v.to_ascii_lowercase();

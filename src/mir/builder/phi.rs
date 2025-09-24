@@ -109,7 +109,7 @@ impl MirBuilder {
     /// `skip_var` allows skipping a variable already merged elsewhere (e.g., bound to an expression result).
     pub(super) fn merge_modified_vars(
         &mut self,
-        then_block: super::BasicBlockId,
+        _then_block: super::BasicBlockId,
         else_block: super::BasicBlockId,
         then_exit_block: super::BasicBlockId,
         else_exit_block_opt: Option<super::BasicBlockId>,

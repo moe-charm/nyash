@@ -58,9 +58,10 @@ Addendum (2025‑09‑26 2nd half)
 - [x] テストランナー: 出力ノイズの共通フィルタ化（filter_noise）
 
 次アクション
-- [ ] Step‑2: primary.rs を TokenCursor 経路へ寄せる（ラッパ＋内部実装の段階移行）
-- [ ] Step‑2: compare/logic/term までを一括寄せ → quick/core 再実行
-- [ ] Step‑3: 旧来 skip 系の参照数ゼロを確認 → 段階撤去 PR を用意
+- [x] Step‑2: primary/postfix/new/unary(−/not/await) を TokenCursor 経路へ寄せる（env トグル配下）
+- [x] Step‑2: parity 代表（優先順位/単項）を追加し VM↔LLVM 整合を確認
+- [ ] Step‑3: statements 側の薄いラッパ導入（env トグル時のみ Cursor を用いた if/loop/print/local/return の最小経路）
+- [ ] Step‑3: 旧来 skip 系（common.rs/depth_tracking.rs/parser_enhanced.rs）参照ゼロ確認→段階撤去
 
 ---
 

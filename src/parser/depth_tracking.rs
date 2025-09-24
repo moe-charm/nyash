@@ -1,7 +1,12 @@
+#![allow(dead_code)]
 /*!
  * 深度追跡機能 - Smart advance用
  *
  * 括弧の深度を追跡し、改行の自動スキップを判定
+ *
+ * LEGACY (Phase 15.5):
+ * - 改行/深度の判定は TokenCursor に一元化していく方針。
+ * - 互換維持のため当面残置（参照ゼロ後に撤去予定）。
  */
 
 use super::{NyashParser, ParserUtils};

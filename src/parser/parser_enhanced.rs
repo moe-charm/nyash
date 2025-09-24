@@ -1,8 +1,13 @@
+#![allow(dead_code)]
 /*!
  * Parser Enhanced - 既存パーサーの改行処理自動化
  *
  * 既存のNyashParserを拡張し、advance()で自動的に改行をスキップ
  * skip_newlines()の明示的呼び出しを不要にする
+ *
+ * LEGACY (Phase 15.5):
+ * - TokenCursor による改行/深度の一元管理へ移行中。
+ * - 本モジュールは互換維持のため一時残置（参照ゼロ後に撤去予定）。
  */
 
 use crate::tokenizer::{Token, TokenType};
