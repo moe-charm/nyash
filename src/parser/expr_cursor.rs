@@ -116,12 +116,12 @@ impl ExprParserWithCursor {
 
     /// 乗算式をパース
     fn parse_multiplicative_expr(cursor: &mut TokenCursor) -> Result<ASTNode, ParseError> {
-        let mut left = Self::parse_primary_expr(cursor)?;
+        let mut left = Self::parse_postfix_expr(cursor)?;
 
         while let Some(op) = Self::match_multiplicative_op(cursor) {
             let op_line = cursor.current().line;
             cursor.advance();
-            let right = Self::parse_primary_expr(cursor)?;
+            let right = Self::parse_postfix_expr(cursor)?;
             left = ASTNode::BinaryOp {
                 operator: op,
                 left: Box::new(left),
@@ -131,6 +131,78 @@ impl ExprParserWithCursor {
         }
 
         Ok(left)
+    }
+
+    /// 後置（フィールドアクセス・関数/メソッド呼び出し）をパース
+    fn parse_postfix_expr(cursor: &mut TokenCursor) -> Result<ASTNode, ParseError> {
+        let mut expr = Self::parse_primary_expr(cursor)?;
+
+        loop {
+            // フィールドアクセス obj.field
+            if cursor.match_token(&TokenType::DOT) {
+                cursor.advance();
+                let field = match &cursor.current().token_type {
+                    TokenType::IDENTIFIER(s) => {
+                        let v = s.clone();
+                        cursor.advance();
+                        v
+                    }
+                    other => {
+                        let line = cursor.current().line;
+                        return Err(ParseError::UnexpectedToken {
+                            found: other.clone(),
+                            expected: "identifier after '.'".to_string(),
+                            line,
+                        });
+                    }
+                };
+                expr = ASTNode::FieldAccess {
+                    object: Box::new(expr),
+                    field,
+                    span: Span::unknown(),
+                };
+                continue;
+            }
+
+            // 呼び出し (…) — 直前のノードの形に応じて Call/FunctionCall/MethodCall を作る
+            if cursor.match_token(&TokenType::LPAREN) {
+                // 引数リスト
+                cursor.advance(); // consume '('
+                let mut args: Vec<ASTNode> = Vec::new();
+                while !cursor.match_token(&TokenType::RPAREN) && !cursor.is_at_end() {
+                    let a = Self::parse_expression(cursor)?;
+                    args.push(a);
+                    if cursor.match_token(&TokenType::COMMA) {
+                        cursor.advance();
+                    }
+                }
+                cursor.consume(TokenType::RPAREN)?;
+
+                expr = match expr {
+                    ASTNode::Variable { name, .. } => ASTNode::FunctionCall {
+                        name,
+                        arguments: args,
+                        span: Span::unknown(),
+                    },
+                    ASTNode::FieldAccess { object, field, .. } => ASTNode::MethodCall {
+                        object,
+                        method: field,
+                        arguments: args,
+                        span: Span::unknown(),
+                    },
+                    callee => ASTNode::Call {
+                        callee: Box::new(callee),
+                        arguments: args,
+                        span: Span::unknown(),
+                    },
+                };
+                continue;
+            }
+
+            break;
+        }
+
+        Ok(expr)
     }
 
     /// 乗算演算子をチェック
@@ -224,6 +296,63 @@ impl ExprParserWithCursor {
             TokenType::LBRACE => {
                 // オブジェクトリテラル（改行対応済み）
                 Self::parse_object_literal(cursor)
+            }
+            TokenType::NEW => {
+                // new ClassName(<args>) with optional type args: <T,U>
+                cursor.advance();
+                let class = match &cursor.current().token_type {
+                    TokenType::IDENTIFIER(s) => {
+                        let v = s.clone();
+                        cursor.advance();
+                        v
+                    }
+                    other => {
+                        let line = cursor.current().line;
+                        return Err(ParseError::UnexpectedToken {
+                            found: other.clone(),
+                            expected: "class identifier after 'new'".to_string(),
+                            line,
+                        });
+                    }
+                };
+
+                // Optional type arguments <T, U>
+                let mut type_arguments: Vec<String> = Vec::new();
+                if cursor.match_token(&TokenType::LESS) {
+                    cursor.advance();
+                    loop {
+                        match &cursor.current().token_type {
+                            TokenType::IDENTIFIER(tn) => {
+                                type_arguments.push(tn.clone());
+                                cursor.advance();
+                            }
+                            other => {
+                                let line = cursor.current().line;
+                                return Err(ParseError::UnexpectedToken {
+                                    found: other.clone(),
+                                    expected: "type identifier".to_string(),
+                                    line,
+                                });
+                            }
+                        }
+                        if cursor.match_token(&TokenType::COMMA) {
+                            cursor.advance();
+                            continue;
+                        }
+                        cursor.consume(TokenType::GREATER)?;
+                        break;
+                    }
+                }
+
+                cursor.consume(TokenType::LPAREN)?;
+                let mut arguments = Vec::new();
+                while !cursor.match_token(&TokenType::RPAREN) && !cursor.is_at_end() {
+                    let arg = Self::parse_expression(cursor)?;
+                    arguments.push(arg);
+                    if cursor.match_token(&TokenType::COMMA) { cursor.advance(); }
+                }
+                cursor.consume(TokenType::RPAREN)?;
+                Ok(ASTNode::New { class, arguments, type_arguments, span: Span::unknown() })
             }
             _ => {
                 let line = cursor.current().line;
