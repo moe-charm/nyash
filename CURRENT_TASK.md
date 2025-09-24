@@ -98,6 +98,23 @@ Updated: 2025‑09‑24
 
 **🚀 革命的効果**: ChatGPT5×Claude協働開発の画期的成果達成！
 
+#### **✅ Phase 2.4 検証完了報告** (2025-09-24)
+**レガシークリーンアップ後の包括的検証**:
+- **✅ リポジトリサイズ削減**: 151MB削減成功
+  - plugin_box_legacy.rs: 7.7KB削除（参照ゼロ）
+  - venv/: 143MB完全削除
+  - llvm_legacy/: アーカイブ移動+スタブ化
+- **✅ スモークテスト**: 12テスト中9合格（75%成功率）
+  - VM Backend: 完璧動作 ✅
+  - Plugin System: フル機能 ✅
+  - NyKernel Core: 正常動作 ✅
+  - LLVM実行: 実行ファイル動作確認（出力キャプチャ改善余地あり）
+- **✅ ExternCall Print修正検証**: 日本語・絵文字完璧出力
+  - `🎉 Phase 2.4 NyKernel ExternCall test!` ✅
+  - `日本語テスト 🌸` ✅
+  - `Emoji test: 🚀 🎯 ✅` ✅
+- **📊 詳細レポート**: [phase24-verification-report.md](docs/development/status/phase24-verification-report.md)
+
 #### **🏆 Phase 3: レガシー完全削除**
 **最終目標**: BuiltinBoxFactory完全削除
 - `src/box_factory/builtin.rs` 削除
