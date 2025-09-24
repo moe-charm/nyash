@@ -119,8 +119,35 @@ impl super::MirBuilder {
                 ..
             } => {
                 if is_static && name == "Main" {
+                    // Special entry box: materialize main() as Program and lower others as static functions
                     self.build_static_main_box(name.clone(), methods.clone())
+                } else if is_static {
+                    // Generic static box: lower all static methods into standalone MIR functions (BoxName.method/N)
+                    self.user_defined_boxes.insert(name.clone());
+                    for (method_name, method_ast) in methods.clone() {
+                        if let ASTNode::FunctionDeclaration { params, body, .. } = method_ast {
+                            let func_name = format!(
+                                "{}.{}{}",
+                                name,
+                                method_name,
+                                format!("/{}", params.len())
+                            );
+                            self.lower_static_method_as_function(
+                                func_name,
+                                params.clone(),
+                                body.clone(),
+                            )?;
+                        }
+                    }
+                    // Return void for declaration context
+                    let void_val = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: void_val,
+                        value: ConstValue::Void,
+                    })?;
+                    Ok(void_val)
                 } else {
+                    // Instance box: register type and lower instance methods/ctors as functions
                     self.user_defined_boxes.insert(name.clone());
                     self.build_box_declaration(
                         name.clone(),

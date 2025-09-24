@@ -140,11 +140,11 @@ parse_arguments() {
 
     # プロファイル検証
     case "$PROFILE" in
-        quick|integration|full)
+        quick|integration|full|plugins)
             ;;
         *)
             log_error "Invalid profile: $PROFILE"
-            log_error "Valid profiles: quick, integration, full"
+            log_error "Valid profiles: quick, integration, full, plugins"
             exit 1
             ;;
     esac

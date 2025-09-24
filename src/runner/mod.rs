@@ -193,7 +193,7 @@ impl NyashRunner {
                 let verbose = crate::config::env::cli_verbose();
                 let ctx = std::path::Path::new(filename).parent();
                 for (ns, alias) in pending_using.iter() {
-                    let value = match resolve_using_target(ns, false, &using_ctx.pending_modules, &using_ctx.using_paths, &using_ctx.aliases, ctx, strict, verbose) {
+                    let value = match resolve_using_target(ns, false, &using_ctx.pending_modules, &using_ctx.using_paths, &using_ctx.aliases, &using_ctx.packages, ctx, strict, verbose) {
                         Ok(v) => v,
                         Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
                     };

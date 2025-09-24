@@ -306,7 +306,7 @@ impl UnifiedBoxRegistry {
         drop(cache);
 
         // Linear search through all factories
-        for factory in &self.factories {
+        for (fi, factory) in self.factories.iter().enumerate() {
             if !factory.is_available() {
                 continue;
             }
@@ -318,6 +318,14 @@ impl UnifiedBoxRegistry {
             }
 
             // Try to create the box (factories with empty box_types() will always be tried)
+            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[UnifiedBoxRegistry] try factory#{} {:?} for {}",
+                    fi,
+                    factory.factory_type(),
+                    name
+                );
+            }
             match factory.create_box(name, args) {
                 Ok(boxed) => return Ok(boxed),
                 Err(_) => continue, // Try next factory

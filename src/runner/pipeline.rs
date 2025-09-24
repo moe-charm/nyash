@@ -9,12 +9,14 @@
 
 use super::*;
 use std::collections::HashMap;
+use crate::using::spec::{UsingPackage, PackageKind};
 
 /// Using/module resolution context accumulated from config/env/nyash.toml
 pub(super) struct UsingContext {
     pub using_paths: Vec<String>,
     pub pending_modules: Vec<(String, String)>,
     pub aliases: std::collections::HashMap<String, String>,
+    pub packages: std::collections::HashMap<String, UsingPackage>,
 }
 
 impl NyashRunner {
@@ -24,50 +26,19 @@ impl NyashRunner {
         let mut pending_modules: Vec<(String, String)> = Vec::new();
         let mut aliases: std::collections::HashMap<String, String> =
             std::collections::HashMap::new();
+        let mut packages: std::collections::HashMap<String, UsingPackage> =
+            std::collections::HashMap::new();
 
         // Defaults
         using_paths.extend(["apps", "lib", "."].into_iter().map(|s| s.to_string()));
 
-        // nyash.toml: [modules] and [using.paths]
-        if std::path::Path::new("nyash.toml").exists() {
-            if let Ok(text) = std::fs::read_to_string("nyash.toml") {
-                if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
-                    if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
-                        fn visit(prefix: &str, tbl: &toml::value::Table, out: &mut Vec<(String, String)>) {
-                            for (k, v) in tbl.iter() {
-                                let name = if prefix.is_empty() { k.to_string() } else { format!("{}.{}", prefix, k) };
-                                if let Some(s) = v.as_str() {
-                                    out.push((name, s.to_string()));
-                                } else if let Some(t) = v.as_table() {
-                                    visit(&name, t, out);
-                                }
-                            }
-                        }
-                        visit("", mods, &mut pending_modules);
-                    }
-                    if let Some(using_tbl) = doc.get("using").and_then(|v| v.as_table()) {
-                        if let Some(paths_arr) = using_tbl.get("paths").and_then(|v| v.as_array()) {
-                            for p in paths_arr {
-                                if let Some(s) = p.as_str() {
-                                    let s = s.trim();
-                                    if !s.is_empty() {
-                                        using_paths.push(s.to_string());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // Optional: [aliases] table maps short name -> path or namespace token
-                    if let Some(alias_tbl) = doc.get("aliases").and_then(|v| v.as_table()) {
-                        for (k, v) in alias_tbl.iter() {
-                            if let Some(target) = v.as_str() {
-                                aliases.insert(k.to_string(), target.to_string());
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // nyash.toml: delegate to using resolver (keeps existing behavior)
+        let _ = crate::using::resolver::populate_from_toml(
+            &mut using_paths,
+            &mut pending_modules,
+            &mut aliases,
+            &mut packages,
+        );
 
         // Env overrides: modules and using paths
         if let Ok(ms) = std::env::var("NYASH_MODULES") {
@@ -106,6 +77,7 @@ impl NyashRunner {
             using_paths,
             pending_modules,
             aliases,
+            packages,
         }
     }
 }
@@ -152,6 +124,7 @@ pub(super) fn resolve_using_target(
     modules: &[(String, String)],
     using_paths: &[String],
     aliases: &HashMap<String, String>,
+    packages: &HashMap<String, UsingPackage>,
     context_dir: Option<&std::path::Path>,
     strict: bool,
     verbose: bool,
@@ -207,13 +180,53 @@ pub(super) fn resolve_using_target(
         }
         return Ok(hit);
     }
-    // Resolve aliases early (provided map)
+    // Resolve aliases early (provided map) — and then recursively resolve the target
     if let Some(v) = aliases.get(tgt) {
         if trace {
             crate::runner::trace::log(format!("[using/resolve] alias '{}' -> '{}'", tgt, v));
         }
-        crate::runner::box_index::cache_put(&key, v.clone());
-        return Ok(v.clone());
+        // Recurse to resolve the alias target into a concrete path/token
+        let rec = resolve_using_target(v, false, modules, using_paths, aliases, packages, context_dir, strict, verbose)?;
+        crate::runner::box_index::cache_put(&key, rec.clone());
+        return Ok(rec);
+    }
+    // Named packages (nyash.toml [using.<name>])
+    if let Some(pkg) = packages.get(tgt) {
+        match pkg.kind {
+            PackageKind::Dylib => {
+                // Return a marker token to avoid inlining attempts; loader will consume later stages
+                let out = format!("dylib:{}", pkg.path);
+                if trace {
+                    crate::runner::trace::log(format!("[using/resolve] dylib '{}' -> '{}'", tgt, out));
+                }
+                crate::runner::box_index::cache_put(&key, out.clone());
+                return Ok(out);
+            }
+            PackageKind::Package => {
+                // Compute entry: main or <dir_last>.nyash
+                let base = std::path::Path::new(&pkg.path);
+                let out = if let Some(m) = &pkg.main {
+                    if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                        // path is a file; ignore main and use as-is
+                        pkg.path.clone()
+                    } else {
+                        base.join(m).to_string_lossy().to_string()
+                    }
+                } else {
+                    if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                        pkg.path.clone()
+                    } else {
+                        let leaf = base.file_name().and_then(|s| s.to_str()).unwrap_or(tgt);
+                        base.join(format!("{}.nyash", leaf)).to_string_lossy().to_string()
+                    }
+                };
+                if trace {
+                    crate::runner::trace::log(format!("[using/resolve] package '{}' -> '{}'", tgt, out));
+                }
+                crate::runner::box_index::cache_put(&key, out.clone());
+                return Ok(out);
+            }
+        }
     }
     // Also consult env aliases
     if let Ok(raw) = std::env::var("NYASH_ALIASES") {
@@ -267,29 +280,20 @@ pub(super) fn resolve_using_target(
         }
     }
     if cand.is_empty() {
+        // Always emit a concise unresolved note to aid diagnostics in smokes
+        let leaf = tgt.split('.').last().unwrap_or(tgt);
+        let mut cands: Vec<String> = Vec::new();
+        suggest_in_base("apps", leaf, &mut cands);
+        if cands.len() < 5 { suggest_in_base("lib", leaf, &mut cands); }
+        if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
         if trace {
-            // Try suggest candidates by leaf across bases (apps/lib/.)
-            let leaf = tgt.split('.').last().unwrap_or(tgt);
-            let mut cands: Vec<String> = Vec::new();
-            suggest_in_base("apps", leaf, &mut cands);
-            if cands.len() < 5 {
-                suggest_in_base("lib", leaf, &mut cands);
-            }
-            if cands.len() < 5 {
-                suggest_in_base(".", leaf, &mut cands);
-            }
             if cands.is_empty() {
-                crate::runner::trace::log(format!(
-                    "[using] unresolved '{}' (searched: rel+paths)",
-                    tgt
-                ));
+                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths)", tgt));
             } else {
-                crate::runner::trace::log(format!(
-                    "[using] unresolved '{}' (searched: rel+paths) candidates: {}",
-                    tgt,
-                    cands.join(", ")
-                ));
+                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", ")));
             }
+        } else {
+            eprintln!("[using] not found: '{}'", tgt);
         }
         return Ok(tgt.to_string());
     }
@@ -485,6 +489,7 @@ boxes = ["ArrayBox"]
             &[],
             &[],
             &HashMap::new(),
+            &std::collections::HashMap::<String, crate::using::spec::UsingPackage>::new(),
             None,
             false,
             false,

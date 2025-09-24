@@ -131,15 +131,8 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         }
         "vm" => {
             crate::cli_v!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
-            #[cfg(feature = "vm-legacy")]
-            {
-                runner.execute_vm_mode(filename);
-            }
-            #[cfg(not(feature = "vm-legacy"))]
-            {
-                // Legacy VM is disabled; use PyVM harness instead.
-                super::modes::pyvm::execute_pyvm_only(runner, filename);
-            }
+            // Prefer lightweight in-crate MIR interpreter as VM fallback
+            runner.execute_vm_fallback_interpreter(filename);
         }
         #[cfg(feature = "cranelift-jit")]
         "jit-direct" => {

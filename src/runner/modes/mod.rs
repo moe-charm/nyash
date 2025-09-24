@@ -2,6 +2,7 @@
 pub mod bench;
 pub mod llvm;
 pub mod mir;
+pub mod vm_fallback;
 #[cfg(feature = "vm-legacy")]
 pub mod vm;
 pub mod pyvm;

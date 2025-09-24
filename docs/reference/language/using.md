@@ -84,9 +84,27 @@ Policy
 - Treated as a synonym to `using` on the Runner side; registers aliases only.
 - Examples: `needs utils.StringHelper`, `needs plugin.network.HttpClient as HttpClient`, `needs plugin.network.*`
 
-## nyash.toml keys (MVP)
-- `[imports]`/`[aliases]`: short name → fully qualified
-- `[plugins.<name>]`: `path`, `prefix`, `require_prefix`, `expose_short_names`
+## nyash.toml — Unified Using (Phase 15)
+
+Using resolution is centralized under the `[using]` table. Three forms are supported:
+
+- `[using.paths]` — additional search roots for path lookups
+  - Example: `paths = ["apps", "lib", "."]`
+- `[using.<name>]` — named packages (file or directory)
+  - Keys: `path = "lib/math_utils/"`, optional `main = "math_utils.nyash"`
+  - Optional `kind = "dylib"` with `bid = "MathBox"` for plug‑ins (dev only)
+- `[using.aliases]` — alias mapping from short name to a package name
+  - Example: `aliases.json = "json_native"`
+
+Notes
+- Aliases are fully resolved: `using json` first rewrites to `json_native`, then resolves to a concrete path via `[using.json_native]`.
+- `include` is deprecated. Use `using "./path/to/file.nyash" as Name` instead.
+
+### Dylib autoload (dev guard)
+- Enable autoload during using resolution: set env `NYASH_USING_DYLIB_AUTOLOAD=1`.
+- Resolution returns a token `dylib:<path>`; when autoload is on, Runner calls the plugin host to `load_library_direct(lib_name, path, boxes)`.
+- `boxes` is taken from `[using.<name>].bid` if present; otherwise the loader falls back to plugin‑embedded TypeBox metadata.
+- Safety: keep OFF by default. Prefer configuring libraries under `nyash.toml` for production.
 
 ## Index and Cache (Runner)
 - BoxIndex（グローバル）：プラグインBox一覧とaliasesを集約し、Runner起動時（plugins init後）に構築・更新。
@@ -118,6 +136,25 @@ static box Main {
     return 0
   }
 }
+```
+
+nyash.toml examples
+```toml
+[using]
+paths = ["apps", "lib", "."]
+
+[using.json_native]
+path = "apps/lib/json_native/"
+main = "parser.nyash"
+
+[using.aliases]
+json = "json_native"
+
+# Dylib (dev)
+[using.math_plugin]
+kind = "dylib"
+path = "plugins/math/libmath.so"
+bid = "MathBox"
 ```
 
 Qualified/Plugins/Aliases examples

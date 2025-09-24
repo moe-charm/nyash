@@ -2,6 +2,9 @@
 
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
+## 🚨 重要：スモークテストはv2構造を使う！
+詳細 → [tools/smokes/v2/README.md](tools/smokes/v2/README.md)
+
 ## Start Here (必ずここから)
 - 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
   - 📁 **Main**: [docs/development/current/main/](docs/development/current/main/)
@@ -207,23 +210,26 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 
 **⚠️ PyVM使用制限**: [PyVM使用ガイドライン](docs/reference/pyvm-usage-guidelines.md)で適切な用途を確認
 
-### ✅ **using system完全実装完了！**
+### ✅ **using system完全実装完了！** (2025-09-24 ChatGPT実装完了確認済み)
 
-**🎉 歴史的快挙**: `using nyashstd`が完璧動作！環境変数を**8個→6個**に削減（25%改善）
+**🎉 歴史的快挙**: `using nyashstd`が完璧動作！環境変数なしでデフォルト有効！
 
 **✅ 実装完了内容**：
 - **ビルトイン名前空間解決**: `nyashstd` → `builtin:nyashstd`の自動解決
 - **自動コード生成**: nyashstdのstatic box群（string, integer, bool, array, console）を動的生成
-- **環境変数デフォルト化**: NYASH_ENABLE_USING, NYASH_RESOLVE_FIX_BRACES, NYASH_LLVM_USE_HARNESS
+- **環境変数不要**: デフォルトで有効（--enable-using不要）
 
 **✅ 動作確認済み**：
 ```bash
-# 基本using動作（パース→解決→読み込み→コード生成すべて成功）
-./target/release/nyash program_with_using.nyash
+# 基本using動作（環境変数・フラグ不要！）
+echo 'using nyashstd' > test.nyash
+echo 'console.log("Hello!")' >> test.nyash
+./target/release/nyash test.nyash
+# 出力: Hello!
 
-# ログ確認済み
-[using/resolve] builtin 'nyashstd' -> 'builtin:nyashstd'  ✅ 解決成功
-[using] loaded builtin namespace: builtin:nyashstd        ✅ 読み込み成功
+# 実装箇所
+src/runner/pipeline.rs       # builtin:nyashstd解決
+src/runner/modes/common_util/resolve/strip.rs  # コード生成
 ```
 
 **📦 含まれるnyashstd機能**：
@@ -231,11 +237,7 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 - `integer.create(value)`, `bool.create(value)`, `array.create()`
 - `console.log(message)`
 
-**🎯 次のステップ**: Mini-VM開発で`using nyashstd`を活用可能！
-
-**将来の簡略化案**:
-- `NYASH_USING_PROFILE=dev|smoke|debug` でプロファイル化
-- または `--using-mode=dev` CLIフラグで統合
+**🎯 完成状態**: ChatGPT実装で`using nyashstd`完全動作中！
 
 ## 📝 Update (2025-09-24) 🎉 Phase 15実行器統一化戦略確定！
 - ✅ **Phase 15.5-B-2 MIRビルダー統一化完了**（約40行特別処理削除）

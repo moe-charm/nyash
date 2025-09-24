@@ -4,9 +4,16 @@
 #[allow(dead_code)]
 pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str) -> Result<i32, String> {
     let py3 = which::which("python3").map_err(|e| format!("python3 not found: {}", e))?;
-    let runner = std::path::Path::new("tools/pyvm_runner.py");
-    if !runner.exists() {
-        return Err(format!("PyVM runner not found: {}", runner.display()));
+    // Resolve runner path relative to CWD or NYASH_ROOT fallback
+    let mut runner_buf = std::path::PathBuf::from("tools/pyvm_runner.py");
+    if !runner_buf.exists() {
+        if let Ok(root) = std::env::var("NYASH_ROOT") {
+            let alt = std::path::Path::new(&root).join("tools/pyvm_runner.py");
+            if alt.exists() { runner_buf = alt; }
+        }
+    }
+    if !runner_buf.exists() {
+        return Err(format!("PyVM runner not found: tools/pyvm_runner.py (cwd) or $NYASH_ROOT/tools/pyvm_runner.py"));
     }
     let tmp_dir = std::path::Path::new("tmp");
     let _ = std::fs::create_dir_all(tmp_dir);
@@ -38,7 +45,7 @@ pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str) -> Result<i32
     }
     let status = cmd
         .args([
-            runner.to_string_lossy().as_ref(),
+            runner_buf.to_string_lossy().as_ref(),
             "--in",
             &mir_json_path.display().to_string(),
             "--entry",
@@ -59,9 +66,15 @@ pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str) -> Result<i32
 #[allow(dead_code)]
 pub fn run_pyvm_harness_lib(module: &nyash_rust::mir::MirModule, tag: &str) -> Result<i32, String> {
     let py3 = which::which("python3").map_err(|e| format!("python3 not found: {}", e))?;
-    let runner = std::path::Path::new("tools/pyvm_runner.py");
-    if !runner.exists() {
-        return Err(format!("PyVM runner not found: {}", runner.display()));
+    let mut runner_buf = std::path::PathBuf::from("tools/pyvm_runner.py");
+    if !runner_buf.exists() {
+        if let Ok(root) = std::env::var("NYASH_ROOT") {
+            let alt = std::path::Path::new(&root).join("tools/pyvm_runner.py");
+            if alt.exists() { runner_buf = alt; }
+        }
+    }
+    if !runner_buf.exists() {
+        return Err(format!("PyVM runner not found: tools/pyvm_runner.py (cwd) or $NYASH_ROOT/tools/pyvm_runner.py"));
     }
     let tmp_dir = std::path::Path::new("tmp");
     let _ = std::fs::create_dir_all(tmp_dir);
@@ -91,7 +104,7 @@ pub fn run_pyvm_harness_lib(module: &nyash_rust::mir::MirModule, tag: &str) -> R
     }
     let status = cmd
         .args([
-            runner.to_string_lossy().as_ref(),
+            runner_buf.to_string_lossy().as_ref(),
             "--in",
             &mir_json_path.display().to_string(),
             "--entry",

@@ -102,6 +102,8 @@ pub fn strip_using_and_register(
             if t.starts_with("using ") {
                 crate::cli_v!("[using] stripped line: {}", line);
                 let rest0 = t.strip_prefix("using ").unwrap().trim();
+                // Strip trailing inline comments
+                let rest0 = rest0.split('#').next().unwrap_or(rest0).trim();
                 let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
                 let (target, alias) = if let Some(pos) = rest0.find(" as ") {
                     (rest0[..pos].trim().to_string(), Some(rest0[pos + 4..].trim().to_string()))
@@ -158,6 +160,7 @@ pub fn strip_using_and_register(
                         &using_ctx.pending_modules,
                         &using_ctx.using_paths,
                         &using_ctx.aliases,
+                        &using_ctx.packages,
                         ctx_dir,
                         strict,
                         verbose,
@@ -174,6 +177,24 @@ pub fn strip_using_and_register(
                     crate::runtime::modules_registry::set(alias.clone(), Box::new(sb));
                     let sb2 = crate::box_trait::StringBox::new(value.clone());
                     crate::runtime::modules_registry::set(ns.clone(), Box::new(sb2));
+                    // Optional: autoload dylib when using kind="dylib" and NYASH_USING_DYLIB_AUTOLOAD=1
+                    if value.starts_with("dylib:") && std::env::var("NYASH_USING_DYLIB_AUTOLOAD").ok().as_deref() == Some("1") {
+                        let lib_path = value.trim_start_matches("dylib:");
+                        // Derive lib name from file stem (strip leading 'lib')
+                        let p = std::path::Path::new(lib_path);
+                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                            let mut lib_name = stem.to_string();
+                            if lib_name.starts_with("lib") { lib_name = lib_name.trim_start_matches("lib").to_string(); }
+                            // Determine box list from using packages (prefer [using.<ns>].bid)
+                            let mut boxes: Vec<String> = Vec::new();
+                            if let Some(pkg) = using_ctx.packages.get(&ns) {
+                                if let Some(b) = &pkg.bid { boxes.push(b.clone()); }
+                            }
+                            if verbose { eprintln!("[using] autoload dylib: {} as {} boxes=[{}]", lib_path, lib_name, boxes.join(",")); }
+                            let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                            let _ = host.read().unwrap().load_library_direct(&lib_name, lib_path, &boxes);
+                        }
+                    }
                 } else if trace {
                     eprintln!("[using] still unresolved: {} as {}", ns, alias);
                 }
@@ -186,13 +207,31 @@ pub fn strip_using_and_register(
                     &using_ctx.pending_modules,
                     &using_ctx.using_paths,
                     &using_ctx.aliases,
+                    &using_ctx.packages,
                     ctx_dir,
                     strict,
                     verbose,
                 ) {
                     Ok(value) => {
                         let sb = crate::box_trait::StringBox::new(value.clone());
-                        crate::runtime::modules_registry::set(ns, Box::new(sb));
+                        let ns_clone = ns.clone();
+                        crate::runtime::modules_registry::set(ns_clone, Box::new(sb));
+                        // Optional: autoload dylib when using kind="dylib"
+                        if value.starts_with("dylib:") && std::env::var("NYASH_USING_DYLIB_AUTOLOAD").ok().as_deref() == Some("1") {
+                            let lib_path = value.trim_start_matches("dylib:");
+                            let p = std::path::Path::new(lib_path);
+                            if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                                let mut lib_name = stem.to_string();
+                                if lib_name.starts_with("lib") { lib_name = lib_name.trim_start_matches("lib").to_string(); }
+                                let mut boxes: Vec<String> = Vec::new();
+                                if let Some(pkg) = using_ctx.packages.get(&ns) {
+                                    if let Some(b) = &pkg.bid { boxes.push(b.clone()); }
+                                }
+                                if verbose { eprintln!("[using] autoload dylib: {} as {} boxes=[{}]", lib_path, lib_name, boxes.join(",")); }
+                                let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                                let _ = host.read().unwrap().load_library_direct(&lib_name, lib_path, &boxes);
+                            }
+                        }
                         Some(value)
                     }
                     Err(e) => return Err(format!("using: {}", e)),

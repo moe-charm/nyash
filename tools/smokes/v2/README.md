@@ -19,15 +19,17 @@
 
 | プロファイル | 実行時間 | 用途 | 対象 |
 |------------|---------|------|------|
-| **quick** | 1-2分 | 開発時高速チェック | Rust VM動的のみ |
+| **quick** | 1-2分 | 開発時高速チェック | 言語/コア機能（プラグイン非依存） |
 | **integration** | 5-10分 | 基本パリティ確認 | VM↔LLVM整合性 |
 | **full** | 15-30分 | 完全マトリックス | 全組み合わせテスト |
+| **plugins** | 数十秒〜 | 任意の補助スイート | using.dylib 自動読み込みなど |
 
 ## 🎯 使用方法
 
 ### 基本実行
 ```bash
 ./run.sh --profile quick
+./run.sh --profile plugins
 ./run.sh --profile integration --filter "plugins:*"
 ./run.sh --profile full --format json --jobs 4 --timeout 300
 ```
@@ -59,6 +61,8 @@ tools/smokes/v2/
 │   └── full/                 # 完全テスト（15-30分）
 │       ├── matrix/           # 全組み合わせ実行
 │       └── stress/           # 負荷・ストレステスト
+│   └── plugins/              # プラグイン専用スイート（任意）
+│       └── dylib_autoload.sh # using kind="dylib" 自動読み込みの動作確認（Fixture/Counter 等）
 ├── lib/                      # 共通ライブラリ（強制使用）
 │   ├── test_runner.sh        # 中核実行器
 │   ├── plugin_manager.sh     # プラグイン設定管理
@@ -217,3 +221,6 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend llvm test.nyash
 **All tests source lib/test_runner.sh and use preflight_plugins.**
 
 この規約により、重複・ズレを防止し、運用しやすいスモークテストシステムを実現します。
+#### **plugins** - プラグイン専用（任意）
+- 安定検証用に最小フィクスチャプラグイン（`nyash-fixture-plugin`）を優先利用
+- 実在プラグイン（Counter/Math/String）は存在すれば追加で実行（無ければSKIP）

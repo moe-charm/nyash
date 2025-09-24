@@ -241,16 +241,8 @@ fi
 echo ""
 echo "=== Section 7: Running Existing Core Smoke Tests ==="
 
-# Run key existing smoke tests to ensure nothing broke
-if [[ -x "$ROOT_DIR/tools/mir15_smoke.sh" ]]; then
-    if "$ROOT_DIR/tools/mir15_smoke.sh" >/dev/null 2>&1; then
-        echo -e "${GREEN}✅${NC} mir15_smoke.sh passed"
-    else
-        log_error "mir15_smoke.sh failed"
-        FAILED=$((FAILED + 1))
-    fi
-    TOTAL=$((TOTAL + 1))
-fi
+# JIT smoke tests have been archived (Phase 2.4 cleanup)
+# mir15_smoke.sh moved to tools/smokes/archive/
 
 # Final Summary
 echo ""

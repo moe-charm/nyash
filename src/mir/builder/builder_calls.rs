@@ -574,6 +574,38 @@ impl super::MirBuilder {
         method: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
+            let kind = match &object {
+                ASTNode::Variable { .. } => "Variable",
+                ASTNode::FieldAccess { .. } => "FieldAccess",
+                ASTNode::This { .. } => "This",
+                ASTNode::Me { .. } => "Me",
+                _ => "Other",
+            };
+            eprintln!("[builder] method-call object kind={} method={}", kind, method);
+        }
+        // Static box method call: BoxName.method(args)
+        if let ASTNode::Variable { name: obj_name, .. } = &object {
+            // If not a local variable and matches a declared box name, treat as static method call
+            let is_local_var = self.variable_map.contains_key(obj_name);
+            // Phase 15.5: Treat unknown identifiers in receiver position as static type names
+            if !is_local_var {
+                if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[builder] static-call {}.{}()", obj_name, method);
+                }
+                // Build argument values
+                let mut arg_values: Vec<ValueId> = Vec::new();
+                for a in &arguments {
+                    arg_values.push(self.build_expression(a.clone())?);
+                }
+                // Compose lowered function name: BoxName.method/N
+                let func_name = format!("{}.{}{}", obj_name, method, format!("/{}", arg_values.len()));
+                let dst = self.value_gen.next();
+                // Use legacy global-call emission to avoid unified builtin/extern constraints
+                self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+                return Ok(dst);
+            }
+        }
         // Minimal TypeOp wiring via method-style syntax: value.is("Type") / value.as("Type")
         if (method == "is" || method == "as") && arguments.len() == 1 {
             if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {

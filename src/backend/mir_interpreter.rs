@@ -16,12 +16,16 @@ use crate::mir::{
 };
 
 pub struct MirInterpreter {
-    // SSA value table
+    // SSA value table (per-function; swapped on call)
     regs: HashMap<ValueId, VMValue>,
     // Simple local memory for Load/Store where `ptr` is a ValueId token
     mem: HashMap<ValueId, VMValue>,
     // Object field storage for RefGet/RefSet (keyed by reference ValueId)
     obj_fields: HashMap<ValueId, HashMap<String, VMValue>>,
+    // Function table (current module)
+    functions: HashMap<String, MirFunction>,
+    // Currently executing function name (for call resolution preferences)
+    cur_fn: Option<String>,
 }
 
 impl MirInterpreter {
@@ -30,11 +34,15 @@ impl MirInterpreter {
             regs: HashMap::new(),
             mem: HashMap::new(),
             obj_fields: HashMap::new(),
+            functions: HashMap::new(),
+            cur_fn: None,
         }
     }
 
     /// Execute module entry (main) and return boxed result
     pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
+        // Snapshot functions for call resolution
+        self.functions = module.functions.clone();
         let func = module
             .functions
             .get("main")
@@ -44,6 +52,27 @@ impl MirInterpreter {
     }
 
     fn execute_function(&mut self, func: &MirFunction) -> Result<VMValue, VMError> {
+        self._exec_function_inner(func, None)
+    }
+
+    fn _exec_function_inner(
+        &mut self,
+        func: &MirFunction,
+        arg_vals: Option<&[VMValue]>,
+    ) -> Result<VMValue, VMError> {
+        // Swap in a fresh register file for this call
+        let saved_regs = std::mem::take(&mut self.regs);
+        let saved_fn = self.cur_fn.clone();
+        self.cur_fn = Some(func.signature.name.clone());
+
+        // Bind parameters if provided
+        if let Some(args) = arg_vals {
+            for (i, pid) in func.params.iter().enumerate() {
+                let v = args.get(i).cloned().unwrap_or(VMValue::Void);
+                self.regs.insert(*pid, v);
+            }
+        }
+
         let mut cur = func.entry_block;
         let mut last_pred: Option<BasicBlockId> = None;
         loop {
@@ -433,12 +462,12 @@ impl MirInterpreter {
                 }
             }
             // Handle terminator
-            match &block.terminator {
+            let out = match &block.terminator {
                 Some(MirInstruction::Return { value }) => {
                     if let Some(v) = value {
-                        return self.reg_load(*v);
+                        self.reg_load(*v)
                     } else {
-                        return Ok(VMValue::Void);
+                        Ok(VMValue::Void)
                     }
                 }
                 Some(MirInstruction::Jump { target }) => {
@@ -458,18 +487,24 @@ impl MirInterpreter {
                     continue;
                 }
                 None => {
-                    return Err(VMError::InvalidBasicBlock(format!(
+                    Err(VMError::InvalidBasicBlock(format!(
                         "unterminated block {:?}",
                         block.id
                     )))
                 }
                 Some(other) => {
-                    return Err(VMError::InvalidInstruction(format!(
+                    Err(VMError::InvalidInstruction(format!(
                         "invalid terminator in MIR interp: {:?}",
                         other
                     )))
                 }
-            }
+            };
+            // Function finished (return or error)
+            // Restore previous register file and current function
+            let result = out;
+            self.cur_fn = saved_fn;
+            self.regs = saved_regs;
+            return result;
         }
     }
 
@@ -595,13 +630,66 @@ impl MirInterpreter {
     }
 
     /// LEGACY: 従来の文字列ベース解決（後方互換性）
-    fn execute_legacy_call(&mut self, func_id: ValueId, _args: &[ValueId]) -> Result<VMValue, VMError> {
-        // 従来の実装: func_idから関数名を取得して呼び出し
-        // 簡易実装 - 実際には関数テーブルやシンボル解決が必要
-        Err(VMError::InvalidInstruction(format!(
-            "Legacy function call (ValueId: {}) not implemented in VM interpreter. Please use Callee-typed calls.",
-            func_id
-        )))
+    fn execute_legacy_call(&mut self, func_id: ValueId, args: &[ValueId]) -> Result<VMValue, VMError> {
+        // 1) 名前を取り出す
+        let name_val = self.reg_load(func_id)?;
+        let raw = match name_val {
+            VMValue::String(ref s) => s.clone(),
+            other => other.to_string(),
+        };
+        // 2) 直接一致を優先
+        let mut pick: Option<String> = None;
+        if self.functions.contains_key(&raw) {
+            pick = Some(raw.clone());
+        } else {
+            let arity = args.len();
+            let mut cands: Vec<String> = Vec::new();
+            // a) 末尾サフィックス一致: ".name/arity"
+            let suf = format!(".{}{}", raw, format!("/{}", arity));
+            for k in self.functions.keys() {
+                if k.ends_with(&suf) { cands.push(k.clone()); }
+            }
+            // b) raw に '/' が含まれ、完全名っぽい場合はそのままも候補に（既に上で除外）
+            if cands.is_empty() && raw.contains('/') && self.functions.contains_key(&raw) {
+                cands.push(raw.clone());
+            }
+            // c) 優先: 現在のボックス名と一致するもの
+            if cands.len() > 1 {
+                if let Some(cur) = &self.cur_fn {
+                    let cur_box = cur.split('.').next().unwrap_or("");
+                    let scoped: Vec<String> = cands
+                        .iter()
+                        .filter(|k| k.starts_with(&format!("{}.", cur_box)))
+                        .cloned()
+                        .collect();
+                    if scoped.len() == 1 { cands = scoped; }
+                }
+            }
+            if cands.len() == 1 {
+                pick = Some(cands.remove(0));
+            } else if cands.len() > 1 {
+                cands.sort();
+                pick = Some(cands[0].clone());
+            }
+        }
+        let fname = pick.ok_or_else(|| VMError::InvalidInstruction(format!(
+            "call unresolved: '{}' (arity={})",
+            raw,
+            args.len()
+        )))?;
+        if std::env::var("NYASH_VM_CALL_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[vm] legacy-call resolved '{}' -> '{}'", raw, fname);
+        }
+        let callee = self
+            .functions
+            .get(&fname)
+            .cloned()
+            .ok_or_else(|| VMError::InvalidInstruction(format!("function not found: {}", fname)))?;
+        // 3) 実引数の評価
+        let mut argv: Vec<VMValue> = Vec::new();
+        for a in args { argv.push(self.reg_load(*a)?); }
+        // 4) 実行
+        self._exec_function_inner(&callee, Some(&argv))
     }
 
     /// グローバル関数実行（nyash.builtin.*）

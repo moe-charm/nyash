@@ -5,6 +5,12 @@
 # set -eは使わない（個々のテストが失敗しても全体を続行するため）
 set -uo pipefail
 
+# ルート/バイナリ検出（CWDに依存しない実行を保証）
+if [ -z "${NYASH_ROOT:-}" ]; then
+  export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+fi
+export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
+
 # グローバル変数
 export SMOKES_V2_LIB_LOADED=1
 export SMOKES_START_TIME=$(date +%s.%N)
@@ -56,9 +62,9 @@ require_env() {
     fi
 
     # Nyash実行ファイル確認
-    if [ ! -f "./target/release/nyash" ]; then
-        log_error "Nyash executable not found at ./target/release/nyash"
-        log_error "Please run 'cargo build --release' first"
+    if [ ! -f "$NYASH_BIN" ]; then
+        log_error "Nyash executable not found at $NYASH_BIN"
+        log_error "Please run 'cargo build --release' first (in $NYASH_ROOT)"
         return 1
     fi
 
@@ -108,6 +114,7 @@ run_test() {
 run_nyash_vm() {
     local program="$1"
     shift
+    local USE_PYVM="${SMOKES_USE_PYVM:-0}"
     # -c オプションの場合は一時ファイル経由で実行
     if [ "$program" = "-c" ]; then
         local code="$1"
@@ -115,15 +122,15 @@ run_nyash_vm() {
         local tmpfile="/tmp/nyash_test_$$.nyash"
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
-        NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 ./target/release/nyash "$tmpfile" "$@" 2>&1 | \
-            grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" "$tmpfile" "$@" 2>&1 | \
+            grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
     else
         # プラグイン初期化メッセージを除外
-        NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 ./target/release/nyash "$program" "$@" 2>&1 | \
-            grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" "$program" "$@" 2>&1 | \
+            grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
         return ${PIPESTATUS[0]}
     fi
 }
@@ -139,18 +146,23 @@ run_nyash_llvm() {
         local tmpfile="/tmp/nyash_test_$$.nyash"
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
-        NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 ./target/release/nyash --backend llvm "$tmpfile" "$@" 2>&1 | \
+        NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
     else
         # プラグイン初期化メッセージを除外
-        NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 ./target/release/nyash --backend llvm "$program" "$@" 2>&1 | \
+        NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
         return ${PIPESTATUS[0]}
     fi
 }
+
+# シンプルテスト補助（スクリプト互換）
+test_pass() { log_success "$1"; return 0; }
+test_fail() { log_error "$1 ${2:-}"; return 1; }
+test_skip() { log_warn "SKIP $1 ${2:-}"; return 0; }
 
 # 出力比較ヘルパー
 compare_outputs() {

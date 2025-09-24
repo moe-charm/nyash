@@ -81,6 +81,48 @@ impl PluginHost {
         self.config.as_ref()
     }
 
+    /// Load a single library directly from path for `using kind="dylib"` autoload.
+    /// Boxes list is best-effort (may be empty). When empty, TypeBox FFI is used to resolve metadata.
+    pub fn load_library_direct(&self, lib_name: &str, path: &str, boxes: &[String]) -> BidResult<()> {
+        let def = crate::config::nyash_toml_v2::LibraryDefinition {
+            boxes: boxes.to_vec(),
+            path: path.to_string(),
+        };
+        // Ensure loader has a minimal config so find_library_for_box works
+        {
+            let mut l = self.loader.write().unwrap();
+            if l.config.is_none() {
+                let mut cfg = NyashConfigV2 {
+                    libraries: std::collections::HashMap::new(),
+                    plugin_paths: crate::config::nyash_toml_v2::PluginPaths { search_paths: vec![] },
+                    plugins: std::collections::HashMap::new(),
+                    box_types: std::collections::HashMap::new(),
+                };
+                cfg.libraries.insert(lib_name.to_string(), crate::config::nyash_toml_v2::LibraryDefinition { boxes: def.boxes.clone(), path: def.path.clone() });
+                l.config = Some(cfg);
+                // No dedicated config file; keep config_path None and rely on box_specs fallback
+            } else if let Some(cfg) = l.config.as_mut() {
+                cfg.libraries.insert(lib_name.to_string(), crate::config::nyash_toml_v2::LibraryDefinition { boxes: def.boxes.clone(), path: def.path.clone() });
+            }
+            // Load the library now
+            l.load_plugin_direct(lib_name, &def)?;
+            // Ingest nyash_box.toml (if present) to populate box_specs: type_id/method ids
+            let nyb_path = std::path::Path::new(path)
+                .parent()
+                .unwrap_or(std::path::Path::new("."))
+                .join("nyash_box.toml");
+            l.ingest_box_specs_from_nyash_box(lib_name, &def.boxes, &nyb_path);
+            // Also register providers in the v2 BoxFactoryRegistry so `new BoxType()` works
+            let registry = crate::runtime::get_global_registry();
+            for bx in &def.boxes {
+                registry.apply_plugin_config(&crate::runtime::PluginConfig {
+                    plugins: [(bx.clone(), lib_name.to_string())].into(),
+                });
+            }
+        }
+        Ok(())
+    }
+
     /// Resolve a method handle for a given plugin box type and method name.
     pub fn resolve_method(&self, box_type: &str, method_name: &str) -> BidResult<MethodHandle> {
         let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;

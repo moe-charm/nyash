@@ -3,7 +3,7 @@
     {
       "blocks": [
         {
-          "id": 3,
+          "id": 13,
           "instructions": [
             {
               "dst": 0,
@@ -13,194 +13,7 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "Test Plugin System"
-              }
-            },
-            {
-              "args": [
-                0
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Hello"
-              }
-            },
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": " World"
-              }
-            },
-            {
-              "dst": 3,
-              "lhs": 1,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 2
-            },
-            {
-              "args": [
-                3
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "ret",
-              "value": 4
-            }
-          ]
-        }
-      ],
-      "name": "Main.main",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "op": "ret",
-              "value": 1
-            }
-          ]
-        }
-      ],
-      "name": "Main.equals/1",
-      "params": [
-        0
-      ]
-    },
-    {
-      "blocks": [
-        {
-          "id": 0,
-          "instructions": [
-            {
-              "dst": 0,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Test Plugin System"
-              }
-            },
-            {
-              "args": [
-                0
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Hello"
-              }
-            },
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": " World"
-              }
-            },
-            {
-              "dst": 3,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 1,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 2
-            },
-            {
-              "args": [
-                3
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 4,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 0
-              }
-            },
-            {
-              "op": "ret",
-              "value": 4
-            }
-          ]
-        }
-      ],
-      "name": "main",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 2,
-          "instructions": [
-            {
-              "dst": 0,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Main("
+                "value": "array("
               }
             },
             {
@@ -228,7 +41,539 @@
           ]
         }
       ],
-      "name": "Main.toString/0",
+      "name": "array.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 8,
+          "instructions": [
+            {
+              "args": [
+                0
+              ],
+              "dst": 1,
+              "op": "newbox",
+              "type": "BoolBox"
+            },
+            {
+              "args": [
+                0
+              ],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "bool.create/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "args": [],
+              "box": 0,
+              "dst": 1,
+              "method": "upper",
+              "op": "boxcall"
+            },
+            {
+              "args": [
+                1
+              ],
+              "dst": 2,
+              "op": "newbox",
+              "type": "StringBox"
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "string.upper/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "args": [
+                0
+              ],
+              "dst": 1,
+              "op": "newbox",
+              "type": "IntegerBox"
+            },
+            {
+              "args": [
+                0
+              ],
+              "box": 1,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "integer.create/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "string("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "string.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 7,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "integer("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "integer.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "test"
+              }
+            },
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "console.log/1"
+              }
+            },
+            {
+              "args": [
+                5
+              ],
+              "dst": 6,
+              "func": 7,
+              "op": "call"
+            },
+            {
+              "op": "ret",
+              "value": 6
+            }
+          ]
+        }
+      ],
+      "name": "main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "integer.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "string.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 14,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "console.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 15,
+          "instructions": [
+            {
+              "args": [
+                0
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "void",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "console.log/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "args": [
+                0
+              ],
+              "dst": 1,
+              "op": "newbox",
+              "type": "StringBox"
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "string.create/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 9,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "bool.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 12,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "box": 0,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "op": "ret",
+              "value": 0
+            }
+          ]
+        }
+      ],
+      "name": "array.create/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 16,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "console("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "console.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 11,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "array.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 10,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "bool("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "bool.toString/0",
       "params": []
     }
   ]

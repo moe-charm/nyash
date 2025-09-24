@@ -1,0 +1,11 @@
+[FixtureBox]
+type_id = 101
+
+[FixtureBox.lifecycle]
+birth.id = 0
+fini.id = 4294967295
+
+[FixtureBox.methods]
+echo.id = 1
+get.id = 2
+

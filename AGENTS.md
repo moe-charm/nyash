@@ -173,7 +173,40 @@ Selfhost 子プロセスの引数透過（開発者向け）
   - Run via harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
 - Quick VM run: `./target/release/nyash --backend vm apps/APP/main.nyash`
 - Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
-- Smokes: `./tools/llvm_smoke.sh release` (use env toggles like `NYASH_LLVM_VINVOKE_RET_SMOKE=1`)
+- Smokes (v2):
+  - Single entry: `tools/smokes/v2/run.sh --profile quick`
+  - Profiles: `quick|integration|full`（`--filter <glob>` で絞り込み）
+  - 個別: `bash tools/smokes/v2/profiles/quick/core/using_named.sh`
+  - メモ: v2 ランタイムは自動でルート検出するので、CWD は任意（テスト中に /tmp へ移動してもOK）
+  - 旧スモークは廃止（tools/test/smoke/*）。最新仕様のみを対象にするため、v2 のみ維持・拡充する。
+  - 補助スイート（任意）: `./tools/smokes/v2/run.sh --profile plugins`（dylib using の自動読み込み検証など、プラグイン固有のチェックを隔離）
+
+## Runtime Lines Policy（VM/LLVM 方針）
+- 軸（2025 Phase‑15+）
+  - Rust VM ライン（主経路）: 実行は Rust VM を既定にする。プラグインは動的ロード（.so/.dll）で扱う。
+  - LLVM ライン（AOT/ハーネス）: 生成/リンクは静的（`libnyrt.a` や静的プラグイン）を基本とし、実行は LLVM で検証する。
+
+- プラグインの扱い
+  - Rust VM: 動的プラグイン（ランタイムでロード）。構成は `nyash.toml` の [plugins] / `ny_plugins` に従う。
+  - LLVM: 静的リンクを前提（AOT/harness）。必要に応じ `nyrt`/静的プラグインにまとめる。
+
+- using/namespace の解決
+  - using は Runner 側で解決（Phase‑15）。`nyash.toml` の `[using]`（paths / <name> / aliases）を参照。
+  - include は廃止。`using "./path/file.nyash" as Name` を推奨。
+
+- スモーク/検証の方針
+  - 既定の開発確認は Rust VM ラインで行い、LLVM ラインは AOT/ハーネスの代表スモークでカバー。
+  - v2 ランナーは実行系を切り替え可能（環境変数・引数で VM/LLVM/（必要時）PyVM を選択）。
+  - PyVM は参照実行器（保守最小）。言語機能の確認や LLVM ハーネスのパリティ検証が主目的で、既定経路では使わない。
+
+- 実行例（目安）
+  - Rust VM（既定）: `./target/release/nyash apps/APP/main.nyash`
+  - LLVM Harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
+  - AOT ビルド: `tools/build_llvm.sh apps/APP/main.nyash -o app`
+
+- セルフホスティング指針
+  - 本方針（Rust VM=主、LLVM=AOT）はそのまま自己ホストの軸にする。
+  - 互換性を崩さず、小粒に前進（VM ↔ LLVM のスモークを保ちつつ実行経路を磨く）。
 
 ## JIT Self‑Host Quickstart (Phase 15)
 - Core build (JIT): `cargo build --release --features cranelift-jit`

@@ -241,7 +241,15 @@ impl MirBuilder {
         if let Some(&value_id) = self.variable_map.get(&name) {
             Ok(value_id)
         } else {
-            Err(format!("Undefined variable: {}", name))
+            // Enhance diagnostics using Using simple registry (Phase 1)
+            let mut msg = format!("Undefined variable: {}", name);
+            let suggest = crate::using::simple_registry::suggest_using_for_symbol(&name);
+            if !suggest.is_empty() {
+                msg.push_str("\nHint: symbol appears in using module(s): ");
+                msg.push_str(&suggest.join(", "));
+                msg.push_str("\nConsider adding 'using <module> [as Alias]' or check nyash.toml [using].");
+            }
+            Err(msg)
         }
     }
 
@@ -451,4 +459,3 @@ impl Default for MirBuilder {
         Self::new()
     }
 }
-

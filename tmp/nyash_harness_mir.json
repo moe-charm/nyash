@@ -3,31 +3,6 @@
     {
       "blocks": [
         {
-          "id": 1,
-          "instructions": [
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": "i64",
-                "value": 1
-              }
-            },
-            {
-              "op": "ret",
-              "value": 1
-            }
-          ]
-        }
-      ],
-      "name": "Main.equals/1",
-      "params": [
-        0
-      ]
-    },
-    {
-      "blocks": [
-        {
           "id": 0,
           "instructions": [
             {
@@ -38,7 +13,7 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "🎉 Simple Compiler Test - NyKernel EXE generation!"
+                "value": "LLVM executable test"
               }
             },
             {
@@ -50,45 +25,31 @@
               "op": "externcall"
             },
             {
-              "dst": 2,
+              "dst": 1,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "compiler_test_complete"
+                "value": "NyKernel integration successful"
               }
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Result: "
-              }
-            },
-            {
-              "dst": 4,
-              "dst_type": {
-                "box_type": "StringBox",
-                "kind": "handle"
-              },
-              "lhs": 3,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 2
             },
             {
               "args": [
-                4
+                1
               ],
               "dst": null,
               "func": "nyash.console.log",
               "op": "externcall"
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
             },
             {
               "op": "ret",
@@ -103,78 +64,7 @@
     {
       "blocks": [
         {
-          "id": 3,
-          "instructions": [
-            {
-              "dst": 0,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "🎉 Simple Compiler Test - NyKernel EXE generation!"
-              }
-            },
-            {
-              "args": [
-                0
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "compiler_test_complete"
-              }
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Result: "
-              }
-            },
-            {
-              "dst": 4,
-              "lhs": 3,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 2
-            },
-            {
-              "args": [
-                4
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "op": "ret",
-              "value": 2
-            }
-          ]
-        }
-      ],
-      "name": "Main.main",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
-          "id": 2,
+          "id": 1,
           "instructions": [
             {
               "dst": 0,
@@ -214,6 +104,92 @@
       ],
       "name": "Main.toString/0",
       "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "LLVM executable test"
+              }
+            },
+            {
+              "args": [
+                0
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "NyKernel integration successful"
+              }
+            },
+            {
+              "args": [
+                1
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "Main.main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "Main.equals/1",
+      "params": [
+        0
+      ]
     }
   ]
 }

@@ -3,7 +3,876 @@
     {
       "blocks": [
         {
-          "id": 1,
+          "id": 3,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== StringBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                0
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Hello"
+              }
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": " World"
+              }
+            },
+            {
+              "dst": 3,
+              "lhs": 1,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 2
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "String concatenation: "
+              }
+            },
+            {
+              "dst": 5,
+              "lhs": 4,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 3
+            },
+            {
+              "args": [
+                5
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== IntegerBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                6
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 42
+              }
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 8
+              }
+            },
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Addition: "
+              }
+            },
+            {
+              "dst": 10,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 8
+            },
+            {
+              "dst": 11,
+              "lhs": 9,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 10
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Subtraction: "
+              }
+            },
+            {
+              "dst": 13,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "-",
+              "rhs": 8
+            },
+            {
+              "dst": 14,
+              "lhs": 12,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 13
+            },
+            {
+              "args": [
+                14
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 15,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Multiplication: "
+              }
+            },
+            {
+              "dst": 16,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "*",
+              "rhs": 8
+            },
+            {
+              "dst": 17,
+              "lhs": 15,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 16
+            },
+            {
+              "args": [
+                17
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Division: "
+              }
+            },
+            {
+              "dst": 19,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "/",
+              "rhs": 8
+            },
+            {
+              "dst": 20,
+              "lhs": 18,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 19
+            },
+            {
+              "args": [
+                20
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 21,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== ArrayBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                21
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [],
+              "dst": 22,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "box": 22,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 23,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "first"
+              }
+            },
+            {
+              "args": [
+                23
+              ],
+              "box": 22,
+              "dst": 24,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 25,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "second"
+              }
+            },
+            {
+              "args": [
+                25
+              ],
+              "box": 22,
+              "dst": 26,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 27,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "third"
+              }
+            },
+            {
+              "args": [
+                27
+              ],
+              "box": 22,
+              "dst": 28,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 29,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Array length: "
+              }
+            },
+            {
+              "args": [],
+              "box": 22,
+              "dst": 30,
+              "dst_type": "i64",
+              "method": "length",
+              "op": "boxcall"
+            },
+            {
+              "dst": 31,
+              "lhs": 29,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 30
+            },
+            {
+              "args": [
+                31
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 32,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Array element 0: "
+              }
+            },
+            {
+              "dst": 33,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "args": [
+                33
+              ],
+              "box": 22,
+              "dst": 34,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 35,
+              "lhs": 32,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 34
+            },
+            {
+              "args": [
+                35
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 36,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Array element 1: "
+              }
+            },
+            {
+              "dst": 37,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "args": [
+                37
+              ],
+              "box": 22,
+              "dst": 38,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 39,
+              "lhs": 36,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 38
+            },
+            {
+              "args": [
+                39
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 40,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== MapBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                40
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [],
+              "dst": 41,
+              "op": "newbox",
+              "type": "MapBox"
+            },
+            {
+              "args": [],
+              "box": 41,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 42,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key1"
+              }
+            },
+            {
+              "dst": 43,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "value1"
+              }
+            },
+            {
+              "args": [
+                42,
+                43
+              ],
+              "box": 41,
+              "dst": 44,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 45,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key2"
+              }
+            },
+            {
+              "dst": 46,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "value2"
+              }
+            },
+            {
+              "args": [
+                45,
+                46
+              ],
+              "box": 41,
+              "dst": 47,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 48,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Map has key1: "
+              }
+            },
+            {
+              "dst": 49,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key1"
+              }
+            },
+            {
+              "args": [
+                49
+              ],
+              "box": 41,
+              "dst": 50,
+              "method": "has",
+              "op": "boxcall"
+            },
+            {
+              "dst": 51,
+              "lhs": 48,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 50
+            },
+            {
+              "args": [
+                51
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 52,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Map get key1: "
+              }
+            },
+            {
+              "dst": 53,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key1"
+              }
+            },
+            {
+              "args": [
+                53
+              ],
+              "box": 41,
+              "dst": 54,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 55,
+              "lhs": 52,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 54
+            },
+            {
+              "args": [
+                55
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 56,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== Mixed Type Tests ==="
+              }
+            },
+            {
+              "args": [
+                56
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 57,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "The answer is "
+              }
+            },
+            {
+              "dst": 58,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 42
+              }
+            },
+            {
+              "dst": 59,
+              "lhs": 57,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 58
+            },
+            {
+              "args": [
+                59
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 60,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== BoolBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                60
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 61,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 62,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 63,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "bool1 AND bool2: "
+              }
+            },
+            {
+              "dst": 64,
+              "lhs": 61,
+              "op": "binop",
+              "operation": "&",
+              "rhs": 62
+            },
+            {
+              "dst": 65,
+              "lhs": 63,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 64
+            },
+            {
+              "args": [
+                65
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 66,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "bool1 OR bool2: "
+              }
+            },
+            {
+              "dst": 67,
+              "lhs": 61,
+              "op": "binop",
+              "operation": "|",
+              "rhs": 62
+            },
+            {
+              "dst": 68,
+              "lhs": 66,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 67
+            },
+            {
+              "args": [
+                68
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 69,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "NOT bool2: "
+              }
+            },
+            {
+              "dst": 70,
+              "kind": "not",
+              "op": "unop",
+              "src": 62
+            },
+            {
+              "dst": 71,
+              "lhs": 69,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 70
+            },
+            {
+              "args": [
+                71
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 72,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== All Plugin Tests Passed ==="
+              }
+            },
+            {
+              "args": [
+                72
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 73,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "ret",
+              "value": 73
+            }
+          ]
+        }
+      ],
+      "name": "Main.main",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
           "instructions": [
             {
               "dst": 0,
@@ -47,7 +916,7 @@
     {
       "blocks": [
         {
-          "id": 2,
+          "id": 1,
           "instructions": [
             {
               "dst": 1,
@@ -72,96 +941,6 @@
     {
       "blocks": [
         {
-          "id": 3,
-          "instructions": [
-            {
-              "dst": 0,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "🎉 ExternCall print修正テスト！"
-              }
-            },
-            {
-              "args": [
-                0
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 1,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "codex先生の名前解決修正確認"
-              }
-            },
-            {
-              "args": [
-                1
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "dst": 2,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "test_complete"
-              }
-            },
-            {
-              "dst": 3,
-              "op": "const",
-              "value": {
-                "type": {
-                  "box_type": "StringBox",
-                  "kind": "handle"
-                },
-                "value": "Result: "
-              }
-            },
-            {
-              "dst": 4,
-              "lhs": 3,
-              "op": "binop",
-              "operation": "+",
-              "rhs": 2
-            },
-            {
-              "args": [
-                4
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
-            },
-            {
-              "op": "ret",
-              "value": 2
-            }
-          ]
-        }
-      ],
-      "name": "Main.main",
-      "params": []
-    },
-    {
-      "blocks": [
-        {
           "id": 0,
           "instructions": [
             {
@@ -172,7 +951,7 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "🎉 ExternCall print修正テスト！"
+                "value": "=== StringBox Tests ==="
               }
             },
             {
@@ -191,16 +970,8 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "codex先生の名前解決修正確認"
+                "value": "Hello"
               }
-            },
-            {
-              "args": [
-                1
-              ],
-              "dst": null,
-              "func": "nyash.console.log",
-              "op": "externcall"
             },
             {
               "dst": 2,
@@ -210,42 +981,885 @@
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "test_complete"
+                "value": " World"
               }
             },
             {
               "dst": 3,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 1,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 2
+            },
+            {
+              "dst": 4,
               "op": "const",
               "value": {
                 "type": {
                   "box_type": "StringBox",
                   "kind": "handle"
                 },
-                "value": "Result: "
+                "value": "String concatenation: "
               }
             },
             {
-              "dst": 4,
+              "dst": 5,
               "dst_type": {
                 "box_type": "StringBox",
                 "kind": "handle"
               },
-              "lhs": 3,
+              "lhs": 4,
               "op": "binop",
               "operation": "+",
-              "rhs": 2
+              "rhs": 3
             },
             {
               "args": [
-                4
+                5
               ],
               "dst": null,
               "func": "nyash.console.log",
               "op": "externcall"
             },
             {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== IntegerBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                6
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 42
+              }
+            },
+            {
+              "dst": 8,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 8
+              }
+            },
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Addition: "
+              }
+            },
+            {
+              "dst": 10,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 8
+            },
+            {
+              "dst": 11,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 9,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 10
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Subtraction: "
+              }
+            },
+            {
+              "dst": 13,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "-",
+              "rhs": 8
+            },
+            {
+              "dst": 14,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 12,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 13
+            },
+            {
+              "args": [
+                14
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 15,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Multiplication: "
+              }
+            },
+            {
+              "dst": 16,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "*",
+              "rhs": 8
+            },
+            {
+              "dst": 17,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 15,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 16
+            },
+            {
+              "args": [
+                17
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 18,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Division: "
+              }
+            },
+            {
+              "dst": 19,
+              "lhs": 7,
+              "op": "binop",
+              "operation": "/",
+              "rhs": 8
+            },
+            {
+              "dst": 20,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 18,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 19
+            },
+            {
+              "args": [
+                20
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 21,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== ArrayBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                21
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [],
+              "dst": 22,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "args": [],
+              "box": 22,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 23,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "first"
+              }
+            },
+            {
+              "args": [
+                23
+              ],
+              "box": 22,
+              "dst": 24,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 25,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "second"
+              }
+            },
+            {
+              "args": [
+                25
+              ],
+              "box": 22,
+              "dst": 26,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 27,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "third"
+              }
+            },
+            {
+              "args": [
+                27
+              ],
+              "box": 22,
+              "dst": 28,
+              "method": "push",
+              "op": "boxcall"
+            },
+            {
+              "dst": 29,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Array length: "
+              }
+            },
+            {
+              "args": [],
+              "box": 22,
+              "dst": 30,
+              "dst_type": "i64",
+              "method": "length",
+              "op": "boxcall"
+            },
+            {
+              "dst": 31,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 29,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 30
+            },
+            {
+              "args": [
+                31
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 32,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Array element 0: "
+              }
+            },
+            {
+              "dst": 33,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "args": [
+                33
+              ],
+              "box": 22,
+              "dst": 34,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 35,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 32,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 34
+            },
+            {
+              "args": [
+                35
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 36,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Array element 1: "
+              }
+            },
+            {
+              "dst": 37,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "args": [
+                37
+              ],
+              "box": 22,
+              "dst": 38,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 39,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 36,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 38
+            },
+            {
+              "args": [
+                39
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 40,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== MapBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                40
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "args": [],
+              "dst": 41,
+              "op": "newbox",
+              "type": "MapBox"
+            },
+            {
+              "args": [],
+              "box": 41,
+              "dst": null,
+              "method": "birth",
+              "op": "boxcall"
+            },
+            {
+              "dst": 42,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key1"
+              }
+            },
+            {
+              "dst": 43,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "value1"
+              }
+            },
+            {
+              "args": [
+                42,
+                43
+              ],
+              "box": 41,
+              "dst": 44,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 45,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key2"
+              }
+            },
+            {
+              "dst": 46,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "value2"
+              }
+            },
+            {
+              "args": [
+                45,
+                46
+              ],
+              "box": 41,
+              "dst": 47,
+              "method": "set",
+              "op": "boxcall"
+            },
+            {
+              "dst": 48,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Map has key1: "
+              }
+            },
+            {
+              "dst": 49,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key1"
+              }
+            },
+            {
+              "args": [
+                49
+              ],
+              "box": 41,
+              "dst": 50,
+              "method": "has",
+              "op": "boxcall"
+            },
+            {
+              "dst": 51,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 48,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 50
+            },
+            {
+              "args": [
+                51
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 52,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Map get key1: "
+              }
+            },
+            {
+              "dst": 53,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "key1"
+              }
+            },
+            {
+              "args": [
+                53
+              ],
+              "box": 41,
+              "dst": 54,
+              "method": "get",
+              "op": "boxcall"
+            },
+            {
+              "dst": 55,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 52,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 54
+            },
+            {
+              "args": [
+                55
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 56,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== Mixed Type Tests ==="
+              }
+            },
+            {
+              "args": [
+                56
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 57,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "The answer is "
+              }
+            },
+            {
+              "dst": 58,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 42
+              }
+            },
+            {
+              "dst": 59,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 57,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 58
+            },
+            {
+              "args": [
+                59
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 60,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== BoolBox Tests ==="
+              }
+            },
+            {
+              "args": [
+                60
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 61,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 62,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "dst": 63,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "bool1 AND bool2: "
+              }
+            },
+            {
+              "dst": 64,
+              "lhs": 61,
+              "op": "binop",
+              "operation": "&",
+              "rhs": 62
+            },
+            {
+              "dst": 65,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 63,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 64
+            },
+            {
+              "args": [
+                65
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 66,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "bool1 OR bool2: "
+              }
+            },
+            {
+              "dst": 67,
+              "lhs": 61,
+              "op": "binop",
+              "operation": "|",
+              "rhs": 62
+            },
+            {
+              "dst": 68,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 66,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 67
+            },
+            {
+              "args": [
+                68
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 69,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "NOT bool2: "
+              }
+            },
+            {
+              "dst": 70,
+              "kind": "not",
+              "op": "unop",
+              "src": 62
+            },
+            {
+              "dst": 71,
+              "dst_type": {
+                "box_type": "StringBox",
+                "kind": "handle"
+              },
+              "lhs": 69,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 70
+            },
+            {
+              "args": [
+                71
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 72,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "=== All Plugin Tests Passed ==="
+              }
+            },
+            {
+              "args": [
+                72
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 73,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
               "op": "ret",
-              "value": 2
+              "value": 73
             }
           ]
         }
