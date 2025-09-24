@@ -9,6 +9,25 @@ Updated: 2025‑09‑24
 - **Phase 15.5 実装成果**: [Phase 15.5 Core Box Unification](docs/development/roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
 - **プラグインチェッカー**: [Plugin Tester Guide](docs/reference/plugin-system/plugin-tester.md)
 
+## 🚨 **緊急タスク: BuiltinBoxFactory問題解決（最優先）**
+
+### **問題**: StringBox/IntegerBoxプラグインが何日も動作しない
+**根本原因**: `builtin > user > plugin` の優先順位でプラグインが到達されない
+
+### **✅ 戦略決定完了**: ChatGPT + ユーザーアイデア統合4段階戦略
+1. **Phase 0 (今日)**: 分離・準備 - 実装を個別ファイルに分離（削除簡単化）
+2. **Phase 1 (1-2日)**: 即座遮断 - strict_plugin_firstデフォルト・到達禁止ガード
+3. **Phase 2 (2-3週)**: 段階削除 - String→Integer→Bool→Array→Map→Console順
+4. **Phase 3 (完成)**: 完全削除 - "Everything is Plugin" 実現
+
+### **📋 実装中タスク**
+- [ ] **Phase 0.1**: `builtin_impls/`ディレクトリ作成・実装分離
+- [ ] **Phase 0.2**: FactoryPolicy enum実装
+- [ ] **Phase 1.1**: strict_plugin_firstデフォルト化
+- [ ] **Phase 1.2**: 到達禁止ガード実装
+
+---
+
 ### 🏆 **今日の歴史的成果（2025-09-24）**
 1. **✅ Phase 15.5-B-2 MIRビルダー統一化完了**（約40行特別処理削除）
 2. **✅ Rust VM現状調査完了**（Task先生による詳細分析）
@@ -19,7 +38,9 @@ Updated: 2025‑09‑24
 4. **✅ インタープリター層完全削除**（約350行削除完了）
 5. **✅ PyVM重要インフラ特化保持戦略確定**（JSON v0ブリッジ、using処理のみ）
 6. **✅ スモークテストv2システム完全実装**（3段階プロファイル、共通ライブラリ、自動環境検出）
-7. **🚧 プラグインBox前提のテスト作成中**（Core Box廃止後の新テスト体系）
+7. **✅ 名前空間設計書統合完了**（using.md拡充・CLAUDE.mdリンク整備）
+8. **✅ BuiltinBoxFactory問題根本原因特定**（Task先生+ChatGPT戦略策定完了）
+9. **🚧 プラグインBox前提のテスト作成中**（Core Box廃止後の新テスト体系）
 
 ---
 

@@ -8,7 +8,7 @@
 use crate::box_factory::builtin::BuiltinBoxFactory;
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
-use crate::box_factory::UnifiedBoxRegistry;
+use crate::box_factory::{UnifiedBoxRegistry, FactoryPolicy};
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Global registry instance
@@ -17,7 +17,8 @@ static GLOBAL_REGISTRY: OnceLock<Arc<Mutex<UnifiedBoxRegistry>>> = OnceLock::new
 /// Initialize the global unified registry
 pub fn init_global_unified_registry() {
     GLOBAL_REGISTRY.get_or_init(|| {
-        let mut registry = UnifiedBoxRegistry::new();
+        // Phase 15.5: Use environment variable policy (StrictPluginFirst for "Everything is Plugin")
+        let mut registry = UnifiedBoxRegistry::with_env_policy();
         // Default: enable builtins unless building with feature "plugins-only"
         #[cfg(not(feature = "plugins-only"))]
         {
@@ -31,6 +32,10 @@ pub fn init_global_unified_registry() {
         }
 
         // TODO: User-defined Box factory will be registered by interpreter
+
+        // Phase 15.5: FactoryPolicy determines actual priority order
+        // StrictPluginFirst: plugins > user > builtin (SOLVES StringBox/IntegerBox issue)
+        // BuiltinFirst: builtin > user > plugin (legacy default)
 
         Arc::new(Mutex::new(registry))
     });
