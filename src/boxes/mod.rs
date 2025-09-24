@@ -56,6 +56,9 @@
 // 🎯 Phase 3リファクタリング: 基本Box実装を分離したモジュール
 pub mod basic;
 
+// 🎯 Phase 4リファクタリング: 算術Box実装を分離したモジュール
+pub mod arithmetic;
+
 pub mod bool_box;
 pub mod debug_box;
 pub mod integer_box;

@@ -11,6 +11,51 @@ use crate::ast::{ASTNode, CatchClause, Span};
 use crate::tokenizer::TokenType;
 
 impl NyashParser {
+    /// Map a starting token into a grammar keyword string used by GRAMMAR_DIFF tracing.
+    #[inline]
+    fn grammar_keyword_for(start: &TokenType) -> Option<&'static str> {
+        match start {
+            TokenType::BOX => Some("box"),
+            TokenType::GLOBAL => Some("global"),
+            TokenType::FUNCTION => Some("function"),
+            TokenType::STATIC => Some("static"),
+            TokenType::IF => Some("if"),
+            TokenType::LOOP => Some("loop"),
+            TokenType::BREAK => Some("break"),
+            TokenType::RETURN => Some("return"),
+            TokenType::PRINT => Some("print"),
+            TokenType::NOWAIT => Some("nowait"),
+            TokenType::LOCAL => Some("local"),
+            TokenType::OUTBOX => Some("outbox"),
+            TokenType::TRY => Some("try"),
+            TokenType::THROW => Some("throw"),
+            TokenType::USING => Some("using"),
+            TokenType::FROM => Some("from"),
+            _ => None,
+        }
+    }
+    /// Small helper: build UnexpectedToken with current token and line.
+    #[inline]
+    fn err_unexpected<S: Into<String>>(&self, expected: S) -> ParseError {
+        ParseError::UnexpectedToken {
+            found: self.current_token().token_type.clone(),
+            expected: expected.into(),
+            line: self.current_token().line,
+        }
+    }
+
+    /// Expect an identifier and advance. Returns its string or an UnexpectedToken error.
+    #[inline]
+    fn expect_identifier(&mut self, what: &str) -> Result<String, ParseError> {
+        if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
+            let out = name.clone();
+            self.advance();
+            Ok(out)
+        } else {
+            Err(self.err_unexpected(what))
+        }
+    }
+
     /// Parse a standalone block `{ ... }` and optional postfix `catch/cleanup` sequence.
     /// Returns Program(body) when no postfix keywords follow.
     fn parse_standalone_block_statement(&mut self) -> Result<ASTNode, ParseError> {
@@ -101,14 +146,7 @@ impl NyashParser {
             TokenType::GLOBAL => self.parse_global_var(),
             TokenType::FUNCTION => self.parse_function_declaration(),
             TokenType::STATIC => self.parse_static_declaration(),
-            _ => {
-                let line = self.current_token().line;
-                Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "declaration statement".to_string(),
-                    line,
-                })
-            }
+            _ => Err(self.err_unexpected("declaration statement")),
         }
     }
 
@@ -120,14 +158,7 @@ impl NyashParser {
             TokenType::BREAK => self.parse_break(),
             TokenType::CONTINUE => self.parse_continue(),
             TokenType::RETURN => self.parse_return(),
-            _ => {
-                let line = self.current_token().line;
-                Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "control-flow statement".to_string(),
-                    line,
-                })
-            }
+            _ => Err(self.err_unexpected("control-flow statement")),
         }
     }
 
@@ -136,14 +167,7 @@ impl NyashParser {
         match &self.current_token().token_type {
             TokenType::PRINT => self.parse_print(),
             TokenType::NOWAIT => self.parse_nowait(),
-            _ => {
-                let line = self.current_token().line;
-                Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "io/module statement".to_string(),
-                    line,
-                })
-            }
+            _ => Err(self.err_unexpected("io/module statement")),
         }
     }
 
@@ -152,14 +176,7 @@ impl NyashParser {
         match &self.current_token().token_type {
             TokenType::LOCAL => self.parse_local(),
             TokenType::OUTBOX => self.parse_outbox(),
-            _ => {
-                let line = self.current_token().line;
-                Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "variable declaration".to_string(),
-                    line,
-                })
-            }
+            _ => Err(self.err_unexpected("variable declaration")),
         }
     }
 
@@ -188,14 +205,7 @@ impl NyashParser {
                     })
                 }
             }
-            _ => {
-                let line = self.current_token().line;
-                Err(ParseError::UnexpectedToken {
-                    found: self.current_token().token_type.clone(),
-                    expected: "try/throw".to_string(),
-                    line,
-                })
-            }
+            _ => Err(self.err_unexpected("try/throw")),
         }
     }
 
@@ -253,8 +263,7 @@ impl NyashParser {
                         self.advance();
                         Ok((Some(first_str), Some(var)))
                     } else {
-                        let line = self.current_token().line;
-                        Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "exception variable name".to_string(), line })
+                        Err(self.err_unexpected("exception variable name"))
                     }
                 } else {
                     self.advance();
@@ -265,8 +274,7 @@ impl NyashParser {
                 if self.match_token(&TokenType::RPAREN) {
                     Ok((None, None))
                 } else {
-                    let line = self.current_token().line;
-                    Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: ") or identifier".to_string(), line })
+                    Err(self.err_unexpected(") or identifier"))
                 }
             }
         }
@@ -315,27 +323,7 @@ impl NyashParser {
 
         // Non-invasive syntax rule check
         if std::env::var("NYASH_GRAMMAR_DIFF").ok().as_deref() == Some("1") {
-            let kw = match start_tok {
-                TokenType::BOX => Some("box"),
-                TokenType::GLOBAL => Some("global"),
-                TokenType::FUNCTION => Some("function"),
-                TokenType::STATIC => Some("static"),
-                TokenType::IF => Some("if"),
-                TokenType::LOOP => Some("loop"),
-                TokenType::BREAK => Some("break"),
-                TokenType::RETURN => Some("return"),
-                TokenType::PRINT => Some("print"),
-                TokenType::NOWAIT => Some("nowait"),
-                // include removed
-                TokenType::LOCAL => Some("local"),
-                TokenType::OUTBOX => Some("outbox"),
-                TokenType::TRY => Some("try"),
-                TokenType::THROW => Some("throw"),
-                TokenType::USING => Some("using"),
-                TokenType::FROM => Some("from"),
-                _ => None,
-            };
-            if let Some(k) = kw {
+            if let Some(k) = Self::grammar_keyword_for(&start_tok) {
                 let ok = crate::grammar::engine::get().syntax_is_allowed_statement(k);
                 if !ok {
                     eprintln!(
@@ -356,11 +344,7 @@ impl NyashParser {
             self.advance();
             v
         } else {
-            return Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "string literal".to_string(),
-                line: self.current_token().line,
-            });
+            return Err(self.err_unexpected("string literal"));
         };
         // Optional: 'as' Alias (treat 'as' as identifier literal)
         let mut alias: Option<String> = None;
@@ -371,11 +355,7 @@ impl NyashParser {
                     alias = Some(name.clone());
                     self.advance();
                 } else {
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "alias name".to_string(),
-                        line: self.current_token().line,
-                    });
+                    return Err(self.err_unexpected("alias name"));
                 }
             }
         }
@@ -498,18 +478,7 @@ impl NyashParser {
         self.advance(); // consume 'nowait'
 
         // 変数名を取得
-        let variable = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
-            let name = name.clone();
-            self.advance();
-            name
-        } else {
-            let line = self.current_token().line;
-            return Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "variable name".to_string(),
-                line,
-            });
-        };
+        let variable = self.expect_identifier("variable name")?;
 
         self.consume(TokenType::ASSIGN)?;
         let expression = Box::new(self.parse_expression()?);
@@ -559,12 +528,7 @@ impl NyashParser {
                         initial_values.push(None);
                         self.advance();
                     } else {
-                        let line = self.current_token().line;
-                        return Err(ParseError::UnexpectedToken {
-                            found: self.current_token().token_type.clone(),
-                            expected: "identifier".to_string(),
-                            line,
-                        });
+                        return Err(self.err_unexpected("identifier"));
                     }
                 }
 
@@ -575,12 +539,7 @@ impl NyashParser {
                 })
             }
         } else {
-            let line = self.current_token().line;
-            Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "identifier".to_string(),
-                line,
-            })
+            Err(self.err_unexpected("identifier"))
         }
     }
 
@@ -603,12 +562,7 @@ impl NyashParser {
                     names.push(name.clone());
                     self.advance();
                 } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "identifier".to_string(),
-                        line,
-                    });
+                    return Err(self.err_unexpected("identifier"));
                 }
             }
 
@@ -619,12 +573,7 @@ impl NyashParser {
                 span: Span::unknown(),
             })
         } else {
-            let line = self.current_token().line;
-            Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "identifier".to_string(),
-                line,
-            })
+            Err(self.err_unexpected("identifier"))
         }
     }
 

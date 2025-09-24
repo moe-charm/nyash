@@ -4,7 +4,7 @@
 pub const NYB_SUCCESS: i32 = 0;
 pub const NYB_E_SHORT_BUFFER: i32 = -1;
 pub const NYB_E_INVALID_TYPE: i32 = -2;
-pub const NYB_E_METHOD_NOT_FOUND: i32 = -3;
+pub const NYB_E_INVALID_METHOD: i32 = -3;
 pub const NYB_E_INVALID_ARGS: i32 = -4;
 pub const NYB_E_PLUGIN_ERROR: i32 = -5;
 pub const NYB_E_INVALID_HANDLE: i32 = -8;

@@ -2,6 +2,7 @@
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
+use std::fs::File;
 use std::sync::{
     atomic::{AtomicU32, Ordering},
     Mutex,
@@ -9,7 +10,7 @@ use std::sync::{
 
 // ============ FileBox Instance ============
 pub struct FileBoxInstance {
-    pub file: Option<std::fs::File>,
+    pub file: Option<File>,
     pub path: String,
     pub buffer: Option<Vec<u8>>, // プラグインが管理するバッファ
 }
@@ -88,5 +89,12 @@ where
             None => Err("Instance not found"),
         },
         Err(_) => Err("Failed to lock instances map"),
+    }
+}
+
+/// Clear all instances from the registry
+pub fn clear_instances() {
+    if let Ok(mut map) = INSTANCES.lock() {
+        map.clear();
     }
 }

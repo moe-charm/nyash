@@ -10,27 +10,9 @@ extern "C" fn clientbox_resolve(name: *const std::os::raw::c_char) -> u32 {
         "fini" => u32::MAX,
         _ => 0,
     }
-    extern "C" fn clientbox_invoke_id(
-        instance_id: u32,
-        method_id: u32,
-        args: *const u8,
-        args_len: usize,
-        result: *mut u8,
-        result_len: *mut usize,
-    ) -> i32 {
-        unsafe { client_invoke(method_id, instance_id, args, args_len, result, result_len) }
-    }
-    #[no_mangle]
-    pub static nyash_typebox_ClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
-        abi_tag: 0x54594258,
-        version: 1,
-        struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
-        name: b"ClientBox\0".as_ptr() as *const std::os::raw::c_char,
-        resolve: Some(clientbox_resolve),
-        invoke_id: Some(clientbox_invoke_id),
-        capabilities: 0,
-    };
-    unsafe fn client_invoke(
+}
+
+unsafe fn client_invoke(
         m: u32,
         _id: u32,
         args: *const u8,
@@ -219,4 +201,25 @@ extern "C" fn clientbox_resolve(name: *const std::os::raw::c_char) -> u32 {
             _ => E_INV_METHOD,
         }
     }
+
+extern "C" fn clientbox_invoke_id(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    unsafe { client_invoke(method_id, instance_id, args, args_len, result, result_len) }
 }
+
+#[no_mangle]
+pub static nyash_typebox_ClientBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"ClientBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(clientbox_resolve),
+    invoke_id: Some(clientbox_invoke_id),
+    capabilities: 0,
+};

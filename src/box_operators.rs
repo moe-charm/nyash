@@ -7,66 +7,28 @@
  *
  * Based on AI consultation decision (2025-08-10): Rust-style traits with
  * static/dynamic hybrid dispatch for optimal performance.
+ *
+ * ## Refactored Architecture (Phase 1 Complete)
+ *
+ * - Phase 1 ✅: Macros and helpers extracted to separate modules
+ * - Phase 2-4: Static/Dynamic implementations and resolver (TODO)
  */
 
 use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
 use crate::boxes::FloatBox;
 use crate::operator_traits::{
-    DynamicAdd, DynamicDiv, DynamicMul, DynamicSub, NyashAdd, NyashDiv, NyashMul, NyashSub,
-    OperatorError,
+    DynamicAdd, DynamicDiv, DynamicMul, DynamicSub, OperatorError,
 };
 
-// Small helpers to reduce duplication in dynamic operators
-#[inline]
-fn concat_result(left: &dyn NyashBox, right: &dyn NyashBox) -> Box<dyn NyashBox> {
-    let l = left.to_string_box();
-    let r = right.to_string_box();
-    Box::new(StringBox::new(format!("{}{}", l.value, r.value)))
-}
+// Phase 1-2: Import macros, helpers, and static implementations from separate modules
+mod macros;
+mod helpers;
+mod static_ops;
 
-#[inline]
-fn can_repeat(times: i64) -> bool {
-    (0..=10_000).contains(&times)
-}
+pub use helpers::{concat_result, can_repeat};
+pub use macros::impl_static_numeric_ops;
 
-// ===== Static numeric operators (macro-generated) =====
-macro_rules! impl_static_numeric_ops {
-    ($ty:ty, $zero:expr) => {
-        impl NyashAdd<$ty> for $ty {
-            type Output = $ty;
-            fn add(self, rhs: $ty) -> Self::Output {
-                < $ty >::new(self.value + rhs.value)
-            }
-        }
-
-        impl NyashSub<$ty> for $ty {
-            type Output = $ty;
-            fn sub(self, rhs: $ty) -> Self::Output {
-                < $ty >::new(self.value - rhs.value)
-            }
-        }
-
-        impl NyashMul<$ty> for $ty {
-            type Output = $ty;
-            fn mul(self, rhs: $ty) -> Self::Output {
-                < $ty >::new(self.value * rhs.value)
-            }
-        }
-
-        impl NyashDiv<$ty> for $ty {
-            type Output = Result<$ty, OperatorError>;
-            fn div(self, rhs: $ty) -> Self::Output {
-                if rhs.value == $zero {
-                    Err(OperatorError::DivisionByZero)
-                } else {
-                    Ok(< $ty >::new(self.value / rhs.value))
-                }
-            }
-        }
-    };
-}
-
-impl_static_numeric_ops!(IntegerBox, 0);
+// Phase 2: Static implementations are now in static_ops.rs
 
 /// Dynamic dispatch implementation for IntegerBox
 impl DynamicAdd for IntegerBox {
@@ -174,7 +136,7 @@ impl DynamicDiv for IntegerBox {
     }
 }
 
-impl_static_numeric_ops!(FloatBox, 0.0);
+// FloatBox static implementations moved to static_ops.rs
 
 // ===== FloatBox Dynamic Operator Implementations =====
 
@@ -266,29 +228,7 @@ impl DynamicDiv for FloatBox {
 }
 
 // ===== StringBox Operator Implementations =====
-
-/// StringBox + StringBox -> StringBox (concatenation)
-impl NyashAdd<StringBox> for StringBox {
-    type Output = StringBox;
-
-    fn add(self, rhs: StringBox) -> Self::Output {
-        StringBox::new(format!("{}{}", self.value, rhs.value))
-    }
-}
-
-/// StringBox * IntegerBox -> StringBox (repetition)
-impl NyashMul<IntegerBox> for StringBox {
-    type Output = StringBox;
-
-    fn mul(self, rhs: IntegerBox) -> Self::Output {
-        if rhs.value >= 0 && rhs.value <= 10000 {
-            // Safety limit
-            StringBox::new(self.value.repeat(rhs.value as usize))
-        } else {
-            StringBox::new(String::new()) // Empty string for invalid repetition
-        }
-    }
-}
+// StringBox static implementations moved to static_ops.rs
 
 /// Dynamic dispatch implementation for StringBox
 impl DynamicAdd for StringBox {
@@ -349,16 +289,7 @@ impl DynamicDiv for StringBox {
 }
 
 // ===== BoolBox Operator Implementations =====
-
-/// BoolBox + BoolBox -> IntegerBox (logical OR as addition)
-impl NyashAdd<BoolBox> for BoolBox {
-    type Output = IntegerBox;
-
-    fn add(self, rhs: BoolBox) -> Self::Output {
-        let result = (self.value as i64) + (rhs.value as i64);
-        IntegerBox::new(result)
-    }
-}
+// BoolBox static implementations moved to static_ops.rs
 
 impl DynamicAdd for BoolBox {
     fn try_add(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {

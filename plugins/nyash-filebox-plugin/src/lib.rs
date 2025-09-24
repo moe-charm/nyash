@@ -12,7 +12,7 @@ mod state;
 mod tlv_helpers;
 
 // Re-exports
-use ffi::{ABI_TAG_TYBX, ABI_VERSION, NyashTypeBoxFfi};
+use ffi::{NyashTypeBoxFfi, ABI_TAG_TYBX, ABI_VERSION};
 use filebox_impl::{filebox_invoke_id, filebox_resolve};
 
 // ============ TypeBox v2 Export ============
@@ -36,6 +36,12 @@ pub static nyash_plugin_name: &[u8] = b"nyash-filebox\0";
 
 #[no_mangle]
 pub static nyash_plugin_version: &[u8] = b"0.1.0\0";
+
+/// Optional shutdown hook for host runtimes that expect a cleanup entrypoint
+#[no_mangle]
+pub extern "C" fn nyash_plugin_shutdown() {
+    state::clear_instances();
+}
 
 // ============ Tests ============
 

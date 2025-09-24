@@ -127,6 +127,7 @@ run_nyash_vm() {
             grep -v "Using builtin StringBox" | grep -v "Phase 15.5: Everything is Plugin" | grep -v "cargo build -p nyash-string-plugin" | \
             grep -v "^\[plugin-loader\] backend=" | grep -v "^\[using\] ctx:" | \
             grep -v "^🔌 plugin host initialized" | grep -v "^✅ plugin host fully configured" | \
+            grep -v "Failed to load nyash.toml - plugins disabled" | \
             grep -v "^🚀 Nyash VM Backend - Executing file:"
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
@@ -138,6 +139,7 @@ run_nyash_vm() {
             grep -v "Using builtin StringBox" | grep -v "Phase 15.5: Everything is Plugin" | grep -v "cargo build -p nyash-string-plugin" | \
             grep -v "^\[plugin-loader\] backend=" | grep -v "^\[using\] ctx:" | \
             grep -v "^🔌 plugin host initialized" | grep -v "^✅ plugin host fully configured" | \
+            grep -v "Failed to load nyash.toml - plugins disabled" | \
             grep -v "^🚀 Nyash VM Backend - Executing file:"
         return ${PIPESTATUS[0]}
     fi

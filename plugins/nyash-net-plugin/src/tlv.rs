@@ -1,4 +1,4 @@
-use super::{E_INV_ARGS, E_SHORT, OK};
+use crate::consts::{E_INV_ARGS, E_SHORT, OK};
 
 #[inline]
 fn tlv_result_size(payloads: &[(u8, &[u8])]) -> usize {

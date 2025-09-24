@@ -127,12 +127,7 @@ pub fn tlv_parse_handle_at(data: &[u8], pos: &mut usize) -> Result<(u32, u32), (
     if len != 8 || data.len() < *pos + 8 {
         return Err(());
     }
-    let type_id = u32::from_le_bytes([
-        data[*pos],
-        data[*pos + 1],
-        data[*pos + 2],
-        data[*pos + 3],
-    ]);
+    let type_id = u32::from_le_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
     let instance_id = u32::from_le_bytes([
         data[*pos + 4],
         data[*pos + 5],
@@ -148,7 +143,7 @@ pub fn tlv_parse_bytes_at(data: &[u8], pos: &mut usize) -> Result<Vec<u8>, ()> {
         return Err(());
     }
     let tag = data[*pos];
-    if tag != TLV_TAG_BYTES {
+    if tag != TLV_TAG_BYTES && tag != TLV_TAG_STRING {
         return Err(());
     }
     let len = u16::from_le_bytes([data[*pos + 2], data[*pos + 3]]) as usize;
@@ -159,6 +154,47 @@ pub fn tlv_parse_bytes_at(data: &[u8], pos: &mut usize) -> Result<Vec<u8>, ()> {
     let bytes = data[*pos..*pos + len].to_vec();
     *pos += len;
     Ok(bytes)
+}
+
+pub fn tlv_parse_string(data: &[u8]) -> Result<String, ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    if argc < 1 {
+        return Err(());
+    }
+    tlv_parse_string_at(data, &mut pos)
+}
+
+pub fn tlv_parse_bytes(data: &[u8]) -> Result<Vec<u8>, ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    if argc < 1 {
+        return Err(());
+    }
+    tlv_parse_bytes_at(data, &mut pos)
+}
+
+pub fn tlv_parse_optional_string_and_bytes(data: &[u8]) -> Result<(Option<String>, Vec<u8>), ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    match argc {
+        0 => Err(()),
+        1 => {
+            let bytes = tlv_parse_bytes_at(data, &mut pos)?;
+            Ok((None, bytes))
+        }
+        _ => {
+            let s = tlv_parse_string_at(data, &mut pos)?;
+            let bytes = tlv_parse_bytes_at(data, &mut pos)?;
+            Ok((Some(s), bytes))
+        }
+    }
+}
+
+pub fn tlv_parse_handle(data: &[u8]) -> Result<(u32, u32), ()> {
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    if argc < 1 {
+        return Err(());
+    }
+    let (type_id, instance_id) = tlv_parse_handle_at(data, &mut pos)?;
+    Ok((type_id, instance_id))
 }
 
 pub fn tlv_parse_one_string(data: &[u8]) -> Result<String, ()> {

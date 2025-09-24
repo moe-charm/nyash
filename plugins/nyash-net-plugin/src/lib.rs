@@ -3,12 +3,12 @@
 //! Pure in-process HTTP over localhost for E2E of BoxRef args/returns.
 
 mod logging;
-use logging::net_log;
+pub(crate) use logging::net_log;
 
 macro_rules! netlog {
     ($($arg:tt)*) => {{
         let s = format!($($arg)*);
-        net_log(&s);
+        crate::net_log(&s);
     }};
 }
 
