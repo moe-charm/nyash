@@ -17,7 +17,7 @@ Options:
 
 Requirements:
   - LLVM 18 development (llvm-config-18)
-  - NyRT static runtime (crates/nyrt)
+  - Nyash Kernel static runtime (crates/nyash_kernel)
 USAGE
 }
 
@@ -92,11 +92,11 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
       fi
       if [[ "${NYASH_LLVM_EMIT:-obj}" == "exe" ]]; then
         echo "    emitting EXE via ny-llvmc (crate) ..." >&2
-        # Ensure NyRT is built (for libnyrt.a)
-        if [[ ! -f crates/nyrt/target/release/libnyrt.a && "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" != "1" ]]; then
-          ( cd crates/nyrt && cargo build --release -j 24 >/dev/null )
+        # Ensure Nyash Kernel is built (for libnyash_kernel.a)
+        if [[ ! -f crates/nyash_kernel/target/release/libnyash_kernel.a && "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" != "1" ]]; then
+          ( cd crates/nyash_kernel && cargo build --release -j 24 >/dev/null )
         fi
-        NYRT_DIR_HINT="${NYASH_LLVM_NYRT:-crates/nyrt/target/release}"
+        NYRT_DIR_HINT="${NYASH_LLVM_NYRT:-crates/nyash_kernel/target/release}"
         ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OUT" --emit exe --nyrt "$NYRT_DIR_HINT" ${NYASH_LLVM_LIBS:+--libs "$NYASH_LLVM_LIBS"}
         echo "✅ Done: $OUT"; echo "   (runtime may require nyash.toml and plugins depending on app)"; exit 0
       else
@@ -128,12 +128,12 @@ if [[ "${NYASH_LLVM_ONLY_OBJ:-0}" == "1" ]]; then
   exit 0
 fi
 
-echo "[3/4] Building NyRT static runtime ..."
+echo "[3/4] Building Nyash Kernel static runtime ..."
 if [[ "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" == "1" ]]; then
-  echo "    Skipping NyRT build (NYASH_LLVM_SKIP_NYRT_BUILD=1)"
+  echo "    Skipping Nyash Kernel build (NYASH_LLVM_SKIP_NYRT_BUILD=1)"
 else
   # Use 24 threads for parallel build
-  ( cd crates/nyrt && cargo build --release -j 24 >/dev/null )
+  ( cd crates/nyash_kernel && cargo build --release -j 24 >/dev/null )
 fi
 
 # Ensure output directory exists
@@ -141,8 +141,8 @@ mkdir -p "$(dirname "$OUT")"
 echo "[4/4] Linking $OUT ..."
 cc "$OBJ" \
   -L target/release \
-  -L crates/nyrt/target/release \
-  -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive \
+  -L crates/nyash_kernel/target/release \
+  -Wl,--whole-archive -lnyash_kernel -Wl,--no-whole-archive \
   -lpthread -ldl -lm -o "$OUT"
 
 echo "✅ Done: $OUT"

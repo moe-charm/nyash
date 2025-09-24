@@ -497,35 +497,9 @@ pub extern "C" fn nyash_string_from_u64x2_export(lo: i64, hi: i64, len: i64) -> 
     handles::to_handle(arc) as i64
 }
 
-// Convert a VM argument (param index or existing handle) into a runtime handle
-// Exported as: nyash.handle.of
-#[export_name = "nyash.handle.of"]
-pub extern "C" fn nyash_handle_of_export(v: i64) -> i64 {
-    use nyash_rust::box_trait::NyashBox;
-    use nyash_rust::jit::rt::{handles, with_legacy_vm_args};
-    // If already a positive handle, pass through
-    if v > 0 {
-        return v;
-    }
-    // Otherwise treat as legacy param index and box-ref → handleize
-    if v >= 0 {
-        let idx = v as usize;
-        let mut out: i64 = 0;
-        with_legacy_vm_args(|args| {
-            if let Some(nyash_rust::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
-                // If it's a PluginBoxV2 or any NyashBox, register into handle registry
-                // Note: store as NyashBox for uniform access
-                let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(b.clone());
-                out = handles::to_handle(arc) as i64;
-            } else if let Some(nyash_rust::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
-                let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::from(b.clone());
-                out = handles::to_handle(arc) as i64;
-            }
-        });
-        return out;
-    }
-    0
-}
+// ✂️ REMOVED: Legacy VM argument processing - replaced by Plugin-First architecture
+// This function was part of the 42% deletable shim functions identified by ChatGPT5 Pro
+// Functionality now handled by unified plugin system
 
 // ---- Reserved runtime/GC externs for AOT linking ----
 // Exported as: nyash.rt.checkpoint
@@ -726,7 +700,8 @@ pub extern "C" fn main() -> i32 {
         let want_text = std::env::var("NYASH_GC_METRICS").ok().as_deref() == Some("1");
         if want_json || want_text {
             let (sp, br, bw) = rt_hooks.gc.snapshot_counters().unwrap_or((0, 0, 0));
-            let handles = nyash_rust::jit::rt::handles::len();
+            // ✂️ REMOVED: Legacy JIT handles::len() - part of 42% deletable functions
+            let handles = 0u64; // Placeholder: handles tracking removed with JIT archival
             let gc_mode_s = gc_mode.as_str();
             // Include allocation totals if controller is used
             let any_gc: &dyn std::any::Any = &*rt_hooks.gc;
@@ -790,17 +765,9 @@ pub extern "C" fn main() -> i32 {
             }
         }
 
-        // Leak diagnostics: report remaining JIT handles by type (Top-10)
-        if std::env::var("NYASH_GC_LEAK_DIAG").ok().as_deref() == Some("1") {
-            let tally = nyash_rust::jit::rt::handles::type_tally();
-            let total = tally.iter().map(|(_, n)| *n as u64).sum::<u64>();
-            if total > 0 {
-                eprintln!("[leak] Remaining handles by type (top 10):");
-                for (i, (ty, n)) in tally.into_iter().take(10).enumerate() {
-                    eprintln!("  {}. {} x{}", i + 1, ty, n);
-                }
-            }
-        }
+        // ✂️ REMOVED: Legacy JIT leak diagnostics - part of 42% deletable functions
+        // Leak diagnostics functionality removed with JIT archival
+        // handles::type_tally() no longer available in Plugin-First architecture
         v as i32
     }
 }

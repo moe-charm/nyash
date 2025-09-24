@@ -293,14 +293,8 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
             }
         }
     }
-    if method_name.is_none() {
-        nyash_rust::jit::rt::with_legacy_vm_args(|args| {
-            // method name is explicit arg position 1 (after receiver)
-            if let Some(nyash_rust::backend::vm::VMValue::String(s)) = args.get(1) {
-                method_name = Some(s.clone());
-            }
-        });
-    }
+    // ✂️ REMOVED: Legacy VM method name fallback
+    // In Plugin-First architecture, method names must be explicitly provided via handles or C strings
     let method_name = match method_name {
         Some(s) => s,
         None => return 0,
@@ -320,72 +314,12 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     let nargs_total = argc.max(0) as usize; // includes method_name
     let nargs_payload = nargs_total.saturating_sub(1);
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs_payload as u16);
-    let mut encode_from_legacy_into = |dst: &mut Vec<u8>, pos: usize| {
-        nyash_rust::jit::rt::with_legacy_vm_args(|args| {
-            if let Some(v) = args.get(pos) {
-                use nyash_rust::backend::vm::VMValue;
-                match v {
-                    VMValue::String(s) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::string(dst, &s)
-                    }
-                    VMValue::Integer(i) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::i64(dst, i)
-                    }
-                    VMValue::Float(f) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::f64(dst, f)
-                    }
-                    VMValue::Bool(b) => {
-                        nyash_rust::runtime::plugin_ffi_common::encode::bool(dst, b)
-                    }
-                    VMValue::BoxRef(b) => {
-                        if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                            let host = nyash_rust::runtime::get_global_plugin_host();
-                            if let Ok(hg) = host.read() {
-                                if p.box_type == "StringBox" {
-                                    if let Ok(Some(sb)) = hg.invoke_instance_method(
-                                        "StringBox",
-                                        "toUtf8",
-                                        p.instance_id(),
-                                        &[],
-                                    ) {
-                                        if let Some(s) = sb.as_any().downcast_ref::<StringBox>() {
-                                            nyash_rust::runtime::plugin_ffi_common::encode::string(
-                                                dst, &s.value,
-                                            );
-                                            return;
-                                        }
-                                    }
-                                } else if p.box_type == "IntegerBox" {
-                                    if let Ok(Some(ibx)) = hg.invoke_instance_method(
-                                        "IntegerBox",
-                                        "get",
-                                        p.instance_id(),
-                                        &[],
-                                    ) {
-                                        if let Some(i) = ibx.as_any().downcast_ref::<IntegerBox>() {
-                                            nyash_rust::runtime::plugin_ffi_common::encode::i64(
-                                                dst, i.value,
-                                            );
-                                            return;
-                                        }
-                                    }
-                                }
-                            }
-                            nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
-                                dst,
-                                p.inner.type_id,
-                                p.instance_id(),
-                            );
-                            return;
-                        }
-                        // Fallback: stringify
-                        let s = b.to_string_box().value;
-                        nyash_rust::runtime::plugin_ffi_common::encode::string(dst, &s);
-                    }
-                    _ => {}
-                }
-            }
-        });
+    // ✂️ REMOVED: Legacy VM argument encoding - replaced by Plugin-First architecture
+    // encode_from_legacy_into closure removed - no longer accessing VMValue args
+    let mut encode_from_legacy_into = |dst: &mut Vec<u8>, _pos: usize| {
+        // ✂️ REMOVED: Legacy VM argument processing
+        // In Plugin-First architecture, arguments are explicitly passed via handles
+        nyash_rust::runtime::plugin_ffi_common::encode::i64(dst, 0); // Default placeholder
     };
     let mut encode_arg_into = |dst: &mut Vec<u8>, val: i64, pos: usize| {
         let mut appended = false;

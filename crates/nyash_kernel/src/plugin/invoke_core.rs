@@ -25,24 +25,9 @@ pub fn resolve_receiver_for_a0(a0: i64) -> Option<Receiver> {
             }
         }
     }
-    // 2) Legacy VM args (index by a0) unless handle-only is enforced
-    if a0 >= 0 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
-        nyash_rust::jit::rt::with_legacy_vm_args(|args| {
-            let idx = a0 as usize;
-            if let Some(nyash_rust::backend::vm::VMValue::BoxRef(b)) = args.get(idx) {
-                if let Some(p) = b.as_any().downcast_ref::<PluginBoxV2>() {
-                    return Some(Receiver {
-                        instance_id: p.instance_id(),
-                        real_type_id: p.inner.type_id,
-                        invoke: p.inner.invoke_fn,
-                    });
-                }
-            }
-            None
-        })
-    } else {
-        None
-    }
+    // ✂️ REMOVED: Legacy VM argument receiver resolution
+    // Plugin-First architecture requires explicit handle-based receiver resolution only
+    None
 }
 
 /// Call plugin invoke with dynamic buffer growth, returning first TLV entry on success.

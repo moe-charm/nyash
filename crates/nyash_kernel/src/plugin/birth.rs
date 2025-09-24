@@ -117,53 +117,9 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
     if nargs >= 2 {
         encode_handle(a2);
     }
-    // Extra birth args from legacy VM when present
-    if nargs > 2 && std::env::var("NYASH_JIT_ARGS_HANDLE_ONLY").ok().as_deref() != Some("1") {
-        for pos in 3..=nargs {
-            nyash_rust::jit::rt::with_legacy_vm_args(|args| {
-                if let Some(v) = args.get(pos) {
-                    use nyash_rust::backend::vm::VMValue as V;
-                    match v {
-                        V::String(s) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
-                        }
-                        V::Integer(i) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut buf, i)
-                        }
-                        V::Float(f) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, f)
-                        }
-                        V::Bool(b) => {
-                            nyash_rust::runtime::plugin_ffi_common::encode::bool(&mut buf, b)
-                        }
-                        V::BoxRef(bx) => {
-                            if let Some(pb) = bx.as_any().downcast_ref::<PluginBoxV2>() {
-                                if let Some(bufbox) =
-                                    bx.as_any()
-                                        .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
-                                {
-                                    nyash_rust::runtime::plugin_ffi_common::encode::bytes(
-                                        &mut buf,
-                                        &bufbox.to_vec(),
-                                    );
-                                } else {
-                                    nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
-                                        &mut buf,
-                                        pb.inner.type_id,
-                                        pb.instance_id(),
-                                    );
-                                }
-                            } else {
-                                let s = bx.to_string_box().value;
-                                nyash_rust::runtime::plugin_ffi_common::encode::string(&mut buf, &s)
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            });
-        }
-    }
+    // ✂️ REMOVED: Legacy VM argument processing for args 3+
+    // In Plugin-First architecture, birth functions are limited to 2 explicit arguments
+    // Extended argument support removed with legacy VM system archival
     let mut out = vec![0u8; 1024];
     let mut out_len: usize = out.len();
     let rc = unsafe {

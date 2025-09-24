@@ -1,10 +1,10 @@
 [package]
-name = "nyrt"
+name = "nyash_kernel"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "nyrt"
+name = "nyash_kernel"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]

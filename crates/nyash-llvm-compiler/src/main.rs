@@ -32,7 +32,7 @@ struct Args {
     #[arg(long, value_name = "{obj|exe}", default_value = "obj")]
     emit: String,
 
-    /// Path to directory containing libnyrt.a when emitting an executable. If omitted, searches target/release then crates/nyrt/target/release.
+    /// Path to directory containing libnyash_kernel.a when emitting an executable. If omitted, searches target/release then crates/nyash_kernel/target/release.
     #[arg(long, value_name = "DIR")]
     nyrt: Option<PathBuf>,
 
@@ -175,14 +175,14 @@ fn link_executable(obj: &Path, out_exe: &Path, nyrt_dir_opt: Option<&PathBuf>, e
     let nyrt_dir = if let Some(dir) = nyrt_dir_opt {
         dir.clone()
     } else {
-        // try target/release then crates/nyrt/target/release
+        // try target/release then crates/nyash_kernel/target/release
         let a = PathBuf::from("target/release");
-        let b = PathBuf::from("crates/nyrt/target/release");
-        if a.join("libnyrt.a").exists() { a } else { b }
+        let b = PathBuf::from("crates/nyash_kernel/target/release");
+        if a.join("libnyash_kernel.a").exists() { a } else { b }
     };
-    let libnyrt = nyrt_dir.join("libnyrt.a");
+    let libnyrt = nyrt_dir.join("libnyash_kernel.a");
     if !libnyrt.exists() {
-        bail!("libnyrt.a not found in {} (use --nyrt to specify)", nyrt_dir.display());
+        bail!("libnyash_kernel.a not found in {} (use --nyrt to specify)", nyrt_dir.display());
     }
 
     // Choose a C linker
@@ -191,7 +191,7 @@ fn link_executable(obj: &Path, out_exe: &Path, nyrt_dir_opt: Option<&PathBuf>, e
     let mut cmd = Command::new(linker);
     cmd.arg("-o").arg(out_exe);
     cmd.arg(obj);
-    // Whole-archive libnyrt to ensure all objects are linked
+    // Whole-archive libnyash_kernel to ensure all objects are linked
     cmd.arg("-Wl,--whole-archive").arg(&libnyrt).arg("-Wl,--no-whole-archive");
     // Common libs on Linux
     cmd.arg("-ldl").arg("-lpthread").arg("-lm");
