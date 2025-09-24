@@ -8,11 +8,11 @@ use std::sync::{
 use std::time::Duration;
 
 use crate::consts::*;
+use crate::logging::net_log;
 use crate::state::{self, SockConnState, SockServerState};
 
-// Utilities provided by parent module
 fn logf(s: String) {
-    super::net_log(&s);
+    net_log(&s);
 }
 
 pub(crate) unsafe fn sock_server_invoke(
