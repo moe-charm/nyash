@@ -120,7 +120,13 @@ impl NyashRuntimeBuilder {
 
     /// Convenience: use CountingGc for development metrics
     pub fn with_counting_gc(mut self) -> Self {
-        let gc = Arc::new(crate::runtime::gc::CountingGc::new());
+        let mode = crate::runtime::gc_mode::GcMode::from_env();
+        if mode == crate::runtime::gc_mode::GcMode::Off {
+            // Respect GC_MODE=off: keep NullGc
+            self.gc = Some(Arc::new(crate::runtime::gc::NullGc));
+            return self;
+        }
+        let gc = Arc::new(crate::runtime::gc::CountingGc::new_with_mode(mode));
         self.gc = Some(gc);
         self
     }

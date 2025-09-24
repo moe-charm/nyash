@@ -37,6 +37,12 @@ impl Registry {
     fn get(&self, h: u64) -> Option<Arc<dyn NyashBox>> {
         self.map.read().ok().and_then(|m| m.get(&h).cloned())
     }
+    fn snapshot(&self) -> Vec<Arc<dyn NyashBox>> {
+        if let Ok(m) = self.map.read() {
+            return m.values().cloned().collect();
+        }
+        Vec::new()
+    }
     #[allow(dead_code)]
     fn drop_handle(&self, h: u64) {
         if let Ok(mut m) = self.map.write() {
@@ -61,4 +67,9 @@ pub fn to_handle_arc(arc: Arc<dyn NyashBox>) -> u64 {
 /// HostHandle(u64) → Arc<dyn NyashBox>
 pub fn get(h: u64) -> Option<Arc<dyn NyashBox>> {
     reg().get(h)
+}
+
+/// Snapshot all current handles as Arc<dyn NyashBox> roots for diagnostics/GC traversal.
+pub fn snapshot() -> Vec<Arc<dyn NyashBox>> {
+    reg().snapshot()
 }

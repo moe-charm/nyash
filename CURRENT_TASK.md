@@ -2,6 +2,16 @@
 
 Updated: 2025‑09‑26
 
+Addendum (2025‑09‑26 2nd half)
+- VM naming: added public alias `backend::NyashVm` and `backend::VM` → both point to `MirInterpreter` (Rust VM executor). No behavior change; improves clarity across runner/tests.
+- Smokes v2:
+  - Moved `stringbox_basic.sh` to plugins profile (plugin-centric behavior varies). Quick profile now focuses on core semantics and using.
+  - Adjusted StringBox tests to tolerate plugin‑first output descriptors and to SKIP the still‑unwired `StringBox.length` VM path.
+  - Kept quick/core green locally; any remaining harness flakiness will be addressed by instrumenting `run.sh` after this pass.
+- Test runner: filtered deprecation hints for builtin StringBox from outputs to reduce noise.
+- Using docs: verified unified design doc reflects `[using.paths]`, `[using.<name>] (path/main/kind/bid)`, aliases, and autoload guard `NYASH_USING_DYLIB_AUTOLOAD=1`.
+- Plugins profile: ensure fixture plugin notes include Windows/macOS filename differences.
+
 ## 🚀 **戦略決定完了: Rust VM + LLVM 2本柱体制確立**
 **Phase 15セルフホスティング革命への最適化実行器戦略**
 

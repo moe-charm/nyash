@@ -7,18 +7,17 @@
 - Rust（stable）: `cargo --version`
 - Bash + ripgrep（WSL/Unix 推奨）
 
-手順
-1) ビルド（JIT有効）
-   - 実行: `cargo build --release --features cranelift-jit`
+手順（v2 推奨）
+1) ビルド
+   - 実行: `cargo build --release`
 2) 最小 E2E（VM、plugins 無効）
    - 実行: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
-3) コアスモーク
-   - 実行: `bash tools/jit_smoke.sh`
-4) selfhost‑minimal スモーク
-   - 実行: `bash tools/selfhost_vm_smoke.sh`
-5) 追加（任意）
-   - ブートストラップ: `bash tools/bootstrap_selfhost_smoke.sh`
-   - ラウンドトリップ: `bash tools/ny_roundtrip_smoke.sh`
+3) クイックスモーク（VM軸）
+   - 実行: `tools/smokes/v2/run.sh --profile quick`
+4) プラグイン（任意・動的）
+   - 実行: `tools/smokes/v2/run.sh --profile plugins`
+5) LLVM 統合（任意・AOT/ハーネス）
+   - 実行: `tools/smokes/v2/run.sh --profile integration`
 
 検証
 - 期待出力: `Result: 0`（selfhost‑minimal）
@@ -27,7 +26,7 @@
 便利フラグ
 - `NYASH_DISABLE_PLUGINS=1` 外部プラグイン無効化
 - `NYASH_CLI_VERBOSE=1` 実行ログ詳細
-- `NYASH_JIT_THRESHOLD=1` JIT 降臨テスト
+- `NYASH_USING_DYLIB_AUTOLOAD=1` using.dylib 自動ロード（開発用）
 
 トラブルシュート
 - ハング: `timeout 15s ...` を付与、`NYASH_CLI_VERBOSE=1` で詳細
@@ -35,5 +34,5 @@
 - ルート相対パスで実行／`cargo clean -p nyash` で個別クリーン
 
 関連
-- CI: `.github/workflows/smoke.yml`
+- CI: `.github/workflows/smoke.yml`（JSON/JUnit 出力は v2 ランナーで取得可能）
 - マージ運用: `docs/CONTRIBUTING-MERGE.md`

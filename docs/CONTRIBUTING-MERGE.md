@@ -21,7 +21,7 @@
 
 ファイルオーナーシップ（推奨）
 - Cranelift: `src/jit/**`, `src/jit/policy.rs`, `tools/*aot*`, `docs/phase-15/cranelift/**`
-- Selfhost core: `src/interpreter/**`, `src/runner/**`, `dev/selfhosting/**`, `tools/jit_smoke.sh`, `tools/selfhost_vm_smoke.sh`
+- Selfhost core: `src/interpreter/**`, `src/runner/**`, `dev/selfhosting/**`, `tools/smokes/v2/**`
 - 共有/IR: `src/mir/**`, `src/parser/**` は変更時に両ブランチへ告知（PR説明で影響範囲を明記）。
 
 実務Tips
@@ -31,4 +31,3 @@
   - md は章分割して別ファイルに参照化（本運用の通り）
   - 大規模renameは単独PRで先行適用
   - 共有インターフェイスは薄いアダプタで橋渡し（実装詳細は各ブランチ内）
-

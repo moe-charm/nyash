@@ -181,6 +181,36 @@ Selfhost 子プロセスの引数透過（開発者向け）
   - 旧スモークは廃止（tools/test/smoke/*）。最新仕様のみを対象にするため、v2 のみ維持・拡充する。
   - 補助スイート（任意）: `./tools/smokes/v2/run.sh --profile plugins`（dylib using の自動読み込み検証など、プラグイン固有のチェックを隔離）
 
+## CI Policy（開発段階の最小ガード）
+
+開発段階では CI を“最小限＋高速”に保つ。むやみにジョブや行程を増やさない。
+
+- 原則（最小ガード）
+  - ビルドのみ: `cargo build --release`
+  - 代表スモーク（軽量）: `tools/smokes/v2/run.sh --profile quick`
+  - 以上で失敗しないこと（0 exit）が最低基準。重い/広範囲のマトリクスは導入しない。
+
+- 禁止/抑制
+  - 追加の CI ワークフローや大規模マトリクスの新設（フェーズ中は保留）
+  - フル/統合（integration/full）を既定で回すこと（ローカル/任意ジョブに留める）
+  - 外部環境依存のテスト（ネットワーク/GUI/長時間 I/O）
+
+- 任意（ローカル/手元）
+  - プラグイン検証: `tools/smokes/v2/run.sh --profile plugins`（フィクスチャ .so は未配置なら SKIP、配置時に PASS）
+  - LLVM/ハーネス確認: `tools/smokes/v2/run.sh --profile integration`
+
+- ログ/出力
+  - v2 ランナーはデフォルトで冗長ログをフィルタ済み（比較に混ざらない）。
+  - JSON/JUnit 出力は“必要時のみ” CI で収集。既定では OFF（テキスト出力で十分）。
+
+- タイムアウト・安定性
+  - quick プロファイルの既定タイムアウトは短め（15s 程度）。CI はこの既定を尊重。
+  - テストは SKIP を活用（プラグイン未配置/環境依存は SKIP で緑を維持）。
+
+- 変更時の注意
+  - v2 スモークの追加は“狭く軽い”ものから。既存の quick を重くしない。
+  - 重い検証（integration/full）はローカル推奨。必要なら単発任意ジョブに限定。
+
 ## Runtime Lines Policy（VM/LLVM 方針）
 - 軸（2025 Phase‑15+）
   - Rust VM ライン（主経路）: 実行は Rust VM を既定にする。プラグインは動的ロード（.so/.dll）で扱う。

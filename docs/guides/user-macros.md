@@ -94,14 +94,13 @@ Notes
 - Timeout: `NYASH_NY_COMPILER_TIMEOUT_MS` (default `2000`).
 
 Testing
-- Smoke: `tools/test/smoke/macro/macro_child_runner_identity_smoke.sh`
+- Smokes (v2): `tools/smokes/v2/run.sh --profile quick --filter "macro"`
 - Golden (identity): `tools/test/golden/macro/identity_user_macro_golden.sh`
 - Golden (upper string): `tools/test/golden/macro/upper_string_user_macro_golden.sh`
  - Golden (array prepend 0): `tools/test/golden/macro/array_prepend_zero_user_macro_golden.sh`
  - Golden (map insert tag): `tools/test/golden/macro/map_insert_tag_user_macro_golden.sh`
- - Negative (timeout strict fail): `tools/test/smoke/macro/macro_user_timeout_strict_fail.sh`
- - Negative (invalid JSON strict fail): `tools/test/smoke/macro/macro_user_invalid_json_strict_fail.sh`
- - Negative (invalid JSON non‑strict identity): `tools/test/smoke/macro/macro_user_invalid_json_nonstrict_identity.sh`
+ - Negative (timeout strict fail): covered by v2 smokes (legacy paths removed)
+ - Negative (invalid JSON strict/non‑strict): covered by v2 smokes（legacy paths removed）
 
 Array/Map editing examples
 - Array prepend zero: `apps/macros/examples/array_prepend_zero_macro.nyash`

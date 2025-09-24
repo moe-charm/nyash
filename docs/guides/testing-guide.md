@@ -85,20 +85,18 @@ PHI-on の補助トレース
 - 出力: 1 行 JSON（JSONL）。`NYASH_LLVM_TRACE_OUT=<path>` に追記出力。
 - イベント: `finalize_begin/finalize_dst/add_incoming/wire_choose/snapshot` など（pred→dst 整合が分かる）
 
-クイック実行
+クイック実行（v2）
 ```bash
-# すべてPHI‑offで OK。llvmlite ハーネスと if-merge プリパスをON
-NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi.jsonl \
-NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_PREPASS_IFMERGE=1 \
-bash tools/test/smoke/llvm/phi_trace/test.sh
+# 代表サンプルを LLVM ハーネスで実行し PHI トレースを採取（v2 スクリプト）
+bash tools/smokes/phi_trace_local.sh
 
 # 結果の検証（要: python3）
-python3 tools/phi_trace_check.py --file tmp/phi.jsonl --summary
+python3 tools/phi_trace_check.py --file tmp/phi_trace.jsonl --summary
 ```
 
 ショートカット
-- `tools/smokes/phi_trace_local.sh`（ビルド→スモーク→チェックを一括）
-- `tools/smokes/fast_local.sh` は `NYASH_LLVM_TRACE_SMOKE=1` でオプション実行
+- `tools/smokes/phi_trace_local.sh`（ビルド→サンプル実行→チェックを一括）
+- `tools/smokes/v2/run.sh --profile quick|integration` で代表スモークを実行
 
 
 ## 🔌 **プラグインテスター（BID-FFI診断ツール）**

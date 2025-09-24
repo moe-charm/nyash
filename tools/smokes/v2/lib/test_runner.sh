@@ -123,14 +123,22 @@ run_nyash_vm() {
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
         NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" "$tmpfile" "$@" 2>&1 | \
-            grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
+            grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
+            grep -v "Using builtin StringBox" | grep -v "Phase 15.5: Everything is Plugin" | grep -v "cargo build -p nyash-string-plugin" | \
+            grep -v "^\[plugin-loader\] backend=" | grep -v "^\[using\] ctx:" | \
+            grep -v "^🔌 plugin host initialized" | grep -v "^✅ plugin host fully configured" | \
+            grep -v "^🚀 Nyash VM Backend - Executing file:"
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
     else
         # プラグイン初期化メッセージを除外
         NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" "$program" "$@" 2>&1 | \
-            grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
+            grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
+            grep -v "Using builtin StringBox" | grep -v "Phase 15.5: Everything is Plugin" | grep -v "cargo build -p nyash-string-plugin" | \
+            grep -v "^\[plugin-loader\] backend=" | grep -v "^\[using\] ctx:" | \
+            grep -v "^🔌 plugin host initialized" | grep -v "^✅ plugin host fully configured" | \
+            grep -v "^🚀 Nyash VM Backend - Executing file:"
         return ${PIPESTATUS[0]}
     fi
 }

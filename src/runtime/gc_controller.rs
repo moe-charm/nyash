@@ -133,17 +133,15 @@ impl GcController {
         // Reset windows
         self.sp_since_last.store(0, Ordering::Relaxed);
         self.bytes_since_last.store(0, Ordering::Relaxed);
-        // PoC: no object graph; report current handles as leak candidates and return.
-        if self.mode == GcMode::Off {
-            return;
-        }
         // Only run for rc/rc+cycle/stw; rc+cycle is default.
         match self.mode {
             GcMode::Rc | GcMode::RcCycle | GcMode::STW => {
                 let started = std::time::Instant::now();
-                // Roots: Runtime handle registry snapshot
-                // ARCHIVED: JIT handle implementation moved to archive/jit-cranelift/ during Phase 15
-                let roots: Vec<std::sync::Arc<dyn crate::box_trait::NyashBox>> = Vec::new(); // TODO: Implement handle registry for Phase 15
+                // Roots: HostHandle registry + modules_registry (Arc<dyn NyashBox>)
+                let mut roots: Vec<std::sync::Arc<dyn crate::box_trait::NyashBox>> =
+                    crate::runtime::host_handles::snapshot();
+                let mut mod_roots = crate::runtime::modules_registry::snapshot_boxes();
+                roots.append(&mut mod_roots);
                 let mut visited: HashSet<u64> = HashSet::new();
                 let mut q: VecDeque<std::sync::Arc<dyn crate::box_trait::NyashBox>> =
                     VecDeque::new();

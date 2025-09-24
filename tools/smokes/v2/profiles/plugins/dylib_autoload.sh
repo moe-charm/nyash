@@ -3,6 +3,7 @@
 
 # 共通ライブラリ読み込み（必須）
 source "$(dirname "$0")/../../lib/test_runner.sh"
+source "$(dirname "$0")/_ensure_fixture.sh"
 
 # 環境チェック（必須）
 require_env || exit 2
@@ -53,6 +54,9 @@ cleanup_autoload_test() {
 test_fixture_dylib_autoload() {
     setup_autoload_test
 
+    if [ ! -f "$NYASH_ROOT/plugins/nyash-fixture-plugin/$LIB_FIXTURE" ]; then
+        ensure_fixture_plugin || true
+    fi
     if [ ! -f "$NYASH_ROOT/plugins/nyash-fixture-plugin/$LIB_FIXTURE" ]; then
         test_skip "fixture_dylib_autoload" "Fixture plugin not available"
         cleanup_autoload_test; return 0

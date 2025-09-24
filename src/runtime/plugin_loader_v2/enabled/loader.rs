@@ -991,6 +991,8 @@ impl PluginLoaderV2 {
                 finalized: std::sync::atomic::AtomicBool::new(false),
             }),
         };
+        // Diagnostics: register for leak tracking (optional)
+        crate::runtime::leak_tracker::register_plugin(box_type, instance_id);
         Ok(Box::new(bx))
     }
 

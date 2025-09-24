@@ -31,10 +31,9 @@ Lowering（Result‑mode）
 - Parser が後置 catch/cleanup を `TryCatch` に畳み込み（try_body=直前ブロック）。
 - Bridge は既存の Result‑mode を使用：ThrowCtx によりネスト throw を単一 catch に集約、PHI‑off 合流（edge‑copy）。
 
-Run examples
-- JSON v0 → Bridge → PyVM: `bash tools/test/smoke/bridge/try_result_mode.sh`
-  - Includes `block_postfix_catch.json` to confirm single‑catch + cleanup path.
-  - Env: `NYASH_TRY_RESULT_MODE=1` is set by the script.
+Run examples（v2）
+- JSON v0 → Bridge → PyVM: `tools/smokes/v2/run.sh --profile integration --filter "exceptions|result|catch"`
+  - `NYASH_TRY_RESULT_MODE=1` をセットして実行ケースを確認（必要に応じてスモーク側で設定）
 
 
 Examples

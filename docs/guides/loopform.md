@@ -98,14 +98,13 @@ MVP-3（実装済み・最小対応）
   - 代入先は変数のみ（フィールド等は対象外）
   - 全体の更新変数は最大2種（MVP-2 制約を継承）
   - セグメント内で「代入の後に非代入」があれば整列しない（順序保持）
-- スモーク:
-  - `tools/test/smoke/macro/loopform_continue_break_output_smoke.sh`
+- スモーク（v2）: `tools/smokes/v2/run.sh --profile quick --filter "loopform|macro"`
 
 for / foreach の糖衣と正規化（概要）
 - for: `for(fn(){ init }, cond, fn(){ step }, fn(){ body })` を `init; loop(cond){ body; step }` へ正規化。
   - init/step は `Assignment`/`Local` 単体でも可。
 - foreach: `foreach(arr, "x", fn(){ body })` を `__ny_i` で走査する Loop へ正規化し、`x` を `arr.get(__ny_i)` に置換。
-- スモーク: `tools/test/smoke/macro/for_foreach_output_smoke.sh`
+- スモーク（v2）: `tools/smokes/v2/run.sh --profile quick --filter "macro|foreach|for"`
 
 対応状況（MVP→順次拡張）
 - Week1: while（break/continue無し）
@@ -124,8 +123,8 @@ for / foreach の糖衣と正規化（概要）
 - ゴールデン（キー順無視の比較）
   - `tools/test/golden/macro/loop_simple_user_macro_golden.sh`
   - `tools/test/golden/macro/loop_two_vars_user_macro_golden.sh`
- - 出力一致スモーク（VM）
-   - `tools/test/smoke/macro/loop_two_vars_output_smoke.sh`
+ - 出力一致スモーク（VM, v2）
+   - `tools/smokes/v2/run.sh --profile quick --filter "loop_two_vars|macro"`
  - 自己ホスト前展開（PyVM 経由）
   - `NYASH_VM_USE_PY=1 NYASH_USE_NY_COMPILER=1 NYASH_MACRO_ENABLE=1 NYASH_MACRO_PATHS=apps/macros/examples/loop_normalize_macro.nyash ./target/release/nyash --macro-preexpand --backend vm apps/tests/macro/loopform/simple.nyash`
 

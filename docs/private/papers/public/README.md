@@ -8,12 +8,11 @@ Topics
 - 03 — PHI Observability and Trace Checking (phi_trace_observability.md)
 - 04 — Block‑Postfix Catch Language Design (block_postfix_catch.md)
 
-How to Reproduce (quick)
+How to Reproduce (quick, v2)
 - Build: `cargo build --release`
-- Bridge(Result‑mode) smokes: `bash tools/test/smoke/bridge/try_result_mode.sh`
-- PHI trace (optional): `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi.jsonl bash tools/test/smoke/bridge/try_result_mode.sh`
+- Run smokes: `tools/smokes/v2/run.sh --profile quick`
+- PHI trace (optional): `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi_trace.jsonl bash tools/smokes/phi_trace_local.sh`
 
 Notes
 - Target audience: systems and compiler practitioners; emphasis on simplicity, robustness, and observability.
 - Draft status: living documents; code references use stable paths in this repo.
-

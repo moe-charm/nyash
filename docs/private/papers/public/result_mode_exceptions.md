@@ -17,11 +17,11 @@ Method
 Code References
 - Parser: `src/parser/statements.rs`
 - Bridge lowering: `src/runner/json_v0_bridge/lowering/{try_catch.rs, throw_ctx.rs}`
-- Smokes: `tools/test/smoke/bridge/try_result_mode.sh`
+- Smokes (v2): covered by `tools/smokes/v2` integration runs
 
 Evaluation Plan
 - Semantic parity: PyVM vs. harness binaries on representative cases.
 - Control‑flow complexity: nested if/loop + cleanup; ensure merges are stable.
 
-Reproduce
-- `bash tools/test/smoke/bridge/try_result_mode.sh`
+Reproduce (v2)
+- `tools/smokes/v2/run.sh --profile integration`

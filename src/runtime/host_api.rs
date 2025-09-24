@@ -181,7 +181,8 @@ pub extern "C" fn nyrt_host_call_name(
                     crate::backend::vm::VMValue::String(s) => s.clone(),
                     v => v.to_string(),
                 };
-                // VM-legacy removed - no GC barrier needed
+                // GC barrier (Write) — revive minimal barrier on host setField
+                crate::runtime::global_hooks::gc_barrier(crate::runtime::gc::BarrierKind::Write);
                 // Accept primitives only for now
                 let nv_opt = match argv[1].clone() {
                     crate::backend::vm::VMValue::Integer(i) => {

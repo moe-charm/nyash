@@ -32,16 +32,14 @@ Bridge/Builder (JSON v0) Behavior
 - MIR14 (default): If/Loop/Try placements emit PHIs up front; loop latches, break/continue, and structured joins have explicit incoming pairs.
 - MIR13 (fallback): Merges are performed with edge copies (`merge_var_maps`). Use only when reproducing historical issues.
 
-Testing
-- Curated LLVM (default = PHI-on):
-  - `tools/smokes/curated_llvm.sh`  (add `--phi-off` to exercise MIR13)
-- PHI invariants/parity (AOT vs PyVM):
-  - `tools/pyvm_vs_llvmlite.sh` (default compares exit code; use `CMP_STRICT=1` for stdout+exit)
-- Bridge/PyVM:
-  - `tools/selfhost_stage2_bridge_smoke.sh`
+Testing (v2)
+- Integration suite (LLVM harness/PHI invariants):
+  - `tools/smokes/v2/run.sh --profile integration`
+- Bridge/PyVM の検証は v2 スイートに統合（必要に応じてフィルタを使用）
 
 How to Force PHI-off (MIR13 fallback)
-- Set: `NYASH_MIR_NO_PHI=1 NYASH_VERIFY_ALLOW_NO_PHI=1` and run `tools/smokes/curated_llvm.sh --phi-off`
+- Set: `NYASH_MIR_NO_PHI=1 NYASH_VERIFY_ALLOW_NO_PHI=1`
+- Run integration: `tools/smokes/v2/run.sh --profile integration`
 - Label the run as legacy in `CURRENT_TASK.md` if results inform shared debugging.
 
 Known Limitations (current)

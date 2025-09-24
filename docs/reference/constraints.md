@@ -13,7 +13,7 @@ Entries
 - Summary: If-join used to effectively handle at most two same‑name variable assignments per join when emitting PHI groups.
 - Impact: LLVM harness (PHI wiring)
 - Fix: Finalize‑PHI wiring + join result observation; normalized to handle N variables.
-- Tests: `tools/test/smoke/llvm/ir_phi_hygiene_if_phi_ret.sh`, `tools/test/smoke/mir/hints_join_result_three_vars_smoke.sh`
+- Tests (v2): use `tools/smokes/v2/run.sh --profile integration` (LLVM PHI invariants covered in integration suite)
 - Notes: Keep IR hygiene smokes minimal in CI; more exhaustive coverage can run locally.
 
 ## CF-PHI-0002 — Empty PHI sanitize switch
@@ -22,20 +22,20 @@ Entries
 - Impact: LLVM harness only
 - Gate: `NYASH_LLVM_SANITIZE_EMPTY_PHI=1`
 - Exit criteria: PHI wiring guarantees no empty PHIs across Loop/If/Match; remove sanitize path.
-- Tests: `tools/test/smoke/llvm/ir_phi_empty_check.sh`
+- Tests (v2): covered by `tools/smokes/v2` integration runs; legacy scripts were removed
 
 ## CF-LOOP-0006 — Nested bare blocks with break/continue in loops
 - Status: Resolved
 - Summary: Previously, a `break`/`continue` inside a nested bare block (`{ ... }`) within a loop could bypass loop-aware lowering in certain cases.
 - Impact: MIR builder (LoopBuilder vs generic block handling)
 - Fix: LoopBuilder now lowers `Program` nodes by recursing through statements with termination checks; `break/continue` inside nested blocks route to the loop header/exit uniformly.
-- Tests: `tools/test/smoke/macro/loop_nested_block_break_output_smoke.sh`
+- Tests (v2): covered in `tools/smokes/v2` macro cases (legacy paths removed)
 
 ## CF-MATCH-0003 — Scrutinee single evaluation
 - Status: Stable
 - Summary: Scrutinee is evaluated once and stored in a gensym (e.g., `__ny_match_scrutinee_X`).
 - Impact: Parser/Normalizer/All backends
-- Tests: `tools/test/golden/macro/match_literal_basic.expanded.json`, output smokes under `tools/test/smoke/macro/`.
+- Tests (v2): goldens remain; execution smokes are under `tools/smokes/v2` (legacy paths removed)
 - Notes: Golden comparison may normalize gensym names in the future to reduce brittleness.
 
 ## EXC-PFX-0004 — Postfix catch/cleanup precedence
@@ -43,7 +43,7 @@ Entries
 - Summary: Postfix attaches to the immediately preceding expression (call/chain) and stops further chaining. Normalizes to a single TryCatch.
 - Impact: Parser/Normalizer/All backends
 - Gate: `NYASH_PARSER_STAGE3=1` (direct parsing); `NYASH_CATCH_NEW=1` (sugar normalization)
-- Tests: `tools/test/smoke/macro/expr_postfix_catch_cleanup_output_smoke.sh`, `tools/test/smoke/mir/hints_scope_trycatch_smoke.sh`, `src/tests/parser_expr_postfix_catch.rs`
+- Tests (v2): see `tools/smokes/v2` and `src/tests/parser_expr_postfix_catch.rs` (legacy paths removed)
 
 ## MACRO-CAPS-0005 — Macro sandbox capabilities (io/net/env)
 - Status: Stable MVP

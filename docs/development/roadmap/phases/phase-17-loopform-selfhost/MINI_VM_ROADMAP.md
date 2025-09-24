@@ -15,7 +15,7 @@ Stages（概要）
 - Stage A（完了）
   - 文字列スキャンで整数抽出→print、if（リテラル条件）の最小到達。
   - サンプル: `apps/selfhost-vm/mini_vm*.nyash`
-  - スモーク: `tools/test/smoke/selfhost/mini_vm_*`
+- スモーク（v2）: `tools/smokes/v2/run.sh --profile quick --filter "mini_vm|selfhost"`
 - Stage B（進行中）
   - stdinローダ（`NYASH_MINIVM_READ_STDIN=1`）[実装済]
   - JSON v0 ローダの最小強化（Print(Literal/FunctionCall)、BinaryOp("+")の最小）[実装中]
@@ -36,7 +36,9 @@ Stages（概要）
 実行・導線
 - PyVM経由（既定）: `NYASH_VM_USE_PY=1` で Runner が MIR(JSON)→PyVM へ委譲
 - Mini‑VM入力: `NYASH_MINIVM_READ_STDIN=1` で標準入力を `NYASH_SCRIPT_ARGS_JSON` に注入
-- サンプル実行: `bash tools/test/smoke/selfhost/mini_vm_stdin_loader_smoke.sh`
+- サンプル実行（例）:
+  - `NYASH_MINIVM_READ_STDIN=1 echo '{"kind":"Program","body":[]}' | ./target/release/nyash --backend vm`
+  - もしくは v2 ランナーで関連スモークをフィルタ実行
 
 関連
 - 現在の短期タスクと進捗: `CURRENT_TASK.md` の「Mini‑VM 構築ロードマップ（整理）」

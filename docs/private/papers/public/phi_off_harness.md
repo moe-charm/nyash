@@ -24,8 +24,7 @@ Evaluation Plan
 - Robustness: mutate block orders; verify PHIs remain grouped at heads and traces stable.
 - Cost: count PHIs vs. classic SSA on samples (optional).
 
-Reproduce
+Reproduce (v2)
 - `cargo build --release`
-- `bash tools/test/smoke/bridge/try_result_mode.sh`
-- Optional trace: `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi.jsonl ...`
-
+- `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi_trace.jsonl bash tools/smokes/phi_trace_local.sh`
+- Optional: `tools/smokes/v2/run.sh --profile integration`

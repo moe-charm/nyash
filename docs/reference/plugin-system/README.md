@@ -125,14 +125,14 @@ cargo build --release
 ./target/release/plugin-tester check path/to/your/plugin.so
 ```
 
-### 5. **nyash_box.toml テンプレ & スモーク** 🆕
+### 5. **nyash_box.toml テンプレ & スモーク（v2）** 🆕
 - テンプレート: `docs/reference/plugin-system/nyash_box.toml.template`
-- スモーク実行（VM・厳格チェックON）:
+- スモーク実行（VM・動的プラグイン）:
 ```bash
-bash tools/smoke_plugins.sh
+tools/smokes/v2/run.sh --profile plugins
 ```
-  - 実行内容: Python デモと Integer デモを `NYASH_PLUGIN_STRICT=1` で起動し、nyash_box.toml 経路のロードと実行を確認
-  - 事前条件: `cargo build --release --features cranelift-jit` 済み、各プラグインも release ビルド済み
+  - 代表ケース（Fixture/Counter/Math など）を自動検証。未配置の .so は SKIP で安全に進行
+  - 事前条件: `cargo build --release` 済み。必要に応じて `tools/smokes/v2/profiles/plugins/_ensure_fixture.sh` がフィクスチャを自動構築
 
 ### 6. **プラグイン優先（ビルトイン上書き）設定** 🆕
 - 既定では、ビルトインの実装が優先されます（安全第一）。

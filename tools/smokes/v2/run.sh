@@ -260,7 +260,10 @@ run_single_test() {
         timeout_cmd="timeout ${SMOKES_DEFAULT_TIMEOUT}"
     fi
 
-    if $timeout_cmd bash "$test_file" >/dev/null 2>&1; then
+    # 詳細ログ: 失敗時のみテイル表示
+    local log_file
+    log_file="/tmp/nyash_smoke_$(date +%s)_$$.log"
+    if $timeout_cmd bash "$test_file" >"$log_file" 2>&1; then
         exit_code=0
     else
         exit_code=$?
@@ -275,18 +278,27 @@ run_single_test() {
             if [ $exit_code -eq 0 ]; then
                 echo -e "${GREEN}PASS${NC} (${duration}s)"
             else
-                echo -e "${RED}FAIL${NC} (${duration}s)"
+                echo -e "${RED}FAIL${NC} (exit=$exit_code, ${duration}s)"
+                echo -e "${YELLOW}[WARN]${NC} Test file: $test_file"
+                local TAIL_N="${SMOKES_NOTIFY_TAIL:-80}"
+                echo "----- LOG (tail -n $TAIL_N) -----"
+                tail -n "$TAIL_N" "$log_file" || true
+                echo "----- END LOG -----"
             fi
             ;;
         json)
-            echo "{\"name\":\"$test_name\",\"status\":\"$([ $exit_code -eq 0 ] && echo "pass" || echo "fail")\",\"duration\":$duration}"
+            local status_json
+            status_json=$([ $exit_code -eq 0 ] && echo "pass" || echo "fail")
+            echo "{\"name\":\"$test_name\",\"path\":\"$test_file\",\"status\":\"$status_json\",\"duration\":$duration,\"exit\":$exit_code}"
             ;;
         junit)
-            # JUnit形式は後でまとめて出力
-            echo "$test_name:$exit_code:$duration" >> /tmp/junit_results.txt
+            # JUnit形式は後でまとめて出力（pathも保持）
+            echo "$test_name:$exit_code:$duration:$test_file" >> /tmp/junit_results.txt
             ;;
     esac
 
+    # 後始末
+    rm -f "$log_file" 2>/dev/null || true
     return $exit_code
 }
 
@@ -381,11 +393,11 @@ run_tests() {
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuite name="smokes_$PROFILE" tests="$((passed + failed))" failures="$failed" time="$total_duration">
 EOF
-            while IFS=':' read -r name exit_code duration; do
+            while IFS=':' read -r name exit_code duration path; do
                 if [ "$exit_code" = "0" ]; then
-                    echo "  <testcase name=\"$name\" time=\"$duration\"/>"
+                    echo "  <testcase name=\"$name\" time=\"$duration\" classname=\"$path\"/>"
                 else
-                    echo "  <testcase name=\"$name\" time=\"$duration\"><failure message=\"Test failed\"/></testcase>"
+                    echo "  <testcase name=\"$name\" time=\"$duration\" classname=\"$path\"><failure message=\"exit=$exit_code\"/></testcase>"
                 fi
             done < /tmp/junit_results.txt
             echo "</testsuite>"

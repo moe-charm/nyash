@@ -242,6 +242,47 @@ impl MirInterpreter {
                                 .insert(fname, valv);
                             continue;
                         }
+                        // Builtin StringBox minimal methods (length/concat) to bridge plugin-first gaps
+                        {
+                            let recv = self.reg_load(*box_val)?;
+                            let recv_box_any: Box<dyn crate::box_trait::NyashBox> = match recv.clone() {
+                                VMValue::BoxRef(b) => b.share_box(),
+                                other => other.to_nyash_box(),
+                            };
+                            if let Some(sb) = recv_box_any
+                                .as_any()
+                                .downcast_ref::<crate::box_trait::StringBox>()
+                            {
+                                match method.as_str() {
+                                    "length" => {
+                                        let ret = sb.length();
+                                        if let Some(d) = dst {
+                                            self.regs.insert(*d, VMValue::from_nyash_box(ret));
+                                        }
+                                        continue;
+                                    }
+                                    "concat" => {
+                                        if args.len() != 1 {
+                                            return Err(VMError::InvalidInstruction(
+                                                "concat expects 1 arg".into(),
+                                            ));
+                                        }
+                                        let rhs = self.reg_load(args[0])?;
+                                        let new_s = format!("{}{}", sb.value, rhs.to_string());
+                                        if let Some(d) = dst {
+                                            self.regs.insert(
+                                                *d,
+                                                VMValue::from_nyash_box(Box::new(
+                                                    crate::box_trait::StringBox::new(new_s),
+                                                )),
+                                            );
+                                        }
+                                        continue;
+                                    }
+                                    _ => { /* fallthrough to plugin or error */ }
+                                }
+                            }
+                        }
                         // Fallback: treat like PluginInvoke for plugin-backed boxes
                         let recv = self.reg_load(*box_val)?;
                         let recv_box: Box<dyn crate::box_trait::NyashBox> = match recv.clone() {
@@ -322,20 +363,87 @@ impl MirInterpreter {
                         args,
                         ..
                     } => {
-                        // Minimal env.console.log bridge
-                        if iface_name == "env.console" && method_name == "log" {
-                            if let Some(a0) = args.get(0) {
-                                let v = self.reg_load(*a0)?;
-                                println!("{}", v.to_string());
+                        match (iface_name.as_str(), method_name.as_str()) {
+                            ("env.console", "log") => {
+                                if let Some(a0) = args.get(0) {
+                                    let v = self.reg_load(*a0)?;
+                                    println!("{}", v.to_string());
+                                }
+                                if let Some(d) = dst {
+                                    self.regs.insert(*d, VMValue::Void);
+                                }
                             }
-                            if let Some(d) = dst {
-                                self.regs.insert(*d, VMValue::Void);
+                            ("env.future", "new") => {
+                                let fut = crate::boxes::future::NyashFutureBox::new();
+                                if let Some(a0) = args.get(0) {
+                                    let v = self.reg_load(*a0)?;
+                                    fut.set_result(v.to_nyash_box());
+                                }
+                                if let Some(d) = dst {
+                                    self.regs.insert(*d, VMValue::Future(fut));
+                                }
                             }
-                        } else {
-                            return Err(VMError::InvalidInstruction(format!(
-                                "ExternCall {}.{} not supported",
-                                iface_name, method_name
-                            )));
+                            ("env.future", "set") => {
+                                if args.len() >= 2 {
+                                    let f = self.reg_load(args[0])?;
+                                    let v = self.reg_load(args[1])?;
+                                    if let VMValue::Future(fut) = f {
+                                        fut.set_result(v.to_nyash_box());
+                                    } else {
+                                        return Err(VMError::TypeError("env.future.set expects Future".into()));
+                                    }
+                                }
+                                if let Some(d) = dst {
+                                    self.regs.insert(*d, VMValue::Void);
+                                }
+                            }
+                            ("env.future", "await") => {
+                                if let Some(a0) = args.get(0) {
+                                    let f = self.reg_load(*a0)?;
+                                    match f {
+                                        VMValue::Future(fut) => {
+                                            // Coarse safepoint while blocking
+                                            let v = fut.get();
+                                            if let Some(d) = dst {
+                                                self.regs.insert(*d, VMValue::from_nyash_box(v));
+                                            }
+                                        }
+                                        _ => return Err(VMError::TypeError("await expects Future".into())),
+                                    }
+                                }
+                            }
+                            ("env.runtime", "checkpoint") => {
+                                crate::runtime::global_hooks::safepoint_and_poll();
+                                if let Some(d) = dst {
+                                    self.regs.insert(*d, VMValue::Void);
+                                }
+                            }
+                            ("env.modules", "set") => {
+                                if args.len() >= 2 {
+                                    let k = self.reg_load(args[0])?.to_string();
+                                    let v = self.reg_load(args[1])?.to_nyash_box();
+                                    crate::runtime::modules_registry::set(k, v);
+                                }
+                                if let Some(d) = dst {
+                                    self.regs.insert(*d, VMValue::Void);
+                                }
+                            }
+                            ("env.modules", "get") => {
+                                if let Some(a0) = args.get(0) {
+                                    let k = self.reg_load(*a0)?.to_string();
+                                    let vb = crate::runtime::modules_registry::get(&k)
+                                        .unwrap_or_else(|| Box::new(crate::box_trait::VoidBox::new()));
+                                    if let Some(d) = dst {
+                                        self.regs.insert(*d, VMValue::from_nyash_box(vb));
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(VMError::InvalidInstruction(format!(
+                                    "ExternCall {}.{} not supported",
+                                    iface_name, method_name
+                                )));
+                            }
                         }
                     }
                     MirInstruction::RefSet {

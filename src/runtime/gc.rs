@@ -35,12 +35,9 @@ pub struct CountingGc {
 }
 
 impl CountingGc {
-    pub fn new() -> Self {
-        // Default to rc+cycle mode for development metrics
-        let mode = crate::runtime::gc_mode::GcMode::RcCycle;
-        Self {
-            inner: crate::runtime::gc_controller::GcController::new(mode),
-        }
+    pub fn new() -> Self { Self::new_with_mode(crate::runtime::gc_mode::GcMode::RcCycle) }
+    pub fn new_with_mode(mode: crate::runtime::gc_mode::GcMode) -> Self {
+        Self { inner: crate::runtime::gc_controller::GcController::new(mode) }
     }
     pub fn snapshot(&self) -> (u64, u64, u64) {
         self.inner.snapshot()

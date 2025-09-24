@@ -14,7 +14,7 @@ pub mod vm {
 // Core backend modules
 pub mod abi_util; // Shared ABI/utility helpers
 pub mod gc_helpers;
-pub mod mir_interpreter; // Lightweight MIR interpreter
+pub mod mir_interpreter; // Lightweight MIR interpreter (Rust VM core)
 
 #[cfg(feature = "wasm-backend")]
 pub mod aot;
@@ -31,7 +31,12 @@ pub mod cranelift;
 #[cfg(feature = "llvm-inkwell-legacy")]
 pub mod llvm;
 
+// Public aliases to make the role of the VM clear in runner/tests
 pub use mir_interpreter::MirInterpreter;
+/// Primary Rust VM executor alias (preferred name)
+pub type NyashVm = mir_interpreter::MirInterpreter;
+/// Back-compat shim used across runner/tests
+pub type VM = NyashVm;
 // Always re-export VMError/VMValue from vm_types
 pub use vm_types::{VMError, VMValue};
 

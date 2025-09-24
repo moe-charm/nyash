@@ -11,10 +11,9 @@ Code References
 - Trace writer: `src/llvm_py/llvm_builder.py`, `src/llvm_py/phi_wiring/wiring.py`
 - Checker: `tools/phi_trace_check.py`
 
-Usage
-- `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi.jsonl bash tools/test/smoke/bridge/try_result_mode.sh`
-- `python3 tools/phi_trace_check.py --summary tmp/phi.jsonl`
+Usage (v2)
+- `NYASH_LLVM_TRACE_PHI=1 NYASH_LLVM_TRACE_OUT=tmp/phi_trace.jsonl bash tools/smokes/phi_trace_local.sh`
+- `python3 tools/phi_trace_check.py --summary tmp/phi_trace.jsonl`
 
 Next
 - Expand checks (dominance, grouping at head), integrate into CI as optional gate.
-
