@@ -1,7 +1,7 @@
 static box Main {
   main() {
     local S
-    S = include "apps/std/string2.nyash"
+    using "apps/std/string2.nyash" as S
     local x
     x = S.string_length("abc")
     print("len=" + x.toString())

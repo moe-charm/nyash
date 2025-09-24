@@ -131,12 +131,11 @@ impl NyashParser {
         }
     }
 
-    /// Grouped: IO/module-ish (print/nowait/include)
+    /// Grouped: IO/module-ish (print/nowait)
     fn parse_io_module_statement(&mut self) -> Result<ASTNode, ParseError> {
         match &self.current_token().token_type {
             TokenType::PRINT => self.parse_print(),
             TokenType::NOWAIT => self.parse_nowait(),
-            TokenType::INCLUDE => self.parse_include(),
             _ => {
                 let line = self.current_token().line;
                 Err(ParseError::UnexpectedToken {
@@ -290,7 +289,7 @@ impl NyashParser {
             | TokenType::BREAK
             | TokenType::CONTINUE
             | TokenType::RETURN => self.parse_control_flow_statement(),
-            TokenType::PRINT | TokenType::NOWAIT | TokenType::INCLUDE => self.parse_io_module_statement(),
+            TokenType::PRINT | TokenType::NOWAIT => self.parse_io_module_statement(),
             TokenType::LOCAL | TokenType::OUTBOX => self.parse_variable_declaration_statement(),
             TokenType::TRY | TokenType::THROW => self.parse_exception_statement(),
             TokenType::CATCH | TokenType::CLEANUP => self.parse_postfix_catch_cleanup_error(),
@@ -327,7 +326,7 @@ impl NyashParser {
                 TokenType::RETURN => Some("return"),
                 TokenType::PRINT => Some("print"),
                 TokenType::NOWAIT => Some("nowait"),
-                TokenType::INCLUDE => Some("include"),
+                // include removed
                 TokenType::LOCAL => Some("local"),
                 TokenType::OUTBOX => Some("outbox"),
                 TokenType::TRY => Some("try"),
@@ -522,28 +521,7 @@ impl NyashParser {
         })
     }
 
-    /// include文をパース
-    pub(super) fn parse_include(&mut self) -> Result<ASTNode, ParseError> {
-        self.advance(); // consume 'include'
-
-        let path = if let TokenType::STRING(path) = &self.current_token().token_type {
-            let path = path.clone();
-            self.advance();
-            path
-        } else {
-            let line = self.current_token().line;
-            return Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "string literal".to_string(),
-                line,
-            });
-        };
-
-        Ok(ASTNode::Include {
-            filename: path,
-            span: Span::unknown(),
-        })
-    }
+    // include文は廃止（usingを使用）
 
     /// local変数宣言をパース: local var1, var2, var3 または local x = 10
     pub(super) fn parse_local(&mut self) -> Result<ASTNode, ParseError> {

@@ -2,12 +2,12 @@
 // Reads MIR(JSON v0) from args[0], parses minimal summary, and exits 0 on success.
 // No side-effects; prints nothing unless later stages add tracing.
 
-include "apps/selfhost-runtime/mir_loader.nyash"
-include "apps/selfhost-runtime/ops_calls.nyash"
-include "apps/lib/boxes/console_std.nyash"
-include "apps/lib/boxes/string_std.nyash"
-include "apps/lib/boxes/array_std.nyash"
-include "apps/lib/boxes/map_std.nyash"
+using "apps/selfhost-runtime/mir_loader.nyash"
+using "apps/selfhost-runtime/ops_calls.nyash"
+using "apps/lib/boxes/console_std.nyash"
+using "apps/lib/boxes/string_std.nyash"
+using "apps/lib/boxes/array_std.nyash"
+using "apps/lib/boxes/map_std.nyash"
 
 static box Main {
   main(args) {

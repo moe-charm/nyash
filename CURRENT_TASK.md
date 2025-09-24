@@ -2,6 +2,16 @@
 
 Updated: 2025‑09‑26
 
+Quick execution summary (local)
+- Build: cargo build --release → OK
+- v2 smokes (quick): core set PASS/expected SKIP only
+- v2 smokes (plugins): Fixture dylib autoload PASS（環境に応じて一部 SKIP 設計）
+
+Include → Using 移行状況（2025‑09‑26）
+- コード一式を `using` に統一（apps/examples/selfhost/JSON Native 等）。
+- ランナーの一時互換シム（`local X = include "..."` を `using` として扱う処理）を削除。
+- 残存の `include` はコメント/ドキュメント/外部Cコードのみ。
+
 Addendum (2025‑09‑26 2nd half)
 - VM naming: added public alias `backend::NyashVm` and `backend::VM` → both point to `MirInterpreter` (Rust VM executor). No behavior change; improves clarity across runner/tests.
 - Smokes v2:
@@ -13,6 +23,75 @@ Addendum (2025‑09‑26 2nd half)
 - Plugins profile: ensure fixture plugin notes include Windows/macOS filename differences.
 
 ## 🚀 **戦略決定完了: Rust VM + LLVM 2本柱体制確立**
+
+---
+
+## 📦 JSON Native（yyjson 置き換え）計画 — 進行メモ（2025‑09‑26）
+
+目的
+- apps/lib/json_native を完成度引き上げ → 互換レイヤ（JsonDoc/JsonNode API）で既存使用箇所に差し替え可能にする。
+- 最終的に Nyash ABI（TypeBox v2）プラグインとして提供し、VM/LLVM の両ラインで統一利用。
+
+方針（段階導入・既定OFF）
+- 既定は現行プラグイン（yyjson 系）を継続。
+- 切替は開発者 opt-in：
+  - env: `NYASH_JSON_PROVIDER=ny` をセットしたときのみ json_native を採用。
+  - もしくは nyash.toml の `[using.json_native]` を定義し `using json_native as json` で明示ロード。
+
+フェーズ
+1) Phase 1（最低限動作・1週）
+   - 実装: `parse_array` / `parse_object` / 再帰ネスト / Float 対応。
+   - テスト: apps/lib/json_native/tests の正常系/代表エラーを緑化。
+   - 受入: 基本/ネスト/混在/数値/真偽/文字列/ヌル + 代表エラー（未終端/末尾カンマ/無効トークン）。
+
+2) Phase 2（yyjson互換・1週）
+   - 互換レイヤ（Nyashスクリプト）
+     - JsonDocCompatBox: `parse(json) / root() / error()`
+     - JsonNodeCompatBox: `kind() / get(k) / size() / at(i) / str() / int() / bool()`
+   - 位置/Unicode/エラー詳細の整備。
+   - 受入: 既存 JsonDocBox 使用コードと結果一致（ゴールデン/差分比較）。
+
+3) Phase 3（実用化・1週）
+   - 性能: 文字列連結削減、バッファ/ビルダー化。
+   - メモリ: 不要コピーの削減、ノード表現の軽量化。
+   - 設計のみ先行: ストリーミング/チャンク並行（実装は後続）。
+
+4) Nyash ABI（TypeBox v2）化（並行または後続）
+   - Box: `JsonDocBox`, `JsonNodeBox`（type_id は現行に揃える）。
+   - methods: 上記互換 API を 1:1 で提供。`returns_result` は当面 false（error() 互換）で開始。
+   - 実装選択: 
+     - 推奨: Rust に移植して v2 TypeBox プラグイン化（VM/LLVM 両ラインで安定）。
+     - 一時: スクリプト呼び出しブリッジは可（AOT では重くなるため最終手段）。
+
+テスト計画（最小）
+- 互換テスト: 正常/エラーで JsonDocBox と json_native 互換レイヤの出力一致。
+- v2 スモーク（ローカル任意・CIに入れない）:
+  - `tools/smokes/v2/run.sh --profile quick --filter "json_native"`
+
+トグル/導線
+- env: `NYASH_JSON_PROVIDER=ny`（既定OFF）。
+- nyash.toml 例:
+  ```toml
+  [using.json_native]
+  path = "apps/lib/json_native/"
+  main = "parser/parser.nyash"  # 例: エントリモジュール
+
+  [using.aliases]
+  json = "json_native"
+  ```
+
+非対象（今回やらない）
+- ストリーミング/非同期・並列・JSONPath は Phase 3 以降（設計のみ先行）。
+
+リスク/注意
+- 互換層導入は既定OFFでガード（既存の挙動は不変）。
+- 大きな設計/依存追加は避け、小粒パッチで段階導入。
+
+次アクション
+- [ ] Phase 1 実装完了（配列/オブジェクト/再帰/Float）と tests 緑化。
+- [ ] 互換レイヤ（JsonDoc/JsonNode相当）を Nyash で実装し、`NYASH_JSON_PROVIDER=ny` で切替確認。
+- [ ] v2 スモークのフィルタ追加（quick のみ、CI対象外）。
+- [ ] ABI プラグインの設計メモ着手（type_id/methods/returns_result）。
 **Phase 15セルフホスティング革命への最適化実行器戦略**
 
 ### 📋 **重要文書リンク**

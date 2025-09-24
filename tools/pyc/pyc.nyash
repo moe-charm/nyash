@@ -6,9 +6,9 @@
 static box Main {
   main() {
     // Load modules via include (returns module boxes)
-    local PyIR = include "tools/pyc/PyIR.nyash"
-    local Parser = include "tools/pyc/PythonParserNy.nyash"
-    local Compiler = include "tools/pyc/PyCompiler.nyash"
+    using "tools/pyc/PyIR.nyash" as PyIR
+    using "tools/pyc/PythonParserNy.nyash" as Parser
+    using "tools/pyc/PyCompiler.nyash" as Compiler
 
     local json, ir, src
 

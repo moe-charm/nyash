@@ -1,7 +1,7 @@
 // Phase 2 精度テスト - yyjson相当精度の検証
 
-local JsonParser = include "apps/lib/json_native/parser/parser.nyash"
-local JsonParserUtils = include "apps/lib/json_native/parser/parser.nyash"
+using "apps/lib/json_native/parser/parser.nyash" as JsonParser
+using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
 
 static box Phase2AccuracyTest {
     

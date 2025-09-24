@@ -35,7 +35,6 @@ pub enum TokenType {
     AWAIT,
     INTERFACE,
     COLON,
-    INCLUDE,
     TRY,
     CATCH,
     CLEANUP,
@@ -131,4 +130,3 @@ pub enum TokenizeError {
     #[error("Comment not closed at line {line}")]
     UnterminatedComment { line: usize },
 }
-

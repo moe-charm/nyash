@@ -4,13 +4,13 @@
 static box ControlFlowBuilder {
   // If 文: then/else は配列（文ノード文字列）
   if_stmt(cond_json, then_stmts, else_stmts) {
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
     return JB.if_(cond_json, then_stmts, else_stmts)
   }
 
   // If 式: res_name へ代入して合流（[Local(res), If(..)] の配列を返す）
   if_expr(cond_json, then_expr_json, else_expr_json, res_name) {
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
     local res_var = JB.variable(res_name)
     local decl = JB.local_decl([res_name], [null])
     local then_s = [ JB.assignment(res_var, then_expr_json) ]
@@ -27,8 +27,8 @@ static box ControlFlowBuilder {
   }
 
   match_expr_with_names(scrut_json, arms, res_name, scrut_name) {
-    local JB = include "apps/lib/json_builder.nyash"
-    local PT = include "apps/lib/pattern_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
+    using "apps/lib/pattern_builder.nyash" as PT
 
     // scrutinee を一度だけ評価
     local decl_scrut = JB.local_decl([scrut_name], [scrut_json])

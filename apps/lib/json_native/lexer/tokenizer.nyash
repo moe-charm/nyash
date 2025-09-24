@@ -1,8 +1,8 @@
 // JsonTokenizer — 精度重視の字句解析器（yyjson相当精度）
 // 責務: 文字列をトークン列に変換、エラー検出、位置情報管理
 
-local JsonScanner = include "apps/lib/json_native/lexer/scanner.nyash"
-local JsonToken = include "apps/lib/json_native/lexer/token.nyash"
+using "apps/lib/json_native/lexer/scanner.nyash" as JsonScanner
+using "apps/lib/json_native/lexer/token.nyash" as JsonToken
 // Removed other dependencies - using self-contained methods
 
 // 🎯 高精度JSONトークナイザー（Everything is Box）
@@ -12,7 +12,7 @@ box JsonTokenizer {
     errors: ArrayBox       // エラー情報配列
     
     birth(input_text) {
-        me.scanner = new JsonScanner(input_text)
+        me.scanner = JsonScannerModule.create_scanner(input_text)
         me.tokens = new ArrayBox()
         me.errors = new ArrayBox()
     }

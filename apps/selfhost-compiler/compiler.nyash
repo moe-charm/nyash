@@ -9,10 +9,10 @@ using "apps/selfhost-compiler/boxes/emitter_box.nyash" as EmitterBoxMod
 using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterBoxMod
 
 // Transitional: keep include for Phase-15 compatibility
-include "apps/selfhost-compiler/boxes/debug_box.nyash"
-include "apps/selfhost-compiler/boxes/parser_box.nyash"
-include "apps/selfhost-compiler/boxes/emitter_box.nyash"
-include "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+using "apps/selfhost-compiler/boxes/debug_box.nyash"
+using "apps/selfhost-compiler/boxes/parser_box.nyash"
+using "apps/selfhost-compiler/boxes/emitter_box.nyash"
+using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
 
 static box Main {
   // ---- IO helper ----

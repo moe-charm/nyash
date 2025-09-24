@@ -1,6 +1,6 @@
 static box Main {
   main() {
-    local Math = include "examples/include_math.nyash"
+    using "examples/include_math.nyash" as Math
     local r = Math.add(1, 2)
     return r
   }

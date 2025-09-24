@@ -141,35 +141,72 @@ static box EscapeUtils {
         return result
     }
     
-    // エスケープシーケンスを解釈
+    // エスケープシーケンスを解釈（オブジェクトリテラル未対応環境のため MapBox で返す）
     unescape_sequence(next_ch, full_string, pos) {
-        return match next_ch {
-            "\"" => { value: "\"", advance: 2 },
-            "\\" => { value: "\\", advance: 2 },
-            "/" => { value: "/", advance: 2 },
-            "b" => { value: "\b", advance: 2 },
-            "f" => { value: "\f", advance: 2 },
-            "n" => { value: "\n", advance: 2 },
-            "r" => { value: "\r", advance: 2 },
-            "t" => { value: "\t", advance: 2 },
-            "u" => {
-                // Unicodeエスケープ \\uXXXX
-                if pos + 5 < full_string.length() {
-                    local hex = full_string.substring(pos + 2, pos + 6)
-                    if this.is_valid_hex4(hex) {
-                        { value: this.hex_to_char(hex), advance: 6 }
-                    } else {
-                        { value: "\\u", advance: 2 }  // 無効な場合はそのまま
-                    }
+        local out = new MapBox()
+        if next_ch == "\"" {
+            out.set("value", "\"")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "\\" {
+            out.set("value", "\\")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "/" {
+            out.set("value", "/")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "b" {
+            out.set("value", "\b")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "f" {
+            out.set("value", "\f")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "n" {
+            out.set("value", "\n")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "r" {
+            out.set("value", "\r")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "t" {
+            out.set("value", "\t")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "u" {
+            // Unicodeエスケープ \\uXXXX
+            if pos + 5 < full_string.length() {
+                local hex = full_string.substring(pos + 2, pos + 6)
+                if this.is_valid_hex4(hex) {
+                    out.set("value", this.hex_to_char(hex))
+                    out.set("advance", 6)
+                    return out
                 } else {
-                    { value: "\\u", advance: 2 }
+                    out.set("value", "\\u")
+                    out.set("advance", 2)
+                    return out
                 }
-            },
-            _ => {
-                // 不明なエスケープはそのまま残す
-                { value: "\\" + next_ch, advance: 2 }
+            } else {
+                out.set("value", "\\u")
+                out.set("advance", 2)
+                return out
             }
         }
+        // 不明なエスケープはそのまま残す
+        out.set("value", "\\" + next_ch)
+        out.set("advance", 2)
+        return out
     }
     
     // 4桁の16進数文字列が有効かどうか判定

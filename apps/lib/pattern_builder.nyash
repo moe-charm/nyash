@@ -4,13 +4,13 @@
 static box PatternBuilder {
   // eq(lhs, rhs) => lhs == rhs
   eq(lhs_json, rhs_json) {
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
     return JB.binary("==", lhs_json, rhs_json)
   }
 
   // or_([c1, c2, ...]) => c1 || c2 || ... （空は false）
   or_(conds) {
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
     if conds.length() == 0 { return JB.literal_bool(false) }
     if conds.length() == 1 { return conds.get(0) }
     local i = 1
@@ -24,7 +24,7 @@ static box PatternBuilder {
 
   // and_([g1, g2, ...]) => g1 && g2 && ... （空は true）
   and_(conds) {
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
     if conds.length() == 0 { return JB.literal_bool(true) }
     if conds.length() == 1 { return conds.get(0) }
     local i = 1

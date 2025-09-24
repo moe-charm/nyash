@@ -1,7 +1,7 @@
 static box Main {
   main() {
     local M
-    M = include "apps/tmp_mod.nyash"
+    using "apps/tmp_mod.nyash" as M
     local r
     r = M.foo()
     print("r=" + r.toString())

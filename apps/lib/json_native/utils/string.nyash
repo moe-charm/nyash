@@ -277,6 +277,65 @@ static box StringUtils {
         // 現在はJSON処理によく使われる数値のみ対応
         return 0
     }
+
+    // 文字列が浮動小数点数表現かどうか（簡易版: 10進/指数部のみ対応）
+    // 許容: [-+]? DIGITS '.' DIGITS ([eE] [+-]? DIGITS)?
+    //     | [-+]? DIGITS ([eE] [+-]? DIGITS)
+    is_float(s) {
+        if s.length() == 0 { return false }
+        // 符号処理
+        local start = 0
+        if s.substring(0, 1) == "-" or s.substring(0, 1) == "+" {
+            if s.length() == 1 { return false }
+            start = 1
+        }
+        local i = start
+        local has_digit = false
+        local has_dot = false
+        local has_exp = false
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            if this.is_digit(ch) {
+                has_digit = true
+                i = i + 1
+                continue
+            }
+            if ch == "." {
+                if has_dot or has_exp { return false }
+                has_dot = true
+                i = i + 1
+                continue
+            }
+            if ch == "e" or ch == "E" {
+                if has_exp or not has_digit { return false }
+                has_exp = true
+                i = i + 1
+                // 指数部符号
+                if i < s.length() {
+                    local sgn = s.substring(i, i + 1)
+                    if sgn == "+" or sgn == "-" { i = i + 1 }
+                }
+                // 指数部の桁
+                local j = i
+                local exp_digit = false
+                loop(j < s.length()) {
+                    local ch2 = s.substring(j, j + 1)
+                    if this.is_digit(ch2) { exp_digit = true j = j + 1 } else { break }
+                }
+                if not exp_digit { return false }
+                i = j
+                continue
+            }
+            return false
+        }
+        if not has_digit { return false }
+        return has_dot or has_exp
+    }
+
+    // 浮動小数点の簡易パース（現段階は正規化のみ。数値演算は行わない）
+    parse_float(s) {
+        return s
+    }
     
     // ===== ユーティリティ =====
     

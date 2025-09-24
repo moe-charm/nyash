@@ -2,7 +2,7 @@
 static box Main {
   main() {
     local S
-    S = include "apps/std/string.nyash"
+    using "apps/std/string.nyash" as S
     local fails
     fails = 0
 

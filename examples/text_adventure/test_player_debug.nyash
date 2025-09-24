@@ -1,5 +1,5 @@
 // Debug player creation
-include "text_adventure/player.nyash"
+using "text_adventure/player.nyash"
 
 print("🎮 Debug Player Creation...")
 

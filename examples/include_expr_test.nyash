@@ -1,6 +1,6 @@
 static box Main {
   main() {
-    return include "examples/include_math.nyash"
+    using "examples/include_math.nyash" as include_math
+    return include_math
   }
 }
-

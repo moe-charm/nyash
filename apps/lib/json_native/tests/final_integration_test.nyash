@@ -1,6 +1,6 @@
 // 最終統合テスト - Nyash JSON Native完全版
 
-local JsonParserUtils = include "apps/lib/json_native/parser/parser.nyash"
+using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
 
 static box FinalIntegrationTest {
     

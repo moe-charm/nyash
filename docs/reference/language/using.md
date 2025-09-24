@@ -208,9 +208,14 @@ Notes
 - 未解決時（非strict）は実行を継続し、`NYASH_RESOLVE_TRACE=1` で候補を提示。strict時はエラーで候補を表示。
 - **Phase 15.5完了により、現代的な名前空間システムを実現予定**
 
-## Include/Export (Phase 1)
+## Deprecated: Include/Export（廃止）
 
-Simple include expression for file‑scoped modules（Phase 1 提案）。将来は `using`/Runner 解決へ統合予定。
+このセクションは移行期の参考情報です。`include` は設計上の一貫性と学習コスト低減のため廃止しました。今後はすべて `using` に一本化してください（ファイル・パッケージ・DLL すべてを `using` で扱えます）。既存コードの移行は以下の対応例を推奨します。
+
+- `local M = include "./path/module.nyash"` → `using "./path/module.nyash" as M`
+- `include` の探索ルートは `[using.paths]` に統合（`nyash.toml`）
+
+注: `include` は完全に非推奨です。コードは `using` に書き換えてください（互換シムは提供しません）。
 
 Overview
 - One file exports one static box. `include(path)` evaluates the file and returns that Box instance.

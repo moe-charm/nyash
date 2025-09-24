@@ -17,7 +17,7 @@ mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
 mod decls; // declarations lowering split
 mod exprs; // expression lowering split
 mod exprs_call; // call(expr)
-mod exprs_include; // include lowering
+// include lowering removed (using is handled in runner)
 mod exprs_lambda; // lambda lowering
 mod exprs_peek; // peek expression
 mod exprs_qmark; // ?-propagate
@@ -92,10 +92,7 @@ pub struct MirBuilder {
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
 
-    /// Include guards: currently loading file canonical paths
-    include_loading: HashSet<String>,
-    /// Include visited cache: canonical path -> box name
-    include_box_map: HashMap<String, String>,
+    // include guards removed
 
     /// Loop context stacks for lowering break/continue inside nested control flow
     /// Top of stack corresponds to the innermost active loop
@@ -149,8 +146,7 @@ impl MirBuilder {
             value_types: HashMap::new(),
             plugin_method_sigs,
             current_static_box: None,
-            include_loading: HashSet::new(),
-            include_box_map: HashMap::new(),
+            
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
             if_merge_stack: Vec::new(),

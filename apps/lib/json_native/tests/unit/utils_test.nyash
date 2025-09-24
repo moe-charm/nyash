@@ -1,7 +1,7 @@
 // Utils層テスト - StringUtils & EscapeUtilsの動作確認
 
-local StringUtils = include "apps/lib/json_native/utils/string.nyash"
-local EscapeUtils = include "apps/lib/json_native/utils/escape.nyash"
+using "apps/lib/json_native/utils/string.nyash" as StringUtils
+using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
 
 print("🧪 Utils層テスト開始")
 

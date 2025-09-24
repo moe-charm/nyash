@@ -10,7 +10,7 @@ static box MacroBoxSpec {
     // "kind":"Loop","condition":<json>,"body":[ ... ] and rewrite them
     // into a normalized form using JsonBuilder (keys ordered as condition/body).
 
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
 
     // helpers
     local s = json

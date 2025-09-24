@@ -1,7 +1,7 @@
 // Minimal recursive-descent parser for Ny v0 producing JSON IR v0 (MapBox)
 
 using "./apps/selfhost/ny-parser-nyash/tokenizer.nyash" as Tokenizer
-include "./apps/selfhost/ny-parser-nyash/tokenizer.nyash"
+using "./apps/selfhost/ny-parser-nyash/tokenizer.nyash"
 
 static box ParserV0 {
     init { tokens, pos }

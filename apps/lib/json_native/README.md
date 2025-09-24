@@ -146,7 +146,7 @@ json.parse("{\"key\": \"value\"}")  // 内部でNyash実装を使用
 
 ```nyash
 // 基本的な使用例
-local JsonNative = include "apps/lib/json_native/node.nyash"
+using "apps/lib/json_native/node.nyash" as JsonNative
 
 // JSON文字列をパース
 local text = "{\"name\": \"Nyash\", \"version\": 1}"

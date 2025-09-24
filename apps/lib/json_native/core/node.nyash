@@ -2,8 +2,9 @@
 // 80/20ルール適用: まず動くもの → 後で最適化
 // 美しいモジュラー設計: Utilsを活用してDRY原則を実践
 
-local StringUtils = include "apps/lib/json_native/utils/string.nyash"
-local EscapeUtils = include "apps/lib/json_native/utils/escape.nyash"
+using "apps/lib/json_native/utils/string.nyash" as StringUtils
+using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+// EscapeUtils は必要時に遅延includeする（一部構文が未対応環境でも数値系は動かすため）
 
 // 🌟 JSON値を表現するBox（Everything is Box原則）
 static box JsonNode {
@@ -31,6 +32,14 @@ static box JsonNode {
         local node = new JsonNode()
         node.kind = "int"
         node.value = i
+        return node
+    }
+    
+    // float値を作成（値は文字列表現を保持）
+    create_float(fstr) {
+        local node = new JsonNode()
+        node.kind = "float"
+        node.value = fstr  // Phase 1: 文字列として保持（演算不要、stringify重視）
         return node
     }
     
@@ -205,19 +214,23 @@ static box JsonNode {
                 if me.kind == "int" {
                     return "" + me.value
                 } else {
+                    if me.kind == "float" {
+                        // 数値の文字列表現をそのまま出力（引用符なし）
+                        return me.value
+                    } else {
                     if me.kind == "string" {
                         return EscapeUtils.quote_string(me.value)
-                    } else {
-                        if me.kind == "array" {
-                            local parts = new ArrayBox()
-                            local i = 0
-                            loop(i < me.value.length()) {
-                                local elem = me.value.get(i)
-                                parts.push(elem.stringify())
-                                i = i + 1
-                            }
-                            return "[" + StringUtils.join(parts, ",") + "]"
                         } else {
+                            if me.kind == "array" {
+                                local parts = new ArrayBox()
+                                local i = 0
+                                loop(i < me.value.length()) {
+                                    local elem = me.value.get(i)
+                                    parts.push(elem.stringify())
+                                    i = i + 1
+                                }
+                                return "[" + StringUtils.join(parts, ",") + "]"
+                            } else {
                             if me.kind == "object" {
                                 local parts = new ArrayBox()
                                 local keys = me.value.keys()
@@ -231,7 +244,8 @@ static box JsonNode {
                                 }
                                 return "{" + StringUtils.join(parts, ",") + "}"
                             } else {
-                                return "null"
+                                    return "null"
+                                }
                             }
                         }
                     }

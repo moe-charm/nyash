@@ -1,7 +1,7 @@
 static box Main {
   main() {
     local M
-    M = include "apps/std/string_std.nyash"
+    using "apps/std/string_std.nyash" as M
     print("ok")
     return 0
   }

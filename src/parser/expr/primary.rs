@@ -92,7 +92,6 @@ impl NyashParser {
                     span: Span::unknown(),
                 })
             }
-            TokenType::INCLUDE => self.parse_include(),
             TokenType::STRING(s) => {
                 let value = s.clone();
                 self.advance();

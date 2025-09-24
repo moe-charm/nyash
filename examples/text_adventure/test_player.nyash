@@ -1,5 +1,5 @@
 // Test file for player.nyash
-include "text_adventure/player.nyash"
+using "text_adventure/player.nyash"
 
 print("🎮 Testing Player Module...")
 

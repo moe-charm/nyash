@@ -1,7 +1,7 @@
 // Text Adventure Game - Player Module
 // プレイヤーシステムの実装
 
-include "text_adventure/simple_rooms.nyash"
+using "text_adventure/simple_rooms.nyash"
 
 // プレイヤーBox
 box Player {

@@ -7,7 +7,7 @@ static box MacroBoxSpec {
   name() { return "IfMatchNormalize" }
 
   expand(json, ctx) {
-    local JB = include "apps/lib/json_builder.nyash"
+    using "apps/lib/json_builder.nyash" as JB
 
     // --- helpers copied/adapted from loop_normalize ---
     function parse_value(s, i) {

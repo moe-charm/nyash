@@ -1,7 +1,7 @@
 // Simple Text Adventure Game
 // Works around the function return bug by using global variables
 
-include "text_adventure/items.nyash"
+using "text_adventure/items.nyash"
 
 // Global game state
 global GAME_ROOM = false

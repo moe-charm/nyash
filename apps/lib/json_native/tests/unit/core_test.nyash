@@ -1,6 +1,6 @@
 // JsonNode基本動作テスト - 80%の動く基盤を確認
 
-local JsonNode = include "apps/lib/json_native/core/node.nyash"
+using "apps/lib/json_native/core/node.nyash" as JsonNode
 
 // ===== 基本値テスト =====
 

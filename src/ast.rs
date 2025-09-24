@@ -547,8 +547,6 @@ pub enum ASTNode {
     /// meフィールドアクセス: me.field
     MeField { field: String, span: Span },
 
-    /// ファイル読み込み: include "filename.nyash"
-    Include { filename: String, span: Span },
 
     /// ローカル変数宣言: local x, y, z
     Local {

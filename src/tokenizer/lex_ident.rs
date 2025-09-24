@@ -39,7 +39,7 @@ impl NyashTokenizer {
             "nowait" => TokenType::NOWAIT,
             "await" => TokenType::AWAIT,
             "interface" => TokenType::INTERFACE,
-            "include" => TokenType::INCLUDE,
+            // "include" keyword removed (use `using` instead)
             "import" => TokenType::IMPORT,
             "try" => TokenType::TRY,
             "catch" => TokenType::CATCH,
@@ -67,7 +67,6 @@ impl NyashTokenizer {
                 tok,
                 TokenType::INTERFACE
                     | TokenType::USING
-                    | TokenType::INCLUDE
                     | TokenType::OUTBOX
                     | TokenType::NOWAIT
                     | TokenType::OVERRIDE
@@ -99,4 +98,3 @@ impl NyashTokenizer {
         tok
     }
 }
-

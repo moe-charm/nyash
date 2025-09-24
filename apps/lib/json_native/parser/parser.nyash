@@ -1,10 +1,11 @@
 // JsonParser — 精度重視の構文解析器（yyjson相当精度）
 // 責務: トークン列をJsonNodeに変換、構文エラー検出、ネスト構造処理
 
-local JsonTokenizer = include "apps/lib/json_native/lexer/tokenizer.nyash"
-local JsonToken = include "apps/lib/json_native/lexer/token.nyash"
-local TokenType = include "apps/lib/json_native/lexer/token.nyash"
-local JsonNode = include "apps/lib/json_native/core/node.nyash"
+using "apps/lib/json_native/lexer/tokenizer.nyash" as JsonTokenizer
+using "apps/lib/json_native/lexer/token.nyash" as JsonToken
+using "apps/lib/json_native/lexer/token.nyash" as TokenType
+using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/utils/string.nyash" as StringUtils
 
 // 🎯 高精度JSON構文解析器（Everything is Box）
 static box JsonParserModule {
@@ -125,8 +126,17 @@ box JsonParser {
         me.advance()
         
         // 数値変換（簡易版）
-        local number_value = me.convert_number(number_str)
-        return JsonNode.create_int(number_value)
+        local info = me.convert_number(number_str)
+        if info.get("kind") == "int" {
+            return JsonNode.create_int(info.get("value"))
+        } else {
+            if info.get("kind") == "float" {
+                return JsonNode.create_float(info.get("value"))
+            } else {
+                // フォールバック（到達しない想定）
+                return JsonNode.create_int(0)
+            }
+        }
     }
     
     // 文字列解析
@@ -337,18 +347,24 @@ box JsonParser {
     
     // ===== ユーティリティメソッド =====
     
-    // 数値文字列を数値に変換（簡易版）
+    // 数値文字列を数値情報に変換（簡易版）
+    // 返り値: MapBox { kind:"int"|"float", value: <int|float_str> }
     convert_number(number_str) {
-        // TODO: より完全な数値変換実装
-        // 現在は簡易的にStringUtilsを使用
-        local StringUtils = include "apps/lib/json_native/utils/string.nyash"
+        local out = new MapBox()
         if StringUtils.is_integer(number_str) {
-            return StringUtils.parse_integer(number_str)
-        } else {
-            // 浮動小数点数の場合は後で実装
-            // とりあえず0を返す
-            return 0
+            out.set("kind", "int")
+            out.set("value", StringUtils.parse_integer(number_str))
+            return out
         }
+        if StringUtils.is_float(number_str) {
+            out.set("kind", "float")
+            out.set("value", StringUtils.parse_float(number_str))
+            return out
+        }
+        // 不正な数値表現（エラー済みのはず）: フォールバック
+        out.set("kind", "int")
+        out.set("value", 0)
+        return out
     }
     
     // ===== デバッグメソッド =====

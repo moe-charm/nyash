@@ -32,7 +32,7 @@ impl ASTNode {
             ASTNode::FromCall { .. } => "FromCall",
             ASTNode::ThisField { .. } => "ThisField",
             ASTNode::MeField { .. } => "MeField",
-            ASTNode::Include { .. } => "Include",
+            
             ASTNode::Local { .. } => "Local",
             ASTNode::Outbox { .. } => "Outbox",
             ASTNode::FunctionCall { .. } => "FunctionCall",
@@ -97,7 +97,7 @@ impl ASTNode {
             ASTNode::UsingStatement { .. } => ASTNodeType::Statement,
             ASTNode::ImportStatement { .. } => ASTNodeType::Statement,
             ASTNode::GlobalVar { .. } => ASTNodeType::Statement,
-            ASTNode::Include { .. } => ASTNodeType::Statement,
+            
             ASTNode::Local { .. } => ASTNodeType::Statement,
             ASTNode::Outbox { .. } => ASTNodeType::Statement,
             ASTNode::Nowait { .. } => ASTNodeType::Statement,
@@ -263,9 +263,7 @@ impl ASTNode {
             ASTNode::MeField { field, .. } => {
                 format!("MeField({})", field)
             }
-            ASTNode::Include { filename, .. } => {
-                format!("Include({})", filename)
-            }
+            
             ASTNode::Local { variables, .. } => {
                 format!("Local({})", variables.join(", "))
             }
@@ -350,7 +348,7 @@ impl ASTNode {
             ASTNode::FromCall { span, .. } => *span,
             ASTNode::ThisField { span, .. } => *span,
             ASTNode::MeField { span, .. } => *span,
-            ASTNode::Include { span, .. } => *span,
+            
             ASTNode::Local { span, .. } => *span,
             ASTNode::Outbox { span, .. } => *span,
             ASTNode::FunctionCall { span, .. } => *span,

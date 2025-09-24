@@ -1,7 +1,7 @@
 // Text Adventure Game - Simple Rooms Module (without MapBox)
 // ルームシステムの簡単実装
 
-include "text_adventure/items.nyash"
+using "text_adventure/items.nyash"
 
 // 基本ルームBox（MapBoxなしのシンプル版）
 box Room {

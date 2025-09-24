@@ -299,33 +299,7 @@ impl NyashRunner {
 
     /// Collect Box declarations from AST and register into runtime
     pub(crate) fn collect_box_declarations(&self, ast: &ASTNode, runtime: &NyashRuntime) {
-        fn resolve_include_path(filename: &str) -> String {
-            if filename.starts_with("./") || filename.starts_with("../") {
-                return filename.to_string();
-            }
-            let parts: Vec<&str> = filename.splitn(2, '/').collect();
-            if parts.len() == 2 {
-                let root = parts[0];
-                let rest = parts[1];
-                let cfg_path = "nyash.toml";
-                if let Ok(toml_str) = std::fs::read_to_string(cfg_path) {
-                    if let Ok(toml_val) = toml::from_str::<toml::Value>(&toml_str) {
-                        if let Some(include) = toml_val.get("include") {
-                            if let Some(roots) = include.get("roots").and_then(|v| v.as_table()) {
-                                if let Some(base) = roots.get(root).and_then(|v| v.as_str()) {
-                                    let mut b = base.to_string();
-                                    if !b.ends_with('/') && !b.ends_with('\\') {
-                                        b.push('/');
-                                    }
-                                    return format!("{}{}", b, rest);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            format!("./{}", filename)
-        }
+        // include support removed; using is resolved by runner/strip
 
         use std::collections::HashSet;
 
@@ -346,32 +320,7 @@ impl NyashRunner {
                         walk_with_state(st, runtime, stack, visited);
                     }
                 }
-                ASTNode::Include { filename, .. } => {
-                    let mut path = resolve_include_path(filename);
-                    if std::path::Path::new(&path).is_dir() {
-                        path = format!("{}/index.nyash", path.trim_end_matches('/'));
-                    } else if std::path::Path::new(&path).extension().is_none() {
-                        path.push_str(".nyash");
-                    }
-                    // Cycle detection using stack
-                    if let Some(pos) = stack.iter().position(|p| p == &path) {
-                        let mut chain = stack[pos..].to_vec();
-                        chain.push(path.clone());
-                        eprintln!("include cycle detected (collector): {}", chain.join(" -> "));
-                        return; // Skip to avoid infinite recursion
-                    }
-                    if visited.contains(&path) {
-                        return; // Already processed
-                    }
-                    stack.push(path.clone());
-                    if let Ok(content) = std::fs::read_to_string(&path) {
-                        if let Ok(inc_ast) = NyashParser::parse_from_string(&content) {
-                            walk_with_state(&inc_ast, runtime, stack, visited);
-                            visited.insert(path);
-                        }
-                    }
-                    stack.pop();
-                }
+                
                 ASTNode::Assignment { target, value, .. } => {
                     walk_with_state(target, runtime, stack, visited);
                     walk_with_state(value, runtime, stack, visited);

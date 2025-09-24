@@ -265,7 +265,7 @@ impl super::MirBuilder {
                 self.build_await_expression(*expression.clone())
             }
 
-            ASTNode::Include { filename, .. } => self.build_include_expression(filename.clone()),
+            
 
             ASTNode::Program { statements, .. } => self.cf_block(statements.clone()),
             ASTNode::ScopeBox { body, .. } => self.cf_block(body.clone()),

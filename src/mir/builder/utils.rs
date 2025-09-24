@@ -1,35 +1,6 @@
 use super::{BasicBlock, BasicBlockId};
 use crate::mir::{BarrierOp, TypeOpKind, WeakRefOp};
-use std::fs;
-
-// Resolve include path using nyash.toml include.roots if present
-pub(super) fn resolve_include_path_builder(filename: &str) -> String {
-    if filename.starts_with("./") || filename.starts_with("../") {
-        return filename.to_string();
-    }
-    let parts: Vec<&str> = filename.splitn(2, '/').collect();
-    if parts.len() == 2 {
-        let root = parts[0];
-        let rest = parts[1];
-        let cfg_path = "nyash.toml";
-        if let Ok(toml_str) = fs::read_to_string(cfg_path) {
-            if let Ok(toml_val) = toml::from_str::<toml::Value>(&toml_str) {
-                if let Some(include) = toml_val.get("include") {
-                    if let Some(roots) = include.get("roots").and_then(|v| v.as_table()) {
-                        if let Some(root_path) = roots.get(root).and_then(|v| v.as_str()) {
-                            let mut base = root_path.to_string();
-                            if !base.ends_with('/') && !base.ends_with('\\') {
-                                base.push('/');
-                            }
-                            return format!("{}{}", base, rest);
-                        }
-                    }
-                }
-            }
-        }
-    }
-    format!("./{}", filename)
-}
+// include path resolver removed (using handles modules)
 
 // Optional builder debug logging
 pub(super) fn builder_debug_enabled() -> bool {
