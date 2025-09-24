@@ -157,6 +157,15 @@ impl ExprParserWithCursor {
                     span: Span::new(op_line, 0, op_line, 0),
                 })
             }
+            TokenType::AWAIT => {
+                let op_line = cursor.current().line;
+                cursor.advance();
+                let expression = Self::parse_unary_expr(cursor)?;
+                Ok(ASTNode::AwaitExpression {
+                    expression: Box::new(expression),
+                    span: Span::new(op_line, 0, op_line, 0),
+                })
+            }
             _ => Self::parse_postfix_expr(cursor),
         }
     }
