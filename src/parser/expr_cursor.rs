@@ -2,6 +2,7 @@ use crate::ast::{ASTNode, BinaryOperator, LiteralValue, Span};
 use crate::parser::cursor::TokenCursor;
 use crate::parser::ParseError;
 use crate::tokenizer::TokenType;
+use crate::parser::sugar_gate;
 
 /// TokenCursorを使用した式パーサー（実験的実装）
 pub struct ExprParserWithCursor;
@@ -145,6 +146,30 @@ impl ExprParserWithCursor {
     /// プライマリ式をパース
     fn parse_primary_expr(cursor: &mut TokenCursor) -> Result<ASTNode, ParseError> {
         match &cursor.current().token_type.clone() {
+            TokenType::LBRACK => {
+                // Array literal (sugar gated)
+                let sugar_on = sugar_gate::is_enabled()
+                    || std::env::var("NYASH_ENABLE_ARRAY_LITERAL").ok().as_deref() == Some("1");
+                if !sugar_on {
+                    let line = cursor.current().line;
+                    return Err(ParseError::UnexpectedToken {
+                        found: cursor.current().token_type.clone(),
+                        expected: "enable NYASH_SYNTAX_SUGAR_LEVEL=basic|full or NYASH_ENABLE_ARRAY_LITERAL=1".to_string(),
+                        line,
+                    });
+                }
+                cursor.advance(); // consume '['
+                let mut elements: Vec<ASTNode> = Vec::new();
+                while !cursor.match_token(&TokenType::RBRACK) && !cursor.is_at_end() {
+                    let el = Self::parse_expression(cursor)?;
+                    elements.push(el);
+                    if cursor.match_token(&TokenType::COMMA) {
+                        cursor.advance();
+                    }
+                }
+                cursor.consume(TokenType::RBRACK)?;
+                Ok(ASTNode::ArrayLiteral { elements, span: Span::unknown() })
+            }
             TokenType::NUMBER(n) => {
                 let value = *n;
                 cursor.advance();
