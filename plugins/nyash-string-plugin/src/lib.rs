@@ -27,7 +27,7 @@ const M_FROM_UTF8: u32 = 5; // fromUtf8(data: String|Bytes) -> Handle(new)
 const M_TO_UTF8: u32 = 6; // toUtf8() -> String
 const M_FINI: u32 = u32::MAX;
 
-const TYPE_ID_STRING: u32 = 13;
+const TYPE_ID_STRING: u32 = 10;  // Match nyash.toml type_id
 
 struct StrInstance {
     s: String,
@@ -198,7 +198,7 @@ pub extern "C" fn nyash_plugin_invoke(
 }
 */
 
-// ===== TypeBox FFI (resolve/invoke_id) =====
+// ===== TypeBox FFI v2 only - no v1 compatibility =====
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
     pub abi_tag: u32,        // 'TYBX'
@@ -218,8 +218,11 @@ extern "C" fn string_resolve(name: *const c_char) -> u32 {
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
         "len" | "length" => M_LENGTH,
-        "toUtf8" => M_TO_UTF8,
+        "isEmpty" => M_IS_EMPTY,
+        "charCodeAt" => M_CHAR_CODE_AT,
         "concat" => M_CONCAT,
+        "fromUtf8" => M_FROM_UTF8,
+        "toUtf8" | "toString" => M_TO_UTF8,  // Map toString to toUtf8
         _ => 0,
     }
 }
@@ -234,11 +237,37 @@ extern "C" fn string_invoke_id(
 ) -> i32 {
     unsafe {
         match method_id {
+            M_BIRTH => {
+                // Create new StringBox instance
+                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                let init = read_arg_string(args, args_len, 0).unwrap_or_else(|| String::new());
+                eprintln!("[StringBox] M_BIRTH called: id={}, init={:?}", id, init);
+                if let Ok(mut m) = INST.lock() {
+                    m.insert(id, StrInstance { s: init.clone() });
+                    eprintln!("[StringBox] Inserted into INST map");
+                    return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
+                } else {
+                    return E_PLUGIN;
+                }
+            }
+            M_FINI => {
+                // Destroy StringBox instance
+                if let Ok(mut m) = INST.lock() {
+                    m.remove(&instance_id);
+                    return OK;
+                } else {
+                    return E_PLUGIN;
+                }
+            }
             M_LENGTH => {
+                eprintln!("[StringBox] M_LENGTH called: instance_id={}", instance_id);
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_i64(inst.s.len() as i64, result, result_len);
+                        let len = inst.s.len();
+                        eprintln!("[StringBox] Found instance, string={:?}, len={}", inst.s, len);
+                        return write_tlv_i64(len as i64, result, result_len);
                     } else {
+                        eprintln!("[StringBox] Instance {} not found in INST map!", instance_id);
                         return E_HANDLE;
                     }
                 } else {

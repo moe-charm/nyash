@@ -149,6 +149,27 @@ extern "C" fn integer_invoke_id(
 ) -> i32 {
     unsafe {
         match method_id {
+            M_BIRTH => {
+                // Create new IntegerBox instance
+                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                let init = read_arg_i64(args, args_len, 0).unwrap_or(0);
+                eprintln!("[IntegerBox] M_BIRTH called: id={}, init={}", id, init);
+                if let Ok(mut m) = INST.lock() {
+                    m.insert(id, IntInstance { value: init });
+                    return write_tlv_handle(TYPE_ID_INTEGER, id, result, result_len);
+                } else {
+                    return E_PLUGIN;
+                }
+            }
+            M_FINI => {
+                // Destroy IntegerBox instance
+                if let Ok(mut m) = INST.lock() {
+                    m.remove(&instance_id);
+                    return OK;
+                } else {
+                    return E_PLUGIN;
+                }
+            }
             M_GET => {
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
@@ -233,6 +254,18 @@ fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut 
 
 fn write_tlv_i64(v: i64, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(3u8, &v.to_le_bytes())], result, result_len)
+}
+
+fn write_tlv_handle(
+    type_id: u32,
+    instance_id: u32,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    let mut payload = Vec::with_capacity(8);
+    payload.extend_from_slice(&type_id.to_le_bytes());
+    payload.extend_from_slice(&instance_id.to_le_bytes());
+    write_tlv_result(&[(8u8, &payload)], result, result_len)
 }
 
 fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
