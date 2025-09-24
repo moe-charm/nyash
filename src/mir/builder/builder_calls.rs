@@ -161,7 +161,7 @@ impl super::MirBuilder {
     }
 
     /// Legacy call fallback - preserves existing behavior
-    fn emit_legacy_call(
+    pub(super) fn emit_legacy_call(
         &mut self,
         dst: Option<ValueId>,
         target: CallTarget,
@@ -403,7 +403,7 @@ impl super::MirBuilder {
     }
 
     /// Try direct static call for `me` in static box
-    fn try_handle_me_direct_call(
+    pub(super) fn try_handle_me_direct_call(
         &mut self,
         method: &str,
         arguments: &Vec<ASTNode>,
@@ -584,90 +584,39 @@ impl super::MirBuilder {
             };
             eprintln!("[builder] method-call object kind={} method={}", kind, method);
         }
-        // Static box method call: BoxName.method(args)
+
+        // 1. Static box method call: BoxName.method(args)
         if let ASTNode::Variable { name: obj_name, .. } = &object {
-            // If not a local variable and matches a declared box name, treat as static method call
             let is_local_var = self.variable_map.contains_key(obj_name);
             // Phase 15.5: Treat unknown identifiers in receiver position as static type names
             if !is_local_var {
-                if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[builder] static-call {}.{}()", obj_name, method);
-                }
-                // Build argument values
-                let mut arg_values: Vec<ValueId> = Vec::new();
-                for a in &arguments {
-                    arg_values.push(self.build_expression(a.clone())?);
-                }
-                // Compose lowered function name: BoxName.method/N
-                let func_name = format!("{}.{}{}", obj_name, method, format!("/{}", arg_values.len()));
-                let dst = self.value_gen.next();
-                // Use legacy global-call emission to avoid unified builtin/extern constraints
-                self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
-                return Ok(dst);
+                return self.handle_static_method_call(obj_name, &method, &arguments);
             }
         }
-        // Minimal TypeOp wiring via method-style syntax: value.is("Type") / value.as("Type")
-        if (method == "is" || method == "as") && arguments.len() == 1 {
-            if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
-                let object_value = self.build_expression(object.clone())?;
-                let mir_ty = Self::parse_type_name_to_mir(&type_name);
-                let dst = self.value_gen.next();
-                let op = if method == "is" {
-                    TypeOpKind::Check
-                } else {
-                    TypeOpKind::Cast
-                };
-                self.emit_instruction(MirInstruction::TypeOp {
-                    dst,
-                    op,
-                    value: object_value,
-                    ty: mir_ty,
-                })?;
-                return Ok(dst);
-            }
+
+        // 2. Handle env.* methods
+        if let Some(res) = self.try_handle_env_method(&object, &method, &arguments) {
+            return res;
         }
-        if let Some(res) = self.try_handle_env_method(&object, &method, &arguments) { return res; }
-        // If object is `me` within a static box, lower to direct Call: BoxName.method/N
+
+        // 3. Handle me.method() calls
         if let ASTNode::Me { .. } = object {
-            if let Some(res) = self.try_handle_me_direct_call(&method, &arguments) { return res; }
-        }
-        // Build the object expression (wrapper allows simple access if needed in future)
-        let _mc = MethodCallExpr { object: Box::new(object.clone()), method: method.clone(), arguments: arguments.clone(), span: crate::ast::Span::unknown() };
-        let object_value = self.build_expression(object.clone())?;
-        // Secondary interception for is/as
-        if (method == "is" || method == "as") && arguments.len() == 1 {
-            if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
-                let mir_ty = Self::parse_type_name_to_mir(&type_name);
-                let dst = self.value_gen.next();
-                let op = if method == "is" {
-                    TypeOpKind::Check
-                } else {
-                    TypeOpKind::Cast
-                };
-                self.emit_instruction(MirInstruction::TypeOp {
-                    dst,
-                    op,
-                    value: object_value,
-                    ty: mir_ty,
-                })?;
-                return Ok(dst);
+            if let Some(res) = self.handle_me_method_call(&method, &arguments)? {
+                return Ok(res);
             }
         }
-        // Fallback: generic plugin invoke
-        let mut arg_values: Vec<ValueId> = Vec::new();
-        for a in &arguments {
-            arg_values.push(self.build_expression(a.clone())?);
+
+        // 4. Build object value for remaining cases
+        let object_value = self.build_expression(object)?;
+
+        // 5. Handle TypeOp methods: value.is("Type") / value.as("Type")
+        // Note: This was duplicated in original code - now unified!
+        if let Some(type_name) = Self::is_typeop_method(&method, &arguments) {
+            return self.handle_typeop_method(object_value, &method, &type_name);
         }
-        let result_id = self.value_gen.next();
-        self.emit_box_or_plugin_call(
-            Some(result_id),
-            object_value,
-            method,
-            None,
-            arg_values,
-            EffectMask::READ.add(Effect::ReadHeap),
-        )?;
-        Ok(result_id)
+
+        // 6. Fallback: standard Box/Plugin method call
+        self.handle_standard_method_call(object_value, method, &arguments)
     }
 
     // Map a user-facing type name to MIR type

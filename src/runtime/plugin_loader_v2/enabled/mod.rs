@@ -5,6 +5,7 @@ mod globals;
 mod host_bridge;
 mod instance_manager;
 mod loader;
+mod method_resolver;
 mod types;
 
 pub use globals::{get_global_loader_v2, init_global_loader_v2, shutdown_plugins_v2};
