@@ -365,14 +365,8 @@ pub fn using_ast_enabled() -> bool {
         _ => !using_is_prod(), // dev/ci → true, prod → false
     }
 }
-pub fn resolve_fix_braces() -> bool {
-    // Safer default: OFF（誤補正の副作用を避ける）
-    // 明示ON: NYASH_RESOLVE_FIX_BRACES=1
-    matches!(
-        std::env::var("NYASH_RESOLVE_FIX_BRACES").ok().as_deref(),
-        Some("1") | Some("true") | Some("on")
-    )
-}
+// Legacy resolve_fix_braces() removed (Phase 15 cleanup)
+// AST-based integration handles syntax properly without text-level brace fixing
 pub fn vm_use_py() -> bool {
     std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1")
 }

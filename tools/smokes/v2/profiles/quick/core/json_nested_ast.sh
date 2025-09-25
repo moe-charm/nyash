@@ -1,11 +1,11 @@
 #!/bin/bash
-# json_roundtrip_ast.sh - JSON parse/stringify roundtrip via AST using
+# json_nested_ast.sh - Nested arrays/objects roundtrip via AST using
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
-TEST_DIR="/tmp/json_roundtrip_ast_$$"
+TEST_DIR="/tmp/json_nested_ast_$$"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
@@ -24,26 +24,14 @@ using json_native as JsonParserModule
 static box Main {
   main() {
     local samples = new ArrayBox()
-    samples.push("null")
-    samples.push("true")
-    samples.push("false")
-    samples.push("42")
-    samples.push("-0")
-    samples.push("0")
-    samples.push("3.14")
-    samples.push("-2.5")
-    samples.push("6.02e23")
-    samples.push("-1e-9")
-    samples.push("\"hello\"")
-    samples.push("[]")
-    samples.push("{}")
-    samples.push("{\"a\":1}")
+    samples.push("[1,[2,3],{\"x\":[4]}]")
+    samples.push("{\"a\":{\"b\":[1,2]},\"c\":\"d\"}")
+    samples.push("{\"n\":-1e-3,\"z\":0.0}")
 
     local i = 0
     loop(i < samples.length()) {
       local s = samples.get(i)
       local r = JsonParserModule.roundtrip_test(s)
-      // Print each roundtrip result on its own line
       print(r)
       i = i + 1
     }
@@ -53,25 +41,14 @@ static box Main {
 EOF
 
 expected=$(cat << 'TXT'
-null
-true
-false
-42
-"hello"
-[]
-{}
-{"a":1}
-0
-0
-3.14
--2.5
-6.02e23
--1e-9
+[1,[2,3],{"x":[4]}]
+{"a":{"b":[1,2]},"c":"d"}
+{"n":-1e-3,"z":0.0}
 TXT
 )
 
 output=$("$NYASH_BIN" --backend vm driver.nyash 2>&1 | filter_noise)
-compare_outputs "$expected" "$output" "json_roundtrip_ast"
+compare_outputs "$expected" "$output" "json_nested_ast"
 
 cd /
 rm -rf "$TEST_DIR"

@@ -12,7 +12,7 @@ impl NyashRunner {
             Ok(s) => s,
             Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
         };
-        // Using preprocessing (legacy inline or AST-prelude merge when NYASH_USING_AST=1)
+        // Using preprocessing with AST-prelude merge (when NYASH_USING_AST=1)
         let mut code2 = code;
         let use_ast_prelude = crate::config::env::enable_using()
             && crate::config::env::using_ast_enabled();
