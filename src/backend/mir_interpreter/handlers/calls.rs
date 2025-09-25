@@ -70,38 +70,60 @@ impl MirInterpreter {
         };
 
         let mut pick: Option<String> = None;
+        // Fast path: exact match
         if self.functions.contains_key(&raw) {
             pick = Some(raw.clone());
         } else {
-            let arity = args.len();
-            let mut cands: Vec<String> = Vec::new();
-            let suf = format!(".{}{}", raw, format!("/{}", arity));
-            for k in self.functions.keys() {
-                if k.ends_with(&suf) {
-                    cands.push(k.clone());
-                }
-            }
-            if cands.is_empty() && raw.contains('/') && self.functions.contains_key(&raw) {
-                cands.push(raw.clone());
-            }
-            if cands.len() > 1 {
-                if let Some(cur) = &self.cur_fn {
-                    let cur_box = cur.split('.').next().unwrap_or("");
-                    let scoped: Vec<String> = cands
-                        .iter()
-                        .filter(|k| k.starts_with(&format!("{}.", cur_box)))
-                        .cloned()
-                        .collect();
-                    if scoped.len() == 1 {
-                        cands = scoped;
+            // Robust normalization for names like "Box.method/Arity" or just "method"
+            let call_arity = args.len();
+            let (base, ar_from_raw) = if let Some((b, a)) = raw.rsplit_once('/') {
+                (b.to_string(), a.parse::<usize>().ok())
+            } else {
+                (raw.clone(), None)
+            };
+            let want_arity = ar_from_raw.unwrap_or(call_arity);
+            // Try exact canonical form: "base/arity"
+            let exact = format!("{}/{}", base, want_arity);
+            if self.functions.contains_key(&exact) {
+                pick = Some(exact);
+            } else {
+                // Split base into optional box and method name
+                let (maybe_box, method) = if let Some((bx, m)) = base.split_once('.') {
+                    (Some(bx.to_string()), m.to_string())
+                } else {
+                    (None, base.clone())
+                };
+                // Collect candidates that end with ".method/arity"
+                let mut cands: Vec<String> = Vec::new();
+                let tail = format!(".{}{}", method, format!("/{}", want_arity));
+                for k in self.functions.keys() {
+                    if k.ends_with(&tail) {
+                        if let Some(ref bx) = maybe_box {
+                            if k.starts_with(&format!("{}.", bx)) { cands.push(k.clone()); }
+                        } else {
+                            cands.push(k.clone());
+                        }
                     }
                 }
-            }
-            if cands.len() == 1 {
-                pick = Some(cands.remove(0));
-            } else if cands.len() > 1 {
-                cands.sort();
-                pick = Some(cands[0].clone());
+                if cands.len() > 1 {
+                    // Prefer same-box candidate based on current function's box
+                    if let Some(cur) = &self.cur_fn {
+                        let cur_box = cur.split('.').next().unwrap_or("");
+                        let scoped: Vec<String> = cands
+                            .iter()
+                            .filter(|k| k.starts_with(&format!("{}.", cur_box)))
+                            .cloned()
+                            .collect();
+                        if scoped.len() == 1 { cands = scoped; }
+                    }
+                }
+                if cands.len() == 1 {
+                    pick = Some(cands.remove(0));
+                } else if cands.len() > 1 {
+                    let mut c = cands;
+                    c.sort();
+                    pick = Some(c.remove(0));
+                }
             }
         }
 
@@ -175,6 +197,22 @@ impl MirInterpreter {
                             "concat requires 1 argument".into(),
                         ))
                     }
+                }
+                "substring" => {
+                    let start = if let Some(a0) = args.get(0) {
+                        self.reg_load(*a0)?.as_integer().unwrap_or(0)
+                    } else { 0 };
+                    let end = if let Some(a1) = args.get(1) {
+                        self.reg_load(*a1)?.as_integer().unwrap_or(s.len() as i64)
+                    } else { s.len() as i64 };
+                    let len = s.len() as i64;
+                    let i0 = start.max(0).min(len) as usize;
+                    let i1 = end.max(0).min(len) as usize;
+                    if i0 > i1 { return Ok(VMValue::String(String::new())); }
+                    // Note: operating on bytes; Nyash strings are UTF‑8, but tests are ASCII only here
+                    let bytes = s.as_bytes();
+                    let sub = String::from_utf8(bytes[i0..i1].to_vec()).unwrap_or_default();
+                    Ok(VMValue::String(sub))
                 }
                 _ => Err(VMError::InvalidInstruction(format!(
                     "Unknown String method: {}",

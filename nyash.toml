@@ -13,9 +13,14 @@ paths = ["apps", "lib", "."]
 path = "apps/lib/json_native/"
 main = "parser/parser.nyash"
 
+# JSON Native – String utilities as a standalone package (single-file)
+[using.string_utils]
+path = "apps/lib/json_native/utils/string.nyash"
+
 [using.aliases]
 # Resolve `using json as ...` to json_native when desired
 json = "json_native"
+StringUtils = "string_utils"
 
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)

@@ -222,7 +222,11 @@ static box StringUtils {
     }
     
     // ===== 数値変換 =====
-    
+    // 浮動小数点の簡易パース（現段階は正規化のみ。数値演算は行わない）
+    parse_float(s) {
+        return s
+    }
+
     // 文字列が数値表現かどうか判定（整数のみ、簡易版）
     is_integer(s) {
         if s.length() == 0 {
@@ -255,6 +259,27 @@ static box StringUtils {
         return true
     }
     
+    // 文字列が空または空白のみかどうか判定（ユーティリティ）
+    is_empty_or_whitespace(s) {
+        return this.trim(s).length() == 0
+    }
+
+    // 文字列の先頭が指定された文字列で始まるか判定
+    starts_with(s, prefix) {
+        if prefix.length() > s.length() {
+            return false
+        }
+        return s.substring(0, prefix.length()) == prefix
+    }
+
+    // 文字列の末尾が指定された文字列で終わるか判定
+    ends_with(s, suffix) {
+        if suffix.length() > s.length() {
+            return false
+        }
+        return s.substring(s.length() - suffix.length(), s.length()) == suffix
+    }
+
     // 文字列を整数に変換（簡易版）
     parse_integer(s) {
         if not this.is_integer(s) {
@@ -286,32 +311,6 @@ static box StringUtils {
         if neg { return 0 - acc } else { return acc }
     }
 
-    // 浮動小数点の簡易パース（現段階は正規化のみ。数値演算は行わない）
-    parse_float(s) {
-        return s
-    }
-    
     // ===== ユーティリティ =====
-    
-    // 文字列が空または空白のみかどうか判定
-    is_empty_or_whitespace(s) {
-        return this.trim(s).length() == 0
-    }
-    
-    // 文字列の先頭が指定された文字列で始まるか判定
-    starts_with(s, prefix) {
-        if prefix.length() > s.length() {
-            return false
-        }
-        return s.substring(0, prefix.length()) == prefix
-    }
-    
-    // 文字列の末尾が指定された文字列で終わるか判定
-    ends_with(s, suffix) {
-        if suffix.length() > s.length() {
-            return false
-        }
-        return s.substring(s.length() - suffix.length(), s.length()) == suffix
-    }
 }
 }

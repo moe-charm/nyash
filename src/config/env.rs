@@ -335,6 +335,25 @@ pub fn enable_using() -> bool {
         _ => true, // デフォルト: ON
     }
 }
+
+// ---- Using profiles (dev|ci|prod) ----
+/// Return using profile string; default is "dev".
+pub fn using_profile() -> String {
+    std::env::var("NYASH_USING_PROFILE").unwrap_or_else(|_| "dev".to_string())
+}
+pub fn using_is_prod() -> bool { using_profile().eq_ignore_ascii_case("prod") }
+pub fn using_is_ci() -> bool { using_profile().eq_ignore_ascii_case("ci") }
+pub fn using_is_dev() -> bool { using_profile().eq_ignore_ascii_case("dev") }
+/// Allow `using "path"` statements in source (dev-only by default).
+pub fn allow_using_file() -> bool {
+    if using_is_prod() { return false; }
+    // Optional explicit override
+    match std::env::var("NYASH_ALLOW_USING_FILE").ok().as_deref() {
+        Some("0") | Some("false") | Some("off") => false,
+        Some("1") | Some("true") | Some("on") => true,
+        _ => true, // dev/ci default: allowed
+    }
+}
 pub fn resolve_fix_braces() -> bool {
     // Safer default: OFF（誤補正の副作用を避ける）
     // 明示ON: NYASH_RESOLVE_FIX_BRACES=1

@@ -56,6 +56,7 @@ pub(crate) fn try_parse_method_or_field(
     fields: &mut Vec<String>,
     last_method_name: &mut Option<String>,
 ) -> Result<bool, ParseError> {
+    let trace = std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1");
     // Allow NEWLINE(s) between identifier and '('
     if !p.match_token(&TokenType::LPAREN) {
         // Lookahead skipping NEWLINE to see if a '(' follows → treat as method head
@@ -65,11 +66,13 @@ pub(crate) fn try_parse_method_or_field(
             // Consume intervening NEWLINEs so current becomes '('
             while p.match_token(&TokenType::NEWLINE) { p.advance(); }
         } else {
+            if trace { eprintln!("[parser][static-box] field detected: {}", name); }
             // Field
             fields.push(name);
             return Ok(true);
         }
     }
+    if trace { eprintln!("[parser][static-box] method head detected: {}(..)", name); }
     // Method
     p.advance(); // consume '('
     let mut params = Vec::new();
@@ -84,14 +87,20 @@ pub(crate) fn try_parse_method_or_field(
     p.consume(TokenType::RPAREN)?;
     // Allow NEWLINE(s) between ')' and '{' of method body
     while p.match_token(&TokenType::NEWLINE) { p.advance(); }
-    let body = p.parse_block_statements()?;
+    // Parse method body; optionally use strict method-body guard when enabled
+    let body = if std::env::var("NYASH_PARSER_METHOD_BODY_STRICT").ok().as_deref() == Some("1") {
+        p.parse_method_body_statements()? 
+    } else {
+        p.parse_block_statements()?
+    };
     let body = wrap_method_body_with_postfix_if_any(p, body)?;
     // Construct method node
     let method = ASTNode::FunctionDeclaration {
         name: name.clone(),
         params,
         body,
-        is_static: false,
+        // Methods inside a static box are semantically static
+        is_static: true,
         is_override: false,
         span: crate::ast::Span::unknown(),
     };

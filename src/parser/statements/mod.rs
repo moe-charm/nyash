@@ -83,13 +83,96 @@ impl NyashParser {
 
     /// Parse block statements: { statement* }
     pub(super) fn parse_block_statements(&mut self) -> Result<Vec<ASTNode>, ParseError> {
+        let trace_blocks = std::env::var("NYASH_PARSER_TRACE_BLOCKS").ok().as_deref() == Some("1");
+        if trace_blocks {
+            eprintln!(
+                "[parser][block] enter '{{' at line {}",
+                self.current_token().line
+            );
+        }
         self.consume(TokenType::LBRACE)?;
         let mut statements = Vec::new();
 
         while !self.is_at_end() && !self.match_token(&TokenType::RBRACE) {
             statements.push(self.parse_statement()?);
         }
+        if trace_blocks {
+            eprintln!(
+                "[parser][block] exit '}}' at line {}",
+                self.current_token().line
+            );
+        }
+        self.consume(TokenType::RBRACE)?;
+        Ok(statements)
+    }
 
+    /// Parse method body statements: { statement* }
+    /// Optional seam-guard (env-gated via NYASH_PARSER_METHOD_BODY_STRICT=1) is applied
+    /// conservatively at top-level only, and only right after a nested block '}' was
+    /// just consumed, to avoid false positives inside method bodies.
+    pub(super) fn parse_method_body_statements(&mut self) -> Result<Vec<ASTNode>, ParseError> {
+        // Reuse block entry tracing
+        let trace_blocks = std::env::var("NYASH_PARSER_TRACE_BLOCKS").ok().as_deref() == Some("1");
+        if trace_blocks {
+            eprintln!(
+                "[parser][block] enter '{{' (method) at line {}",
+                self.current_token().line
+            );
+        }
+        self.consume(TokenType::LBRACE)?;
+        let mut statements = Vec::new();
+
+        // Helper: lookahead for `ident '(' ... ')' [NEWLINE*] '{'`
+        let mut looks_like_method_head = |this: &Self| -> bool {
+            // Only meaningful when starting at a new statement head
+            match &this.current_token().token_type {
+                TokenType::IDENTIFIER(_) => {
+                    // Expect '(' after optional NEWLINE
+                    let mut k = 1usize;
+                    while matches!(this.peek_nth_token(k), TokenType::NEWLINE) { k += 1; }
+                    if !matches!(this.peek_nth_token(k), TokenType::LPAREN) { return false; }
+                    // Walk to matching ')'
+                    k += 1; // after '('
+                    let mut depth: i32 = 1;
+                    while !matches!(this.peek_nth_token(k), TokenType::EOF) {
+                        match this.peek_nth_token(k) {
+                            TokenType::LPAREN => depth += 1,
+                            TokenType::RPAREN => { depth -= 1; if depth == 0 { k += 1; break; } },
+                            _ => {}
+                        }
+                        k += 1;
+                    }
+                    // Allow NEWLINE(s) between ')' and '{'
+                    while matches!(this.peek_nth_token(k), TokenType::NEWLINE) { k += 1; }
+                    matches!(this.peek_nth_token(k), TokenType::LBRACE)
+                }
+                _ => false,
+            }
+        };
+
+        while !self.is_at_end() && !self.match_token(&TokenType::RBRACE) {
+            statements.push(self.parse_statement()?);
+            // Conservative seam guard: apply only when env is ON, we just consumed a '}'
+            // (end of a nested block), and the next tokens at the top-level look like a
+            // method head. This limits the guard to real seams between members.
+            if std::env::var("NYASH_PARSER_METHOD_BODY_STRICT").ok().as_deref() == Some("1") {
+                // If the next token would close the current method, do not guard here
+                if self.match_token(&TokenType::RBRACE) { break; }
+                // Check if we just consumed a '}' token from inner content
+                let just_saw_rbrace = if self.current > 0 {
+                    matches!(self.tokens[self.current - 1].token_type, TokenType::RBRACE)
+                } else { false };
+                if just_saw_rbrace && looks_like_method_head(self) {
+                    break;
+                }
+            }
+        }
+        if trace_blocks {
+            eprintln!(
+                "[parser][block] exit '}}' (method) at line {}",
+                self.current_token().line
+            );
+        }
         self.consume(TokenType::RBRACE)?;
         Ok(statements)
     }

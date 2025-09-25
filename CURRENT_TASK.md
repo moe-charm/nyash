@@ -8,6 +8,43 @@ Quick status
 - Parser: TokenCursor 統一 Step‑2/3 完了（env ゲート）
 - PHI: if/else の incoming pred を exit ブロックへ修正（VM 未定義値を根治）
 
+## Using / Resolver — “Best of Both” Decision（2025‑09‑26）
+
+合意（いいとこどり）
+- 依存の唯一の真実（SSOT）を `nyash.toml` `[using]` に集約（aliases/packages/paths）。
+- 実体の合成は AST マージに一本化（テキスト結合・括弧補正の互換シムは段階的に削除）。
+- プロファイル導入で段階移行: `NYASH_USING_PROFILE={dev|ci|prod}`
+  - dev: toml + ファイル内 using/path を許可。診断ON、限定的フォールバックON。
+  - ci: toml 優先。ファイル using は警告/限定許可。フォールバックOFF。
+  - prod: toml のみ。ファイル using/path はエラー（toml 追記ガイドを表示）。
+
+やること（仕様不変・既定OFFで段階導入）
+1) ドキュメント
+   - [x] `docs/reference/language/using.md` に SSOT+AST とプロファイル運用を追記。
+2) Resolver 統合
+   - [x] vm_fallback に AST プレリュード統合を導入（common と同形）。
+   - [x] prod での `using "path"`/未知 alias はエラー（修正ガイド付）。
+   - [x] prelude 決定（toml優先/プロファイル対応）の共通ヘルパを新設し、呼び出し側を一元化（`resolve_prelude_paths_profiled`）。
+3) レガシー削除計画
+   - [x] prod でテキスト結合（combiner）/括弧補正を禁止（ガイド表示）。
+   - [ ] dev/ci でも段階的に無効化 → parity 緑後に完全削除。
+4) パーサ堅牢化（必要時の安全弁、NYASH_PARSER_METHOD_BODY_STRICT=1）
+   - [x] メソッド本体用ガードを実装（env で opt-in）。
+   - [x] Guard 条件をトップレベル限定かつ `}` 直後のみ発火に調整（誤検知回避）。
+   - [ ] `apps/lib/json_native/utils/string.nyash` で stray FunctionCall 消滅確認。
+
+受け入れ基準
+- StringUtils の `--dump-ast` に stray FunctionCall が出ない（宣言のみ）。
+- mini（starts_with）: ASTモード ON/OFF で parse→MIR まで到達（VM fallback の未実装は許容）。
+- prod プロファイル: 未登録 using/パスはエラーになり、toml 追記指示を提示。
+
+### 進捗ログ（2025‑09‑26 PM）
+- Profiles + SSOT 実装（prod で file using 禁止、toml 真実）→ 完了。
+- VM fallback に AST プレリュード導入 → 完了。
+- Parser: method-body guard を env で opt-in 実装（既定OFF）。
+  - 現状: OFF 時は `string.nyash` にて Program 配下に `FunctionCall(parse_float)` が残存。
+  - 次: Guard ON で AST/MIR を検証し、必要に応じて lookahead 条件を調整。
+
 ## 今日の合意（方向修正の確定）
 - Rust層は新機能を最小化。今後は Nyash VM/コンパイラ（自己ホスト）へリソース集中。
 - 次タスクは Nyash 製 JSON ライブラリ（JSON v0 DOM: parse/stringify）。完了次第、Ny Executor 最小命令の実装を着手。

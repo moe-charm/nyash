@@ -29,6 +29,15 @@ impl NyashParser {
         // Track last inserted method name to allow postfix catch/cleanup fallback parsing
         let mut last_method_name: Option<String> = None;
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
+            // Tolerate blank lines between members
+            while self.match_token(&TokenType::NEWLINE) { self.advance(); }
+            let trace = std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1");
+            if trace {
+                eprintln!(
+                    "[parser][static-box] loop token={:?}",
+                    self.current_token().token_type
+                );
+            }
 
             // Fallback: method-level postfix catch/cleanup immediately following a method
             if crate::parser::declarations::box_def::members::postfix::try_parse_method_postfix_after_last_method(
@@ -45,8 +54,14 @@ impl NyashParser {
                 static_init = Some(body);
                 continue;
             } else if self.match_token(&TokenType::STATIC) {
-                // STRICT で top-level seam を検出した場合は while を抜ける
-                break;
+                // 互換用の暫定ガード（既定OFF）: using テキスト結合の継ぎ目で誤って 'static' が入った場合に
+                // ループを抜けて外側の '}' 消費に委ねる。既定では無効化し、文脈エラーとして扱う。
+                if std::env::var("NYASH_PARSER_SEAM_BREAK_ON_STATIC").ok().as_deref() == Some("1") {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[parser][static-box][seam] encountered 'static' inside static box; breaking (compat shim)");
+                    }
+                    break;
+                }
             }
 
             // initブロックの処理（共通ヘルパに委譲）
@@ -69,6 +84,12 @@ impl NyashParser {
             }
         }
 
+        if std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1") {
+            eprintln!(
+                "[parser][static-box] closing '}}' at token={:?}",
+                self.current_token().token_type
+            );
+        }
         self.consume(TokenType::RBRACE)?;
 
         // 🔥 Static初期化ブロックから依存関係を抽出

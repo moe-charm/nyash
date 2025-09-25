@@ -4,6 +4,14 @@
 
 Status: Accepted (Runner‑side resolution). Selfhost parser accepts using as no‑op and attaches `meta.usings` for future use.
 
+> Phase 15.5 指針（いいとこ取り）
+> - 依存の唯一の真実（SSOT）: `nyash.toml` の `[using]`（aliases/packages/paths）
+> - 実体の合成: テキスト結合は廃止し、AST マージに一本化（曖昧さ根絶）
+> - プロファイル運用: `NYASH_USING_PROFILE={dev|ci|prod}` で厳格度を段階的に切替
+>   - dev: toml + ファイル内 using を許可（実験/便利）
+>   - ci: toml 優先、ファイル using は警告または限定許可
+>   - prod: toml のみ。ファイル using/path はエラー（追記ガイドを提示）
+
 ## 🎯 設計思想：Everything has Namespace
 
 ### **核心コンセプト**
@@ -56,8 +64,8 @@ pub enum QualifiedCallee {
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.
 - Resolution is performed by the Rust Runner when `NYASH_ENABLE_USING=1`.
-  - Runner strips `using` lines from the source before parsing/execution.
-  - Registers modules into an internal registry for path/namespace hints.
+- 実体の結合は AST マージのみ。テキストの前置き/連結は行わない（移行完了後に完全廃止）。
+- Runner は `nyash.toml` の `[using]` を唯一の真実として参照（prod）。dev/ci は段階的に緩和可能。
 - Selfhost compiler (Ny→JSON v0) collects using lines and emits `meta.usings` when present. The bridge currently ignores this meta field.
 
 ## Namespace Resolution (Runner‑side)
@@ -84,7 +92,7 @@ Policy
 - Treated as a synonym to `using` on the Runner side; registers aliases only.
 - Examples: `needs utils.StringHelper`, `needs plugin.network.HttpClient as HttpClient`, `needs plugin.network.*`
 
-## nyash.toml — Unified Using (Phase 15)
+## nyash.toml — Unified Using（唯一の真実 / SSOT）
 
 Using resolution is centralized under the `[using]` table. Three forms are supported:
 
@@ -98,7 +106,7 @@ Using resolution is centralized under the `[using]` table. Three forms are suppo
 
 Notes
 - Aliases are fully resolved: `using json` first rewrites to `json_native`, then resolves to a concrete path via `[using.json_native]`.
-- `include` is deprecated. Use `using "./path/to/file.nyash" as Name` instead.
+- `include` は廃止。代替は `using "./path/to/file.nyash" as Name`。prod では `nyash.toml` への登録が必須。
 
 ### Dylib autoload (dev guard)
 - Enable autoload during using resolution: set env `NYASH_USING_DYLIB_AUTOLOAD=1`.
@@ -182,11 +190,44 @@ static box Main {
 Runner Configuration
 - Enable using pre‑processing: `NYASH_ENABLE_USING=1`
 - CLI from-the-top registration: `--using "ns as Alias"` or `--using '"apps/foo.nyash" as Foo'` (repeatable)
+- Using profiles (phase‑in): `NYASH_USING_PROFILE={dev|ci|prod}`
+  - dev: toml + file using（path）可、AST マージ、候補提示 ON
+  - ci: toml 優先、file using は警告/限定、AST マージ、フォールバック OFF
+  - prod: toml のみ、file using/path はエラー（追記ガイドを表示）
 - Strict mode (plugin prefix required): `NYASH_PLUGIN_REQUIRE_PREFIX=1` または `nyash.toml` の `[plugins] require_prefix=true`
 - Aliases from env: `NYASH_ALIASES="Foo=apps/foo/main.nyash,Bar=lib/bar.nyash"`
 - Additional search paths: `NYASH_USING_PATH="apps:lib:."`
 - Selfhost pipeline keeps child stdout quiet and extracts JSON only: `NYASH_JSON_ONLY=1` (set by Runner automatically for child)
 - Selfhost emits `meta.usings` automatically when present; no additional flags required.
+
+## 🔬 Quick Smokes（AST + Profiles）
+
+開発・CIで最小コストに確認できるスモークを用意しています。AST プレリュードとプロファイル（dev/prod）の基本動作をカバーします。
+
+- dev: `using "file"` 許可 + AST マージ
+- prod: `using "file"` 禁止（toml へ誘導） / alias・package は許可
+
+実行例（quick プロファイル）
+
+```
+# 1) dev で file using が通る（AST マージ）
+./tools/smokes/v2/run.sh --profile quick --filter "using_profiles_ast.sh$"
+
+# 2) 相対パス using（サブディレクトリ）
+./tools/smokes/v2/run.sh --profile quick --filter "using_relative_file_ast.sh$"
+
+# 3) 複数プレリュード（toml packages）+ 依存（B→A）
+./tools/smokes/v2/run.sh --profile quick --filter "using_multi_prelude_dep_ast.sh$"
+```
+
+テストソース
+- `tools/smokes/v2/profiles/quick/core/using_profiles_ast.sh`
+- `tools/smokes/v2/profiles/quick/core/using_relative_file_ast.sh`
+- `tools/smokes/v2/profiles/quick/core/using_multi_prelude_dep_ast.sh`
+
+注意
+- ログに `[using] stripped line:` が出力されますが、これは AST マージ前の using 行の除去ログです（機能上問題ありません）。
+- 実行バイナリは `target/release/nyash` を前提とします。未ビルド時は `cargo build --release` を実行してください。
 
 ## 🔗 関連ドキュメント
 
@@ -204,6 +245,8 @@ Runner Configuration
 
 Notes
 - Phase 15 keeps resolution in the Runner to minimize parser complexity. Future phases may leverage `meta.usings` for compiler decisions.
+- レガシー実装の扱い: テキスト前置き/括弧補正などのシムは段階的に削除（prod プロファイルから先に無効化）。
+- AST マージは dev/ci/prod の全プロファイルで共通基盤とし、曖昧性（宣言≻式）問題の再発を原理的に回避する。
 - Unknown fields in the top‑level JSON (like `meta`) are ignored by the current bridge.
 - 未解決時（非strict）は実行を継続し、`NYASH_RESOLVE_TRACE=1` で候補を提示。strict時はエラーで候補を表示。
 - **Phase 15.5完了により、現代的な名前空間システムを実現予定**

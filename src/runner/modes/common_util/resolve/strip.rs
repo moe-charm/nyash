@@ -62,6 +62,10 @@ pub fn strip_using_and_register(
     if !crate::config::env::enable_using() {
         return Ok(code.to_string());
     }
+    // Profile guard: legacy text inlining is not allowed under prod profile
+    if crate::config::env::using_is_prod() {
+        return Err("using: text inlining is disabled in prod profile. Enable NYASH_USING_AST=1 and declare dependencies in nyash.toml [using]".to_string());
+    }
     // Optional external combiner (default OFF): NYASH_USING_COMBINER=1
     if std::env::var("NYASH_USING_COMBINER").ok().as_deref() == Some("1") {
         let fix_braces = crate::config::env::resolve_fix_braces();
@@ -435,6 +439,8 @@ pub fn collect_using_and_strip(
         return Ok((code.to_string(), Vec::new()));
     }
     let using_ctx = runner.init_using_context();
+    let prod = crate::config::env::using_is_prod();
+    let dev = crate::config::env::using_is_dev();
     let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
     let verbose = crate::config::env::cli_verbose()
         || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
@@ -454,6 +460,12 @@ pub fn collect_using_and_strip(
             } else { (rest0.to_string(), None) };
             let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
             if is_path {
+                if prod || !crate::config::env::allow_using_file() {
+                    return Err(format!(
+                        "using: file paths are disallowed in this profile. Add it to nyash.toml [using] (packages/aliases) and reference by name: {}",
+                        target
+                    ));
+                }
                 let path = target.trim_matches('"').to_string();
                 // Resolve relative to current file dir
                 let mut p = std::path::PathBuf::from(&path);
@@ -464,29 +476,67 @@ pub fn collect_using_and_strip(
                 continue;
             }
             // Resolve namespaces/packages
-            match crate::runner::pipeline::resolve_using_target(
-                &target,
-                false,
-                &using_ctx.pending_modules,
-                &using_ctx.using_paths,
-                &using_ctx.aliases,
-                &using_ctx.packages,
-                ctx_dir,
-                strict,
-                verbose,
-            ) {
-                Ok(value) => {
-                    // Only file paths are candidates for AST prelude merge
-                    if value.ends_with(".nyash") || value.contains('/') || value.contains('\\') {
-                        // Resolve relative
-                        let mut p = std::path::PathBuf::from(&value);
-                        if p.is_relative() {
-                            if let Some(dir) = ctx_dir { let cand = dir.join(&p); if cand.exists() { p = cand; } }
-                        }
-                        prelude_paths.push(p.to_string_lossy().to_string());
-                    }
+            if prod {
+                // prod: only allow names present in aliases/packages (toml)
+                let mut pkg_name: String = target.clone();
+                if let Some(v) = using_ctx.aliases.get(&target) {
+                    pkg_name = v.clone();
                 }
-                Err(e) => return Err(format!("using: {}", e)),
+                if let Some(pkg) = using_ctx.packages.get(&pkg_name) {
+                    use crate::using::spec::PackageKind;
+                    match pkg.kind {
+                        PackageKind::Dylib => {
+                            // dylib: nothing to prelude-parse; runtime loader handles it.
+                        }
+                        PackageKind::Package => {
+                            let base = std::path::Path::new(&pkg.path);
+                            let out = if let Some(m) = &pkg.main {
+                                if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                                    pkg.path.clone()
+                                } else {
+                                    base.join(m).to_string_lossy().to_string()
+                                }
+                            } else if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                                pkg.path.clone()
+                            } else {
+                                let leaf = base.file_name().and_then(|s| s.to_str()).unwrap_or(&pkg_name);
+                                base.join(format!("{}.nyash", leaf)).to_string_lossy().to_string()
+                            };
+                            prelude_paths.push(out);
+                        }
+                    }
+                } else {
+                    return Err(format!(
+                        "using: '{}' not found in nyash.toml [using]. Define a package or alias and use its name (prod profile)",
+                        target
+                    ));
+                }
+            } else {
+                // dev/ci: allow broader resolution via resolver
+                match crate::runner::pipeline::resolve_using_target(
+                    &target,
+                    false,
+                    &using_ctx.pending_modules,
+                    &using_ctx.using_paths,
+                    &using_ctx.aliases,
+                    &using_ctx.packages,
+                    ctx_dir,
+                    strict,
+                    verbose,
+                ) {
+                    Ok(value) => {
+                        // Only file paths are candidates for AST prelude merge
+                        if value.ends_with(".nyash") || value.contains('/') || value.contains('\\') {
+                            // Resolve relative
+                            let mut p = std::path::PathBuf::from(&value);
+                            if p.is_relative() {
+                                if let Some(dir) = ctx_dir { let cand = dir.join(&p); if cand.exists() { p = cand; } }
+                            }
+                            prelude_paths.push(p.to_string_lossy().to_string());
+                        }
+                    }
+                    Err(e) => return Err(format!("using: {}", e)),
+                }
             }
             continue;
         }
@@ -501,6 +551,17 @@ pub fn collect_using_and_strip(
         out = with_marker;
     }
     Ok((out, prelude_paths))
+}
+
+/// Profile-aware prelude resolution wrapper.
+/// Currently delegates to `collect_using_and_strip`, but provides a single
+/// entry point for callers (common and vm_fallback) to avoid logic drift.
+pub fn resolve_prelude_paths_profiled(
+    runner: &NyashRunner,
+    code: &str,
+    filename: &str,
+) -> Result<(String, Vec<String>), String> {
+    collect_using_and_strip(runner, code, filename)
 }
 
 /// Pre-expand line-head `@name[: Type] = expr` into `local name[: Type] = expr`.

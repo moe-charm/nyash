@@ -56,7 +56,7 @@ impl NyashRunner {
         let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
         if crate::config::env::enable_using() {
             if use_ast {
-                match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &code, filename) {
+                match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
                     Ok((clean, paths)) => {
                         cleaned_code_owned = clean; code_ref = &cleaned_code_owned;
                         // Parse each prelude file into AST and store
@@ -108,6 +108,30 @@ impl NyashRunner {
             }
             ASTNode::Program { statements: combined, span: nyash_rust::ast::Span::unknown() }
         } else { main_ast };
+
+        // Optional: dump AST statement kinds for quick diagnostics
+        if std::env::var("NYASH_AST_DUMP").ok().as_deref() == Some("1") {
+            use nyash_rust::ast::ASTNode;
+            eprintln!("[ast] dump start");
+            if let ASTNode::Program { statements, .. } = &ast {
+                for (i, st) in statements.iter().enumerate().take(50) {
+                    let kind = match st {
+                        ASTNode::BoxDeclaration { is_static, name, .. } => {
+                            if *is_static { format!("StaticBox({})", name) } else { format!("Box({})", name) }
+                        }
+                        ASTNode::FunctionDeclaration { name, .. } => format!("FuncDecl({})", name),
+                        ASTNode::FunctionCall { name, .. } => format!("FuncCall({})", name),
+                        ASTNode::MethodCall { method, .. } => format!("MethodCall({})", method),
+                        ASTNode::ScopeBox { .. } => "ScopeBox".to_string(),
+                        ASTNode::ImportStatement { path, .. } => format!("Import({})", path),
+                        ASTNode::UsingStatement { namespace_name, .. } => format!("Using({})", namespace_name),
+                        _ => format!("{:?}", st),
+                    };
+                    eprintln!("[ast] {}: {}", i, kind);
+                }
+            }
+            eprintln!("[ast] dump end");
+        }
 
         // Stage-0: import loader (top-level only) — resolve path and register in modules registry
         if let nyash_rust::ast::ASTNode::Program { statements, .. } = &ast {

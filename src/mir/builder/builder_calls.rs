@@ -297,10 +297,12 @@ impl super::MirBuilder {
         args: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            let cur_fun = self.current_function.as_ref().map(|f| f.signature.name.clone()).unwrap_or_else(|| "<none>".to_string());
             eprintln!(
-                "[builder] function-call name={} static_ctx={}",
+                "[builder] function-call name={} static_ctx={} in_fn={}",
                 name,
-                self.current_static_box.as_deref().unwrap_or("")
+                self.current_static_box.as_deref().unwrap_or(""),
+                cur_fun
             );
         }
         // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
@@ -577,6 +579,14 @@ impl super::MirBuilder {
         params: Vec<String>,
         body: Vec<ASTNode>,
     ) -> Result<(), String> {
+        // Derive static box context from function name prefix, e.g., "BoxName.method/N"
+        let saved_static_ctx = self.current_static_box.clone();
+        if let Some(pos) = func_name.find('.') {
+            let box_name = &func_name[..pos];
+            if !box_name.is_empty() {
+                self.current_static_box = Some(box_name.to_string());
+            }
+        }
         let signature = function_lowering::prepare_static_method_signature(
             func_name,
             &params,
@@ -652,6 +662,8 @@ impl super::MirBuilder {
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
         self.value_gen = saved_value_gen;
+        // Restore static box context
+        self.current_static_box = saved_static_ctx;
         Ok(())
     }
 }

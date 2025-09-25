@@ -1,0 +1,3 @@
+[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)
+[FileBox] Plugin initialized
+❌ MIR compilation error: Unresolved function: 'parse_float'. Function 'parse_float' not found. Check spelling or add explicit scope qualifier
