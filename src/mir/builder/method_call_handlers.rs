@@ -97,6 +97,84 @@ impl MirBuilder {
             arg_values.push(self.build_expression(arg.clone())?);
         }
 
+        // If receiver is a user-defined box, lower to function call: "Box.method/(1+arity)"
+        let mut class_name_opt: Option<String> = None;
+        if let Some(cn) = self.value_origin_newbox.get(&object_value) { class_name_opt = Some(cn.clone()); }
+        if class_name_opt.is_none() {
+            if let Some(t) = self.value_types.get(&object_value) {
+                if let MirType::Box(bn) = t { class_name_opt = Some(bn.clone()); }
+            }
+        }
+        if let Some(cls) = class_name_opt.clone() {
+            if self.user_defined_boxes.contains(&cls) {
+                let arity = arg_values.len(); // function name arity excludes 'me'
+                let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(&cls, &method, arity);
+                // Only use userbox path if such a function actually exists in the module
+                let has_fn = if let Some(ref module) = self.current_module {
+                    module.functions.contains_key(&fname)
+                } else { false };
+                if has_fn {
+                    if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                        super::utils::builder_debug_log(&format!("userbox method-call cls={} method={} fname={}", cls, method, fname));
+                    }
+                    let name_const = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: name_const,
+                        value: crate::mir::builder::ConstValue::String(fname),
+                    })?;
+                    let mut call_args = Vec::with_capacity(arity + 1);
+                    call_args.push(object_value); // 'me'
+                    call_args.extend(arg_values.into_iter());
+                    let dst = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(dst),
+                        func: name_const,
+                        callee: None,
+                        args: call_args,
+                        effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                    })?;
+                    return Ok(dst);
+                }
+            }
+        }
+
+        // Fallback: if exactly one user-defined method matches by name/arity across module, resolve to that
+        if let Some(ref module) = self.current_module {
+            let tail = format!(".{}{}", method, format!("/{}", arg_values.len()));
+            let mut cands: Vec<String> = module
+                .functions
+                .keys()
+                .filter(|k| k.ends_with(&tail))
+                .cloned()
+                .collect();
+            if cands.len() == 1 {
+                let fname = cands.remove(0);
+                // sanity: ensure the box prefix looks like a user-defined box
+                if let Some((bx, _)) = fname.split_once('.') {
+                    if self.user_defined_boxes.contains(bx) {
+                        let name_const = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::Const {
+                            dst: name_const,
+                            value: crate::mir::builder::ConstValue::String(fname),
+                        })?;
+                        let mut call_args = Vec::with_capacity(arg_values.len() + 1);
+                        call_args.push(object_value); // 'me'
+                        call_args.extend(arg_values.into_iter());
+                        let dst = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(dst),
+                            func: name_const,
+                            callee: None,
+                            args: call_args,
+                            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                        })?;
+                        return Ok(dst);
+                    }
+                }
+            }
+        }
+
+        // Else fall back to plugin/boxcall path
         let result_id = self.value_gen.next();
         self.emit_box_or_plugin_call(
             Some(result_id),

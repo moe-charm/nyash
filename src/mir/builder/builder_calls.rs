@@ -57,8 +57,44 @@ impl super::MirBuilder {
         args: Vec<ValueId>,
     ) -> Result<(), String> {
         match target {
-            CallTarget::Method { receiver, method, .. } => {
-                // Use existing emit_box_or_plugin_call
+            CallTarget::Method { receiver, method, box_type } => {
+                // If receiver is a user-defined box, lower to function call: "Box.method/(1+arity)" with receiver as first arg
+                let mut is_user_box = false;
+                let mut class_name_opt: Option<String> = None;
+                if let Some(bt) = box_type.clone() { class_name_opt = Some(bt); }
+                if class_name_opt.is_none() {
+                    if let Some(cn) = self.value_origin_newbox.get(&receiver) { class_name_opt = Some(cn.clone()); }
+                }
+                if class_name_opt.is_none() {
+                    if let Some(t) = self.value_types.get(&receiver) {
+                        if let super::MirType::Box(bn) = t { class_name_opt = Some(bn.clone()); }
+                    }
+                }
+                if let Some(cls) = class_name_opt.clone() {
+                    // Prefer explicit registry of user-defined boxes when available
+                    if self.user_defined_boxes.contains(&cls) { is_user_box = true; }
+                }
+                if is_user_box {
+                    let cls = class_name_opt.unwrap();
+                    let arity = args.len(); // function name arity excludes 'me'
+                    let fname = super::calls::function_lowering::generate_method_function_name(&cls, &method, arity);
+                    let name_const = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: name_const,
+                        value: super::ConstValue::String(fname),
+                    })?;
+                    let mut call_args = Vec::with_capacity(arity);
+                    call_args.push(receiver); // pass 'me' first
+                    call_args.extend(args.into_iter());
+                    return self.emit_instruction(MirInstruction::Call {
+                        dst,
+                        func: name_const,
+                        callee: None,
+                        args: call_args,
+                        effects: EffectMask::READ.add(Effect::ReadHeap),
+                    });
+                }
+                // Else fall back to plugin/boxcall path (StringBox/ArrayBox/MapBox etc.)
                 self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO)
             },
             CallTarget::Constructor(box_type) => {

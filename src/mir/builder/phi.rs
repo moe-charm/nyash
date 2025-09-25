@@ -25,6 +25,8 @@ impl MirBuilder {
             then_map_end,
             else_map_end_opt,
         );
+        use std::collections::HashSet;
+        let changed_set: HashSet<String> = changed.iter().cloned().collect();
         for name in changed {
             if skip_var.map(|s| s == name).unwrap_or(false) {
                 continue;
@@ -49,6 +51,29 @@ impl MirBuilder {
             }
             self.emit_instruction(MirInstruction::Phi { dst: merged, inputs })?;
             self.variable_map.insert(name, merged);
+        }
+
+        // Ensure pinned synthetic slots ("__pin$...") have a block-local definition at the merge,
+        // even if their values did not change across branches. This avoids undefined uses when
+        // subsequent blocks re-use pinned values without modifications.
+        for (pin_name, pre_val) in pre_if_snapshot.iter() {
+            if !pin_name.starts_with("__pin$") { continue; }
+            if skip_var.map(|s| s == pin_name.as_str()).unwrap_or(false) { continue; }
+            if changed_set.contains(pin_name) { continue; }
+            let then_v = then_map_end.get(pin_name.as_str()).copied().unwrap_or(*pre_val);
+            let else_v = else_map_end_opt
+                .as_ref()
+                .and_then(|m| m.get(pin_name.as_str()).copied())
+                .unwrap_or(*pre_val);
+            let then_pred = then_exit_block;
+            let else_pred = else_exit_block_opt.unwrap_or(else_block);
+            let merged = self.value_gen.next();
+            let inputs = vec![(then_pred, then_v), (else_pred, else_v)];
+            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            }
+            self.emit_instruction(MirInstruction::Phi { dst: merged, inputs })?;
+            self.variable_map.insert(pin_name.clone(), merged);
         }
         Ok(())
     }

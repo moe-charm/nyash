@@ -173,6 +173,18 @@ pub fn mir_core13_pure() -> bool {
     std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1")
 }
 
+/// Enable heuristic pre-pin of comparison operands in if/loop headers.
+/// Default: OFF (0). Set NYASH_MIR_PREPIN=1 to enable.
+pub fn mir_pre_pin_compare_operands() -> bool {
+    match std::env::var("NYASH_MIR_PREPIN").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => false,
+    }
+}
+
 // ---- Optimizer diagnostics ----
 pub fn opt_debug() -> bool {
     std::env::var("NYASH_OPT_DEBUG").is_ok()

@@ -1,12 +1,27 @@
 # Current Task — Phase 15 (Revised): Self‑Hosting Focus, JSON→Ny Executor
 
-Updated: 2025‑09‑26
+Updated: 2025‑09‑27
 
 Quick status
 - Build: `cargo build --release` → OK（警告のみ）
 - Smokes v2: quick/core PASS、integration/parity PASS（Python LLVM harness）
 - Parser: TokenCursor 統一 Step‑2/3 完了（env ゲート）
 - PHI: if/else の incoming pred を exit ブロックへ修正（VM 未定義値を根治）
+
+MIR/VM 進捗（SSA/短絡/ユーザーBox）
+- 短絡（&&/||）: 分岐+PHI で正規低下（RHS 未評価）を実装済み。
+- 比較オペランド: その場 `pin_to_slot` で slot 化、PHI 参加（支配関係破れの根治策）。
+- ブロック入口: then/else/短絡入口に単一 pred PHI を配置（局所定義を保証）。
+- ユーザーBox呼び出し（VM fallback）:
+  - Builder 側: user‑defined Box のインスタンスメソッドは `Box.method/Arity` 関数へ書き換え（'me' 先頭引数、関数名の Arity は 'me' を含めない）。
+  - VM 側: BoxCall で InstanceBox を受けた場合、存在すれば `Box.method/Arity` に動的フォールバック実行（'me'+args を渡す）。
+
+現状の未解決（再現あり）
+- JSON VM quick が `BoxCall unsupported on VoidBox.current` で停止。
+  - トレース: `JsonTokenizer.next_token` 内で `me.scanner.current()` が BoxCall 経路に残存。
+  - 期待: Builder が user‑defined `JsonScanner` を検知して `JsonScanner.current/0` へ書き換えるか、VM が fallback で補足。
+  - 観測: 関数一覧に `JsonScanner.current/0` が存在しないケースがある（環境差/順序の可能性）。
+    - 以前の実行では `JsonScanner.current/0` が列挙されていたため、低下順または条件分岐の取りこぼしが疑わしい。
 
 ## ADR 受理: No CoreBox & Everything is Plugin（Provider/Type 分離）
 
@@ -73,6 +88,52 @@ Quick status
 - quick/integration スモークが AST 既定ON（dev/ci）で緑。
 - mini（starts_with）が VM fallback / LLVM / PyVM のいずれか基準で PASS（VM fallback は暫定メソッドで通せばOK）。
  - Builder 順序不整合の解消: 出現順に依存せず、new/静的メソッドの前方参照が安定解決。
+
+## いま着手中（SSA pin/PHI と user‑defined 呼び出しの根治）
+
+目的
+- 「式一時値の支配関係破れ」由来の未定義参照を構造的に排除（pin→PHI）。
+- user‑defined Box のインスタンスメソッド呼び出しを 100% `Box.method/Arity` へ正規化し、VM fallback でも実行可能にする。
+
+実装済み
+- 短絡: And/Or を分岐+PHI で実装。
+- 比較: 左右オペランドを都度 pin→PHI 参加。
+- 分岐入口: then/else/短絡入口に単一 pred PHI を配置（正規化）。
+- VM fallback: InstanceBox に対する BoxCall を `Box.method/Arity` 関数へ動的フォールバック（'me'+args）。
+- Builder: user‑defined Box のメソッド呼び出しを `Box.method/Arity` 関数へ書き換え（存在確認つき）。
+
+未解決点（原因候補）
+- `JsonScanner.current/0` が関数一覧に存在しない実行がある → インスタンスメソッド低下の取りこぼし疑い。
+  - 仮説A: `build_box_declaration` の instance method 低下が順序/条件でスキップされるケースがある。
+  - 仮説B: `field_access` → `value_origin_newbox` の伝搬が不足し、Builder が user‑defined 判定に失敗（BoxCall に落ちる）。
+
+デバッグ手順（再現と確認）
+- 関数一覧の確認: `NYASH_DUMP_FUNCS=1 NYASH_VM_TRACE=1 ... --backend vm driver.nyash`
+  - 期待: `JsonScanner.current/0` を含む。
+- Builder トレース: `NYASH_BUILDER_DEBUG=1`（userbox method 書き換え時に `userbox method-call ...` を出力）
+- フィールド由来の型伝搬: `build_field_access` で `field_origin_class` → `value_origin_newbox` 反映の有無をログで確認。
+
+次の作業（順番）
+1) 低下順序の点検
+   - `build_box_declaration` の instance method 低下が常に走ることを再確認（静的/インスタンス混在時、重複/上書きなし）。
+   - `JsonScanner` の全メソッド（`current/0` 含む）が `module.functions` に常に登録されることをテストで保証。
+2) 型伝搬の強化
+   - `build_field_access` 経由の `value_origin_newbox` 伝搬を明示ログ化し、`scanner` フィールドで `JsonScanner` を確実に付与。
+   - 併せて `value_types` に `MirType::Box(JsonScanner)` を注釈（判定補助; 既定OFFの安全弁として env ゲートで導入）。
+3) 呼び出し書き換えの網羅
+   - `handle_standard_method_call` の user‑defined 書き換えを早期に実施（BoxCall へ落ちる前に判定）。
+   - `CallTarget::Method` 経由の経路も同一ロジックで統一。
+4) 検証
+   - ミニ: `me.scanner.current()` を含む 1 ケースで `NYASH_DUMP_FUNCS=1` と Builder/VM トレース確認、BoxCall が消えて Call(`JsonScanner.current/0`, me) であること。
+   - quick/core JSON VM: 代表ケース再実行。未定義参照や Void 経路暫定ガードが発火しないこと。
+
+注意（暫定対策の扱い）
+- `eval_binop(Add, Void, X)` の簡易ガードは開発用の安全弁。根治後に撤去する（テストが緑になってから）。
+
+受け入れ基準（このタスク）
+- `JsonTokenizer.next_token` で `me.scanner.current()` が Call 経路に正規化され、BoxCall 不要。
+- `JsonScanner.current/0` が常に関数一覧に存在。
+- JSON VM quick が未定義参照・BoxCall unsupported を出さずに最後まで出力一致（ノイズ除去込み）。
 
 受け入れ基準
 - StringUtils の `--dump-ast` に stray FunctionCall が出ない（宣言のみ）。

@@ -87,9 +87,10 @@ impl super::MirBuilder {
                 } else {
                     (lhs, rhs)
                 };
-                // Materialize operands in the current block to avoid dominance/undef issues
-                let lhs2 = lhs2_raw;
-                let rhs2 = rhs2_raw;
+                // Ensure operands are safe across blocks: pin ephemeral values into slots
+                // This guarantees they participate in PHI merges and have block-local defs.
+                let lhs2 = self.ensure_slotified_for_use(lhs2_raw, "@cmp_lhs")?;
+                let rhs2 = self.ensure_slotified_for_use(rhs2_raw, "@cmp_rhs")?;
                 self.emit_instruction(MirInstruction::Compare {
                     dst,
                     op,
@@ -128,16 +129,24 @@ impl super::MirBuilder {
             then_bb: then_block,
             else_bb: else_block,
         })?;
+        // Record predecessor block for branch (for single-pred PHI materialization)
+        let pre_branch_bb = self.current_block()?;
 
         // Snapshot variables before entering branches
         let pre_if_var_map = self.variable_map.clone();
 
         // ---- THEN branch ----
-        self.current_block = Some(then_block);
-        self.ensure_block_exists(then_block)?;
+        self.start_new_block(then_block)?;
         self.hint_scope_enter(0);
         // Reset scope to pre-if snapshot for clean deltas
         self.variable_map = pre_if_var_map.clone();
+        // Materialize all variables at entry via single-pred PHI (correctness-first)
+        for (name, &pre_v) in pre_if_var_map.iter() {
+            let phi_val = self.value_gen.next();
+            let inputs = vec![(pre_branch_bb, pre_v)];
+            self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
+            self.variable_map.insert(name.clone(), phi_val);
+        }
 
         // AND: then → evaluate RHS and reduce to bool
         //  OR: then → constant true
@@ -187,10 +196,16 @@ impl super::MirBuilder {
         }
 
         // ---- ELSE branch ----
-        self.current_block = Some(else_block);
-        self.ensure_block_exists(else_block)?;
+        self.start_new_block(else_block)?;
         self.hint_scope_enter(0);
         self.variable_map = pre_if_var_map.clone();
+        // Materialize all variables at entry via single-pred PHI (correctness-first)
+        for (name, &pre_v) in pre_if_var_map.iter() {
+            let phi_val = self.value_gen.next();
+            let inputs = vec![(pre_branch_bb, pre_v)];
+            self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
+            self.variable_map.insert(name.clone(), phi_val);
+        }
         // AND: else → false
         //  OR: else → evaluate RHS and reduce to bool
         let else_value_raw = if is_and {
@@ -238,8 +253,9 @@ impl super::MirBuilder {
         }
 
         // ---- MERGE ----
-        self.current_block = Some(merge_block);
-        self.ensure_block_exists(merge_block)?;
+        // Merge block: suppress entry pin copy so PHIs remain first and materialize pins explicitly
+        self.suppress_next_entry_pin_copy();
+        self.start_new_block(merge_block)?;
         self.push_if_merge(merge_block);
 
         // Result PHI (bool)

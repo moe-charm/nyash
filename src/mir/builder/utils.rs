@@ -32,17 +32,21 @@ impl super::MirBuilder {
         if let Some(ref mut function) = self.current_function {
             function.add_block(BasicBlock::new(block_id));
             self.current_block = Some(block_id);
-            // Entry materialization for pinned slots only: ensure a local def exists in this block
-            // This avoids dominance/undef issues when pinned values are referenced across blocks.
-            let names: Vec<String> = self.variable_map.keys().cloned().collect();
-            for name in names {
-                if !name.starts_with("__pin$") { continue; }
-                if let Some(&src) = self.variable_map.get(&name) {
-                    let dst = self.value_gen.next();
-                    self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
-                    self.variable_map.insert(name.clone(), dst);
+            // Entry materialization for pinned slots only when not suppressed.
+            // This provides block-local defs in single-predecessor flows without touching user vars.
+            if !self.suppress_pin_entry_copy_next {
+                let names: Vec<String> = self.variable_map.keys().cloned().collect();
+                for name in names {
+                    if !name.starts_with("__pin$") { continue; }
+                    if let Some(&src) = self.variable_map.get(&name) {
+                        let dst = self.value_gen.next();
+                        self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
+                        self.variable_map.insert(name.clone(), dst);
+                    }
                 }
             }
+            // Reset suppression flag after use (one-shot)
+            self.suppress_pin_entry_copy_next = false;
             Ok(())
         } else {
             Err("No current function".to_string())
@@ -204,12 +208,16 @@ impl super::MirBuilder {
         })
     }
 
-    /// Pin a block-crossing ephemeral value into a pseudo local slot so it participates in PHI merges.
+    /// Pin a block-crossing ephemeral value into a pseudo local slot and register it in variable_map
+    /// so it participates in PHI merges across branches/blocks. Safe default for correctness-first.
     pub(crate) fn pin_to_slot(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
         self.temp_slot_counter = self.temp_slot_counter.wrapping_add(1);
         let slot_name = format!("__pin${}${}", self.temp_slot_counter, hint);
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
+        if super::utils::builder_debug_enabled() || std::env::var("NYASH_PIN_TRACE").ok().as_deref() == Some("1") {
+            super::utils::builder_debug_log(&format!("pin slot={} src={} dst={}", slot_name, v.0, dst.0));
+        }
         self.variable_map.insert(slot_name, dst);
         Ok(dst)
     }
@@ -219,5 +227,11 @@ impl super::MirBuilder {
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
         Ok(dst)
+    }
+
+    /// Ensure a value is safe to use in the current block by slotifying (pinning) it.
+    /// Currently correctness-first: always pin to get a block-local def and PHI participation.
+    pub(crate) fn ensure_slotified_for_use(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
+        self.pin_to_slot(v, hint)
     }
 }

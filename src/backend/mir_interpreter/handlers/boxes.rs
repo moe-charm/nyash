@@ -481,6 +481,23 @@ impl MirInterpreter {
                 ))),
             }
         } else {
+            // Dynamic fallback for user-defined InstanceBox: dispatch to lowered function "Class.method/Arity"
+            if let Some(inst) = recv_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                let class_name = inst.class_name.clone();
+                let arity = args.len(); // function name arity excludes 'me'
+                let fname = format!("{}.{}{}", class_name, method, format!("/{}", arity));
+                if let Some(func) = self.functions.get(&fname).cloned() {
+                    let mut argv: Vec<VMValue> = Vec::with_capacity(arity + 1);
+                    // Pass receiver as first arg ('me')
+                    argv.push(recv.clone());
+                    for a in args {
+                        argv.push(self.reg_load(*a)?);
+                    }
+                    let ret = self.exec_function_inner(&func, Some(&argv))?;
+                    if let Some(d) = dst { self.regs.insert(d, ret); }
+                    return Ok(());
+                }
+            }
             Err(VMError::InvalidInstruction(format!(
                 "BoxCall unsupported on {}.{}",
                 recv_box.type_name(),

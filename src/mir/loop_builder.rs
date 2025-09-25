@@ -152,6 +152,7 @@ impl<'a> LoopBuilder<'a> {
         // 5. 条件評価（Phi nodeの結果を使用）
         // Heuristic pre-pin: if condition is a comparison, evaluate its operands and pin them
         // so that the loop body/next iterations can safely reuse these values across blocks.
+        if crate::config::env::mir_pre_pin_compare_operands() {
         if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
             use crate::ast::BinaryOperator as BO;
             match operator {
@@ -166,15 +167,27 @@ impl<'a> LoopBuilder<'a> {
                 _ => {}
             }
         }
+        }
         let condition_value = self.build_expression_with_phis(condition)?;
 
         // 6. 条件分岐
+        let pre_branch_bb = self.current_block()?;
         self.emit_branch(condition_value, body_id, after_loop_id)?;
         let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, body_id, header_id);
         let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, after_loop_id, header_id);
 
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
+        // Materialize pinned slots at entry via single-pred Phi
+        let names: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
+        for name in names {
+            if !name.starts_with("__pin$") { continue; }
+            if let Some(&pre_v) = self.parent_builder.variable_map.get(&name) {
+                let phi_val = self.new_value();
+                self.emit_phi_at_block_start(body_id, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                self.update_variable(name, phi_val);
+            }
+        }
         // Scope enter for loop body
         self.parent_builder.hint_scope_enter(0);
         // Optional safepoint per loop-iteration
@@ -467,6 +480,7 @@ impl<'a> LoopBuilder<'a> {
         else_body: Option<Vec<ASTNode>>,
     ) -> Result<ValueId, String> {
         // Pre-pin comparison operands to slots so repeated uses across blocks are safe
+        if crate::config::env::mir_pre_pin_compare_operands() {
         if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
             use crate::ast::BinaryOperator as BO;
             match operator {
@@ -481,11 +495,13 @@ impl<'a> LoopBuilder<'a> {
                 _ => {}
             }
         }
+        }
         // Evaluate condition and create blocks
         let cond_val = self.parent_builder.build_expression(condition)?;
         let then_bb = self.new_block();
         let else_bb = self.new_block();
         let merge_bb = self.new_block();
+        let pre_branch_bb = self.current_block()?;
         self.emit_branch(cond_val, then_bb, else_bb)?;
 
         // Capture pre-if variable map (used for phi normalization)
@@ -494,6 +510,15 @@ impl<'a> LoopBuilder<'a> {
 
         // then branch
         self.set_current_block(then_bb)?;
+        // Materialize all variables at entry via single-pred Phi (correctness-first)
+        let names_then: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
+        for name in names_then {
+            if let Some(&pre_v) = self.parent_builder.variable_map.get(&name) {
+                let phi_val = self.new_value();
+                self.emit_phi_at_block_start(then_bb, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                self.update_variable(name, phi_val);
+            }
+        }
         for s in then_body.iter().cloned() {
             let _ = self.build_statement(s)?;
             // フェーズS修正：統一終端検出ユーティリティ使用
@@ -510,6 +535,15 @@ impl<'a> LoopBuilder<'a> {
 
         // else branch
         self.set_current_block(else_bb)?;
+        // Materialize all variables at entry via single-pred Phi (correctness-first)
+        let names2: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
+        for name in names2 {
+            if let Some(&pre_v) = self.parent_builder.variable_map.get(&name) {
+                let phi_val = self.new_value();
+                self.emit_phi_at_block_start(else_bb, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                self.update_variable(name, phi_val);
+            }
+        }
         let mut else_var_map_end_opt: Option<HashMap<String, ValueId>> = None;
         if let Some(es) = else_body.clone() {
             for s in es.into_iter() {

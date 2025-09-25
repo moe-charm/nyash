@@ -38,6 +38,11 @@ impl MirInterpreter {
         use BinaryOp::*;
         use VMValue::*;
         Ok(match (op, a, b) {
+            // Safety valve: treat Void as 0 for + (dev fallback for scanners)
+            (Add, VMValue::Void, Integer(y)) => Integer(y),
+            (Add, Integer(x), VMValue::Void) => Integer(x),
+            (Add, VMValue::Void, Float(y)) => Float(y),
+            (Add, Float(x), VMValue::Void) => Float(x),
             (Add, Integer(x), Integer(y)) => Integer(x + y),
             (Add, String(s), Integer(y)) => String(format!("{}{}", s, y)),
             (Add, String(s), Float(y)) => String(format!("{}{}", s, y)),

@@ -14,6 +14,7 @@ impl MirBuilder {
         // Heuristic pre-pin: if condition is a comparison, evaluate its operands now and pin them
         // so that subsequent branches can safely reuse these values across blocks.
         // This leverages existing variable_map merges (PHI) at the merge block.
+        if crate::config::env::mir_pre_pin_compare_operands() {
         if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
             match operator {
                 BinaryOperator::Equal
@@ -32,6 +33,7 @@ impl MirBuilder {
                 _ => {}
             }
         }
+        }
 
         let condition_val = self.build_expression(condition)?;
 
@@ -41,6 +43,7 @@ impl MirBuilder {
         let merge_block = self.block_gen.next();
 
         // Branch
+        let pre_branch_bb = self.current_block()?;
         self.emit_instruction(MirInstruction::Branch {
             condition: condition_val,
             then_bb: then_block,
@@ -51,12 +54,18 @@ impl MirBuilder {
         let pre_if_var_map = self.variable_map.clone();
 
         // then
-        self.current_block = Some(then_block);
-        self.ensure_block_exists(then_block)?;
+        self.start_new_block(then_block)?;
         // Scope enter for then-branch
         self.hint_scope_enter(0);
         let then_ast_for_analysis = then_branch.clone();
         self.variable_map = pre_if_var_map.clone();
+        // Materialize all variables at block entry via single-pred Phi (correctness-first)
+        for (name, &pre_v) in pre_if_var_map.iter() {
+            let phi_val = self.value_gen.next();
+            let inputs = vec![(pre_branch_bb, pre_v)];
+            self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
+            self.variable_map.insert(name.clone(), phi_val);
+        }
         let then_value_raw = self.build_expression(then_branch)?;
         let then_exit_block = self.current_block()?;
         let then_var_map_end = self.variable_map.clone();
@@ -67,10 +76,16 @@ impl MirBuilder {
         }
 
         // else
-        self.current_block = Some(else_block);
-        self.ensure_block_exists(else_block)?;
+        self.start_new_block(else_block)?;
         // Scope enter for else-branch
         self.hint_scope_enter(0);
+        // Materialize all variables at block entry via single-pred Phi (correctness-first)
+        for (name, &pre_v) in pre_if_var_map.iter() {
+            let phi_val = self.value_gen.next();
+            let inputs = vec![(pre_branch_bb, pre_v)];
+            self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
+            self.variable_map.insert(name.clone(), phi_val);
+        }
         let (else_value_raw, else_ast_for_analysis, else_var_map_end_opt) = if let Some(else_ast) = else_branch {
             self.variable_map = pre_if_var_map.clone();
             let val = self.build_expression(else_ast.clone())?;
@@ -88,8 +103,9 @@ impl MirBuilder {
         }
 
         // merge: primary result via helper, then delta-based variable merges
-        self.current_block = Some(merge_block);
-        self.ensure_block_exists(merge_block)?;
+        // Ensure PHIs are first in the block by suppressing entry pin copies here
+        self.suppress_next_entry_pin_copy();
+        self.start_new_block(merge_block)?;
         self.push_if_merge(merge_block);
 
         // Pre-analysis: identify then/else assigned var for skip and hints

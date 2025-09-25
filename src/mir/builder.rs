@@ -130,6 +130,8 @@ pub struct MirBuilder {
 
     /// Internal counter for temporary pin slots (block-crossing ephemeral values)
     temp_slot_counter: u32,
+    /// If true, skip entry materialization of pinned slots on the next start_new_block call.
+    suppress_pin_entry_copy_next: bool,
 }
 
 impl MirBuilder {
@@ -168,12 +170,16 @@ impl MirBuilder {
             cleanup_allow_throw: false,
             hint_sink: crate::mir::hints::HintSink::new(),
             temp_slot_counter: 0,
+            suppress_pin_entry_copy_next: false,
         }
     }
 
     /// Push/pop helpers for If merge context (best-effort; optional usage)
     pub(super) fn push_if_merge(&mut self, bb: BasicBlockId) { self.if_merge_stack.push(bb); }
     pub(super) fn pop_if_merge(&mut self) { let _ = self.if_merge_stack.pop(); }
+
+    /// Suppress entry pin copy for the next start_new_block (used for merge blocks).
+    pub(super) fn suppress_next_entry_pin_copy(&mut self) { self.suppress_pin_entry_copy_next = true; }
 
     // ---- Hint helpers (no-op by default) ----
     #[inline]
