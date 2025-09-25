@@ -58,7 +58,7 @@ impl super::MirBuilder {
             // Comparison operations
             BinaryOpType::Comparison(op) => {
                 // 80/20: If both operands originate from IntegerBox, cast to integer first
-                let (lhs2, rhs2) = if self
+                let (lhs2_raw, rhs2_raw) = if self
                     .value_origin_newbox
                     .get(&lhs)
                     .map(|s| s == "IntegerBox")
@@ -87,6 +87,9 @@ impl super::MirBuilder {
                 } else {
                     (lhs, rhs)
                 };
+                // Materialize operands in the current block to avoid dominance/undef issues
+                let lhs2 = lhs2_raw;
+                let rhs2 = rhs2_raw;
                 self.emit_instruction(MirInstruction::Compare {
                     dst,
                     op,
@@ -110,8 +113,9 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         let is_and = matches!(operator, BinaryOperator::And);
 
-        // Evaluate LHS only once
-        let lhs_val = self.build_expression(left)?;
+        // Evaluate LHS only once and pin to a slot so it can be reused safely across blocks
+        let lhs_val0 = self.build_expression(left)?;
+        let lhs_val = self.pin_to_slot(lhs_val0, "@sc_lhs")?;
 
         // Prepare blocks
         let then_block = self.block_gen.next();

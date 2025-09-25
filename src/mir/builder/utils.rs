@@ -32,6 +32,17 @@ impl super::MirBuilder {
         if let Some(ref mut function) = self.current_function {
             function.add_block(BasicBlock::new(block_id));
             self.current_block = Some(block_id);
+            // Entry materialization for pinned slots only: ensure a local def exists in this block
+            // This avoids dominance/undef issues when pinned values are referenced across blocks.
+            let names: Vec<String> = self.variable_map.keys().cloned().collect();
+            for name in names {
+                if !name.starts_with("__pin$") { continue; }
+                if let Some(&src) = self.variable_map.get(&name) {
+                    let dst = self.value_gen.next();
+                    self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
+                    self.variable_map.insert(name.clone(), dst);
+                }
+            }
             Ok(())
         } else {
             Err("No current function".to_string())
@@ -191,5 +202,22 @@ impl super::MirBuilder {
             op: BarrierOp::Write,
             ptr,
         })
+    }
+
+    /// Pin a block-crossing ephemeral value into a pseudo local slot so it participates in PHI merges.
+    pub(crate) fn pin_to_slot(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
+        self.temp_slot_counter = self.temp_slot_counter.wrapping_add(1);
+        let slot_name = format!("__pin${}${}", self.temp_slot_counter, hint);
+        let dst = self.value_gen.next();
+        self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
+        self.variable_map.insert(slot_name, dst);
+        Ok(dst)
+    }
+
+    /// Ensure a value has a local definition in the current block by inserting a Copy.
+    pub(crate) fn materialize_local(&mut self, v: super::ValueId) -> Result<super::ValueId, String> {
+        let dst = self.value_gen.next();
+        self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
+        Ok(dst)
     }
 }

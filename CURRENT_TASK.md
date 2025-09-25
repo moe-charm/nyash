@@ -1468,3 +1468,55 @@ Trigger: nyash_vm の安定（主要スモーク緑・自己ホスト経路が�
 
 ロールバック容易性
 - 差分は `ops.rs` 限定・小規模。`build_logical_shortcircuit` を外せば従来に戻る。
+## 2025-09-26: SSA 支配破れの根治（Pin → 既存 PHI マージへ）
+
+背景
+- JSON トークナイザ/パーサ実行時に VM fallback で `use of undefined value ValueId(..)` が発生。
+- 原因は「ブロックをまたいで再利用する“式の一時値”が変数へ束縛されておらず、合流点で PHI に載らない」ため、支配関係を満たさないまま参照されること。
+
+方針（最小・設計整合）
+1) Pin（昇格）: 一時値を擬似ローカル（slot）へ昇格し、以後は slot 経由で参照させる。
+   - 既存の `merge_modified_vars / normalize_if_else_phi` に自然に乗るため、合流点で PHI が立つ。
+2) 適用箇所（段階導入）
+   - 短絡（&&/||）: LHS を `pin_to_slot(lhs, "@sc_lhs")`（済）
+   - if 低下: 条件式/繰返し比較されるオペランドを Pin（これから）
+3) トレース・検証
+   - `NYASH_VM_TRACE=1` でブロック/命令/PHI 適用/未定義参照を詳細出力（済）
+   - 追加で Verifier（dev 限定）に dominance 簡易検査を入れる（任意）
+
+実装状況
+- 実装済み:
+  - 短絡の正規低下（RHS 未評価を保証）
+  - `pin_to_slot` を MirBuilder に追加
+  - LHS を pin（build_logical_shortcircuit 内）
+  - VM 実行トレース（`NYASH_VM_TRACE`）導入
+- 未着手/次:
+  - if 低下（lower_if_form）での Pin を導入
+  - 必要なら dominance Verifier（dev）
+  - JSON VM スモーク quick を再確認→緑後に一時的 Void ガードを格下げ/撤去
+
+受け入れ条件 / ロールバック
+- JSON quick（VM）で `use of undefined value` が消えること。短絡/分岐の意味論は既存仕様のまま。
+- Pin は局所かつ可逆。問題があれば当該箇所の Pin 呼び出しを除去すれば戻せる。
+
+ドキュメント
+- 設計ノート追加: `docs/development/notes/mir-ssa-pin-slot.md`
+
+この後の順番（作業 TODO）
+1) docs/CURRENT_TASK 整備（本更新）
+2) lower_if_form に Pin（条件式/繰返し比較オペランドの昇格）
+3) JSON VM スモーク quick 再実行（必要に応じ追加 Pin）
+4) （任意）dominance Verifier を dev 限定で導入
+5) 一時 Void ガードの検知ログ化→撤去
+
+即時タスク（詳細ルール・実装メモ）
+- Pin の適用規則（最小セット）
+  - 短絡: `build_logical_shortcircuit` で LHS を必ず `pin_to_slot(lhs, "@sc_lhs")`（済）
+  - if/elseif: 条件式の中で合流後も参照する可能性のある“一時値”を分岐前に `pin_to_slot`（これから）
+  - ループ: 反復して比較する値（scanner の current()/position 等）は必要に応じてループ入場直後で `pin_to_slot`
+- エントリ処理の順序
+  - PHI 適用 →（必要時のみ）single‑pred copy‑in（Id/Copy）
+  - 先に copy‑in は行わない（PHI 入力と競合するため）
+- 追加検証
+  - トレース: `NYASH_VM_TRACE=1` で未定義参照箇所を特定し、漏れ箇所に局所 Pin を追加
+  - Verifier（任意）: 非 PHI 命令オペランドが使用ブロックに支配されるかの簡易チェック（dev）

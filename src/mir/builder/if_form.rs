@@ -1,6 +1,6 @@
 use super::{ConstValue, MirBuilder, MirInstruction, ValueId};
 use crate::mir::loop_api::LoopBuilderApi; // for current_block()
-use crate::ast::ASTNode;
+use crate::ast::{ASTNode, BinaryOperator};
 
 impl MirBuilder {
     /// Lower an if/else using a structured IfForm (header→then/else→merge).
@@ -11,6 +11,28 @@ impl MirBuilder {
         then_branch: ASTNode,
         else_branch: Option<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Heuristic pre-pin: if condition is a comparison, evaluate its operands now and pin them
+        // so that subsequent branches can safely reuse these values across blocks.
+        // This leverages existing variable_map merges (PHI) at the merge block.
+        if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
+            match operator {
+                BinaryOperator::Equal
+                | BinaryOperator::NotEqual
+                | BinaryOperator::Less
+                | BinaryOperator::LessEqual
+                | BinaryOperator::Greater
+                | BinaryOperator::GreaterEqual => {
+                    if let Ok(lhs_v) = self.build_expression((**left).clone()) {
+                        let _ = self.pin_to_slot(lhs_v, "@if_lhs");
+                    }
+                    if let Ok(rhs_v) = self.build_expression((**right).clone()) {
+                        let _ = self.pin_to_slot(rhs_v, "@if_rhs");
+                    }
+                }
+                _ => {}
+            }
+        }
+
         let condition_val = self.build_expression(condition)?;
 
         // Create blocks

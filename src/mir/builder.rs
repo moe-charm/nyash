@@ -127,6 +127,9 @@ pub struct MirBuilder {
 
     /// Hint sink (zero-cost guidance; currently no-op)
     pub(super) hint_sink: crate::mir::hints::HintSink,
+
+    /// Internal counter for temporary pin slots (block-crossing ephemeral values)
+    temp_slot_counter: u32,
 }
 
 impl MirBuilder {
@@ -164,6 +167,7 @@ impl MirBuilder {
             cleanup_allow_return: false,
             cleanup_allow_throw: false,
             hint_sink: crate::mir::hints::HintSink::new(),
+            temp_slot_counter: 0,
         }
     }
 

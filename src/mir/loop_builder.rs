@@ -150,6 +150,22 @@ impl<'a> LoopBuilder<'a> {
         self.prepare_loop_variables(header_id, preheader_id)?;
 
         // 5. 条件評価（Phi nodeの結果を使用）
+        // Heuristic pre-pin: if condition is a comparison, evaluate its operands and pin them
+        // so that the loop body/next iterations can safely reuse these values across blocks.
+        if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
+            use crate::ast::BinaryOperator as BO;
+            match operator {
+                BO::Equal | BO::NotEqual | BO::Less | BO::LessEqual | BO::Greater | BO::GreaterEqual => {
+                    if let Ok(lhs_v) = self.parent_builder.build_expression((**left).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(lhs_v, "@loop_if_lhs");
+                    }
+                    if let Ok(rhs_v) = self.parent_builder.build_expression((**right).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(rhs_v, "@loop_if_rhs");
+                    }
+                }
+                _ => {}
+            }
+        }
         let condition_value = self.build_expression_with_phis(condition)?;
 
         // 6. 条件分岐
@@ -450,6 +466,21 @@ impl<'a> LoopBuilder<'a> {
         then_body: Vec<ASTNode>,
         else_body: Option<Vec<ASTNode>>,
     ) -> Result<ValueId, String> {
+        // Pre-pin comparison operands to slots so repeated uses across blocks are safe
+        if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
+            use crate::ast::BinaryOperator as BO;
+            match operator {
+                BO::Equal | BO::NotEqual | BO::Less | BO::LessEqual | BO::Greater | BO::GreaterEqual => {
+                    if let Ok(lhs_v) = self.parent_builder.build_expression((**left).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(lhs_v, "@loop_if_lhs");
+                    }
+                    if let Ok(rhs_v) = self.parent_builder.build_expression((**right).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(rhs_v, "@loop_if_rhs");
+                    }
+                }
+                _ => {}
+            }
+        }
         // Evaluate condition and create blocks
         let cond_val = self.parent_builder.build_expression(condition)?;
         let then_bb = self.new_block();
