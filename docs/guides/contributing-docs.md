@@ -29,6 +29,5 @@ One‑pager Template
 - Notes (constraints / future work)
 
 Examples
-- Using→Loader overview: docs/design/using-loader-integration.md
+- Using→Loader overview: docs/development/design/legacy/using-loader-integration.md
 - Mini‑VM roadmap: docs/development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md
-

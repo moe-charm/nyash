@@ -104,4 +104,4 @@ tools/run_vm_stats.sh local_tests/vm_stats_http_err.nyash vm_stats_err.json
 - unreachable（接続不可/タイムアウト）: `Result.Err(ErrorBox)`
 - 404/500 等のHTTPエラー: `Result.Ok(Response)`（アプリ側で `response.status` を評価）
 
-詳細: `docs/reference/architecture/mir-to-vm-mapping.md` と `docs/examples/http_result_patterns.md` を参照。
+詳細: `docs/reference/architecture/mir-to-vm-mapping.md` と `docs/guides/examples/http_result_patterns.md` を参照。

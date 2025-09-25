@@ -238,6 +238,14 @@ hexEncode = { method_id = 8 }
 hexDecode = { method_id = 9 }
 fini = { method_id = 4294967295 }
 
+# Provider Verify — minimal required methods (dev warn by default)
+[verify.required_methods]
+# Note: Dynamic plugins may not be present in dev; preflight runs in warn mode.
+StringBox = ["length", "concat"]
+ArrayBox  = ["len", "push", "get"]
+MapBox    = ["has", "get", "set"]
+ConsoleBox = ["print"]
+
 [libraries."libnyash_json_plugin.so"]
 boxes = ["JsonDocBox", "JsonNodeBox"]
 path = "plugins/nyash-json-plugin/libnyash_json_plugin.so"

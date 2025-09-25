@@ -101,10 +101,17 @@ impl NyashRunner {
             }
         };
 
-        // Optional Phase-15: strip `using` lines and register aliases/modules
+        // Using handling: AST-prelude collection (legacy inlining removed)
         let code = if crate::config::env::enable_using() {
-            match crate::runner::modes::common::resolve::strip_using_and_register(self, &code, filename) {
-                Ok(s) => s,
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
+                Ok((clean, paths)) => {
+                    if !paths.is_empty() && !crate::config::env::using_ast_enabled() {
+                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        process::exit(1);
+                    }
+                    // VM path currently does not merge prelude ASTs; rely on compile pipeline path for that.
+                    clean
+                }
                 Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
             }
         } else { code };

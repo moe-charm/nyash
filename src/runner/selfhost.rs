@@ -25,8 +25,15 @@ impl NyashRunner {
         // Optional Phase-15: strip `using` lines and register modules (same policy as execute_nyash_file)
         let mut code_ref: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(&code);
         if crate::config::env::enable_using() {
-            match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code, filename) {
-                Ok(s) => { code_ref = std::borrow::Cow::Owned(s); }
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
+                Ok((clean, paths)) => {
+                    if !paths.is_empty() && !crate::config::env::using_ast_enabled() {
+                        eprintln!("[ny-compiler] using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        return false;
+                    }
+                    code_ref = std::borrow::Cow::Owned(clean);
+                    // Selfhost compile path does not need to parse prelude ASTs here.
+                }
                 Err(e) => { eprintln!("[ny-compiler] {}", e); return false; }
             }
         }

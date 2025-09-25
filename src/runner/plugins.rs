@@ -63,5 +63,15 @@ impl NyashRunner {
                 }
             }
         }
+
+        // Provider verify (受け口): env で warn/strict のみ動作（未設定時は無処理）
+        match crate::runtime::provider_verify::verify_from_env() {
+            Ok(()) => {}
+            Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
+        }
+
+        // Provider Lock — lock after registry and plugins are initialized (受け口)
+        // Default: no-op behavior change. Exposed for future verify→lock sequencing.
+        crate::runtime::provider_lock::lock_providers();
     }
 }

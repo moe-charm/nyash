@@ -17,6 +17,8 @@ pub mod plugin_loader_v2;
 pub mod scheduler;
 pub mod semantics;
 pub mod unified_registry;
+pub mod provider_lock;
+pub mod provider_verify;
 // pub mod plugin_box;  // legacy - 古いPluginBox
 // pub mod plugin_loader;  // legacy - Host VTable使用
 pub mod extern_registry; // ExternCall (env.*) 登録・診断用レジストリ

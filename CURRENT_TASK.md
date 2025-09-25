@@ -8,6 +8,21 @@ Quick status
 - Parser: TokenCursor 統一 Step‑2/3 完了（env ゲート）
 - PHI: if/else の incoming pred を exit ブロックへ修正（VM 未定義値を根治）
 
+## ADR 受理: No CoreBox & Everything is Plugin（Provider/Type 分離）
+
+- CoreBox は戻さない。Kernel は最小（GC/Handle/TLV/Extern/PluginRegistry/ABI）。
+- 型名（STN: `StringBox` 等）は不変、実装提供者（PVN）は TOML で切替。
+- 起動は「Kernel init → plugins.bootstrap/static + plugins.dynamic → Verify → 実行」。
+- VM/LLVM は `ny_new_box` / `ny_call_method` に統一（段階導入）。
+- ADR: docs/development/adr/adr-001-no-corebox-everything-is-plugin.md を追加。
+
+受け口フェーズ（挙動不変）
+- K0: ADR/Docs 追加（完了）。
+- K1: TOML スキーマ雛形（types/providers/policy）受け口（後続）。
+- K2: Provider 解決ログの受け口（後続）。
+- K3: Verify フック（preflight_plugins）受け口（後続）。
+- K4: Bootstrap Pack 登録導線（prod限定フラグ; 後続）。
+
 ## Using / Resolver — “Best of Both” Decision（2025‑09‑26）
 
 合意（いいとこどり）
@@ -20,7 +35,8 @@ Quick status
 
 やること（仕様不変・既定OFFで段階導入）
 1) ドキュメント
-   - [x] `docs/reference/language/using.md` に SSOT+AST とプロファイル運用を追記。
+   - [x] `docs/reference/language/using.md` に SSOT+AST/Profiles/Smokes を追記。
+   - [x] ADR を追加（No CoreBox / Provider 分離）
 2) Resolver 統合
    - [x] vm_fallback に AST プレリュード統合を導入（common と同形）。
    - [x] prod での `using "path"`/未知 alias はエラー（修正ガイド付）。
@@ -33,6 +49,24 @@ Quick status
    - [x] Guard 条件をトップレベル限定かつ `}` 直後のみ発火に調整（誤検知回避）。
    - [ ] `apps/lib/json_native/utils/string.nyash` で stray FunctionCall 消滅確認。
 
+## シンプル化ロードマップ（claude code 提案の順）
+
+1) VM fallback 強化（mini 緑化）
+   - [x] レガシー解決の正規化（Box.method/Arity）
+   - [x] 文字列の最小メソッド（substring 等）暫定実装（短期・撤去予定）
+2) dev/ci で AST 既定ON（prodはSSOTを維持）
+   - [ ] 既定値切替とスモーク緑確認
+3) レガシー using 経路の段階削除
+   - [x] 呼び出し側のレガシー分岐を撤去（common/vm/vm_fallback/pyvm/selfhost を AST 経路に統一）
+   - [ ] strip_using_and_register 本体のファイル内撤去（後続の掃除タスクで対応）
+4) パーサガードの格下げ→撤去
+   - [x] Guard を log-only に格下げ（NYASH_PARSER_METHOD_BODY_STRICT=1 でも break せず警告ログのみ）
+   - [x] Guard 実装を撤去（method-body 専用のシーム判定を削除、通常ブロック同等に）
+
+受け入れ基準（追加）
+- quick/integration スモークが AST 既定ON（dev/ci）で緑。
+- mini（starts_with）が VM fallback / LLVM / PyVM のいずれか基準で PASS（VM fallback は暫定メソッドで通せばOK）。
+
 受け入れ基準
 - StringUtils の `--dump-ast` に stray FunctionCall が出ない（宣言のみ）。
 - mini（starts_with）: ASTモード ON/OFF で parse→MIR まで到達（VM fallback の未実装は許容）。
@@ -44,6 +78,14 @@ Quick status
 - Parser: method-body guard を env で opt-in 実装（既定OFF）。
   - 現状: OFF 時は `string.nyash` にて Program 配下に `FunctionCall(parse_float)` が残存。
   - 次: Guard ON で AST/MIR を検証し、必要に応じて lookahead 条件を調整。
+
+### 追加進捗（Using/Verify 受け口 2025‑09‑26 EOD）
+- Provider Verify: nyash.toml の `[verify.required_methods]` / `[types.*.required_methods]` を読んで検査（env とマージ）
+  - 受け口: `NYASH_PROVIDER_VERIFY=warn|strict`、`NYASH_VERIFY_REQUIRED_METHODS`（任意上書き）
+  - preflight: `tools/smokes/v2/lib/preflight.sh` から warn で起動。`SMOKES_PROVIDER_VERIFY_MODE=strict` でエラー化
+- Using: レガシー前置き経路を呼び出し側から完全撤去（AST プレリュードに一本化）
+  - AST 無効プロファイルで using がある場合はガイド付きエラー
+  - 内部実装: 旧 strip_using_and_register/builtin 経路の物理削除（ファイル再構成）
 
 ## 今日の合意（方向修正の確定）
 - Rust層は新機能を最小化。今後は Nyash VM/コンパイラ（自己ホスト）へリソース集中。
@@ -1068,7 +1110,7 @@ This page is trimmed to reflect the active work only. The previous long form has
   - mini_vm_core の末尾ブレースを整合（未閉じ/余剰の解消）
   - MiniVm.collect_prints の未知形スキップを Print オブジェクト全体に拡張（停滞防止）
 - Docs
-  - Added strings blueprint: `docs/blueprints/strings-utf8-byte.md`
+  - Added strings blueprint: `docs/development/design/blueprints/strings-utf8-byte.md`
   - Refreshed docs index with clear "Start here" links (blueprints/strings, EBNF, strings reference)
   - Clarified operator/loop sugar policy in `guides/language-core-and-sugar.md` ("!" adopted, do‑while not adopted)
   - Concurrency docs (design-only): box model, semantics, and patterns/checklist added
@@ -1297,7 +1339,7 @@ Progress
 - [x] Mini‑VM ソースの @ 採用（apps/selfhost‑vm 配下の入口/補助を段階 @ 化）
 - [x] Runner CLI: clap ArgAction（bool フラグ）を一通り点検・SetTrue 指定（panic 回避）
 - [ ] Docs: invariants/constraints/testing‑matrix へ反映追加（前処理: using前置/@正規化）
- - [x] Docs: Using→Loader 統合メモ（短尺）— docs/design/using-loader-integration.md（READMEにリンク済）
+ - [x] Docs: Using→Loader 統合メモ（短尺）— docs/development/design/legacy/using-loader-integration.md（READMEにリンク済）
 
 ### Guardrails（active）
 - 参照実行: PyVM が常時緑、マクロ正規化は pre‑MIR で一度だけ
@@ -1305,16 +1347,16 @@ Progress
 - テスト: VM/goldens は軽量維持、IR は任意ジョブ
 
 ## Post‑Bootstrap Backlog（Docs only）
-- Language: Scope reuse blocks（design） — docs/proposals/scope-reuse.md
-- Language: Flow blocks & `->` piping（design） — docs/design/flow-blocks.md
+- Language: Scope reuse blocks（design） — docs/development/proposals/scope-reuse.md
+- Language: Flow blocks & `->` piping（design） — docs/development/design/legacy/flow-blocks.md
 - Guards: Range/CharClass sugar（reference） — docs/reference/language/match-guards.md
 - Strings: `toDigitOrNull` / `toIntOrNull`（design note） — docs/reference/language/strings.md
  - Concurrency: Box model（Routine/Channel/Select/Scope） — docs/proposals/concurrency/boxes.md
  - Concurrency semantics（blocking/close/select/trace） — docs/reference/concurrency/semantics.md
 
 ## Nyash VM めど後 — 機能追加リンク（備忘）
-- スコープ再利用ブロック（MVP 提案）: docs/proposals/scope-reuse.md
-- 矢印フロー × 匿名ブロック（設計草案）: docs/design/flow-blocks.md
+- スコープ再利用ブロック（MVP 提案）: docs/development/proposals/scope-reuse.md
+- 矢印フロー × 匿名ブロック（設計草案）: docs/development/design/legacy/flow-blocks.md
 - Match Guard の Range/CharClass（参照・設計）: docs/reference/language/match-guards.md
 - String 便利関数（toDigit/Int; 設計）: docs/reference/language/strings.md
 

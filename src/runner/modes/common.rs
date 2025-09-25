@@ -49,16 +49,20 @@ impl NyashRunner {
             println!("\n🚀 Parsing and executing...\n");
         }
 
-        // Using handling: either strip+inline (legacy) or AST-based prelude merge (when NYASH_USING_AST=1)
-        let use_ast = std::env::var("NYASH_USING_AST").ok().as_deref() == Some("1");
+        // Using handling: AST-based prelude collection (legacy inlining removed)
+        let use_ast = crate::config::env::using_ast_enabled();
         let mut code_ref: &str = &code;
         let cleaned_code_owned;
         let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
         if crate::config::env::enable_using() {
-            if use_ast {
-                match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
-                    Ok((clean, paths)) => {
-                        cleaned_code_owned = clean; code_ref = &cleaned_code_owned;
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
+                Ok((clean, paths)) => {
+                    cleaned_code_owned = clean; code_ref = &cleaned_code_owned;
+                    if !paths.is_empty() && !use_ast {
+                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        std::process::exit(1);
+                    }
+                    if use_ast {
                         // Parse each prelude file into AST and store
                         for p in paths {
                             match std::fs::read_to_string(&p) {
@@ -72,13 +76,8 @@ impl NyashRunner {
                             }
                         }
                     }
-                    Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
                 }
-            } else {
-                match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code, filename) {
-                    Ok(s) => { cleaned_code_owned = s; code_ref = &cleaned_code_owned; }
-                    Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
-                }
+                Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
             }
         }
         // Optional dev sugar: @name[:T] = expr → local name[:T] = expr (line-head only)

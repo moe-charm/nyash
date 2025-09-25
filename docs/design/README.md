@@ -1,13 +1,11 @@
-# Nyash Design Notes
+# Design Notes Moved
 
-Public, stable design documents and architecture explanations.
+`docs/design/` の設計ノートは `docs/development/design/legacy/` に移動しました。
 
-Use for rationale, trade‑offs, and diagrams that are safe to cite.
+- 新しい場所: [../development/design/legacy/](../development/design/legacy/)
+- よく参照されるページ:
+  - [flow-blocks.md](../development/design/legacy/flow-blocks.md)
+  - [using-loader-integration.md](../development/design/legacy/using-loader-integration.md)
 
-Contents to consolidate here:
-- Architecture overviews derived from ARCHITECTURE.md
-- Backend design (LLVM/Cranelift) summaries
-- MIR/IR evolution notes that are not drafts
-
-Draft, exploratory, or long‑form papers should remain under `docs/private/` until finalized.
+このディレクトリは互換のための案内のみ残しています。
 

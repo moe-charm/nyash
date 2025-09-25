@@ -64,7 +64,7 @@ pub enum QualifiedCallee {
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.
 - Resolution is performed by the Rust Runner when `NYASH_ENABLE_USING=1`.
-- 実体の結合は AST マージのみ。テキストの前置き/連結は行わない（移行完了後に完全廃止）。
+- 実体の結合は AST マージのみ。テキストの前置き/連結は行わない（レガシー経路は呼び出し側から削除済み）。
 - Runner は `nyash.toml` の `[using]` を唯一の真実として参照（prod）。dev/ci は段階的に緩和可能。
 - Selfhost compiler (Ny→JSON v0) collects using lines and emits `meta.usings` when present. The bridge currently ignores this meta field.
 
@@ -191,14 +191,17 @@ Runner Configuration
 - Enable using pre‑processing: `NYASH_ENABLE_USING=1`
 - CLI from-the-top registration: `--using "ns as Alias"` or `--using '"apps/foo.nyash" as Foo'` (repeatable)
 - Using profiles (phase‑in): `NYASH_USING_PROFILE={dev|ci|prod}`
-  - dev: toml + file using（path）可、AST マージ、候補提示 ON
-  - ci: toml 優先、file using は警告/限定、AST マージ、フォールバック OFF
-  - prod: toml のみ、file using/path はエラー（追記ガイドを表示）
+  - dev: AST マージ 既定ON、legacy前置きは既定で無効（必要時は `NYASH_LEGACY_USING_ALLOW=1` で一時許可）
+  - ci: AST マージ 既定ON、legacy前置きは既定で無効（同上の一時許可）
+  - prod: AST マージ 既定OFF、toml のみ（file using/path はエラー・追記ガイド）
 - Strict mode (plugin prefix required): `NYASH_PLUGIN_REQUIRE_PREFIX=1` または `nyash.toml` の `[plugins] require_prefix=true`
 - Aliases from env: `NYASH_ALIASES="Foo=apps/foo/main.nyash,Bar=lib/bar.nyash"`
 - Additional search paths: `NYASH_USING_PATH="apps:lib:."`
 - Selfhost pipeline keeps child stdout quiet and extracts JSON only: `NYASH_JSON_ONLY=1` (set by Runner automatically for child)
 - Selfhost emits `meta.usings` automatically when present; no additional flags required.
+
+Note: Provider/Type 分離（型名は不変で提供者のみを切替）については ADR を参照。  
+docs/development/adr/adr-001-no-corebox-everything-is-plugin.md
 
 ## 🔬 Quick Smokes（AST + Profiles）
 

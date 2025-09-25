@@ -354,6 +354,17 @@ pub fn allow_using_file() -> bool {
         _ => true, // dev/ci default: allowed
     }
 }
+/// Determine whether AST prelude merge for `using` is enabled.
+/// Precedence:
+/// 1) Explicit env `NYASH_USING_AST` = 1/true/on → enabled, = 0/false/off → disabled
+/// 2) Default by profile: dev/ci → ON, prod → OFF
+pub fn using_ast_enabled() -> bool {
+    match std::env::var("NYASH_USING_AST").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
+        Some(ref s) if s == "1" || s == "true" || s == "on" => true,
+        Some(ref s) if s == "0" || s == "false" || s == "off" => false,
+        _ => !using_is_prod(), // dev/ci → true, prod → false
+    }
+}
 pub fn resolve_fix_braces() -> bool {
     // Safer default: OFF（誤補正の副作用を避ける）
     // 明示ON: NYASH_RESOLVE_FIX_BRACES=1

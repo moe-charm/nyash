@@ -3,7 +3,7 @@
 ## 🚀 はじめに（導線）
 - 現在のタスクと進行状況: ../CURRENT_TASK.md
 - コア概念の速習: reference/architecture/nyash_core_concepts.md
-- 設計ブループリント（文字列/文字コード）: blueprints/strings-utf8-byte.md
+- 設計ブループリント（文字列/文字コード）: development/design/blueprints/strings-utf8-byte.md
 
 ---
 
@@ -72,9 +72,9 @@
  - proposals/concurrency/boxes.md（並行モデルのBox設計：Routine/Channel/Select/Scope）
  - reference/concurrency/semantics.md（ブロッキング/close/select/観測の規約）
 - design/（設計ノート入口）
-  - design/flow-blocks.md（矢印フロー／匿名ブロック・設計草案）
-  - ../proposals/scope-reuse.md（スコープ再利用ブロック・MVP提案）
-  - ../reference/language/match-guards.md（ガード連鎖／Range・CharClass設計）
+  - development/design/legacy/flow-blocks.md（矢印フロー／匿名ブロック・設計草案）
+  - development/proposals/scope-reuse.md（スコープ再利用ブロック・MVP提案）
+  - reference/language/match-guards.md（ガード連鎖／Range・CharClass設計）
   - guides/core-principles.md（最小構文・ゼロランタイム・可視化の原則）
 
 ### 開発状況
@@ -86,7 +86,7 @@
    - 🧪 **[Phase 17: LoopForm Self‑Hosting](development/roadmap/phases/phase-17-loopform-selfhost/)**
    - 💡 **[Rust所有権統合（候補）](private/ideas/new-features/2025-09-22-rust-ownership-fusion.md)** - Phase 17+候補
 - 🧩 **[Mini‑VM 構築ロードマップ](development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)**
-- 🧭 **Using→Loader 統合（最小設計）**: design/using-loader-integration.md
+- 🧭 **Using→Loader 統合（最小設計）**: development/design/legacy/using-loader-integration.md
  - 🗂️ **Docsの書き方（小さく・リンク駆動）**: guides/contributing-docs.md
 
 ---

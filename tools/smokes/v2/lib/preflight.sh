@@ -135,6 +135,27 @@ preflight_plugins() {
         return 1
     fi
 
+    # Provider Verify（段階導入）: nyash.toml の [verify.required_methods] / [types.*.required_methods]
+    # 既定 warn。SMOKES_PROVIDER_VERIFY_MODE=strict でエラー化。
+    local verify_mode="${SMOKES_PROVIDER_VERIFY_MODE:-warn}"
+    if [ -f "./target/release/nyash" ]; then
+        local tmp_preflight
+        tmp_preflight="/tmp/nyash_preflight_empty_$$.ny"
+        echo "/* preflight */" > "$tmp_preflight"
+        if NYASH_PROVIDER_VERIFY="$verify_mode" ./target/release/nyash "$tmp_preflight" >/dev/null 2>&1; then
+            echo "[INFO] Provider verify ($verify_mode): OK" >&2
+        else
+            if [ "$verify_mode" = "strict" ]; then
+                echo "[ERROR] Provider verify failed (strict)" >&2
+                rm -f "$tmp_preflight" 2>/dev/null || true
+                return 1
+            else
+                echo "[WARN] Provider verify reported issues (mode=$verify_mode)" >&2
+            fi
+        fi
+        rm -f "$tmp_preflight" 2>/dev/null || true
+    fi
+
     echo "[INFO] Plugin integrity: OK" >&2
     return 0
 }

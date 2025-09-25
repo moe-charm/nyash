@@ -152,20 +152,6 @@ impl NyashParser {
 
         while !self.is_at_end() && !self.match_token(&TokenType::RBRACE) {
             statements.push(self.parse_statement()?);
-            // Conservative seam guard: apply only when env is ON, we just consumed a '}'
-            // (end of a nested block), and the next tokens at the top-level look like a
-            // method head. This limits the guard to real seams between members.
-            if std::env::var("NYASH_PARSER_METHOD_BODY_STRICT").ok().as_deref() == Some("1") {
-                // If the next token would close the current method, do not guard here
-                if self.match_token(&TokenType::RBRACE) { break; }
-                // Check if we just consumed a '}' token from inner content
-                let just_saw_rbrace = if self.current > 0 {
-                    matches!(self.tokens[self.current - 1].token_type, TokenType::RBRACE)
-                } else { false };
-                if just_saw_rbrace && looks_like_method_head(self) {
-                    break;
-                }
-            }
         }
         if trace_blocks {
             eprintln!(

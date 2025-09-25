@@ -41,8 +41,8 @@ Acceptance & guardrails (feature‑pause)
 - Golden texts (Ny → MIR fragments) to lock compatibility where practical.
 - Lint proposals are documentation-only: single-use scope, long `->` chains, duplicated side effects.
 
-Related docs
-- proposals/scope-reuse.md — local scope reuse blocks (MVP)
-- design/flow-blocks.md — arrow flow + anonymous blocks
+- Related docs
+- development/proposals/scope-reuse.md — local scope reuse blocks (MVP)
+- development/design/legacy/flow-blocks.md — arrow flow + anonymous blocks
 - reference/language/match-guards.md — guard chains + range/charclass sugar
 - reference/language/strings.md — UTF‑8 first; proposed digit helpers

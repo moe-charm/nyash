@@ -8,6 +8,10 @@ impl MirInterpreter {
         box_type: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Provider Lock guard (受け口・既定は挙動不変)
+        if let Err(e) = crate::runtime::provider_lock::guard_before_new_box(box_type) {
+            return Err(VMError::InvalidInstruction(e));
+        }
         let mut converted: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
         for vid in args {
             converted.push(self.reg_load(*vid)?.to_nyash_box());

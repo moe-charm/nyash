@@ -14,10 +14,17 @@ pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
         }
     };
 
-    // Optional using pre-processing (strip lines and register modules)
+    // Using handling: AST-prelude collection (legacy inlining removed)
     let mut code = if crate::config::env::enable_using() {
-        match crate::runner::modes::common_util::resolve::strip_using_and_register(runner, &code, filename) {
-            Ok(s) => s,
+        match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(runner, &code, filename) {
+            Ok((clean, paths)) => {
+                if !paths.is_empty() && !crate::config::env::using_ast_enabled() {
+                    eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                    process::exit(1);
+                }
+                // PyVM pipeline currently does not merge prelude ASTs here; rely on main/common path for that.
+                clean
+            }
             Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
         }
     } else { code };

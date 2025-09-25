@@ -15,30 +15,27 @@ impl NyashRunner {
         // Using preprocessing (legacy inline or AST-prelude merge when NYASH_USING_AST=1)
         let mut code2 = code;
         let use_ast_prelude = crate::config::env::enable_using()
-            && std::env::var("NYASH_USING_AST").ok().as_deref() == Some("1");
+            && crate::config::env::using_ast_enabled();
         let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
         if crate::config::env::enable_using() {
-            if use_ast_prelude {
-                match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code2, filename) {
-                    Ok((clean, paths)) => {
-                        code2 = clean;
-                        for p in paths {
-                            match std::fs::read_to_string(&p) {
-                                Ok(src) => match NyashParser::parse_from_string(&src) {
-                                    Ok(ast) => prelude_asts.push(ast),
-                                    Err(e) => { eprintln!("❌ Parse error in using prelude {}: {}", p, e); process::exit(1); }
-                                },
-                                Err(e) => { eprintln!("❌ Error reading using prelude {}: {}", p, e); process::exit(1); }
-                            }
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code2, filename) {
+                Ok((clean, paths)) => {
+                    code2 = clean;
+                    if !paths.is_empty() && !use_ast_prelude {
+                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        process::exit(1);
+                    }
+                    for p in paths {
+                        match std::fs::read_to_string(&p) {
+                            Ok(src) => match NyashParser::parse_from_string(&src) {
+                                Ok(ast) => prelude_asts.push(ast),
+                                Err(e) => { eprintln!("❌ Parse error in using prelude {}: {}", p, e); process::exit(1); }
+                            },
+                            Err(e) => { eprintln!("❌ Error reading using prelude {}: {}", p, e); process::exit(1); }
                         }
                     }
-                    Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
                 }
-            } else {
-                match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code2, filename) {
-                    Ok(s) => { code2 = s; }
-                    Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
-                }
+                Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
             }
         }
         // Dev sugar pre-expand: @name = expr → local name = expr

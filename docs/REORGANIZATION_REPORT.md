@@ -109,3 +109,37 @@
 3. 相互リンクの確認と修正
 4. 最終的な整合性チェック
 5. CLAUDE.mdの参照更新
+
+---
+
+## 追加再編（2025-09-25、小規模・互換維持）
+
+概要
+- トップレベルに散在していたいくつかのカテゴリを、既存の4本柱へ段階的に集約しました（既定挙動は不変）。
+
+主な移動
+- architecture → reference/architecture
+  - phi-and-ssa.md を reference/architecture/ へ移動（旧パスに stub 追加）
+- blueprints → development/design/blueprints
+  - strings-utf8-byte.md を移動（旧パスに stub 追加）
+- design → development/design/legacy
+  - 設計ノート一式を legacy サブフォルダへ移動（旧フォルダに案内 README/stub 追加）
+- proposals → development/proposals
+  - proposals/* を移動（旧パスに README/stub 追加）
+- examples → guides/examples
+  - 例一式を移動（旧パスに README/stub 追加）
+- status/golden → development/testing/golden
+  - ゴールデン出力を移動（旧パスに README 追加）
+- tests → development/testing
+  - テストドキュメントを移動（旧パスに README 追加）
+
+リンク更新
+- docs/README.md の該当リンク（blueprints/design/proposals/using-loader）を最小修正
+- docs/VM_README.md の examples 参照を guides/examples に更新
+
+非対象
+- docs/private/ 配下は今回の再編から除外（方針どおり）
+
+受け入れチェック
+- 既定挙動は不変、差分は最小
+- 移動元ディレクトリに stub/README を配置し、後方互換を確保
