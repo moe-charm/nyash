@@ -19,6 +19,12 @@ static box Main {
     samples.push("true")
     samples.push("false")
     samples.push("42")
+    samples.push("-0")
+    samples.push("0")
+    samples.push("3.14")
+    samples.push("-2.5")
+    samples.push("6.02e23")
+    samples.push("-1e-9")
     samples.push("\"hello\"")
     samples.push("[]")
     samples.push("{}")
@@ -46,6 +52,12 @@ false
 []
 {}
 {"a":1}
+0
+0
+3.14
+-2.5
+6.02e23
+-1e-9
 TXT
 )
 

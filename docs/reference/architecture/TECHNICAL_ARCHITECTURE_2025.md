@@ -6,7 +6,7 @@ This index points to the currently maintained architectural documents:
 - Execution Backends: reference/architecture/execution-backends.md
 - Lowering Contexts: ../../design/LOWERING_CONTEXTS.md
 - LLVM Layer Overview: ../../design/LLVM_LAYER_OVERVIEW.md
-- VM Overview: VM_README.md
+- VM Overview: vm.md
 - Cranelift AOT design: ../../design/backend-cranelift-aot-design.md
 
 Note: Some long-form papers reside under `private/papers/reference/architecture/`.

@@ -2,7 +2,7 @@
 
 Scope
 - Practical guide to LLVM lowering architecture and invariants used in Phase 15.
-- Complements LOWERING_LLVM.md (rules), RESOLVER_API.md (value resolution), and LLVM_HARNESS.md (harness).
+- Complements LOWERING_LLVM.md (rules), RESOLVER_API.md (value resolution), and docs/reference/architecture/llvm-harness.md (harness).
 
 Module Layout
 - `src/backend/llvm/compiler/codegen/`
@@ -33,5 +33,4 @@ Harness (optional)
 References
 - LOWERING_LLVM.md — lowering rules and runtime calls
 - RESOLVER_API.md — Resolver design and usage
-- LLVM_HARNESS.md — llvmlite harness interface and usage
-
+- docs/reference/architecture/llvm-harness.md — llvmlite harness interface and usage

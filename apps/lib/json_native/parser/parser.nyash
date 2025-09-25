@@ -349,7 +349,7 @@ box JsonParser {
     
     // ===== ユーティリティメソッド =====
     
-    // 数値文字列を数値情報に変換（簡易版）
+    // 数値文字列を数値情報に変換（MVP）
     // 返り値: MapBox { kind:"int"|"float", value: <int|float_str> }
     convert_number(number_str) {
         local out = new MapBox()
@@ -358,8 +358,11 @@ box JsonParser {
             out.set("value", StringUtils.parse_integer(number_str))
             return out
         }
-        // Float detection disabled in MVP pending StringUtils float API stabilization
-        if false {
+        // 浮動小数点: 小数点または指数表記を含むものは文字列のまま保持
+        if number_str.indexOf != null {
+            // indexOfが提供されていない環境向けフォールバック
+        }
+        if StringUtils.contains(number_str, ".") or StringUtils.contains(number_str, "e") or StringUtils.contains(number_str, "E") {
             out.set("kind", "float")
             out.set("value", StringUtils.parse_float(number_str))
             return out

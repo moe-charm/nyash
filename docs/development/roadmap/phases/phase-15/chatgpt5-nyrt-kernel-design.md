@@ -121,7 +121,7 @@ void ny_root_remove(ny_handle h);
 
 - MIRの**Call統一**（進行中の`Call{callee: Callee}`方式）をLLVMでも厳守
 - **型・スロットIDの決定をFrontend時点で確定**させ、**Codegenでは機械的に`ny_call_method(id)`を吐くだけ**にする
-- Pythonルート（llvmliteハーネス）も同じABIに揃え、**NyRT名称のdeclareを撲滅**（`LLVM_HARNESS.md`の"NyRT shim"項を置換）
+ - Pythonルート（llvmliteハーネス）も同じABIに揃え、**NyRT名称のdeclareを撲滅**（`docs/reference/architecture/llvm-harness.md`の"NyRT shim"項を置換）
 
 ## GC設計（設計の要点）
 

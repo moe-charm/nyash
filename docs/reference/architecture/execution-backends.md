@@ -5,4 +5,4 @@ For the full guide, see:
 
 Additional references:
 - ../../design/backend-llvm-implementation-guide.md
-- VM_README.md
+- vm.md

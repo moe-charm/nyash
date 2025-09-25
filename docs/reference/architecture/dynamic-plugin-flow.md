@@ -115,4 +115,4 @@ Nyash Source ──▶ MIR (Builder)
 
 See also
 - `docs/guides/examples/http_result_patterns.md` - HTTPのResult挙動（unreachable/404/500）のE2E例
-- `docs/VM_README.md` - VM統計とプラグイン周りの既知制約
+- `docs/reference/architecture/vm.md` - VM統計とプラグイン周りの既知制約

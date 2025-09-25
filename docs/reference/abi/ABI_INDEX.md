@@ -47,7 +47,7 @@
 - パフォーマンス目標（33倍高速化）
 - 互換性維持戦略
 
-#### [PLUGIN_ABI.md](../../../PLUGIN_ABI.md)
+#### [PLUGIN_ABI.md](PLUGIN_ABI.md)
 **プラグインABI概要**
 - 現在のTLVベース実装
 - プラグイン開発ガイド

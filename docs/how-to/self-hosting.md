@@ -35,4 +35,4 @@
 
 関連
 - CI: `.github/workflows/smoke.yml`（JSON/JUnit 出力は v2 ランナーで取得可能）
-- マージ運用: `docs/CONTRIBUTING-MERGE.md`
+- マージ運用: `docs/development/engineering/merge-strategy.md`

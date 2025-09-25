@@ -29,4 +29,4 @@ tools/run_vm_stats.sh local_tests/vm_stats_http_500.nyash vm_stats_500.json
 
 関連ドキュメント
 - `docs/reference/architecture/mir-to-vm-mapping.md`（Result/Handleの取り扱い）
-- `docs/VM_README.md`（VM統計・既知の制約）
+- `docs/reference/architecture/vm.md`（VM統計・既知の制約）
