@@ -2,6 +2,7 @@
 # json_errors_ast.sh - JSON error cases via AST using
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+export SMOKES_USE_PYVM=1
 require_env || exit 2
 preflight_plugins || exit 2
 
@@ -54,7 +55,7 @@ ERR
 TXT
 )
 
-output=$("$NYASH_BIN" --backend vm driver.nyash 2>&1 | filter_noise)
+output=$(NYASH_LLVM_USE_HARNESS=1 run_nyash_llvm driver.nyash)
 compare_outputs "$expected" "$output" "json_errors_ast"
 
 cd /

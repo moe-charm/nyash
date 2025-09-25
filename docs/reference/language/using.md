@@ -67,6 +67,8 @@ Policy
 - 実体の結合は AST マージのみ。テキストの前置き/連結は行わない（レガシー経路は呼び出し側から削除済み）。
 - Runner は `nyash.toml` の `[using]` を唯一の真実として参照（prod）。dev/ci は段階的に緩和可能。
 - Selfhost compiler (Ny→JSON v0) collects using lines and emits `meta.usings` when present. The bridge currently ignores this meta field.
+ - Prelude の中にさらに `using` が含まれている場合は、Runner が再帰的に `using` をストリップしてから AST として取り込みます（入れ子の前処理をサポート）。
+ - パス解決の順序（dev/ci）: 呼び出し元ファイルのディレクトリ → `$NYASH_ROOT` → 実行バイナリからのプロジェクトルート推定（target/release/nyash の 3 階層上）→ `nyash.toml` の `[using.paths]`。
 
 ## Namespace Resolution (Runner‑side)
 - Goal: keep IR/VM/JIT untouched. All resolution happens in Runner/Registry.

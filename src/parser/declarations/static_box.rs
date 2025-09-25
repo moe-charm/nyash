@@ -84,13 +84,32 @@ impl NyashParser {
             }
         }
 
+        // Tolerate trailing NEWLINE(s) before the closing '}' of the static box
+        while self.match_token(&TokenType::NEWLINE) { self.advance(); }
         if std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1") {
             eprintln!(
                 "[parser][static-box] closing '}}' at token={:?}",
                 self.current_token().token_type
             );
         }
-        self.consume(TokenType::RBRACE)?;
+        if self.match_token(&TokenType::RBRACE) {
+            self.consume(TokenType::RBRACE)?;
+        } else if self.is_at_end() {
+            // Safety valve: if EOF is reached right after members (common at file end),
+            // accept as implicitly closed static box. This keeps behavior stable for
+            // well-formed sources and avoids false negatives on seam edges.
+            if std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1") {
+                eprintln!("[parser][static-box] accepting EOF as closing '}}' (at file end)");
+            }
+        } else {
+            // Still something else here; report a structured error
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                expected: "RBRACE".to_string(),
+                found: self.current_token().token_type.clone(),
+                line,
+            });
+        }
 
         // 🔥 Static初期化ブロックから依存関係を抽出
         if let Some(ref init_stmts) = static_init {

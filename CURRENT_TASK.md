@@ -60,12 +60,19 @@ Quick status
    - [x] 呼び出し側のレガシー分岐を撤去（common/vm/vm_fallback/pyvm/selfhost を AST 経路に統一）
    - [ ] strip_using_and_register 本体のファイル内撤去（後続の掃除タスクで対応）
 4) パーサガードの格下げ→撤去
-   - [x] Guard を log-only に格下げ（NYASH_PARSER_METHOD_BODY_STRICT=1 でも break せず警告ログのみ）
-   - [x] Guard 実装を撤去（method-body 専用のシーム判定を削除、通常ブロック同等に）
+  - [x] Guard を log-only に格下げ（NYASH_PARSER_METHOD_BODY_STRICT=1 でも break せず警告ログのみ）
+  - [x] Guard 実装を撤去（method-body 専用のシーム判定を削除、通常ブロック同等に）
+
+5) 宣言順序の根治（Builder 2パス: 宣言インデックス → 低下）
+  - [x] MirBuilder に index_declarations を導入（Phase A）
+  - [x] user_defined_boxes と static_method_index を統一収集（AST一回走査）
+  - [x] lower_root 先頭で index_declarations を呼び、既存の個別 preindex_* を置換
+  - [ ] 追加の前方参照ケース（interface/extern等）発見時は同関数でカバー（設計上の拡張点）
 
 受け入れ基準（追加）
 - quick/integration スモークが AST 既定ON（dev/ci）で緑。
 - mini（starts_with）が VM fallback / LLVM / PyVM のいずれか基準で PASS（VM fallback は暫定メソッドで通せばOK）。
+ - Builder 順序不整合の解消: 出現順に依存せず、new/静的メソッドの前方参照が安定解決。
 
 受け入れ基準
 - StringUtils の `--dump-ast` に stray FunctionCall が出ない（宣言のみ）。
@@ -78,6 +85,40 @@ Quick status
 - Parser: method-body guard を env で opt-in 実装（既定OFF）。
   - 現状: OFF 時は `string.nyash` にて Program 配下に `FunctionCall(parse_float)` が残存。
   - 次: Guard ON で AST/MIR を検証し、必要に応じて lookahead 条件を調整。
+
+### JSON Native — Unicode/BMP とスモーク拡張（2025‑09‑26 late）
+- EscapeUtils 改善（仕様不変・堅牢化）
+  - char_code: 未知文字を -1 に変更（制御文字扱いしない）。
+  - is_control_char: ASCII 0x00–0x1F のみ対象に明確化。
+  - hex_to_char: 制御系を追加（0000/0008/0009/000A/000C/000D）＋既存 ASCII/BMP 基本を維持。
+- AST プレリュードの再帰処理
+  - runner common/vm_fallback で using 先のファイルにも `collect_using_and_strip` を適用し、入れ子 using を DFS で展開してから AST 化。
+- dispatch ガード
+  - `vm` ブランチは既定の VM fallback を維持。`NYASH_USE_AST_RUNNER=1` を追加（将来の AST ランナー用の開発ガード；現状は未使用に留める）。
+- スモーク追加（quick/core）
+  - json_long_string_ast.sh（長い文字列の roundtrip）
+  - json_deep_nesting_ast.sh（深いネストの配列/オブジェクト）
+  - json_error_positions_ast.sh（行/列つきエラーUX: 欠落カンマ、未知キーワード、複数行オブジェクト）
+  - json_unicode_basic_ast.sh（\u0041/\u000A の基本確認）
+
+注意/未解決（ブロッカー）
+- `apps/lib/json_native/utils/string.nyash` の静的ボックス終端で Parser が `Expected RBRACE`（EOF）を報告（トレース: static-box ループ末尾で `}` 未検出）。
+  - 既知の「メソッド継ぎ目」問題の再燃と推測。static box メンバーの宣言≻式をループ側でも再確認し、必要なら lookahead を強化（`)`→`{` の改行許容）。
+  - 一時回避として Guard を戻すことも可能だが、宣言優先の根治を優先する。
+  - このため、追加スモークは実装済みだが、現時点では prelude 解析段で停止する（Runner 側の再帰処理は完了済み）。
+
+### VM fallback の制約と対応状況（更新）
+- 既定 `--backend vm` は VM fallback（MIR interpreter）。現在の対応状況:
+  - ArrayBox.birth / push / len / get / set … 実装済み（最小）
+  - StringBox.substring … 実装済み（最小・時限的）
+  - ユーザー定義 Box（例: `JsonParser`）の NewBox … 最小 UserFactory を登録して対応（本タスクで実装）
+- これにより、VM fallback でも `new JsonParser()` などのユーザー型生成が可能になった。
+- 依然として JSON スモークは LLVM ハーネス経路で走らせているため、緑化には実行経路の切替（もしくはハーネスの namespace 受理）が必要。
+
+### Builder 宣言インデックス化（設計メモ）
+- docs/development/notes/mir-declaration-indexing.md を追加
+- 目的: 個別 preindex_* の増殖を防ぎ、順序に依存しない lowering を実現
+- 実装: lower_root 入口で index_declarations、以降は従来どおり lowering
 
 ### 追加進捗（Using/Verify 受け口 2025‑09‑26 EOD）
 - Provider Verify: nyash.toml の `[verify.required_methods]` / `[types.*.required_methods]` を読んで検査（env とマージ）
@@ -1397,3 +1438,33 @@ Trigger: nyash_vm の安定（主要スモーク緑・自己ホスト経路が�
 - Rust 側は MIR(JSON) を `tmp/nyash_selfhost_mir.json` に出力→Ny ランナー（apps/selfhost-runtime/runner.nyash）へ引き渡し。
 - 子プロセスへは `NYASH_SELFHOST_EXEC` を伝播しない（再帰配線を防止）。
 - 現段階の Ny ランナーは no‑op で 0 を返す。次ステージでローダ/ディスパッチを追加。
+## 2025-09-26: 短絡（&&/||）の正規低下を実装（根治）
+
+目的
+- `&&`/`||` を BinOp ではなく制御フロー（branch + PHI）で下ろし、RHS を必要時のみ評価する。
+- 結果は常に Bool。truthy 評価は分岐側（runtime `to_bool_vm`）に委ねる。
+
+実装
+- `src/mir/builder/ops.rs`
+  - `build_binary_op` で `And`/`Or` を特別扱いし、`build_logical_shortcircuit` に委譲。
+  - `build_logical_shortcircuit` では以下を実装：
+    - LHS を評価→ `Branch(LHS)`
+    - AND: then=RHS を truthy で true/false に還元、else=false
+    - OR:  then=true、else=RHS を truthy で true/false に還元
+    - then/else の変数差分を `merge_modified_vars` でマージ、結果は `Phi` で Bool を合成
+
+検証（軽量）
+- `tmp/sc_bool.nyash` にて `print((1 > 0) && (0 > 1))` → `false`、`print((1 > 0) || (0 > 1))` → `true` を確認。
+
+影響範囲と方針
+- 既存仕様不変（短絡の意味論を本来の姿に）。
+- BinOp 経路での And/Or は使用しないため、RHS の副作用が誤って実行される経路を遮断。
+
+未完了/次の作業
+- JSON VM スモーク: 依然として `VoidBox.push` 経由の失敗が残る（ログにデプリケーション行も混入）。
+  - 短絡未適用箇所の有無を確認（他の演算子や ternary 経路）。
+  - テスト出力のノイズフィルタを拡張（"Using builtin ArrayBox" 行）。
+  - グリーン化後に VM fallback の一時ガード（VoidBox 系）を段階的に撤去。
+
+ロールバック容易性
+- 差分は `ops.rs` 限定・小規模。`build_logical_shortcircuit` を外せば従来に戻る。

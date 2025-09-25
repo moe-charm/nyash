@@ -373,6 +373,22 @@ impl super::MirBuilder {
                             return Ok(dst);
                         }
                     }
+                    // Secondary fallback: search already-materialized functions in the current module
+                    if let Some(ref module) = self.current_module {
+                        let tail = format!(".{}{}", name, format!("/{}", arg_values.len()));
+                        let mut cands: Vec<String> = module
+                            .functions
+                            .keys()
+                            .filter(|k| k.ends_with(&tail))
+                            .cloned()
+                            .collect();
+                        if cands.len() == 1 {
+                            let func_name = cands.remove(0);
+                            let dst = self.value_gen.next();
+                            self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+                            return Ok(dst);
+                        }
+                    }
                     // Propagate original error
                     return Err(format!("Unresolved function: '{}'. {}", name, super::call_resolution::suggest_resolution(&name)));
                 }

@@ -14,8 +14,6 @@ static box JsonParserModule {
     }
 }
 
-}
-
 box JsonParser {
     tokens: ArrayBox       // トークン配列
     position: IntegerBox   // 現在のトークン位置

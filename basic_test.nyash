@@ -1,0 +1,6 @@
+static box BasicTest {
+    main() {
+        print("Hello from BasicTest")
+        return 0
+    }
+}

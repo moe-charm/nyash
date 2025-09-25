@@ -46,15 +46,9 @@ pub fn resolve_call_target(
         return Ok(Callee::Extern(name.to_string()));
     }
 
-    // 5. Fallback: when inside a static box, treat bare `name()` as a static method of the box.
-    //    This helps scripts that omit the box qualifier inside the same static box scope.
-    if let Some(box_name) = current_static_box {
-        return Ok(Callee::Method {
-            box_name: box_name.clone(),
-            method: name.to_string(),
-            receiver: None,
-        });
-    }
+    // 5. Do not assume bare `name()` refers to current static box.
+    //    Leave it unresolved so caller can try static_method_index fallback
+    //    or report a clear unresolved error.
 
     // 6. Resolution failed - prevent runtime string-based resolution
     Err(format!("Unresolved function: '{}'. {}", name, suggest_resolution(name)))

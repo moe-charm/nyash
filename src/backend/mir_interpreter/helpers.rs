@@ -2,10 +2,31 @@ use super::*;
 
 impl MirInterpreter {
     pub(super) fn reg_load(&self, id: ValueId) -> Result<VMValue, VMError> {
-        self.regs
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| VMError::InvalidValue(format!("use of undefined value {:?}", id)))
+        match self.regs.get(&id).cloned() {
+            Some(v) => Ok(v),
+            None => {
+                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1")
+                    || std::env::var("NYASH_VM_TRACE_EXEC").ok().as_deref() == Some("1")
+                {
+                    let keys: Vec<String> = self
+                        .regs
+                        .keys()
+                        .map(|k| format!("{:?}", k))
+                        .collect();
+                    eprintln!(
+                        "[vm-trace] reg_load undefined id={:?} last_block={:?} last_inst={:?} regs={}",
+                        id,
+                        self.last_block,
+                        self.last_inst,
+                        keys.join(", ")
+                    );
+                }
+                Err(VMError::InvalidValue(format!(
+                    "use of undefined value {:?}",
+                    id
+                )))
+            }
+        }
     }
 
     pub(super) fn eval_binop(
@@ -40,6 +61,8 @@ impl MirInterpreter {
             (BitAnd, Integer(x), Integer(y)) => Integer(x & y),
             (BitOr, Integer(x), Integer(y)) => Integer(x | y),
             (BitXor, Integer(x), Integer(y)) => Integer(x ^ y),
+            (And, VMValue::Bool(x), VMValue::Bool(y)) => VMValue::Bool(x && y),
+            (Or,  VMValue::Bool(x), VMValue::Bool(y)) => VMValue::Bool(x || y),
             (Shl, Integer(x), Integer(y)) => Integer(x.wrapping_shl(y as u32)),
             (Shr, Integer(x), Integer(y)) => Integer(x.wrapping_shr(y as u32)),
             (opk, va, vb) => {
@@ -65,6 +88,10 @@ impl MirInterpreter {
             (Le, Float(x), Float(y)) => x <= y,
             (Gt, Float(x), Float(y)) => x > y,
             (Ge, Float(x), Float(y)) => x >= y,
+            (Lt, VMValue::String(ref s), VMValue::String(ref t)) => s < t,
+            (Le, VMValue::String(ref s), VMValue::String(ref t)) => s <= t,
+            (Gt, VMValue::String(ref s), VMValue::String(ref t)) => s > t,
+            (Ge, VMValue::String(ref s), VMValue::String(ref t)) => s >= t,
             (opk, va, vb) => {
                 return Err(VMError::TypeError(format!(
                     "unsupported compare {:?} on {:?} and {:?}",

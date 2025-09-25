@@ -1,12 +1,12 @@
 #!/bin/bash
-# json_nested_ast.sh - Nested arrays/objects roundtrip via AST using
+# json_unicode_basic_ast.sh - Basic \uXXXX handling via AST using
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=1
 require_env || exit 2
 preflight_plugins || exit 2
 
-TEST_DIR="/tmp/json_nested_ast_$$"
+TEST_DIR="/tmp/json_unicode_basic_ast_$$"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
@@ -24,32 +24,27 @@ using json_native as JsonParserModule
 
 static box Main {
   main() {
-    local samples = new ArrayBox()
-    samples.push("[1,[2,3],{\"x\":[4]}]")
-    samples.push("{\"a\":{\"b\":[1,2]},\"c\":\"d\"}")
-    samples.push("{\"n\":-1e-3,\"z\":0.0}")
+    // Case 1: ASCII via \uXXXX becomes plain letters after roundtrip
+    local s1 = "\"A\\u0041\\u005A\""  // => "AAZ"
+    print(JsonParserUtils.roundtrip_test(s1))
 
-    local i = 0
-    loop(i < samples.length()) {
-      local s = samples.get(i)
-      local r = JsonParserUtils.roundtrip_test(s)
-      print(r)
-      i = i + 1
-    }
+    // Case 2: control via \u000A becomes newline, stringifier emits \n
+    local s2 = "\"line\\u000Aend\""
+    print(JsonParserUtils.roundtrip_test(s2))
+
     return 0
   }
 }
 EOF
 
 expected=$(cat << 'TXT'
-[1,[2,3],{"x":[4]}]
-{"a":{"b":[1,2]},"c":"d"}
-{"n":-1e-3,"z":0.0}
+"AAZ"
+"line\nend"
 TXT
 )
 
 output=$(NYASH_LLVM_USE_HARNESS=1 run_nyash_llvm driver.nyash)
-compare_outputs "$expected" "$output" "json_nested_ast"
+compare_outputs "$expected" "$output" "json_unicode_basic_ast"
 
 cd /
 rm -rf "$TEST_DIR"

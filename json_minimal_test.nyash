@@ -1,0 +1,77 @@
+// JSONライブラリの最小機能テスト
+static box JsonMinimalTest {
+    main() {
+        print("🧪 JSON Minimal Test")
+
+        // 基本的なJSONノードを手動作成
+        local null_node = this.create_node("null", null)
+        print("null node: " + null_node.stringify())
+
+        local bool_node = this.create_node("bool", true)
+        print("bool node: " + bool_node.stringify())
+
+        local int_node = this.create_node("int", 42)
+        print("int node: " + int_node.stringify())
+
+        local str_node = this.create_node("string", "hello")
+        print("string node: " + str_node.stringify())
+
+        print("✅ Minimal test complete")
+        return 0
+    }
+
+    // シンプルなJSONノード作成
+    create_node(kind, value) {
+        local node = new MinimalJsonNode()
+        node.set_kind(kind)
+        node.set_value(value)
+        return node
+    }
+}
+
+// 最小限のJSONノード
+box MinimalJsonNode {
+    kind: StringBox
+    value: Box
+
+    birth() {
+        me.kind = "null"
+        me.value = null
+    }
+
+    set_kind(k) {
+        me.kind = k
+    }
+
+    set_value(v) {
+        me.value = v
+    }
+
+    get_kind() {
+        return me.kind
+    }
+
+    stringify() {
+        if me.kind == "null" {
+            return "null"
+        } else {
+            if me.kind == "bool" {
+                if me.value {
+                    return "true"
+                } else {
+                    return "false"
+                }
+            } else {
+                if me.kind == "int" {
+                    return "" + me.value
+                } else {
+                    if me.kind == "string" {
+                        return "\"" + me.value + "\""
+                    } else {
+                        return "null"
+                    }
+                }
+            }
+        }
+    }
+}

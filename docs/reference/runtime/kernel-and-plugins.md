@@ -45,6 +45,7 @@ Interop（同一型の異 Provider 混在）
 - 受け口/ドキュメントの整備を先行（挙動は不変）。
 - using は SSOT+AST に移行済み（prod は file-using 禁止）。
 - VM fallback の個別救済は暫定（短期で Bootstrap Pack へ移行し撤去）。
+ - VM fallback（MIR interpreter）の役割は「軽量デバッグ実行器」：フロントエンド（Parser/Using/AST→MIR）の健全性をすばやく確認するために維持。機能は最小限に留め、プラグイン/本流VM/LLVM の実装が主となる（本番・性能評価には使用しない）。
 
 関連ドキュメント
 - nyash.toml のスキーマと例: docs/reference/config/nyash-toml.md

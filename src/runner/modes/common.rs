@@ -63,13 +63,84 @@ impl NyashRunner {
                         std::process::exit(1);
                     }
                     if use_ast {
-                        // Parse each prelude file into AST and store
-                        for p in paths {
+                        // Parse each prelude file into AST after stripping its own using-lines.
+                        // Recursively process nested preludes to avoid parse errors.
+                        let mut visited = std::collections::HashSet::<String>::new();
+                        // Normalize initial paths relative to filename or $NYASH_ROOT
+                        let mut stack: Vec<String> = Vec::new();
+                        for raw in paths {
+                            let mut pb = std::path::PathBuf::from(&raw);
+                            if pb.is_relative() {
+                                if let Some(dir) = std::path::Path::new(filename).parent() {
+                                    let cand = dir.join(&pb);
+                                    if cand.exists() { pb = cand; }
+                                }
+                                if pb.is_relative() {
+                                    if let Ok(root) = std::env::var("NYASH_ROOT") {
+                                        let cand = std::path::Path::new(&root).join(&pb);
+                                        if cand.exists() { pb = cand; }
+                                    } else {
+                                        // Fallback: resolve relative to project root guessed from the nyash binary path
+                                        if let Ok(exe) = std::env::current_exe() {
+                                            if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                                                let cand = root.join(&pb);
+                                                if cand.exists() { pb = cand; }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            stack.push(pb.to_string_lossy().to_string());
+                        }
+                        while let Some(mut p) = stack.pop() {
+                            // Normalize relative path against $NYASH_ROOT as a last resort
+                            if std::path::Path::new(&p).is_relative() {
+                                if let Ok(root) = std::env::var("NYASH_ROOT") {
+                                    let cand = std::path::Path::new(&root).join(&p);
+                                    p = cand.to_string_lossy().to_string();
+                                } else if let Ok(exe) = std::env::current_exe() {
+                                    if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                                        let cand = root.join(&p);
+                                        p = cand.to_string_lossy().to_string();
+                                    }
+                                }
+                            }
+                            if !visited.insert(p.clone()) { continue; }
                             match std::fs::read_to_string(&p) {
                                 Ok(src) => {
-                                    match NyashParser::parse_from_string(&src) {
-                                        Ok(ast) => prelude_asts.push(ast),
-                                        Err(e) => { eprintln!("❌ Parse error in using prelude {}: {}", p, e); std::process::exit(1); }
+                                    match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &src, &p) {
+                                        Ok((clean_src, nested)) => {
+                                            // Normalize and push nested first so they are parsed before the current file (DFS)
+                                            for np in nested {
+                                                let mut npp = std::path::PathBuf::from(&np);
+                                                if npp.is_relative() {
+                                                    if let Some(dir) = std::path::Path::new(&p).parent() {
+                                                        let cand = dir.join(&npp);
+                                                        if cand.exists() { npp = cand; }
+                                                    }
+                                                    if npp.is_relative() {
+                                                        if let Ok(root) = std::env::var("NYASH_ROOT") {
+                                                            let cand = std::path::Path::new(&root).join(&npp);
+                                                            if cand.exists() { npp = cand; }
+                                                        } else {
+                                                            if let Ok(exe) = std::env::current_exe() {
+                                                                if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                                                                    let cand = root.join(&npp);
+                                                                    if cand.exists() { npp = cand; }
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                                let nps = npp.to_string_lossy().to_string();
+                                                if !visited.contains(&nps) { stack.push(nps); }
+                                            }
+                                            match NyashParser::parse_from_string(&clean_src) {
+                                                Ok(ast) => prelude_asts.push(ast),
+                                                Err(e) => { eprintln!("❌ Parse error in using prelude {}: {}", p, e); std::process::exit(1); }
+                                            }
+                                        }
+                                        Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
                                     }
                                 }
                                 Err(e) => { eprintln!("❌ Error reading using prelude {}: {}", p, e); std::process::exit(1); }

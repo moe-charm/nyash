@@ -2,7 +2,6 @@
 pub mod llvm;
 pub mod mir;
 pub mod vm_fallback;
-// vm module removed with vm-legacy
 pub mod pyvm;
 pub mod macro_child;
 

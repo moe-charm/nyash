@@ -27,6 +27,9 @@ pub struct MirInterpreter {
     pub(super) obj_fields: HashMap<ValueId, HashMap<String, VMValue>>,
     pub(super) functions: HashMap<String, MirFunction>,
     pub(super) cur_fn: Option<String>,
+    // Trace context (dev-only; enabled with NYASH_VM_TRACE=1)
+    pub(super) last_block: Option<BasicBlockId>,
+    pub(super) last_inst: Option<MirInstruction>,
 }
 
 impl MirInterpreter {
@@ -37,6 +40,8 @@ impl MirInterpreter {
             obj_fields: HashMap::new(),
             functions: HashMap::new(),
             cur_fn: None,
+            last_block: None,
+            last_inst: None,
         }
     }
 

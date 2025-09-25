@@ -420,9 +420,9 @@ impl MirBuilder {
         // Record origin for optimization: dst was created by NewBox of class
         self.value_origin_newbox.insert(dst, class.clone());
 
-        // For plugin/builtin boxes, call birth(...). For user-defined boxes, skip (InstanceBox already constructed)
-        // Special-case: StringBox is already fully constructed via from_i8_string in LLVM lowering; skip birth
-        if !self.user_defined_boxes.contains(&class) && class != "StringBox" {
+        // Call birth(...) for all boxes except StringBox (special-cased in LLVM path)
+        // User-defined boxes require birth to initialize fields (scanner/tokens etc.)
+        if class != "StringBox" {
             let birt_mid = resolve_slot_by_type_name(&class, "birth");
             self.emit_box_or_plugin_call(
                 None,

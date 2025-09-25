@@ -3,15 +3,20 @@ use crate::ast::ASTNode;
 
 // Lifecycle routines extracted from builder.rs
 impl super::MirBuilder {
-    fn preindex_static_methods_from_ast(&mut self, node: &ASTNode) {
+    /// Unified declaration indexing (Phase A): collect symbols before lowering
+    /// - user_defined_boxes: non-static Box names (for NewBox birth() skip)
+    /// - static_method_index: name -> [(BoxName, arity)] (for bare-call fallback)
+    fn index_declarations(&mut self, node: &ASTNode) {
         match node {
             ASTNode::Program { statements, .. } => {
                 for st in statements {
-                    self.preindex_static_methods_from_ast(st);
+                    self.index_declarations(st);
                 }
             }
             ASTNode::BoxDeclaration { name, methods, is_static, .. } => {
-                if *is_static {
+                if !*is_static {
+                    self.user_defined_boxes.insert(name.clone());
+                } else {
                     for (mname, mast) in methods {
                         if let ASTNode::FunctionDeclaration { params, .. } = mast {
                             self.static_method_index
@@ -59,8 +64,88 @@ impl super::MirBuilder {
     pub(super) fn lower_root(&mut self, ast: ASTNode) -> Result<ValueId, String> {
         // Pre-index static methods to enable safe fallback for bare calls in using-prepended code
         let snapshot = ast.clone();
-        self.preindex_static_methods_from_ast(&snapshot);
-        self.build_expression(ast)
+        // Phase A: collect declarations in one pass (symbols available to lowering)
+        self.index_declarations(&snapshot);
+        // Phase B: top-level program lowering with declaration-first pass
+        match ast {
+            ASTNode::Program { statements, .. } => {
+                use crate::ast::ASTNode as N;
+                // First pass: lower declarations (static boxes except Main, and instance boxes)
+                let mut main_static: Option<(String, std::collections::HashMap<String, ASTNode>)> = None;
+                for st in &statements {
+                    if let N::BoxDeclaration {
+                        name,
+                        methods,
+                        is_static,
+                        fields,
+                        constructors,
+                        weak_fields,
+                        ..
+                    } = st
+                    {
+                        if *is_static {
+                            if name == "Main" {
+                                main_static = Some((name.clone(), methods.clone()));
+                            } else {
+                                // Lower all static methods into standalone functions: BoxName.method/Arity
+                                for (mname, mast) in methods.iter() {
+                                    if let N::FunctionDeclaration { params, body, .. } = mast {
+                                        let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
+                                        self.lower_static_method_as_function(func_name, params.clone(), body.clone())?;
+                                        self.static_method_index
+                                            .entry(mname.clone())
+                                            .or_insert_with(Vec::new)
+                                            .push((name.clone(), params.len()));
+                                    }
+                                }
+                            }
+                        } else {
+                            // Instance box: register type and lower instance methods/ctors as functions
+                            self.user_defined_boxes.insert(name.clone());
+                            self.build_box_declaration(
+                                name.clone(),
+                                methods.clone(),
+                                fields.clone(),
+                                weak_fields.clone(),
+                            )?;
+                            for (ctor_key, ctor_ast) in constructors.iter() {
+                                if let N::FunctionDeclaration { params, body, .. } = ctor_ast {
+                                    let func_name = format!("{}.{}", name, ctor_key);
+                                    self.lower_method_as_function(
+                                        func_name,
+                                        name.clone(),
+                                        params.clone(),
+                                        body.clone(),
+                                    )?;
+                                }
+                            }
+                            for (mname, mast) in methods.iter() {
+                                if let N::FunctionDeclaration { params, body, is_static, .. } = mast {
+                                    if !*is_static {
+                                        let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
+                                        self.lower_method_as_function(
+                                            func_name,
+                                            name.clone(),
+                                            params.clone(),
+                                            body.clone(),
+                                        )?;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Second pass: lower Main.main body as Program (entry). If absent, fall back to sequential block.
+                if let Some((box_name, methods)) = main_static {
+                    self.build_static_main_box(box_name, methods)
+                } else {
+                    // Fallback: sequential lowering (keeps legacy behavior for scripts without Main)
+                    self.cf_block(statements)
+                }
+            }
+            other => self.build_expression(other),
+        }
     }
 
     pub(super) fn finalize_module(

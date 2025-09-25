@@ -50,8 +50,12 @@ filter_noise() {
     grep -v "^\[UnifiedBoxRegistry\]" \
       | grep -v "^\[FileBox\]" \
       | grep -v "^Net plugin:" \
-      | grep -v "^\[.*\] Plugin" \
+  | grep -v "^\[.*\] Plugin" \
       | grep -v "Using builtin StringBox" \
+      | grep -v "Using builtin ArrayBox" \
+      | grep -v "Using builtin MapBox" \
+      | grep -v "plugins/nyash-array-plugin" \
+      | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
       | grep -v "cargo build -p nyash-string-plugin" \
       | grep -v "^\[plugin-loader\] backend=" \
@@ -140,13 +144,13 @@ run_nyash_vm() {
         local tmpfile="/tmp/nyash_test_$$.nyash"
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" "$tmpfile" "$@" 2>&1 | filter_noise
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$tmpfile" "$@" 2>&1 | filter_noise
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
     else
         # プラグイン初期化メッセージを除外
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" "$program" "$@" 2>&1 | filter_noise
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$program" "$@" 2>&1 | filter_noise
         return ${PIPESTATUS[0]}
     fi
 }

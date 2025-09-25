@@ -1,12 +1,12 @@
 #!/bin/bash
-# json_roundtrip_ast.sh - JSON parse/stringify roundtrip via AST using
+# json_roundtrip_vm.sh - JSON parse/stringify roundtrip via AST using on VM backend
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
-export SMOKES_USE_PYVM=1
+export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-TEST_DIR="/tmp/json_roundtrip_ast_$$"
+TEST_DIR="/tmp/json_roundtrip_vm_$$"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
@@ -20,7 +20,7 @@ json = "json_native"
 EOF
 
 cat > driver.nyash << 'EOF'
-using json_native as JsonParserModule
+using json as JsonParserModule
 
 static box Main {
   main() {
@@ -43,9 +43,9 @@ static box Main {
     local i = 0
     loop(i < samples.length()) {
       local s = samples.get(i)
-      local r = JsonParserUtils.roundtrip_test(s)
-      // Print each roundtrip result on its own line
-      print(r)
+      local p = JsonParserModule.create_parser()
+      local r = p.parse(s)
+      if (r == null) { print("null") } else { print(r.toString()) }
       i = i + 1
     }
     return 0
@@ -71,8 +71,8 @@ false
 TXT
 )
 
-output=$(NYASH_LLVM_USE_HARNESS=1 run_nyash_llvm driver.nyash)
-compare_outputs "$expected" "$output" "json_roundtrip_ast"
+output=$(NYASH_USING_PROFILE=dev NYASH_USING_AST=1 run_nyash_vm driver.nyash)
+compare_outputs "$expected" "$output" "json_roundtrip_vm" || exit 1
 
 cd /
 rm -rf "$TEST_DIR"

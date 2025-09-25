@@ -60,27 +60,22 @@ static box EscapeUtils {
         }
     }
     
-    // 制御文字かどうか判定
+    // 制御文字かどうか判定（MVP: 代表的な制御のみ）
     is_control_char(ch) {
-        // ASCII制御文字（0x00-0x1F）の簡易判定
-        // TODO: より完全な制御文字判定
-        local code = this.char_code(ch)
-        return code >= 0 and code <= 31
+        return ch == "\0" or ch == "\t" or ch == "\n" or ch == "\r" or ch == "\f" or ch == "\b"
     }
     
-    // 文字のASCIIコードを取得（簡易版）
+    // 文字のASCIIコードを取得（簡易）: 必要最小のケースのみ
     char_code(ch) {
-        // 主要な文字のASCIIコード（簡易実装）
-        if ch == "\0" { return 0 } else { if ch == "\t" { return 9 } else { if ch == "\n" { return 10 } else { if ch == "\r" { return 13 } else {
-        if ch == " " { return 32 } else { if ch == "!" { return 33 } else { if ch == "\"" { return 34 } else { if ch == "#" { return 35 } else {
-        if ch == "$" { return 36 } else { if ch == "%" { return 37 } else { if ch == "&" { return 38 } else { if ch == "'" { return 39 } else {
-        if ch == "(" { return 40 } else { if ch == ")" { return 41 } else { if ch == "*" { return 42 } else { if ch == "+" { return 43 } else {
-        if ch == "," { return 44 } else { if ch == "-" { return 45 } else { if ch == "." { return 46 } else { if ch == "/" { return 47 } else {
-        if ch == "0" { return 48 } else { if ch == "1" { return 49 } else { if ch == "2" { return 50 } else { if ch == "3" { return 51 } else {
-        if ch == "4" { return 52 } else { if ch == "5" { return 53 } else { if ch == "6" { return 54 } else { if ch == "7" { return 55 } else {
-        if ch == "8" { return 56 } else { if ch == "9" { return 57 } else {
-        return 0  // その他の文字は0
-        } } } } } } } } } } } } } } } } } } } } } } } } } } } } } }
+        if ch == "\0" { return 0 }
+        if ch == "\t" { return 9 }
+        if ch == "\n" { return 10 }
+        if ch == "\r" { return 13 }
+        if ch == "\f" { return 12 }
+        if ch == " "  { return 32 }
+        if ch == "\"" { return 34 }
+        if ch == "\\" { return 92 }
+        return -1
     }
     
     // Unicodeエスケープ形式に変換（簡易版）
@@ -89,21 +84,19 @@ static box EscapeUtils {
         return "\\u" + this.int_to_hex4(code)
     }
     
-    // 整数を4桁の16進数文字列に変換
+    // 整数を4桁の16進数文字列に変換（0..65535にクランプ）
     int_to_hex4(n) {
-        // 簡易実装: 0-127のASCII文字のみ対応
-        if n >= 0 and n <= 15 {
-            return "000" + this.int_to_hex_digit(n)
-        } else {
-            if n >= 16 and n <= 255 {
-                local high = n / 16
-                local low = n % 16
-                return "00" + this.int_to_hex_digit(high) + this.int_to_hex_digit(low)
-            } else {
-                // より大きな値は後で実装
-                return "0000"
-            }
-        }
+        local v = n
+        if v < 0 { v = 0 }
+        if v > 65535 { v = 65535 }
+        // 4096=16^3, 256=16^2, 16=16^1
+        local d0 = v / 4096
+        local r0 = v % 4096
+        local d1 = r0 / 256
+        local r1 = r0 % 256
+        local d2 = r1 / 16
+        local d3 = r1 % 16
+        return this.int_to_hex_digit(d0) + this.int_to_hex_digit(d1) + this.int_to_hex_digit(d2) + this.int_to_hex_digit(d3)
     }
     
     // 整数（0-15）を16進数文字に変換
@@ -233,12 +226,19 @@ static box EscapeUtils {
                (ch >= "A" and ch <= "F")
     }
     
-    // 4桁の16進数文字列を文字に変換（MVP: BMPの基本ASCIIとサロゲート検知）
+    // 4桁の16進数文字列を文字に変換（MVP: ASCII + 一部制御 + サロゲート検知）
     hex_to_char(hex) {
         // サロゲート半の範囲は '?' に置換（結合は現段階で未対応）
         if hex >= "D800" and hex <= "DFFF" {
             return "?"
         }
+        // 制御文字（代表的なもの）
+        if hex == "0000" { return "\0" }
+        if hex == "0008" { return "\b" }
+        if hex == "0009" { return "\t" }
+        if hex == "000A" { return "\n" }
+        if hex == "000C" { return "\f" }
+        if hex == "000D" { return "\r" }
         // 簡易: よく使う範囲（0x20-0x7E）を網羅
         if hex == "005C" { return "\\" }
         if hex == "0022" { return "\"" }
@@ -429,7 +429,7 @@ static box EscapeUtils {
     
     // 印刷可能文字かどうか判定
     is_printable(ch) {
-        local code = this.char_code(ch)
-        return code >= 32 and code <= 126  // 基本的な印刷可能ASCII文字
+        // MVP: 制御文字でなければ表示可能とみなす（デバッグ用）
+        return not this.is_control_char(ch)
     }
 }

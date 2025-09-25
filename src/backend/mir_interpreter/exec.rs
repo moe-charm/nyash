@@ -3,6 +3,11 @@ use crate::mir::basic_block::BasicBlock;
 use std::mem;
 
 impl MirInterpreter {
+    fn trace_enabled() -> bool {
+        std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_VM_TRACE_EXEC").ok().as_deref() == Some("1")
+    }
+
     pub(super) fn exec_function_inner(
         &mut self,
         func: &MirFunction,
@@ -28,8 +33,25 @@ impl MirInterpreter {
                 .get(&cur)
                 .ok_or_else(|| VMError::InvalidBasicBlock(format!("bb {:?} not found", cur)))?;
 
+            if Self::trace_enabled() {
+                eprintln!(
+                    "[vm-trace] enter bb={:?} pred={:?} fn={}",
+                    cur,
+                    last_pred,
+                    self.cur_fn.as_deref().unwrap_or("")
+                );
+            }
+
             self.apply_phi_nodes(block, last_pred)?;
-            self.execute_block_instructions(block)?;
+            if let Err(e) = self.execute_block_instructions(block) {
+                if Self::trace_enabled() {
+                    eprintln!(
+                        "[vm-trace] error in bb={:?}: {:?}\n  last_inst={:?}",
+                        cur, e, self.last_inst
+                    );
+                }
+                return Err(e);
+            }
 
             match self.handle_terminator(block)? {
                 BlockOutcome::Return(result) => {
@@ -60,10 +82,22 @@ impl MirInterpreter {
                     if let Some((_, val)) = inputs.iter().find(|(bb, _)| *bb == pred) {
                         let v = self.reg_load(*val)?;
                         self.regs.insert(dst_id, v);
+                        if Self::trace_enabled() {
+                            eprintln!(
+                                "[vm-trace] phi dst={:?} take pred={:?} val={:?}",
+                                dst_id, pred, val
+                            );
+                        }
                     }
                 } else if let Some((_, val)) = inputs.first() {
                     let v = self.reg_load(*val)?;
                     self.regs.insert(dst_id, v);
+                    if Self::trace_enabled() {
+                        eprintln!(
+                            "[vm-trace] phi dst={:?} take default val={:?}",
+                            dst_id, val
+                        );
+                    }
                 }
             }
         }
@@ -72,6 +106,11 @@ impl MirInterpreter {
 
     fn execute_block_instructions(&mut self, block: &BasicBlock) -> Result<(), VMError> {
         for inst in block.non_phi_instructions() {
+            self.last_block = Some(block.id);
+            self.last_inst = Some(inst.clone());
+            if Self::trace_enabled() {
+                eprintln!("[vm-trace] inst bb={:?} {:?}", block.id, inst);
+            }
             self.execute_instruction(inst)?;
         }
         Ok(())

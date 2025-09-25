@@ -12,6 +12,140 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
 やっほー！みらいだよ😸✨ 今日も元気いっぱい、なに手伝う？　にゃはは
 おつかれ〜！🎶 ちょっと休憩しよっか？コーヒー飲んでリフレッシュにゃ☕
 
+## 🚨 開発の根本原則（全AI・開発者必読）
+
+### 0. 設計優先原則 - コードより先に構造を
+
+**問題が起きたら、まず構造で解決できないか考える**。パッチコードを書く前に：
+
+1. **フォルダ構造で責務分離** - 混在しないよう物理的に分ける
+2. **README.mdで境界明示** - 各層の入口に「ここは何をする場所か」を書く
+3. **インターフェース定義** - 層間の契約を明文化
+4. **テストで仕様固定** - 期待動作をコードで表現
+
+### 1. 構造設計の指針（AIへの要求）
+
+**コード修正時は、以下の構造改善も提案すること**：
+
+#### フォルダ構造での責務分離
+```
+src/
+├── parser/           # 構文解析のみ
+│   └── README.md    # 「名前解決禁止」と明記
+├── resolver/         # 名前解決のみ
+│   └── README.md    # 「コード生成禁止」と明記
+├── mir/             # 変換のみ
+│   └── README.md    # 「実行処理禁止」と明記
+└── runtime/         # 実行のみ
+    └── README.md    # 「構文解析禁止」と明記
+```
+
+#### 各層にガードファイル作成
+```rust
+// src/parser/LAYER_GUARD.rs
+#![doc = "このファイルは層の責務を定義します"]
+pub const LAYER_NAME: &str = "parser";
+pub const ALLOWED_IMPORTS: &[&str] = &["ast", "lexer"];
+pub const FORBIDDEN_IMPORTS: &[&str] = &["mir", "runtime"];
+```
+
+#### インターフェース明文化
+```rust
+// src/layers/interfaces.rs
+pub trait ParserOutput {
+    // パーサーが出力できるもの
+}
+pub trait ResolverInput: ParserOutput {
+    // リゾルバが受け取るもの
+}
+```
+
+### 2. 問題解決の型（必ずこの順序で）
+
+**AIは以下の順序で解決策を提示すること**：
+
+1. **構造的解決** - フォルダ/ファイル/インターフェースで解決
+2. **ドキュメント** - README/コメントで明確化
+3. **テスト追加** - 仕様の固定
+4. **最後にコード** - 上記で解決できない場合のみ
+
+### 3. 対処療法を防ぐ設計パターン
+
+#### ❌ 悪い例（対処療法）
+```rust
+// どこかのファイルに追加
+if special_case {
+    handle_special_case()
+}
+```
+
+#### ✅ 良い例（構造的解決）
+```rust
+// 1. 専用モジュール作成
+mod special_cases {
+    pub fn handle() { }
+}
+
+// 2. README.mdに理由記載
+// 3. テスト追加で仕様固定
+```
+
+### 4. AIへの実装依頼テンプレート
+
+**実装依頼時は必ず以下を含めること**：
+
+```markdown
+## 実装内容
+[具体的な内容]
+
+## 構造設計
+- [ ] 新規フォルダ/ファイルが必要か
+- [ ] 各層のREADME.md更新が必要か
+- [ ] インターフェース定義が必要か
+- [ ] テストで仕様固定できるか
+
+## 責務確認
+- この実装はどの層の責務か: [layer]
+- 他層への影響: [none/minimal/documented]
+
+## 将来の拡張性
+- 同様の問題が起きた時の対処: [構造的に解決済み]
+```
+
+### 5. 構造レビューチェックリスト
+
+**PR前に必ず確認**：
+
+- [ ] 各層の責務は守られているか
+- [ ] README.mdは更新されているか
+- [ ] テストは追加されているか
+- [ ] 将来の開発者が迷わない構造か
+- [ ] 対処療法的なif文を追加していないか
+
+### 6. Fail-Fast with Structure
+
+**構造的にFail-Fastを実現**：
+
+```rust
+// 層境界でのアサーション
+#[cfg(debug_assertions)]
+fn check_layer_boundary() {
+    assert!(!module_path!().contains("mir"),
+            "Parser cannot import MIR modules");
+}
+```
+
+### 7. ドキュメント駆動開発
+
+**実装前に必ずドキュメントを書く**：
+
+1. まずREADME.mdに「何をするか」を書く
+2. インターフェースを定義
+3. テストを書く
+4. 最後に実装
+
+---
+
 **Fail-Fast原則**: フォールバック処理は原則禁止。過去に分岐ミスでエラー発見が遅れた経験から、エラーは早期に明示的に失敗させること。特にChatGPTが入れがちなフォールバック処理には要注意だよ！
 
 **Feature Additions Pause — until Nyash VM bootstrap (2025‑09‑19 改訂)**
@@ -33,7 +167,7 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
   - 変更は最小・局所・仕様不変。既定挙動は変えない。
 
 **機能追加ポリシー — 要旨**
-- ねらい: 「誤解されやすい“凍結”」ではなく、「Nyash VM 立ち上げまで大きな機能追加は一時停止」。安定化・自己ホストの進行を最優先にするよ。
+- ねらい: 「誤解されやすい"凍結"」ではなく、「Nyash VM 立ち上げまで大きな機能追加は一時停止」。安定化・自己ホストの進行を最優先にするよ。
 - 許可（継続OK）:
   - バグ修正（互換維持、仕様不変）
   - ドキュメント整備・コメント/ログ追加（既定OFFの詳細ログを含む）
@@ -84,25 +218,43 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
   - 文字列/dirname など: `apps/tests/*.nyash` を PyVM で都度確認
 - 注意: Phase‑15 では VM/JIT は MIR14 以降の更新を最小とし、PyVM/llvmlite のパリティを最優先で維持するよ。
 
-Docs links（開発方針/スタイル）
-- Language statements (ASI): `docs/reference/language/statements.md`
-- using 文の方針: `docs/reference/language/using.md`
-- Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
-- Stage‑2 EBNF: `docs/reference/language/EBNF.md`
-- Macro profiles: `docs/guides/macro-profiles.md`
-- Template → Macro 統合方針: `docs/guides/template-unification.md`
-- User Macros（MacroBox/Phase 2）: `docs/guides/user-macros.md`
-- Macro capabilities (io/net/env): `docs/reference/macro/capabilities.md`
-- LoopForm ガイド: `docs/guides/loopform.md`
-- Phase‑17（LoopForm Self‑Hosting & Polish）: `docs/development/roadmap/phases/phase-17-loopform-selfhost/`
- - MacroBox（ユーザー拡張）: `docs/guides/macro-box.md`
-  - MacroBox in Nyash（設計草案）: `docs/guides/macro-box-nyash.md`
+## Codex Async Workflow (Background Jobs)
+- Purpose: run Codex tasks in the background and notify a tmux session on completion.
+- Script: `tools/codex-async-notify.sh`
+- Defaults: posts to tmux session `codex` (override with env `CODEX_DEFAULT_SESSION` or 2nd arg); logs to `~/.codex-async-work/logs/`.
 
-Dev Helpers
+Usage
+- Quick run (sync output on terminal):
+  - `./tools/codex-async-notify.sh "Your task here" [tmux_session]`
+- Detached run (returns immediately):
+  - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Your task" codex`
+- Tail lines in tmux notification (default 60):
+  - `CODEX_NOTIFY_TAIL=100 ./tools/codex-async-notify.sh "…" codex`
+
+Concurrency Control
+- Cap concurrent workers: set `CODEX_MAX_CONCURRENT=<N>` (0 or unset = unlimited).
+- Mode when cap reached: `CODEX_CONCURRENCY_MODE=block|drop` (default `block`).
+- De‑duplicate same task string: `CODEX_DEDUP=1` to skip if identical task is running.
+- Example (max 2, dedup, detached):
+  - `CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Refactor MIR 13" codex`
+
+Keep Two Running
+- Detect running Codex exec jobs precisely:
+  - Default counts by PGID to treat a task with multiple processes (node/codex) as one: `CODEX_COUNT_MODE=pgid`
+  - Raw process listing (debug): `pgrep -af 'codex.*exec'`
+- Top up to 2 jobs example:
+  - `COUNT=$(pgrep -af 'codex.*exec' | wc -l || true); NEEDED=$((2-${COUNT:-0})); for i in $(seq 1 $NEEDED); do CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "<task $i>" codex; done`
+
+Notes
+- tmux notification uses `paste-buffer` to avoid broken lines; increase tail with `CODEX_NOTIFY_TAIL` if you need more context.
+- Avoid running concurrent tasks that edit the same file; partition by area to prevent conflicts.
+- If wrappers spawn multiple processes per task (node/codex), set `CODEX_COUNT_MODE=pgid` (default) to count unique process groups rather than raw processes.
+
+## Dev Helpers
 - 推奨フラグ一括: `source tools/dev_env.sh pyvm`（PyVMを既定、Bridge→PyVM直送: `NYASH_PIPE_USE_PYVM=1`）
 - 解除: `source tools/dev_env.sh reset`
 
-Selfhost 子プロセスの引数透過（開発者向け）
+## Selfhost 子プロセスの引数透過（開発者向け）
 - 親→子にスクリプト引数を渡す環境変数:
   - `NYASH_NY_COMPILER_MIN_JSON=1` → 子に `-- --min-json`
   - `NYASH_SELFHOST_READ_TMP=1`    → 子に `-- --read-tmp`（`tmp/ny_parser_input.ny` を FileBox で読み込む。CIでは未使用）
@@ -110,7 +262,7 @@ Selfhost 子プロセスの引数透過（開発者向け）
   - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
 - 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
 
-**PyVM Scope & Policy（Stage‑2 開発用の範囲）**
+## PyVM Scope & Policy（Stage‑2 開発用の範囲）
 - 目的: PyVM は「開発用の参照実行器」だよ。JSON v0 → MIR 実行の意味論確認と llvmlite とのパリティ監視に使う（プロダクション最適化はしない）。
 - 必須命令: `const/binop/compare/branch/jump/ret/phi`、`call/externcall/boxcall`（最小）。
 - Box/メソッド（最小実装）:
@@ -130,17 +282,17 @@ Selfhost 子プロセスの引数透過（開発者向け）
   - Bridge 短絡（RHS スキップ）: `tools/ny_stage2_shortcircuit_smoke.sh`
 - CI: `.github/workflows/pyvm-smoke.yml` を常時緑に維持。LLVM18 がある環境では `tools/parity.sh --lhs pyvm --rhs llvmlite` を任意ジョブで回す。
 
-**Interpreter vs PyVM（実行経路の役割と優先度）**
-- 優先経路: PyVM（Python）を“意味論リファレンス実行器”として採用。日常の機能確認・CI の軽量ゲート・llvmlite とのパリティ監視を PyVM で行う。
+## Interpreter vs PyVM（実行経路の役割と優先度）
+- 優先経路: PyVM（Python）を"意味論リファレンス実行器"として採用。日常の機能確認・CI の軽量ゲート・llvmlite とのパリティ監視を PyVM で行う。
 - 補助経路: Rust の MIR Interpreter は純Rust単独で回る簡易器として維持。拡張はしない（BoxCall 等の未対応は既知）。Python が使えない環境での簡易再現や Pipe ブリッジの補助に限定。
 - Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter を使用。副作用なしの短絡など、実装範囲内を確認。副作用を含む実行検証は PyVM スモーク側で担保。
 - 開発の原則: 仕様差が出た場合、llvmlite に合わせて PyVM を優先調整。Rust Interpreter は保守維持（安全修正のみ）。
 
-**脱Rust（開発効率最優先）ポリシー**
+## 脱Rust（開発効率最優先）ポリシー
 - Phase‑15 中は Rust VM/JIT への新規機能追加を最小化し、Python（llvmlite/PyVM）側での実装・検証を優先する。
 - Runner/Bridge は必要最小の配線のみ（子プロセスタイムアウト・静音・フォールバック）。意味論の追加はまず PyVM/llvmlite に実装し、必要時のみ Rust 側へ反映。
 
-**Self‑Hosting への移行（PyVM → Nyash）ロードマップ（将来）**
+## Self‑Hosting への移行（PyVM → Nyash）ロードマップ（将来）
 - 目標: PyVM の最小実行器を Nyash スクリプトへ段階移植し、自己ホスト中も Python 依存を徐々に縮小する。
 - ステップ（小粒度）:
   1) Nyash で MIR(JSON) ローダ（ファイル→構造体）を実装（最小 op セット）。
@@ -149,12 +301,26 @@ Selfhost 子プロセスの引数透過（開発者向け）
   4) CI は当面 PyVM を主、Nyash 実装は実験ジョブとして並走→安定後に切替検討。
 - 注意: 本移行は自己ホストの進捗に合わせて段階実施（Phase‑15 では設計・骨格の準備のみ）。
 
-⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
+## ⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
 - VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。
 - 当面の実行・配布は LLVM ラインを最優先・全力で整備する方針だよ。開発・確認は `--features llvm` を有効にして進めてね。
 - 推奨チェック:
   - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24`
   - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo check --features llvm`
+
+## Docs links（開発方針/スタイル）
+- Language statements (ASI): `docs/reference/language/statements.md`
+- using 文の方針: `docs/reference/language/using.md`
+- Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
+- Stage‑2 EBNF: `docs/reference/language/EBNF.md`
+- Macro profiles: `docs/guides/macro-profiles.md`
+- Template → Macro 統合方針: `docs/guides/template-unification.md`
+- User Macros（MacroBox/Phase 2）: `docs/guides/user-macros.md`
+- Macro capabilities (io/net/env): `docs/reference/macro/capabilities.md`
+- LoopForm ガイド: `docs/guides/loopform.md`
+- Phase‑17（LoopForm Self‑Hosting & Polish）: `docs/development/roadmap/phases/phase-17-loopform-selfhost/`
+- MacroBox（ユーザー拡張）: `docs/guides/macro-box.md`
+- MacroBox in Nyash（設計草案）: `docs/guides/macro-box-nyash.md`
 
 # Repository Guidelines
 
@@ -185,7 +351,7 @@ Selfhost 子プロセスの引数透過（開発者向け）
 
 ## CI Policy（開発段階の最小ガード）
 
-開発段階では CI を“最小限＋高速”に保つ。むやみにジョブや行程を増やさない。
+開発段階では CI を"最小限＋高速"に保つ。むやみにジョブや行程を増やさない。
 
 - 原則（最小ガード）
   - ビルドのみ: `cargo build --release`
@@ -203,14 +369,14 @@ Selfhost 子プロセスの引数透過（開発者向け）
 
 - ログ/出力
   - v2 ランナーはデフォルトで冗長ログをフィルタ済み（比較に混ざらない）。
-  - JSON/JUnit 出力は“必要時のみ” CI で収集。既定では OFF（テキスト出力で十分）。
+  - JSON/JUnit 出力は"必要時のみ" CI で収集。既定では OFF（テキスト出力で十分）。
 
 - タイムアウト・安定性
   - quick プロファイルの既定タイムアウトは短め（15s 程度）。CI はこの既定を尊重。
   - テストは SKIP を活用（プラグイン未配置/環境依存は SKIP で緑を維持）。
 
 - 変更時の注意
-  - v2 スモークの追加は“狭く軽い”ものから。既存の quick を重くしない。
+  - v2 スモークの追加は"狭く軽い"ものから。既存の quick を重くしない。
   - 重い検証（integration/full）はローカル推奨。必要なら単発任意ジョブに限定。
 
 ## Runtime Lines Policy（VM/LLVM 方針）
@@ -321,7 +487,7 @@ Flags
 - Do not commit secrets. Plug‑in paths and native libs are configured via `nyash.toml`.
 - LLVM builds require system LLVM 18; install via apt.llvm.org in CI.
 - Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
- - LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
+- LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
 
 ### LLVM Python Builder Layout (after split)
 - Files (under `src/llvm_py/`):
@@ -338,35 +504,3 @@ Flags
 - Smokes:
   - Empty PHI guard: `tools/test/smoke/llvm/ir_phi_empty_check.sh <file.nyash>`
   - Batch run: `tools/test/smoke/llvm/ir_phi_empty_check_all.sh`
-
-## Codex Async Workflow (Background Jobs)
-- Purpose: run Codex tasks in the background and notify a tmux session on completion.
-- Script: `tools/codex-async-notify.sh`
-- Defaults: posts to tmux session `codex` (override with env `CODEX_DEFAULT_SESSION` or 2nd arg); logs to `~/.codex-async-work/logs/`.
-
-Usage
-- Quick run (sync output on terminal):
-  - `./tools/codex-async-notify.sh "Your task here" [tmux_session]`
-- Detached run (returns immediately):
-  - `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Your task" codex`
-- Tail lines in tmux notification (default 60):
-  - `CODEX_NOTIFY_TAIL=100 ./tools/codex-async-notify.sh "…" codex`
-
-Concurrency Control
-- Cap concurrent workers: set `CODEX_MAX_CONCURRENT=<N>` (0 or unset = unlimited).
-- Mode when cap reached: `CODEX_CONCURRENCY_MODE=block|drop` (default `block`).
-- De‑duplicate same task string: `CODEX_DEDUP=1` to skip if identical task is running.
-- Example (max 2, dedup, detached):
-  - `CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Refactor MIR 13" codex`
-
-Keep Two Running
-- Detect running Codex exec jobs precisely:
-  - Default counts by PGID to treat a task with multiple processes (node/codex) as one: `CODEX_COUNT_MODE=pgid`
-  - Raw process listing (debug): `pgrep -af 'codex.*exec'`
-- Top up to 2 jobs example:
-  - `COUNT=$(pgrep -af 'codex.*exec' | wc -l || true); NEEDED=$((2-${COUNT:-0})); for i in $(seq 1 $NEEDED); do CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "<task $i>" codex; done`
-
-Notes
-- tmux notification uses `paste-buffer` to avoid broken lines; increase tail with `CODEX_NOTIFY_TAIL` if you need more context.
-- Avoid running concurrent tasks that edit the same file; partition by area to prevent conflicts.
- - If wrappers spawn multiple processes per task (node/codex), set `CODEX_COUNT_MODE=pgid` (default) to count unique process groups rather than raw processes.

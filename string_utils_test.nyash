@@ -1,0 +1,61 @@
+// StringUtils単体テスト
+static box StringUtilsTest {
+    main() {
+        print("🧪 StringUtils Test")
+
+        // シンプルなファクトリーテスト
+        local text = "  hello world  "
+        print("Original: '" + text + "'")
+
+        print("Testing trim...")
+        local result = this.trim(text)
+        print("Trimmed: '" + result + "'")
+
+        print("Testing starts_with...")
+        local starts = this.starts_with("hello world", "hello")
+        print("starts_with 'hello': " + starts)
+
+        print("✅ StringUtils test complete")
+        return 0
+    }
+
+    // 基本的なtrim実装
+    trim(s) {
+        return this.trim_end(this.trim_start(s))
+    }
+
+    trim_start(s) {
+        local i = 0
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            if not this.is_whitespace(ch) {
+                break
+            }
+            i = i + 1
+        }
+        return s.substring(i, s.length())
+    }
+
+    trim_end(s) {
+        local i = s.length() - 1
+        loop(i >= 0) {
+            local ch = s.substring(i, i + 1)
+            if not this.is_whitespace(ch) {
+                break
+            }
+            i = i - 1
+        }
+        return s.substring(0, i + 1)
+    }
+
+    is_whitespace(ch) {
+        return ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    }
+
+    starts_with(s, prefix) {
+        if prefix.length() > s.length() {
+            return false
+        }
+        return s.substring(0, prefix.length()) == prefix
+    }
+}

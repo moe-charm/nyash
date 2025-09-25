@@ -1,4 +1,5 @@
 use super::{MirInstruction, MirType, ValueId};
+use crate::mir::loop_api::LoopBuilderApi; // for current_block()
 use crate::ast::{ASTNode, BinaryOperator};
 use crate::mir::{BinaryOp, CompareOp, TypeOpKind, UnaryOp};
 
@@ -17,6 +18,11 @@ impl super::MirBuilder {
         operator: BinaryOperator,
         right: ASTNode,
     ) -> Result<ValueId, String> {
+        // Short-circuit logical ops: lower to control-flow so RHS is evaluated conditionally
+        if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
+            return self.build_logical_shortcircuit(left, operator, right);
+        }
+
         let lhs = self.build_expression(left)?;
         let rhs = self.build_expression(right)?;
         let dst = self.value_gen.next();
@@ -92,6 +98,169 @@ impl super::MirBuilder {
         }
 
         Ok(dst)
+    }
+
+    /// Lower logical && / || with proper short-circuit semantics.
+    /// Result is a Bool, and RHS is only evaluated if needed.
+    fn build_logical_shortcircuit(
+        &mut self,
+        left: ASTNode,
+        operator: BinaryOperator,
+        right: ASTNode,
+    ) -> Result<ValueId, String> {
+        let is_and = matches!(operator, BinaryOperator::And);
+
+        // Evaluate LHS only once
+        let lhs_val = self.build_expression(left)?;
+
+        // Prepare blocks
+        let then_block = self.block_gen.next();
+        let else_block = self.block_gen.next();
+        let merge_block = self.block_gen.next();
+
+        // Branch on LHS truthiness (runtime to_bool semantics in interpreter/LLVM)
+        self.emit_instruction(MirInstruction::Branch {
+            condition: lhs_val,
+            then_bb: then_block,
+            else_bb: else_block,
+        })?;
+
+        // Snapshot variables before entering branches
+        let pre_if_var_map = self.variable_map.clone();
+
+        // ---- THEN branch ----
+        self.current_block = Some(then_block);
+        self.ensure_block_exists(then_block)?;
+        self.hint_scope_enter(0);
+        // Reset scope to pre-if snapshot for clean deltas
+        self.variable_map = pre_if_var_map.clone();
+
+        // AND: then → evaluate RHS and reduce to bool
+        //  OR: then → constant true
+        let then_value_raw = if is_and {
+            // Reduce arbitrary RHS to bool by branching on its truthiness and returning consts
+            let rhs_true = self.block_gen.next();
+            let rhs_false = self.block_gen.next();
+            let rhs_join = self.block_gen.next();
+            let rhs_val = self.build_expression(right.clone())?;
+            self.emit_instruction(MirInstruction::Branch {
+                condition: rhs_val,
+                then_bb: rhs_true,
+                else_bb: rhs_false,
+            })?;
+            // true path
+            self.start_new_block(rhs_true)?;
+            let t_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_true_exit = self.current_block()?;
+            // false path
+            self.start_new_block(rhs_false)?;
+            let f_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_false_exit = self.current_block()?;
+            // join rhs result into a single bool
+            self.start_new_block(rhs_join)?;
+            let rhs_bool = self.value_gen.next();
+            let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
+            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            }
+            self.emit_instruction(MirInstruction::Phi { dst: rhs_bool, inputs })?;
+            self.value_types.insert(rhs_bool, MirType::Bool);
+            rhs_bool
+        } else {
+            let t_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            t_id
+        };
+        let then_exit_block = self.current_block()?;
+        let then_var_map_end = self.variable_map.clone();
+        if !self.is_current_block_terminated() {
+            self.hint_scope_leave(0);
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
+
+        // ---- ELSE branch ----
+        self.current_block = Some(else_block);
+        self.ensure_block_exists(else_block)?;
+        self.hint_scope_enter(0);
+        self.variable_map = pre_if_var_map.clone();
+        // AND: else → false
+        //  OR: else → evaluate RHS and reduce to bool
+        let else_value_raw = if is_and {
+            let f_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            f_id
+        } else {
+            let rhs_true = self.block_gen.next();
+            let rhs_false = self.block_gen.next();
+            let rhs_join = self.block_gen.next();
+            let rhs_val = self.build_expression(right)?;
+            self.emit_instruction(MirInstruction::Branch {
+                condition: rhs_val,
+                then_bb: rhs_true,
+                else_bb: rhs_false,
+            })?;
+            // true path
+            self.start_new_block(rhs_true)?;
+            let t_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_true_exit = self.current_block()?;
+            // false path
+            self.start_new_block(rhs_false)?;
+            let f_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_false_exit = self.current_block()?;
+            // join rhs result into a single bool
+            self.start_new_block(rhs_join)?;
+            let rhs_bool = self.value_gen.next();
+            let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
+            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            }
+            self.emit_instruction(MirInstruction::Phi { dst: rhs_bool, inputs })?;
+            self.value_types.insert(rhs_bool, MirType::Bool);
+            rhs_bool
+        };
+        let else_exit_block = self.current_block()?;
+        let else_var_map_end = self.variable_map.clone();
+        if !self.is_current_block_terminated() {
+            self.hint_scope_leave(0);
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
+
+        // ---- MERGE ----
+        self.current_block = Some(merge_block);
+        self.ensure_block_exists(merge_block)?;
+        self.push_if_merge(merge_block);
+
+        // Result PHI (bool)
+        let result_val = self.value_gen.next();
+        let inputs = vec![(then_exit_block, then_value_raw), (else_exit_block, else_value_raw)];
+        if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+            crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+        }
+        self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+        self.value_types.insert(result_val, MirType::Bool);
+
+        // Merge modified vars from both branches back into current scope
+        self.merge_modified_vars(
+            then_block,
+            else_block,
+            then_exit_block,
+            Some(else_exit_block),
+            &pre_if_var_map,
+            &then_var_map_end,
+            &Some(else_var_map_end),
+            None,
+        )?;
+
+        self.pop_if_merge();
+        Ok(result_val)
     }
 
     // Build a unary operation

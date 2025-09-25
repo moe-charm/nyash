@@ -43,7 +43,23 @@ pub fn collect_using_and_strip(
                 let mut p = std::path::PathBuf::from(&path);
                 if p.is_relative() {
                     if let Some(dir) = ctx_dir { let cand = dir.join(&p); if cand.exists() { p = cand; } }
+                    // Also try NYASH_ROOT when available (repo-root relative like "apps/...")
+                    if p.is_relative() {
+                        if let Ok(root) = std::env::var("NYASH_ROOT") {
+                            let cand = std::path::Path::new(&root).join(&p);
+                            if cand.exists() { p = cand; }
+                        } else {
+                            // Fallback: guess project root from executable path (target/release/nyash)
+                            if let Ok(exe) = std::env::current_exe() {
+                                if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                                    let cand = root.join(&p);
+                                    if cand.exists() { p = cand; }
+                                }
+                            }
+                        }
+                    }
                 }
+                if verbose { crate::runner::trace::log(format!("[using/resolve] file '{}' -> '{}'", target, p.display())); }
                 prelude_paths.push(p.to_string_lossy().to_string());
                 continue;
             }
@@ -103,7 +119,21 @@ pub fn collect_using_and_strip(
                             let mut p = std::path::PathBuf::from(&value);
                             if p.is_relative() {
                                 if let Some(dir) = ctx_dir { let cand = dir.join(&p); if cand.exists() { p = cand; } }
+                                if p.is_relative() {
+                                    if let Ok(root) = std::env::var("NYASH_ROOT") {
+                                        let cand = std::path::Path::new(&root).join(&p);
+                                        if cand.exists() { p = cand; }
+                                    } else {
+                                        if let Ok(exe) = std::env::current_exe() {
+                                            if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+                                                let cand = root.join(&p);
+                                                if cand.exists() { p = cand; }
+                                            }
+                                        }
+                                    }
+                                }
                             }
+                            if verbose { crate::runner::trace::log(format!("[using/resolve] dev-file '{}' -> '{}'", value, p.display())); }
                             prelude_paths.push(p.to_string_lossy().to_string());
                         }
                     }
@@ -174,4 +204,3 @@ pub fn preexpand_at_local(src: &str) -> String {
     }
     out
 }
-
