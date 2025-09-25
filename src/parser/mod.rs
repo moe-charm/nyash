@@ -20,13 +20,14 @@
 mod common;
 mod cursor; // TokenCursor: 改行処理を一元管理
 mod declarations;
-mod depth_tracking; // Phase 1: 深度追跡機能（Smart advance用）
+// depth_tracking.rs was a legacy depth counter for Smart advance.
+// Phase 15.5: removed in favor of TokenCursor-centric newline handling.
 pub mod entry_sugar; // helper to parse with sugar level
 mod expr;
 mod expr_cursor; // TokenCursorを使用した式パーサー（実験的）
 mod expressions;
 mod items;
-mod statements;
+mod statements; // Now uses modular structure in statements/
 pub mod sugar; // Phase 12.7-B: desugar pass (basic)
 pub mod sugar_gate; // thread-local gate for sugar parsing (tests/docs)
                     // mod errors;
@@ -139,13 +140,9 @@ pub struct NyashParser {
         std::collections::HashMap<String, std::collections::HashSet<String>>,
     /// 🔥 デバッグ燃料：無限ループ検出用制限値 (None = 無制限)
     pub(super) debug_fuel: Option<usize>,
-    /// Phase 1: Smart advance用深度カウンタ（改行自動スキップ判定）
-    pub(super) paren_depth: usize,   // ()
-    pub(super) brace_depth: usize,   // {}
-    pub(super) bracket_depth: usize, // []
 }
 
-// ParserUtils trait implementation is in depth_tracking.rs
+// ParserUtils trait implementation now lives here (legacy depth tracking removed)
 
 impl NyashParser {
     /// 新しいパーサーを作成
@@ -155,9 +152,6 @@ impl NyashParser {
             current: 0,
             static_box_dependencies: std::collections::HashMap::new(),
             debug_fuel: Some(100_000), // デフォルト値
-            paren_depth: 0,
-            brace_depth: 0,
-            bracket_depth: 0,
         }
     }
 
@@ -348,4 +342,13 @@ impl NyashParser {
     // Item parsing methods are now in items.rs module
 
     // ===== 🔥 Static Box循環依存検出 =====
+}
+
+// ---- Minimal ParserUtils impl (depth-less; TokenCursor handles newline policy) ----
+impl common::ParserUtils for NyashParser {
+    fn tokens(&self) -> &Vec<Token> { &self.tokens }
+    fn current(&self) -> usize { self.current }
+    fn current_mut(&mut self) -> &mut usize { &mut self.current }
+    fn update_depth_before_advance(&mut self) { /* no-op (legacy removed) */ }
+    fn update_depth_after_advance(&mut self) { /* no-op (legacy removed) */ }
 }

@@ -43,7 +43,7 @@ pub trait ParserUtils {
         }
     }
 
-    /// 位置を1つ進める（改行自動スキップ対応）
+    /// 位置を1つ進める（改行スキップ：Cursor無効時のみ最小限）
     fn advance(&mut self) {
         if !self.is_at_end() {
             // 現在のトークンで深度を更新（進める前）
@@ -54,9 +54,23 @@ pub trait ParserUtils {
             // 新しいトークンで深度を更新（進めた後）
             self.update_depth_after_advance();
 
-            // Phase 1: Smart advance - コンテキストに応じて改行を自動スキップ
-            if self.should_auto_skip_newlines() {
-                self.skip_newlines_internal();
+            // 改行スキップは Cursor 無効時のみ最小限で行う（互換用）。
+            // 環境変数 NYASH_PARSER_TOKEN_CURSOR=1 の場合は Cursor 側で一元管理する。
+            let cursor_on = std::env::var("NYASH_PARSER_TOKEN_CURSOR").ok().as_deref() == Some("1");
+            if !cursor_on {
+                let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
+                    let lv = v.to_ascii_lowercase();
+                    lv == "1" || lv == "true" || lv == "on"
+                }).unwrap_or(false);
+                loop {
+                    let is_nl = matches!(self.current_token().token_type, TokenType::NEWLINE);
+                    let is_sc = allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON);
+                    if (is_nl || is_sc) && !self.is_at_end() {
+                        *self.current_mut() += 1; // 非再帰的に前進
+                        continue;
+                    }
+                    break;
+                }
             }
         }
     }
@@ -71,70 +85,7 @@ pub trait ParserUtils {
         // デフォルト実装は何もしない（NyashParserでオーバーライド）
     }
 
-    /// 改行を自動スキップすべきか判定
-    fn should_auto_skip_newlines(&self) -> bool {
-        // 環境変数でSmart advanceを有効化
-        if std::env::var("NYASH_SMART_ADVANCE").ok().as_deref() != Some("1") {
-            return false;
-        }
-
-        // 現在のトークンがブレースやパーレンの後の場合
-        if self.current() > 0 {
-            let prev_token = &self.tokens()[self.current() - 1].token_type;
-            match prev_token {
-                TokenType::LBRACE | TokenType::LPAREN | TokenType::LBRACK => return true,
-                // 演算子の後（行継続）
-                TokenType::PLUS | TokenType::MINUS | TokenType::MULTIPLY |
-                TokenType::DIVIDE | TokenType::MODULO |
-                TokenType::AND | TokenType::OR |
-                TokenType::DOT | TokenType::DoubleColon |
-                TokenType::COMMA | TokenType::FatArrow => return true,
-                _ => {}
-            }
-        }
-
-        false
-    }
-
-/// 内部用改行スキップ（再帰防止）
-///
-/// LEGACY NOTE (Phase 15.5): 改行処理は TokenCursor での一元管理へ移行中。
-/// 既存パスの互換維持のため残置。参照ゼロ後に撤去予定。
-    fn skip_newlines_internal(&mut self) {
-        let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
-            let lv = v.to_ascii_lowercase();
-            lv == "1" || lv == "true" || lv == "on"
-        }).unwrap_or(false);
-
-        while !self.is_at_end() {
-            let is_nl = matches!(self.current_token().token_type, TokenType::NEWLINE);
-            let is_sc = allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON);
-            if is_nl || is_sc {
-                *self.current_mut() += 1;  // advance()を使わず直接更新（再帰防止）
-            } else {
-                break;
-            }
-        }
-    }
-
-    /// NEWLINEトークンをスキップ
-    ///
-    /// LEGACY NOTE: 直接の呼び出しは推奨しない。TokenCursor への移行を優先。
-    fn skip_newlines(&mut self) {
-        let allow_sc = std::env::var("NYASH_PARSER_ALLOW_SEMICOLON").ok().map(|v| {
-            let lv = v.to_ascii_lowercase();
-            lv == "1" || lv == "true" || lv == "on"
-        }).unwrap_or(false);
-        loop {
-            let is_nl = matches!(self.current_token().token_type, TokenType::NEWLINE);
-            let is_sc = allow_sc && matches!(self.current_token().token_type, TokenType::SEMICOLON);
-            if (is_nl || is_sc) && !self.is_at_end() {
-                self.advance();
-                continue;
-            }
-            break;
-        }
-    }
+    // 旧来の should_auto_skip_newlines / skip_newlines 系は撤去（Cursor に集約）
 
     /// 指定されたトークンタイプを消費 (期待通りでなければエラー)
     fn consume(&mut self, expected: TokenType) -> Result<Token, ParseError> {

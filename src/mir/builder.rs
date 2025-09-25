@@ -12,6 +12,7 @@ use super::{
 use crate::ast::{ASTNode, LiteralValue};
 use std::collections::HashMap;
 use std::collections::HashSet;
+mod calls; // Call system modules (refactored from builder_calls)
 mod builder_calls;
 mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
 mod method_call_handlers; // Method call handler separation (Phase 3)

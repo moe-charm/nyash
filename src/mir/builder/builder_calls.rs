@@ -2,69 +2,12 @@
 use super::{Effect, EffectMask, FunctionSignature, MirInstruction, MirType, ValueId};
 use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
 use crate::mir::definitions::call_unified::{Callee, CallFlags, MirCall};
+use crate::mir::TypeOpKind;
 use super::call_resolution;
 
-fn contains_value_return(nodes: &[ASTNode]) -> bool {
-    fn node_has_value_return(node: &ASTNode) -> bool {
-        match node {
-            ASTNode::Return { value: Some(_), .. } => true,
-            ASTNode::If { then_body, else_body, .. } => {
-                contains_value_return(then_body)
-                    || else_body
-                        .as_ref()
-                        .map_or(false, |body| contains_value_return(body))
-            }
-            ASTNode::Loop { body, .. } => contains_value_return(body),
-            ASTNode::TryCatch {
-                try_body,
-                catch_clauses,
-                finally_body,
-                ..
-            } => {
-                contains_value_return(try_body)
-                    || catch_clauses
-                        .iter()
-                        .any(|clause| contains_value_return(&clause.body))
-                    || finally_body
-                        .as_ref()
-                        .map_or(false, |body| contains_value_return(body))
-            }
-            ASTNode::Program { statements, .. } => contains_value_return(statements),
-            ASTNode::ScopeBox { body, .. } => contains_value_return(body),
-            ASTNode::FunctionDeclaration { body, .. } => contains_value_return(body),
-            _ => false,
-        }
-    }
-
-    nodes.iter().any(node_has_value_return)
-}
-use crate::mir::TypeOpKind;
-
-/// Call target specification for emit_unified_call
-/// Provides type-safe target resolution at the builder level
-#[derive(Debug, Clone)]
-pub enum CallTarget {
-    /// Global function (print, panic, etc.)
-    Global(String),
-    /// Method call (box.method)
-    Method {
-        box_type: Option<String>,  // None = infer from value
-        method: String,
-        receiver: ValueId,
-    },
-    /// Constructor (new BoxType)
-    Constructor(String),
-    /// External function (nyash.*)
-    Extern(String),
-    /// Dynamic function value
-    Value(ValueId),
-    /// Closure creation
-    Closure {
-        params: Vec<String>,
-        captures: Vec<(String, ValueId)>,
-        me_capture: Option<ValueId>,
-    },
-}
+// Import from new modules
+use super::calls::*;
+pub use super::calls::call_target::CallTarget;
 
 impl super::MirBuilder {
     /// Unified call emission - replaces all emit_*_call methods
@@ -76,86 +19,32 @@ impl super::MirBuilder {
         args: Vec<ValueId>,
     ) -> Result<(), String> {
         // Check environment variable for unified call usage
-        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
-
-        if !use_unified {
+        if !call_unified::is_unified_call_enabled() {
             // Fall back to legacy implementation
             return self.emit_legacy_call(dst, target, args);
         }
 
+        // Convert CallTarget to Callee using the new module
+        let callee = call_unified::convert_target_to_callee(
+            target,
+            &self.value_origin_newbox,
+            &self.value_types,
+        )?;
 
-        // Convert CallTarget to Callee
-        let callee = match target {
-            CallTarget::Global(name) => {
-                // Check if it's a built-in function
-                if call_resolution::is_builtin_function(&name) {
-                    Callee::Global(name)
-                } else if call_resolution::is_extern_function(&name) {
-                    Callee::Extern(name)
-                } else {
-                    return Err(format!("Unknown global function: {}", name));
-                }
-            },
-            CallTarget::Method { box_type, method, receiver } => {
-                let inferred_box_type = box_type.unwrap_or_else(|| {
-                    // Try to infer box type from value origin or type annotation
-                    self.value_origin_newbox.get(&receiver)
-                        .cloned()
-                        .or_else(|| {
-                            self.value_types.get(&receiver)
-                                .and_then(|t| match t {
-                                    MirType::Box(box_name) => Some(box_name.clone()),
-                                    _ => None,
-                                })
-                        })
-                        .unwrap_or_else(|| "UnknownBox".to_string())
-                });
+        // Validate call arguments
+        call_unified::validate_call_args(&callee, &args)?;
 
-                Callee::Method {
-                    box_name: inferred_box_type,
-                    method,
-                    receiver: Some(receiver),
-                }
-            },
-            CallTarget::Constructor(box_type) => {
-                Callee::Constructor { box_type }
-            },
-            CallTarget::Extern(name) => {
-                Callee::Extern(name)
-            },
-            CallTarget::Value(func_val) => {
-                Callee::Value(func_val)
-            },
-            CallTarget::Closure { params, captures, me_capture } => {
-                Callee::Closure { params, captures, me_capture }
-            },
-        };
-
-        // Create MirCall instruction
-        let effects = self.compute_call_effects(&callee);
-        let flags = if callee.is_constructor() {
-            CallFlags::constructor()
-        } else {
-            CallFlags::new()
-        };
-
-        let mir_call = MirCall {
-            dst,
-            callee,
-            args,
-            flags,
-            effects,
-        };
+        // Create MirCall instruction using the new module
+        let mir_call = call_unified::create_mir_call(dst, callee.clone(), args.clone());
 
         // For Phase 2: Convert to legacy Call instruction with new callee field
         let legacy_call = MirInstruction::Call {
             dst: mir_call.dst,
             func: ValueId::new(0), // Dummy value for legacy compatibility
-            callee: Some(mir_call.callee.clone()),
+            callee: Some(mir_call.callee),
             args: mir_call.args,
             effects: mir_call.effects,
         };
-
 
         self.emit_instruction(legacy_call)
     }
@@ -236,28 +125,6 @@ impl super::MirBuilder {
         }
     }
 
-    /// Compute effects for a call based on its callee
-    fn compute_call_effects(&self, callee: &Callee) -> EffectMask {
-        match callee {
-            Callee::Global(name) => {
-                match name.as_str() {
-                    "print" | "error" => EffectMask::IO,
-                    "panic" | "exit" => EffectMask::IO.add(Effect::Control),
-                    _ => EffectMask::IO,
-                }
-            },
-            Callee::Method { method, .. } => {
-                match method.as_str() {
-                    "birth" => EffectMask::PURE.add(Effect::Alloc),
-                    _ => EffectMask::READ,
-                }
-            },
-            Callee::Constructor { .. } => EffectMask::PURE.add(Effect::Alloc),
-            Callee::Closure { .. } => EffectMask::PURE.add(Effect::Alloc),
-            Callee::Extern(_) => EffectMask::IO,
-            Callee::Value(_) => EffectMask::IO, // Conservative
-        }
-    }
     // Phase 2 Migration: Convenience methods that use emit_unified_call
 
     /// Emit a global function call (print, panic, etc.)
@@ -310,8 +177,7 @@ impl super::MirBuilder {
         name: &str,
         raw_args: Vec<ASTNode>,
     ) -> Option<Result<ValueId, String>> {
-        let is_math_func = matches!(name, "sin" | "cos" | "abs" | "min" | "max");
-        if !is_math_func {
+        if !special_handlers::is_math_function(name) {
             return None;
         }
         // Build numeric args directly for math.* to preserve f64 typing
@@ -375,31 +241,15 @@ impl super::MirBuilder {
                     Ok(void_id)
                 }
             };
+            // Use the new module for env method spec
             if let Some((iface_name, method_name, effects, returns)) =
-                Self::get_env_method_spec(iface, m)
+                extern_calls::get_env_method_spec(iface, m)
             {
                 return Some(extern_call(&iface_name, &method_name, effects, returns));
             }
             return None;
         }
         None
-    }
-
-    /// Table-like spec for env.* methods. Returns iface_name, method_name, effects, returns.
-    fn get_env_method_spec(
-        iface: &str,
-        method: &str,
-    ) -> Option<(String, String, EffectMask, bool)> {
-        // This match is the table. Keep it small and explicit.
-        match (iface, method) {
-            ("future", "delay") => Some(("env.future".to_string(), "delay".to_string(), EffectMask::READ.add(Effect::Io), true)),
-            ("task", "currentToken") => Some(("env.task".to_string(), "currentToken".to_string(), EffectMask::READ, true)),
-            ("task", "cancelCurrent") => Some(("env.task".to_string(), "cancelCurrent".to_string(), EffectMask::IO, false)),
-            ("console", "log") => Some(("env.console".to_string(), "log".to_string(), EffectMask::IO, false)),
-            ("console", "readLine") => Some(("env.console".to_string(), "readLine".to_string(), EffectMask::IO, true)),
-            ("canvas", m) if matches!(m, "fillRect" | "fillText") => Some(("env.canvas".to_string(), method.to_string(), EffectMask::IO, false)),
-            _ => None,
-        }
     }
 
     /// Try direct static call for `me` in static box
@@ -433,61 +283,11 @@ impl super::MirBuilder {
     /// Resolve function call target to type-safe Callee
     /// Implements the core logic of compile-time function resolution
     fn resolve_call_target(&self, name: &str) -> Result<super::super::Callee, String> {
-        // 1. Check for built-in/global functions first
-        if self.is_builtin_function(name) {
-            return Ok(super::super::Callee::Global(name.to_string()));
-        }
-
-        // 2. Check for static box method in current context
-        if let Some(box_name) = &self.current_static_box {
-            if self.has_method(box_name, name) {
-                // Warn about potential self-recursion using external helper
-                if super::call_resolution::is_commonly_shadowed_method(name) {
-                    eprintln!("{}", super::call_resolution::generate_self_recursion_warning(box_name, name));
-                }
-
-                return Ok(super::super::Callee::Method {
-                    box_name: box_name.clone(),
-                    method: name.to_string(),
-                    receiver: None, // Static method call
-                });
-            }
-        }
-
-        // 3. Check for local variable containing function value
-        if self.variable_map.contains_key(name) {
-            let value_id = self.variable_map[name];
-            return Ok(super::super::Callee::Value(value_id));
-        }
-
-        // 4. Check for external/host functions
-        if self.is_extern_function(name) {
-            return Ok(super::super::Callee::Extern(name.to_string()));
-        }
-
-        // 5. Resolution failed - this prevents runtime string-based resolution
-        Err(format!("Unresolved function: '{}'. {}", name, super::call_resolution::suggest_resolution(name)))
-    }
-
-    /// Check if function name is a built-in global function
-    fn is_builtin_function(&self, name: &str) -> bool {
-        super::call_resolution::is_builtin_function(name)
-    }
-
-    /// Check if current static box has the specified method
-    fn has_method(&self, box_name: &str, method: &str) -> bool {
-        // TODO: Implement proper method registry lookup
-        // For now, use simple heuristics for common cases
-        match box_name {
-            "ConsoleStd" => matches!(method, "print" | "println" | "log"),
-            "StringBox" => matches!(method, "upper" | "lower" | "length"),
-            _ => false, // Conservative: assume no method unless explicitly known
-        }
-    }
-
-    /// Check if function name is an external/host function
-    fn is_extern_function(&self, name: &str) -> bool {
-        super::call_resolution::is_extern_function(name)
+        method_resolution::resolve_call_target(
+            name,
+            &self.current_static_box,
+            &self.variable_map,
+        )
     }
 
     // Build function call: name(args)
@@ -498,9 +298,9 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
         if (name == "isType" || name == "asType") && args.len() == 2 {
-            if let Some(type_name) = Self::extract_string_literal(&args[1]) {
+            if let Some(type_name) = special_handlers::extract_string_literal(&args[1]) {
                 let val = self.build_expression(args[0].clone())?;
-                let ty = Self::parse_type_name_to_mir(&type_name);
+                let ty = special_handlers::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
                 let op = if name == "isType" {
                     TypeOpKind::Check
@@ -611,7 +411,7 @@ impl super::MirBuilder {
 
         // 5. Handle TypeOp methods: value.is("Type") / value.as("Type")
         // Note: This was duplicated in original code - now unified!
-        if let Some(type_name) = Self::is_typeop_method(&method, &arguments) {
+        if let Some(type_name) = special_handlers::is_typeop_method(&method, &arguments) {
             return self.handle_typeop_method(object_value, &method, &type_name);
         }
 
@@ -621,36 +421,12 @@ impl super::MirBuilder {
 
     // Map a user-facing type name to MIR type
     pub(super) fn parse_type_name_to_mir(name: &str) -> super::MirType {
-        match name {
-            // Core primitive types only (no Box suffixes)
-            "Integer" | "Int" | "I64" => super::MirType::Integer,
-            "Float" | "F64" => super::MirType::Float,
-            "Bool" | "Boolean" => super::MirType::Bool,
-            "String" => super::MirType::String,
-            "Void" | "Unit" => super::MirType::Void,
-            // Phase 15.5: All Box types (including former core IntegerBox, StringBox, etc.) treated uniformly
-            other => super::MirType::Box(other.to_string()),
-        }
+        special_handlers::parse_type_name_to_mir(name)
     }
 
     // Extract string literal from AST node if possible
     pub(super) fn extract_string_literal(node: &ASTNode) -> Option<String> {
-        let mut cur = node;
-        loop {
-            match cur {
-                ASTNode::Literal {
-                    value: LiteralValue::String(s),
-                    ..
-                } => return Some(s.clone()),
-                ASTNode::New {
-                    class, arguments, ..
-                } if class == "StringBox" && arguments.len() == 1 => {
-                    cur = &arguments[0];
-                    continue;
-                }
-                _ => return None,
-            }
-        }
+        special_handlers::extract_string_literal(node)
     }
 
     // Build from expression: from Parent.method(arguments)
@@ -689,23 +465,13 @@ impl super::MirBuilder {
         params: Vec<String>,
         body: Vec<ASTNode>,
     ) -> Result<(), String> {
-        let mut param_types = Vec::new();
-        param_types.push(MirType::Box(box_name.clone()));
-        for _ in &params {
-            param_types.push(MirType::Unknown);
-        }
-        let returns_value = contains_value_return(&body);
-        let ret_ty = if returns_value {
-            MirType::Unknown
-        } else {
-            MirType::Void
-        };
-        let signature = FunctionSignature {
-            name: func_name,
-            params: param_types,
-            return_type: ret_ty,
-            effects: EffectMask::READ.add(Effect::ReadHeap),
-        };
+        let signature = function_lowering::prepare_method_signature(
+            func_name,
+            &box_name,
+            &params,
+            &body,
+        );
+        let returns_value = !matches!(signature.return_type, MirType::Void);
         let entry = self.block_gen.next();
         let function = super::MirFunction::new(signature, entry);
         let saved_function = self.current_function.take();
@@ -727,10 +493,7 @@ impl super::MirBuilder {
                 self.variable_map.insert(p.clone(), pid);
             }
         }
-        let program_ast = ASTNode::Program {
-            statements: body,
-            span: crate::ast::Span::unknown(),
-        };
+        let program_ast = function_lowering::wrap_in_program(body);
         let _last = self.build_expression(program_ast)?;
         if !returns_value && !self.is_current_block_terminated() {
             let void_val = self.value_gen.next();
@@ -786,22 +549,12 @@ impl super::MirBuilder {
         params: Vec<String>,
         body: Vec<ASTNode>,
     ) -> Result<(), String> {
-        let mut param_types = Vec::new();
-        for _ in &params {
-            param_types.push(MirType::Unknown);
-        }
-        let returns_value = contains_value_return(&body);
-        let ret_ty = if returns_value {
-            MirType::Unknown
-        } else {
-            MirType::Void
-        };
-        let signature = FunctionSignature {
-            name: func_name,
-            params: param_types,
-            return_type: ret_ty,
-            effects: EffectMask::READ.add(Effect::ReadHeap),
-        };
+        let signature = function_lowering::prepare_static_method_signature(
+            func_name,
+            &params,
+            &body,
+        );
+        let returns_value = !matches!(signature.return_type, MirType::Void);
         let entry = self.block_gen.next();
         let function = super::MirFunction::new(signature, entry);
         let saved_function = self.current_function.take();
@@ -819,10 +572,7 @@ impl super::MirBuilder {
                 self.variable_map.insert(p.clone(), pid);
             }
         }
-        let program_ast = ASTNode::Program {
-            statements: body,
-            span: crate::ast::Span::unknown(),
-        };
+        let program_ast = function_lowering::wrap_in_program(body);
         let _last = self.build_expression(program_ast)?;
         if !returns_value {
             if let Some(ref mut f) = self.current_function {
