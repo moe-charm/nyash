@@ -49,13 +49,36 @@ impl NyashRunner {
             println!("\n🚀 Parsing and executing...\n");
         }
 
-        // Optional Phase-15: strip `using` lines (gate) for minimal acceptance
+        // Using handling: either strip+inline (legacy) or AST-based prelude merge (when NYASH_USING_AST=1)
+        let use_ast = std::env::var("NYASH_USING_AST").ok().as_deref() == Some("1");
         let mut code_ref: &str = &code;
         let cleaned_code_owned;
+        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
         if crate::config::env::enable_using() {
-            match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code, filename) {
-                Ok(s) => { cleaned_code_owned = s; code_ref = &cleaned_code_owned; }
-                Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
+            if use_ast {
+                match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &code, filename) {
+                    Ok((clean, paths)) => {
+                        cleaned_code_owned = clean; code_ref = &cleaned_code_owned;
+                        // Parse each prelude file into AST and store
+                        for p in paths {
+                            match std::fs::read_to_string(&p) {
+                                Ok(src) => {
+                                    match NyashParser::parse_from_string(&src) {
+                                        Ok(ast) => prelude_asts.push(ast),
+                                        Err(e) => { eprintln!("❌ Parse error in using prelude {}: {}", p, e); std::process::exit(1); }
+                                    }
+                                }
+                                Err(e) => { eprintln!("❌ Error reading using prelude {}: {}", p, e); std::process::exit(1); }
+                            }
+                        }
+                    }
+                    Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
+                }
+            } else {
+                match crate::runner::modes::common_util::resolve::strip_using_and_register(self, &code, filename) {
+                    Ok(s) => { cleaned_code_owned = s; code_ref = &cleaned_code_owned; }
+                    Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
+                }
             }
         }
         // Optional dev sugar: @name[:T] = expr → local name[:T] = expr (line-head only)
@@ -69,10 +92,22 @@ impl NyashRunner {
         // Parse the code with debug fuel limit
         let groups = self.config.as_groups();
         eprintln!("🔍 DEBUG: Starting parse with fuel: {:?}...", groups.debug.debug_fuel);
-        let ast = match NyashParser::parse_from_string_with_fuel(code_ref, groups.debug.debug_fuel) {
+        let main_ast = match NyashParser::parse_from_string_with_fuel(code_ref, groups.debug.debug_fuel) {
             Ok(ast) => { eprintln!("🔍 DEBUG: Parse completed, AST created"); ast },
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
+        // When using AST prelude mode, combine prelude ASTs + main AST into one Program
+        let ast = if use_ast && !prelude_asts.is_empty() {
+            use nyash_rust::ast::ASTNode;
+            let mut combined: Vec<ASTNode> = Vec::new();
+            for a in prelude_asts {
+                if let ASTNode::Program { statements, .. } = a { combined.extend(statements); }
+            }
+            if let ASTNode::Program { statements, .. } = main_ast.clone() {
+                combined.extend(statements);
+            }
+            ASTNode::Program { statements: combined, span: nyash_rust::ast::Span::unknown() }
+        } else { main_ast };
 
         // Stage-0: import loader (top-level only) — resolve path and register in modules registry
         if let nyash_rust::ast::ASTNode::Program { statements, .. } = &ast {

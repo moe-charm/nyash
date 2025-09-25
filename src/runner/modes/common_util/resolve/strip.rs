@@ -423,6 +423,86 @@ pub fn strip_using_and_register(
     Ok(preexpand_at_local(&combined))
 }
 
+/// Collect using targets and strip using lines, without inlining.
+/// Returns (cleaned_source, prelude_paths) where prelude_paths are resolved file paths
+/// to be parsed separately and AST-merged (when NYASH_USING_AST=1).
+pub fn collect_using_and_strip(
+    runner: &NyashRunner,
+    code: &str,
+    filename: &str,
+) -> Result<(String, Vec<String>), String> {
+    if !crate::config::env::enable_using() {
+        return Ok((code.to_string(), Vec::new()));
+    }
+    let using_ctx = runner.init_using_context();
+    let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+    let verbose = crate::config::env::cli_verbose()
+        || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
+    let ctx_dir = std::path::Path::new(filename).parent();
+
+    let mut out = String::with_capacity(code.len());
+    let mut prelude_paths: Vec<String> = Vec::new();
+    for line in code.lines() {
+        let t = line.trim_start();
+        if t.starts_with("using ") {
+            crate::cli_v!("[using] stripped line: {}", line);
+            let rest0 = t.strip_prefix("using ").unwrap().trim();
+            let rest0 = rest0.split('#').next().unwrap_or(rest0).trim();
+            let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
+            let (target, alias) = if let Some(pos) = rest0.find(" as ") {
+                (rest0[..pos].trim().to_string(), Some(rest0[pos + 4..].trim().to_string()))
+            } else { (rest0.to_string(), None) };
+            let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+            if is_path {
+                let path = target.trim_matches('"').to_string();
+                // Resolve relative to current file dir
+                let mut p = std::path::PathBuf::from(&path);
+                if p.is_relative() {
+                    if let Some(dir) = ctx_dir { let cand = dir.join(&p); if cand.exists() { p = cand; } }
+                }
+                prelude_paths.push(p.to_string_lossy().to_string());
+                continue;
+            }
+            // Resolve namespaces/packages
+            match crate::runner::pipeline::resolve_using_target(
+                &target,
+                false,
+                &using_ctx.pending_modules,
+                &using_ctx.using_paths,
+                &using_ctx.aliases,
+                &using_ctx.packages,
+                ctx_dir,
+                strict,
+                verbose,
+            ) {
+                Ok(value) => {
+                    // Only file paths are candidates for AST prelude merge
+                    if value.ends_with(".nyash") || value.contains('/') || value.contains('\\') {
+                        // Resolve relative
+                        let mut p = std::path::PathBuf::from(&value);
+                        if p.is_relative() {
+                            if let Some(dir) = ctx_dir { let cand = dir.join(&p); if cand.exists() { p = cand; } }
+                        }
+                        prelude_paths.push(p.to_string_lossy().to_string());
+                    }
+                }
+                Err(e) => return Err(format!("using: {}", e)),
+            }
+            continue;
+        }
+        out.push_str(line);
+        out.push('\n');
+    }
+    // Optional prelude boundary comment (helps manual inspection; parser ignores comments)
+    if std::env::var("NYASH_RESOLVE_SEAM_DEBUG").ok().as_deref() == Some("1") {
+        let mut with_marker = String::with_capacity(out.len() + 64);
+        with_marker.push_str("\n/* --- using boundary (AST) --- */\n");
+        with_marker.push_str(&out);
+        out = with_marker;
+    }
+    Ok((out, prelude_paths))
+}
+
 /// Pre-expand line-head `@name[: Type] = expr` into `local name[: Type] = expr`.
 /// Minimal, safe, no semantics change. Applies only at line head (after spaces/tabs).
 pub fn preexpand_at_local(src: &str) -> String {
