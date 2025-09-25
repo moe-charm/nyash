@@ -20,6 +20,7 @@ pub mod loop_api; // Minimal LoopBuilder facade (adapter-ready)
 pub mod loop_builder; // SSA loop construction with phi nodes
 pub mod optimizer;
 pub mod utils; // Phase 15 control flow utilities for root treatment
+pub mod phi_core; // Phase 1 scaffold: unified PHI entry (re-exports only)
 pub mod optimizer_passes; // optimizer passes (normalize/diagnostics)
 pub mod optimizer_stats; // extracted stats struct
 pub mod passes;

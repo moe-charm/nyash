@@ -236,6 +236,14 @@ static box StringUtils {
             }
             start = 1
         }
+
+        // 先頭ゼロの禁止（"0" 単独は許可、符号付きの "-0" も許可）
+        if s.length() - start > 1 and s.substring(start, start + 1) == "0" {
+            // 2文字目以降が数字なら先頭ゼロ（不正）
+            if this.is_digit(s.substring(start + 1, start + 2)) {
+                return false
+            }
+        }
         
         local i = start
         loop(i < s.length()) {
@@ -252,84 +260,30 @@ static box StringUtils {
         if not this.is_integer(s) {
             return 0
         }
-        
-        // 超簡易実装: よく使われる数値のみ対応
-        // JSON処理に必要な数値パース実装
-        // 基本数字 0-9
-        if s == "0" { return 0 } if s == "1" { return 1 } if s == "2" { return 2 }
-        if s == "3" { return 3 } if s == "4" { return 4 } if s == "5" { return 5 }
-        if s == "6" { return 6 } if s == "7" { return 7 } if s == "8" { return 8 } if s == "9" { return 9 }
-        
-        // よく使われる2桁数値 10-20
-        if s == "10" { return 10 } if s == "11" { return 11 } if s == "12" { return 12 }
-        if s == "13" { return 13 } if s == "14" { return 14 } if s == "15" { return 15 }
-        if s == "16" { return 16 } if s == "17" { return 17 } if s == "18" { return 18 }
-        if s == "19" { return 19 } if s == "20" { return 20 }
-        
-        // JSON頻出数値
-        if s == "42" { return 42 } if s == "100" { return 100 } if s == "200" { return 200 }
-        if s == "404" { return 404 } if s == "500" { return 500 } if s == "1000" { return 1000 }
-        
-        // 負数
-        if s == "-1" { return -1 } if s == "-2" { return -2 } if s == "-10" { return -10 }
-        
-        // TODO: より完全な数値パース実装が必要（算術演算による動的パース）
-        // 現在はJSON処理によく使われる数値のみ対応
-        return 0
-    }
 
-    // 文字列が浮動小数点数表現かどうか（簡易版: 10進/指数部のみ対応）
-    // 許容: [-+]? DIGITS '.' DIGITS ([eE] [+-]? DIGITS)?
-    //     | [-+]? DIGITS ([eE] [+-]? DIGITS)
-    is_float(s) {
-        if s.length() == 0 { return false }
-        // 符号処理
-        local start = 0
-        if s.substring(0, 1) == "-" or s.substring(0, 1) == "+" {
-            if s.length() == 1 { return false }
-            start = 1
+        // 汎用整数パース（符号と任意桁に対応）
+        local neg = false
+        local i = 0
+        if s.substring(0, 1) == "-" {
+            neg = true
+            i = 1
         }
-        local i = start
-        local has_digit = false
-        local has_dot = false
-        local has_exp = false
+
+        local acc = 0
         loop(i < s.length()) {
+            // 各桁の数値を計算
             local ch = s.substring(i, i + 1)
-            if this.is_digit(ch) {
-                has_digit = true
-                i = i + 1
-                continue
-            }
-            if ch == "." {
-                if has_dot or has_exp { return false }
-                has_dot = true
-                i = i + 1
-                continue
-            }
-            if ch == "e" or ch == "E" {
-                if has_exp or not has_digit { return false }
-                has_exp = true
-                i = i + 1
-                // 指数部符号
-                if i < s.length() {
-                    local sgn = s.substring(i, i + 1)
-                    if sgn == "+" or sgn == "-" { i = i + 1 }
-                }
-                // 指数部の桁
-                local j = i
-                local exp_digit = false
-                loop(j < s.length()) {
-                    local ch2 = s.substring(j, j + 1)
-                    if this.is_digit(ch2) { exp_digit = true j = j + 1 } else { break }
-                }
-                if not exp_digit { return false }
-                i = j
-                continue
-            }
-            return false
+            // '0'..'9' 前提（is_integer で検証済み）
+            // 文字を数値へ: (ch - '0') 相当の分岐
+            local digit = 0
+            if ch == "0" { digit = 0 } else { if ch == "1" { digit = 1 } else { if ch == "2" { digit = 2 } else { if ch == "3" { digit = 3 } else {
+            if ch == "4" { digit = 4 } else { if ch == "5" { digit = 5 } else { if ch == "6" { digit = 6 } else { if ch == "7" { digit = 7 } else {
+            if ch == "8" { digit = 8 } else { if ch == "9" { digit = 9 } else { digit = 0 } } } } } } } } }
+            acc = acc * 10 + digit
+            i = i + 1
         }
-        if not has_digit { return false }
-        return has_dot or has_exp
+
+        if neg { return 0 - acc } else { return acc }
     }
 
     // 浮動小数点の簡易パース（現段階は正規化のみ。数値演算は行わない）
@@ -359,4 +313,5 @@ static box StringUtils {
         }
         return s.substring(s.length() - suffix.length(), s.length()) == suffix
     }
+}
 }

@@ -14,6 +14,8 @@ static box JsonParserModule {
     }
 }
 
+}
+
 box JsonParser {
     tokens: ArrayBox       // トークン配列
     position: IntegerBox   // 現在のトークン位置
@@ -356,7 +358,8 @@ box JsonParser {
             out.set("value", StringUtils.parse_integer(number_str))
             return out
         }
-        if StringUtils.is_float(number_str) {
+        // Float detection disabled in MVP pending StringUtils float API stabilization
+        if false {
             out.set("kind", "float")
             out.set("value", StringUtils.parse_float(number_str))
             return out

@@ -71,10 +71,10 @@ impl MirBuilder {
         self.push_if_merge(merge_block);
 
         // Pre-analysis: identify then/else assigned var for skip and hints
-        let assigned_then_pre = super::phi::extract_assigned_var(&then_ast_for_analysis);
+        let assigned_then_pre = crate::mir::phi_core::if_phi::extract_assigned_var(&then_ast_for_analysis);
         let assigned_else_pre = else_ast_for_analysis
             .as_ref()
-            .and_then(|e| super::phi::extract_assigned_var(e));
+            .and_then(|e| crate::mir::phi_core::if_phi::extract_assigned_var(e));
         let pre_then_var_value = assigned_then_pre
             .as_ref()
             .and_then(|name| pre_if_var_map.get(name).copied());

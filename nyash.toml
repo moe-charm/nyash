@@ -8,6 +8,15 @@ NYASH_DEV_AT_LOCAL = "1"
 [using]
 paths = ["apps", "lib", "."]
 
+# Optional package-style entries (opt-in via using resolver)
+[using.json_native]
+path = "apps/lib/json_native/"
+main = "parser/parser.nyash"
+
+[using.aliases]
+# Resolve `using json as ...` to json_native when desired
+json = "json_native"
+
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
 selfhost.compiler.debug = "apps/selfhost/compiler/boxes/debug_box.nyash"

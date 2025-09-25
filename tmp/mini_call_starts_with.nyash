@@ -1,0 +1,6 @@
+using "apps/lib/json_native/utils/string.nyash" as StringUtils
+
+main() {
+  println(StringUtils.starts_with("abc", "a"))
+  return 0
+}

@@ -336,12 +336,12 @@ pub fn enable_using() -> bool {
     }
 }
 pub fn resolve_fix_braces() -> bool {
-    // Phase 15: デフォルトON（using時のブレース均等修正が必須）
-    // NYASH_RESOLVE_FIX_BRACES=0 で明示的に無効化可能
-    match std::env::var("NYASH_RESOLVE_FIX_BRACES").ok().as_deref() {
-        Some("0") | Some("false") | Some("off") => false,
-        _ => enable_using(), // using有効時は自動でON
-    }
+    // Safer default: OFF（誤補正の副作用を避ける）
+    // 明示ON: NYASH_RESOLVE_FIX_BRACES=1
+    matches!(
+        std::env::var("NYASH_RESOLVE_FIX_BRACES").ok().as_deref(),
+        Some("1") | Some("true") | Some("on")
+    )
 }
 pub fn vm_use_py() -> bool {
     std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1")

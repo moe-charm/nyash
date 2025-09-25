@@ -93,6 +93,8 @@ pub struct MirBuilder {
     plugin_method_sigs: HashMap<(String, String), super::MirType>,
     /// Current static box name when lowering a static box body (e.g., "Main")
     current_static_box: Option<String>,
+    /// Index of static methods seen during lowering: name -> [(BoxName, arity)]
+    pub(super) static_method_index: std::collections::HashMap<String, Vec<(String, usize)>>,
 
     // include guards removed
 
@@ -148,6 +150,7 @@ impl MirBuilder {
             value_types: HashMap::new(),
             plugin_method_sigs,
             current_static_box: None,
+            static_method_index: std::collections::HashMap::new(),
             
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),

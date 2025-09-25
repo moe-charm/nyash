@@ -1,0 +1,108 @@
+// Json Native Compat Layer — emulate JsonDocBox/JsonNodeBox API (MVP)
+// Purpose: Provide a thin, script-only compatibility wrapper so existing Ny code
+//          that expects JsonDocBox/JsonNodeBox style methods can operate
+//          with json_native without changing call sites.
+
+using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+using "apps/lib/json_native/core/node.nyash" as JsonNode
+
+// Box that mimics a document holder with parse()/root()/error()
+box JsonDocCompat {
+    _root: Box
+    _error: StringBox
+
+    birth() {
+        me._root = null
+        me._error = ""
+    }
+
+    // Parse JSON text and populate state; returns bool success
+    parse(text) {
+        local node = JsonParserUtils.parse_json(text)
+        if node == null {
+            me._root = null
+            me._error = "parse_error"
+            return false
+        }
+        me._root = node
+        me._error = ""
+        return true
+    }
+
+    // Return root node (wrapped by JsonNodeCompat)
+    root() {
+        if me._root == null { return null }
+        return new JsonNodeCompat(me._root)
+    }
+
+    // Return last error string (empty when no error)
+    error() {
+        return me._error
+    }
+}
+
+// Node wrapper that offers JsonNodeBox-like APIs
+box JsonNodeCompat {
+    _node: Box
+
+    birth(node) {
+        me._node = node
+    }
+
+    // kind(): "null"|"bool"|"int"|"float"|"string"|"array"|"object"
+    kind() {
+        if me._node == null { return "null" }
+        return me._node.get_kind()
+    }
+
+    // get(k): object lookup
+    get(key) {
+        if me._node == null { return null }
+        if me._node.get_kind() != "object" { return null }
+        local v = me._node.object_get(key)
+        if v == null { return null }
+        return new JsonNodeCompat(v)
+    }
+
+    // at(i): array lookup (0-based)
+    at(i) {
+        if me._node == null { return null }
+        if me._node.get_kind() != "array" { return null }
+        local v = me._node.array_get(i)
+        if v == null { return null }
+        return new JsonNodeCompat(v)
+    }
+
+    // size(): array/object length
+    size() {
+        if me._node == null { return 0 }
+        if me._node.get_kind() == "array" { return me._node.array_size() }
+        if me._node.get_kind() == "object" {
+            // MapBox.keys() is expected to exist on underlying map
+            local keys = me._node.object_keys()
+            return keys.length()
+        }
+        return 0
+    }
+
+    // Scalar extractors
+    str() {
+        if me._node == null { return "" }
+        return me._node.as_string()
+    }
+    int() {
+        if me._node == null { return 0 }
+        return me._node.as_int()
+    }
+    bool() {
+        if me._node == null { return false }
+        return me._node.as_bool()
+    }
+
+    // toString (stringify underlying JSON)
+    stringify() {
+        if me._node == null { return "null" }
+        return me._node.stringify()
+    }
+}
+

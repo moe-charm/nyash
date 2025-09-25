@@ -6,6 +6,7 @@
  */
 
 use super::{BasicBlockId, ConstValue, MirInstruction, ValueId};
+use crate::mir::phi_core::loop_phi::IncompletePhi;
 use crate::ast::ASTNode;
 use std::collections::HashMap;
 
@@ -15,16 +16,7 @@ use super::utils::{
     capture_actual_predecessor_and_jump,
 };
 
-/// 不完全なPhi nodeの情報
-#[derive(Debug, Clone)]
-struct IncompletePhi {
-    /// Phi nodeの結果ValueId
-    phi_id: ValueId,
-    /// 変数名
-    var_name: String,
-    /// 既知の入力値 (predecessor block id, value)
-    known_inputs: Vec<(BasicBlockId, ValueId)>,
-}
+// IncompletePhi has moved to phi_core::loop_phi
 
 /// ループビルダー - SSA形式でのループ構築を管理
 pub struct LoopBuilder<'a> {
@@ -52,6 +44,8 @@ pub struct LoopBuilder<'a> {
 
 
 impl<'a> LoopBuilder<'a> {
+    // Implement phi_core LoopPhiOps on LoopBuilder for in-place delegation
+    
     // =============================================================
     // Control Helpers — break/continue/jumps/unreachable handling
     // =============================================================
@@ -125,33 +119,9 @@ impl<'a> LoopBuilder<'a> {
         body: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
         // Pre-scan body for simple carrier pattern (up to 2 assigned variables, no break/continue)
-        fn collect_assigns(n: &ASTNode, vars: &mut Vec<String>, has_ctrl: &mut bool) {
-            match n {
-                ASTNode::Assignment { target, .. } => {
-                    if let ASTNode::Variable { name, .. } = target.as_ref() {
-                        if !vars.iter().any(|v| v == name) {
-                            vars.push(name.clone());
-                        }
-                    }
-                }
-                ASTNode::Break { .. } | ASTNode::Continue { .. } => { *has_ctrl = true; }
-                ASTNode::If { then_body, else_body, .. } => {
-                    let tp = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
-                    collect_assigns(&tp, vars, has_ctrl);
-                    if let Some(eb) = else_body {
-                        let ep = ASTNode::Program { statements: eb.clone(), span: crate::ast::Span::unknown() };
-                        collect_assigns(&ep, vars, has_ctrl);
-                    }
-                }
-                ASTNode::Program { statements, .. } => {
-                    for s in statements { collect_assigns(s, vars, has_ctrl); }
-                }
-                _ => {}
-            }
-        }
         let mut assigned_vars: Vec<String> = Vec::new();
         let mut has_ctrl = false;
-        for st in &body { collect_assigns(st, &mut assigned_vars, &mut has_ctrl); }
+        for st in &body { crate::mir::phi_core::loop_phi::collect_carrier_assigns(st, &mut assigned_vars, &mut has_ctrl); }
         if !has_ctrl && !assigned_vars.is_empty() && assigned_vars.len() <= 2 {
             // Emit a carrier hint (no-op sink by default; visible with NYASH_MIR_TRACE_HINTS=1)
             self.parent_builder.hint_loop_carrier(assigned_vars.clone());
@@ -214,7 +184,11 @@ impl<'a> LoopBuilder<'a> {
         let latch_snapshot = self.get_current_variable_map();
         // 以前は body_id に保存していたが、複数ブロックのボディや continue 混在時に不正確になるため
         // 実際の latch_id に対してスナップショットを紐づける
-        self.block_var_maps.insert(latch_id, latch_snapshot);
+        crate::mir::phi_core::loop_phi::save_block_snapshot(
+            &mut self.block_var_maps,
+            latch_id,
+            &latch_snapshot,
+        );
         // Only jump back to header if the latch block is not already terminated
         {
             let need_jump = {
@@ -266,113 +240,49 @@ impl<'a> LoopBuilder<'a> {
         header_id: BasicBlockId,
         preheader_id: BasicBlockId,
     ) -> Result<(), String> {
-        // 現在の変数マップから、ループで使用される可能性のある変数を取得
         let current_vars = self.get_current_variable_map();
-        // preheader時点のスナップショット（後でphi入力の解析に使う）
-        self.block_var_maps
-            .insert(preheader_id, current_vars.clone());
-
-        // 各変数に対して不完全なPhi nodeを作成
-        let mut incomplete_phis = Vec::new();
-        for (var_name, &value_before) in &current_vars {
-            let phi_id = self.new_value();
-
-            // 不完全なPhi nodeを作成（preheaderからの値のみ設定）
-            let incomplete_phi = IncompletePhi {
-                phi_id,
-                var_name: var_name.clone(),
-                known_inputs: vec![(preheader_id, value_before)],
-            };
-
-            incomplete_phis.push(incomplete_phi);
-
-            // フェーズM: no_phi_mode分岐削除（常にPHI使用）
-
-            // 変数マップを更新（Phi nodeの結果を使用）
-            self.update_variable(var_name.clone(), phi_id);
-        }
-
-        // 不完全なPhi nodeを記録
-        self.incomplete_phis.insert(header_id, incomplete_phis);
-
+        crate::mir::phi_core::loop_phi::save_block_snapshot(
+            &mut self.block_var_maps,
+            preheader_id,
+            &current_vars,
+        );
+        let incs = crate::mir::phi_core::loop_phi::prepare_loop_variables_with(
+            self,
+            header_id,
+            preheader_id,
+            &current_vars,
+        )?;
+        self.incomplete_phis.insert(header_id, incs);
         Ok(())
     }
 
     /// ブロックをシールし、不完全なPhi nodeを完成させる
     fn seal_block(&mut self, block_id: BasicBlockId, latch_id: BasicBlockId) -> Result<(), String> {
-        // 不完全なPhi nodeを取得
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
-            for mut phi in incomplete_phis {
-                for (cid, snapshot) in &self.continue_snapshots {
-                    if let Some(v) = snapshot.get(&phi.var_name) {
-                        phi.known_inputs.push((*cid, *v));
-                    }
-                }
-
-                let value_after = self
-                    .get_variable_at_block(&phi.var_name, latch_id)
-                    .ok_or_else(|| format!("Variable {} not found at latch block", phi.var_name))?;
-
-                phi.known_inputs.push((latch_id, value_after));
-
-                // フェーズM: 常にPHI命令を使用（no_phi_mode分岐削除）
-                self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
-                self.update_variable(phi.var_name.clone(), phi.phi_id);
-            }
+            let cont_snaps = self.continue_snapshots.clone();
+            crate::mir::phi_core::loop_phi::seal_incomplete_phis_with(
+                self,
+                block_id,
+                latch_id,
+                incomplete_phis,
+                &cont_snaps,
+            )?;
         }
-
-        // ブロックをシール済みとしてマーク
         self.mark_block_sealed(block_id)?;
-
         Ok(())
     }
 
     /// Exitブロックで変数のPHIを生成（breakポイントでの値を統一）
     fn create_exit_phis(&mut self, header_id: BasicBlockId, exit_id: BasicBlockId) -> Result<(), String> {
-        // 全変数名を収集（exit_snapshots内のすべての変数）
-        let mut all_vars = std::collections::HashSet::new();
-
-        // Header直行ケース（0回実行）の変数を収集
         let header_vars = self.get_current_variable_map();
-        for var_name in header_vars.keys() {
-            all_vars.insert(var_name.clone());
-        }
-
-        // break時点の変数を収集
-        for (_, snapshot) in &self.exit_snapshots {
-            for var_name in snapshot.keys() {
-                all_vars.insert(var_name.clone());
-            }
-        }
-
-        // 各変数に対してExit PHIを生成
-        for var_name in all_vars {
-            let mut phi_inputs = Vec::new();
-
-            // Header直行ケース（0回実行）の入力
-            if let Some(header_value) = header_vars.get(&var_name) {
-                phi_inputs.push((header_id, *header_value));
-            }
-
-            // 各breakポイントからの入力
-            for (block_id, snapshot) in &self.exit_snapshots {
-                if let Some(value) = snapshot.get(&var_name) {
-                    phi_inputs.push((*block_id, *value));
-                }
-            }
-
-            // PHI入力が2つ以上なら、PHIノードを生成
-            if phi_inputs.len() > 1 {
-                let phi_dst = self.new_value();
-                self.emit_phi_at_block_start(exit_id, phi_dst, phi_inputs)?;
-                self.update_variable(var_name, phi_dst);
-            } else if phi_inputs.len() == 1 {
-                // 単一入力なら直接使用（最適化）
-                self.update_variable(var_name, phi_inputs[0].1);
-            }
-        }
-
-        Ok(())
+        let exit_snaps = self.exit_snapshots.clone();
+        crate::mir::phi_core::loop_phi::build_exit_phis_with(
+            self,
+            header_id,
+            exit_id,
+            &header_vars,
+            &exit_snaps,
+        )
     }
 
     // --- ヘルパーメソッド（親ビルダーへの委譲） ---
@@ -549,7 +459,7 @@ impl<'a> LoopBuilder<'a> {
 
         // Capture pre-if variable map (used for phi normalization)
         let pre_if_var_map = self.get_current_variable_map();
-        let pre_then_var_value = pre_if_var_map.clone();
+        // (legacy) kept for earlier merge style; now unified helpers compute deltas directly.
 
         // then branch
         self.set_current_block(then_bb)?;
@@ -588,60 +498,74 @@ impl<'a> LoopBuilder<'a> {
 
         // Continue at merge
         self.set_current_block(merge_bb)?;
-        // collect assigned variables in both branches
-        fn collect_assigned_vars(ast: &ASTNode, out: &mut std::collections::HashSet<String>) {
-            match ast {
-                ASTNode::Assignment { target, .. } => {
-                    if let ASTNode::Variable { name, .. } = target.as_ref() { out.insert(name.clone()); }
-                }
-                ASTNode::Program { statements, .. } => { for s in statements { collect_assigned_vars(s, out); } }
-                ASTNode::If { then_body, else_body, .. } => {
-                    let tp = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
-                    collect_assigned_vars(&tp, out);
-                    if let Some(eb) = else_body {
-                        let ep = ASTNode::Program { statements: eb.clone(), span: crate::ast::Span::unknown() };
-                        collect_assigned_vars(&ep, out);
-                    }
-                }
-                _ => {}
-            }
-        }
 
         let mut vars: std::collections::HashSet<String> = std::collections::HashSet::new();
         let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
-        collect_assigned_vars(&then_prog, &mut vars);
+        crate::mir::phi_core::if_phi::collect_assigned_vars(&then_prog, &mut vars);
         if let Some(es) = &else_body {
             let else_prog = ASTNode::Program { statements: es.clone(), span: crate::ast::Span::unknown() };
-            collect_assigned_vars(&else_prog, &mut vars);
+            crate::mir::phi_core::if_phi::collect_assigned_vars(&else_prog, &mut vars);
         }
 
         // Reset to pre-if map before rebinding to ensure a clean environment
         self.parent_builder.variable_map = pre_if_var_map.clone();
-        for var_name in vars.into_iter() {
-            let then_val = then_var_map_end.get(&var_name).copied().or_else(|| pre_then_var_value.get(&var_name).copied());
-            let else_val = else_var_map_end_opt.as_ref().and_then(|m| m.get(&var_name).copied()).or_else(|| pre_then_var_value.get(&var_name).copied());
-
-            if let (Some(tv), Some(ev)) = (then_val, else_val) {
-                let mut incomings: Vec<(BasicBlockId, ValueId)> = Vec::new();
-                if let Some(pred) = then_pred_to_merge { incomings.push((pred, tv)); }
-                if let Some(pred) = else_pred_to_merge { incomings.push((pred, ev)); }
-                match incomings.len() {
-                    0 => {}
-                    1 => {
-                        let (_pred, v) = incomings[0];
-                        self.parent_builder.variable_map.insert(var_name, v);
-                    }
-                    _ => {
-                        let phi_id = self.new_value();
-                        // フェーズM: 常にPHI命令を使用（no_phi_mode分岐削除）
-                        self.emit_phi_at_block_start(merge_bb, phi_id, incomings)?;
-                        self.parent_builder.variable_map.insert(var_name, phi_id);
-                    }
+        // Use shared helper to merge modified variables at merge block
+        struct Ops<'b, 'a>(&'b mut LoopBuilder<'a>);
+        impl<'b, 'a> crate::mir::phi_core::if_phi::PhiMergeOps for Ops<'b, 'a> {
+            fn new_value(&mut self) -> ValueId { self.0.new_value() }
+            fn emit_phi_at_block_start(
+                &mut self,
+                block: BasicBlockId,
+                dst: ValueId,
+                inputs: Vec<(BasicBlockId, ValueId)>,
+            ) -> Result<(), String> { self.0.emit_phi_at_block_start(block, dst, inputs) }
+            fn update_var(&mut self, name: String, value: ValueId) { self.0.parent_builder.variable_map.insert(name, value); }
+            fn debug_verify_phi_inputs(&mut self, merge_bb: BasicBlockId, inputs: &[(BasicBlockId, ValueId)]) {
+                if let Some(ref func) = self.0.parent_builder.current_function {
+                    crate::mir::phi_core::common::debug_verify_phi_inputs(func, merge_bb, inputs);
                 }
             }
         }
+        // Reset to pre-if snapshot, then delegate to shared helper
+        self.parent_builder.variable_map = pre_if_var_map.clone();
+        let mut ops = Ops(self);
+        crate::mir::phi_core::if_phi::merge_modified_at_merge_with(
+            &mut ops,
+            merge_bb,
+            then_bb,
+            else_bb,
+            then_pred_to_merge,
+            else_pred_to_merge,
+            &pre_if_var_map,
+            &then_var_map_end,
+            &else_var_map_end_opt,
+            None,
+        )?;
         let void_id = self.new_value();
         self.emit_const(void_id, ConstValue::Void)?;
         Ok(void_id)
+    }
+}
+
+// Implement phi_core LoopPhiOps on LoopBuilder for in-place delegation
+impl crate::mir::phi_core::loop_phi::LoopPhiOps for LoopBuilder<'_> {
+    fn new_value(&mut self) -> ValueId { self.new_value() }
+    fn emit_phi_at_block_start(
+        &mut self,
+        block: BasicBlockId,
+        dst: ValueId,
+        inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String> {
+        self.emit_phi_at_block_start(block, dst, inputs)
+    }
+    fn update_var(&mut self, name: String, value: ValueId) { self.update_variable(name, value) }
+    fn get_variable_at_block(&mut self, name: &str, block: BasicBlockId) -> Option<ValueId> {
+        // Call the inherent method (immutable borrow) to avoid recursion
+        LoopBuilder::get_variable_at_block(self, name, block)
+    }
+    fn debug_verify_phi_inputs(&mut self, merge_bb: BasicBlockId, inputs: &[(BasicBlockId, ValueId)]) {
+        if let Some(ref func) = self.parent_builder.current_function {
+            crate::mir::phi_core::common::debug_verify_phi_inputs(func, merge_bb, inputs);
+        }
     }
 }

@@ -1,0 +1,9 @@
+using "./apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+
+main() {
+  local input = "{\"a\": [1, 2, 3], \"b\": \"say \\\"hello\\\"\"}"
+  local out = JsonParserUtils.roundtrip_test(input)
+  if out == null { println("FAIL") return 1 }
+  println(out)
+  return 0
+}

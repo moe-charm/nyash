@@ -27,60 +27,23 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 
 ## Next (small boxes)
 
-1) EXE-first: Selfhost Parser → EXE（Phase 15.2）🚀
-   - tools/build_compiler_exe.sh で EXE をビルド（同梱distパッケージ作成）
-   - dist/nyash_compiler/{nyash_compiler,nyash.toml,plugins/...} で独立実行
-   - 入力: Nyソース → 出力: JSON v0（stdout）
-   - Smokes: sample.nyash→JSON 行生成（JSONのみ出力）
-   - リスク: プラグイン解決（FileBox）をnyash.tomlで固定
-2) LLVM Native EXE Generation（AOTパイプライン継続）
-   - Python/llvmlite implementation as primary path (2400 lines, 10x faster development)
-   - LLVM backend object → executable pipeline completion
-   - Separate `nyash-llvm-compiler` crate (reduce main build weight)
-   - Input: MIR (JSON/binary) → Output: native executable
-   - Link with nyrt runtime (static/dynamic options)
-   - Plugin all-direction build strategy (.so/.o/.a simultaneous generation)
-   - Integration: `nyash --backend llvm --emit exe program.nyash -o program.exe`
-3) Standard Ny std impl (P0→実体化)
-   - Implement P0 methods for string/array/map in Nyash (keep NyRT primitives minimal)
-   - Enable via `nyash.toml` `[ny_plugins]` (opt‑in); extend `tools/jit_smoke.sh`
-4) Ny compiler MVP (Ny→MIR on JIT path) (Phase 15.3) 🎯
-   - Ny tokenizer + recursive‑descent parser (current subset) in Ny; drive existing MIR builder
-   - Target: 800 lines parser + 2500 lines MIR builder = 3300 lines total
-   - No circular dependency: nyrt provides StringBox/ArrayBox via C ABI
-   - Flag path: `NYASH_USE_NY_COMPILER=1` to switch rust→ny compiler; rust parser as fallback
-   - Add apps/selfhost-compiler/ and minimal smokes
-   - Stage‑1 checklist:
-     - [ ] return/int/string/arithmetic/paren JSON v0 emit
-     - [ ] Minimal ASI（newline separator + continuation tokens）
-     - [ ] Smokes: `return 1+2*3` / grouping / string literal
-   - Stage‑2 checklist:
-     - [ ] local/if/loop/call/method/new/var/logical/compare
-     - [ ] PHI 合流は Bridge に委譲（If/Loop）
-     - [ ] Smokes: nested if / loop 累積 / and/or × if/loop
-5) Phase 15.5: Core Box Unification（3層→2層革命）🎯
-   - コアBox（nyrt内蔵）削除、プラグインBox/ユーザーBoxの2層に統一
-   - 環境変数制御で段階的移行: `NYASH_USE_PLUGIN_CORE_BOXES=1`
-   - 削減目標: 約700行（nyrt実装600行 + 特別扱い100行）
-   - DLL動作確認→Nyashコード化の安全な移行戦略
-   - **using構文完全実装**: compiler.nyashのusing構文パース問題解決
-   - **LLVM ExternCall改善**: print出力問題修正（LLVMバックエンド）
-   - 詳細: [phase-15.5-core-box-unification.md](phase-15.5-core-box-unification.md)
-6) PHI 自動化は Phase‑15 後（LoopForm = MIR18）
-   - Phase‑15: 現行の Bridge‑PHI を維持し、E2E 緑とパリティを最優先
-   - MIR18 (LoopForm): LoopForm 強化＋逆Loweringで PHI を自動生成（合流点の定型化）
-7) Bootstrap loop (c0→c1→c1')
-   - Use existing trace/hash harness to compare parity; add optional CI gate
-   - **This achieves self-hosting!** Nyash compiles Nyash
-8) VM Layer in Nyash (Phase 15.4) ⚡
-   - Implement MIR interpreter in Nyash (13 core instructions)
-   - Dynamic dispatch via MapBox for instruction handlers
-   - BoxCall/ExternCall bridge to existing infrastructure
-   - Optional LLVM JIT acceleration for hot paths
-   - Enable instant execution without compilation
-   - Expected: 5000 lines for complete VM implementation
-9) Plugins CI split (継続)
-   - Core always‑on (JIT, plugins disabled); Plugins as optional job (strict off by default)
+1) Ny JSON ライブラリ（最小 DOM / JSON v0 対応）
+   - Nyash 製の parse/stringify（object/array/string/number/bool/null）。
+   - Env: `NYASH_JSON_PROVIDER=ny`（既定OFF）。
+   - Smokes: roundtrip/エラー位置検証（quick 任意; CI非ブロック）。
+2) Ny Executor（最小命令セット）
+   - ops: const/binop/compare/branch/jump/ret/phi（Box 呼び出しは後段）。
+   - Env: `NYASH_SELFHOST_EXEC=1`（既定OFF）。
+   - Parity: PyVM/LLVM harness と stdout/exit の一致。
+3) 呼び出し最小（Console/String/Array/Map P0）
+   - call/externcall/boxcall の最小を接続。未知 extern は STRICT で拒否。
+4) Selfhost Parser の EXE 化（任意・後回し可）
+   - `tools/build_compiler_exe.sh` により JSON v0 emit の単体配布（開発者向け）。
+5) PHI 自動化は Phase‑15 後（LoopForm = MIR18）
+   - Phase‑15: 現行の Bridge‑PHI を維持（規約は「incoming pred=実際の遷移元」）。
+   - MIR18: LoopForm 強化＋逆Loweringでの自動化に委譲（設計のみ先行）。
+6) Plugins CI split（継続）
+   - Plugins は任意ジョブ（strict off）を維持。Core は軽量 quick を常時。
 
 ## Later (incremental)
 
@@ -99,6 +62,8 @@ This roadmap is a living checklist to advance Phase 15 with small, safe boxes. U
 - JSON dump: `NYASH_DUMP_JSON_IR=1`
  - （予告）LoopForm: MIR18 で仕様化予定
  - Selfhost compiler: `NYASH_USE_NY_COMPILER=1`, child quiet: `NYASH_JSON_ONLY=1`
+ - JSON provider: `NYASH_JSON_PROVIDER=ny`（Ny JSON; 既定OFF）
+ - Ny executor: `NYASH_SELFHOST_EXEC=1`（既定OFF）
 - EXE-first bundle: `tools/build_compiler_exe.sh` → `dist/nyash_compiler/`
 - Load Ny plugins: `NYASH_LOAD_NY_PLUGINS=1` / `--load-ny-plugins`
 - AOT smoke: `CLIF_SMOKE_RUN=1`

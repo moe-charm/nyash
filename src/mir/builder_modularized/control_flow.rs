@@ -13,20 +13,7 @@ impl MirBuilder {
         self.lower_if_form(condition, then_branch, else_branch)
     }
 
-    /// Extract assigned variable name from an AST node if it represents an assignment to a variable.
-    /// Handles direct Assignment and Program with trailing single-statement Assignment.
-    fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
-        match ast {
-            ASTNode::Assignment { target, .. } => {
-                if let ASTNode::Variable { name, .. } = target.as_ref() { Some(name.clone()) } else { None }
-            }
-            ASTNode::Program { statements, .. } => {
-                // Inspect the last statement as the resulting value of the block
-                statements.last().and_then(|st| Self::extract_assigned_var(st))
-            }
-            _ => None,
-        }
-    }
+    // Assigned variable extraction is centralized in phi_core::if_phi now.
     
     /// Build a loop statement: loop(condition) { body }
     ///

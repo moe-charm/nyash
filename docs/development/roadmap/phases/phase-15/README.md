@@ -6,6 +6,20 @@ NyashでNyashコンパイラを書く、完全なセルフホスティングの�
 MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存から完全に解放される。
 **究極の目標：80,000行→20,000行（75%削減）→ さらなる最適化へ**
 
+## 🔄 2025‑09‑26 Update（方針の明確化）
+- 実行系の優先順位: LLVM は Python/llvmlite ハーネスを主経路に固定（llvm_sys 依存は前提にしない）。Rust VM/JIT は保守最小・比較用。
+- パーサ: TokenCursor 統一を env ゲート下で進行。Step‑2/3（式＋主要文の薄ラッパ）完了、代表スモーク/パリティは緑。
+- PHI: if/else の incoming は「実際の遷移元（exit ブロック）」を使用する規約で統一。dev 検証を追加（pred 重複/自己参照/CFG 包含）。
+- ループPHI: `phi_core` に統合（IncompletePhi/スナップショット/exit PHI の責務集約）。`loop_builder.rs` は委譲化で軽量化。
+- 次の主タスク: Nyash 製 JSON ライブラリ（JSON v0 DOM: parse/stringify）。完了後に Ny Executor（最小命令）へ直行。
+- 既定挙動は不変。新経路はすべて env トグルで opt‑in。
+
+推奨トグル
+- `NYASH_LLVM_USE_HARNESS=1`（LLVM Python ハーネス）
+- `NYASH_PARSER_TOKEN_CURSOR=1`（TokenCursor 経路）
+- `NYASH_JSON_PROVIDER=ny`（Ny JSON ライブラリ）
+- `NYASH_SELFHOST_EXEC=1`（Ny Executor 最小経路）
+
 ## 🎯 フェーズの目的
 
 1. **完全なセルフホスティング**: NyashコンパイラをNyashで実装

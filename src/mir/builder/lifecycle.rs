@@ -3,6 +3,28 @@ use crate::ast::ASTNode;
 
 // Lifecycle routines extracted from builder.rs
 impl super::MirBuilder {
+    fn preindex_static_methods_from_ast(&mut self, node: &ASTNode) {
+        match node {
+            ASTNode::Program { statements, .. } => {
+                for st in statements {
+                    self.preindex_static_methods_from_ast(st);
+                }
+            }
+            ASTNode::BoxDeclaration { name, methods, is_static, .. } => {
+                if *is_static {
+                    for (mname, mast) in methods {
+                        if let ASTNode::FunctionDeclaration { params, .. } = mast {
+                            self.static_method_index
+                                .entry(mname.clone())
+                                .or_insert_with(Vec::new)
+                                .push((name.clone(), params.len()));
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     pub(super) fn prepare_module(&mut self) -> Result<(), String> {
         let module = MirModule::new("main".to_string());
         let main_signature = FunctionSignature {
@@ -35,6 +57,9 @@ impl super::MirBuilder {
     }
 
     pub(super) fn lower_root(&mut self, ast: ASTNode) -> Result<ValueId, String> {
+        // Pre-index static methods to enable safe fallback for bare calls in using-prepended code
+        let snapshot = ast.clone();
+        self.preindex_static_methods_from_ast(&snapshot);
         self.build_expression(ast)
     }
 
@@ -74,7 +99,7 @@ impl super::MirBuilder {
                             inferred = Some(mt);
                             break 'outer;
                         }
-                        if let Some(mt) = super::phi::infer_type_from_phi(
+                        if let Some(mt) = crate::mir::phi_core::if_phi::infer_type_from_phi(
                             &function,
                             *v,
                             &self.value_types,
@@ -89,7 +114,7 @@ impl super::MirBuilder {
                         inferred = Some(mt);
                         break;
                     }
-                    if let Some(mt) = super::phi::infer_type_from_phi(
+                    if let Some(mt) = crate::mir::phi_core::if_phi::infer_type_from_phi(
                         &function,
                         *v,
                         &self.value_types,

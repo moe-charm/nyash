@@ -3,6 +3,7 @@
 
 using "apps/lib/json_native/lexer/scanner.nyash" as JsonScanner
 using "apps/lib/json_native/lexer/token.nyash" as JsonToken
+using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
 // Removed other dependencies - using self-contained methods
 
 // 🎯 高精度JSONトークナイザー（Everything is Box）
@@ -109,8 +110,8 @@ box JsonTokenizer {
             return new JsonToken("ERROR", "Unterminated string literal", start_pos, me.scanner.get_position())
         }
         
-        // エスケープ解除して値を取得
-        local unescaped = me.unquote_string(literal)
+        // エスケープ解除して値を取得（厳密版）
+        local unescaped = EscapeUtils.unquote_string(literal)
         
         // 文字列妥当性検証
         if not me.validate_string(unescaped) {
@@ -141,8 +142,8 @@ box JsonTokenizer {
     tokenize_keyword() {
         local start_pos = me.scanner.get_position()
         
-        // アルファベット文字を読み取り
-        local keyword = me.scanner.read_while(this.is_identifier_char)
+        // アルファベット/数字/下線を読み取り（関数参照を避ける安全版）
+        local keyword = me.scanner.read_identifier()
         
         // キーワード判定
         local token_type = me.keyword_to_token_type(keyword)
@@ -190,10 +191,7 @@ box JsonTokenizer {
         }
     }
     
-    // 識別子文字かどうか判定
-    is_identifier_char(ch) {
-        return me.is_alphanumeric_char(ch) or ch == "_"
-    }
+
     
     // 数値形式の妥当性検証
     validate_number_format(num_str) {

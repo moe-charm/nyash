@@ -141,10 +141,20 @@ box JsonScanner {
     is_digit_char(ch) {
         return ch == "0" or ch == "1" or ch == "2" or ch == "3" or ch == "4" or ch == "5" or ch == "6" or ch == "7" or ch == "8" or ch == "9"
     }
-    
+
     // 16進数字判定（内蔵）
     is_hex_digit_char(ch) {
         return me.is_digit_char(ch) or ch == "a" or ch == "b" or ch == "c" or ch == "d" or ch == "e" or ch == "f" or ch == "A" or ch == "B" or ch == "C" or ch == "D" or ch == "E" or ch == "F"
+    }
+
+    // 英字判定（内蔵）
+    is_alpha_char(ch) {
+        return (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z")
+    }
+
+    // 英数字 + 下線（識別子向け）
+    is_alphanumeric_or_underscore(ch) {
+        return me.is_alpha_char(ch) or me.is_digit_char(ch) or ch == "_"
     }
     
     // ===== 高レベル読み取りメソッド =====
@@ -196,6 +206,18 @@ box JsonScanner {
             me.advance()
         }
         
+        return me.text.substring(start_pos, me.position)
+    }
+
+    // 識別子を読み取り（英数字+アンダースコア）
+    read_identifier() {
+        local start_pos = me.position
+        if not me.is_alpha_char(me.current()) and me.current() != "_" {
+            return ""
+        }
+        loop(not me.is_eof() and me.is_alphanumeric_or_underscore(me.current())) {
+            me.advance()
+        }
         return me.text.substring(start_pos, me.position)
     }
     

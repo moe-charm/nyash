@@ -1,11 +1,56 @@
-# Current Task — Phase 15: Nyashセルフホスティング実行器統一化
+# Current Task — Phase 15 (Revised): Self‑Hosting Focus, JSON→Ny Executor
 
 Updated: 2025‑09‑26
 
-Quick execution summary (local)
-- Build: cargo build --release → OK
-- v2 smokes (quick): core set PASS/expected SKIP only
-- v2 smokes (plugins): Fixture dylib autoload PASS（環境に応じて一部 SKIP 設計）
+Quick status
+- Build: `cargo build --release` → OK（警告のみ）
+- Smokes v2: quick/core PASS、integration/parity PASS（Python LLVM harness）
+- Parser: TokenCursor 統一 Step‑2/3 完了（env ゲート）
+- PHI: if/else の incoming pred を exit ブロックへ修正（VM 未定義値を根治）
+
+## 今日の合意（方向修正の確定）
+- Rust層は新機能を最小化。今後は Nyash VM/コンパイラ（自己ホスト）へリソース集中。
+- 次タスクは Nyash 製 JSON ライブラリ（JSON v0 DOM: parse/stringify）。完了次第、Ny Executor 最小命令の実装を着手。
+- LLVM ラインは Python/llvmlite ハーネスを正式優先（llvm_sys_180 依存は前提にしない）。
+- GC は“安全網と計測の小粒強化”に限定（既定: RC、不変）。
+
+## 直近10日の実行計画（小粒・仕様不変・既定OFF）
+1) JSON types/lexer/parser/encoder（Nyash）
+   - Path: `apps/lib/json_native/{types,lexer,parser,encode}.nyash`
+   - Env: `NYASH_JSON_PROVIDER=ny`（既定OFF）
+   - Smokes: roundtrip/parse_error 最小セット（quick/core には既定OFFで影響なし）
+2) Ny Executor（最小命令）
+   - ops: const/binop/compare/branch/jump/ret/phi
+   - Env: `NYASH_SELFHOST_EXEC=1`（既定OFF）
+   - Smokes: arith/if/phi（parity: PyVM/LLVM harness）
+3) 呼び出し最小（MVP）
+   - call/externcall/boxcall（Console/String/Array/Map の P0）
+   - 代表スモーク: print/concat/len/has 基本
+4) 監視期間（数日）→ 旧 depth/skip 残骸の完全削除と警告掃除（任意）
+
+受け入れゲート
+- quick/core + integration/parity 緑（env ON/OFF 双方）
+- 既定挙動を変えない（新経路はすべて env トグルで opt‑in）
+- 変更は小さくロールバック容易
+
+主要トグル（統一）
+- `NYASH_LLVM_USE_HARNESS=1`（Python llvmlite ハーネス）
+- `NYASH_PARSER_TOKEN_CURSOR=1`（式/文を Cursor 経路で）
+- `NYASH_JSON_PROVIDER=ny`（Ny JSON）
+- `NYASH_SELFHOST_EXEC=1`（Ny Executor）
+- `NYASH_GC_MODE=rc|rc+cycle|stw`（既定rc）/ `NYASH_GC_METRICS=1`（任意）
+
+ドキュメント更新（本日）
+- phase‑15/README.md: 2025‑09‑26 更新ノートを追加（JSON→Self‑Host への舵切り、TokenCursor/PHI/Loop PHI 統合の反映）
+- phase‑15/ROADMAP.md: Now/Next を刷新（JSON ライブラリを Next1 に昇格、Cranelift 記述は凍結注記）
+- selfhosting‑ny‑executor.md: Stage‑1 に Ny JSON 依存を明記
+- README.md: Phase‑15（2025‑09）アップデートのクイックノート追記（Python ハーネス・トグル案内）
+
+---
+
+以下は履歴ノート（必要時の参照用）。最新の計画は上記ブロックを正とする。
+
+---
 
 Include → Using 移行状況（2025‑09‑26）
 - コード一式を `using` に統一（apps/examples/selfhost/JSON Native 等）。
@@ -56,12 +101,38 @@ Addendum (2025‑09‑26 2nd half)
 - [x] PHI 修正: incoming pred を then/else の exit ブロックに統一（VM 未定義値を根治）
 - [x] PHI 検証（dev）: 重複 pred/自己参照/CFG preds 含有の debug アサート追加
 - [x] テストランナー: 出力ノイズの共通フィルタ化（filter_noise）
+- [x] Legacy 撤去(1): `src/parser/depth_tracking.rs` を削除。`NyashParser` から `paren/br ace/bracket` 深度フィールドを除去し、`impl ParserUtils for NyashParser` を `src/parser/mod.rs` に最小実装（depth 無し）で移設。既定の Smart advance は共通実装（`common.rs`）を既定ONに統一（`NYASH_SMART_ADVANCE=0|off|false` で無効化）。
+- [x] Legacy 撤去(2): `src/parser/nyash_parser_v2.rs` を削除（参照ゼロの実験コード）。
+- [x] Bridge hardening: `ParserUtils::advance` は `NYASH_PARSER_TOKEN_CURSOR=1` 時に改行自動スキップを停止（改行処理の一元化）。既定OFFのため互換維持。
+
+Rollback（簡易）
+- `git revert <commit>` または `git checkout` で `src/parser/depth_tracking.rs` を復活し、`src/parser/mod.rs` の `impl ParserUtils` とフィールド削除差分を戻す。
+- 追加フラグ/挙動変更は無し（`NYASH_SMART_ADVANCE` の扱いは旧来と同等に既定ON）。
 
 次アクション
 - [x] Step‑2: primary/postfix/new/unary(−/not/await) を TokenCursor 経路へ寄せる（env トグル配下）
 - [x] Step‑2: parity 代表（優先順位/単項）を追加し VM↔LLVM 整合を確認
-- [ ] Step‑3: statements 側の薄いラッパ導入（env トグル時のみ Cursor を用いた if/loop/print/local/return の最小経路）
-- [ ] Step‑3: 旧来 skip 系（common.rs/depth_tracking.rs/parser_enhanced.rs）参照ゼロ確認→段階撤去
+- [x] Step‑3: statements 側の薄いラッパ導入（env トグル時のみ Cursor を用いた if/loop/print/local/return の最小経路）
+- [x] Step‑3: 旧来 skip 系削除（`should_auto_skip_newlines` / `skip_newlines(_internal)` を `common.rs` から撤去）。`advance` は Cursor 無効時に限り最小限の NEWLINE/; スキップのみを内蔵（非再帰）。
+
+---
+
+## Loop/PHI 統合リファクタ（準備段階）
+
+目的
+- if/loop の PHI 管理を将来的に一箇所へ統合（挙動は不変、段階導入）。
+
+Phase 1（完了）
+- 追加: `src/mir/phi_core/`（scaffold のみ、挙動不変）
+  - `mod.rs` / `common.rs` / `if_phi.rs` / `loop_phi.rs`
+  - 現時点では再エクスポート無し（`builder::phi` は private / `pub(super)` のため）。
+- 追加: `src/mir/mod.rs` に `pub mod phi_core;`
+- 受け入れ: cargo check / quick(core代表) / parity 代表 PASS
+- 付随: `loop_builder` 内の `IncompletePhi` を `phi_core::loop_phi::IncompletePhi` に移設（ロジック変更なし）
+
+次段（提案）
+- Phase 2: if系呼び出し側の import を `phi_core` に寄せるための薄い public wrapper を `phi_core::if_phi` に追加（機能同一）。
+- Phase 3: `loop_builder` の PHI 部分を `phi_core::loop_phi` に段階委譲（仕様不変）。
 
 ---
 

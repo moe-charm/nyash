@@ -296,6 +296,13 @@ impl super::MirBuilder {
         name: String,
         args: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!(
+                "[builder] function-call name={} static_ctx={}",
+                name,
+                self.current_static_box.as_deref().unwrap_or("")
+            );
+        }
         // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
         if (name == "isType" || name == "asType") && args.len() == 2 {
             if let Some(type_name) = special_handlers::extract_string_literal(&args[1]) {
@@ -321,7 +328,7 @@ impl super::MirBuilder {
 
         if let Some(res) = self.try_handle_math_function(&name, raw_args) { return res; }
 
-        // Build argument values
+        // Build argument values first (needed for arity-aware fallback)
         let mut arg_values = Vec::new();
         for a in args {
             arg_values.push(self.build_expression(a)?);
@@ -344,9 +351,30 @@ impl super::MirBuilder {
             let dst = self.value_gen.next();
 
             // === ChatGPT5 Pro Design: Type-safe function call resolution ===
-
-            // Resolve call target using new type-safe system
-            let callee = self.resolve_call_target(&name)?;
+            // Resolve call target using new type-safe system; if it fails, try static-method fallback
+            let callee = match self.resolve_call_target(&name) {
+                Ok(c) => c,
+                Err(_e) => {
+                    // Fallback: if exactly one static method with this name and arity is known, call it.
+                    if let Some(cands) = self.static_method_index.get(&name) {
+                        let mut matches: Vec<(String, usize)> = cands
+                            .iter()
+                            .cloned()
+                            .filter(|(_, ar)| *ar == arg_values.len())
+                            .collect();
+                        if matches.len() == 1 {
+                            let (bx, _arity) = matches.remove(0);
+                            let dst = self.value_gen.next();
+                            let func_name = format!("{}.{}{}", bx, name, format!("/{}", arg_values.len()));
+                            // Emit legacy global call to the lowered static method function
+                            self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+                            return Ok(dst);
+                        }
+                    }
+                    // Propagate original error
+                    return Err(format!("Unresolved function: '{}'. {}", name, super::call_resolution::suggest_resolution(&name)));
+                }
+            };
 
             // Legacy compatibility: Create dummy func value for old systems
             let fun_val = self.value_gen.next();

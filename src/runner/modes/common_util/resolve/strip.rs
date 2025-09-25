@@ -141,64 +141,79 @@ pub fn strip_using_and_register(
             // Two forms:
             //  - using path "..." [as Alias]
             //  - using namespace.with.dots [as Alias]
-            let resolved_path = if let Some(alias) = alias_opt {
-                // alias case: resolve namespace to a concrete path
-                let mut found: Option<String> = using_ctx
-                    .pending_modules
-                    .iter()
-                    .find(|(n, _)| n == &ns)
-                    .map(|(_, p)| p.clone());
-                if trace {
-                    if let Some(f) = &found {
-                        eprintln!("[using/resolve] alias '{}' -> '{}'", ns, f);
-                    }
-                }
-                if found.is_none() {
-                    match crate::runner::pipeline::resolve_using_target(
-                        &ns,
-                        false,
-                        &using_ctx.pending_modules,
-                        &using_ctx.using_paths,
-                        &using_ctx.aliases,
-                        &using_ctx.packages,
-                        ctx_dir,
-                        strict,
-                        verbose,
-                    ) {
-                        Ok(v) => {
-                            // Treat unchanged token (namespace) as unresolved
-                            if v == ns { found = None; } else { found = Some(v) }
-                        }
-                        Err(e) => return Err(format!("using: {}", e)),
-                    }
-                }
-                if let Some(value) = found.clone() {
+            let resolved_path = if let Some(alias_or_path) = alias_opt {
+                // Disambiguate: when alias_opt looks like a file path, treat it as direct path.
+                let is_path_hint = alias_or_path.ends_with(".nyash")
+                    || alias_or_path.contains('/')
+                    || alias_or_path.contains('\\');
+                if is_path_hint {
+                    // Direct path provided (e.g., using "path/file.nyash" as Name)
+                    let value = alias_or_path.clone();
+                    // Register: Name -> path
                     let sb = crate::box_trait::StringBox::new(value.clone());
-                    crate::runtime::modules_registry::set(alias.clone(), Box::new(sb));
-                    let sb2 = crate::box_trait::StringBox::new(value.clone());
-                    crate::runtime::modules_registry::set(ns.clone(), Box::new(sb2));
-                    // Optional: autoload dylib when using kind="dylib" and NYASH_USING_DYLIB_AUTOLOAD=1
-                    if value.starts_with("dylib:") && std::env::var("NYASH_USING_DYLIB_AUTOLOAD").ok().as_deref() == Some("1") {
-                        let lib_path = value.trim_start_matches("dylib:");
-                        // Derive lib name from file stem (strip leading 'lib')
-                        let p = std::path::Path::new(lib_path);
-                        if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                            let mut lib_name = stem.to_string();
-                            if lib_name.starts_with("lib") { lib_name = lib_name.trim_start_matches("lib").to_string(); }
-                            // Determine box list from using packages (prefer [using.<ns>].bid)
-                            let mut boxes: Vec<String> = Vec::new();
-                            if let Some(pkg) = using_ctx.packages.get(&ns) {
-                                if let Some(b) = &pkg.bid { boxes.push(b.clone()); }
-                            }
-                            if verbose { eprintln!("[using] autoload dylib: {} as {} boxes=[{}]", lib_path, lib_name, boxes.join(",")); }
-                            let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
-                            let _ = host.read().unwrap().load_library_direct(&lib_name, lib_path, &boxes);
+                    crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+                    Some(value)
+                } else {
+                    // alias string for a namespace (e.g., using ns.token as Alias)
+                    let alias = alias_or_path;
+                    // alias case: resolve namespace to a concrete path
+                    let mut found: Option<String> = using_ctx
+                        .pending_modules
+                        .iter()
+                        .find(|(n, _)| n == &ns)
+                        .map(|(_, p)| p.clone());
+                    if trace {
+                        if let Some(f) = &found {
+                            eprintln!("[using/resolve] alias '{}' -> '{}'", ns, f);
                         }
                     }
-                } else if trace {
-                    eprintln!("[using] still unresolved: {} as {}", ns, alias);
+                    if found.is_none() {
+                        match crate::runner::pipeline::resolve_using_target(
+                            &ns,
+                            false,
+                            &using_ctx.pending_modules,
+                            &using_ctx.using_paths,
+                            &using_ctx.aliases,
+                            &using_ctx.packages,
+                            ctx_dir,
+                            strict,
+                            verbose,
+                        ) {
+                            Ok(v) => {
+                                // Treat unchanged token (namespace) as unresolved
+                                if v == ns { found = None; } else { found = Some(v) }
+                            }
+                            Err(e) => return Err(format!("using: {}", e)),
+                        }
+                    }
+                    if let Some(value) = found.clone() {
+                        let sb = crate::box_trait::StringBox::new(value.clone());
+                        crate::runtime::modules_registry::set(alias.clone(), Box::new(sb));
+                        let sb2 = crate::box_trait::StringBox::new(value.clone());
+                        crate::runtime::modules_registry::set(ns.clone(), Box::new(sb2));
+                        // Optional: autoload dylib when using kind="dylib" and NYASH_USING_DYLIB_AUTOLOAD=1
+                        if value.starts_with("dylib:") && std::env::var("NYASH_USING_DYLIB_AUTOLOAD").ok().as_deref() == Some("1") {
+                            let lib_path = value.trim_start_matches("dylib:");
+                            // Derive lib name from file stem (strip leading 'lib')
+                            let p = std::path::Path::new(lib_path);
+                            if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                                let mut lib_name = stem.to_string();
+                                if lib_name.starts_with("lib") { lib_name = lib_name.trim_start_matches("lib").to_string(); }
+                                // Determine box list from using packages (prefer [using.<ns>].bid)
+                                let mut boxes: Vec<String> = Vec::new();
+                                if let Some(pkg) = using_ctx.packages.get(&ns) {
+                                    if let Some(b) = &pkg.bid { boxes.push(b.clone()); }
+                                }
+                                if verbose { eprintln!("[using] autoload dylib: {} as {} boxes=[{}]", lib_path, lib_name, boxes.join(",")); }
+                                let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                                let _ = host.read().unwrap().load_library_direct(&lib_name, lib_path, &boxes);
+                            }
+                        }
+                    } else if trace {
+                        eprintln!("[using] still unresolved: {} as {}", ns, alias);
+                    }
+                    found
                 }
-                found
             } else {
                 // direct namespace without alias
                 match crate::runner::pipeline::resolve_using_target(
@@ -397,6 +412,9 @@ pub fn strip_using_and_register(
         combined.push('\n');
         crate::runner::modes::common_util::resolve::seam::fix_prelude_braces_if_enabled(prelude_clean, &mut combined, trace);
         combined.push_str(&out);
+        if std::env::var("NYASH_RESOLVE_SEAM_DEBUG").ok().as_deref() == Some("1") {
+            let _ = std::fs::write("/tmp/nyash_using_combined.nyash", &combined);
+        }
         Ok(combined)
     }
 

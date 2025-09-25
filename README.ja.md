@@ -20,6 +20,13 @@ AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
 
+Phase‑15（2025‑09）アップデート
+- LLVM は Python/llvmlite ハーネスを優先（`NYASH_LLVM_USE_HARNESS=1`）。Rust VM/JIT は保守・比較用途。
+- パーサの改行処理は TokenCursor に統一中（`NYASH_PARSER_TOKEN_CURSOR=1`）。
+- if/else の PHI は実際の遷移元（exit）を pred として使用（VM/LLVM パリティ緑）。
+- 自己ホスト準備として Ny 製 JSON ライブラリと Ny Executor（最小命令）を既定OFFトグルで段階導入予定。
+- 推奨トグル: `NYASH_LLVM_USE_HARNESS=1`, `NYASH_PARSER_TOKEN_CURSOR=1`, `NYASH_JSON_PROVIDER=ny`, `NYASH_SELFHOST_EXEC=1`。
+
 仕様と既知制約
 - 必須不変条件（Invariants）: `docs/reference/invariants.md`
 - 制約（既知/一時/解消済み）: `docs/reference/constraints.md`

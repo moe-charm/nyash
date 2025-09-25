@@ -37,6 +37,7 @@ Rust ランナー側は PyVM 経路にて `NYASH_SELFHOST_EXEC=1` を検出し�
 
 ### Stage 1 — MIR ローダ（2–3日）
 - `mir_loader.nyash` で JSON v0 を読み込み、関数/ブロック/命令の構造体に展開（最初は要約のみ）。
+- 依存: Nyash 製 JSON ライブラリ（`NYASH_JSON_PROVIDER=ny`）で DOM を提供（既定OFF、開発時のみON）。
 - 受け入れ: ロードのみのスモーク（構文要素の個数検証）。
 - 備考: 立ち上げ初期は PyVM ハーネス用 MIR JSON（`{"functions":…}`）も受理し、要約（functions数）だけ行う（既定OFF）。
 
