@@ -71,7 +71,7 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 
 ### 実践方法
 1. **まず動くものを作る**（80%）
-2. **改善アイデアは `docs/ideas/` フォルダに記録**（20%）
+2. **改善アイデアは `docs/development/proposals/ideas/` フォルダに記録**（20%）
 3. **優先度に応じて後から改善**
 
 ## 🚀 クイックスタート
@@ -537,7 +537,7 @@ Call { func: ValueId, callee: Option<Callee> }  // 段階移行で破壊的変�
 - 🎯 **All or Nothing**: Phase 10.7でPython transpilation、フォールバック無し設計
 - 📚 **完全ドキュメント化**: README.md導線、実装戦略、技術仕様すべて完備
 - 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
-- 📋 詳細: [Property System仕様](docs/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
+- 📋 詳細: [Property System仕様](docs/development/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
 
 ## 📝 Update (2025-09-24) ✅ 改行処理革命Phase 2-B完了！実用レベル到達
 - 🎯 **改行処理革命Phase 2-B完了！** Box宣言系ファイルから14箇所のskip_newlines()完全削除
@@ -913,12 +913,12 @@ CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 CODEX_ASYNC_DETACH=1 \
 pgrep -af 'codex.*exec'
 ```
 
-### 💡 アイデア管理（docs/ideas/フォルダ）
+### 💡 アイデア管理（docs/development/proposals/ideas/ フォルダ）
 
 **80/20ルールの「残り20%」を整理して管理**
 
 ```
-docs/ideas/
+docs/development/proposals/ideas/
 ├── improvements/     # 80%実装の残り20%改善候補
 ├── new-features/     # 新機能アイデア  
 └── other/           # その他すべて（調査、メモ、設計案）

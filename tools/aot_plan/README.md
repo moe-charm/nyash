@@ -1,6 +1,6 @@
 # Nyash AOT-Plan (Phase 15.1) — Scripts Skeleton
 
-This folder will contain Nyash scripts that analyze a project (following `using` imports) and emit `aot_plan.v1.json` per docs/design/aot-plan-v1.md.
+This folder will contain Nyash scripts that analyze a project (following `using` imports) and emit `aot_plan.v1.json` per docs/development/design/legacy/aot-plan-v1.md.
 
 Phase 15.1 scope:
 - Keep scripts minimal and deterministic

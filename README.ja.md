@@ -30,11 +30,11 @@ Phase‑15（2025‑09）アップデート
 仕様と既知制約
 - 必須不変条件（Invariants）: `docs/reference/invariants.md`
 - 制約（既知/一時/解消済み）: `docs/reference/constraints.md`
-- PHI と SSA の設計: `docs/architecture/phi-and-ssa.md`
+- PHI と SSA の設計: `docs/reference/architecture/phi-and-ssa.md`
   - 既定のPHI挙動: Phase‑15 で PHI-ON（MIR14）が標準になったよ。ループ・break/continue・構造化制御の合流で PHI を必ず生成するよ。
   - レガシー互換: `NYASH_MIR_NO_PHI=1`（必要なら `NYASH_VERIFY_ALLOW_NO_PHI=1` も）で PHI-OFF（エッジコピー）に切り替えできるよ。
 - テスト行列（仕様→テスト対応）: `docs/guides/testing-matrix.md`
-- 他言語との比較: `docs/comparison/nyash-vs-others.md`
+- 他言語との比較: `docs/guides/comparison/nyash-vs-others.md`
 
 プロファイル（クイック）
 - `--profile dev` → マクロON（strict）、PyVM 開発向けの既定を適用（必要に応じて環境で上書き可）

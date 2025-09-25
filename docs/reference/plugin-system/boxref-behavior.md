@@ -49,5 +49,4 @@
 ## 7. 参考
 - 仕様: `docs/reference/plugin-system/nyash-toml-v2_1-spec.md`
 - 実装: `src/runtime/plugin_loader_v2.rs`（引数検証/Handle戻り値復元）
-- 例: `docs/examples/plugin_boxref_return.nyash`
-
+- 例: `docs/guides/examples/plugin_boxref_return.nyash`

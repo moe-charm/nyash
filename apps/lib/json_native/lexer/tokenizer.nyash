@@ -66,37 +66,39 @@ box JsonTokenizer {
         
         // EOF チェック
         if me.scanner.is_eof() {
-            return new JsonToken("EOF", "", me.scanner.get_position(), me.scanner.get_position())
+            return new JsonToken("EOF", "", me.scanner.get_position(), me.scanner.get_position()).set_line_column(me.scanner.get_line(), me.scanner.get_column())
         }
         
         local start_pos = me.scanner.get_position()
+        local start_line = me.scanner.get_line()
+        local start_col = me.scanner.get_column()
         local ch = me.scanner.current()
         
         // 構造文字（単一文字）
         local structural_type = me.char_to_token_type(ch)
         if structural_type != null {
             me.scanner.advance()
-            return this.create_structural_token(structural_type, start_pos)
+            return this.create_structural_token(structural_type, start_pos).set_line_column(start_line, start_col)
         }
         
         // 文字列リテラル
         if ch == "\"" {
-            return me.tokenize_string()
+            return me.tokenize_string().set_line_column(start_line, start_col)
         }
         
         // 数値リテラル
         if me.is_number_start_char(ch) {
-            return me.tokenize_number()
+            return me.tokenize_number().set_line_column(start_line, start_col)
         }
         
         // キーワード（null, true, false）
         if me.is_alpha_char(ch) {
-            return me.tokenize_keyword()
+            return me.tokenize_keyword().set_line_column(start_line, start_col)
         }
         
         // 不明な文字（エラー）
         me.scanner.advance()
-        return new JsonToken("ERROR", "Unexpected character: '" + ch + "'", start_pos, me.scanner.get_position())
+        return new JsonToken("ERROR", "Unexpected character: '" + ch + "'", start_pos, me.scanner.get_position()).set_line_column(start_line, start_col)
     }
     
     // ===== 専用トークナイザーメソッド =====

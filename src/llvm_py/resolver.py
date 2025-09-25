@@ -12,7 +12,7 @@ import llvmlite.ir as ir
 class Resolver:
     """
     Centralized value resolution with per-block caching.
-    Following the Core Invariants from docs/design/LLVM_LAYER_OVERVIEW.md:
+    Following the Core Invariants from docs/development/design/legacy/LLVM_LAYER_OVERVIEW.md:
     - Resolver-only reads
     - Localize at block start (PHI creation)
     - Cache per (block, value) to avoid redundant PHIs

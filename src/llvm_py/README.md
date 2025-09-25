@@ -2,7 +2,7 @@
 
 ## 📝 概要
 Rust/inkwellの複雑性を回避し、llvmliteを使ってシンプルに実装する実験的バックエンド。
-ChatGPTが設計した`docs/design/LLVM_LAYER_OVERVIEW.md`の設計原則に従う。
+ChatGPTが設計した`docs/development/design/legacy/LLVM_LAYER_OVERVIEW.md`の設計原則に従う。
 
 ## 🎯 目的
 1. **検証ハーネス** - PHI/SSA構造の高速検証

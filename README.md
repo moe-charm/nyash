@@ -52,9 +52,9 @@ Profiles (quick)
 Specs & Constraints
 - Invariants (must-hold): `docs/reference/invariants.md`
 - Constraints (known/temporary/resolved): `docs/reference/constraints.md`
-- PHI & SSA design: `docs/architecture/phi-and-ssa.md`
+- PHI & SSA design: `docs/reference/architecture/phi-and-ssa.md`
 - Testing matrix (spec → tests): `docs/guides/testing-matrix.md`
-- Comparison with other languages: `docs/comparison/nyash-vs-others.md`
+- Comparison with other languages: `docs/guides/comparison/nyash-vs-others.md`
 
 ## Table of Contents
 - [Self‑Hosting (Dev Focus)](#self-hosting)
@@ -378,7 +378,7 @@ box DataProcessor {
 **Result**: Python code runs 10-50x faster as native Nyash binaries!
 
 ### Documentation
-- **[Property System Specification](docs/proposals/unified-members.md)** - Complete syntax reference
+- **[Property System Specification](docs/development/proposals/unified-members.md)** - Complete syntax reference
 - **[Python Integration Guide](docs/development/roadmap/phases/phase-10.7/)** - Python → Nyash transpilation
 - **[Implementation Strategy](docs/private/papers/paper-m-method-postfix-catch/implementation-strategy.md)** - Technical details
 

@@ -1114,7 +1114,7 @@ This page is trimmed to reflect the active work only. The previous long form has
   - Refreshed docs index with clear "Start here" links (blueprints/strings, EBNF, strings reference)
   - Clarified operator/loop sugar policy in `guides/language-core-and-sugar.md` ("!" adopted, do‑while not adopted)
   - Concurrency docs (design-only): box model, semantics, and patterns/checklist added
-    - `docs/proposals/concurrency/boxes.md`
+    - `docs/development/proposals/concurrency/boxes.md`
     - `docs/reference/concurrency/semantics.md`
     - `docs/guides/box-patterns.md`, `docs/guides/box-design-checklist.md`
 - CI/Smokes
@@ -1351,7 +1351,7 @@ Progress
 - Language: Flow blocks & `->` piping（design） — docs/development/design/legacy/flow-blocks.md
 - Guards: Range/CharClass sugar（reference） — docs/reference/language/match-guards.md
 - Strings: `toDigitOrNull` / `toIntOrNull`（design note） — docs/reference/language/strings.md
- - Concurrency: Box model（Routine/Channel/Select/Scope） — docs/proposals/concurrency/boxes.md
+- Concurrency: Box model（Routine/Channel/Select/Scope） — docs/development/proposals/concurrency/boxes.md
  - Concurrency semantics（blocking/close/select/trace） — docs/reference/concurrency/semantics.md
 
 ## Nyash VM めど後 — 機能追加リンク（備忘）
