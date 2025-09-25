@@ -56,10 +56,19 @@ pub(crate) fn try_parse_method_or_field(
     fields: &mut Vec<String>,
     last_method_name: &mut Option<String>,
 ) -> Result<bool, ParseError> {
+    // Allow NEWLINE(s) between identifier and '('
     if !p.match_token(&TokenType::LPAREN) {
-        // Field
-        fields.push(name);
-        return Ok(true);
+        // Lookahead skipping NEWLINE to see if a '(' follows → treat as method head
+        let mut k = 0usize;
+        while matches!(p.peek_nth_token(k), TokenType::NEWLINE) { k += 1; }
+        if matches!(p.peek_nth_token(k), TokenType::LPAREN) {
+            // Consume intervening NEWLINEs so current becomes '('
+            while p.match_token(&TokenType::NEWLINE) { p.advance(); }
+        } else {
+            // Field
+            fields.push(name);
+            return Ok(true);
+        }
     }
     // Method
     p.advance(); // consume '('
@@ -73,6 +82,8 @@ pub(crate) fn try_parse_method_or_field(
         if p.match_token(&TokenType::COMMA) { p.advance(); }
     }
     p.consume(TokenType::RPAREN)?;
+    // Allow NEWLINE(s) between ')' and '{' of method body
+    while p.match_token(&TokenType::NEWLINE) { p.advance(); }
     let body = p.parse_block_statements()?;
     let body = wrap_method_body_with_postfix_if_any(p, body)?;
     // Construct method node
