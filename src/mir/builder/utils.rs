@@ -218,6 +218,13 @@ impl super::MirBuilder {
         if super::utils::builder_debug_enabled() || std::env::var("NYASH_PIN_TRACE").ok().as_deref() == Some("1") {
             super::utils::builder_debug_log(&format!("pin slot={} src={} dst={}", slot_name, v.0, dst.0));
         }
+        // Propagate lightweight metadata so downstream resolution/type inference remains stable
+        if let Some(t) = self.value_types.get(&v).cloned() {
+            self.value_types.insert(dst, t);
+        }
+        if let Some(cls) = self.value_origin_newbox.get(&v).cloned() {
+            self.value_origin_newbox.insert(dst, cls);
+        }
         self.variable_map.insert(slot_name, dst);
         Ok(dst)
     }
