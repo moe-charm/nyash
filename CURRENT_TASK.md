@@ -7,6 +7,229 @@ Quick status
 - Smokes v2: quick/core PASS、integration/parity PASS（Python LLVM harness）
 - Parser: TokenCursor 統一 Step‑2/3 完了（env ゲート）
 - PHI: if/else の incoming pred を exit ブロックへ修正（VM 未定義値を根治）
+- Resolver: using 先を DFS で事前ロードする共通ヘルパー導入（common/vm_fallback 両経路で `resolve_prelude_paths_profiled` を採用済み）
+ - Loop‑Form: ループ低下を LoopBuilder 正規形（preheader→header(φ)→body→latch→exit）に統一（cf_loop 経由）
+
+Today’s update（2025‑09‑27 pm）
+- LoopForm if 入口の PHI 入力を pre_if スナップショット参照に固定（then/else の相互汚染を禁止）。
+- if トレース追加（`NYASH_IF_TRACE=1`）: then/else 入口PHI・合流PHIの var/pre/dst/preds を可視化。
+- VM InstanceBox dispatcher 強化（BoxCall→関数）：
+  - 候補順: `Class.method/Arity` → `ClassInstance.method/Arity` → `Class.method/(Arity+1)` → 一意な「`.method/Arity`」末尾一致。
+  - `toString/0` → `stringify/0` 特別フォールバック。
+  - 追跡ログ: `NYASH_VM_TRACE=1` で候補・命中名を出力。
+- JsonScanner のフィールド getField 補強（内部が Null/None の場合に開発用デフォルトを適用）。
+- ビルダー側のインスタンス書き換えは既定OFF、検証時のみ `NYASH_BUILDER_REWRITE_INSTANCE=1` で有効化。
+
+追加の微修正（2025‑09‑27 late）
+- JsonParser.parse/1 の戻り型を安定化（Builder 注釈）
+  - `annotate_call_result_from_func_name` に特例を追加し、署名が Unknown/Void の場合でも `MirType::Box("JsonNode")` を付与。
+  - 署名が取得できない場合も最小ヒューリスティックで同注釈を適用（Builder DEBUG ログ対応）。
+- VM InstanceBox ディスパッチの一意尻一致フォールバックをナローイング
+  - 多候補時は受け手クラス接頭（`<Class>.`/`<Class>Instance.`）で再絞り込み、1件ならヒットとする。
+  - `NYASH_VM_TRACE=1` でナローイング経路をログ出力。
+
+微修正（2025‑09‑27 late‑late）
+- VM: `length` 呼出しのディスパッチ簡易ログを追加（`NYASH_VM_TRACE=1` 時のみ）
+  - 受け手型の表示と、命中したハンドラ（object_fields / instance_box / string_box / array_box / map_box / fallback）を出力。
+  - 目的: Compare(Lt) 直前で RHS が Void になる事象の切り分け（どの経路で 0/未定義になっているか）。
+- Builder: メソッド呼出しの受け手（receiver）を追加で pin（`@recv`）。
+  - `handle_standard_method_call` の先頭で `pin_to_slot` を適用し、条件式内での分岐横断利用でも定義点が安定するよう補強。
+
+封じ込め（2025‑09‑27 night）
+- 関数側 tail 一意解決を既定OFF（`NYASH_BUILDER_TAIL_RESOLVE=1` でのみ有効化）
+- me.method() を囲み Box 名で優先バインド（曖昧関数化の抑止）
+- 戻り型注釈の追加：
+  - `JsonParser.current_token/0` → `Box(JsonToken)`
+  - `JsonTokenizer.tokenize/0` → `Box(ArrayBox)`
+- VM 狭域ガード：JsonParser.length → tokens.length() ブリッジ（開発用）
+- VM 受信時の JsonScanner デフォルト注入（開発用）
+
+スモーク（抜粋）
+- `json_nested_vm.sh` は PASS（dev+AST）
+- `json_roundtrip_vm.sh` は FAIL（Ge on Void, Void）→ is_eof で position/length の Void が混入
+
+次のアクション（WIP 計画）
+1) getField 最終安全弁の狭域強化（呼び出し元関数が `JsonScanner.is_eof/0` の場合に position/length を補う）
+2) 追加の注釈と pin/PHI を Builder に最小追加（merge 直前の Undefined を撲滅）
+3) 緑化後、VM 狭域ブリッジ（JsonParser.length/JsonScanner デフォルト）を撤去
+
+最小再現ドライバ（追跡用）
+- 追加: `tmp/json_rt_null_vm.nyash`（JSON null のVMラウンドトリップ）
+- 追加: `tmp/json_scanner_is_eof_min.nyash`（Scanner 単体で `is_eof` 経路を観測）
+
+本日後半 — Builder 書き換えの既定（dev/ci）
+- 変更: MirBuilder のインスタンス→関数書き換えを dev/ci プロファイルで既定ON、prodは既定OFFのまま。
+  - 明示オーバーライド: `NYASH_BUILDER_REWRITE_INSTANCE={1|true|on}` で強制ON、`{0|false|off}` で強制OFF。
+  - 実装: `src/mir/builder/method_call_handlers.rs` 内の `rewrite_enabled` 判定を `using_profile` に連動させた。
+  - 目的: VM 側の JsonNodeInstance 狭域ブリッジ撤去に向けた段階移行。既定挙動（prod）は不変。
+  - 観測: `arithmetic_ops` は PASS。JSON VM 系は従前の失敗が残存（今回の切替による悪化は未観測）。
+
+続き — VM 狭域ブリッジ（JsonNodeInstance）の撤去（第一弾）
+- 変更: `try_handle_instance_box` から JsonNodeInstance 固有の分岐（`array_push/array_size/object_{get,set,keys}`）を削除。
+  - File: `src/backend/mir_interpreter/handlers/boxes.rs`（約 527 行〜）
+  - 依存: Builder のインスタンス→関数書き換え既定ON（dev/ci）＋ VM 側の汎用インスタンスディスパッチで代替。
+  - birth の no-op は維持（Builder が明示生成する birth 呼び出しの互換保険）。
+- 結果: `json_roundtrip_vm.sh` / `json_nested_vm.sh` は PASS を維持（dev+AST）。
+- 次: quick を通しで再確認 → 問題なければ stringify/unique-tail のナローイング経路のログも静音（filter側）→ 残るVM特例を段階撤去。
+
+SSOT 徹底 — file using を全プロファイル既定禁止（パッケージ内のみ許容）
+- 変更: `src/config/env.rs::allow_using_file()` をデフォルト false に（明示オーバーライドのみ true）。
+- 変更: `collect_using_and_strip()` に「パッケージ内ソースの内部 file-using は許容」の例外を追加（package root 配下のファイルに限る）。
+  - 効果: メイン/アプリ側は必ず `nyash.toml` の packages/aliases 経由で参照。パッケージ実装内部は相対/明示パスで自己構成可能。
+- スモーク更新:
+  - `using_profiles_ast.sh`: dev でも file-using 禁止を期待に変更。
+  - `using_relative_file_ast.sh`: 相対パス → alias 参照に変更（パッケージ相対）。
+- LLVM 経路: `runner/modes/llvm.rs` に AST using 処理と PyVM フォールバック（SMOKES_USE_PYVM=1）を追加。
+- 既知: VM quick の JSON ラインで "Integer vs Void" 比較が再発（サンプルループの `length()` が Void になるケース）。LoopForm/IF の構造は維持済みで、ArrayBox の `length` 実装は存在。次のデバッグで Compare 発生点（length の解決経路）をトレースして原因を特定する。
+
+リファクタリング計画（ふるまい不変・段階）
+- 目的: 追跡容易化とソース整頓（根治パッチの前段）。挙動は変えない。
+- ステップ:
+  1) VM handlers の分割（boxes.rs の肥大解消）
+     - 抽出: `try_handle_array_box` / `try_handle_string_box` / `try_handle_map_box` を個別ファイルへ。
+     - 影響: 関数名・シグネチャは不変。呼び出し元（handle_box_call）は変更なし。
+  2) getField 既定（JsonScanner の最終フォールバック）を専用箇所に集約（現状ロジックは不変）。
+  3) トレース整備: compare 失敗ログに関数名/ブロック/最後の命令を出力済み。length 呼出し経路の型ログを追加予定。
+- 受け入れ: quick が従前と同等（現状の赤は赤のまま）。差分は構造とログのみ。
+
+直近の受け入れ確認（要再実行）
+- 単体ドライバ: `r = JsonParser().parse("{\"a\":1}"); print(r.toString())` が `JsonNode.stringify/0` に命中（VM トレースで確認）。
+- v2 quick: `NYASH_USING_PROFILE=dev NYASH_USING_AST=1 bash tools/smokes/v2/profiles/quick/core/json_roundtrip_vm.sh` が完走。
+
+Resolved — Integer stringify shortens (42 → 4)
+- Symptom: In JSON VM quick, the integer sample "42" prints as "4" while other types (null/bool/float/array/object) stringify correctly.
+- Hypotheses:
+  - Value truncation during convert_number → create_int flow, or parse_integer returns incorrect value in some path.
+  - Field bridging is not the culprit (InstanceBox getField/setField already maps NyashValue::Integer i64 correctly), but will confirm via trace.
+Fix (2025‑09‑27):
+- Root cause: StringUtils.parse_integer parsed only the first digit; multi-digit accumulation was incorrect.
+- Patch: Rewrote per‑digit loop using an index_of lookup over "0123456789" and `acc = acc * 10 + d`; kept sign handling and integer validation.
+- Also unified stringify(int) on both static/instance JsonNode to use `me.value.toString()`.
+- Result: Minimal drivers A/B now print "42"; `json_roundtrip_vm` passes under dev+AST.
+
+Open item — json_nested_vm (VM) fails (debug in progress)
+- Symptom (quick/core/json_nested_vm.sh):
+  - Expected: `[1,[2,3],{"x":[4]}]`, `{\"a\":{\"b\":[1,2]},\"c\":\"d\"}`, `{\"n\":-1e-3,\"z\":0.0}`
+  - Actual: `null` for all three samples under VM path (AST counterparts pass)
+- Notes:
+  - Earlier, a stray semicolon at block endings triggered a tokenizer parse error. For smoke stability only, we added a dev-only ASI-like strip in test_runner to remove trailing `;` before VM run (SMOKES_ASI_STRIP_SEMI=1 default). After that, error turns into `null` results => true parse failures remain.
+  - AST-based tests for nested JSON pass; issue is specific to VM execution path for nested structures.
+- Hypotheses:
+  1) Number tokenization edge (exponent + sign: `-1e-3`, `0.0`) in VM path.
+  2) Nested object/array boundary handling (Tokenizer.read_string_literal / read_number / structural tokens) differs under VM fallback.
+  3) validate_number_format too strict in VM path relative to AST expectations.
+- Plan (do not force green; debug methodically):
+  1) Repro with diagnostic driver printing parser errors per sample (`p.print_errors()`).
+  2) Enable targeted traces: `NYASH_VM_TRACE=1`, optional tokenizer-local prints if needed.
+  3) Inspect JsonTokenizer.read_number and validate_number_format for exponent and decimal handling; align with AST behavior.
+  4) Fix narrowly (number validation or structural token sequence) and re-run only json_nested_vm; then re-run quick profile.
+- Acceptance:
+  - json_nested_vm prints expected three lines; no other quick tests regress.
+
+現状観測（after fixes）
+- 未定義PHIは解消。`r.toString()` 出力が `JsonNodeInstance()` のまま残るケースあり。
+- `object_set` 呼び出しも VM 側で動的解決の一意尻一致フォールバックを追加済みだが、引っかからないケースがある（受け値の型/起源が落ちている可能性）。
+
+JSON VM 根治（WIP）
+- 症状: `json_roundtrip_vm`（VM fallback）が `TypeError: unsupported compare ... on Void` で停止（以前は `Integer vs Void`、現在は `Void vs Void` まで改善）。
+- 原因（一次）: ユーザー Box のフィールドが VM 側の外部マップ（obj_fields）に保存され、インスタンス同一性の継ぎ目で取りこぼすことがある。
+- 施した修正（最小・仕様不変）:
+  - VM インタープリタ `getField/setField` を優先的に `InstanceBox` の内部フィールド（`fields_ng: NyashValue`）へ委譲。
+  - NyashValue ↔ VMValue の最小ブリッジを実装（数値/真偽/文字列/Null→Void）。
+  - dev 導線: `NYASH_VM_VERIFY_MIR=1` で VM fallback 前に関数単位の MIR 検証（`MirVerifier.verify_function`）を走らせてヒントを出力。
+- 現状の観測:
+  - `JsonScanner.birth` による `length/line/column/position` 初期化は安定（min 再現で確認）。
+  - `json_roundtrip_vm` は別箇所（比較）で Void が混入。未初期化フィールド（Null→Void）または merge 付近の値流れの可能性。
+- 次の対処（局所・点修正で緑化）:
+  1) Verifier ログで該当関数の merge/支配関係違反を特定（dev 環境のみ）。
+  2) 比較/条件構築のピン不足箇所に `ensure_slotified_for_use` を追加（漏れ潰し）。
+  3) 必要なら「スキャナの数値系フィールド」の既定値（0/1）を dev フラグ下で補う（`NYASH_VM_SCANNER_DEFAULTS=1` 追加検討）。
+  4) 緑化後に dev 安全弁（Void 許容）を撤去/既定 OFF 固定。
+− 受け入れ: `tools/smokes/v2/profiles/quick/core/json_roundtrip_vm.sh` が dev/prod（AST using）で緑。
+
+追加タスク（インスタンス呼び出しの最終詰め）
+- 目的: `JsonNode.stringify/0` / `JsonNode.object_set/2` などが確実に関数呼びに正規化され、`JsonNodeInstance()` 表示が JSON 文字列へ置換されること。
+- 手順（診断→修正の順）:
+  1) 単体ドライバでトレース取得:
+     - 実行: `NYASH_VM_TRACE=1 NYASH_BUILDER_REWRITE_INSTANCE=1` で `instance-dispatch class=... method=toString/0` 等の候補/命中ログを確認。
+     - 関数表: `NYASH_DUMP_FUNCS=1`（vm_fallback）で `JsonNode.stringify/0` / `JsonNode.object_set/2` の存在確認。
+  2) 命中しない場合:
+     - `handle_box_call` で `recv` の型名（`recv_box.type_name()`）をログ出し、InstanceBox 判定漏れを特定。
+     - 末尾一致の一意解決が多候補なら、`JsonNode` 系に限定するナローイングを追加。
+  3) 緑化確認: `json_roundtrip_vm.sh` が期待出力に一致。
+
+受け入れ基準（今回のスライス）
+- if/LoopForm の入口PHIが常に pre_if スナップショットから生成される（`NYASH_IF_TRACE=1` で確認）。
+- `json_roundtrip_vm` が VM で完走し、 `JsonNodeInstance()` ではなく JSON 文字列を出力。
+- VM トレースで `instance-dispatch hit -> JsonNode.stringify/0` 等の命中が確認できる。
+
+根治テーマ（新規） — birth 呼び出しの責務分離と生成位置の是正
+
+問題の本質（層の責務分離違反）
+
+- 現状（暫定パッチ）:
+  - VM 実行器が `NewBox` 実行時に自動で `birth` を探して呼び出す（`handle_new_box` 内で `Class.birth[/Arity]` を探索・実行）。
+  - 目的はユーザー Box の初期化だが、これは本来コンパイラ（MIR ビルダー）の責務。
+- 正しい設計:
+  - using 層/コンパイラが `new MyBox(args)` を MIR へ明示展開する。
+    - 期待する MIR 例:
+      - `dst = NewBox MyBox(args...)`
+      - `Call { callee = Global("MyBox.birth/N"), args = [dst, args...] }`
+      - 以後 `dst` を使用
+  - VM 実行器は MIR を忠実に実行するだけ（自動 birth 呼び出しは不要）。
+- リスク（現状パッチの副作用）:
+  - 層を跨いだ肩代わりで制御不能（無限再帰/二重初期化/順序依存の温床）。
+  - デバッグ困難化（birth 呼び出しが MIR に現れない）。
+
+方針（根治）
+
+1) MIR ビルダー側で `new` の正規展開を実装（birth 明示呼び出しの生成）
+   - 対象: `ASTNode::New`（既存の new ノード）または同等の生成箇所。
+   - 生成:
+     - `dst = NewBox <Class>(args...)`
+     - 存在する場合: `Call Global("<Class>.birth/N"), argv = [dst, args...]`
+     - birth 不存在時は Call を省略（既存互換）。
+   - 併せて、ユーザー定義メソッドの関数名規約 `<Class>.<method>/<Arity>` に統一し、birth 検索も同規約で行う。
+
+2) VM 実行器の自動 birth 呼び出しを段階的に撤去
+   - Step‑A（即時）: dev フラグで既定 OFF（`NYASH_VM_AUTO_BIRTH=0` 既定）。
+   - Step‑B（ビルダー実装安定後）: 自動呼び出しコードを削除。
+
+3) 付随の整合
+   - 静的名→インスタンス別名（`JsonNode` → `JsonNodeInstance`）の alias は vm_fallback の簡易ファクトリで保持（当面）。
+   - 将来は宣言解析で静的/インスタンスの関連付けを明示して alias 依存を解消。
+
+テスト計画 / 受け入れ条件
+
+- MIR 生成の確認:
+  - `--dump-mir`/`NYASH_VM_TRACE=1` で `NewBox <Class>` の直後に `Call <Class>.birth/N` が現れる。
+  - VM 実行ログからは `handle_new_box` 内での自動 birth 呼び出しが消えている（実行器は NewBox のみ）。
+- 機能スモーク:
+  - `json_roundtrip_vm` が dev/prod（AST using）で完走。少なくとも null/bool/int/string の基本ケースが期待出力。
+  - `new JsonParser()` などのユーザー Box 生成で未初期化フィールド由来の Void 混入が再発しない。
+- 回帰抑止:
+  - birth 不存在な Box でも従来通り動作（Call を生成しない）。
+
+作業ステップ（詳細）
+
+1) Builder: `new` 正規展開
+   - ファイル: `src/mir/builder/exprs.rs`（`ASTNode::New` 分岐）、必要なら専用モジュール。
+   - 実装: NewBox emit → `module.functions` で `<Class>.birth/N` を探索 → あれば Global Call emit（先頭 arg に me=dst）。
+   - 備考: 既存の「メソッド→関数」低下 (`lower_method_as_function`) の規約に合わせる。
+
+2) VM: 自動 birth を dev 既定 OFF に変更 → 後で削除
+   - ファイル: `src/backend/mir_interpreter/handlers/boxes.rs`（`handle_new_box`）。
+   - Step‑A: `if env(NYASH_VM_AUTO_BIRTH)==1 のみ` birth を試行（既定 0）。
+   - Step‑B: Builder 安定後に完全削除。
+
+3) スモーク/検証の整備
+   - 新規: mini birth 展開テスト（`new Box(x);` で `NewBox`→`Call birth` が生成されるか）。
+   - 既存: `json_roundtrip_vm` / `mini_call_starts_with` を AST using（dev/prod）で確認。
+
+リスクとロールバック
+
+- 万一 Builder 実装で birth が生成されない場合でも、dev では env=1 で VM 自動 birth を一時的に再有効化可能。
+- ただし最終到達点は VM 自動 birth の完全撤去。CURRENT_TASK で管理し段階的に外す。
 
 MIR/VM 進捗（SSA/短絡/ユーザーBox）
 - 短絡（&&/||）: 分岐+PHI で正規低下（RHS 未評価）を実装済み。
@@ -22,6 +245,54 @@ MIR/VM 進捗（SSA/短絡/ユーザーBox）
   - 期待: Builder が user‑defined `JsonScanner` を検知して `JsonScanner.current/0` へ書き換えるか、VM が fallback で補足。
   - 観測: 関数一覧に `JsonScanner.current/0` が存在しないケースがある（環境差/順序の可能性）。
     - 以前の実行では `JsonScanner.current/0` が列挙されていたため、低下順または条件分岐の取りこぼしが疑わしい。
+
+## 方向修正（複雑性の抑制と安定化） — 2025‑09‑27
+
+- 遅延注釈・保険フック・VM 側の大改造は一旦見送り、シンプルな導線で解消する。
+- 根治の順序:
+  1) Resolver 強化（nested using を DFS で AST 事前ロード）
+  2) 低下順の一貫化（宣言インデックス後に関数群が常に materialize）
+  3) 書き換えは「関数存在」の一点で採否（既に実装済み）
+  4) 必要箇所のみ Loop‑Form（Builder 側、flag 付き）
+
+ロールバック（安定化のため）
+- VM インタプリタの一時変更は元に戻す:
+  - obj_fields のキー安定化（Arc ptr ベース）を撤回し、暫定的に従来挙動へ復帰。
+  - host_api の BoxRef → NyashValue 変換や戻り値の挙動変更は撤回（既定の最小仕様に戻す）。
+  - 目的は無限ループ/非停止の芽を確実に摘むこと（後段の Resolver 強化で書き換えが安定すれば、ここを再度検討可能）。
+
+次のステップ（最小）
+1) 上記ロールバックを反映して quick/core JSON を再実行（ハングがないことの確認）。
+2) Resolver: using 先の再帰（nested）を DFS で事前 AST 化し、その結果を `index_declarations` 前に連結。
+3) `NYASH_DUMP_FUNCS=1` で `JsonScanner.current/0` の存在、`NYASH_BUILDER_DEBUG=1` で user‑box 書き換え採用ログを確認。
+4) json_roundtrip_vm を再実行。完走したら、VM 側の臨時ガードや余計な保険を段階的に外す。
+
+受け入れ条件（このスライス）
+- nested using の AST 事前ロードにより依存関数が常に materialize。
+- user‑box 書き換えは「関数存在」の一点で採否（ブレなし）。
+- json_roundtrip_vm が完走（無限ループなし）。
+- 遅延注釈・保険フックなどの複雑化を増やしていない。
+
+## 根治戦略（確定方針）
+
+結論:
+- 制御フロー/SSA の根治は Option‑B（Loop‑Form 導入）が本命。
+- ただし今回の「起源未伝搬→書き換え不発」は依存解決/宣言順の問題が主因のため、まず Resolver 側を確立し、その上で Loop‑Form を段階導入する。
+
+進め方（順序）
+1) Resolver 根治（小規模・点修正） — ✅ 2025‑09‑27 実装済み
+   - `resolve_prelude_paths_profiled` を canonicalize+DFS 化し、common/vm_fallback 両経路で採用。
+   - nested using も AST 事前ロードに含まれるよう整理済み（書き換えは既存の「関数存在」基準を継続）。
+2) Loop‑Form（PHI根治） — ✅ 2025‑09‑27 既定経路へ切替
+   - 低下経路を loop_api(簡易) から LoopBuilder（正規形: preheader→header(φ)→body→latch→exit）に統一。
+   - 変更: `src/mir/builder_modularized/control_flow.rs::build_loop_statement` を `self.cf_loop(..)` に切替。
+   - 既存の `src/mir/loop_builder.rs` + `mir/phi_core/loop_phi.rs` の φ 生成/封止を活用（continue/break の取り込みと latch wiring を保証）。
+   - 目的: SSA 支配関係の事故・未定義参照・分岐合流のゆらぎを構造的に排除。
+
+受け入れ条件（Loop‑Form スライス）
+- 代表ループ（tokenizer/scanner の while）で header φ が生成され、continue/break が latch/exit に束ねられていること（`--dump-mir` で確認）。
+- json_roundtrip_vm（VM fallback）で未定義参照・無限ループが再発しない（既存の短絡/if の diamond と整合）。
+- フラグ OFF 時は従来どおり（既定挙動は変えない）。
 
 ## ADR 受理: No CoreBox & Everything is Plugin（Provider/Type 分離）
 
@@ -358,6 +629,19 @@ Phase 1（完了）
 - 互換テスト: 正常/エラーで JsonDocBox と json_native 互換レイヤの出力一致。
 - v2 スモーク（ローカル任意・CIに入れない）:
   - `tools/smokes/v2/run.sh --profile quick --filter "json_native"`
+
+---
+
+## Delta (today)
+
+- MIR builder: annotate call results (type + origin)
+  - Added `annotate_call_result_from_func_name` and applied to Global/Method/me-call paths so static/instance function calls propagate `MirType` and `value_origin_newbox`.
+- Cross-function field origin
+  - New `field_origin_by_box: (BaseBoxName, field) -> FieldBoxName` recorded on assignment; used on field access to recover origin across methods.
+- Builder debug
+  - `NYASH_BUILDER_DEBUG=1` logs pin ops and call-result annotations.
+- Next focus
+  - Verify `me.scanner` origin hit in `JsonTokenizer.next_token` and ensure method-call rewrite precedes BoxCall fallback. If still VoidBox at runtime, inspect VM BoxCall InstanceBox dispatch.
 
 トグル/導線
 - env: `NYASH_JSON_PROVIDER=ny`（既定OFF）。
@@ -1581,3 +1865,53 @@ Trigger: nyash_vm の安定（主要スモーク緑・自己ホスト経路が�
 - 追加検証
   - トレース: `NYASH_VM_TRACE=1` で未定義参照箇所を特定し、漏れ箇所に局所 Pin を追加
   - Verifier（任意）: 非 PHI 命令オペランドが使用ブロックに支配されるかの簡易チェック（dev）
+# CURRENT_TASK — condensed (2025-09-27)
+
+このファイルは簡潔版だよ。従来の長大なメモはアーカイブへ退避したにゃ:
+- docs/development/current_task_archive/CURRENT_TASK_2025-09-27.md
+
+目的（Phase‑15+）
+- using の SSOT（nyash.toml）+ AST プレリュード統合の安定運用（dev/ci/prod プロファイル）。
+- Parser/Lower の「宣言≻式」徹底と seam 取りこぼし根絶（静的ボックスメンバー）。
+- LoopForm 正規化（preheader→header(φ)→body→latch→exit）と IF/PHI の不変条件維持。
+- JSON ネイティブ（Tokenize/Parse/Stringify）の VM 走行を最小差分で安定化。
+
+最近の達成（2025‑09‑27）
+- Tokenizer 入力消失を修正: `new JsonScanner(input)` で初期化（VM 経路で EOF 固定になる問題を解消）。
+- JsonNodeInstance に不足メソッド追加: `array_push/1`, `array_size/0`, `object_get/1`。
+- VM getField/setField の順序/保持を是正: fields_ng（NyashValue）優先、欠損時の JsonScanner 既定値を局所適用。
+- 狭域ブリッジ（暫定）: JsonNodeInstance の `array_*`/`object_*` を内部 value に直結（静的フォールバック回避）。
+- スモーク: `json_nested_vm.sh` / `json_roundtrip_vm.sh` が PASS（dev+AST, VM）。
+
+次にやる（高優先）
+1) if/Loop 生成の点検（MIR 側）
+   - 入口 PHI を pre_if/preheader スナップショットから生成できているかを `NYASH_IF_TRACE=1`/`NYASH_LOOP_TRACE=1` で継続確認。
+   - merge で未定義値が混入しないか `NYASH_VM_VERIFY_MIR=1` を常時有効化（dev）。
+2) JsonNodeInstance ブリッジの段階撤去計画
+   - 関数表（インスタンス関数）整備後、VM 特例を削除。まずはインスタンス側 stringify/集合操作の関数を常備。
+   - Builder のインスタンス→関数書き換えは現状 env ゲート（`NYASH_BUILDER_REWRITE_INSTANCE=1`）。dev/ci で十分に緑化したら既定ON→最終的に VM 特例を削除。
+3) using SSOT+AST の一貫化
+   - dev/ci は AST 既定ON、prod は toml 限定。レガシー前置き経路は削除候補として隔離維持。
+
+受け入れ基準（このスライス）
+- JSON quick: `json_roundtrip_vm.sh` / `json_nested_vm.sh` PASS（dev+AST, VM）。
+- if/Loop のトレース上、入口 PHI が pre_if/preheader から生成され、未定義参照が Verifier に検出されない。
+- 変更は局所・既定挙動不変（prod 既定は SSOT/toml のみ）。
+- MapBox.keys は安定化のため昇順ソートを行い stringify の順序が安定（期待出力と一致）。
+
+実行メモ（よく使うコマンド）
+- ビルド: `cargo build --release`
+- JSON（VM, dev+AST）:
+  - `NYASH_USING_PROFILE=dev NYASH_USING_AST=1 bash tools/smokes/v2/profiles/quick/core/json_roundtrip_vm.sh`
+  - `NYASH_USING_PROFILE=dev NYASH_USING_AST=1 bash tools/smokes/v2/profiles/quick/core/json_nested_vm.sh`
+- 詳細トレース: `NYASH_VM_TRACE=1 NYASH_VM_VERIFY_MIR=1 NYASH_IF_TRACE=1 NYASH_LOOP_TRACE=1 ...`
+
+主な変更ファイル（直近）
+- apps/lib/json_native/lexer/tokenizer.nyash — scanner 初期化修正
+- apps/lib/json_native/core/node.nyash — インスタンスAPI追加
+- src/backend/mir_interpreter/handlers/boxes.rs — getField/setField 是正 + JsonNode 狭域ブリッジ
+- src/boxes/map_box.rs — Instance 取得の共有優先（副作用低）
+
+備考
+- 大きな仕様追加はポーズ中（Nyash VM bootstrap 完了まで）。今回の差分は安定化・局所修正のみ。
+- 旧 CURRENT_TASK の全内容はアーカイブ参照（必要なら git でもたどれる）。

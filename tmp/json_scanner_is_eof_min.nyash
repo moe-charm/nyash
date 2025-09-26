@@ -1,0 +1,18 @@
+using json as JsonParserModule
+
+// Directly exercise JsonScanner.is_eof/0 and advance/0
+// This script helps reproduce/trace Void in comparisons (position/length)
+
+static box Main {
+  main() {
+    // Build a tokenizer and access internal scanner via behavior
+    // (We won't reach inside boxes; instead, we derive observable effects.)
+    local tok = new JsonTokenizer("{}")
+    // Call is_eof on scanner indirectly via tokenization pre-checks
+    // The tokenizer will loop until is_eof becomes true and emit EOF token.
+    local tokens = tok.tokenize()
+    // Print token count to confirm it reached EOF cleanly
+    print(tokens.length())
+    return 0
+  }
+}
