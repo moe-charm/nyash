@@ -2,9 +2,10 @@
 # Nyash dev environment convenience script
 # Usage: source tools/dev_env.sh [profile]
 # Profiles:
-#   pyvm   - Favor PyVM for VM and Bridge
-#   bridge - Bridge-only helpers (keep interpreter)
-#   reset  - Unset variables set by this script
+#   pyvm     - Favor PyVM for VM and Bridge
+#   bridge   - Bridge-only helpers (keep interpreter)
+#   phi_off  - PHI-less MIR (edge-copy) + verifier relax; harness on
+#   reset    - Unset variables set by this script
 
 set -euo pipefail
 
@@ -28,13 +29,23 @@ reset_env() {
   unset NYASH_PIPE_USE_PYVM || true
   unset NYASH_DISABLE_PLUGINS || true
   unset NYASH_NY_COMPILER_TIMEOUT_MS || true
+  unset NYASH_MIR_NO_PHI || true
+  unset NYASH_VERIFY_ALLOW_NO_PHI || true
+  unset NYASH_LLVM_USE_HARNESS || true
   echo "[dev-env] environment reset" >&2
+}
+
+activate_phi_off() {
+  export NYASH_MIR_NO_PHI=1
+  export NYASH_VERIFY_ALLOW_NO_PHI=1
+  export NYASH_LLVM_USE_HARNESS=1
+  echo "[dev-env] PHI-off (edge-copy) profile activated (harness on)" >&2
 }
 
 case "${1:-pyvm}" in
   pyvm) activate_pyvm ;;
   bridge) activate_bridge ;;
+  phi_off) activate_phi_off ;;
   reset) reset_env ;;
-  *) echo "usage: source tools/dev_env.sh [pyvm|bridge|reset]" >&2 ;;
+  *) echo "usage: source tools/dev_env.sh [pyvm|bridge|phi_off|reset]" >&2 ;;
 esac
-

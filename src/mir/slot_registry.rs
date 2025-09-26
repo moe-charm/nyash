@@ -22,25 +22,23 @@ static NEXT_TYPE_ID: Lazy<Mutex<BoxTypeId>> = Lazy::new(|| Mutex::new(100)); // 
 static EXPLICIT_SLOTS: Lazy<Mutex<HashMap<(BoxTypeId, String), MethodSlot>>> =
     Lazy::new(|| Mutex::new(HashMap::new()));
 
-// Builtin type -> (method, slot) static table (slots start at 4; 0..3 are universal)
-static BUILTIN_SLOTS: Lazy<HashMap<&'static str, Vec<(&'static str, MethodSlot)>>> = Lazy::new(|| {
-    use std::iter::FromIterator;
-    let mut m = HashMap::new();
-    m.insert("ArrayBox", vec![
-        ("push", 4), ("pop", 5), ("length", 6), ("len", 6), ("get", 7), ("set", 8),
-        ("remove", 9), ("contains", 10), ("indexOf", 11), ("clear", 12), ("join", 13),
-        ("sort", 14), ("reverse", 15), ("slice", 16)
-    ]);
-    m.insert("MapBox", vec![
-        ("set", 4), ("get", 5), ("has", 6), ("delete", 7), ("remove", 7), ("keys", 8),
-        ("values", 9), ("size", 10), ("clear", 11)
-    ]);
-    m.insert("IntegerBox", vec![("abs", 4)]);
-    m.insert("StringBox", vec![("substring", 4), ("concat", 5)]);
-    // Common plugin boxes (minimal seed)
-    m.insert("FileBox", vec![ ("open", 4), ("read", 5), ("write", 6), ("close", 7) ]);
-    HashMap::from_iter(m)
-});
+// Phase 15.5: Unified plugin-based slot resolution (core box special handling removed)
+// All boxes (including former "core" boxes) now use plugin-based slot assignment
+// Static builtin slots are deprecated in favor of nyash.toml configuration
+static BUILTIN_SLOTS: Lazy<HashMap<&'static str, Vec<(&'static str, MethodSlot)>>> =
+    Lazy::new(|| {
+        use std::iter::FromIterator;
+        let mut m = HashMap::new();
+        // Phase 15.5: Core boxes removed, all slots come from nyash.toml
+        // Former core boxes (StringBox, IntegerBox, ArrayBox, MapBox) now use plugin slots
+
+        // Common plugin boxes (reference examples only)
+        m.insert(
+            "FileBox",
+            vec![("open", 4), ("read", 5), ("write", 6), ("close", 7)],
+        );
+        HashMap::from_iter(m)
+    });
 
 // Universal slots mapping for quick checks
 fn universal_slot(method: &str) -> Option<MethodSlot> {
@@ -126,8 +124,29 @@ mod tests {
 
     #[test]
     fn test_explicit_slot_reservation() {
-        let tid = get_or_assign_type_id("ArrayBox");
-        reserve_method_slot(tid, "push", 8);
-        assert_eq!(resolve_slot(tid, "push"), Some(8));
+        // Phase 15.5: Test unified plugin-based slot reservation
+        let tid = get_or_assign_type_id("TestBox");
+        reserve_method_slot(tid, "custom_method", 8);
+        assert_eq!(resolve_slot(tid, "custom_method"), Some(8));
+    }
+
+    #[test]
+    fn test_phase_15_5_unified_resolution() {
+        // Phase 15.5: Former core boxes now use plugin-based resolution
+        let string_tid = get_or_assign_type_id("StringBox");
+
+        // Universal slots still work
+        assert_eq!(resolve_slot(string_tid, "toString"), Some(0));
+        assert_eq!(resolve_slot(string_tid, "type"), Some(1));
+
+        // Former builtin slots (substring, concat) are no longer auto-assigned
+        assert_eq!(resolve_slot(string_tid, "substring"), None);
+        assert_eq!(resolve_slot(string_tid, "concat"), None);
+
+        // Must be explicitly reserved (as plugins do)
+        reserve_method_slot(string_tid, "get", 4);
+        reserve_method_slot(string_tid, "set", 5);
+        assert_eq!(resolve_slot(string_tid, "get"), Some(4));
+        assert_eq!(resolve_slot(string_tid, "set"), Some(5));
     }
 }

@@ -18,6 +18,7 @@ Grammar (subset):
   term     := unary (('*'|'/') unary)*
   unary    := '-' unary | factor
   factor   := INT | STRING | IDENT call_tail* | '(' expr ')' | 'new' IDENT '(' args? ')'
+            | '{' map_entries? '}'               # map literal (string keys only)
   call_tail:= '.' IDENT '(' args? ')'   # method
             | '(' args? ')'             # function call
   args     := expr (',' expr)*
@@ -45,7 +46,7 @@ def lex(s: str):
         # two-char ops
         if s.startswith('==', i) or s.startswith('!=', i) or s.startswith('<=', i) or s.startswith('>=', i) or s.startswith('&&', i) or s.startswith('||', i):
             out.append(Tok('OP2', s[i:i+2], i)); i+=2; continue
-        if c in '+-*/(){}.,<>=':
+        if c in '+-*/(){}.,<>=[]:':
             out.append(Tok(c, c, i)); i+=1; continue
         if c=='"':
             j=i+1; buf=[]
@@ -144,6 +145,31 @@ class P:
         if self.eat('STR'): return {"type":"Str","value":tok.val}
         if self.eat('('):
             e=self.expr(); self.expect(')'); return e
+        # Array literal: [e1, e2, ...] → Call{name:"array.of", args:[...]}
+        if self.eat('['):
+            args=[]
+            if self.cur().kind != ']':
+                args.append(self.expr())
+                while self.eat(','):
+                    args.append(self.expr())
+            self.expect(']')
+            return {"type":"Call","name":"array.of","args":args}
+        # Map literal: {"k": v, ...} (string keys only) → Call{name:"map.of", args:[Str(k1), v1, ...]}
+        if self.eat('{'):
+            args=[]
+            if self.cur().kind != '}':
+                # first entry
+                k=self.cur(); self.expect('STR');
+                self.expect(':'); v=self.expr();
+                args.append({"type":"Str","value":k.val}); args.append(v)
+                while self.eat(','):
+                    if self.cur().kind == '}':
+                        break
+                    k=self.cur(); self.expect('STR');
+                    self.expect(':'); v=self.expr();
+                    args.append({"type":"Str","value":k.val}); args.append(v)
+            self.expect('}')
+            return {"type":"Call","name":"map.of","args":args}
         if self.eat('NEW'):
             t=self.cur(); self.expect('IDENT'); self.expect('(')
             args=self.args_opt(); self.expect(')')

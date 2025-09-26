@@ -1,7 +1,7 @@
 static box Main {
   main() {
     local S
-    S = include "apps/std/string.nyash"
+    using "apps/std/string.nyash" as S
     local r
     r = S.string_index_of("banana", "na")
     print("r=" + r.toString())

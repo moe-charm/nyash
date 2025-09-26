@@ -1,0 +1,6 @@
+// Ny Executor Stage 0 scaffold — core ops placeholder
+
+static box OpsCore {
+  main(args) { return 0 }
+}
+

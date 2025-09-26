@@ -1,0 +1,12 @@
+// ByteCursorBox (MVP): byte-based helpers (placeholder on top of String)
+// Note: MVP assumes input as String; true byte buffer support to be added.
+static box ByteCursorBox {
+  len_bytes(s) { return s.length() }  // MVP: not true bytes yet
+  slice_bytes(s, i, j) { return s.substring(i, j) }
+  find_bytes(s, pat, from) {
+    if from { return s.indexOf(pat, from) }
+    return s.indexOf(pat)
+  }
+  to_string_utf8(s, strict) { return s } // MVP: identity
+}
+

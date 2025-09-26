@@ -1,0 +1,215 @@
+commit 8b0abf84292e85a3c09eba92d8bd0da79770ec8f
+Author: moe-charm <moecharm.dev@gmail.com>
+Date:   Tue Sep 23 06:41:07 2025 +0900
+
+    mir: detect nested returns in static lowering
+
+diff --git a/apps/selfhost/vm/boxes/mini_vm_core.nyash b/apps/selfhost/vm/boxes/mini_vm_core.nyash
+index bac66c4..184cd2f 100644
+--- a/apps/selfhost/vm/boxes/mini_vm_core.nyash
++++ b/apps/selfhost/vm/boxes/mini_vm_core.nyash
+@@ -541,10 +541,20 @@ static box MiniVm {
+     local k_print = "\"kind\":\"Print\""
+     loop (true) {
+       guard = guard + 1
+-      if guard > 200 { if trace == 1 { print("[collect][guard_break] guard="+guard) } break }
++      if guard > 200 {
++        if trace == 1 { print("[collect][guard_break] guard="+guard) }
++        if trace == 1 { print("[collect][loop_exit] guard="+guard+" out.size="+out.size()) }
++        if trace == 1 { print("[collect][return] out.size="+out.size()) }
++        return out
++      }
+       local p = index_of_from(json, k_print, pos)
+       if trace == 1 { print("[collect][loop] pos="+pos+" p="+p+" guard="+guard) }
+-      if p < 0 { if trace == 1 { print("[collect][p_break] p="+p) } break }
++      if p < 0 {
++        if trace == 1 { print("[collect][p_break] p="+p) }
++        if trace == 1 { print("[collect][loop_exit] guard="+guard+" out.size="+out.size()) }
++        if trace == 1 { print("[collect][return] out.size="+out.size()) }
++        return out
++      }
+       // bound current Print slice to [this, next)
+       local obj_start = p
+       local next_p = index_of_from(json, k_print, p + k_print.length())
+diff --git a/src/mir/builder/builder_calls.rs b/src/mir/builder/builder_calls.rs
+index 6b5bf7e..3432a75 100644
+--- a/src/mir/builder/builder_calls.rs
++++ b/src/mir/builder/builder_calls.rs
+@@ -1,6 +1,41 @@
+ // Extracted call-related builders from builder.rs to keep files lean
+ use super::{Effect, EffectMask, FunctionSignature, MirInstruction, MirType, ValueId};
+ use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
++
++fn contains_value_return(nodes: &[ASTNode]) -> bool {
++    fn node_has_value_return(node: &ASTNode) -> bool {
++        match node {
++            ASTNode::Return { value: Some(_), .. } => true,
++            ASTNode::If { then_body, else_body, .. } => {
++                contains_value_return(then_body)
++                    || else_body
++                        .as_ref()
++                        .map_or(false, |body| contains_value_return(body))
++            }
++            ASTNode::Loop { body, .. } => contains_value_return(body),
++            ASTNode::TryCatch {
++                try_body,
++                catch_clauses,
++                finally_body,
++                ..
++            } => {
++                contains_value_return(try_body)
++                    || catch_clauses
++                        .iter()
++                        .any(|clause| contains_value_return(&clause.body))
++                    || finally_body
++                        .as_ref()
++                        .map_or(false, |body| contains_value_return(body))
++            }
++            ASTNode::Program { statements, .. } => contains_value_return(statements),
++            ASTNode::ScopeBox { body, .. } => contains_value_return(body),
++            ASTNode::FunctionDeclaration { body, .. } => contains_value_return(body),
++            _ => false,
++        }
++    }
++
++    nodes.iter().any(node_has_value_return)
++}
+ use crate::mir::{slot_registry, TypeOpKind};
+ 
+ impl super::MirBuilder {
+@@ -321,13 +356,7 @@ impl super::MirBuilder {
+         for _ in &params {
+             param_types.push(MirType::Unknown);
+         }
+-        let mut returns_value = false;
+-        for st in &body {
+-            if let ASTNode::Return { value: Some(_), .. } = st {
+-                returns_value = true;
+-                break;
+-            }
+-        }
++        let returns_value = contains_value_return(&body);
+         let ret_ty = if returns_value {
+             MirType::Unknown
+         } else {
+@@ -365,17 +394,39 @@ impl super::MirBuilder {
+             span: crate::ast::Span::unknown(),
+         };
+         let _last = self.build_expression(program_ast)?;
++        if !returns_value && !self.is_current_block_terminated() {
++            let void_val = self.value_gen.next();
++            self.emit_instruction(MirInstruction::Const {
++                dst: void_val,
++                value: super::ConstValue::Void,
++            })?;
++            self.emit_instruction(MirInstruction::Return {
++                value: Some(void_val),
++            })?;
++        }
+         if let Some(ref mut f) = self.current_function {
+-            if let Some(block) = f.get_block(self.current_block.unwrap()) {
+-                if !block.is_terminated() {
+-                    let void_val = self.value_gen.next();
+-                    self.emit_instruction(MirInstruction::Const {
+-                        dst: void_val,
+-                        value: super::ConstValue::Void,
+-                    })?;
+-                    self.emit_instruction(MirInstruction::Return {
+-                        value: Some(void_val),
+-                    })?;
++            if returns_value
++                && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
++            {
++                let mut inferred: Option<MirType> = None;
++                'search: for (_bid, bb) in f.blocks.iter() {
++                    for inst in bb.instructions.iter() {
++                        if let MirInstruction::Return { value: Some(v) } = inst {
++                            if let Some(mt) = self.value_types.get(v).cloned() {
++                                inferred = Some(mt);
++                                break 'search;
++                            }
++                        }
++                    }
++                    if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
++                        if let Some(mt) = self.value_types.get(v).cloned() {
++                            inferred = Some(mt);
++                            break;
++                        }
++                    }
++                }
++                if let Some(mt) = inferred {
++                    f.signature.return_type = mt;
+                 }
+             }
+         }
+@@ -401,13 +452,7 @@ impl super::MirBuilder {
+         for _ in &params {
+             param_types.push(MirType::Unknown);
+         }
+-        let mut returns_value = false;
+-        for st in &body {
+-            if let ASTNode::Return { value: Some(_), .. } = st {
+-                returns_value = true;
+-                break;
+-            }
+-        }
++        let returns_value = contains_value_return(&body);
+         let ret_ty = if returns_value {
+             MirType::Unknown
+         } else {
+@@ -441,17 +486,45 @@ impl super::MirBuilder {
+             span: crate::ast::Span::unknown(),
+         };
+         let _last = self.build_expression(program_ast)?;
++        if !returns_value {
++            if let Some(ref mut f) = self.current_function {
++                if let Some(block) = f.get_block(self.current_block.unwrap()) {
++                    if !block.is_terminated() {
++                        let void_val = self.value_gen.next();
++                        self.emit_instruction(MirInstruction::Const {
++                            dst: void_val,
++                            value: super::ConstValue::Void,
++                        })?;
++                        self.emit_instruction(MirInstruction::Return {
++                            value: Some(void_val),
++                        })?;
++                    }
++                }
++            }
++        }
+         if let Some(ref mut f) = self.current_function {
+-            if let Some(block) = f.get_block(self.current_block.unwrap()) {
+-                if !block.is_terminated() {
+-                    let void_val = self.value_gen.next();
+-                    self.emit_instruction(MirInstruction::Const {
+-                        dst: void_val,
+-                        value: super::ConstValue::Void,
+-                    })?;
+-                    self.emit_instruction(MirInstruction::Return {
+-                        value: Some(void_val),
+-                    })?;
++            if returns_value
++                && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
++            {
++                let mut inferred: Option<MirType> = None;
++                'search: for (_bid, bb) in f.blocks.iter() {
++                    for inst in bb.instructions.iter() {
++                        if let MirInstruction::Return { value: Some(v) } = inst {
++                            if let Some(mt) = self.value_types.get(v).cloned() {
++                                inferred = Some(mt);
++                                break 'search;
++                            }
++                        }
++                    }
++                    if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
++                        if let Some(mt) = self.value_types.get(v).cloned() {
++                            inferred = Some(mt);
++                            break;
++                        }
++                    }
++                }
++                if let Some(mt) = inferred {
++                    f.signature.return_type = mt;
+                 }
+             }
+         }

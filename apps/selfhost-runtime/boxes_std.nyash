@@ -1,0 +1,6 @@
+// Ny Executor Stage 0 scaffold — std boxes placeholder
+
+static box BoxesStd {
+  main(args) { return 0 }
+}
+

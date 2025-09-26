@@ -1,0 +1,519 @@
+{
+  "functions": [
+    {
+      "blocks": [
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "op": "jump",
+              "target": 5
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "dst": 2,
+              "incoming": [
+                [
+                  6,
+                  7
+                ],
+                [
+                  10,
+                  9
+                ],
+                [
+                  12,
+                  6
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "0"
+              }
+            },
+            {
+              "dst": 4,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 8,
+              "op": "branch",
+              "then": 7
+            }
+          ]
+        },
+        {
+          "id": 6,
+          "instructions": [
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "other"
+              }
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "jump",
+              "target": 4
+            }
+          ]
+        },
+        {
+          "id": 7,
+          "instructions": [
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "found zero"
+              }
+            },
+            {
+              "args": [
+                5
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "jump",
+              "target": 4
+            }
+          ]
+        },
+        {
+          "id": 8,
+          "instructions": [
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "dst": 8,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 7
+            },
+            {
+              "cond": 8,
+              "else": 6,
+              "op": "branch",
+              "then": 9
+            }
+          ]
+        },
+        {
+          "id": 9,
+          "instructions": [
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "found one"
+              }
+            },
+            {
+              "args": [
+                9
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "jump",
+              "target": 4
+            }
+          ]
+        }
+      ],
+      "name": "Main.main",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "ret",
+              "value": 1
+            }
+          ]
+        }
+      ],
+      "name": "Main.equals/1",
+      "params": [
+        0
+      ]
+    },
+    {
+      "blocks": [
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 0,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "Main("
+              }
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": ")"
+              }
+            },
+            {
+              "dst": 2,
+              "lhs": 0,
+              "op": "binop",
+              "operation": "+",
+              "rhs": 1
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ],
+      "name": "Main.toString/0",
+      "params": []
+    },
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "op": "jump",
+              "target": 11
+            }
+          ]
+        },
+        {
+          "id": 10,
+          "instructions": [
+            {
+              "dst": 2,
+              "incoming": [
+                [
+                  6,
+                  13
+                ],
+                [
+                  10,
+                  15
+                ],
+                [
+                  12,
+                  12
+                ]
+              ],
+              "op": "phi"
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        },
+        {
+          "id": 11,
+          "instructions": [
+            {
+              "dst": 3,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "0"
+              }
+            },
+            {
+              "dst": 4,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 3
+            },
+            {
+              "cond": 4,
+              "else": 14,
+              "op": "branch",
+              "then": 13
+            }
+          ]
+        },
+        {
+          "id": 12,
+          "instructions": [
+            {
+              "dst": 11,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "other"
+              }
+            },
+            {
+              "args": [
+                11
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 12,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "jump",
+              "target": 10
+            }
+          ]
+        },
+        {
+          "id": 13,
+          "instructions": [
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "found zero"
+              }
+            },
+            {
+              "args": [
+                5
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 6,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 0
+              }
+            },
+            {
+              "op": "jump",
+              "target": 10
+            }
+          ]
+        },
+        {
+          "id": 14,
+          "instructions": [
+            {
+              "dst": 7,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "1"
+              }
+            },
+            {
+              "dst": 8,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "==",
+              "rhs": 7
+            },
+            {
+              "cond": 8,
+              "else": 12,
+              "op": "branch",
+              "then": 15
+            }
+          ]
+        },
+        {
+          "id": 15,
+          "instructions": [
+            {
+              "dst": 9,
+              "op": "const",
+              "value": {
+                "type": {
+                  "box_type": "StringBox",
+                  "kind": "handle"
+                },
+                "value": "found one"
+              }
+            },
+            {
+              "args": [
+                9
+              ],
+              "dst": null,
+              "func": "nyash.console.log",
+              "op": "externcall"
+            },
+            {
+              "dst": 10,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "op": "jump",
+              "target": 10
+            }
+          ]
+        }
+      ],
+      "name": "main",
+      "params": []
+    }
+  ]
+}

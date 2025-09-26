@@ -14,10 +14,8 @@ pub type PluginAbiFn = unsafe extern "C" fn() -> u32;
 /// - host: Host function table for plugin to use
 /// - info: Plugin information to be filled by plugin
 /// Returns: 0 on success, negative error code on failure
-pub type PluginInitFn = unsafe extern "C" fn(
-    host: *const NyashHostVtable,
-    info: *mut NyashPluginInfo,
-) -> i32;
+pub type PluginInitFn =
+    unsafe extern "C" fn(host: *const NyashHostVtable, info: *mut NyashPluginInfo) -> i32;
 
 /// Invoke a plugin method
 /// Parameters:
@@ -65,27 +63,19 @@ impl PluginHandle {
         }
         Ok(())
     }
-    
+
     /// Initialize plugin with host vtable
-    pub fn initialize(
-        &self,
-        host: &NyashHostVtable,
-        info: &mut NyashPluginInfo,
-    ) -> BidResult<()> {
-        let result = unsafe {
-            (self.init)(
-                host as *const NyashHostVtable,
-                info as *mut NyashPluginInfo,
-            )
-        };
-        
+    pub fn initialize(&self, host: &NyashHostVtable, info: &mut NyashPluginInfo) -> BidResult<()> {
+        let result =
+            unsafe { (self.init)(host as *const NyashHostVtable, info as *mut NyashPluginInfo) };
+
         if result != 0 {
             Err(BidError::from_raw(result))
         } else {
             Ok(())
         }
     }
-    
+
     /// Invoke a plugin method
     pub fn invoke(
         &self,
@@ -108,16 +98,16 @@ impl PluginHandle {
                 &mut required_size,
             )
         };
-        
+
         // Check for error (except buffer too small)
         if result != 0 && result != -1 {
             return Err(BidError::from_raw(result));
         }
-        
+
         // Allocate buffer if needed
         if required_size > 0 {
             result_buffer.resize(required_size, 0);
-            
+
             // Second call: get actual data
             let mut actual_size = required_size;
             let result = unsafe {
@@ -131,18 +121,18 @@ impl PluginHandle {
                     &mut actual_size,
                 )
             };
-            
+
             if result != 0 {
                 return Err(BidError::from_raw(result));
             }
-            
+
             // Trim to actual size
             result_buffer.truncate(actual_size);
         }
-        
+
         Ok(())
     }
-    
+
     /// Shutdown plugin
     pub fn shutdown(&self) {
         unsafe {
@@ -162,7 +152,7 @@ impl HostVtableBuilder {
             vtable: NyashHostVtable::empty(),
         }
     }
-    
+
     pub fn with_alloc<F>(self, _f: F) -> Self
     where
         F: Fn(usize) -> *mut std::os::raw::c_void + 'static,
@@ -171,21 +161,21 @@ impl HostVtableBuilder {
         // and create a proper extern "C" function. This is simplified.
         self
     }
-    
+
     pub fn with_free<F>(self, _f: F) -> Self
     where
         F: Fn(*mut std::os::raw::c_void) + 'static,
     {
         self
     }
-    
+
     pub fn with_log<F>(self, _f: F) -> Self
     where
         F: Fn(&str) + 'static,
     {
         self
     }
-    
+
     pub fn build(self) -> NyashHostVtable {
         self.vtable
     }
@@ -194,12 +184,12 @@ impl HostVtableBuilder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     // Mock plugin functions for testing
     unsafe extern "C" fn mock_abi() -> u32 {
         1 // BID-1
     }
-    
+
     unsafe extern "C" fn mock_init(
         _host: *const NyashHostVtable,
         info: *mut NyashPluginInfo,
@@ -210,7 +200,7 @@ mod tests {
         }
         0
     }
-    
+
     unsafe extern "C" fn mock_invoke(
         _type_id: u32,
         _method_id: u32,
@@ -225,9 +215,9 @@ mod tests {
         }
         0
     }
-    
+
     unsafe extern "C" fn mock_shutdown() {}
-    
+
     #[test]
     fn test_plugin_handle() {
         let handle = PluginHandle {
@@ -236,16 +226,16 @@ mod tests {
             invoke: mock_invoke,
             shutdown: mock_shutdown,
         };
-        
+
         // Check ABI
         assert!(handle.check_abi().is_ok());
-        
+
         // Initialize
         let host = NyashHostVtable::empty();
         let mut info = NyashPluginInfo::empty();
         assert!(handle.initialize(&host, &mut info).is_ok());
         assert_eq!(info.type_id, 99);
-        
+
         // Invoke
         let mut result = Vec::new();
         assert!(handle.invoke(99, 1, 0, &[], &mut result).is_ok());

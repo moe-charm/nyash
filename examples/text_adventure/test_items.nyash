@@ -1,5 +1,5 @@
 // Test file for items.nyash - デバッグしやすい単体テスト
-include "text_adventure/items.nyash"
+using "text_adventure/items.nyash"
 
 DEBUG = new DebugBox()
 DEBUG.startTracking()

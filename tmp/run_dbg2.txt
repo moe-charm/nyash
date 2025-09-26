@@ -1,0 +1,23 @@
+[pyvm] error: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'
+Traceback (most recent call last):
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/pyvm_runner.py", line 83, in <module>
+    main()
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/pyvm_runner.py", line 67, in main
+    result = vm.run_args(entry, argv) if argv else vm.run(entry)
+                                                   ^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 159, in run
+    return self._exec_function(fn, [])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 521, in _exec_function
+    out = self._exec_function(callee, args)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 754, in _exec_function
+    result = self._exec_function(callee, call_args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 754, in _exec_function
+    result = self._exec_function(callee, call_args)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 657, in _exec_function
+    start = int(args[0]) if len(args) > 0 else 0
+            ^^^^^^^^^^^^
+TypeError: int() argument must be a string, a bytes-like object or a real number, not 'NoneType'

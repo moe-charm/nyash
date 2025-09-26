@@ -2,12 +2,12 @@
 // Nyashの箱システムによるJSON解析・生成を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, BoxCore, BoxBase, StringBox, BoolBox, IntegerBox};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, IntegerBox, NyashBox, StringBox};
 use crate::boxes::array::ArrayBox;
 use crate::boxes::map_box::MapBox;
+use serde_json::{Error, Value};
 use std::any::Any;
 use std::sync::RwLock;
-use serde_json::{Value, Error};
 
 #[derive(Debug)]
 pub struct JSONBox {
@@ -18,7 +18,7 @@ pub struct JSONBox {
 impl Clone for JSONBox {
     fn clone(&self) -> Self {
         let value_clone = self.value.read().unwrap().clone();
-        
+
         Self {
             value: RwLock::new(value_clone),
             base: BoxBase::new(), // New unique ID for clone
@@ -29,24 +29,24 @@ impl Clone for JSONBox {
 impl JSONBox {
     pub fn from_str(s: &str) -> Result<Self, Error> {
         let value = serde_json::from_str(s)?;
-        Ok(JSONBox { 
-            value: RwLock::new(value), 
-            base: BoxBase::new() 
+        Ok(JSONBox {
+            value: RwLock::new(value),
+            base: BoxBase::new(),
         })
     }
-    
+
     pub fn new(value: Value) -> Self {
-        JSONBox { 
-            value: RwLock::new(value), 
-            base: BoxBase::new() 
+        JSONBox {
+            value: RwLock::new(value),
+            base: BoxBase::new(),
         }
     }
-    
+
     pub fn to_string(&self) -> String {
         let value = self.value.read().unwrap();
         value.to_string()
     }
-    
+
     /// JSONパース
     pub fn parse(data: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let json_str = data.to_string_box().value;
@@ -55,17 +55,17 @@ impl JSONBox {
             Err(e) => Box::new(StringBox::new(&format!("Error parsing JSON: {}", e))),
         }
     }
-    
+
     /// JSON文字列化
     pub fn stringify(&self) -> Box<dyn NyashBox> {
         Box::new(StringBox::new(&self.to_string()))
     }
-    
+
     /// 値取得
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         let value = self.value.read().unwrap();
-        
+
         if let Some(obj) = value.as_object() {
             if let Some(val) = obj.get(&key_str) {
                 json_value_to_nyash_box(val)
@@ -86,14 +86,14 @@ impl JSONBox {
             Box::new(crate::boxes::null_box::NullBox::new())
         }
     }
-    
+
     /// 値設定
     pub fn set(&self, key: Box<dyn NyashBox>, new_value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         let mut value = self.value.write().unwrap();
-        
+
         let json_value = nyash_box_to_json_value(new_value);
-        
+
         if let Some(obj) = value.as_object_mut() {
             obj.insert(key_str, json_value);
             Box::new(StringBox::new("ok"))
@@ -101,31 +101,31 @@ impl JSONBox {
             Box::new(StringBox::new("Error: JSONBox is not an object"))
         }
     }
-    
+
     /// キー存在チェック
     pub fn has(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         let value = self.value.read().unwrap();
-        
+
         if let Some(obj) = value.as_object() {
             Box::new(BoolBox::new(obj.contains_key(&key_str)))
         } else {
             Box::new(BoolBox::new(false))
         }
     }
-    
+
     /// すべてのキーを取得
     pub fn keys(&self) -> Box<dyn NyashBox> {
         let value = self.value.read().unwrap();
         let array = ArrayBox::new();
-        
+
         if let Some(obj) = value.as_object() {
             for key in obj.keys() {
                 // ArrayBoxのpushメソッドは&selfなので、直接呼び出し可能
                 let _ = array.push(Box::new(StringBox::new(key)));
             }
         }
-        
+
         Box::new(array)
     }
 }
@@ -134,11 +134,11 @@ impl BoxCore for JSONBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let value = self.value.read().unwrap();
         let json_type = match *value {
@@ -148,18 +148,18 @@ impl BoxCore for JSONBox {
             Value::String(_) => "string",
             Value::Array(ref arr) => {
                 return write!(f, "JSONBox[array:{}]", arr.len());
-            },
+            }
             Value::Object(ref obj) => {
                 return write!(f, "JSONBox[object:{}]", obj.len());
-            },
+            }
         };
         write!(f, "JSONBox[{}]", json_type)
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -175,7 +175,7 @@ impl NyashBox for JSONBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -186,11 +186,9 @@ impl NyashBox for JSONBox {
         StringBox::new(value.to_string())
     }
 
-
     fn type_name(&self) -> &'static str {
         "JSONBox"
     }
-
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_json) = other.as_any().downcast_ref::<JSONBox>() {
@@ -230,10 +228,7 @@ fn json_value_to_nyash_box(value: &Value) -> Box<dyn NyashBox> {
         Value::Object(obj) => {
             let map_box = MapBox::new();
             for (key, val) in obj {
-                map_box.set(
-                    Box::new(StringBox::new(key)),
-                    json_value_to_nyash_box(val)
-                );
+                map_box.set(Box::new(StringBox::new(key)), json_value_to_nyash_box(val));
             }
             Box::new(map_box)
         }
@@ -242,7 +237,11 @@ fn json_value_to_nyash_box(value: &Value) -> Box<dyn NyashBox> {
 
 /// NyashBox を JSON Value に変換
 fn nyash_box_to_json_value(value: Box<dyn NyashBox>) -> Value {
-    if value.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+    if value
+        .as_any()
+        .downcast_ref::<crate::boxes::null_box::NullBox>()
+        .is_some()
+    {
         Value::Null
     } else if let Some(bool_box) = value.as_any().downcast_ref::<BoolBox>() {
         Value::Bool(bool_box.value)
@@ -259,7 +258,8 @@ fn nyash_box_to_json_value(value: Box<dyn NyashBox>) -> Value {
         Value::String(string_box.value.clone())
     } else if let Some(array_box) = value.as_any().downcast_ref::<ArrayBox>() {
         let items = array_box.items.read().unwrap();
-        let arr: Vec<Value> = items.iter()
+        let arr: Vec<Value> = items
+            .iter()
             .map(|item| nyash_box_to_json_value(item.clone_box()))
             .collect();
         Value::Array(arr)

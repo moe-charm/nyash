@@ -254,7 +254,7 @@ NyRegisterUserBox(const NyTypeSpec*, const NyMethodSpec*,
 
 ### 最大の課題
 1. **ABI安定と最適化の両立**
-   - vtable拡張、署名IDの凍結、JITパッチ互換などを「一度決めて長期維持」する難しさ
+   - vtable拡張、署名IDの仕様固定、JITパッチ互換などを「一度決めて長期維持」する難しさ
 2. **GC協調の完全性**
    - プラグインのtrace不備がリーク/サイクル残留を引き起こす
 3. **多様な信頼レベル混在**

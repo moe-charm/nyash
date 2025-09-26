@@ -4,7 +4,8 @@ Minimal mapping for NyRT-exported symbols (console/log family等)
 """
 
 import llvmlite.ir as ir
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+from instructions.safepoint import insert_automatic_safepoint
 
 def lower_externcall(
     builder: ir.IRBuilder,
@@ -16,7 +17,8 @@ def lower_externcall(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR ExternCall instruction
@@ -30,8 +32,39 @@ def lower_externcall(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
+    # If BuildCtx is provided, prefer its maps for consistency.
+    if ctx is not None:
+        try:
+            if getattr(ctx, 'resolver', None) is not None:
+                resolver = ctx.resolver
+            if getattr(ctx, 'preds', None) is not None and preds is None:
+                preds = ctx.preds
+            if getattr(ctx, 'block_end_values', None) is not None and block_end_values is None:
+                block_end_values = ctx.block_end_values
+            if getattr(ctx, 'bb_map', None) is not None and bb_map is None:
+                bb_map = ctx.bb_map
+        except Exception:
+            pass
+    # Normalize extern target names
     # Accept full symbol names (e.g., "nyash.console.log", "nyash.string.len_h").
+    # Also accept legacy/environment names and map them to kernel exports.
     llvm_name = func_name
+    try:
+        if func_name.startswith("env.console."):
+            # Map env.console.* → nyash.console.* (kernel exports)
+            method = func_name.split(".")[-1]
+            # println maps to log for now
+            if method == "println":
+                method = "log"
+            llvm_name = f"nyash.console.{method}"
+        elif func_name == "println" or func_name == "print":
+            # Bare println/print fallback
+            llvm_name = "nyash.console.log"
+        elif func_name.startswith("nyash.console.") and func_name.endswith("println"):
+            # Normalize nyash.console.println → nyash.console.log
+            llvm_name = "nyash.console.log"
+    except Exception:
+        pass
 
     i8 = ir.IntType(8)
     i64 = ir.IntType(64)
@@ -83,13 +116,17 @@ def lower_externcall(
     call_args: List[ir.Value] = []
     for i, arg_id in enumerate(args):
         orig_arg_id = arg_id
-        # Prefer resolver
+        # Prefer resolver/ctx
+        aval = None
         if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-            if len(func.args) > i and isinstance(func.args[i].type, ir.PointerType):
-                aval = resolver.resolve_ptr(arg_id, builder.block, preds, block_end_values, vmap)
-            else:
-                aval = resolver.resolve_i64(arg_id, builder.block, preds, block_end_values, vmap, bb_map)
-        else:
+            try:
+                if len(func.args) > i and isinstance(func.args[i].type, ir.PointerType):
+                    aval = resolver.resolve_ptr(arg_id, builder.block, preds, block_end_values, vmap)
+                else:
+                    aval = resolver.resolve_i64(arg_id, builder.block, preds, block_end_values, vmap, bb_map)
+            except Exception:
+                aval = None
+        if aval is None:
             aval = vmap.get(arg_id)
         if aval is None:
             # Default guess
@@ -142,7 +179,8 @@ def lower_externcall(
                             except Exception:
                                 pass
                 else:
-                    aval = ir.Constant(expected_ty, None)
+                    # used_string_h2p was true: keep the resolved pointer (do not null it)
+                    pass
             elif isinstance(expected_ty, ir.IntType) and expected_ty.width == 64:
                 # Need i64
                 if hasattr(aval, 'type'):
@@ -179,3 +217,10 @@ def lower_externcall(
             vmap[dst_vid] = ir.Constant(i64, 0)
         else:
             vmap[dst_vid] = result
+    # Insert an automatic safepoint after externcall
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(builder, module, "extern_call")
+    except Exception:
+        pass

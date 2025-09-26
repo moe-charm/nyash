@@ -1,6 +1,6 @@
-use clap::{Arg, ArgAction, Command, value_parser};
+use clap::{Arg, ArgAction, Command};
 use std::fs::{self, File};
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command as PCommand, Stdio};
 
@@ -24,28 +24,47 @@ fn main() {
         // Read stdin to tmp/ny_mir_builder_input.json for re-use
         let mut buf = Vec::new();
         io::stdin().read_to_end(&mut buf).expect("read stdin");
-        if buf.is_empty() { eprintln!("error: no input on stdin"); std::process::exit(2); }
-        let cwd_tmp = Path::new("tmp"); let _ = fs::create_dir_all(cwd_tmp);
+        if buf.is_empty() {
+            eprintln!("error: no input on stdin");
+            std::process::exit(2);
+        }
+        let cwd_tmp = Path::new("tmp");
+        let _ = fs::create_dir_all(cwd_tmp);
         let cwd_path = cwd_tmp.join("ny_mir_builder_input.json");
         fs::write(&cwd_path, &buf).expect("write cwd tmp json");
         cwd_path
     } else {
         let p = PathBuf::from(matches.get_one::<String>("in").unwrap());
-        if !p.exists() { eprintln!("error: input not found: {}", p.display()); std::process::exit(2); }
+        if !p.exists() {
+            eprintln!("error: input not found: {}", p.display());
+            std::process::exit(2);
+        }
         p
     };
 
     let emit = matches.get_one::<String>("emit").unwrap().as_str();
-    let out_path = matches.get_one::<String>("out").map(|s| s.to_string()).unwrap_or_else(|| match emit {
-        "obj" => format!("{}/target/aot_objects/a.o", std::env::current_dir().unwrap().display()),
-        "ll" => format!("{}/target/aot_objects/a.ll", std::env::current_dir().unwrap().display()),
-        "exe" => "a.out".to_string(),
-        "json" => "/dev/stdout".to_string(),
-        _ => unreachable!(),
-    });
+    let out_path = matches
+        .get_one::<String>("out")
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| match emit {
+            "obj" => format!(
+                "{}/target/aot_objects/a.o",
+                std::env::current_dir().unwrap().display()
+            ),
+            "ll" => format!(
+                "{}/target/aot_objects/a.ll",
+                std::env::current_dir().unwrap().display()
+            ),
+            "exe" => "a.out".to_string(),
+            "json" => "/dev/stdout".to_string(),
+            _ => unreachable!(),
+        });
     let verify = matches.get_flag("verify_llvm");
     let quiet = matches.get_flag("quiet");
-    let nyrt_dir = matches.get_one::<String>("nyrt").map(|s| s.to_string()).unwrap_or("crates/nyrt".to_string());
+    let nyrt_dir = matches
+        .get_one::<String>("nyrt")
+        .map(|s| s.to_string())
+        .unwrap_or("crates/nyash_kernel".to_string());
 
     // Determine sibling nyash binary path (target dir)
     let nyash_bin = current_dir_bin("nyash");
@@ -56,47 +75,74 @@ fn main() {
         } else {
             fs::copy(&in_file, &out_path).expect("copy json");
         }
-        if !quiet { println!("OK json:{}", out_path); }
+        if !quiet {
+            println!("OK json:{}", out_path);
+        }
         return;
     }
 
     // Ensure build dirs
-    let aot_dir = Path::new("target/aot_objects"); let _ = fs::create_dir_all(aot_dir);
+    let aot_dir = Path::new("target/aot_objects");
+    let _ = fs::create_dir_all(aot_dir);
 
     match emit {
         "ll" => {
             std::env::set_var("NYASH_LLVM_DUMP_LL", "1");
             std::env::set_var("NYASH_LLVM_LL_OUT", &out_path);
-            if verify { std::env::set_var("NYASH_LLVM_VERIFY", "1"); }
+            if verify {
+                std::env::set_var("NYASH_LLVM_VERIFY", "1");
+            }
             std::env::set_var("NYASH_LLVM_USE_HARNESS", "1");
             run_nyash_pipe(&nyash_bin, &in_file);
-            if !Path::new(&out_path).exists() { eprintln!("error: failed to produce {}", out_path); std::process::exit(4); }
-            if !quiet { println!("OK ll:{}", out_path); }
+            if !Path::new(&out_path).exists() {
+                eprintln!("error: failed to produce {}", out_path);
+                std::process::exit(4);
+            }
+            if !quiet {
+                println!("OK ll:{}", out_path);
+            }
         }
         "obj" => {
             std::env::set_var("NYASH_LLVM_OBJ_OUT", &out_path);
-            if verify { std::env::set_var("NYASH_LLVM_VERIFY", "1"); }
+            if verify {
+                std::env::set_var("NYASH_LLVM_VERIFY", "1");
+            }
             std::env::set_var("NYASH_LLVM_USE_HARNESS", "1");
             // remove stale
             let _ = fs::remove_file(&out_path);
             run_nyash_pipe(&nyash_bin, &in_file);
-            if !Path::new(&out_path).exists() { eprintln!("error: failed to produce {}", out_path); std::process::exit(4); }
-            if !quiet { println!("OK obj:{}", out_path); }
+            if !Path::new(&out_path).exists() {
+                eprintln!("error: failed to produce {}", out_path);
+                std::process::exit(4);
+            }
+            if !quiet {
+                println!("OK obj:{}", out_path);
+            }
         }
         "exe" => {
-            let obj_path = format!("{}/target/aot_objects/__tmp_mir_builder.o", std::env::current_dir().unwrap().display());
+            let obj_path = format!(
+                "{}/target/aot_objects/__tmp_mir_builder.o",
+                std::env::current_dir().unwrap().display()
+            );
             std::env::set_var("NYASH_LLVM_OBJ_OUT", &obj_path);
-            if verify { std::env::set_var("NYASH_LLVM_VERIFY", "1"); }
+            if verify {
+                std::env::set_var("NYASH_LLVM_VERIFY", "1");
+            }
             std::env::set_var("NYASH_LLVM_USE_HARNESS", "1");
             let _ = fs::remove_file(&obj_path);
             run_nyash_pipe(&nyash_bin, &in_file);
-            if !Path::new(&obj_path).exists() { eprintln!("error: failed to produce object {}", obj_path); std::process::exit(4); }
+            if !Path::new(&obj_path).exists() {
+                eprintln!("error: failed to produce object {}", obj_path);
+                std::process::exit(4);
+            }
             // Link with NyRT
             if let Err(e) = link_exe(&obj_path, &out_path, &nyrt_dir) {
                 eprintln!("error: link failed: {}", e);
                 std::process::exit(5);
             }
-            if !quiet { println!("OK exe:{}", out_path); }
+            if !quiet {
+                println!("OK exe:{}", out_path);
+            }
         }
         _ => unreachable!(),
     }
@@ -108,20 +154,27 @@ fn current_dir_bin(name: &str) -> PathBuf {
     if let Ok(cur) = std::env::current_exe() {
         if let Some(dir) = cur.parent() {
             let cand = dir.join(name);
-            if cand.exists() { return cand; }
+            if cand.exists() {
+                return cand;
+            }
             #[cfg(windows)]
             {
                 let cand = dir.join(format!("{}.exe", name));
-                if cand.exists() { return cand; }
+                if cand.exists() {
+                    return cand;
+                }
             }
         }
     }
     // Fallback to target/release
-    let mut cand = PathBuf::from("target/release").join(name);
-    if cand.exists() { return cand; }
+    let cand = PathBuf::from("target/release").join(name);
+    if cand.exists() {
+        return cand;
+    }
     #[cfg(windows)]
     {
-        cand = PathBuf::from("target/release").join(format!("{}.exe", name));
+        let cand = PathBuf::from("target/release").join(format!("{}.exe", name));
+        return cand;
     }
     cand
 }
@@ -149,17 +202,24 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
         // Prefer lld-link, then link.exe, fallback to cc
         let nyrt_release = format!("{}/target/release", nyrt_dir.replace('\\', "/"));
         let lib_nyrt_lib = format!("{}/nyrt.lib", nyrt_release);
-        let lib_nyrt_a = format!("{}/libnyrt.a", nyrt_release);
+        let lib_nyrt_a = format!("{}/libnyash_kernel.a", nyrt_release);
         if which::which("lld-link").is_ok() {
             let mut args: Vec<String> = Vec::new();
             args.push(format!("/OUT:{}", out_path));
             args.push(obj_path.to_string());
             // Provide LIBPATH and library name (prefer nyrt.lib)
             args.push(format!("/LIBPATH:{}", nyrt_release));
-            if std::path::Path::new(&lib_nyrt_lib).exists() { args.push("nyrt.lib".to_string()); }
+            if std::path::Path::new(&lib_nyrt_lib).exists() {
+                args.push("nyrt.lib".to_string());
+            }
             // lld-link cannot consume .a directly; rely on .lib
-            let status = PCommand::new("lld-link").args(args.iter().map(|s| s.as_str())).status().map_err(|e| e.to_string())?;
-            if status.success() { return Ok(()); }
+            let status = PCommand::new("lld-link")
+                .args(args.iter().map(|s| s.as_str()))
+                .status()
+                .map_err(|e| e.to_string())?;
+            if status.success() {
+                return Ok(());
+            }
             return Err(format!("lld-link failed: status {:?}", status.code()));
         }
         if which::which("link").is_ok() {
@@ -167,18 +227,28 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
             args.push(format!("/OUT:{}", out_path));
             args.push(obj_path.to_string());
             args.push(format!("/LIBPATH:{}", nyrt_release));
-            if std::path::Path::new(&lib_nyrt_lib).exists() { args.push("nyrt.lib".to_string()); }
-            let status = PCommand::new("link").args(args.iter().map(|s| s.as_str())).status().map_err(|e| e.to_string())?;
-            if status.success() { return Ok(()); }
+            if std::path::Path::new(&lib_nyrt_lib).exists() {
+                args.push("nyrt.lib".to_string());
+            }
+            let status = PCommand::new("link")
+                .args(args.iter().map(|s| s.as_str()))
+                .status()
+                .map_err(|e| e.to_string())?;
+            if status.success() {
+                return Ok(());
+            }
             return Err(format!("link.exe failed: status {:?}", status.code()));
         }
         // Fallback: try cc with MinGW-like flags
         let status = PCommand::new("cc")
             .args([obj_path])
             .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args(["-lnyrt", "-o", out_path])
-            .status().map_err(|e| e.to_string())?;
-        if status.success() { return Ok(()); }
+            .args(["-lnyash_kernel", "-o", out_path])
+            .status()
+            .map_err(|e| e.to_string())?;
+        if status.success() {
+            return Ok(());
+        }
         return Err(format!("cc link failed: status {:?}", status.code()));
     }
     #[cfg(not(target_os = "windows"))]
@@ -187,9 +257,18 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
             .args([obj_path])
             .args(["-L", "target/release"])
             .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args(["-Wl,--whole-archive", "-lnyrt", "-Wl,--no-whole-archive"])
+            .args([
+                "-Wl,--whole-archive",
+                "-lnyash_kernel",
+                "-Wl,--no-whole-archive",
+            ])
             .args(["-lpthread", "-ldl", "-lm", "-o", out_path])
-            .status().map_err(|e| e.to_string())?;
-        if status.success() { Ok(()) } else { Err(format!("cc failed: status {:?}", status.code())) }
+            .status()
+            .map_err(|e| e.to_string())?;
+        if status.success() {
+            Ok(())
+        } else {
+            Err(format!("cc failed: status {:?}", status.code()))
+        }
     }
 }

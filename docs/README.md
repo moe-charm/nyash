@@ -1,12 +1,13 @@
 # 📚 Nyash Documentation
 
-## 🚀 はじめに
-- **現在のタスク**: [../CURRENT_TASK.md](../CURRENT_TASK.md)
-- **コア概念の速習**: [reference/architecture/nyash_core_concepts.md](reference/architecture/nyash_core_concepts.md)
+## 🚀 はじめに（導線）
+- 現在のタスクと進行状況: ../CURRENT_TASK.md
+- コア概念の速習: reference/architecture/nyash_core_concepts.md
+- 設計ブループリント（文字列/文字コード）: development/design/blueprints/strings-utf8-byte.md
 
 ---
 
-## 📂 新しいドキュメント構造（2025年8月20日再編成）
+## 📂 ドキュメント構造（指針）
 
 ### 📖 [reference/](reference/) - 正式な技術仕様
 - **language/** - 言語仕様（構文、型システム、Box仕様）
@@ -21,6 +22,9 @@
 - **tutorials/** - ステップバイステップのチュートリアル
 - **examples/** - 実践的なサンプルコード
 - **wasm-guide/** - WebAssemblyビルドガイド
+
+### 🧩 [how-to/](how-to/) - 目的別ハウツー
+- 手順重視の短いガイド（前提→コマンド→検証）
 
 ### 🔧 [development/](development/) - 開発者向け
 - **current/** - 現在進行中のタスク（CURRENT_TASK.md等）
@@ -44,26 +48,50 @@
 ## 🎯 クイックアクセス
 
 ### すぐ始める
-- [Getting Started](guides/getting-started.md)
-- [Language Guide](guides/language-guide.md)
-- [P2P Guide](guides/p2p-guide.md)
+- guides/getting-started.md
+- guides/language-guide.md
+- guides/p2p-guide.md
 
 ### 技術リファレンス
-- [言語リファレンス](reference/language/LANGUAGE_REFERENCE_2025.md)
-- [アーキテクチャ概要](reference/architecture/TECHNICAL_ARCHITECTURE_2025.md)
-- [実行バックエンド](reference/architecture/execution-backends.md)
-- [プラグインシステム](reference/plugin-system/)
- - [CLIオプション早見表](tools/cli-options.md)
+- reference/language/LANGUAGE_REFERENCE_2025.md
+- reference/language/EBNF.md（演算子: ! 採用 / do-while 非採用）
+- reference/language/strings.md（UTF‑8/Byte 二本柱）
+- reference/architecture/TECHNICAL_ARCHITECTURE_2025.md
+- reference/architecture/execution-backends.md
+- reference/runtime/gc.md
+- reference/plugin-system/
+- tools/cli-options.md（CLI早見表）
+ 
+### デザイン/ガイド
+- guides/language-core-and-sugar.md（コア最小＋糖衣）
+- guides/loopform.md（ループ正規化）
+- guides/scopebox.md（開発時の可視化）
+- guides/dev-local-alias.md（開発向け: 行頭 @name = expr → local 宣言糖衣）
+ - guides/box-patterns.md（Boxパターン集：Ownership/Lease/Cancel/Capability/Affinity/Observable）
+ - guides/box-design-checklist.md（Box 設計チェックリスト）
+ - proposals/concurrency/boxes.md（並行モデルのBox設計：Routine/Channel/Select/Scope）
+ - reference/concurrency/semantics.md（ブロッキング/close/select/観測の規約）
+- design/（設計ノート入口）
+  - development/design/legacy/flow-blocks.md（矢印フロー／匿名ブロック・設計草案）
+  - development/proposals/scope-reuse.md（スコープ再利用ブロック・MVP提案）
+  - reference/language/match-guards.md（ガード連鎖／Range・CharClass設計）
+  - guides/core-principles.md（最小構文・ゼロランタイム・可視化の原則）
 
 ### 開発状況
 - [現在のタスク](../CURRENT_TASK.md)
-- [開発ロードマップ](development/roadmap/)
-- [Phase別計画](development/roadmap/phases/)
-  - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)** - プラグイン革命！
+ - [開発ロードマップ](development/roadmap/)
+ - [Phase別計画](development/roadmap/phases/)
+   - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)**
+   - 🔥 **[Phase 16: マクロ革命](development/roadmap/phases/phase-16-macro-revolution/)**
+   - 🧪 **[Phase 17: LoopForm Self‑Hosting](development/roadmap/phases/phase-17-loopform-selfhost/)**
+   - 💡 **[Rust所有権統合（候補）](private/ideas/new-features/2025-09-22-rust-ownership-fusion.md)** - Phase 17+候補
+- 🧩 **[Mini‑VM 構築ロードマップ](development/roadmap/phases/phase-17-loopform-selfhost/MINI_VM_ROADMAP.md)**
+- 🧭 **Using→Loader 統合（最小設計）**: development/design/legacy/using-loader-integration.md
+ - 🗂️ **Docsの書き方（小さく・リンク駆動）**: guides/contributing-docs.md
 
 ---
 
-## 📋 再編成について
+## 📋 再編成について / フォルダの見分け方
 ドキュメントは2025年8月20日に再編成されました。詳細は[REORGANIZATION_REPORT.md](REORGANIZATION_REPORT.md)を参照してください。
 
 旧パスから新パスへの主な変更：
@@ -72,5 +100,11 @@
 - 散在していたファイル → 適切なカテゴリに整理
 
 ---
+
+補足:
+- `reference/` は正本（仕様）。
+- `guides/` は読み物、`how-to/` は手順書。
+- `design/` は公開できる設計ノート。
+- `private/` は下書き保管庫（将来 `reference/`/`design/` に昇格）。
 
 Nyash は「Everything is Box」哲学に基づく言語です。詳細はコア概念とガイドを参照してください。

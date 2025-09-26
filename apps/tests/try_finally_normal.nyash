@@ -4,10 +4,9 @@ static box Main {
     try {
       console.println("T")
       return 123
-    } finally {
+    } cleanup {
       // finally は必ず実行される想定
       console.println("F")
     }
   }
 }
-

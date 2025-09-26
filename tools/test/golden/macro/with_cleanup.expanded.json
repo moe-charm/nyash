@@ -1,0 +1,11 @@
+{"kind":"Program","statements":[
+  {"kind":"FunctionDeclaration","name":"cleanup_target","params":["args"],"body":[{"kind":"Return","value":{"kind":"Literal","value":{"type":"int","value":1}}}]},
+  {"kind":"FunctionDeclaration","name":"main","params":["args"],"body":[
+    {"kind":"TryCatch",
+      "try":[{"kind":"FunctionCall","name":"cleanup_target","arguments":[{"kind":"Variable","name":"args"}]}],
+      "catch":[],
+      "cleanup":[{"kind":"Print","expression":{"kind":"Literal","value":{"type":"string","value":"done"}}}]
+    }
+  ]}
+]}
+

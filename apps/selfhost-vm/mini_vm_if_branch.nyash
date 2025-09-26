@@ -1,0 +1,59 @@
+// Mini-VM: function-based entry for branching
+// Local static box (duplicated from mini_vm_lib for now to avoid include gate issues)
+static box MiniVm {
+  _is_digit(ch) { return ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" }
+  read_digits(json, pos) {
+    @out = ""
+    loop (true) {
+      @s = json.substring(pos, pos+1)
+      if s == "" { break }
+      if _is_digit(s) { out = out + s  pos = pos + 1 } else { break }
+    }
+    return out
+  }
+  parse_first_int(json) {
+    @key = "\"value\":{\"type\":\"int\",\"value\":"
+    @idx = json.lastIndexOf(key)
+    if idx < 0 { return "0" }
+    @start = idx + key.length()
+    return read_digits(json, start)
+  }
+  run_branch(json) {
+    @n = parse_first_int(json)
+    if n == "0" || n == "1" || n == "2" || n == "3" || n == "4" { print("10") return 0 }
+    print("20")
+    return 0
+  }
+}
+
+// Program entry: embedded JSON (value=1 → print 10; else → 20)
+static box Main {
+  main(args) {
+    @vm = new MiniVm()
+    @json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}}}]}"
+    // If provided, override by argv[0]
+    if args {
+      if args.size() > 0 {
+        @s = args.get(0)
+        if s { json = s }
+      }
+    }
+    return vm.run_branch(json)
+  }
+}
+
+// Top-level fallback entry for current runner
+function main(args) {
+  @vm = new MiniVm()
+  @json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}}}]}"
+  if args {
+    if args.size() > 0 {
+      @s = args.get(0)
+      if s { json = s }
+    }
+  }
+  @n = vm.parse_first_int(json)
+  if n == "0" || n == "1" || n == "2" || n == "3" || n == "4" { print("10") return 0 }
+  print("20")
+  return 0
+}

@@ -1,0 +1,11 @@
+[package]
+name = "nyash-fixture-plugin"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "nyash_fixture_plugin"
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+once_cell = "1"

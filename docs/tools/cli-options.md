@@ -16,6 +16,19 @@
 - `--vm-stats`: VM命令統計を有効化（`NYASH_VM_STATS=1`）
 - `--vm-stats-json`: VM統計をJSONで出力（`NYASH_VM_STATS_JSON=1`）
 
+## GC
+- `--gc {auto|rc+cycle|minorgen|stw|rc|off}`: GCモード（既定: `auto` → rc+cycle）
+  - `rc+cycle`: 参照カウント + 循環回収（推奨・安定）
+  - `minorgen`: 高速向けの軽量世代別（Gen‑0移動、上位非移動）
+  - `stw`: 検証用の非移動Mark‑Sweep（開発者向け）
+  - `rc`: 循環回収なしのRC（比較用）
+  - `off`: 自己責任モード（循環はリーク）
+- 関連ENV
+  - `NYASH_GC_MODE`（CLIが優先）
+  - `NYASH_GC_METRICS` / `NYASH_GC_METRICS_JSON`
+  - `NYASH_GC_LEAK_DIAG` / `NYASH_GC_ALLOC_THRESHOLD`
+  - 詳細: `docs/reference/runtime/gc.md`
+
 ## WASM/AOT
 - `--compile-wasm`: WATを出力
 - `--compile-native` / `--aot`: AOT実行ファイル出力（要wasm-backend）

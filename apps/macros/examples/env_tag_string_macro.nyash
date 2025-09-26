@@ -1,0 +1,16 @@
+// If env cap is ON, tag string literals by appending " [ENV]" in expanded JSON.
+// This is a demo; it uses simple substring replacement on the JSON text.
+
+static box MacroBoxSpec {
+  name() { return "EnvTagString" }
+
+  expand(json, ctx) {
+    if ctx && ctx.lastIndexOf("\"env\":true") >= 0 {
+      // naive replacement: "value":"hello" -> "value":"hello [ENV]"
+      // Only for demo purposes; not a general JSON editor.
+      return json.replace("\"value\":\"hello\"", "\"value\":\"hello [ENV]\"")
+    }
+    return json
+  }
+}
+

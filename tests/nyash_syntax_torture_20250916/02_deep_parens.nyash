@@ -1,0 +1,5 @@
+
+// Expect: 170 (deep parentheses stress)
+// 12 * 15 - 10 = 180 - 10 = 170
+local v = (5 + 7) * (10 + 5) - 10
+print(v)  // 170

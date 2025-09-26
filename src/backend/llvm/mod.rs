@@ -13,4 +13,3 @@ pub mod compiler {
 pub mod box_types {
     pub use crate::backend::llvm_legacy::box_types::*;
 }
-

@@ -1,0 +1,51 @@
+// upper_string_macro.nyash
+// MacroBoxSpec.expand: uppercase string literal values that start with "UPPER:" in AST JSON v0
+// Contract: expand(json: string) -> string (AST JSON v0)
+
+static box MacroBoxSpec {
+  expand(json) {
+    local s, out, i, plen, pat
+    s = json
+    out = ""
+    i = 0
+    pat = "\"value\":\"UPPER:"
+    plen = pat.length()
+
+    loop(i < s.length()) {
+      // Match pattern: "value":"UPPER:
+      if i + plen <= s.length() && s.substring(i, i + plen) == pat {
+        // Emit the JSON key and opening quote: "value":"
+        out = out + "\"value\":\""
+        // Skip the pattern (drop the literal prefix UPPER:)
+        i = i + plen
+        // Uppercase until the closing quote (handle escapes conservatively)
+        local j, ch, up
+        j = i
+        loop(j < s.length()) {
+          ch = s.substring(j, j + 1)
+          if ch == "\\" { // copy escaped char as-is
+            if j + 1 < s.length() {
+              out = out + s.substring(j, j + 2)
+              j = j + 2
+              continue
+            }
+          }
+          if ch == "\"" {
+            break
+          }
+          up = ch.toUpperCase()
+          out = out + up
+          j = j + 1
+        }
+        // Append the closing quote and advance pointer past it
+        out = out + "\""
+        i = j + 1
+      } else {
+        // Copy-through
+        out = out + s.substring(i, i + 1)
+        i = i + 1
+      }
+    }
+    return out
+  }
+}

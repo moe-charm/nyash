@@ -30,6 +30,9 @@ Purpose: Claude×Copilot×ChatGPT×Gemini×Codex協調開発の総合ロード�
 | 13 | 📅予定 | Nyashブラウザー革命 | [phase-13/](phase-13/) |
 | 14 | 📅予定 | パッケージング・CI改善 | [phase-14/](phase-14/) |
 | 15 | 🌟実現可能 | セルフホスティング（C実装ABI経由） | [phase-15/](phase-15/) |
+| 16 | 🔄進行中 | マクロ革命（正規化＋テストランナー） | [phase-16-macro-revolution/](../phase-16-macro-revolution/) |
+| 17 | 🧪計画中 | LoopForm Self‑Hosting＋Mini‑VM | [phase-17-loopform-selfhost/](../phase-17-loopform-selfhost/) |
+| 17+ | 💡候補 | Rust所有権統合（オプショナル） | [rust-ownership-fusion](../../private/ideas/new-features/2025-09-22-rust-ownership-fusion.md) |
 
 ---
 

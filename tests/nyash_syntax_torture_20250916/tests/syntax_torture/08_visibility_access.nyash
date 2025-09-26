@@ -1,0 +1,13 @@
+
+# Expect: base:42|sub:99
+box Base {
+    private { x }
+    birth() { me.x = 42 }
+    getX() { return me.x }
+}
+box Sub from Base {
+    getX() { return 99 }  # override
+}
+local b = new Base()
+local s = new Sub()
+print("base:" + b.getX() + "|sub:" + s.getX())

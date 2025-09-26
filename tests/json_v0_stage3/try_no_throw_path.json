@@ -1,0 +1,27 @@
+{
+  "version": 0,
+  "kind": "Program",
+  "body": [
+    { "type": "Local", "name": "x", "expr": { "type": "Int", "value": 0 } },
+    { "type": "Try",
+      "try": [
+        { "type": "Local", "name": "x", "expr": { "type": "Int", "value": 5 } }
+      ],
+      "catches": [
+        { "param": "e", "typeHint": null, "body": [
+            { "type": "Local", "name": "x", "expr": { "type": "Int", "value": 999 } }
+        ]}
+      ],
+      "finally": [
+        { "type": "Local", "name": "x",
+          "expr": { "type": "Binary", "op": "+",
+            "lhs": { "type": "Var", "name": "x" },
+            "rhs": { "type": "Int", "value": 1 }
+          }
+        }
+      ]
+    },
+    { "type": "Return", "expr": { "type": "Var", "name": "x" } }
+  ]
+}
+

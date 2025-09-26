@@ -11,7 +11,7 @@ fn main() -> eframe::Result {
             .with_title("Nyash Notepad"),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "Nyash Notepad",
         options,
@@ -44,14 +44,14 @@ impl eframe::App for NyashNotepad {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-                
+
                 ui.menu_button("編集", |ui| {
                     if ui.button("すべて選択").clicked() {
                         // TODO: テキストエリア全選択
                         self.status = "すべて選択（未実装）".to_string();
                     }
                 });
-                
+
                 ui.menu_button("ヘルプ", |ui| {
                     if ui.button("Nyashについて").clicked() {
                         self.status = "Nyash - Everything is Box! 🐱".to_string();
@@ -59,7 +59,7 @@ impl eframe::App for NyashNotepad {
                 });
             });
         });
-        
+
         // ステータスバー
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -69,7 +69,7 @@ impl eframe::App for NyashNotepad {
                 });
             });
         });
-        
+
         // メインのテキストエディタ
         egui::CentralPanel::default().show(ctx, |ui| {
             // ツールバー
@@ -78,28 +78,28 @@ impl eframe::App for NyashNotepad {
                     self.text.clear();
                     self.status = "テキストをクリアしました".to_string();
                 }
-                
+
                 ui.separator();
-                
+
                 if ui.button("📋 コピー").clicked() {
                     ui.output_mut(|o| o.copied_text = self.text.clone());
                     self.status = "テキストをコピーしました".to_string();
                 }
-                
+
                 if ui.button("✂️ カット").clicked() {
                     ui.output_mut(|o| o.copied_text = self.text.clone());
                     self.text.clear();
                     self.status = "テキストをカットしました".to_string();
                 }
-                
+
                 if ui.button("📄 ペースト").clicked() {
                     // egui 0.29ではクリップボードAPIが変更されている
                     self.status = "ペースト機能（簡易版）".to_string();
                 }
             });
-            
+
             ui.separator();
-            
+
             // テキストエディタ本体
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.add(
@@ -107,10 +107,10 @@ impl eframe::App for NyashNotepad {
                         .font(egui::TextStyle::Monospace)
                         .desired_width(f32::INFINITY)
                         .desired_rows(20)
-                        .hint_text("ここにテキストを入力してください... にゃ！")
+                        .hint_text("ここにテキストを入力してください... にゃ！"),
                 );
             });
-            
+
             // サンプルボタン
             ui.separator();
             ui.horizontal(|ui| {
@@ -120,15 +120,17 @@ impl eframe::App for NyashNotepad {
                     self.text.push_str("    init { message }\n");
                     self.text.push_str("    \n");
                     self.text.push_str("    HelloWorld() {\n");
-                    self.text.push_str("        me.message = \"Hello, Nyash World! にゃ！\"\n");
+                    self.text
+                        .push_str("        me.message = \"Hello, Nyash World! にゃ！\"\n");
                     self.text.push_str("    }\n");
                     self.text.push_str("}\n");
                     self.status = "Nyashサンプルコードを挿入しました".to_string();
                 }
-                
+
                 if ui.button("時刻挿入").clicked() {
                     let now = chrono::Local::now();
-                    self.text.push_str(&format!("\n{}\n", now.format("%Y-%m-%d %H:%M:%S")));
+                    self.text
+                        .push_str(&format!("\n{}\n", now.format("%Y-%m-%d %H:%M:%S")));
                     self.status = "現在時刻を挿入しました".to_string();
                 }
             });

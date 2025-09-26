@@ -1,1 +1,2 @@
-return 1+2*3
+// M2 minimal: Return(Int)
+return 42

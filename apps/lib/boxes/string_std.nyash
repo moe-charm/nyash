@@ -1,0 +1,39 @@
+// StringStd — minimal standard string helpers (commonized API)
+
+static box StringStd {
+  length(s) {
+    if s == null { return 0 }
+    return s.length()
+  }
+  substring(s, start, end) {
+    if s == null { return "" }
+    if start == null { start = 0 }
+    if end == null { end = s.length() }
+    return s.substring(start, end)
+  }
+  indexOf(s, needle, start) {
+    if s == null { return -1 }
+    if needle == null { needle = "" }
+    if start == null { return s.indexOf(needle) }
+    return s.indexOf(needle, start)
+  }
+  lastIndexOf(s, needle, start) {
+    if s == null { return -1 }
+    if needle == null { needle = "" }
+    if start == null { return s.lastIndexOf(needle) }
+    return s.lastIndexOf(needle, start)
+  }
+  esc_json(s) {
+    if s == null { return "" }
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" } else { if ch == "\"" { out = out + "\\\"" } else { out = out + ch } }
+      i = i + 1
+    }
+    return out
+  }
+}
+

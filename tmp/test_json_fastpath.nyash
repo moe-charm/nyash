@@ -1,0 +1,63 @@
+static box Main {
+  main(args) {
+    local json = args.get(0)
+    // Fast path parse
+    if json.indexOf("\"BinaryOp\"") >= 0 {
+      local k_plus = "\"operator\":\"+\""
+      if json.indexOf(k_plus) >= 0 {
+        local k_v = "\"value\":"
+        local opos = json.indexOf(k_plus)
+        if opos >= 0 {
+          local p1 = json.indexOf(k_v, opos)
+          if p1 >= 0 {
+            local p2 = json.indexOf(k_v, p1 + k_v.length())
+            if p2 >= 0 {
+              local i = p2 + k_v.length()
+              local a = 0
+              loop (true) {
+                local ch = json.substring(i, i+1)
+                if ch == "0" { a = a * 10 + 0  i = i + 1  continue }
+                if ch == "1" { a = a * 10 + 1  i = i + 1  continue }
+                if ch == "2" { a = a * 10 + 2  i = i + 1  continue }
+                if ch == "3" { a = a * 10 + 3  i = i + 1  continue }
+                if ch == "4" { a = a * 10 + 4  i = i + 1  continue }
+                if ch == "5" { a = a * 10 + 5  i = i + 1  continue }
+                if ch == "6" { a = a * 10 + 6  i = i + 1  continue }
+                if ch == "7" { a = a * 10 + 7  i = i + 1  continue }
+                if ch == "8" { a = a * 10 + 8  i = i + 1  continue }
+                if ch == "9" { a = a * 10 + 9  i = i + 1  continue }
+                break
+              }
+              local p3 = json.indexOf(k_v, p2 + k_v.length())
+              if p3 >= 0 {
+                local p4 = json.indexOf(k_v, p3 + k_v.length())
+                if p4 >= 0 {
+                  local j = p4 + k_v.length()
+                  local b = 0
+                  loop (true) {
+                    local ch2 = json.substring(j, j+1)
+                    if ch2 == "0" { b = b * 10 + 0  j = j + 1  continue }
+                    if ch2 == "1" { b = b * 10 + 1  j = j + 1  continue }
+                    if ch2 == "2" { b = b * 10 + 2  j = j + 1  continue }
+                    if ch2 == "3" { b = b * 10 + 3  j = j + 1  continue }
+                    if ch2 == "4" { b = b * 10 + 4  j = j + 1  continue }
+                    if ch2 == "5" { b = b * 10 + 5  j = j + 1  continue }
+                    if ch2 == "6" { b = b * 10 + 6  j = j + 1  continue }
+                    if ch2 == "7" { b = b * 10 + 7  j = j + 1  continue }
+                    if ch2 == "8" { b = b * 10 + 8  j = j + 1  continue }
+                    if ch2 == "9" { b = b * 10 + 9  j = j + 1  continue }
+                    break
+                  }
+                  print(a + b)
+                  return 0
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    print(0)
+    return 0
+  }
+}

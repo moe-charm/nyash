@@ -1,6 +1,6 @@
-/*! 
+/*!
  * Nyash Rust Implementation - Integration Tests
- * 
+ *
  * 完全なNyash言語機能テストスイート
  * Everything is Box哲学の包括的検証
  */
@@ -27,8 +27,10 @@ fn get_variable_value(code: &str, var_name: &str) -> Result<String, String> {
     match parser::NyashParser::parse_from_string(code) {
         Ok(ast) => {
             let mut interpreter = interpreter::NyashInterpreter::new();
-            interpreter.execute(ast).map_err(|e| format!("Execution error: {}", e))?;
-            
+            interpreter
+                .execute(ast)
+                .map_err(|e| format!("Execution error: {}", e))?;
+
             match interpreter.get_variable(var_name) {
                 Ok(value) => Ok(value.to_string_box().value),
                 Err(_) => Err(format!("Variable '{}' not found", var_name)),
@@ -49,7 +51,7 @@ mod integration_tests {
         b = 32
         result = a + b
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "42");
     }
@@ -61,7 +63,7 @@ mod integration_tests {
         name = "Nyash!"
         message = greeting + name
         "#;
-        
+
         let result = get_variable_value(code, "message").unwrap();
         assert_eq!(result, "Hello, Nyash!");
     }
@@ -74,10 +76,10 @@ mod integration_tests {
         and_result = a && b
         or_result = a || b
         "#;
-        
+
         let and_result = get_variable_value(code, "and_result").unwrap();
         let or_result = get_variable_value(code, "or_result").unwrap();
-        
+
         assert_eq!(and_result, "false");
         assert_eq!(or_result, "true");
     }
@@ -92,7 +94,7 @@ mod integration_tests {
         equal = a == a
         not_equal = a != b
         "#;
-        
+
         assert_eq!(get_variable_value(code, "less").unwrap(), "true");
         assert_eq!(get_variable_value(code, "greater").unwrap(), "false");
         assert_eq!(get_variable_value(code, "equal").unwrap(), "true");
@@ -109,7 +111,7 @@ mod integration_tests {
             result = "failure"
         }
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "success");
     }
@@ -125,7 +127,7 @@ mod integration_tests {
             }
         }
         "#;
-        
+
         let result = get_variable_value(code, "counter").unwrap();
         assert_eq!(result, "5");
     }
@@ -140,7 +142,7 @@ mod integration_tests {
         
         result = add(10, 32)
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "42");
     }
@@ -160,7 +162,7 @@ mod integration_tests {
         p.x = 100
         result = p.getX()
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "100");
     }
@@ -190,7 +192,7 @@ mod integration_tests {
         calc.add(32)
         result = calc.getValue()
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "42");
     }
@@ -221,7 +223,7 @@ mod integration_tests {
         c.increment()
         result = c.getCount()
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "3");
     }
@@ -250,10 +252,10 @@ mod integration_tests {
         result1 = d1.getValue()
         result2 = d2.getValue()
         "#;
-        
+
         let result1 = get_variable_value(code, "result1").unwrap();
         let result2 = get_variable_value(code, "result2").unwrap();
-        
+
         assert_eq!(result1, "first");
         assert_eq!(result2, "second");
     }
@@ -271,7 +273,7 @@ mod integration_tests {
         
         result = getConfig()
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "production v42");
     }
@@ -284,7 +286,7 @@ mod integration_tests {
         c = 15
         result = (a + b) * c - a
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         // (5 + 10) * 15 - 5 = 15 * 15 - 5 = 225 - 5 = 220
         assert_eq!(result, "220");
@@ -323,7 +325,7 @@ mod integration_tests {
         w.setInner("nested value")
         result = container.getWrapper().getInner()
         "#;
-        
+
         let result = get_variable_value(code, "result").unwrap();
         assert_eq!(result, "nested value");
     }
@@ -343,14 +345,17 @@ mod integration_tests {
         less_eq_result = b <= a
         greater_eq_result = a >= b
         "#;
-        
+
         assert_eq!(get_variable_value(code, "add_result").unwrap(), "25");
         assert_eq!(get_variable_value(code, "sub_result").unwrap(), "15");
         assert_eq!(get_variable_value(code, "mul_result").unwrap(), "100");
         assert_eq!(get_variable_value(code, "less_result").unwrap(), "true");
         assert_eq!(get_variable_value(code, "greater_result").unwrap(), "true");
         assert_eq!(get_variable_value(code, "less_eq_result").unwrap(), "true");
-        assert_eq!(get_variable_value(code, "greater_eq_result").unwrap(), "true");
+        assert_eq!(
+            get_variable_value(code, "greater_eq_result").unwrap(),
+            "true"
+        );
     }
 
     #[test]
@@ -370,13 +375,13 @@ mod integration_tests {
         direct_access = obj.value
         method_result = obj.getValue()
         "#;
-        
+
         let direct = get_variable_value(code, "direct_access").unwrap();
         let method = get_variable_value(code, "method_result").unwrap();
-        
+
         assert_eq!(direct, "test123");
         assert_eq!(method, "test123");
-        
+
         // thisが正しく動作している証明
         assert_eq!(direct, method);
     }

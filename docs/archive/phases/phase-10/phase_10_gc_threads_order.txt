@@ -1,0 +1,35 @@
+Phase 10 — GC/Thread Roadmap Order (txt)
+
+Recommended order:
+10_4a → 10_4b → 10_6a → 10_4c → 10_4d → 10_6b → 10_6c
+
+10_4a: GC hook scaffolding
+- Add GcHooks { safepoint(), barrier(kind) } and BarrierKind.
+- NyashRuntime holds Arc<dyn GcHooks>; builder supports with_gc_hooks.
+- VM calls hooks at MIR Safepoint/Barrier*.
+
+10_4b: Roots + minimal barriers
+- ScopeTracker root API: enter_root_region/leave_root_region/pin_root.
+- Write-Barrier at RefSet/ArraySet/BoxCall(Array/Map: set/push).
+- Tracing flags: NYASH_GC_TRACE=1 for barrier/safepoint and roots.
+
+10_6a: Thread-safety audit (prep)
+- Audit Builtin/User/Plugin boxes for Send/Sync policy.
+- Strategy for shared state (RwLock) and non-thread-safe wrappers.
+
+10_4c: GC PoC (STW, single-thread)
+- Implement simple collector behind GcHooks (e.g., mark-sweep or RC hybrid).
+- Manage roots via ScopeTracker; traverse VMValue graph/object_fields.
+
+10_4d: Barrier hardening + regression
+- Ensure coverage for all mutating write sites (Array/Map/Ref/Plugin paths).
+- Strict checks flag for development; add stress/regression tests.
+
+10_6b: Thread runtime scaffolding
+- Scheduler abstraction (cooperative preemption), Future/Channel compliance.
+- Confirm GcHooks is Send+Sync and shareable.
+
+10_6c: Parallel GC design notes
+- Per-thread root regions, card marking/write barriers, safepoint coordination.
+- Document design and API diffs for later implementation.
+

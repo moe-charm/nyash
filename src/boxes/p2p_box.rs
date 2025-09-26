@@ -1,49 +1,49 @@
 /*! 📡 P2PBox - Modern P2P Communication Node
- * 
+ *
  * ## 📝 概要
  * P2PBoxは現代的なP2P通信ノードを表現するBoxです。
  * 新しいアーキテクチャ（IntentBox + MessageBus + Transport）を使用し、
  * 構造化メッセージによる安全で明示的な通信を実現します。
- * 
+ *
  * ## 🎯 AI大会議決定事項準拠
  * - **個別送信のみ**: `send(to, message)` 固定API
  * - **ブロードキャスト除外**: 安全性のため完全除外
  * - **明示的API**: 関数オーバーロード不採用
  * - **構造化メッセージ**: IntentBox (name + payload) 使用
- * 
+ *
  * ## 🛠️ 利用可能メソッド
  * - `new(node_id, transport)` - ノードを作成
  * - `send(to, intent)` - 特定ノードにメッセージ送信
  * - `on(intent_name, handler)` - イベントリスナー登録
  * - `getNodeId()` - ノードID取得
  * - `isReachable(node_id)` - ノード到達可能性確認
- * 
+ *
  * ## 💡 使用例
  * ```nyash
  * // ノード作成
  * local alice = new P2PBox("alice", "inprocess")
  * local bob = new P2PBox("bob", "inprocess")
- * 
+ *
  * // 受信ハンドラ登録
  * bob.on("chat.message", function(intent, from) {
  *     print("From " + from + ": " + intent.payload.text)
  * })
- * 
+ *
  * // メッセージ送信
  * local msg = new IntentBox("chat.message", { text: "Hello P2P!" })
  * alice.send("bob", msg)
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
+use crate::boxes::result::ResultBox;
 use crate::boxes::IntentBox;
 use crate::method_box::MethodBox;
-use crate::boxes::result::ResultBox;
-use crate::transport::{Transport, InProcessTransport};
+use crate::transport::{InProcessTransport, Transport};
 use std::any::Any;
-use std::sync::{RwLock, Arc};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 
 /// P2PBox - P2P通信ノード (RwLock pattern)
 #[derive(Debug)]
@@ -72,7 +72,7 @@ impl Clone for P2PBox {
         let handlers_val = HashMap::new(); // Start fresh for cloned instance
         let last_from_val = self.last_from.read().unwrap().clone();
         let last_intent_val = self.last_intent_name.read().unwrap().clone();
-        
+
         Self {
             base: BoxBase::new(), // New unique ID for clone
             node_id: RwLock::new(node_id_val),
@@ -93,7 +93,7 @@ pub enum TransportKind {
 
 impl std::str::FromStr for TransportKind {
     type Err = String;
-    
+
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "inprocess" => Ok(TransportKind::InProcess),
@@ -136,28 +136,38 @@ impl P2PBox {
             {
                 if let Ok(mut t) = transport_arc_outer.write() {
                     let transport_arc_for_cb = Arc::clone(&transport_arc_outer);
-                    t.register_intent_handler("sys.ping", Box::new(move |env| {
-                        if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
-                        if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
-                        // Reply asynchronously to avoid deep call stacks
-                        let to = env.from.clone();
-                        let reply = crate::boxes::IntentBox::new("sys.pong".to_string(), serde_json::json!({}));
-                        let transport_arc = Arc::clone(&transport_arc_for_cb);
-                        std::thread::spawn(move || {
-                            // slight delay to avoid lock contention and ordering races
-                            std::thread::sleep(std::time::Duration::from_millis(3));
-                            if let Ok(transport) = transport_arc.read() {
-                                let _ = transport.send(&to, reply, Default::default());
+                    t.register_intent_handler(
+                        "sys.ping",
+                        Box::new(move |env| {
+                            if let Ok(mut lf) = last_from.write() {
+                                *lf = Some(env.from.clone());
                             }
-                        });
-                    }));
+                            if let Ok(mut li) = last_intent.write() {
+                                *li = Some(env.intent.get_name().to_string_box().value);
+                            }
+                            // Reply asynchronously to avoid deep call stacks
+                            let to = env.from.clone();
+                            let reply = crate::boxes::IntentBox::new(
+                                "sys.pong".to_string(),
+                                serde_json::json!({}),
+                            );
+                            let transport_arc = Arc::clone(&transport_arc_for_cb);
+                            std::thread::spawn(move || {
+                                // slight delay to avoid lock contention and ordering races
+                                std::thread::sleep(std::time::Duration::from_millis(3));
+                                if let Ok(transport) = transport_arc.read() {
+                                    let _ = transport.send(&to, reply, Default::default());
+                                }
+                            });
+                        }),
+                    );
                 };
             }
         }
 
         p2p
     }
-    
+
     /// ノードIDを取得
     pub fn get_node_id(&self) -> Box<dyn NyashBox> {
         let node_id = self.node_id.read().unwrap().clone();
@@ -177,14 +187,17 @@ impl P2PBox {
 
         // Register temporary transport-level handler for sys.pong
         if let Ok(mut t) = self.transport.write() {
-            t.register_intent_handler("sys.pong", Box::new(move |env| {
-                if active_cb.load(Ordering::SeqCst) {
-                    // record last receive for visibility
-                    // Note: we cannot access self here safely; rely on tx notify only
-                    let _ = env; // suppress unused
-                    let _ = tx.send(());
-                }
-            }));
+            t.register_intent_handler(
+                "sys.pong",
+                Box::new(move |env| {
+                    if active_cb.load(Ordering::SeqCst) {
+                        // record last receive for visibility
+                        // Note: we cannot access self here safely; rely on tx notify only
+                        let _ = env; // suppress unused
+                        let _ = tx.send(());
+                    }
+                }),
+            );
 
             // Send sys.ping
             let ping = IntentBox::new("sys.ping".to_string(), serde_json::json!({}));
@@ -199,7 +212,9 @@ impl P2PBox {
         }
 
         // Wait for pong with timeout
-        let ok = rx.recv_timeout(std::time::Duration::from_millis(timeout_ms)).is_ok();
+        let ok = rx
+            .recv_timeout(std::time::Duration::from_millis(timeout_ms))
+            .is_ok();
         active.store(false, Ordering::SeqCst);
         Box::new(BoolBox::new(ok))
     }
@@ -208,11 +223,11 @@ impl P2PBox {
     pub fn ping(&self, to: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         self.ping_with_timeout(to, 300)
     }
-    
+
     /// 特定ノードにメッセージを送信
     pub fn send(&self, to: Box<dyn NyashBox>, intent: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let to_str = to.to_string_box().value;
-        
+
         // Extract IntentBox from the generic Box
         if let Some(intent_box) = intent.as_any().downcast_ref::<IntentBox>() {
             let transport = self.transport.read().unwrap();
@@ -221,20 +236,34 @@ impl P2PBox {
                     // Minimal loopback trace without relying on transport callbacks
                     let self_id = self.node_id.read().unwrap().clone();
                     if to_str == self_id {
-                        if let Ok(mut lf) = self.last_from.write() { *lf = Some(self_id.clone()); }
-                        if let Ok(mut li) = self.last_intent_name.write() { *li = Some(intent_box.get_name().to_string_box().value); }
+                        if let Ok(mut lf) = self.last_from.write() {
+                            *lf = Some(self_id.clone());
+                        }
+                        if let Ok(mut li) = self.last_intent_name.write() {
+                            *li = Some(intent_box.get_name().to_string_box().value);
+                        }
                     }
                     Box::new(ResultBox::new_ok(Box::new(BoolBox::new(true))))
-                },
-                Err(e) => Box::new(ResultBox::new_err(Box::new(StringBox::new(format!("{:?}", e))))),
+                }
+                Err(e) => Box::new(ResultBox::new_err(Box::new(StringBox::new(format!(
+                    "{:?}",
+                    e
+                ))))),
             }
         } else {
-            Box::new(ResultBox::new_err(Box::new(StringBox::new("Second argument must be IntentBox"))))
+            Box::new(ResultBox::new_err(Box::new(StringBox::new(
+                "Second argument must be IntentBox",
+            ))))
         }
     }
-    
+
     /// イベントハンドラーを登録
-    fn register_handler_internal(&self, intent_str: &str, handler: &Box<dyn NyashBox>, once: bool) -> Box<dyn NyashBox> {
+    fn register_handler_internal(
+        &self,
+        intent_str: &str,
+        handler: &Box<dyn NyashBox>,
+        once: bool,
+    ) -> Box<dyn NyashBox> {
         // 保存
         {
             let mut handlers = self.handlers.write().unwrap();
@@ -245,7 +274,10 @@ impl P2PBox {
         let flag = Arc::new(AtomicBool::new(true));
         {
             let mut flags = self.handler_flags.write().unwrap();
-            flags.entry(intent_str.to_string()).or_default().push(flag.clone());
+            flags
+                .entry(intent_str.to_string())
+                .or_default()
+                .push(flag.clone());
         }
         // once情報を記録
         {
@@ -265,82 +297,111 @@ impl P2PBox {
                 // capture flags map to allow removal on once
                 let flags_arc = Arc::clone(&self.handler_flags);
                 let intent_name_closure = intent_name.clone();
-                t.register_intent_handler(&intent_name, Box::new(move |env| {
-                    if flag.load(Ordering::SeqCst) {
-                        if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
-                        if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
-                        let _ = method_clone.invoke(vec![
-                            Box::new(env.intent.clone()),
-                            Box::new(StringBox::new(env.from.clone())),
-                        ]);
-                        if once {
-                            flag.store(false, Ordering::SeqCst);
-                            if let Ok(mut flags) = flags_arc.write() {
-                                if let Some(v) = flags.get_mut(&intent_name_closure) { v.clear(); }
+                t.register_intent_handler(
+                    &intent_name,
+                    Box::new(move |env| {
+                        if flag.load(Ordering::SeqCst) {
+                            if let Ok(mut lf) = last_from.write() {
+                                *lf = Some(env.from.clone());
+                            }
+                            if let Ok(mut li) = last_intent.write() {
+                                *li = Some(env.intent.get_name().to_string_box().value);
+                            }
+                            let _ = method_clone.invoke(vec![
+                                Box::new(env.intent.clone()),
+                                Box::new(StringBox::new(env.from.clone())),
+                            ]);
+                            if once {
+                                flag.store(false, Ordering::SeqCst);
+                                if let Ok(mut flags) = flags_arc.write() {
+                                    if let Some(v) = flags.get_mut(&intent_name_closure) {
+                                        v.clear();
+                                    }
+                                }
                             }
                         }
-                    }
-                }));
+                    }),
+                );
             // FunctionBox ハンドラー（関数値）
-            } else if let Some(func_box) = handler.as_any().downcast_ref::<crate::boxes::function_box::FunctionBox>() {
+            } else if let Some(func_box) = handler
+                .as_any()
+                .downcast_ref::<crate::boxes::function_box::FunctionBox>()
+            {
                 let func_clone = func_box.clone();
                 let intent_name = intent_str.to_string();
                 let last_from = Arc::clone(&self.last_from);
                 let last_intent = Arc::clone(&self.last_intent_name);
                 let flags_arc = Arc::clone(&self.handler_flags);
                 let intent_name_closure = intent_name.clone();
-                t.register_intent_handler(&intent_name, Box::new(move |env| {
-                    if flag.load(Ordering::SeqCst) {
-                        if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
-                        if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
-                        // 最小インタープリタで FunctionBox を実行
-                        let mut interp = crate::interpreter::NyashInterpreter::new();
-                        // キャプチャ注入
-                        for (k, v) in func_clone.env.captures.iter() {
-                            interp.declare_local_variable(k, v.clone_or_share());
-                        }
-                        if let Some(me_w) = &func_clone.env.me_value {
-                            if let Some(me_arc) = me_w.upgrade() {
-                                interp.declare_local_variable("me", (*me_arc).clone_or_share());
+                t.register_intent_handler(
+                    &intent_name,
+                    Box::new(move |env| {
+                        if flag.load(Ordering::SeqCst) {
+                            if let Ok(mut lf) = last_from.write() {
+                                *lf = Some(env.from.clone());
+                            }
+                            if let Ok(mut li) = last_intent.write() {
+                                *li = Some(env.intent.get_name().to_string_box().value);
+                            }
+                            // 最小インタープリタで FunctionBox を実行
+                            let mut interp = crate::interpreter::NyashInterpreter::new();
+                            // キャプチャ注入
+                            for (k, v) in func_clone.env.captures.iter() {
+                                interp.declare_local_variable(k, v.clone_or_share());
+                            }
+                            if let Some(me_w) = &func_clone.env.me_value {
+                                if let Some(me_arc) = me_w.upgrade() {
+                                    interp.declare_local_variable("me", (*me_arc).clone_or_share());
+                                }
+                            }
+                            // 引数束縛: intent, from（必要数だけ）
+                            let args: Vec<Box<dyn NyashBox>> = vec![
+                                Box::new(env.intent.clone()),
+                                Box::new(StringBox::new(env.from.clone())),
+                            ];
+                            for (i, p) in func_clone.params.iter().enumerate() {
+                                if let Some(av) = args.get(i) {
+                                    interp.declare_local_variable(p, av.clone_or_share());
+                                }
+                            }
+                            // 本体実行
+                            crate::runtime::global_hooks::push_task_scope();
+                            for st in &func_clone.body {
+                                let _ = interp.execute_statement(st);
+                            }
+                            crate::runtime::global_hooks::pop_task_scope();
+                            if once {
+                                flag.store(false, Ordering::SeqCst);
+                                if let Ok(mut flags) = flags_arc.write() {
+                                    if let Some(v) = flags.get_mut(&intent_name_closure) {
+                                        v.clear();
+                                    }
+                                }
                             }
                         }
-                        // 引数束縛: intent, from（必要数だけ）
-                        let args: Vec<Box<dyn NyashBox>> = vec![
-                            Box::new(env.intent.clone()),
-                            Box::new(StringBox::new(env.from.clone())),
-                        ];
-                        for (i, p) in func_clone.params.iter().enumerate() {
-                            if let Some(av) = args.get(i) {
-                                interp.declare_local_variable(p, av.clone_or_share());
-                            }
-                        }
-                        // 本体実行
-                        crate::runtime::global_hooks::push_task_scope();
-                        for st in &func_clone.body {
-                            let _ = interp.execute_statement(st);
-                        }
-                        crate::runtime::global_hooks::pop_task_scope();
-                        if once {
-                            flag.store(false, Ordering::SeqCst);
-                            if let Ok(mut flags) = flags_arc.write() {
-                                if let Some(v) = flags.get_mut(&intent_name_closure) { v.clear(); }
-                            }
-                        }
-                    }
-                }));
+                    }),
+                );
             }
         }
         Box::new(ResultBox::new_ok(Box::new(BoolBox::new(true))))
     }
 
     /// イベントハンドラーを登録
-    pub fn on(&self, intent_name: Box<dyn NyashBox>, handler: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn on(
+        &self,
+        intent_name: Box<dyn NyashBox>,
+        handler: Box<dyn NyashBox>,
+    ) -> Box<dyn NyashBox> {
         let intent_str = intent_name.to_string_box().value;
         self.register_handler_internal(&intent_str, &handler, false)
     }
 
     /// 一度だけのハンドラー登録
-    pub fn on_once(&self, intent_name: Box<dyn NyashBox>, handler: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
+    pub fn on_once(
+        &self,
+        intent_name: Box<dyn NyashBox>,
+        handler: Box<dyn NyashBox>,
+    ) -> Box<dyn NyashBox> {
         let intent_str = intent_name.to_string_box().value;
         self.register_handler_internal(&intent_str, &handler, true)
     }
@@ -350,7 +411,9 @@ impl P2PBox {
         let intent_str = intent_name.to_string_box().value;
         if let Ok(mut flags) = self.handler_flags.write() {
             if let Some(v) = flags.get_mut(&intent_str) {
-                for f in v.iter() { f.store(false, Ordering::SeqCst); }
+                for f in v.iter() {
+                    f.store(false, Ordering::SeqCst);
+                }
                 v.clear();
             }
         }
@@ -364,7 +427,7 @@ impl P2PBox {
         let transport = self.transport.read().unwrap();
         Box::new(BoolBox::new(transport.is_reachable(&node_str)))
     }
-    
+
     /// トランスポート種類を取得
     pub fn get_transport_type(&self) -> Box<dyn NyashBox> {
         let transport = self.transport.read().unwrap();
@@ -396,11 +459,16 @@ impl P2PBox {
         // once登録かつ直近受信が同名なら 0 を返す（自己送信の安定化用）
         if let (Ok(once_map), Ok(last)) = (self.handler_once.read(), self.last_intent_name.read()) {
             if let Some(true) = once_map.get(&name).copied() {
-                if let Some(li) = &*last { if li == &name { return Box::new(crate::box_trait::IntegerBox::new(0)); } }
+                if let Some(li) = &*last {
+                    if li == &name {
+                        return Box::new(crate::box_trait::IntegerBox::new(0));
+                    }
+                }
             }
         }
         let flags = self.handler_flags.read().unwrap();
-        let cnt = flags.get(&name)
+        let cnt = flags
+            .get(&name)
             .map(|v| v.iter().filter(|f| f.load(Ordering::SeqCst)).count())
             .unwrap_or(0);
         Box::new(crate::box_trait::IntegerBox::new(cnt as i64))
@@ -414,18 +482,21 @@ impl P2PBox {
 
     /// 最後に受信したIntent名を取得（ループバック検証用）
     pub fn get_last_intent_name(&self) -> Box<dyn NyashBox> {
-        let v = self.last_intent_name.read().unwrap().clone().unwrap_or_default();
+        let v = self
+            .last_intent_name
+            .read()
+            .unwrap()
+            .clone()
+            .unwrap_or_default();
         Box::new(StringBox::new(v))
     }
 }
-
-
 
 impl NyashBox for P2PBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     fn share_box(&self) -> Box<dyn NyashBox> {
         // Share underlying transport and state via Arc clones
         let node_id_val = self.node_id.read().unwrap().clone();
@@ -446,7 +517,7 @@ impl NyashBox for P2PBox {
         let transport_type = self.transport.read().unwrap().transport_type().to_string();
         StringBox::new(format!("P2PBox[{}:{}]", node_id, transport_type))
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_p2p) = other.as_any().downcast_ref::<P2PBox>() {
             BoolBox::new(self.base.id == other_p2p.base.id)
@@ -464,7 +535,7 @@ impl BoxCore for P2PBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
@@ -474,11 +545,11 @@ impl BoxCore for P2PBox {
         let transport_type = self.transport.read().unwrap().transport_type().to_string();
         write!(f, "P2PBox[{}:{}]", node_id, transport_type)
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -498,7 +569,10 @@ mod tests {
     fn self_ping_sets_last_fields() {
         let p = P2PBox::new("alice".to_string(), TransportKind::InProcess);
         let intent = IntentBox::new("ping".to_string(), serde_json::json!({}));
-        let res = p.send(Box::new(StringBox::new("alice".to_string())), Box::new(intent));
+        let res = p.send(
+            Box::new(StringBox::new("alice".to_string())),
+            Box::new(intent),
+        );
         // Ensure Ok
         if let Some(r) = res.as_any().downcast_ref::<ResultBox>() {
             assert!(matches!(r, ResultBox::Ok(_)));
@@ -506,7 +580,10 @@ mod tests {
             panic!("send did not return ResultBox");
         }
         assert_eq!(p.get_last_from().to_string_box().value, "alice".to_string());
-        assert_eq!(p.get_last_intent_name().to_string_box().value, "ping".to_string());
+        assert_eq!(
+            p.get_last_intent_name().to_string_box().value,
+            "ping".to_string()
+        );
     }
 
     /// Internal helper for tests: register raw Rust handler with optional async reply
@@ -521,22 +598,29 @@ mod tests {
                 // Avoid deep clone (which re-registers transport). Use transport directly for reply.
                 let transport_arc = Arc::clone(&self.transport);
                 let reply_name = reply_intent.map(|s| s.to_string());
-                t.register_intent_handler(&intent_name, Box::new(move |env| {
-                    if let Ok(mut lf) = last_from.write() { *lf = Some(env.from.clone()); }
-                    if let Ok(mut li) = last_intent.write() { *li = Some(env.intent.get_name().to_string_box().value); }
-                    if let Some(rn) = reply_name.clone() {
-                        let to = env.from.clone();
-                        let transport_arc = Arc::clone(&transport_arc);
-                        std::thread::spawn(move || {
-                            // slight delay to avoid lock contention
-                            std::thread::sleep(std::time::Duration::from_millis(5));
-                            let intent = IntentBox::new(rn, serde_json::json!({}));
-                            if let Ok(transport) = transport_arc.read() {
-                                let _ = transport.send(&to, intent, Default::default());
-                            }
-                        });
-                    }
-                }));
+                t.register_intent_handler(
+                    &intent_name,
+                    Box::new(move |env| {
+                        if let Ok(mut lf) = last_from.write() {
+                            *lf = Some(env.from.clone());
+                        }
+                        if let Ok(mut li) = last_intent.write() {
+                            *li = Some(env.intent.get_name().to_string_box().value);
+                        }
+                        if let Some(rn) = reply_name.clone() {
+                            let to = env.from.clone();
+                            let transport_arc = Arc::clone(&transport_arc);
+                            std::thread::spawn(move || {
+                                // slight delay to avoid lock contention
+                                std::thread::sleep(std::time::Duration::from_millis(5));
+                                let intent = IntentBox::new(rn, serde_json::json!({}));
+                                if let Ok(transport) = transport_arc.read() {
+                                    let _ = transport.send(&to, intent, Default::default());
+                                }
+                            });
+                        }
+                    }),
+                );
             }
         }
     }

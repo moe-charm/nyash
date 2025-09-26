@@ -1,0 +1,25 @@
+Phase 10.6b — Scheduler Prep (Single-Thread Queue)
+
+What’s added
+- `src/runtime/scheduler.rs` with `Scheduler` trait and `SingleThreadScheduler`.
+- Queue + delayed tasks (spawn/spawn_after) and `poll()` to run work.
+- VM calls `scheduler.poll()` at MIR `Safepoint` to integrate cooperative scheduling.
+ - Poll budget via env `NYASH_SCHED_POLL_BUDGET` (default: 1)
+ - Trace via `NYASH_SCHED_TRACE=1` (diagnostic)
+
+How to use (dev)
+- Build runtime with default SingleThreadScheduler (already default via builder), or inject custom via:
+  `NyashRuntimeBuilder::new().with_single_thread_scheduler().build()`
+- Schedule tasks from boxes/host code via `runtime.scheduler.spawn(...)`.
+- At safepoints, queued tasks run (1 per safepoint) and due delayed tasks are enqueued.
+
+How to validate quickly
+- Run any Nyash program that contains loops or function entries (safepoints exist by default).
+- Optionally enable the demo hook: set `NYASH_SCHED_DEMO=1` and run the VM backend
+  to observe scheduler tasks firing at safepoints.
+- Control throughput by `NYASH_SCHED_POLL_BUDGET` (e.g., 3 runs up to 3 tasks/safepoint).
+- GC trace pairs well: set `NYASH_GC_COUNTING=1 NYASH_GC_TRACE=1` to see safepoints.
+
+Next (10.6c+)
+- Expose scheduling APIs to script level (Box API).
+- Optional multi-thread scheduler implementation behind feature flag.

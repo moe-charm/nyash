@@ -7,4 +7,4 @@
 - 関連: ABI/BIDドラフトは `../予定/native-plan/box_ffi_abi.md`
 
 補足:
-- NyIR Core（25命令）は凍結。拡張は NyIR-Ext（exceptions/concurrency/atomics）で段階導入。
+- NyIR Core（25命令）は仕様固定。拡張は NyIR-Ext（exceptions/concurrency/atomics）で段階導入。

@@ -12,6 +12,10 @@ fi
 TMP="$ROOT_DIR/tmp"
 mkdir -p "$TMP"
 
+# Default to PyVM reference unless explicitly disabled by caller
+: "${NYASH_VM_USE_PY:=1}"
+export NYASH_VM_USE_PY
+
 pass() { echo "✅ $1" >&2; }
 fail() { echo "❌ $1" >&2; echo "$2" >&2; exit 1; }
 
@@ -121,6 +125,42 @@ OUT=$(NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 NYASH_VM_USE_PY=${NY
       "$BIN" --backend vm "$TMP/selfhost_string_len.nyash" 2>&1)
 set -e
 echo "$OUT" | rg -q '^Result:\s*3\b' && pass "String.length()" || fail "String.length()" "$OUT"
+
+# J) ternary expression → 10
+cat > "$TMP/selfhost_ternary_basic.nyash" <<'NY'
+return (1 < 2) ? 10 : 20
+NY
+set +e
+NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 NYASH_VM_USE_PY=${NYASH_VM_USE_PY:-1} \
+      "$BIN" --backend vm "$TMP/selfhost_ternary_basic.nyash" >/dev/null 2>&1
+CODE=$?
+set -e
+if [[ "$CODE" -eq 10 ]]; then
+  pass "Ternary basic"
+else
+  fail "Ternary basic" "exit=$CODE"
+fi
+
+# K) peek expression → 1
+cat > "$TMP/selfhost_peek_basic.nyash" <<'NY'
+local d = "dog"
+local v = peek d {
+  "cat" => { 0 }
+  "dog" => { 1 }
+  else => { 0 }
+}
+return v
+NY
+set +e
+NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 NYASH_VM_USE_PY=${NYASH_VM_USE_PY:-1} \
+      "$BIN" --backend vm "$TMP/selfhost_peek_basic.nyash" >/dev/null 2>&1
+CODE=$?
+set -e
+if [[ "$CODE" -eq 1 ]]; then
+  pass "Peek basic"
+else
+  fail "Peek basic" "exit=$CODE"
+fi
 
 echo "All selfhost Stage-2 smokes PASS" >&2
 exit 0

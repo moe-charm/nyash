@@ -15,7 +15,10 @@ mkdir -p dist/nyash_compiler/tmp
 echo 'return 1+2*3' > dist/nyash_compiler/tmp/sample_exe_smoke.nyash
 
 echo "[3/4] Running parser EXE → JSON ..."
-(cd dist/nyash_compiler && ./nyash_compiler tmp/sample_exe_smoke.nyash > sample.json)
+(cd dist/nyash_compiler && timeout -s KILL 60s ./nyash_compiler tmp/sample_exe_smoke.nyash > sample.json)
+
+echo "[3.5/4] Validating JSON schema ..."
+python3 tools/validate_mir_json.py dist/nyash_compiler/sample.json
 
 if ! head -n1 dist/nyash_compiler/sample.json | grep -q '"kind":"Program"'; then
   echo "error: JSON does not look like a Program" >&2
@@ -26,7 +29,7 @@ echo "[4/4] Executing via bridge (pipe) to verify semantics ..."
 # Keep core minimal and deterministic
 export NYASH_DISABLE_PLUGINS=1
 set +e
-cat dist/nyash_compiler/sample.json | ./target/release/nyash --ny-parser-pipe --backend vm >/dev/null
+timeout -s KILL 60s bash -c 'cat dist/nyash_compiler/sample.json | ./target/release/nyash --ny-parser-pipe --backend vm >/dev/null'
 RC=$?
 set -e
 if [[ "$RC" -ne 7 ]]; then
@@ -36,4 +39,3 @@ fi
 
 echo "✅ EXE-first smoke passed (parser EXE + bridge run)"
 exit 0
-

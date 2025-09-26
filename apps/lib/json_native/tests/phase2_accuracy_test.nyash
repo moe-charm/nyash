@@ -1,0 +1,243 @@
+// Phase 2 精度テスト - yyjson相当精度の検証
+
+using "apps/lib/json_native/parser/parser.nyash" as JsonParser
+using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+
+static box Phase2AccuracyTest {
+    
+    main() {
+        print("🎯 Phase 2 完成テスト - yyjson相当精度検証")
+        print("美しいモジュラー設計 vs 「ずれ」問題の完全解決")
+        
+        // 1. 基本精度テスト
+        print("\n1️⃣ 基本JSON精度テスト")
+        this.test_basic_accuracy()
+        
+        // 2. エスケープ処理精度テスト
+        print("\n2️⃣ エスケープ処理精度テスト")
+        this.test_escape_accuracy()
+        
+        // 3. ネスト構造精度テスト
+        print("\n3️⃣ ネスト構造精度テスト")
+        this.test_nesting_accuracy()
+        
+        // 4. 境界条件精度テスト
+        print("\n4️⃣ 境界条件精度テスト")
+        this.test_boundary_accuracy()
+        
+        // 5. エラー検出精度テスト
+        print("\n5️⃣ エラー検出精度テスト")
+        this.test_error_detection()
+        
+        // 6. ラウンドトリップテスト
+        print("\n6️⃣ ラウンドトリップテスト")
+        this.test_roundtrip_accuracy()
+        
+        print("\n🏆 Phase 2 精度テスト完了！")
+        return 0
+    }
+    
+    // 基本JSON精度テスト
+    test_basic_accuracy() {
+        local test_cases = new ArrayBox()
+        
+        // 基本値テスト
+        test_cases.push({input: "null", expected: "null"})
+        test_cases.push({input: "true", expected: "true"})
+        test_cases.push({input: "false", expected: "false"})
+        test_cases.push({input: "42", expected: "42"})
+        test_cases.push({input: "-123", expected: "-123"})
+        test_cases.push({input: "\"hello\"", expected: "\"hello\""})
+        
+        // 空構造テスト
+        test_cases.push({input: "[]", expected: "[]"})
+        test_cases.push({input: "{}", expected: "{}"})
+        
+        local passed = 0
+        local total = test_cases.length()
+        
+        local i = 0
+        loop(i < total) {
+            local test_case = test_cases.get(i)
+            local input = test_case.input
+            local expected = test_case.expected
+            
+            local result = JsonParserUtils.roundtrip_test(input)
+            
+            if result == expected {
+                print("✅ " + input + " → " + result)
+                passed = passed + 1
+            } else {
+                print("❌ " + input + " → " + result + " (expected: " + expected + ")")
+            }
+            
+            i = i + 1
+        }
+        
+        print("Basic accuracy: " + passed + "/" + total + " passed")
+    }
+    
+    // エスケープ処理精度テスト
+    test_escape_accuracy() {
+        local escape_cases = new ArrayBox()
+        
+        // 基本エスケープ
+        escape_cases.push({input: "\"say \\\"hello\\\"\"", desc: "Quote escaping"})
+        escape_cases.push({input: "\"path\\\\to\\\\file\"", desc: "Backslash escaping"})
+        escape_cases.push({input: "\"line1\\nline2\"", desc: "Newline escaping"})
+        escape_cases.push({input: "\"tab\\there\"", desc: "Tab escaping"})
+        
+        // Unicode エスケープ（簡易版）
+        // escape_cases.push({input: "\"\\u0041\\u0042\"", desc: "Unicode escaping"})
+        
+        local i = 0
+        loop(i < escape_cases.length()) {
+            local test_case = escape_cases.get(i)
+            local input = test_case.input
+            local desc = test_case.desc
+            
+            print("Testing: " + desc)
+            print("  Input: " + input)
+            
+            local parsed = JsonParserUtils.parse_json(input)
+            if parsed != null {
+                local output = parsed.stringify()
+                print("  Output: " + output)
+                print("  ✅ Success")
+            } else {
+                print("  ❌ Parse failed")
+            }
+            
+            i = i + 1
+        }
+    }
+    
+    // ネスト構造精度テスト
+    test_nesting_accuracy() {
+        local nesting_cases = new ArrayBox()
+        
+        // 浅いネスト
+        nesting_cases.push("{\"a\": {\"b\": \"value\"}}")
+        nesting_cases.push("[1, [2, 3], 4]")
+        nesting_cases.push("{\"array\": [1, 2, 3], \"object\": {\"key\": \"value\"}}")
+        
+        // 複雑なネスト
+        nesting_cases.push("{\"users\": [{\"name\": \"Alice\", \"age\": 30}, {\"name\": \"Bob\", \"age\": 25}]}")
+        nesting_cases.push("[{\"type\": \"A\", \"data\": {\"x\": 1}}, {\"type\": \"B\", \"data\": {\"y\": 2}}]")
+        
+        local i = 0
+        loop(i < nesting_cases.length()) {
+            local input = nesting_cases.get(i)
+            
+            print("Testing complex nesting:")
+            print("  Input: " + input)
+            
+            local parsed = JsonParserUtils.parse_json(input)
+            if parsed != null {
+                local output = parsed.stringify()
+                print("  Output: " + output)
+                print("  ✅ Nesting handled correctly")
+            } else {
+                print("  ❌ Nesting parse failed")
+            }
+            print("")
+            
+            i = i + 1
+        }
+    }
+    
+    // 境界条件精度テスト
+    test_boundary_accuracy() {
+        local boundary_cases = new ArrayBox()
+        
+        // 空白処理
+        boundary_cases.push({input: " { \"key\" : \"value\" } ", desc: "Whitespace handling"})
+        boundary_cases.push({input: "{\n  \"key\": \"value\"\n}", desc: "Newline handling"})
+        boundary_cases.push({input: "{\"key\":\"value\"}", desc: "No spaces"})
+        
+        // 特殊文字
+        boundary_cases.push({input: "{\"key with spaces\": \"value\"}", desc: "Key with spaces"})
+        boundary_cases.push({input: "{\"comma,inside\": \"value,with,commas\"}", desc: "Commas in strings"})
+        
+        local i = 0
+        loop(i < boundary_cases.length()) {
+            local test_case = boundary_cases.get(i)
+            local input = test_case.input
+            local desc = test_case.desc
+            
+            print("Testing: " + desc)
+            print("  Input: '" + input + "'")
+            
+            local parsed = JsonParserUtils.parse_json(input)
+            if parsed != null {
+                print("  ✅ Boundary condition handled")
+            } else {
+                print("  ❌ Boundary condition failed")
+            }
+            
+            i = i + 1
+        }
+    }
+    
+    // エラー検出精度テスト
+    test_error_detection() {
+        local error_cases = new ArrayBox()
+        
+        // 構文エラー
+        error_cases.push({input: "{\"key\": }", desc: "Missing value"})
+        error_cases.push({input: "{\"key\" \"value\"}", desc: "Missing colon"})
+        error_cases.push({input: "{\"key\": \"value\",}", desc: "Trailing comma"})
+        error_cases.push({input: "[1, 2, 3,]", desc: "Trailing comma in array"})
+        
+        // 不正な文字列
+        error_cases.push({input: "{\"key\": \"unclosed string}", desc: "Unclosed string"})
+        error_cases.push({input: "{\"key\": \"invalid\\x escape\"}", desc: "Invalid escape"})
+        
+        // 不正な数値
+        error_cases.push({input: "{\"key\": 01}", desc: "Leading zero"})
+        error_cases.push({input: "{\"key\": -}", desc: "Incomplete number"})
+        
+        local i = 0
+        loop(i < error_cases.length()) {
+            local test_case = error_cases.get(i)
+            local input = test_case.input
+            local desc = test_case.desc
+            
+            print("Testing error detection: " + desc)
+            print("  Input: " + input)
+            
+            local parsed = JsonParserUtils.parse_json(input)
+            if parsed == null {
+                print("  ✅ Error correctly detected")
+            } else {
+                print("  ❌ Error not detected (should have failed)")
+            }
+            
+            i = i + 1
+        }
+    }
+    
+    // ラウンドトリップテスト
+    test_roundtrip_accuracy() {
+        local complex_json = "{\"project\": \"Nyash JSON Native\", \"version\": 1, \"features\": [\"modular\", \"beautiful\", \"accurate\"], \"config\": {\"provider\": \"nyash\", \"fallback\": true}, \"status\": \"phase2_complete\"}"
+        
+        print("Complex JSON roundtrip test:")
+        print("Input: " + complex_json)
+        
+        local result = JsonParserUtils.roundtrip_test(complex_json)
+        if result != null {
+            print("Output: " + result)
+            print("✅ Complex roundtrip successful")
+            
+            // 2回目のラウンドトリップテスト（安定性確認）
+            local second_result = JsonParserUtils.roundtrip_test(result)
+            if second_result == result {
+                print("✅ Stable roundtrip confirmed")
+            } else {
+                print("⚠️  Roundtrip not stable")
+            }
+        } else {
+            print("❌ Complex roundtrip failed")
+        }
+    }
+}

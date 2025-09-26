@@ -1,5 +1,5 @@
 // Simplified test for items.nyash
-include "text_adventure/items.nyash"
+using "text_adventure/items.nyash"
 
 print("🧪 Simple Items Test...")
 

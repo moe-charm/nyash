@@ -1,24 +1,34 @@
-
 #![cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 
-use nyash_rust::parser::NyashParser;
-use nyash_rust::runtime::plugin_loader_v2::{init_global_loader_v2, get_global_loader_v2};
-use nyash_rust::runtime::box_registry::get_global_registry;
-use nyash_rust::runtime::PluginConfig;
-use nyash_rust::runtime::NyashRuntime;
 use nyash_rust::backend::VM;
+use nyash_rust::parser::NyashParser;
+use nyash_rust::runtime::box_registry::get_global_registry;
+use nyash_rust::runtime::plugin_loader_v2::{get_global_loader_v2, init_global_loader_v2};
+use nyash_rust::runtime::NyashRuntime;
+use nyash_rust::runtime::PluginConfig;
 
 fn try_init_plugins() -> bool {
-    if !std::path::Path::new("nyash.toml").exists() { return false; }
-    if let Err(e) = init_global_loader_v2("nyash.toml") { eprintln!("init failed: {:?}", e); return false; }
+    if !std::path::Path::new("nyash.toml").exists() {
+        return false;
+    }
+    if let Err(e) = init_global_loader_v2("nyash.toml") {
+        eprintln!("init failed: {:?}", e);
+        return false;
+    }
     let loader = get_global_loader_v2();
     let loader = loader.read().unwrap();
     if let Some(conf) = &loader.config {
         let mut map = std::collections::HashMap::new();
-        for (lib, def) in &conf.libraries { for b in &def.boxes { map.insert(b.clone(), lib.clone()); } }
+        for (lib, def) in &conf.libraries {
+            for b in &def.boxes {
+                map.insert(b.clone(), lib.clone());
+            }
+        }
         get_global_registry().apply_plugin_config(&PluginConfig { plugins: map });
         true
-    } else { false }
+    } else {
+        false
+    }
 }
 
 #[test]
@@ -26,7 +36,9 @@ fn try_init_plugins() -> bool {
 fn e2e_http_two_servers_parallel() {
     std::env::set_var("NYASH_NET_LOG", "1");
     std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local s1, s2, c, r1, r2, resp1, resp2, req1, req2, p1, p2, x, y
@@ -73,7 +85,9 @@ x + ":" + y
 fn e2e_http_long_body_and_headers() {
     std::env::set_var("NYASH_NET_LOG", "1");
     std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local s, c, r, resp, q, body, hv
@@ -106,13 +120,14 @@ hv + ":" + body
     assert!(s.contains("OK-LONG"));
 }
 
-
 #[test]
 #[ignore = "MIR13/plugin Net: client error result semantics pending"]
 fn e2e_vm_http_client_error_result() {
     std::env::set_var("NYASH_NET_LOG", "1");
     std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     // No server on 8099 → should produce Err result
     let code = r#"
@@ -133,7 +148,9 @@ result
     let mut compiler = nyash_rust::mir::MirCompiler::new();
     let compile_result = compiler.compile(ast).expect("mir compile failed");
     let mut vm = VM::with_runtime(runtime);
-    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    let result = vm
+        .execute_module(&compile_result.module)
+        .expect("vm exec failed");
     let s = result.to_string_box().value;
     assert!(s.contains("Error") || s.contains("unexpected_ok") == false);
 }
@@ -143,7 +160,9 @@ result
 fn e2e_vm_http_empty_body() {
     std::env::set_var("NYASH_NET_LOG", "1");
     std::env::set_var("NYASH_NET_LOG_FILE", "net_plugin.log");
-    if !try_init_plugins() { return; }
+    if !try_init_plugins() {
+        return;
+    }
 
     let code = r#"
 local srv, cli, r, resp, req, body
@@ -169,6 +188,8 @@ body
     let mut compiler = nyash_rust::mir::MirCompiler::new();
     let compile_result = compiler.compile(ast).expect("mir compile failed");
     let mut vm = VM::with_runtime(runtime);
-    let result = vm.execute_module(&compile_result.module).expect("vm exec failed");
+    let result = vm
+        .execute_module(&compile_result.module)
+        .expect("vm exec failed");
     assert_eq!(result.to_string_box().value, "");
 }

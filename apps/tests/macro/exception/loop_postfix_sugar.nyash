@@ -1,0 +1,15 @@
+function f(x) {
+  return x
+}
+
+function main(args) {
+  local i = 0
+  loop(i < 2) {
+    with_cleanup(
+      postfix_catch(f(i), "Error", fn(e){ print(e) }),
+      fn(){ print("cleanup") }
+    )
+    i = i + 1
+  }
+}
+

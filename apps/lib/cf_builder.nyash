@@ -1,0 +1,98 @@
+// ControlFlowBuilder — If/Match 正規化ビルダー（コンパイル時メタ）
+// 生成物は AST JSON v0 のノード文字列、またはステートメント配列（文字列配列）。
+
+static box ControlFlowBuilder {
+  // If 文: then/else は配列（文ノード文字列）
+  if_stmt(cond_json, then_stmts, else_stmts) {
+    using "apps/lib/json_builder.nyash" as JB
+    return JB.if_(cond_json, then_stmts, else_stmts)
+  }
+
+  // If 式: res_name へ代入して合流（[Local(res), If(..)] の配列を返す）
+  if_expr(cond_json, then_expr_json, else_expr_json, res_name) {
+    using "apps/lib/json_builder.nyash" as JB
+    local res_var = JB.variable(res_name)
+    local decl = JB.local_decl([res_name], [null])
+    local then_s = [ JB.assignment(res_var, then_expr_json) ]
+    local else_s = [ JB.assignment(res_var, else_expr_json) ]
+    local ifn = JB.if_(cond_json, then_s, else_s)
+    return [ decl, ifn ]
+  }
+
+  // Match 式（簡易版）: scrutinee を一度だけ評価し、res_name に収束。
+  // arms: array of { cond_json, guard_json|null, body_expr_json }。
+  // default アームは cond_json == "__NY_PATTERN_DEFAULT" で指定。
+  match_expr(scrut_json, arms, res_name) {
+    return this.match_expr_with_names(scrut_json, arms, res_name, "__ny_scrut")
+  }
+
+  match_expr_with_names(scrut_json, arms, res_name, scrut_name) {
+    using "apps/lib/json_builder.nyash" as JB
+    using "apps/lib/pattern_builder.nyash" as PT
+
+    // scrutinee を一度だけ評価
+    local decl_scrut = JB.local_decl([scrut_name], [scrut_json])
+    local scrut_var = JB.variable(scrut_name)
+
+    // res の宣言
+    local res_decl = JB.local_decl([res_name], [null])
+    local res_var = JB.variable(res_name)
+
+    // デフォルト（任意）を抽出
+    local normals = []
+    local default_arm = null
+    local i = 0
+    loop(i < arms.length()) {
+      local a = arms.get(i)
+      if a.cond_json == PT.default() {
+        default_arm = a
+      } else {
+        normals.push(a)
+      }
+      i = i + 1
+    }
+
+    // 連鎖 If を構築
+    function cond_fuse(c, g) {
+      if g == null { return c }
+      return PT.and_([c, g])
+    }
+
+    // 末尾から畳み込んで If 連鎖を組み立てる
+    local chain = null
+    i = normals.length() - 1
+    loop(i >= 0) {
+      local a = normals.get(i)
+      local cond_all = cond_fuse(a.cond_json, a.guard_json)
+      local then_s = [ JB.assignment(res_var, a.body_expr_json) ]
+      local else_s = null
+      if chain != null { else_s = [ chain ] }
+      local ifn = JB.if_(cond_all, then_s, else_s)
+      chain = ifn
+      i = i - 1
+    }
+
+    // デフォルト（無ければ null を代入して収束させる）
+    if default_arm != null {
+      if chain == null {
+        // 単一デフォルト
+        chain = JB.assignment(res_var, default_arm.body_expr_json)
+        // Assignment は文なので If で包む必要なし
+        chain = JB.if_(JB.literal_bool(true), [chain], null)
+      } else {
+        local def_s = [ JB.assignment(res_var, default_arm.body_expr_json) ]
+        chain = JB.if_(JB.literal_bool(true), [chain], def_s) // 常に true の If で else をぶら下げる
+      }
+    } else {
+      // デフォルトなし: 未マッチ経路を res=null へ収束
+      local set_null = JB.assignment(res_var, JB.literal_null())
+      if chain == null {
+        chain = JB.if_(JB.literal_bool(true), [set_null], null)
+      } else {
+        chain = JB.if_(JB.literal_bool(true), [chain], [set_null])
+      }
+    }
+
+    return [ decl_scrut, res_decl, chain ]
+  }
+}

@@ -1,0 +1,80 @@
+// JsonNode基本動作テスト - 80%の動く基盤を確認
+
+using "apps/lib/json_native/core/node.nyash" as JsonNode
+
+// ===== 基本値テスト =====
+
+print("🧪 JsonNode基本動作テスト開始")
+
+// null値テスト
+local null_node = JsonNode.create_null()
+print("null test: " + null_node.stringify())  // 期待値: "null"
+
+// bool値テスト
+local true_node = JsonNode.create_bool(true)
+local false_node = JsonNode.create_bool(false)
+print("bool test: " + true_node.stringify())   // 期待値: "true"
+print("bool test: " + false_node.stringify())  // 期待値: "false"
+
+// int値テスト
+local int_node = JsonNode.create_int(42)
+print("int test: " + int_node.stringify())     // 期待値: "42"
+
+// string値テスト
+local str_node = JsonNode.create_string("hello")
+print("string test: " + str_node.stringify())  // 期待値: "\"hello\""
+
+// エスケープテスト
+local escape_node = JsonNode.create_string("say \"hello\"")
+print("escape test: " + escape_node.stringify())  // 期待値: "\"say \\\"hello\\\"\""
+
+// ===== 配列テスト =====
+
+local array_node = JsonNode.create_array()
+array_node.array_push(JsonNode.create_int(1))
+array_node.array_push(JsonNode.create_int(2))
+array_node.array_push(JsonNode.create_string("three"))
+print("array test: " + array_node.stringify())  // 期待値: "[1,2,\"three\"]"
+
+// ===== オブジェクトテスト =====
+
+local object_node = JsonNode.create_object()
+object_node.object_set("name", JsonNode.create_string("Nyash"))
+object_node.object_set("version", JsonNode.create_int(1))
+object_node.object_set("active", JsonNode.create_bool(true))
+print("object test: " + object_node.stringify())  // 期待値: {"name":"Nyash","version":1,"active":true}
+
+// ===== ネストテスト =====
+
+local nested_object = JsonNode.create_object()
+nested_object.object_set("user", object_node)
+nested_object.object_set("items", array_node)
+print("nested test: " + nested_object.stringify())
+
+// ===== パーステスト（簡易版） =====
+
+print("\n🔍 簡易パーステスト")
+
+local parsed_null = JsonNode.parse("null")
+print("parse null: " + parsed_null.stringify())
+
+local parsed_true = JsonNode.parse("true")
+print("parse true: " + parsed_true.stringify())
+
+local parsed_false = JsonNode.parse("false")
+print("parse false: " + parsed_false.stringify())
+
+local parsed_int = JsonNode.parse("42")
+print("parse int: " + parsed_int.stringify())
+
+local parsed_string = JsonNode.parse("\"hello\"")
+print("parse string: " + parsed_string.stringify())
+
+local parsed_array = JsonNode.parse("[]")
+print("parse empty array: " + parsed_array.stringify())
+
+local parsed_object = JsonNode.parse("{}")
+print("parse empty object: " + parsed_object.stringify())
+
+print("\n✅ JsonNode基本動作テスト完了！")
+print("🎯 次のステップ: レクサー・パーサー実装で複雑なJSONに対応")

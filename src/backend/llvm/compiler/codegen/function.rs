@@ -10,7 +10,8 @@ pub(super) fn lower_one_function<'ctx>(
 ) -> Result<(), String> {
     // Create basic blocks (prefix names with function label to avoid any ambiguity)
     let fn_label = sanitize_symbol(name);
-    let (mut bb_map, entry_bb) = instructions::create_basic_blocks(codegen, llvm_func, func, &fn_label);
+    let (mut bb_map, entry_bb) =
+        instructions::create_basic_blocks(codegen, llvm_func, func, &fn_label);
     let mut cursor = instructions::builder_cursor::BuilderCursor::new(&codegen.builder);
     cursor.at_end(func.entry_block, entry_bb);
     let mut vmap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
@@ -23,19 +24,25 @@ pub(super) fn lower_one_function<'ctx>(
         Vec<(ValueId, PhiValue, Vec<(crate::mir::BasicBlockId, ValueId)>)>,
     > = HashMap::new();
     // Snapshot of values at the end of each basic block (for sealed-SSA PHI wiring)
-    let mut block_end_values: HashMap<crate::mir::BasicBlockId, HashMap<ValueId, BasicValueEnum>> = HashMap::new();
+    let mut block_end_values: HashMap<crate::mir::BasicBlockId, HashMap<ValueId, BasicValueEnum>> =
+        HashMap::new();
     // Build successors and predecessors map (for optional sealed-SSA PHI wiring)
-    let mut succs: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> = HashMap::new();
+    let mut succs: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> =
+        HashMap::new();
     for (bid, block) in &func.blocks {
         let v: Vec<crate::mir::BasicBlockId> = block.successors.iter().copied().collect();
         succs.insert(*bid, v);
     }
-    let mut preds: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> = HashMap::new();
+    let mut preds: HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>> =
+        HashMap::new();
     for (b, ss) in &succs {
-        for s in ss { preds.entry(*s).or_default().push(*b); }
+        for s in ss {
+            preds.entry(*s).or_default().push(*b);
+        }
     }
     // Track sealed blocks to know when all preds of a successor are sealed
-    let mut sealed_blocks: std::collections::HashSet<crate::mir::BasicBlockId> = std::collections::HashSet::new();
+    let mut sealed_blocks: std::collections::HashSet<crate::mir::BasicBlockId> =
+        std::collections::HashSet::new();
     // Bind parameters
     for (i, pid) in func.params.iter().enumerate() {
         if let Some(av) = llvm_func.get_nth_param(i as u32) {
@@ -105,8 +112,17 @@ pub(super) fn lower_one_function<'ctx>(
     // Default sealed-SSA ON unless explicitly disabled with NYASH_LLVM_PHI_SEALED=0
     let sealed_mode = std::env::var("NYASH_LLVM_PHI_SEALED").ok().as_deref() != Some("0");
     // LoopForm registry (per-function lowering; gated)
-    let mut loopform_registry: HashMap<crate::mir::BasicBlockId, (inkwell::basic_block::BasicBlock, PhiValue, PhiValue, inkwell::basic_block::BasicBlock)> = HashMap::new();
-    let mut loopform_body_to_header: HashMap<crate::mir::BasicBlockId, crate::mir::BasicBlockId> = HashMap::new();
+    let mut loopform_registry: HashMap<
+        crate::mir::BasicBlockId,
+        (
+            inkwell::basic_block::BasicBlock,
+            PhiValue,
+            PhiValue,
+            inkwell::basic_block::BasicBlock,
+        ),
+    > = HashMap::new();
+    let mut loopform_body_to_header: HashMap<crate::mir::BasicBlockId, crate::mir::BasicBlockId> =
+        HashMap::new();
     // Per-function Resolver for dominance-safe value access (i64 minimal)
     let mut resolver = instructions::Resolver::new();
     for (bi, bid) in block_ids.iter().enumerate() {
@@ -117,10 +133,15 @@ pub(super) fn lower_one_function<'ctx>(
             eprintln!("[LLVM] lowering bb={}", bid.as_u32());
         }
         let block = func.blocks.get(bid).unwrap();
-        let mut defined_in_block: std::collections::HashSet<ValueId> = std::collections::HashSet::new();
+        let mut defined_in_block: std::collections::HashSet<ValueId> =
+            std::collections::HashSet::new();
         for inst in &block.instructions {
             match inst {
-                MirInstruction::NewBox { dst, box_type, args } => {
+                MirInstruction::NewBox {
+                    dst,
+                    box_type,
+                    args,
+                } => {
                     instructions::lower_newbox(
                         codegen,
                         &mut cursor,
@@ -136,42 +157,74 @@ pub(super) fn lower_one_function<'ctx>(
                         &block_end_values,
                     )?;
                     defined_in_block.insert(*dst);
-                },
+                }
                 MirInstruction::Const { dst, value } => {
                     let bval = match value {
-                        ConstValue::Integer(i) => codegen.context.i64_type().const_int(*i as u64, true).into(),
+                        ConstValue::Integer(i) => {
+                            codegen.context.i64_type().const_int(*i as u64, true).into()
+                        }
                         ConstValue::Float(f) => codegen.context.f64_type().const_float(*f).into(),
-                        ConstValue::Bool(b) => codegen.context.bool_type().const_int(*b as u64, false).into(),
+                        ConstValue::Bool(b) => codegen
+                            .context
+                            .bool_type()
+                            .const_int(*b as u64, false)
+                            .into(),
                         ConstValue::String(s) => {
                             // Hoist string creation to entry block to dominate all uses.
                             let entry_term = unsafe { entry_bb.get_terminator() };
-                            if let Some(t) = entry_term { entry_builder.position_before(&t); }
-                            else { entry_builder.position_at_end(entry_bb); }
+                            if let Some(t) = entry_term {
+                                entry_builder.position_before(&t);
+                            } else {
+                                entry_builder.position_at_end(entry_bb);
+                            }
                             let gv = entry_builder
                                 .build_global_string_ptr(s, "str")
                                 .map_err(|e| e.to_string())?;
                             let len = codegen.context.i32_type().const_int(s.len() as u64, false);
                             let rt = codegen.context.ptr_type(inkwell::AddressSpace::from(0));
-                            let fn_ty = rt.fn_type(&[
-                                codegen.context.ptr_type(inkwell::AddressSpace::from(0)).into(),
-                                codegen.context.i32_type().into(),
-                            ], false);
+                            let fn_ty = rt.fn_type(
+                                &[
+                                    codegen
+                                        .context
+                                        .ptr_type(inkwell::AddressSpace::from(0))
+                                        .into(),
+                                    codegen.context.i32_type().into(),
+                                ],
+                                false,
+                            );
                             let callee = codegen
                                 .module
                                 .get_function("nyash_string_new")
-                                .unwrap_or_else(|| codegen.module.add_function("nyash_string_new", fn_ty, None));
+                                .unwrap_or_else(|| {
+                                    codegen.module.add_function("nyash_string_new", fn_ty, None)
+                                });
                             let call = entry_builder
-                                .build_call(callee, &[gv.as_pointer_value().into(), len.into()], "strnew")
+                                .build_call(
+                                    callee,
+                                    &[gv.as_pointer_value().into(), len.into()],
+                                    "strnew",
+                                )
                                 .map_err(|e| e.to_string())?;
-                            call.try_as_basic_value().left().ok_or("nyash_string_new returned void".to_string())?
+                            call.try_as_basic_value()
+                                .left()
+                                .ok_or("nyash_string_new returned void".to_string())?
                         }
-                        ConstValue::Null => codegen.context.ptr_type(inkwell::AddressSpace::from(0)).const_zero().into(),
+                        ConstValue::Null => codegen
+                            .context
+                            .ptr_type(inkwell::AddressSpace::from(0))
+                            .const_zero()
+                            .into(),
                         ConstValue::Void => codegen.context.i64_type().const_zero().into(),
                     };
                     vmap.insert(*dst, bval);
                     defined_in_block.insert(*dst);
-                },
-                MirInstruction::Call { dst, func: callee, args, .. } => {
+                }
+                MirInstruction::Call {
+                    dst,
+                    func: callee,
+                    args,
+                    ..
+                } => {
                     instructions::lower_call(
                         codegen,
                         &mut cursor,
@@ -188,9 +241,18 @@ pub(super) fn lower_one_function<'ctx>(
                         &preds,
                         &block_end_values,
                     )?;
-                    if let Some(d) = dst { defined_in_block.insert(*d); }
-                },
-                MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects: _ } => {
+                    if let Some(d) = dst {
+                        defined_in_block.insert(*d);
+                    }
+                }
+                MirInstruction::BoxCall {
+                    dst,
+                    box_val,
+                    method,
+                    method_id,
+                    args,
+                    effects: _,
+                } => {
                     instructions::lower_boxcall(
                         codegen,
                         &mut cursor,
@@ -209,9 +271,17 @@ pub(super) fn lower_one_function<'ctx>(
                         &preds,
                         &block_end_values,
                     )?;
-                    if let Some(d) = dst { defined_in_block.insert(*d); }
-                },
-                MirInstruction::ExternCall { dst, iface_name, method_name, args, effects: _ } => {
+                    if let Some(d) = dst {
+                        defined_in_block.insert(*d);
+                    }
+                }
+                MirInstruction::ExternCall {
+                    dst,
+                    iface_name,
+                    method_name,
+                    args,
+                    effects: _,
+                } => {
                     instructions::lower_externcall(
                         codegen,
                         &mut cursor,
@@ -227,8 +297,10 @@ pub(super) fn lower_one_function<'ctx>(
                         &preds,
                         &block_end_values,
                     )?;
-                    if let Some(d) = dst { defined_in_block.insert(*d); }
-                },
+                    if let Some(d) = dst {
+                        defined_in_block.insert(*d);
+                    }
+                }
                 MirInstruction::UnaryOp { dst, op, operand } => {
                     instructions::lower_unary(
                         codegen,
@@ -245,16 +317,43 @@ pub(super) fn lower_one_function<'ctx>(
                         &block_end_values,
                     )?;
                     defined_in_block.insert(*dst);
-                },
+                }
                 MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                    instructions::lower_binop(codegen, &mut cursor, &mut resolver, *bid, func, &mut vmap, *dst, op, lhs, rhs, &bb_map, &preds, &block_end_values)?;
+                    instructions::lower_binop(
+                        codegen,
+                        &mut cursor,
+                        &mut resolver,
+                        *bid,
+                        func,
+                        &mut vmap,
+                        *dst,
+                        op,
+                        lhs,
+                        rhs,
+                        &bb_map,
+                        &preds,
+                        &block_end_values,
+                    )?;
                     defined_in_block.insert(*dst);
-                },
+                }
                 MirInstruction::Compare { dst, op, lhs, rhs } => {
-                    let out = instructions::lower_compare(codegen, &mut cursor, &mut resolver, *bid, func, &vmap, op, lhs, rhs, &bb_map, &preds, &block_end_values)?;
+                    let out = instructions::lower_compare(
+                        codegen,
+                        &mut cursor,
+                        &mut resolver,
+                        *bid,
+                        func,
+                        &vmap,
+                        op,
+                        lhs,
+                        rhs,
+                        &bb_map,
+                        &preds,
+                        &block_end_values,
+                    )?;
                     vmap.insert(*dst, out);
                     defined_in_block.insert(*dst);
-                },
+                }
                 MirInstruction::Store { value, ptr } => {
                     instructions::lower_store(
                         codegen,
@@ -270,17 +369,30 @@ pub(super) fn lower_one_function<'ctx>(
                         &preds,
                         &block_end_values,
                     )?;
-                },
+                }
                 MirInstruction::Load { dst, ptr } => {
-                    instructions::lower_load(codegen, &mut cursor, *bid, &mut vmap, &mut allocas, &mut alloca_elem_types, dst, ptr)?;
+                    instructions::lower_load(
+                        codegen,
+                        &mut cursor,
+                        *bid,
+                        &mut vmap,
+                        &mut allocas,
+                        &mut alloca_elem_types,
+                        dst,
+                        ptr,
+                    )?;
                     defined_in_block.insert(*dst);
-                },
+                }
                 MirInstruction::Phi { .. } => { /* precreated */ }
                 _ => { /* ignore others */ }
             }
             // Snapshot end-of-block values
             let mut snap: HashMap<ValueId, BasicValueEnum> = HashMap::new();
-            for vid in &defined_in_block { if let Some(v) = vmap.get(vid).copied() { snap.insert(*vid, v); } }
+            for vid in &defined_in_block {
+                if let Some(v) = vmap.get(vid).copied() {
+                    snap.insert(*vid, v);
+                }
+            }
             block_end_values.insert(*bid, snap);
         }
         // Terminator handling
@@ -288,42 +400,85 @@ pub(super) fn lower_one_function<'ctx>(
             cursor.at_end(*bid, bb);
             match term {
                 MirInstruction::Return { value } => {
-                    instructions::emit_return(codegen, &mut cursor, &mut resolver, *bid, func, &vmap, value, &bb_map, &preds, &block_end_values)?;
+                    instructions::term_emit_return(
+                        codegen,
+                        &mut cursor,
+                        &mut resolver,
+                        *bid,
+                        func,
+                        &vmap,
+                        value,
+                        &bb_map,
+                        &preds,
+                        &block_end_values,
+                    )?;
                 }
                 MirInstruction::Jump { target } => {
                     let mut handled = false;
-                    if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") &&
-                       std::env::var("NYASH_LOOPFORM_BODY2DISPATCH").ok().as_deref() == Some("1") {
+                    if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1")
+                        && std::env::var("NYASH_LOOPFORM_BODY2DISPATCH")
+                            .ok()
+                            .as_deref()
+                            == Some("1")
+                    {
                         if let Some(hdr) = loopform_body_to_header.get(bid) {
                             if hdr == target {
-                                if let Some((dispatch_bb, tag_phi, payload_phi, _latch_bb)) = loopform_registry.get(hdr) {
+                                if let Some((dispatch_bb, tag_phi, payload_phi, _latch_bb)) =
+                                    loopform_registry.get(hdr)
+                                {
                                     let i8t = codegen.context.i8_type();
                                     let i64t = codegen.context.i64_type();
-                                    let pred_llbb = *bb_map.get(bid).ok_or("loopform: body llbb missing")?;
+                                    let pred_llbb =
+                                        *bb_map.get(bid).ok_or("loopform: body llbb missing")?;
                                     let z = i8t.const_zero();
                                     let pz = i64t.const_zero();
                                     tag_phi.add_incoming(&[(&z, pred_llbb)]);
                                     payload_phi.add_incoming(&[(&pz, pred_llbb)]);
-                                    cursor.emit_term(*bid, |b| { b.build_unconditional_branch(*dispatch_bb).unwrap(); });
+                                    cursor.emit_term(*bid, |b| {
+                                        b.build_unconditional_branch(*dispatch_bb).unwrap();
+                                    });
                                     handled = true;
                                 }
                             }
                         }
                     }
                     if !handled {
-                        instructions::emit_jump(codegen, &mut cursor, *bid, target, &bb_map, &phis_by_block)?;
+                        instructions::term_emit_jump(
+                            codegen,
+                            &mut cursor,
+                            *bid,
+                            target,
+                            &bb_map,
+                            &phis_by_block,
+                        )?;
                     }
                 }
-                MirInstruction::Branch { condition, then_bb, else_bb } => {
+                MirInstruction::Branch {
+                    condition,
+                    then_bb,
+                    else_bb,
+                } => {
                     let mut handled_by_loopform = false;
                     if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") {
                         let mut is_back = |start: crate::mir::BasicBlockId| -> u8 {
                             if let Some(b) = func.blocks.get(&start) {
-                                if let Some(crate::mir::instruction::MirInstruction::Jump { target }) = &b.terminator {
-                                    if target == bid { return 1; }
+                                if let Some(crate::mir::instruction::MirInstruction::Jump {
+                                    target,
+                                }) = &b.terminator
+                                {
+                                    if target == bid {
+                                        return 1;
+                                    }
                                     if let Some(b2) = func.blocks.get(target) {
-                                        if let Some(crate::mir::instruction::MirInstruction::Jump { target: t2 }) = &b2.terminator {
-                                            if t2 == bid { return 2; }
+                                        if let Some(
+                                            crate::mir::instruction::MirInstruction::Jump {
+                                                target: t2,
+                                            },
+                                        ) = &b2.terminator
+                                        {
+                                            if t2 == bid {
+                                                return 2;
+                                            }
                                         }
                                     }
                                 }
@@ -332,73 +487,164 @@ pub(super) fn lower_one_function<'ctx>(
                         };
                         let d_then = is_back(*then_bb);
                         let d_else = is_back(*else_bb);
-                        let choose_body = if d_then > 0 && d_else == 0 { Some((*then_bb, *else_bb)) }
-                            else if d_else > 0 && d_then == 0 { Some((*else_bb, *then_bb)) }
-                            else if d_then > 0 && d_else > 0 { if d_then <= d_else { Some((*then_bb, *else_bb)) } else { Some((*else_bb, *then_bb)) } }
-                            else { None };
+                        let choose_body = if d_then > 0 && d_else == 0 {
+                            Some((*then_bb, *else_bb))
+                        } else if d_else > 0 && d_then == 0 {
+                            Some((*else_bb, *then_bb))
+                        } else if d_then > 0 && d_else > 0 {
+                            if d_then <= d_else {
+                                Some((*then_bb, *else_bb))
+                            } else {
+                                Some((*else_bb, *then_bb))
+                            }
+                        } else {
+                            None
+                        };
                         if let Some((body_sel, after_sel)) = choose_body {
                             let body_block = func.blocks.get(&body_sel).unwrap();
                             handled_by_loopform = instructions::lower_while_loopform(
-                                codegen, &mut cursor, &mut resolver, func, llvm_func, condition, &body_block.instructions,
-                                loopform_loop_id, &fn_label, *bid, body_sel, after_sel, &bb_map, &vmap, &preds, &block_end_values,
-                                &mut loopform_registry, &mut loopform_body_to_header,
+                                codegen,
+                                &mut cursor,
+                                &mut resolver,
+                                func,
+                                llvm_func,
+                                condition,
+                                &body_block.instructions,
+                                loopform_loop_id,
+                                &fn_label,
+                                *bid,
+                                body_sel,
+                                after_sel,
+                                &bb_map,
+                                &vmap,
+                                &preds,
+                                &block_end_values,
+                                &mut loopform_registry,
+                                &mut loopform_body_to_header,
                             )?;
                             loopform_loop_id = loopform_loop_id.wrapping_add(1);
                         }
                     }
                     if !handled_by_loopform {
-                        instructions::emit_branch(codegen, &mut cursor, &mut resolver, *bid, condition, then_bb, else_bb, &bb_map, &phis_by_block, &vmap, &preds, &block_end_values)?;
+                        let cond_norm = instructions::normalize_branch_condition(func, condition);
+                        instructions::term_emit_branch(
+                            codegen,
+                            &mut cursor,
+                            &mut resolver,
+                            *bid,
+                            &cond_norm,
+                            then_bb,
+                            else_bb,
+                            &bb_map,
+                            &phis_by_block,
+                            &vmap,
+                            &preds,
+                            &block_end_values,
+                        )?;
                     }
                 }
                 _ => {
                     cursor.at_end(*bid, bb);
                     if let Some(next_bid) = block_ids.get(bi + 1) {
-                        instructions::emit_jump(codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block)?;
+                        instructions::term_emit_jump(
+                            codegen,
+                            &mut cursor,
+                            *bid,
+                            next_bid,
+                            &bb_map,
+                            &phis_by_block,
+                        )?;
                     } else {
                         let entry_first = func.entry_block;
-                        instructions::emit_jump(codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block)?;
+                        instructions::term_emit_jump(
+                            codegen,
+                            &mut cursor,
+                            *bid,
+                            &entry_first,
+                            &bb_map,
+                            &phis_by_block,
+                        )?;
                     }
                 }
             }
         } else {
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[LLVM] no terminator in MIR for bb={} (fallback)", bid.as_u32());
+                eprintln!(
+                    "[LLVM] no terminator in MIR for bb={} (fallback)",
+                    bid.as_u32()
+                );
             }
             cursor.at_end(*bid, bb);
             if let Some(next_bid) = block_ids.get(bi + 1) {
-                instructions::emit_jump(codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block)?;
+                instructions::term_emit_jump(
+                    codegen,
+                    &mut cursor,
+                    *bid,
+                    next_bid,
+                    &bb_map,
+                    &phis_by_block,
+                )?;
             } else {
                 let entry_first = func.entry_block;
-                instructions::emit_jump(codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block)?;
+                instructions::term_emit_jump(
+                    codegen,
+                    &mut cursor,
+                    *bid,
+                    &entry_first,
+                    &bb_map,
+                    &phis_by_block,
+                )?;
             }
         }
         if unsafe { bb.get_terminator() }.is_none() {
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[LLVM] extra guard inserting fallback for bb={}", bid.as_u32());
+                eprintln!(
+                    "[LLVM] extra guard inserting fallback for bb={}",
+                    bid.as_u32()
+                );
             }
             cursor.at_end(*bid, bb);
             if let Some(next_bid) = block_ids.get(bi + 1) {
-                instructions::emit_jump(codegen, &mut cursor, *bid, next_bid, &bb_map, &phis_by_block)?;
+                instructions::term_emit_jump(
+                    codegen,
+                    &mut cursor,
+                    *bid,
+                    next_bid,
+                    &bb_map,
+                    &phis_by_block,
+                )?;
             } else {
                 let entry_first = func.entry_block;
-                instructions::emit_jump(codegen, &mut cursor, *bid, &entry_first, &bb_map, &phis_by_block)?;
+                instructions::term_emit_jump(
+                    codegen,
+                    &mut cursor,
+                    *bid,
+                    &entry_first,
+                    &bb_map,
+                    &phis_by_block,
+                )?;
             }
         }
         if sealed_mode {
-            instructions::flow::seal_block(codegen, &mut cursor, func, *bid, &succs, &bb_map, &phis_by_block, &block_end_values)?;
+            instructions::flow::seal_block(
+                codegen,
+                &mut cursor,
+                func,
+                *bid,
+                &succs,
+                &bb_map,
+                &phis_by_block,
+                &block_end_values,
+            )?;
             sealed_blocks.insert(*bid);
         }
     }
-    if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1") &&
-       std::env::var("NYASH_LOOPFORM_LATCH2HEADER").ok().as_deref() == Some("1") {
+    if std::env::var("NYASH_ENABLE_LOOPFORM").ok().as_deref() == Some("1")
+        && std::env::var("NYASH_LOOPFORM_LATCH2HEADER").ok().as_deref() == Some("1")
+    {
         for (hdr_bid, (_dispatch_bb, _tag_phi, _payload_phi, latch_bb)) in &loopform_registry {
             if let Some(phis) = phis_by_block.get(hdr_bid) {
-                instructions::normalize_header_phis_for_latch(
-                    codegen,
-                    *hdr_bid,
-                    *latch_bb,
-                    phis,
-                )?;
+                instructions::normalize_header_phis_for_latch(codegen, *hdr_bid, *latch_bb, phis)?;
             }
         }
         instructions::dev_check_dispatch_only_phi(&phis_by_block, &loopform_registry);

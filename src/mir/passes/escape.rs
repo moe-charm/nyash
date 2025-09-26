@@ -2,7 +2,7 @@
 //! Conservative analysis to elide write/read barriers for definitely non-escaping boxes.
 //! Enabled for VM backend as a staging step before LLVM.
 
-use crate::mir::{MirModule, MirFunction, MirInstruction, ValueId};
+use crate::mir::{MirFunction, MirInstruction, MirModule, ValueId};
 use std::collections::{HashMap, HashSet};
 
 /// Run a conservative escape analysis and remove Barrier(Read/Write) for non-escaping boxes.
@@ -32,7 +32,9 @@ struct EscapeInfo {
 }
 
 impl EscapeInfo {
-    fn is_non_escaping(&self, v: &ValueId) -> bool { self.local_boxes.contains(v) && !self.escaping.contains(v) }
+    fn is_non_escaping(&self, v: &ValueId) -> bool {
+        self.local_boxes.contains(v) && !self.escaping.contains(v)
+    }
 }
 
 fn analyze_function(func: &MirFunction) -> EscapeInfo {
@@ -40,25 +42,39 @@ fn analyze_function(func: &MirFunction) -> EscapeInfo {
     // Collect local boxes: results of NewBox in this function
     for block in func.blocks.values() {
         for ins in block.instructions.iter() {
-            if let MirInstruction::NewBox { dst, .. } = ins { info.local_boxes.insert(*dst); }
+            if let MirInstruction::NewBox { dst, .. } = ins {
+                info.local_boxes.insert(*dst);
+            }
         }
         if let Some(term) = &block.terminator {
-            if let MirInstruction::NewBox { dst, .. } = term { info.local_boxes.insert(*dst); }
+            if let MirInstruction::NewBox { dst, .. } = term {
+                info.local_boxes.insert(*dst);
+            }
         }
     }
     // Conservative escape marking
     for block in func.blocks.values() {
         for ins in block.all_instructions() {
             match ins {
-                MirInstruction::Return { value: Some(v) } => { if info.local_boxes.contains(v) { info.escaping.insert(*v); } }
+                MirInstruction::Return { value: Some(v) } => {
+                    if info.local_boxes.contains(v) {
+                        info.escaping.insert(*v);
+                    }
+                }
                 MirInstruction::Call { args, .. }
                 | MirInstruction::BoxCall { args, .. }
                 | MirInstruction::ExternCall { args, .. }
                 | MirInstruction::PluginInvoke { args, .. } => {
-                    for a in args { if info.local_boxes.contains(a) { info.escaping.insert(*a); } }
+                    for a in args {
+                        if info.local_boxes.contains(a) {
+                            info.escaping.insert(*a);
+                        }
+                    }
                 }
                 MirInstruction::Store { value, .. } => {
-                    if info.local_boxes.contains(value) { info.escaping.insert(*value); }
+                    if info.local_boxes.contains(value) {
+                        info.escaping.insert(*value);
+                    }
                 }
                 _ => {}
             }
@@ -98,7 +114,8 @@ fn elide_barriers_in_function(func: &mut MirFunction, info: &EscapeInfo) -> usiz
             }
         }
     }
-    if removed > 0 { func.update_cfg(); }
+    if removed > 0 {
+        func.update_cfg();
+    }
     removed
 }
-

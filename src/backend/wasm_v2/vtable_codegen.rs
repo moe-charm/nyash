@@ -13,6 +13,8 @@ pub struct GeneratedVTableInfo {
 
 pub fn generate_tables() -> GeneratedVTableInfo {
     // 未実装: TypeRegistry::resolve_typebox_by_name()/methods を走査して集計
-    GeneratedVTableInfo { types: 0, methods: 0 }
+    GeneratedVTableInfo {
+        types: 0,
+        methods: 0,
+    }
 }
-

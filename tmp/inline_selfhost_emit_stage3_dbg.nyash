@@ -2,8 +2,7 @@ include "apps/selfhost-compiler/boxes/parser_box.nyash"
 include "apps/selfhost-compiler/boxes/emitter_box.nyash"
 static box Main {
   main(args) {
-    local source_text = "try { local x = 1 } catch (Error e) { local y = 2 } finally { local z = 3 }
-return 0"
+    local source_text = "try { local x = 1 } catch (Error e) { local y = 2 } finally { local z = 3 }\nreturn 0"
     local p = new ParserBox()
     local json = p.parse_program2(source_text)
     local e = new EmitterBox()

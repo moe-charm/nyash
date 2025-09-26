@@ -1,0 +1,10 @@
+using selfhost.vm.prints as MiniVmPrints
+
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}}]}"
+    new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
+    return 0
+  }
+}
+

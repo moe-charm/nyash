@@ -1,0 +1,9 @@
+// for_/foreach_ normalization marker macro
+static box MacroBoxSpec {
+  name() { return "ForForeach" }
+  expand(json, ctx) {
+    // Identity in Ny child; actual transform is handled by internal-child (Rust)
+    return json
+  }
+}
+

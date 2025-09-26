@@ -12,10 +12,14 @@ categories = ["development-tools::parsing", "interpreters"]
 # Default features - minimal CLI only
 [features]
 default = ["cli", "plugins"]
+# Legacy features removed - archive cleaned up
 e2e = []
 cli = []
 plugins-only = []
 builtin-core = []
+## Silence check-cfg warnings for historical cfg guards (kept off by default)
+vm-legacy = []
+phi-legacy = []
 ## JIT-direct only mode: disable legacy VM-arg fallback and plugin-builtins branches
 ## (keeps code compiling; VM-integrated JIT paths remain but are inert)
 jit-direct-only = []
@@ -37,14 +41,14 @@ llvm-harness = []
 llvm-inkwell-legacy = ["dep:inkwell"]
 llvm = ["llvm-harness"]
 # (removed) Optional modular MIR builder feature
-cranelift-jit = [
-  "dep:cranelift-codegen",
-  "dep:cranelift-frontend",
-  "dep:cranelift-module",
-  "dep:cranelift-jit",
-  "dep:cranelift-object",
-  "dep:cranelift-native"
-]
+# cranelift-jit = [    # ARCHIVED: Moved to archive/jit-cranelift/ during Phase 15
+#   "dep:cranelift-codegen",
+#   "dep:cranelift-frontend",
+#   "dep:cranelift-module",
+#   "dep:cranelift-jit",
+#   "dep:cranelift-object",
+#   "dep:cranelift-native"
+# ]
 aot-plan-import = []
 
 [lib]
@@ -152,13 +156,13 @@ wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 
-# Cranelift JIT (optional; enabled via feature "cranelift-jit")
-cranelift-codegen = { version = "0.103", optional = true }
-cranelift-frontend = { version = "0.103", optional = true }
-cranelift-module = { version = "0.103", optional = true }
-cranelift-jit = { version = "0.103", optional = true }
-cranelift-object = { version = "0.103", optional = true }
-cranelift-native = { version = "0.103", optional = true }
+# Cranelift JIT (ARCHIVED: moved to archive/jit-cranelift/ during Phase 15)
+# cranelift-codegen = { version = "0.103", optional = true }
+# cranelift-frontend = { version = "0.103", optional = true }
+# cranelift-module = { version = "0.103", optional = true }
+# cranelift-jit = { version = "0.103", optional = true }
+# cranelift-object = { version = "0.103", optional = true }
+# cranelift-native = { version = "0.103", optional = true }
 
 # WASM backend dependencies (Phase 8) - optional for faster builds
 wabt = { version = "0.10", optional = true }
@@ -234,6 +238,10 @@ once_cell = "1.20"
 members = [
   "crates/*",
   "plugins/*",
+]
+exclude = [
+  "plugins/nyash-file",
+  "plugins/nyash-test-multibox",
 ]
 
 [profile.release]

@@ -1,0 +1,8 @@
+try {
+  local x = 1
+} catch (Error e) {
+  local y = 2
+} cleanup {
+  local z = 3
+}
+return 0

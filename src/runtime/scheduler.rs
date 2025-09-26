@@ -10,10 +10,15 @@ pub trait Scheduler: Send + Sync {
     /// Poll scheduler: run due tasks and a limited number of queued tasks.
     fn poll(&self) {}
     /// Cooperative yield point (no-op for single-thread).
-    fn yield_now(&self) { }
+    fn yield_now(&self) {}
 
     /// Optional: spawn with a cancellation token. Default delegates to spawn.
-    fn spawn_with_token(&self, name: &str, _token: CancellationToken, f: Box<dyn FnOnce() + Send + 'static>) {
+    fn spawn_with_token(
+        &self,
+        name: &str,
+        _token: CancellationToken,
+        f: Box<dyn FnOnce() + Send + 'static>,
+    ) {
         self.spawn(name, f)
     }
 }
@@ -30,17 +35,24 @@ pub struct SingleThreadScheduler {
 
 impl SingleThreadScheduler {
     pub fn new() -> Self {
-        Self { queue: Arc::new(Mutex::new(VecDeque::new())), delayed: Arc::new(Mutex::new(Vec::new())) }
+        Self {
+            queue: Arc::new(Mutex::new(VecDeque::new())),
+            delayed: Arc::new(Mutex::new(Vec::new())),
+        }
     }
 }
 
 impl Scheduler for SingleThreadScheduler {
     fn spawn(&self, _name: &str, f: Box<dyn FnOnce() + Send + 'static>) {
-        if let Ok(mut q) = self.queue.lock() { q.push_back(f); }
+        if let Ok(mut q) = self.queue.lock() {
+            q.push_back(f);
+        }
     }
     fn spawn_after(&self, delay_ms: u64, _name: &str, f: Box<dyn FnOnce() + Send + 'static>) {
         let when = Instant::now() + Duration::from_millis(delay_ms);
-        if let Ok(mut d) = self.delayed.lock() { d.push((when, f)); }
+        if let Ok(mut d) = self.delayed.lock() {
+            d.push((when, f));
+        }
     }
     fn poll(&self) {
         // Move due delayed tasks to queue
@@ -52,20 +64,36 @@ impl Scheduler for SingleThreadScheduler {
             while i < d.len() {
                 if d[i].0 <= now {
                     let (_when, task) = d.remove(i);
-                    if let Ok(mut q) = self.queue.lock() { q.push_back(task); }
+                    if let Ok(mut q) = self.queue.lock() {
+                        q.push_back(task);
+                    }
                     moved += 1;
-                } else { i += 1; }
+                } else {
+                    i += 1;
+                }
             }
         }
         // Run up to budget queued tasks
         let budget: usize = std::env::var("NYASH_SCHED_POLL_BUDGET")
-            .ok().and_then(|s| s.parse().ok()).filter(|&n: &usize| n > 0).unwrap_or(1);
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .filter(|&n: &usize| n > 0)
+            .unwrap_or(1);
         let mut ran = 0usize;
         while ran < budget {
             let task_opt = {
-                if let Ok(mut q) = self.queue.lock() { q.pop_front() } else { None }
+                if let Ok(mut q) = self.queue.lock() {
+                    q.pop_front()
+                } else {
+                    None
+                }
             };
-            if let Some(task) = task_opt { task(); ran += 1; } else { break; }
+            if let Some(task) = task_opt {
+                task();
+                ran += 1;
+            } else {
+                break;
+            }
         }
         if trace {
             eprintln!("[SCHED] poll moved={} ran={} budget={}", moved, ran, budget);
@@ -80,7 +108,13 @@ use std::sync::atomic::{AtomicBool, Ordering};
 pub struct CancellationToken(Arc<AtomicBool>);
 
 impl CancellationToken {
-    pub fn new() -> Self { Self(Arc::new(AtomicBool::new(false))) }
-    pub fn cancel(&self) { self.0.store(true, Ordering::SeqCst); }
-    pub fn is_cancelled(&self) -> bool { self.0.load(Ordering::SeqCst) }
+    pub fn new() -> Self {
+        Self(Arc::new(AtomicBool::new(false)))
+    }
+    pub fn cancel(&self) {
+        self.0.store(true, Ordering::SeqCst);
+    }
+    pub fn is_cancelled(&self) -> bool {
+        self.0.load(Ordering::SeqCst)
+    }
 }

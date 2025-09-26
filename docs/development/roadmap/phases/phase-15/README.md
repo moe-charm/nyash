@@ -6,6 +6,20 @@ NyashでNyashコンパイラを書く、完全なセルフホスティングの�
 MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存から完全に解放される。
 **究極の目標：80,000行→20,000行（75%削減）→ さらなる最適化へ**
 
+## 🔄 2025‑09‑26 Update（方針の明確化）
+- 実行系の優先順位: LLVM は Python/llvmlite ハーネスを主経路に固定（llvm_sys 依存は前提にしない）。Rust VM/JIT は保守最小・比較用。
+- パーサ: TokenCursor 統一を env ゲート下で進行。Step‑2/3（式＋主要文の薄ラッパ）完了、代表スモーク/パリティは緑。
+- PHI: if/else の incoming は「実際の遷移元（exit ブロック）」を使用する規約で統一。dev 検証を追加（pred 重複/自己参照/CFG 包含）。
+- ループPHI: `phi_core` に統合（IncompletePhi/スナップショット/exit PHI の責務集約）。`loop_builder.rs` は委譲化で軽量化。
+- 次の主タスク: Nyash 製 JSON ライブラリ（JSON v0 DOM: parse/stringify）。完了後に Ny Executor（最小命令）へ直行。
+- 既定挙動は不変。新経路はすべて env トグルで opt‑in。
+
+推奨トグル
+- `NYASH_LLVM_USE_HARNESS=1`（LLVM Python ハーネス）
+- `NYASH_PARSER_TOKEN_CURSOR=1`（TokenCursor 経路）
+- `NYASH_JSON_PROVIDER=ny`（Ny JSON ライブラリ）
+- `NYASH_SELFHOST_EXEC=1`（Ny Executor 最小経路）
+
 ## 🎯 フェーズの目的
 
 1. **完全なセルフホスティング**: NyashコンパイラをNyashで実装
@@ -45,6 +59,67 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
   - PHI は「合流点での別名付け」であり、Boxの操作ではない。
   - 抽象レイヤの純度維持（Everything is Box）。
   - 実装責務の一極化（行数削減／保守性向上）。
+
+#### IfForm（構造化 if）— Builder 内部モデル（追加）
+- 目的: if/merge を構造化フォームで生成し、PHI‑off/PHI‑on の両経路で安定合流を得る。
+
+### 🚀 **Phase 15.4: MIR Call革新（2025-09-23 NEW）**
+**シャドウイングバグからの設計革命 - ChatGPT5 Pro協働成果**
+
+#### 📋 **革新の背景**
+- **発端**: PyVM無限ループ問題（ConsoleStd.print内でのprint()再帰呼び出し）
+- **発見**: 根本原因は実行時文字列解決によるスコープ曖昧性
+- **昇華**: ChatGPT5 Pro提案により表面修正→根本的アーキテクチャ改良へ
+
+#### 🎯 **技術革新内容**
+```rust
+// ❌ 従来（問題構造）
+Call { func: ValueId /* "print"文字列 */, args }
+
+// ✅ 革新後（型付き解決）
+enum Callee {
+    Global(String),      // nyash.builtin.print
+    Method { box_name, method, receiver },
+    Value(ValueId),      // 関数値（最小限）
+    Extern(String),      // C ABI
+}
+Call { callee: Callee, args }
+```
+
+#### 📈 **Phase 15目標への直接寄与**
+
+1. **80k→20k行削減目標**
+   - Phase 1のみ: ~1,500行削減（目標の7.5%）
+   - 全Phase完了: ~4,500行削減（目標の22.5%）
+   - 実行時解決ロジック・エラー処理・デバッグコードの大幅簡略化
+
+2. **セルフホスティング安定化**
+   - using system連携: built-in namespace統合
+   - PyVM最適化: 型付き呼び出しによる高速化
+   - LLVM最適化: 静的解決による最適化機会拡大
+
+3. **Everything is Box哲学強化**
+   - コンパイル時型安全性の確立
+   - Box間の呼び出し関係の明確化
+   - デバッグ・保守性の劇的向上
+
+#### 🛡️ **実装戦略（3段階・破壊的変更なし）**
+- **Phase 1**: 最小変更（2-3日）→即実装可能
+- **Phase 2**: HIR導入（1-2週間）→コンパイル時解決確立
+- **Phase 3**: 言語仕様統合（1ヶ月）→完全修飾名システム
+
+#### 📊 **成功指標**
+- [ ] シャドウイング無限再帰の完全排除
+- [ ] 全既存テストの破壊なし（グリーン維持）
+- [ ] MIRダンプの可読性向上
+- [ ] パフォーマンス向上（実行時オーバーヘッド削減）
+- [ ] using systemとの完全統合
+- 規約（PHI 合流）:
+  - merge 内に copy は置かない。then/else の pred へ edge_copy のみを挿入（self‑copy は No‑Op）。
+  - 分岐直前に pre_if_snapshot を取得し、then/else は snapshot ベースで独立構築。merge で snapshot を基底に戻す。
+  - 差分検出で“変更された変数のみ”をマージ対象にする。
+- LoopForm との合成: ループ body 内に IfForm をネスト。continue は latch、break は after へ分岐（IfForm の merge preds から除外）。
+- 検証: スナップショットテストで CFG/edge_copy/終端/分岐先を固定。
 
 ### Phase 15.3: NyashコンパイラMVP（次フェーズ着手）
 - PyVM 安定後、Nyash製パーサ/レクサ（サブセット）と MIR ビルダを段階導入
@@ -119,6 +194,44 @@ Imports/Namespace plan（15.3‑late）
 - 動的ディスパッチで13命令処理を目標に拡張
 
 詳細：[セルフホスティング戦略 2025年9月版](implementation/self-hosting-strategy-2025-09.md)
+
+---
+
+## ♻ 再計画（Macro駆動リファクタ）
+
+強化されたマクロ基盤（AST JSON v0 / PyVMサンドボックス / strict / timeout / golden）を前提に、Phase‑15 のセルフホスティング工程を **「前段AST正規化 → 正式MIR生成」** の二段型にリフレームする。
+
+### ポイント（運用）
+- すべてのフロント側変換（構文糖衣・derive相当・軽微なリライト・静的検証）は **MacroBoxSpec**（Nyash/PyVM）で実行（1パス固定点）。
+- Rust側は **最小のコア**（パース/AST JSON生成、MIRビルド、バックエンド）に収束。
+- 決定性担保: strict=1（既定）、capabilitiesは全OFF（io/net/env=false）の純粋展開。
+- 観測: `--dump-expanded-ast-json` と golden 比較で安定性を担保。
+
+### 実行順序（改定）
+1) Parse → AST
+2) Macro expand（1パス固定点: Built‑in(Rust)→User (Nyash/PyVM)）
+3) Using/解決 → MIR → Backend（VM/LLVM/AOT）
+
+### 直近タスクリスト（Phase‑15用）
+1. Macro 前段の正式導入（完了／PoC→実運用）
+   - `NYASH_MACRO_PATHS=...` でユーザーマクロ登録（ランナールート既定）
+   - strict=1/timeout=2000ms（既定）
+   - `--dump-expanded-ast-json` を golden として活用
+2. Self‑host フロントの簡素化
+   - Nyash 製パーサは **最小構文**のみサポート（Stage‑2サブセット）
+   - 糖衣や軽いリライトは **MacroBox** に寄せる
+3. Golden セットの拡充
+   - `apps/tests/*` → `tools/test/golden/*` で展開後JSONの一致
+   - timeout/strict/失敗cap の負例テストを追加
+4. nyash.toml 設計の雛形（capabilities）
+   - `[macros] paths=[…]` + `[macro_caps."path"] io/net/env=false` をドキュメント化
+
+### 受け入れ基準（Phase‑15）
+- `--dump-expanded-ast-json` の golden が緑（MacroON/OFF差分は無い／または期待通り）
+- PyVM ランナー経由で `MacroBoxSpec.expand(json)` を呼べる（strict/timeout遵守）
+- MIR/LLVM/VM の後段は、Macro展開済み入力で恒常緑
+
+関連: [planning/macro_driven_replan.md](planning/macro_driven_replan.md)
 
 ---
 

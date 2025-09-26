@@ -47,15 +47,28 @@ code=${code:-0}
 [[ "$code" -eq 50 ]] && pass "PyVM: ternary nested (exit=50)" || fail "PyVM: ternary nested" "exit=$code"
 unset code
 
-# 7) Peek expr block (exit=1)
+# 7) Match expr block: assert output and exit code
+OUT=$(NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/peek_expr_block.nyash" 2>&1 || true)
+echo "$OUT" | rg -q 'found one' || fail "PyVM: match expr block output" "$OUT"
 NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/peek_expr_block.nyash" >/dev/null 2>&1 || code=$?
 code=${code:-0}
-[[ "$code" -eq 1 ]] && pass "PyVM: peek expr block (exit=1)" || fail "PyVM: peek expr block" "exit=$code"
+[[ "$code" -eq 1 ]] && pass "PyVM: match expr block (print+exit=1)" || fail "PyVM: match expr block exit" "exit=$code"
 unset code
 
-# 8) Peek return value
-OUT=$(run_pyvm "$ROOT_DIR/apps/tests/peek_return_value.nyash" || true)
-echo "$OUT" | rg -q '^1$' && pass "PyVM: peek return value" || fail "PyVM: peek return value" "$OUT"
+# 8) Match guard (type) — strict check
+OUT=$(NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/match_guard_type_basic.nyash" 2>&1 || true)
+echo "$OUT" | rg -q '^gt3$' || fail "PyVM: match guard (type) output" "$OUT"
+NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/match_guard_type_basic.nyash" >/dev/null 2>&1 || code=$?
+code=${code:-0}
+[[ "$code" -eq 1 ]] && pass "PyVM: match guard (type) exit=1" || fail "PyVM: match guard (type) exit" "exit=$code"
+unset code
+
+# 9) Match guard (literal) — first guard fails, second arm matches
+OUT=$(NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/match_guard_lit_basic.nyash" 2>&1 || true)
+echo "$OUT" | rg -q '^yes$' || fail "PyVM: match guard (lit) output" "$OUT"
+NYASH_VM_USE_PY=1 "$BIN" --backend vm "$ROOT_DIR/apps/tests/match_guard_lit_basic.nyash" >/dev/null 2>&1 || code=$?
+code=${code:-0}
+[[ "$code" -eq 9 ]] && pass "PyVM: match guard (lit) exit=9" || fail "PyVM: match guard (lit) exit" "exit=$code"
+unset code
 
 echo "All PyVM Stage-2 smokes PASS" >&2
-

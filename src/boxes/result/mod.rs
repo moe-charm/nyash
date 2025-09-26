@@ -2,7 +2,7 @@
 // Nyashの箱システムによるエラー処理を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore};
+use crate::box_trait::{BoolBox, BoxCore, NyashBox, StringBox};
 use std::any::Any;
 
 #[derive(Debug)]
@@ -15,19 +15,19 @@ impl NyashResultBox {
     pub fn new_ok(value: Box<dyn NyashBox>) -> Self {
         NyashResultBox::Ok(value)
     }
-    
+
     pub fn new_err(error: Box<dyn NyashBox>) -> Self {
         NyashResultBox::Err(error)
     }
-    
+
     pub fn is_ok_bool(&self) -> bool {
         matches!(self, NyashResultBox::Ok(_))
     }
-    
+
     pub fn is_err(&self) -> bool {
         matches!(self, NyashResultBox::Err(_))
     }
-    
+
     pub fn unwrap(self) -> Box<dyn NyashBox> {
         match self {
             NyashResultBox::Ok(val) => val,
@@ -43,7 +43,7 @@ impl NyashBox for NyashResultBox {
             NyashResultBox::Err(err) => Box::new(NyashResultBox::Err(err.clone_or_share())),
         }
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         match self {
@@ -55,15 +55,15 @@ impl NyashBox for NyashResultBox {
     fn to_string_box(&self) -> StringBox {
         match self {
             NyashResultBox::Ok(val) => StringBox::new(format!("Ok({})", val.to_string_box().value)),
-            NyashResultBox::Err(err) => StringBox::new(format!("Err({})", err.to_string_box().value)),
+            NyashResultBox::Err(err) => {
+                StringBox::new(format!("Err({})", err.to_string_box().value))
+            }
         }
     }
-
 
     fn type_name(&self) -> &'static str {
         "NyashResultBox"
     }
-
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_result) = other.as_any().downcast_ref::<NyashResultBox>() {
@@ -86,7 +86,7 @@ impl BoxCore for NyashResultBox {
             NyashResultBox::Err(err) => err.box_id(),
         }
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         // For enum variants, we use the contained value's parent type ID
         match self {
@@ -101,11 +101,11 @@ impl BoxCore for NyashResultBox {
             NyashResultBox::Err(err) => write!(f, "Err({})", err.to_string_box().value),
         }
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -125,13 +125,17 @@ impl ResultBox {
     pub fn is_ok(&self) -> Box<dyn NyashBox> {
         Box::new(BoolBox::new(matches!(self, NyashResultBox::Ok(_))))
     }
-    
+
     /// getValue()の実装 - Ok値を取得
     pub fn get_value(&self) -> Box<dyn NyashBox> {
         match self {
             NyashResultBox::Ok(val) => {
                 // Preserve identity for plugin-backed boxes
-                if val.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                if val
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                    .is_some()
+                {
                     val.share_box()
                 } else {
                     val.clone_box()
@@ -140,7 +144,7 @@ impl ResultBox {
             NyashResultBox::Err(_) => Box::new(StringBox::new("Error: Result is Err")),
         }
     }
-    
+
     /// getError()の実装 - Err値を取得
     pub fn get_error(&self) -> Box<dyn NyashBox> {
         match self {

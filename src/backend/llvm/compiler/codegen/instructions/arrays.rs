@@ -2,9 +2,9 @@ use std::collections::HashMap;
 
 use inkwell::values::BasicValueEnum as BVE;
 
+use super::builder_cursor::BuilderCursor;
 use crate::backend::llvm::context::CodegenContext;
 use crate::mir::{function::MirFunction, BasicBlockId, ValueId};
-use super::builder_cursor::BuilderCursor;
 
 /// Handle ArrayBox fast-paths. Returns true if handled.
 pub(super) fn try_handle_array_method<'ctx, 'b>(
@@ -19,9 +19,15 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
     method: &str,
     args: &[ValueId],
     recv_h: inkwell::values::IntValue<'ctx>,
-    bb_map: &std::collections::HashMap<crate::mir::BasicBlockId, inkwell::basic_block::BasicBlock<'ctx>>,
+    bb_map: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        inkwell::basic_block::BasicBlock<'ctx>,
+    >,
     preds: &std::collections::HashMap<crate::mir::BasicBlockId, Vec<crate::mir::BasicBlockId>>,
-    block_end_values: &std::collections::HashMap<crate::mir::BasicBlockId, std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>>,
+    block_end_values: &std::collections::HashMap<
+        crate::mir::BasicBlockId,
+        std::collections::HashMap<ValueId, inkwell::values::BasicValueEnum<'ctx>>,
+    >,
 ) -> Result<bool, String> {
     // Only when receiver is ArrayBox
     let is_array = matches!(func.metadata.value_types.get(box_val), Some(crate::mir::MirType::Box(b)) if b == "ArrayBox")
@@ -38,14 +44,25 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             if args.len() != 1 {
                 return Err("ArrayBox.get expects 1 arg".to_string());
             }
-            let idx_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+            let idx_i = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                args[0],
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
                 .get_function("nyash_array_get_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash_array_get_h", fnty, None));
             let call = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), idx_i.into()], "aget"))
+                .emit_instr(cur_bid, |b| {
+                    b.build_call(callee, &[recv_h.into(), idx_i.into()], "aget")
+                })
                 .map_err(|e| e.to_string())?;
             if let Some(d) = dst {
                 let rv = call
@@ -63,15 +80,35 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             if args.len() != 2 {
                 return Err("ArrayBox.set expects 2 arg".to_string());
             }
-            let idx_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
-            let val_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[1], bb_map, preds, block_end_values, vmap)?;
+            let idx_i = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                args[0],
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
+            let val_i = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                args[1],
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
                 .get_function("nyash_array_set_h")
                 .unwrap_or_else(|| codegen.module.add_function("nyash_array_set_h", fnty, None));
             let _ = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), idx_i.into(), val_i.into()], "aset"))
+                .emit_instr(cur_bid, |b| {
+                    b.build_call(callee, &[recv_h.into(), idx_i.into(), val_i.into()], "aset")
+                })
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }
@@ -82,14 +119,29 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             if args.len() != 1 {
                 return Err("ArrayBox.push expects 1 arg".to_string());
             }
-            let val_i = resolver.resolve_i64(codegen, cursor, cur_bid, args[0], bb_map, preds, block_end_values, vmap)?;
+            let val_i = resolver.resolve_i64(
+                codegen,
+                cursor,
+                cur_bid,
+                args[0],
+                bb_map,
+                preds,
+                block_end_values,
+                vmap,
+            )?;
             let fnty = i64t.fn_type(&[i64t.into(), i64t.into()], false);
             let callee = codegen
                 .module
                 .get_function("nyash_array_push_h")
-                .unwrap_or_else(|| codegen.module.add_function("nyash_array_push_h", fnty, None));
+                .unwrap_or_else(|| {
+                    codegen
+                        .module
+                        .add_function("nyash_array_push_h", fnty, None)
+                });
             let _ = cursor
-                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into(), val_i.into()], "apush"))
+                .emit_instr(cur_bid, |b| {
+                    b.build_call(callee, &[recv_h.into(), val_i.into()], "apush")
+                })
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }
@@ -104,7 +156,11 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
             let callee = codegen
                 .module
                 .get_function("nyash_array_length_h")
-                .unwrap_or_else(|| codegen.module.add_function("nyash_array_length_h", fnty, None));
+                .unwrap_or_else(|| {
+                    codegen
+                        .module
+                        .add_function("nyash_array_length_h", fnty, None)
+                });
             let call = cursor
                 .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "alen"))
                 .map_err(|e| e.to_string())?;

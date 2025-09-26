@@ -30,8 +30,8 @@ compile_json() {
   local esc
   esc=$(sed -e 's/\\/\\\\/g' -e 's/\"/\\\"/g' "$TMP/ny_parser_input.ny")
   cat > "$inline" << NY
-include "apps/selfhost-compiler/boxes/parser_box.nyash"
-include "apps/selfhost-compiler/boxes/emitter_box.nyash"
+include "apps/selfhost/compiler/boxes/parser_box.nyash"
+include "apps/selfhost/compiler/boxes/emitter_box.nyash"
 static box Main {
   main(args) {
     local src = "$esc"
@@ -109,6 +109,23 @@ return x
 NY
 )
 run_case_bridge "assign update (bridge)" "$SRC_ASSIGN" 3
+
+# G) array literal [x,2,3] → size() == 3
+SRC_ALIT=$(cat <<'NY'
+local x = 1
+local arr = [x, 2, 3]
+return arr.size()
+NY
+)
+run_case_bridge "array literal (bridge)" "$SRC_ALIT" 3
+
+# H) map literal {"name":"Alice", "age":25} → size() == 2
+SRC_MLIT=$(cat <<'NY'
+local m = {"name": "Alice", "age": 25}
+return m.size()
+NY
+)
+run_case_bridge "map literal (bridge)" "$SRC_MLIT" 2
 
 echo "All selfhost Stage-2 bridge smokes PASS" >&2
 exit 0

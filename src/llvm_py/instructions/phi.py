@@ -4,6 +4,7 @@ Critical for SSA form - handles value merging from different control flow paths
 """
 
 import llvmlite.ir as ir
+from phi_wiring import phi_at_block_head
 from typing import Dict, List, Tuple, Optional
 
 def lower_phi(
@@ -123,8 +124,8 @@ def lower_phi(
         vmap[dst_vid] = ir.Constant(phi_type, 0)
         return
 
-    # Create PHI instruction now and add incoming
-    phi = builder.phi(phi_type, name=f"phi_{dst_vid}")
+    # Create PHI instruction at the block head and add incoming
+    phi = phi_at_block_head(current_block, phi_type, name=f"phi_{dst_vid}")
     for block, val in incoming_pairs:
         phi.add_incoming(val, block)
     
@@ -134,12 +135,15 @@ def lower_phi(
     import os
     if used_default_zero and os.environ.get('NYASH_LLVM_PHI_STRICT') == '1':
         raise RuntimeError(f"[LLVM_PY] PHI dst={dst_vid} used synthesized zero; check preds/incoming")
-    if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
+    try:
+        from trace import phi as trace_phi
         try:
             blkname = str(current_block.name)
         except Exception:
             blkname = '<blk>'
-        print(f"[PHI] {blkname} v{dst_vid} incoming={len(incoming_pairs)} zero={1 if used_default_zero else 0}")
+        trace_phi(f"[PHI] {blkname} v{dst_vid} incoming={len(incoming_pairs)} zero={1 if used_default_zero else 0}")
+    except Exception:
+        pass
     # Propagate string-ness: if any incoming value-id is tagged string-ish, mark dst as string-ish.
     try:
         if resolver is not None and hasattr(resolver, 'is_stringish') and hasattr(resolver, 'mark_string'):

@@ -1,0 +1,52 @@
+// MirEmitterBox — Minimal MIR JSON v0 emitter (M2 MVP)
+// Scope: Return(Int) only (const + ret). Safe default to 0 when not found.
+// Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
+
+box MirEmitterBox {
+  // Extract first Return(Int) value from Stage-1 JSON (very small string scan)
+  _extract_return_int(ast_json) {
+    if ast_json == null { return 0 }
+    // Look for '"type":"Return"'
+    local p = ast_json.lastIndexOf("\"type\":\"Return\"")
+    if p < 0 { p = ast_json.indexOf("\"type\":\"Return\"") }
+    if p < 0 { return 0 }
+    // From there, search for '"type":"Int","value":'
+    local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
+    if q < 0 { return 0 }
+    q = q + 23 // length of the marker
+    // Read consecutive digits (optional minus not handled in Stage-1 yet)
+    local n = ast_json.length()
+    local i = q
+    local s = ""
+    loop(i < n) {
+      local ch = ast_json.substring(i, i+1)
+      if ch >= "0" && ch <= "9" { s = s + ch i = i + 1 } else { break }
+    }
+    if s.length() == 0 { return 0 }
+    // String to int via addition loop
+    local val = 0
+    local k = 0
+    local m = s.length()
+    loop(k < m) {
+      local d = s.substring(k, k+1)
+      local dv = 0
+      if d == "1" { dv = 1 } else { if d == "2" { dv = 2 } else { if d == "3" { dv = 3 } else { if d == "4" { dv = 4 } else { if d == "5" { dv = 5 } else { if d == "6" { dv = 6 } else { if d == "7" { dv = 7 } else { if d == "8" { dv = 8 } else { if d == "9" { dv = 9 } } } } } } } } }
+      val = val * 10 + dv
+      k = k + 1
+    }
+    return val
+  }
+
+  // Build minimal MIR JSON v0: main with const -> ret
+  emit_mir_min(ast_json) {
+    local retv = me._extract_return_int(ast_json)
+    local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
+    s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + retv + "},\\\"dst\\\":1},"
+    s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":1}"
+    s = s + "]}]}]}"
+    return s
+  }
+}
+
+static box MirEmitterStub { main(args) { return 0 } }
+

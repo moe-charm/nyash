@@ -1,0 +1,13 @@
+using "apps/lib/json_native/core/compat.nyash" as JsonCompat
+
+print("compat: begin")
+
+local doc = new JsonDocCompat()
+doc.parse("{\"hello\": [1,2,3], \"msg\": \"hi\"}")
+local root = doc.root()
+print("kind(root): " + root.kind())
+print("size(hello): " + root.get("hello").size())
+print("msg: " + root.get("msg").str())
+print("roundtrip: " + root.stringify())
+
+print("compat: end")

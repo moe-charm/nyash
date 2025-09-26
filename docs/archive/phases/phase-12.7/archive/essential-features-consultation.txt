@@ -1,0 +1,96 @@
+Nyash言語の必須機能について深い相談です（文法改革の続き）
+
+【前回の合意事項】
+- 予約語10個に削減
+- セミコロン不要（改行区切り）
+- フィールド宣言は name: Type 形式
+- publicは先頭配置
+
+【重要：忘れていた必須機能】
+
+1. switch/case文（またはwhen文）
+   - if文地獄を避けるために絶対必要
+   - 以前Claude提案のwhen文も検討
+   - パターンマッチング機能は必要？
+
+【例：現在のif文地獄】
+if type == "dog" {
+    bark()
+} else if type == "cat" {
+    meow()
+} else if type == "bird" {
+    chirp()
+} else {
+    silent()
+}
+
+【理想的な形は？】
+when type {
+    "dog" => bark()
+    "cat" => meow()
+    "bird" => chirp()
+    else => silent()
+}
+
+または
+
+switch type {
+    case "dog":
+        bark()
+    case "cat":
+        meow()
+    default:
+        silent()
+}
+
+【その他の必須機能候補】
+
+1. continue文
+   - ループの次の反復へスキップ
+   - breakはあるのにcontinueがない
+
+2. null/nil/void値
+   - 現在はVoidBoxだけ？
+   - もっと簡潔な表現が必要？
+
+3. 型チェック機能
+   - value is StringBox のような？
+   - typeof演算子？
+
+4. エラーハンドリング
+   - try/catch/finallyは予約語リストにあるが、本当に必要？
+   - Result型だけで十分？
+
+5. モジュール/名前空間
+   - importはあるが、exportは？
+   - 名前空間の分離は？
+
+6. その他検討事項
+   - yield（ジェネレータ）
+   - with文（リソース管理）
+   - defer文（遅延実行）
+   - assert文（デバッグ）
+
+【質問】
+
+1. switch/case vs when文、どちらがNyashに適している？
+   - 予約語数への影響は？
+   - Everything is Box哲学との整合性は？
+
+2. 上記の機能候補の中で、本当に必須なものは？
+   - 予約語10個制限を守りつつ実現可能？
+   - 代替案はある？
+
+3. Box型システムで解決できる機能は？
+   - 例：ResultBoxでエラーハンドリング
+   - 例：OptionBoxでnull安全性
+
+4. 文法のシンプルさを保ちながら実用性を確保する方法は？
+
+【理想】
+- 予約語は最小限（できれば10個維持）
+- Everything is Box哲学に忠実
+- 実用的でif文地獄を避けられる
+- 初学者にも分かりやすい
+
+プログラミング言語設計の観点から、必須機能の優先順位と実装方法を提案してください。

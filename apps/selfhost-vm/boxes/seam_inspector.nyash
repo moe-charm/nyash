@@ -1,0 +1,249 @@
+// SeamInspector — analyze inlined code seam and duplicates
+// Usage: import and call report(text) or analyze_dump_file(path)
+
+static box SeamInspector {
+  // Count brace delta ignoring simple strings ("...") and escapes
+  _brace_delta_ignoring_strings(text, start, end) {
+    @i = start
+    @n = end
+    @delta = 0
+    loop (i < n) {
+      @ch = text.substring(i, i+1)
+      if ch == "\"" {
+        i = i + 1
+        loop (i < n) {
+          @c = text.substring(i, i+1)
+          if c == "\\" { i = i + 2  continue }
+          if c == "\"" { i = i + 1  break }
+          i = i + 1
+        }
+        continue
+      }
+      if ch == "{" { delta = delta + 1 }
+      if ch == "}" { delta = delta - 1 }
+      i = i + 1
+    }
+    return delta
+  }
+
+  // Find index of exact token in plain text from position
+  _index_of_from(h, needle, pos) {
+    if pos < 0 { pos = 0 }
+    @n = h.length()
+    if pos >= n { return -1 }
+    @m = needle.length()
+    if m <= 0 { return pos }
+    @i = pos
+    @limit = n - m
+    loop (i <= limit) {
+      if h.substring(i, i+m) == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // Find matching closing brace starting at '{'
+  _find_balanced_object_end(text, idx) {
+    if text.substring(idx, idx+1) != "{" { return -1 }
+    @i = idx
+    @n = text.length()
+    @depth = 0
+    loop (i < n) {
+      @ch = text.substring(i, i+1)
+      if ch == "\"" {
+        i = i + 1
+        loop (i < n) {
+          @c = text.substring(i, i+1)
+          if c == "\\" { i = i + 2  continue }
+          if c == "\"" { i = i + 1  break }
+          i = i + 1
+        }
+        continue
+      }
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // Scan boxes: return array of {name, start, end}
+  _scan_boxes(text) {
+    @i = 0
+    @n = text.length()
+    @res = new ArrayBox()
+    @tok = "static box "
+    loop (i < n) {
+      @p = _index_of_from(text, tok, i)
+      if p < 0 { break }
+      @j = p + tok.length()
+      // read identifier
+      @name = ""
+      loop (j < n) {
+        @c = text.substring(j, j+1)
+        // ASCII alpha-num or '_'
+        if c == "_" { name = name + c  j = j + 1  continue }
+        // digits
+        if c == "0" or c == "1" or c == "2" or c == "3" or c == "4" or c == "5" or c == "6" or c == "7" or c == "8" or c == "9" { name = name + c  j = j + 1  continue }
+        // letters
+        if (c >= "A" and c <= "Z") or (c >= "a" and c <= "z") { name = name + c  j = j + 1  continue }
+        break
+      }
+      // skip to '{'
+      loop (j < n) {
+        @c2 = text.substring(j, j+1)
+        if c2 == "{" { break }
+        j = j + 1
+      }
+      @end = _find_balanced_object_end(text, j)
+      if end < 0 { end = j }
+      @obj = new MapBox()
+      obj.set("name", name)
+      obj.set("start", _int_to_str(p))
+      obj.set("end", _int_to_str(end))
+      res.push(obj)
+      i = end + 1
+    }
+    return res
+  }
+
+  // Print duplicate boxes by name
+  _report_duplicate_boxes(text) {
+    @boxes = _scan_boxes(text)
+    @cnt = new MapBox()
+    @names = new ArrayBox()
+    @i = 0
+    loop (i < boxes.size()) {
+      @name = boxes.get(i).get("name")
+      @cur = cnt.get(name)
+      if cur == null { cnt.set(name, "1")  names.push(name) } else { cnt.set(name, _int_to_str(_str_to_int(cur) + 1)) }
+      i = i + 1
+    }
+    @j = 0
+    loop (j < names.size()) {
+      @k = names.get(j)
+      @v = cnt.get(k)
+      if _str_to_int(v) > 1 { print("dup_box " + k + " x" + v) }
+      j = j + 1
+    }
+    return 0
+  }
+
+  // Inside a given box, count function name duplicates (simple scan: name(...){ )
+  _report_duplicate_functions_in_box(text, box_name) {
+    @boxes = _scan_boxes(text)
+    @i = 0
+    @fnmap = new MapBox()
+    @fnames = new ArrayBox()
+    loop (i < boxes.size()) {
+      @b = boxes.get(i)
+      if b.get("name") == box_name {
+        @s = _str_to_int(b.get("start"))
+        @e = _str_to_int(b.get("end"))
+        @j = s
+        loop (j < e) {
+          // find identifier start at line head-ish (naive)
+          // pattern: <spaces> ident '(' ... '{'
+          @k = j
+          // skip spaces/newlines
+          loop (k < e) {
+            @ch = text.substring(k, k+1)
+            if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { k = k + 1  continue }
+            break
+          }
+          if k >= e { break }
+          // read ident
+          @name = ""
+          @p = k
+          @c0 = text.substring(p, p+1)
+          if (c0 >= "A" and c0 <= "Z") or (c0 >= "a" and c0 <= "z") or c0 == "_" {
+            loop (p < e) {
+              @c = text.substring(p, p+1)
+              if (c >= "A" and c <= "Z") or (c >= "a" and c <= "z") or (c >= "0" and c <= "9") or c == "_" { name = name + c  p = p + 1  continue }
+              break
+            }
+            // must be a function definition: ident '(' ... ')' ws* '{'
+            if text.substring(p, p+1) == "(" {
+              // find matching ')' with a simple counter (strings ignored for simplicity)
+              @d = 0
+              @r = p
+              loop (r < e) {
+                @cc = text.substring(r, r+1)
+                if cc == "(" { d = d + 1  r = r + 1  continue }
+                if cc == ")" {
+                  d = d - 1
+                  r = r + 1
+                  if d <= 0 { break }
+                  continue
+                }
+                if cc == "\"" {
+                  // skip string inside params
+                  r = r + 1
+                  loop (r < e) {
+                    @c2 = text.substring(r, r+1)
+                    if c2 == "\\" { r = r + 2  continue }
+                    if c2 == "\"" { r = r + 1  break }
+                    r = r + 1
+                  }
+                  continue
+                }
+                r = r + 1
+              }
+              // skip ws
+              loop (r < e) {
+                @ws = text.substring(r, r+1)
+                if ws == " " or ws == "\t" or ws == "\r" or ws == "\n" { r = r + 1  continue }
+                break
+              }
+              // definition only if next is '{'
+              if r < e and text.substring(r, r+1) == "{" {
+                @cur = fnmap.get(name)
+                if cur == null { fnmap.set(name, "1")  fnames.push(name) } else { fnmap.set(name, _int_to_str(_str_to_int(cur) + 1)) }
+              }
+            }
+          }
+          // advance to next line
+          @nl = _index_of_from(text, "\n", k+1)
+          if nl < 0 || nl > e { break }
+          j = nl + 1
+        }
+        break
+      }
+      i = i + 1
+    }
+    @x = 0
+    loop (x < fnames.size()) {
+      @nm = fnames.get(x)
+      @ct = fnmap.get(nm)
+      if _str_to_int(ct) > 1 { print("dup_fn " + box_name + "." + nm + " x" + ct) }
+      x = x + 1
+    }
+    return 0
+  }
+
+  // Report summary
+  report(text) {
+    // find Main
+    @m = _index_of_from(text, "static box Main {", 0)
+    @delta = -9999
+    if m > 0 { delta = _brace_delta_ignoring_strings(text, 0, m) }
+    print("prelude_brace_delta=" + _int_to_str(delta))
+
+    // duplicate boxes
+    _report_duplicate_boxes(text)
+
+    // specific hot-spot
+    _report_duplicate_functions_in_box(text, "MiniVmPrints")
+    return 0
+  }
+
+  // Load dump file and report
+  analyze_dump_file(path) {
+    @fb = new FileBox()
+    @f = fb.open(path)
+    if f == null { print("warn: cannot open " + path)  return 0 }
+    @text = f.read()
+    f.close()
+    return me.report(text)
+  }
+}

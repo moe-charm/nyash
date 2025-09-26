@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use inkwell::{
     basic_block::BasicBlock,
-    values::{BasicValueEnum as BVE, IntValue, PointerValue, FloatValue},
+    values::{BasicValueEnum as BVE, FloatValue, IntValue, PointerValue},
 };
 
 use crate::backend::llvm::context::CodegenContext;
@@ -70,49 +70,46 @@ impl<'ctx, 'b> LowerFnCtx<'ctx, 'b> {
     #[inline]
     pub fn ensure_i64(&mut self, blk: &BlockCtx<'ctx>, v: ValueId) -> LlResult<IntValue<'ctx>> {
         self.cursor.assert_open(blk.cur_bid);
-        self.resolver
-            .resolve_i64(
-                self.codegen,
-                self.cursor,
-                blk.cur_bid,
-                v,
-                self.bb_map,
-                self.preds,
-                self.block_end_values,
-                self.vmap,
-            )
+        self.resolver.resolve_i64(
+            self.codegen,
+            self.cursor,
+            blk.cur_bid,
+            v,
+            self.bb_map,
+            self.preds,
+            self.block_end_values,
+            self.vmap,
+        )
     }
 
     #[inline]
     pub fn ensure_ptr(&mut self, blk: &BlockCtx<'ctx>, v: ValueId) -> LlResult<PointerValue<'ctx>> {
         self.cursor.assert_open(blk.cur_bid);
-        self.resolver
-            .resolve_ptr(
-                self.codegen,
-                self.cursor,
-                blk.cur_bid,
-                v,
-                self.bb_map,
-                self.preds,
-                self.block_end_values,
-                self.vmap,
-            )
+        self.resolver.resolve_ptr(
+            self.codegen,
+            self.cursor,
+            blk.cur_bid,
+            v,
+            self.bb_map,
+            self.preds,
+            self.block_end_values,
+            self.vmap,
+        )
     }
 
     #[inline]
     pub fn ensure_f64(&mut self, blk: &BlockCtx<'ctx>, v: ValueId) -> LlResult<FloatValue<'ctx>> {
         self.cursor.assert_open(blk.cur_bid);
-        self.resolver
-            .resolve_f64(
-                self.codegen,
-                self.cursor,
-                blk.cur_bid,
-                v,
-                self.bb_map,
-                self.preds,
-                self.block_end_values,
-                self.vmap,
-            )
+        self.resolver.resolve_f64(
+            self.codegen,
+            self.cursor,
+            blk.cur_bid,
+            v,
+            self.bb_map,
+            self.preds,
+            self.block_end_values,
+            self.vmap,
+        )
     }
 }
 

@@ -3,6 +3,9 @@ pub static KEYWORDS: &[(&str, &str)] = &[
     ("me", "ME"),
     ("from", "FROM"),
     ("loop", "LOOP"),
+    ("box", "BOX"),
+    ("local", "LOCAL"),
+    ("peek", "PEEK"),
 ];
 pub static OPERATORS_ADD_COERCION: &str = "string_priority";
 pub static OPERATORS_SUB_COERCION: &str = "numeric_only";

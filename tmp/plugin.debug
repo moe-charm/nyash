@@ -1,0 +1,37 @@
+🔍 DEBUG: Initializing v2 plugin system
+[PluginLoaderV2] load_plugin: lib='libnyash_python_parser_plugin.so' path='plugins/nyash-python-parser-plugin/target/release/libnyash_python_parser_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_python_plugin.so' path='plugins/nyash-python-plugin/target/release/libnyash_python_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_regex_plugin.so' path='plugins/nyash-regex-plugin/target/release/libnyash_regex_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_toml_plugin.so' path='plugins/nyash-toml-plugin/target/release/libnyash_toml_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_path_plugin.so' path='plugins/nyash-path-plugin/target/release/libnyash_path_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_net_plugin.so' path='plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_encoding_plugin.so' path='plugins/nyash-encoding-plugin/target/release/libnyash_encoding_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_json_plugin.so' path='plugins/nyash-json-plugin/target/release/libnyash_json_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_filebox_plugin.so' path='plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_python_compiler_plugin.so' path='plugins/nyash-python-compiler-plugin/target/release/libnyash_python_compiler_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_math_plugin.so' path='plugins/nyash-math-plugin/target/release/libnyash_math_plugin.so'
+🔌 plugin host initialized from nyash.toml
+  📦 Registering plugin provider for FileBox
+  📦 Registering plugin provider for PythonCompilerBox
+  📦 Registering plugin provider for ClientBox
+  📦 Registering plugin provider for ResponseBox
+  📦 Registering plugin provider for RequestBox
+  📦 Registering plugin provider for ServerBox
+  📦 Registering plugin provider for SockServerBox
+  📦 Registering plugin provider for SockClientBox
+  📦 Registering plugin provider for SockConnBox
+  📦 Registering plugin provider for PythonParserBox
+  📦 Registering plugin provider for RegexBox
+  📦 Registering plugin provider for PathBox
+  📦 Registering plugin provider for PyRuntimeBox
+  📦 Registering plugin provider for PyObjectBox
+  📦 Registering plugin provider for MathBox
+  📦 Registering plugin provider for TimeBox
+  📦 Registering plugin provider for JsonDocBox
+  📦 Registering plugin provider for JsonNodeBox
+  📦 Registering plugin provider for EncodingBox
+  📦 Registering plugin provider for TOMLBox
+✅ plugin host fully configured
+🚀 Nyash VM Backend - Executing file: apps/tests/jsonbox_parse_probe.nyash 🚀
+[using] ctx: modules=12 using_paths=apps:lib:.:apps:lib:.
+[Runner] using PyVM (pyvm ) → tmp/nyash_pyvm_mir.json

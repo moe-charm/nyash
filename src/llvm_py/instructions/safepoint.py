@@ -4,7 +4,7 @@ GC safepoints where runtime can safely collect garbage
 """
 
 import llvmlite.ir as ir
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
 
 def lower_safepoint(
     builder: ir.IRBuilder,
@@ -15,7 +15,8 @@ def lower_safepoint(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx: Optional[Any] = None
 ) -> None:
     """
     Lower MIR Safepoint instruction
@@ -53,8 +54,18 @@ def lower_safepoint(
         
         # Store each live value
         for i, vid in enumerate(live_values):
-            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-                val = resolver.resolve_i64(vid, builder.block, preds, block_end_values, vmap, bb_map)
+            # Prefer BuildCtx if provided
+            r = resolver; p = preds; bev = block_end_values; bbm = bb_map
+            if ctx is not None:
+                try:
+                    r = getattr(ctx, 'resolver', r)
+                    p = getattr(ctx, 'preds', p)
+                    bev = getattr(ctx, 'block_end_values', bev)
+                    bbm = getattr(ctx, 'bb_map', bbm)
+                except Exception:
+                    pass
+            if r is not None and p is not None and bev is not None and bbm is not None:
+                val = r.resolve_i64(vid, builder.block, p, bev, vmap, bbm)
             else:
                 val = vmap.get(vid, ir.Constant(i64, 0))
             

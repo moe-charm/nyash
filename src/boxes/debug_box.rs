@@ -1,57 +1,57 @@
 /*! 🔍 DebugBox - デバッグ支援Box
- * 
+ *
  * ## 📝 概要
  * プロフェッショナル開発向けデバッグ機能を提供するBox。
  * メモリ使用量監視、実行トレース、ブレークポイントなど
  * 高度なデバッグ機能を完備。
- * 
+ *
  * ## 🛠️ 利用可能メソッド
- * 
+ *
  * ### 🎯 基本デバッグ
  * - `startTracking()` - デバッグ追跡開始
  * - `stopTracking()` - デバッグ追跡停止
  * - `trackBox(box, name)` - 特定Boxを追跡対象に追加
  * - `watch(box, name)` - リアルタイム監視
  * - `clear()` - 全デバッグ情報クリア
- * 
+ *
  * ### 📊 レポート・分析
  * - `dumpAll()` - 全追跡データダンプ
  * - `memoryReport()` - メモリ使用量レポート
  * - `showCallStack()` - 関数呼び出しスタック表示
  * - `saveToFile(filename)` - デバッグ情報をファイル保存
- * 
+ *
  * ### 🎮 高度機能
  * - `setBreakpoint(function)` - ブレークポイント設定
  * - `traceCall(function, args)` - 関数呼び出しトレース
  * - `isTracking()` - 追跡状態確認
  * - `getTrackedCount()` - 追跡中Box数取得
- * 
+ *
  * ## 💡 使用例
  * ```nyash
  * local debug, user, product
  * debug = new DebugBox()
- * 
+ *
  * // デバッグ開始
  * debug.startTracking()
- * 
+ *
  * // オブジェクトを追跡
  * user = new User("Alice", 25)
  * debug.trackBox(user, "user_alice")
- * 
+ *
  * product = new Product("Book", 1500)
  * debug.trackBox(product, "book_product")
- * 
+ *
  * // リアルタイム監視
  * debug.watch(user.age, "user_age")
- * 
+ *
  * // レポート生成
  * print(debug.memoryReport())
  * print(debug.dumpAll())
- * 
+ *
  * // ファイルに保存
  * debug.saveToFile("debug_report.txt")
  * ```
- * 
+ *
  * ## 🎮 実用例 - パフォーマンス診断
  * ```nyash
  * static box PerformanceTest {
@@ -76,13 +76,13 @@
  *     }
  * }
  * ```
- * 
+ *
  * ## ⚡ ベストプラクティス
  * ```nyash
  * // エラーハンドリング付きデバッグ
  * local debug
  * debug = new DebugBox()
- * 
+ *
  * try {
  *     debug.startTracking()
  *     // 問題のあるコード
@@ -92,20 +92,20 @@
  *     print("Debug info saved to error_dump.txt")
  * }
  * ```
- * 
+ *
  * ## ⚠️ 注意
  * - 本格運用時はtrackingを無効にしてパフォーマンス向上
  * - 大量データ追跡時はメモリ消費に注意
  * - call stackは直近100件まで自動保持
  */
 
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox, VoidBox};
+use crate::instance_v2::InstanceBox;
+use crate::box_factory::RuntimeError;
+use chrono::Local;
+use std::any::Any;
 use std::collections::HashMap;
 use std::sync::RwLock;
-use chrono::Local;
-use crate::box_trait::{BoxCore, BoxBase, NyashBox, StringBox, BoolBox, VoidBox};
-use crate::interpreter::RuntimeError;
-use crate::instance_v2::InstanceBox;
-use std::any::Any;
 
 #[derive(Debug)]
 pub struct DebugBox {
@@ -156,23 +156,27 @@ impl DebugBox {
         Ok(Box::new(VoidBox::new()))
     }
 
-    pub fn track_box(&self, box_value: &dyn NyashBox, name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub fn track_box(
+        &self,
+        box_value: &dyn NyashBox,
+        name: &str,
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let enabled = self.tracking_enabled.read().unwrap();
         if !*enabled {
             return Ok(Box::new(VoidBox::new()));
         }
 
         let mut tracked = self.tracked_boxes.write().unwrap();
-        
+
         let info = TrackedBoxInfo {
             box_type: box_value.type_name().to_string(),
             created_at: Local::now().format("%Y-%m-%d %H:%M:%S").to_string(),
             fields: self.get_box_fields(box_value),
             value_repr: box_value.to_string_box().value,
         };
-        
+
         tracked.insert(name.to_string(), info);
-        
+
         Ok(Box::new(VoidBox::new()))
     }
 
@@ -192,9 +196,12 @@ impl DebugBox {
     pub fn dump_all(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let tracked = self.tracked_boxes.read().unwrap();
         let mut output = String::from("=== Box State Dump ===\n");
-        output.push_str(&format!("Time: {}\n", Local::now().format("%Y-%m-%d %H:%M:%S")));
+        output.push_str(&format!(
+            "Time: {}\n",
+            Local::now().format("%Y-%m-%d %H:%M:%S")
+        ));
         output.push_str(&format!("Total tracked boxes: {}\n\n", tracked.len()));
-        
+
         for (name, info) in tracked.iter() {
             output.push_str(&format!("Box: {}\n", name));
             output.push_str(&format!("  Type: {}\n", info.box_type));
@@ -203,28 +210,31 @@ impl DebugBox {
             output.push_str(&format!("  Value: {}\n", info.value_repr));
             output.push_str("\n");
         }
-        
+
         Ok(Box::new(StringBox::new(output)))
     }
 
     pub fn save_to_file(&self, filename: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let dump_result = self.dump_all()?;
         let content = dump_result.to_string_box().value;
-        
+
         // Write to file using std::fs
-        std::fs::write(filename, content)
-            .map_err(|e| RuntimeError::InvalidOperation {
-                message: format!("Failed to write debug file: {}", e),
-            })?;
-        
+        std::fs::write(filename, content).map_err(|e| RuntimeError::InvalidOperation {
+            message: format!("Failed to write debug file: {}", e),
+        })?;
+
         println!("[DEBUG] Saved debug info to {}", filename);
         Ok(Box::new(VoidBox::new()))
     }
 
-    pub fn watch(&self, box_value: &dyn NyashBox, name: &str) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub fn watch(
+        &self,
+        box_value: &dyn NyashBox,
+        name: &str,
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let value_str = box_value.to_string_box().value;
         let type_name = box_value.type_name();
-        
+
         println!("[DEBUG] Watching {} ({}): {}", name, type_name, value_str);
         Ok(Box::new(VoidBox::new()))
     }
@@ -233,18 +243,18 @@ impl DebugBox {
         let tracked = self.tracked_boxes.read().unwrap();
         let mut report = String::from("=== Memory Report ===\n");
         report.push_str(&format!("Tracked boxes: {}\n", tracked.len()));
-        
+
         // Count by type
         let mut type_counts: HashMap<String, usize> = HashMap::new();
         for info in tracked.values() {
             *type_counts.entry(info.box_type.clone()).or_insert(0) += 1;
         }
-        
+
         report.push_str("\nBoxes by type:\n");
         for (box_type, count) in type_counts.iter() {
             report.push_str(&format!("  {}: {}\n", box_type, count));
         }
-        
+
         Ok(Box::new(StringBox::new(report)))
     }
 
@@ -256,45 +266,50 @@ impl DebugBox {
         Ok(Box::new(VoidBox::new()))
     }
 
-    pub fn trace_call(&self, function_name: &str, args: Vec<String>) -> Result<Box<dyn NyashBox>, RuntimeError> {
+    pub fn trace_call(
+        &self,
+        function_name: &str,
+        args: Vec<String>,
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let mut stack = self.call_stack.write().unwrap();
         stack.push(CallInfo {
             function_name: function_name.to_string(),
             args,
             timestamp: Local::now().format("%H:%M:%S.%3f").to_string(),
         });
-        
+
         // Keep only last 100 calls to prevent memory issues
         if stack.len() > 100 {
             stack.remove(0);
         }
-        
+
         Ok(Box::new(VoidBox::new()))
     }
 
     pub fn show_call_stack(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let stack = self.call_stack.read().unwrap();
         let mut output = String::from("=== Call Stack ===\n");
-        
+
         for (i, call) in stack.iter().enumerate() {
-            output.push_str(&format!("{}: [{}] {}({})\n", 
-                i, 
-                call.timestamp, 
+            output.push_str(&format!(
+                "{}: [{}] {}({})\n",
+                i,
+                call.timestamp,
                 call.function_name,
                 call.args.join(", ")
             ));
         }
-        
+
         Ok(Box::new(StringBox::new(output)))
     }
 
     pub fn clear(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let mut tracked = self.tracked_boxes.write().unwrap();
         tracked.clear();
-        
+
         let mut stack = self.call_stack.write().unwrap();
         stack.clear();
-        
+
         println!("[DEBUG] Cleared all debug information");
         Ok(Box::new(VoidBox::new()))
     }
@@ -306,19 +321,25 @@ impl DebugBox {
 
     pub fn get_tracked_count(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
         let tracked = self.tracked_boxes.read().unwrap();
-        Ok(Box::new(crate::box_trait::IntegerBox::new(tracked.len() as i64)))
+        Ok(Box::new(crate::box_trait::IntegerBox::new(
+            tracked.len() as i64
+        )))
     }
 
     // --- Phase 1: JIT/Plugin shim tracing ---
     pub fn trace_plugin_calls(&self, on: bool) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        crate::jit::shim_trace::set_enabled(on);
-        println!("[DEBUG] JIT shim trace: {}", if on {"ENABLED"} else {"DISABLED"});
+        // ARCHIVED: JIT functionality moved to archive/jit-cranelift/
+        println!(
+            "[DEBUG] JIT shim trace: {} (JIT ARCHIVED - no-op)",
+            if on { "ENABLED" } else { "DISABLED" }
+        );
         Ok(Box::new(VoidBox::new()))
     }
 
     pub fn get_jit_events(&self) -> Result<Box<dyn NyashBox>, RuntimeError> {
-        let s = crate::jit::shim_trace::snapshot_joined();
-        Ok(Box::new(StringBox::new(s)))
+        // ARCHIVED: JIT functionality moved to archive/jit-cranelift/
+        let s = "[JIT ARCHIVED] No JIT events available - JIT moved to archive/jit-cranelift/";
+        Ok(Box::new(StringBox::new(s.to_string())))
     }
 }
 
@@ -329,7 +350,7 @@ impl Clone for DebugBox {
         let breakpoints = self.breakpoints.read().unwrap();
         let call_stack = self.call_stack.read().unwrap();
         let tracking_enabled = self.tracking_enabled.read().unwrap();
-        
+
         DebugBox {
             base: BoxBase::new(), // New unique ID for cloned instance
             tracking_enabled: RwLock::new(*tracking_enabled),
@@ -345,20 +366,20 @@ impl BoxCore for DebugBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         let tracked = self.tracked_boxes.read().unwrap();
         write!(f, "DebugBox[{} tracked]", tracked.len())
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -377,7 +398,7 @@ impl NyashBox for DebugBox {
         let tracked = self.tracked_boxes.read().unwrap();
         StringBox::new(format!("DebugBox[{} tracked]", tracked.len()))
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_debug) = other.as_any().downcast_ref::<DebugBox>() {
             BoolBox::new(self.base.id == other_debug.base.id)
@@ -385,19 +406,17 @@ impl NyashBox for DebugBox {
             BoolBox::new(false)
         }
     }
-    
+
     fn type_name(&self) -> &'static str {
         "DebugBox"
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
-    
-    
 }

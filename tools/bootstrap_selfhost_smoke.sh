@@ -13,13 +13,16 @@ fi
 echo "[bootstrap] c0 (rust) → c1 (ny) → c1' parity (JIT-only)" >&2
 
 # c0: baseline run (rust path)
-NYASH_DISABLE_PLUGINS=1 NYASH_CLI_VERBOSE=1 "$BIN" --backend vm "$ROOT_DIR/apps/examples/string_p0.nyash" > /tmp/nyash-c0.out
+timeout -s KILL 20s env NYASH_DISABLE_PLUGINS=1 NYASH_CLI_VERBOSE=1 \
+  "$BIN" --backend vm "$ROOT_DIR/apps/examples/string_p0.nyash" > /tmp/nyash-c0.out
 
 # c1: try Ny compiler path (flagged); tolerate fallback to rust path
-NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_CLI_VERBOSE=1 "$BIN" --backend vm "$ROOT_DIR/apps/examples/string_p0.nyash" > /tmp/nyash-c1.out || true
+timeout -s KILL 20s env NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_CLI_VERBOSE=1 \
+  "$BIN" --backend vm "$ROOT_DIR/apps/examples/string_p0.nyash" > /tmp/nyash-c1.out || true
 
 # c1': re-run (simulated second pass)
-NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_CLI_VERBOSE=1 "$BIN" --backend vm "$ROOT_DIR/apps/examples/string_p0.nyash" > /tmp/nyash-c1p.out || true
+timeout -s KILL 20s env NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_CLI_VERBOSE=1 \
+  "$BIN" --backend vm "$ROOT_DIR/apps/examples/string_p0.nyash" > /tmp/nyash-c1p.out || true
 
 H0=$(rg -n '^Result:\s*' /tmp/nyash-c0.out | sed 's/\s\+/ /g')
 H1=$(rg -n '^Result:\s*' /tmp/nyash-c1.out | sed 's/\s\+/ /g' || true)

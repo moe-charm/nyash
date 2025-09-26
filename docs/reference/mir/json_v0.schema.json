@@ -1,0 +1,96 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://nyash.dev/schema/mir/json_v0.schema.json",
+  "title": "Nyash MIR JSON v0",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "schema_version": { "type": ["integer", "string" ] },
+    "functions": {
+      "oneOf": [
+        { "$ref": "#/definitions/functionList" },
+        { "$ref": "#/definitions/functionMap" }
+      ]
+    }
+  },
+  "required": ["functions"],
+  "definitions": {
+    "functionList": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/function" }
+    },
+    "functionMap": {
+      "type": "object",
+      "additionalProperties": { "$ref": "#/definitions/functionBody" }
+    },
+    "function": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "name": { "type": "string" },
+        "params": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": true,
+            "properties": {
+              "name": { "type": "string" },
+              "type": { "type": "string" }
+            },
+            "required": ["name", "type"]
+          }
+        },
+        "return_type": { "type": "string" },
+        "entry_block": { "type": ["integer", "string"] },
+        "blocks": { "$ref": "#/definitions/blocks" }
+      },
+      "required": ["name", "blocks"]
+    },
+    "functionBody": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "params": { "$ref": "#/definitions/function/properties/params" },
+        "return_type": { "type": "string" },
+        "entry_block": { "type": ["integer", "string"] },
+        "blocks": { "$ref": "#/definitions/blocks" }
+      },
+      "required": ["blocks"]
+    },
+    "blocks": {
+      "oneOf": [
+        {
+          "type": "array",
+          "items": { "$ref": "#/definitions/block" }
+        },
+        {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/definitions/block" }
+        }
+      ]
+    },
+    "block": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": ["integer", "string"] },
+        "instructions": { "$ref": "#/definitions/instructions" },
+        "terminator": { "$ref": "#/definitions/instruction" }
+      },
+      "required": ["id", "instructions"]
+    },
+    "instructions": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/instruction" }
+    },
+    "instruction": {
+      "type": "object",
+      "additionalProperties": true,
+      "properties": {
+        "kind": { "type": "string" }
+      },
+      "required": ["kind"]
+    }
+  }
+}
+

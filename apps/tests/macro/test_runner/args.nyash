@@ -1,0 +1,18 @@
+// Macro test-args demo (top-level + Box static/instance)
+
+function test_top_level(a, b) {
+    return (a == 1) && (b == "x")
+}
+
+box B {
+    static function test_static(i) {
+        return i == 2
+    }
+    function method(s) {
+        return s == "y"
+    }
+    function test_instance(p) {
+        return me.method(p)
+    }
+}
+

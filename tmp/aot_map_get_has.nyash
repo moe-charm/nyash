@@ -1,0 +1,9 @@
+static box Main {
+  main(args) {
+    local m = {"name": "Alice"}
+    if (m.has("name")) {
+      return m.get("name").length()
+    }
+    return 0
+  }
+}

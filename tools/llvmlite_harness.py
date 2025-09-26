@@ -50,6 +50,9 @@ def run_dummy(out_path: str) -> None:
 def run_from_json(in_path: str, out_path: str) -> None:
     # Delegate to python builder to keep code unified
     import runpy
+    # Enable safe defaults for prepasses unless explicitly disabled by env
+    os.environ.setdefault('NYASH_LLVM_PREPASS_LOOP', os.environ.get('NYASH_LLVM_PREPASS_LOOP', '0'))
+    os.environ.setdefault('NYASH_LLVM_PREPASS_IFMERGE', os.environ.get('NYASH_LLVM_PREPASS_IFMERGE', '1'))
     # Ensure src/llvm_py is on sys.path for relative imports
     builder_dir = str(PY_BUILDER.parent)
     if builder_dir not in sys.path:

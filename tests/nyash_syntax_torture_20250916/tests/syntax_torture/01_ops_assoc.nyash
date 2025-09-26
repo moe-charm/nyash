@@ -1,0 +1,6 @@
+
+# Expect: x=33 / y=33  (left-assoc + explicit coercion via "+")
+# Also verifies numeric-first vs string-first concatenation symmetry.
+local x = "x=" + 11 + 22     # if left-assoc with string + int => "x=1122" OR "x=33"? define spec
+local y = "x=" + (11 + 22)   # force arithmetic then concat => "x=33"
+print(y)                     # authoritative: should be "x=33"

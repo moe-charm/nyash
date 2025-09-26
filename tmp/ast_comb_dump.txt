@@ -1,0 +1,12 @@
+[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+[FileBox] Plugin initialized
+⚠️ Failed to load nyash.toml - plugins disabled
+🚀 Nyash VM Backend - Executing file: tmp/mini_call_starts_with.nyash 🚀
+[using] stripped line: using "apps/lib/json_native/utils/string.nyash" as StringUtils
+[ast] dump start (vm-fallback)
+[ast] 0: StaticBox(StringUtils)
+[ast] 1: StaticBox(Main)
+[ast] dump end
+[builder] function-call name=parse_float static_ctx=
+❌ MIR compilation error: Unresolved function: 'parse_float'. Function 'parse_float' not found. Check spelling or add explicit scope qualifier

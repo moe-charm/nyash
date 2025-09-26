@@ -1,23 +1,24 @@
 /*!
  * MIR Printer - Debug output and visualization
- * 
+ *
  * Implements pretty-printing for MIR modules and functions
  */
 
-use super::{MirModule, MirFunction, BasicBlock, MirInstruction, ValueId, MirType};
+use super::{BasicBlock, MirFunction, MirInstruction, MirModule, MirType, ValueId};
+use super::printer_helpers;
+use crate::debug::log as dlog;
 use std::collections::HashMap;
 use std::fmt::Write;
-use crate::debug::log as dlog;
 
 /// MIR printer for debug output and visualization
 pub struct MirPrinter {
     /// Indentation level
     #[allow(dead_code)]
     indent_level: usize,
-    
+
     /// Whether to show detailed information
     verbose: bool,
-    
+
     /// Whether to show line numbers
     show_line_numbers: bool,
 
@@ -35,7 +36,7 @@ impl MirPrinter {
             show_effects_inline: false,
         }
     }
-    
+
     /// Create a verbose MIR printer
     pub fn verbose() -> Self {
         Self {
@@ -45,13 +46,13 @@ impl MirPrinter {
             show_effects_inline: false,
         }
     }
-    
+
     /// Set verbose mode
     pub fn set_verbose(&mut self, verbose: bool) -> &mut Self {
         self.verbose = verbose;
         self
     }
-    
+
     /// Set line number display
     pub fn set_show_line_numbers(&mut self, show: bool) -> &mut Self {
         self.show_line_numbers = show;
@@ -63,18 +64,18 @@ impl MirPrinter {
         self.show_effects_inline = show;
         self
     }
-    
+
     /// Print a complete MIR module
     pub fn print_module(&self, module: &MirModule) -> String {
         let mut output = String::new();
-        
+
         // Module header
         writeln!(output, "; MIR Module: {}", module.name).unwrap();
         if let Some(ref source) = module.metadata.source_file {
             writeln!(output, "; Source: {}", source).unwrap();
         }
         writeln!(output).unwrap();
-        
+
         // Module statistics
         if self.verbose {
             let stats = module.stats();
@@ -82,11 +83,16 @@ impl MirPrinter {
             writeln!(output, ";   Functions: {}", stats.function_count).unwrap();
             writeln!(output, ";   Globals: {}", stats.global_count).unwrap();
             writeln!(output, ";   Total Blocks: {}", stats.total_blocks).unwrap();
-            writeln!(output, ";   Total Instructions: {}", stats.total_instructions).unwrap();
+            writeln!(
+                output,
+                ";   Total Instructions: {}",
+                stats.total_instructions
+            )
+            .unwrap();
             writeln!(output, ";   Pure Functions: {}", stats.pure_functions).unwrap();
             writeln!(output).unwrap();
         }
-        
+
         // Global constants
         if !module.globals.is_empty() {
             writeln!(output, "; Global Constants:").unwrap();
@@ -95,25 +101,29 @@ impl MirPrinter {
             }
             writeln!(output).unwrap();
         }
-        
+
         // Functions
         for (_name, function) in &module.functions {
             output.push_str(&self.print_function(function));
             output.push('\n');
         }
-        
+
         output
     }
-    
+
     /// Print a single MIR function
     pub fn print_function(&self, function: &MirFunction) -> String {
         let mut output = String::new();
-        
+
         // Function signature
-        write!(output, "define {} @{}(", 
-               self.format_type(&function.signature.return_type),
-               function.signature.name).unwrap();
-        
+        write!(
+            output,
+            "define {} @{}(",
+            self.format_type(&function.signature.return_type),
+            function.signature.name
+        )
+        .unwrap();
+
         for (i, param_type) in function.signature.params.iter().enumerate() {
             if i > 0 {
                 write!(output, ", ").unwrap();
@@ -121,14 +131,14 @@ impl MirPrinter {
             write!(output, "{} %{}", self.format_type(param_type), i).unwrap();
         }
         write!(output, ")").unwrap();
-        
+
         // Effects
         if !function.signature.effects.is_pure() {
             write!(output, " effects({})", function.signature.effects).unwrap();
         }
-        
+
         writeln!(output, " {{").unwrap();
-        
+
         // Function statistics
         if self.verbose {
             let stats = function.stats();
@@ -150,8 +160,16 @@ impl MirPrinter {
             for block in function.blocks.values() {
                 for inst in &block.instructions {
                     match inst {
-                        MirInstruction::Throw { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found throw in {}", function.signature.name); } }
-                        MirInstruction::Catch { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found catch in {}", function.signature.name); } }
+                        MirInstruction::Throw { .. } => {
+                            if dlog::on("NYASH_DEBUG_MIR_PRINTER") {
+                                eprintln!("[PRINTER] found throw in {}", function.signature.name);
+                            }
+                        }
+                        MirInstruction::Catch { .. } => {
+                            if dlog::on("NYASH_DEBUG_MIR_PRINTER") {
+                                eprintln!("[PRINTER] found catch in {}", function.signature.name);
+                            }
+                        }
                         MirInstruction::TypeCheck { .. } => type_check += 1,
                         MirInstruction::Cast { .. } => type_cast += 1,
                         MirInstruction::TypeOp { op, .. } => match op {
@@ -175,8 +193,22 @@ impl MirPrinter {
                 }
                 if let Some(term) = &block.terminator {
                     match term {
-                        MirInstruction::Throw { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found throw(term) in {}", function.signature.name); } }
-                        MirInstruction::Catch { .. } => { if dlog::on("NYASH_DEBUG_MIR_PRINTER") { eprintln!("[PRINTER] found catch(term) in {}", function.signature.name); } }
+                        MirInstruction::Throw { .. } => {
+                            if dlog::on("NYASH_DEBUG_MIR_PRINTER") {
+                                eprintln!(
+                                    "[PRINTER] found throw(term) in {}",
+                                    function.signature.name
+                                );
+                            }
+                        }
+                        MirInstruction::Catch { .. } => {
+                            if dlog::on("NYASH_DEBUG_MIR_PRINTER") {
+                                eprintln!(
+                                    "[PRINTER] found catch(term) in {}",
+                                    function.signature.name
+                                );
+                            }
+                        }
                         MirInstruction::TypeCheck { .. } => type_check += 1,
                         MirInstruction::Cast { .. } => type_cast += 1,
                         MirInstruction::TypeOp { op, .. } => match op {
@@ -200,21 +232,42 @@ impl MirPrinter {
                 }
             }
             if type_check + type_cast > 0 {
-                writeln!(output, "  ;   TypeOp: {} (check: {}, cast: {})", type_check + type_cast, type_check, type_cast).unwrap();
+                writeln!(
+                    output,
+                    "  ;   TypeOp: {} (check: {}, cast: {})",
+                    type_check + type_cast,
+                    type_check,
+                    type_cast
+                )
+                .unwrap();
             }
             if weak_new + weak_load > 0 {
-                writeln!(output, "  ;   WeakRef: {} (new: {}, load: {})", weak_new + weak_load, weak_new, weak_load).unwrap();
+                writeln!(
+                    output,
+                    "  ;   WeakRef: {} (new: {}, load: {})",
+                    weak_new + weak_load,
+                    weak_new,
+                    weak_load
+                )
+                .unwrap();
             }
             if barrier_read + barrier_write > 0 {
-                writeln!(output, "  ;   Barrier: {} (read: {}, write: {})", barrier_read + barrier_write, barrier_read, barrier_write).unwrap();
+                writeln!(
+                    output,
+                    "  ;   Barrier: {} (read: {}, write: {})",
+                    barrier_read + barrier_write,
+                    barrier_read,
+                    barrier_write
+                )
+                .unwrap();
             }
             writeln!(output).unwrap();
         }
-        
+
         // Print blocks in order
         let mut block_ids: Vec<_> = function.blocks.keys().copied().collect();
         block_ids.sort();
-        
+
         for (i, block_id) in block_ids.iter().enumerate() {
             if let Some(block) = function.blocks.get(block_id) {
                 if i > 0 {
@@ -223,29 +276,35 @@ impl MirPrinter {
                 output.push_str(&self.print_basic_block(block, &function.metadata.value_types));
             }
         }
-        
+
         writeln!(output, "}}").unwrap();
-        
+
         output
     }
-    
+
     /// Print a basic block
-    pub fn print_basic_block(&self, block: &BasicBlock, types: &HashMap<ValueId, MirType>) -> String {
+    pub fn print_basic_block(
+        &self,
+        block: &BasicBlock,
+        types: &HashMap<ValueId, MirType>,
+    ) -> String {
         let mut output = String::new();
-        
+
         // Block header
         write!(output, "{}:", block.id).unwrap();
-        
+
         // Predecessors
         if !block.predecessors.is_empty() && self.verbose {
-            let preds: Vec<String> = block.predecessors.iter()
+            let preds: Vec<String> = block
+                .predecessors
+                .iter()
                 .map(|p| format!("{}", p))
                 .collect();
             write!(output, "  ; preds({})", preds.join(", ")).unwrap();
         }
-        
+
         writeln!(output).unwrap();
-        
+
         // Instructions
         let mut line_num = 0;
         for instruction in block.all_instructions() {
@@ -258,269 +317,38 @@ impl MirPrinter {
             let mut line = self.format_instruction(instruction, types);
             if self.show_effects_inline {
                 let eff = instruction.effects();
-                let cat = if eff.is_pure() { "pure" } else if eff.is_read_only() { "readonly" } else { "side" };
+                let cat = if eff.is_pure() {
+                    "pure"
+                } else if eff.is_read_only() {
+                    "readonly"
+                } else {
+                    "side"
+                };
                 line.push_str(&format!("    ; eff: {}", cat));
             }
             writeln!(output, "{}", line).unwrap();
             line_num += 1;
         }
-        
+
         // Block effects (if verbose and not pure)
         if self.verbose && !block.effects.is_pure() {
             writeln!(output, "    ; effects: {}", block.effects).unwrap();
         }
-        
+
         output
-    }
-    
-    fn format_dst(&self, dst: &ValueId, types: &HashMap<ValueId, MirType>) -> String {
-        if let Some(ty) = types.get(dst) {
-            format!("{}: {:?} =", dst, ty)
-        } else {
-            format!("{} =", dst)
-        }
     }
 
     /// Format a single instruction
-    fn format_instruction(&self, instruction: &MirInstruction, types: &HashMap<ValueId, MirType>) -> String {
-        match instruction {
-            MirInstruction::Const { dst, value } => {
-                format!("{} const {}", self.format_dst(dst, types), value)
-            },
-
-            MirInstruction::BinOp { dst, op, lhs, rhs } => {
-                format!("{} {} {:?} {}", self.format_dst(dst, types), lhs, op, rhs)
-            },
-
-            MirInstruction::UnaryOp { dst, op, operand } => {
-                format!("{} {:?} {}", self.format_dst(dst, types), op, operand)
-            },
-
-            MirInstruction::Compare { dst, op, lhs, rhs } => {
-                format!("{} icmp {:?} {}, {}", self.format_dst(dst, types), op, lhs, rhs)
-            },
-
-            MirInstruction::Load { dst, ptr } => {
-                format!("{} load {}", self.format_dst(dst, types), ptr)
-            },
-
-            MirInstruction::Store { value, ptr } => {
-                format!("store {} -> {}", value, ptr)
-            },
-            
-            MirInstruction::Call { dst, func, args, effects: _ } => {
-                let args_str = args.iter()
-                    .map(|v| format!("{}", v))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-
-                if let Some(dst) = dst {
-                    format!("{} call {}({})", self.format_dst(dst, types), func, args_str)
-                } else {
-                    format!("call {}({})", func, args_str)
-                }
-            },
-            MirInstruction::FunctionNew { dst, params, body, captures, me } => {
-                let p = params.join(", ");
-                let c = captures.iter().map(|(n, v)| format!("{}={}", n, v)).collect::<Vec<_>>().join(", ");
-                let me_s = me.map(|m| format!(" me={}", m)).unwrap_or_default();
-                let cap_s = if c.is_empty() { String::new() } else { format!(" [{}]", c) };
-                format!("{} function_new ({}) {{...{}}}{}{}", self.format_dst(dst, types), p, body.len(), cap_s, me_s)
-            },
-
-            MirInstruction::BoxCall { dst, box_val, method, method_id, args, effects: _ } => {
-                let args_str = args.iter()
-                    .map(|v| format!("{}", v))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let id_suffix = method_id.map(|id| format!("[#{}]", id)).unwrap_or_default();
-                if let Some(dst) = dst {
-                    format!("{} call {}.{}{}({})", self.format_dst(dst, types), box_val, method, id_suffix, args_str)
-                } else {
-                    format!("call {}.{}{}({})", box_val, method, id_suffix, args_str)
-                }
-            },
-            MirInstruction::PluginInvoke { dst, box_val, method, args, effects: _ } => {
-                let args_str = args.iter()
-                    .map(|v| format!("{}", v))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                if let Some(dst) = dst {
-                    format!("{} plugin_invoke {}.{}({})", self.format_dst(dst, types), box_val, method, args_str)
-                } else {
-                    format!("plugin_invoke {}.{}({})", box_val, method, args_str)
-                }
-            },
-            
-            MirInstruction::Branch { condition, then_bb, else_bb } => {
-                format!("br {}, label {}, label {}", condition, then_bb, else_bb)
-            },
-            
-            MirInstruction::Jump { target } => {
-                format!("br label {}", target)
-            },
-            
-            MirInstruction::Return { value } => {
-                if let Some(value) = value {
-                    format!("ret {}", value)
-                } else {
-                    "ret void".to_string()
-                }
-            },
-            
-            MirInstruction::Phi { dst, inputs } => {
-                let inputs_str = inputs.iter()
-                    .map(|(bb, val)| format!("[{}, {}]", val, bb))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{} phi {}", self.format_dst(dst, types), inputs_str)
-            },
-
-            MirInstruction::NewBox { dst, box_type, args } => {
-                let args_str = args.iter()
-                    .map(|v| format!("{}", v))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                format!("{} new {}({})", self.format_dst(dst, types), box_type, args_str)
-            },
-
-            // Legacy -> Unified print: TypeCheck as TypeOp(check)
-            MirInstruction::TypeCheck { dst, value, expected_type } => {
-                // Print using unified TypeOp style to avoid naming divergence
-                format!("{} typeop check {} {}", self.format_dst(dst, types), value, expected_type)
-            },
-
-            MirInstruction::Cast { dst, value, target_type } => {
-                format!("{} cast {} to {:?}", self.format_dst(dst, types), value, target_type)
-            },
-
-            MirInstruction::TypeOp { dst, op, value, ty } => {
-                let op_str = match op { super::TypeOpKind::Check => "check", super::TypeOpKind::Cast => "cast" };
-                format!("{} typeop {} {} {:?}", self.format_dst(dst, types), op_str, value, ty)
-            },
-
-            MirInstruction::ArrayGet { dst, array, index } => {
-                format!("{} {}[{}]", self.format_dst(dst, types), array, index)
-            },
-
-            MirInstruction::ArraySet { array, index, value } => {
-                format!("{}[{}] = {}", array, index, value)
-            },
-
-            MirInstruction::Copy { dst, src } => {
-                format!("{} copy {}", self.format_dst(dst, types), src)
-            },
-
-            MirInstruction::Debug { value, message } => {
-                format!("debug {} \"{}\"", value, message)
-            },
-
-            MirInstruction::Print { value, effects: _ } => {
-                format!("print {}", value)
-            },
-
-            MirInstruction::Nop => {
-                "nop".to_string()
-            },
-
-            // Phase 5: Control flow & exception handling
-            MirInstruction::Throw { exception, effects: _ } => {
-                format!("throw {}", exception)
-            },
-
-            MirInstruction::Catch { exception_type, exception_value, handler_bb } => {
-                if let Some(ref exc_type) = exception_type {
-                    format!("catch {} {} -> {}", exc_type, exception_value, handler_bb)
-                } else {
-                    format!("catch * {} -> {}", exception_value, handler_bb)
-                }
-            },
-            
-            MirInstruction::Safepoint => {
-                "safepoint".to_string()
-            },
-            
-            // Phase 6: Box reference operations
-            MirInstruction::RefNew { dst, box_val } => {
-                format!("{} ref_new {}", self.format_dst(dst, types), box_val)
-            },
-
-            MirInstruction::RefGet { dst, reference, field } => {
-                format!("{} ref_get {}.{}", self.format_dst(dst, types), reference, field)
-            },
-            
-            MirInstruction::RefSet { reference, field, value } => {
-                format!("ref_set {}.{} = {}", reference, field, value)
-            },
-            
-            // Legacy -> Unified print: WeakNew as weakref new
-            MirInstruction::WeakNew { dst, box_val } => {
-                format!("{} weakref new {}", self.format_dst(dst, types), box_val)
-            },
-
-            // Legacy -> Unified print: WeakLoad as weakref load
-            MirInstruction::WeakLoad { dst, weak_ref } => {
-                format!("{} weakref load {}", self.format_dst(dst, types), weak_ref)
-            },
-
-            // Legacy -> Unified print: BarrierRead as barrier read
-            MirInstruction::BarrierRead { ptr } => {
-                format!("barrier read {}", ptr)
-            },
-
-            // Legacy -> Unified print: BarrierWrite as barrier write
-            MirInstruction::BarrierWrite { ptr } => {
-                format!("barrier write {}", ptr)
-            },
-
-            MirInstruction::WeakRef { dst, op, value } => {
-                let op_str = match op { super::WeakRefOp::New => "new", super::WeakRefOp::Load => "load" };
-                format!("{} weakref {} {}", self.format_dst(dst, types), op_str, value)
-            },
-
-            MirInstruction::Barrier { op, ptr } => {
-                let op_str = match op { super::BarrierOp::Read => "read", super::BarrierOp::Write => "write" };
-                format!("barrier {} {}", op_str, ptr)
-            },
-
-            // Phase 7: Async/Future Operations
-            MirInstruction::FutureNew { dst, value } => {
-                format!("{} future_new {}", self.format_dst(dst, types), value)
-            },
-
-            MirInstruction::FutureSet { future, value } => {
-                format!("future_set {} = {}", future, value)
-            },
-
-            MirInstruction::Await { dst, future } => {
-                format!("{} await {}", self.format_dst(dst, types), future)
-            },
-
-            // Phase 9.7: External Function Calls
-            MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
-                let args_str = args.iter().map(|v| format!("{}", v)).collect::<Vec<_>>().join(", ");
-                if let Some(dst) = dst {
-                    format!("{} extern_call {}.{}({}) [effects: {}]", self.format_dst(dst, types), iface_name, method_name, args_str, effects)
-                } else {
-                    format!("extern_call {}.{}({}) [effects: {}]", iface_name, method_name, args_str, effects)
-                }
-            },
-        }
+    fn format_instruction(
+        &self,
+        instruction: &MirInstruction,
+        types: &HashMap<ValueId, MirType>,
+    ) -> String {
+        // Delegate to helpers to keep this file lean
+        printer_helpers::format_instruction(instruction, types)
     }
-    
-    /// Format a MIR type
     fn format_type(&self, mir_type: &super::MirType) -> String {
-        match mir_type {
-            super::MirType::Integer => "i64".to_string(),
-            super::MirType::Float => "f64".to_string(),
-            super::MirType::Bool => "i1".to_string(),
-            super::MirType::String => "str".to_string(),
-            super::MirType::Box(name) => format!("box<{}>", name),
-            super::MirType::Array(elem_type) => format!("[{}]", self.format_type(elem_type)),
-            super::MirType::Future(inner_type) => format!("future<{}>", self.format_type(inner_type)),
-            super::MirType::Void => "void".to_string(),
-            super::MirType::Unknown => "?".to_string(),
-        }
+        printer_helpers::format_type(mir_type)
     }
 }
 
@@ -533,19 +361,21 @@ impl Default for MirPrinter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mir::{MirModule, MirFunction, FunctionSignature, MirType, EffectMask, BasicBlockId};
-    
+    use crate::mir::{
+        BasicBlockId, EffectMask, FunctionSignature, MirFunction, MirModule, MirType,
+    };
+
     #[test]
     fn test_empty_module_printing() {
         let module = MirModule::new("test".to_string());
         let printer = MirPrinter::new();
-        
+
         let output = printer.print_module(&module);
-        
+
         assert!(output.contains("MIR Module: test"));
         assert!(!output.is_empty());
     }
-    
+
     #[test]
     fn test_function_printing() {
         let signature = FunctionSignature {
@@ -554,23 +384,23 @@ mod tests {
             return_type: MirType::Void,
             effects: EffectMask::PURE,
         };
-        
+
         let function = MirFunction::new(signature, BasicBlockId::new(0));
         let printer = MirPrinter::new();
-        
+
         let output = printer.print_function(&function);
-        
+
         assert!(output.contains("define void @test_func(i64 %0)"));
         assert!(output.contains("bb0:"));
     }
-    
+
     #[test]
     fn test_verbose_printing() {
         let module = MirModule::new("test".to_string());
         let printer = MirPrinter::verbose();
-        
+
         let output = printer.print_module(&module);
-        
+
         assert!(output.contains("Module Statistics"));
     }
 }

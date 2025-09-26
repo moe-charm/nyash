@@ -6,11 +6,11 @@
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
 
-use crate::core::model::BoxDeclaration;
-use crate::box_factory::{UnifiedBoxRegistry, BoxFactory};
 use crate::box_factory::builtin::BuiltinBoxFactory;
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
+use crate::box_factory::{BoxFactory, UnifiedBoxRegistry};
+use crate::core::model::BoxDeclaration;
 
 /// Core runtime container for executing Nyash programs
 pub struct NyashRuntime {
@@ -21,7 +21,7 @@ pub struct NyashRuntime {
     /// GC hooks (switchable runtime). Default is no-op.
     pub gc: Arc<dyn crate::runtime::gc::GcHooks>,
     /// Optional scheduler (single-thread by default is fine)
-    pub scheduler: Option<Arc<dyn crate::runtime::scheduler::Scheduler>>, 
+    pub scheduler: Option<Arc<dyn crate::runtime::scheduler::Scheduler>>,
 }
 
 impl NyashRuntime {
@@ -31,7 +31,9 @@ impl NyashRuntime {
             box_registry: create_default_registry(),
             box_declarations: Arc::new(RwLock::new(HashMap::new())),
             gc: Arc::new(crate::runtime::gc::NullGc),
-            scheduler: Some(Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new())),
+            scheduler: Some(Arc::new(
+                crate::runtime::scheduler::SingleThreadScheduler::new(),
+            )),
         }
     }
 }
@@ -40,18 +42,26 @@ impl NyashRuntime {
 pub struct NyashRuntimeBuilder {
     box_registry: Option<Arc<Mutex<UnifiedBoxRegistry>>>,
     box_declarations: Option<Arc<RwLock<HashMap<String, BoxDeclaration>>>>,
-    gc: Option<Arc<dyn crate::runtime::gc::GcHooks>>, 
+    gc: Option<Arc<dyn crate::runtime::gc::GcHooks>>,
     scheduler: Option<Arc<dyn crate::runtime::scheduler::Scheduler>>,
 }
 
 impl NyashRuntimeBuilder {
     pub fn new() -> Self {
-        Self { box_registry: None, box_declarations: None, gc: None, scheduler: None }
+        Self {
+            box_registry: None,
+            box_declarations: None,
+            gc: None,
+            scheduler: None,
+        }
     }
 
     /// Inject a BoxFactory implementation directly into a private registry
     pub fn with_factory(mut self, factory: Arc<dyn BoxFactory>) -> Self {
-        let registry = self.box_registry.take().unwrap_or_else(|| create_default_registry());
+        let registry = self
+            .box_registry
+            .take()
+            .unwrap_or_else(|| create_default_registry());
         if let Ok(mut reg) = registry.lock() {
             reg.register(factory);
         }
@@ -68,13 +78,21 @@ impl NyashRuntimeBuilder {
     }
 
     pub fn build(self) -> NyashRuntime {
-        let registry = self.box_registry.unwrap_or_else(|| create_default_registry());
+        let registry = self
+            .box_registry
+            .unwrap_or_else(|| create_default_registry());
 
         NyashRuntime {
             box_registry: registry,
-            box_declarations: self.box_declarations.unwrap_or_else(|| Arc::new(RwLock::new(HashMap::new()))),
-            gc: self.gc.unwrap_or_else(|| Arc::new(crate::runtime::gc::NullGc)),
-            scheduler: Some(self.scheduler.unwrap_or_else(|| Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new()))),
+            box_declarations: self
+                .box_declarations
+                .unwrap_or_else(|| Arc::new(RwLock::new(HashMap::new()))),
+            gc: self
+                .gc
+                .unwrap_or_else(|| Arc::new(crate::runtime::gc::NullGc)),
+            scheduler: Some(self.scheduler.unwrap_or_else(|| {
+                Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new())
+            })),
         }
     }
 }
@@ -102,7 +120,13 @@ impl NyashRuntimeBuilder {
 
     /// Convenience: use CountingGc for development metrics
     pub fn with_counting_gc(mut self) -> Self {
-        let gc = Arc::new(crate::runtime::gc::CountingGc::new());
+        let mode = crate::runtime::gc_mode::GcMode::from_env();
+        if mode == crate::runtime::gc_mode::GcMode::Off {
+            // Respect GC_MODE=off: keep NullGc
+            self.gc = Some(Arc::new(crate::runtime::gc::NullGc));
+            return self;
+        }
+        let gc = Arc::new(crate::runtime::gc::CountingGc::new_with_mode(mode));
         self.gc = Some(gc);
         self
     }
@@ -115,7 +139,9 @@ impl NyashRuntimeBuilder {
 
     /// Convenience: use SingleThreadScheduler
     pub fn with_single_thread_scheduler(mut self) -> Self {
-        self.scheduler = Some(Arc::new(crate::runtime::scheduler::SingleThreadScheduler::new()));
+        self.scheduler = Some(Arc::new(
+            crate::runtime::scheduler::SingleThreadScheduler::new(),
+        ));
         self
     }
 }

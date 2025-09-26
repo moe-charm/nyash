@@ -32,9 +32,14 @@ mod tests {
     #[test]
     fn mir14_instruction_count_is_14() {
         let names = mir14_instruction_names();
-        assert_eq!(names.len(), 14, "MIR14 must contain exactly 14 instructions");
+        assert_eq!(
+            names.len(),
+            14,
+            "MIR14 must contain exactly 14 instructions"
+        );
         let set: BTreeSet<_> = names.iter().copied().collect();
-        for must in ["Const", "UnaryOp", "BoxCall"] { assert!(set.contains(must), "missing '{}'", must); }
+        for must in ["Const", "UnaryOp", "BoxCall"] {
+            assert!(set.contains(must), "missing '{}'", must);
+        }
     }
 }
-

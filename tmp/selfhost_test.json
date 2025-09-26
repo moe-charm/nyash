@@ -1,0 +1,113 @@
+{
+  "functions": [
+    {
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "args": [],
+              "dst": 0,
+              "op": "newbox",
+              "type": "ArrayBox"
+            },
+            {
+              "dst": 1,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 1
+              }
+            },
+            {
+              "dst": 2,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 2
+              }
+            },
+            {
+              "dst": 3,
+              "lhs": 1,
+              "op": "compare",
+              "operation": "<",
+              "rhs": 2
+            },
+            {
+              "cond": 3,
+              "else": 2,
+              "op": "branch",
+              "then": 1
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 4
+            },
+            {
+              "dst": 4,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 10
+              }
+            },
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 4
+            },
+            {
+              "op": "jump",
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 5
+            },
+            {
+              "dst": 5,
+              "op": "const",
+              "value": {
+                "type": "i64",
+                "value": 20
+              }
+            },
+            {
+              "dst": 6,
+              "op": "copy",
+              "src": 5
+            },
+            {
+              "op": "jump",
+              "target": 3
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "op": "ret",
+              "value": 6
+            }
+          ]
+        }
+      ],
+      "name": "main",
+      "params": []
+    }
+  ]
+}

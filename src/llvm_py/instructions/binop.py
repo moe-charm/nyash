@@ -5,6 +5,7 @@ Handles +, -, *, /, %, &, |, ^, <<, >>
 
 import llvmlite.ir as ir
 from typing import Dict, Optional, Any
+from utils.values import resolve_i64_strict
 from .compare import lower_compare
 import llvmlite.ir as ir
 
@@ -38,12 +39,12 @@ def lower_binop(
     """
     # Resolve operands as i64 (using resolver when available)
     # For now, simple vmap lookup
-    if resolver is not None and preds is not None and block_end_values is not None:
-        lhs_val = resolver.resolve_i64(lhs, current_block, preds, block_end_values, vmap, bb_map)
-        rhs_val = resolver.resolve_i64(rhs, current_block, preds, block_end_values, vmap, bb_map)
-    else:
-        lhs_val = vmap.get(lhs, ir.Constant(ir.IntType(64), 0))
-        rhs_val = vmap.get(rhs, ir.Constant(ir.IntType(64), 0))
+    lhs_val = resolve_i64_strict(resolver, lhs, current_block, preds, block_end_values, vmap, bb_map)
+    rhs_val = resolve_i64_strict(resolver, rhs, current_block, preds, block_end_values, vmap, bb_map)
+    if lhs_val is None:
+        lhs_val = ir.Constant(ir.IntType(64), 0)
+    if rhs_val is None:
+        rhs_val = ir.Constant(ir.IntType(64), 0)
     
     # Relational/equality operators delegate to compare
     if op in ('==','!=','<','>','<=','>='):
@@ -60,6 +61,7 @@ def lower_binop(
             preds=preds,
             block_end_values=block_end_values,
             bb_map=bb_map,
+            ctx=getattr(resolver, 'ctx', None),
         )
         return
 

@@ -12,10 +12,16 @@ pub fn is_mutating_builtin_call(recv: &VMValue, method: &str) -> bool {
 
     match recv {
         VMValue::BoxRef(b) => {
-            if b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
+            if b.as_any()
+                .downcast_ref::<crate::boxes::array::ArrayBox>()
+                .is_some()
+            {
                 return ARRAY_METHODS.iter().any(|m| *m == method);
             }
-            if b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>().is_some() {
+            if b.as_any()
+                .downcast_ref::<crate::boxes::map_box::MapBox>()
+                .is_some()
+            {
                 return MAP_METHODS.iter().any(|m| *m == method);
             }
             false
@@ -28,7 +34,11 @@ pub fn is_mutating_builtin_call(recv: &VMValue, method: &str) -> bool {
 pub fn gc_write_barrier_site(runtime: &crate::runtime::NyashRuntime, site: &str) {
     let trace = crate::config::env::gc_trace();
     let strict = crate::config::env::gc_barrier_strict();
-    let before = if strict { runtime.gc.snapshot_counters() } else { None };
+    let before = if strict {
+        runtime.gc.snapshot_counters()
+    } else {
+        None
+    };
     if trace {
         eprintln!("[GC] barrier: Write @{}", site);
     }
@@ -38,10 +48,16 @@ pub fn gc_write_barrier_site(runtime: &crate::runtime::NyashRuntime, site: &str)
         match (before, after) {
             (Some((_, _, bw)), Some((_, _, aw))) if aw > bw => {}
             (Some(_), Some(_)) => {
-                panic!("[GC][STRICT] write barrier did not increment at site='{}'", site);
+                panic!(
+                    "[GC][STRICT] write barrier did not increment at site='{}'",
+                    site
+                );
             }
             _ => {
-                panic!("[GC][STRICT] CountingGc required for strict verification at site='{}'", site);
+                panic!(
+                    "[GC][STRICT] CountingGc required for strict verification at site='{}'",
+                    site
+                );
             }
         }
     }

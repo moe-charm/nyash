@@ -1,0 +1,13 @@
+static box Main {
+  main(args) {
+    local x = "hello"
+    // Expect to match type arm and pass guard (length > 3)
+    local r = match x {
+      StringBox(s) if s.length() > 3 => { print("gt3") 1 }
+      StringBox(s) if s.length() > 10 => { print("gt10") 2 }
+      _ => { print("other") 0 }
+    }
+    return r
+  }
+}
+

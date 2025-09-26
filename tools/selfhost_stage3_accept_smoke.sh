@@ -15,56 +15,36 @@ mkdir -p "$TMP"
 pass() { echo "✅ $1" >&2; }
 fail() { echo "❌ $1" >&2; echo "$2" >&2; exit 1; }
 
-compile_json_stage3() {
-  local src_text="$1"
-  local inline="$TMP/inline_selfhost_emit_stage3.nyash"
-  # Embed source (escape quotes and backslashes; preserve newlines)
-  local esc
-  esc=$(printf '%s' "$src_text" | sed -e 's/\\/\\\\/g' -e 's/\"/\\\"/g')
-  cat > "$inline" << NY
-include "apps/selfhost-compiler/boxes/parser_box.nyash"
-include "apps/selfhost-compiler/boxes/emitter_box.nyash"
-static box Main {
-  main(args) {
-    local source_text = "$esc"
-    local p = new ParserBox()
-    local json = p.parse_program2(source_text)
-    local e = new EmitterBox()
-    json = e.emit_program(json, "[]")
-    print(json)
-    return 0
-  }
-}
-NY
-  local raw
-  raw=$("$BIN" --backend vm "$inline" 2>/dev/null || true)
-  # Extract the first JSON-looking line (contains version/kind)
-  printf '%s\n' "$raw" | awk 'BEGIN{found=0} /^[ \t]*\{/{ if ($0 ~ /"version"/ && $0 ~ /"kind"/) { print; found=1; exit } } END{ if(found==0){} }'
-}
-
 run_case_stage3() {
   local name="$1"; shift
   local src="$1"; shift
   local expect_code="$1"; shift
+  local file="$TMP/selfhost_stage3_${name// /_}.nyash"
+  printf "%s\n" "$src" > "$file"
+  # 1) Produce JSON v0 via selfhost compiler program
   set +e
-  JSON=$(compile_json_stage3 "$src")
-  OUT=$(printf '%s\n' "$JSON" | NYASH_PIPE_USE_PYVM=1 "$BIN" --ny-parser-pipe --backend vm 2>&1)
+  JSON=$(NYASH_JSON_ONLY=1 "$BIN" --backend vm "$ROOT_DIR/apps/selfhost/compiler/compiler.nyash" -- --stage3 "$file" 2>/dev/null | awk 'BEGIN{found=0} /^[ \t]*\{/{ if ($0 ~ /"version"/ && $0 ~ /"kind"/) { print; found=1; exit } } END{ if(found==0){} }')
+  # 2) Execute JSON v0 via Bridge (prefer PyVM harness if requested)
+  OUT=$(printf '%s\n' "$JSON" | NYASH_TRY_RESULT_MODE=${NYASH_TRY_RESULT_MODE:-1} NYASH_PIPE_USE_PYVM=${NYASH_PIPE_USE_PYVM:-1} "$BIN" --ny-parser-pipe --backend vm 2>&1)
   CODE=$?
   set -e
   if [[ "$CODE" == "$expect_code" ]]; then pass "$name"; else fail "$name" "$OUT"; fi
 }
 
-# A) try/catch/finally acceptance; final return 0
-run_case_stage3 "try/catch/finally (accept)" $'try { local x = 1 } catch (Error e) { local y = 2 } finally { local z = 3 }\nreturn 0' 0
+# A) try/catch/cleanup acceptance; final return 0
+run_case_stage3 "try_cleanup" $'try { local x = 1 } catch (Error e) { local y = 2 } cleanup { local z = 3 }\nreturn 0' 0
 
 # B) break acceptance under dead branch
-run_case_stage3 "break in dead branch (accept)" $'if false { break } else { }\nreturn 0' 0
+run_case_stage3 "break_dead" $'if false { break } else { }\nreturn 0' 0
 
 # C) continue acceptance under dead branch
-run_case_stage3 "continue in dead branch (accept)" $'if false { continue } else { }\nreturn 0' 0
+run_case_stage3 "continue_dead" $'if false { continue } else { }\nreturn 0' 0
 
 # D) throw acceptance (degrade); final return 0
-run_case_stage3 "throw (accept)" $'try { throw 123 } finally { }\nreturn 0' 0
+run_case_stage3 "throw_accept" $'try { throw 123 } cleanup { }\nreturn 0' 0
+
+# E) nested throw inside if: should route to catch, then cleanup runs, and return 0
+run_case_stage3 "throw_nested_if" $'try { if true { throw "boom" } else { local k = 1 } } catch (e) { local caught = 1 } cleanup { local fin = 1 }\nreturn 0' 0
 
 echo "All selfhost Stage-3 acceptance smokes PASS" >&2
 exit 0

@@ -58,6 +58,47 @@ echo 'print("Hello Nyash!")' > local_tests/test_hello.nyash
 ./target/release/nyash --backend vm --jit-exec --jit-hostcall examples/jit_string_is_empty.nyash
 ```
 
+## PHI ポリシー（Phase‑15）と検証トグル
+
+- Phase‑15 では PHI‑on（MIR14）が既定だよ。MIR ビルダーがブロック先頭へ `Phi` を配置し、検証も SSA 前提で実施するよ。
+- レガシー検証で edge-copy 互換が必要なら `NYASH_MIR_NO_PHI=1` を明示してね（`NYASH_VERIFY_ALLOW_NO_PHI=1` も忘れずに）。
+- 詳細は `docs/reference/mir/phi_policy.md` を参照してね。
+
+テスト時の環境（推奨）
+```bash
+# 既定: 何も設定しない → PHI-on
+
+# レガシー PHI-off の再現が必要なときだけ明示的に切り替え
+export NYASH_MIR_NO_PHI=1
+export NYASH_VERIFY_ALLOW_NO_PHI=1
+
+# さらに edge-copy 規約を厳格チェックしたい場合（任意）
+export NYASH_VERIFY_EDGE_COPY_STRICT=1
+```
+
+PHI-on の補助トレース
+- `NYASH_LLVM_TRACE_PHI=1` と `NYASH_LLVM_TRACE_OUT=tmp/phi.jsonl` を組み合わせると、PHI がどの predecessor から値を受け取っているかを確認できるよ。
+
+## PHI 配線トレース（JSONL）
+
+- 目的: LLVM 側の PHI 配線が、PHI-on で生成された SSA と legacy edge-copy (PHI-off) の両方に整合しているかを可視化・検証する。
+- 出力: 1 行 JSON（JSONL）。`NYASH_LLVM_TRACE_OUT=<path>` に追記出力。
+- イベント: `finalize_begin/finalize_dst/add_incoming/wire_choose/snapshot` など（pred→dst 整合が分かる）
+
+クイック実行（v2）
+```bash
+# 代表サンプルを LLVM ハーネスで実行し PHI トレースを採取（v2 スクリプト）
+bash tools/smokes/phi_trace_local.sh
+
+# 結果の検証（要: python3）
+python3 tools/phi_trace_check.py --file tmp/phi_trace.jsonl --summary
+```
+
+ショートカット
+- `tools/smokes/phi_trace_local.sh`（ビルド→サンプル実行→チェックを一括）
+- `tools/smokes/v2/run.sh --profile quick|integration` で代表スモークを実行
+
+
 ## 🔌 **プラグインテスター（BID-FFI診断ツール）**
 ```bash
 # プラグインテスターのビルド
@@ -108,3 +149,21 @@ DEBUG.startTracking()
 DEBUG.trackBox(myObject, "説明")
 print(DEBUG.memoryReport())
 ```
+## Macro-based Test Runner (MVP)
+
+Nyash provides a macro-powered lightweight test runner in Phase 16 (MVP).
+
+- Enable and run tests in a script file:
+  - `nyash --run-tests apps/tests/my_tests.nyash`
+  - Discovers top-level `test_*` functions and Box `test_*` methods (static/instance).
+- Filtering: `--test-filter NAME` (substring match) or env `NYASH_TEST_FILTER`.
+- Entry policy when a main exists:
+  - `--test-entry wrap` → run tests then call original main
+  - `--test-entry override` → replace entry with test harness only
+  - Force apply: `NYASH_TEST_FORCE=1`
+- Parameterized tests (MVP): `NYASH_TEST_ARGS_DEFAULTS=1` injects integer `0` for each parameter (static/instance tests).
+- Exit code = number of failed tests (0 on success).
+
+Notes
+- The feature is behind the macro gate; CLI `--run-tests` enables it automatically.
+- Future versions will add JSON-based per-test arguments and richer reporting.

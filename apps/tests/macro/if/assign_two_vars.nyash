@@ -1,0 +1,15 @@
+function main(args) {
+  local x, y
+  local c = 1
+  if c == 1 {
+    x = 10
+    y = 20
+  } else {
+    x = 30
+    y = 40
+  }
+  // ensure use
+  print(x)
+  print(y)
+}
+

@@ -1,0 +1,33 @@
+// Mini-VM library (function-based) with a tiny JSON extractor
+// Safe MVP: no real JSON parsing; string scan for first int literal only
+
+static box MiniVm {
+  _is_digit(ch) { return ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" }
+
+  // Read consecutive digits starting at pos
+  read_digits(json, pos) {
+    @out = ""
+    loop (true) {
+      @s = json.substring(pos, pos+1)
+      if s == "" { break }
+      if _is_digit(s) { out = out + s  pos = pos + 1 } else { break }
+    }
+    return out
+  }
+
+  // Extract the first integer literal from our AST JSON v0 subset
+  parse_first_int(json) {
+    @key = "\"value\":{\"type\":\"int\",\"value\":"
+    @idx = json.lastIndexOf(key)
+    if idx < 0 { return "0" }
+    @start = idx + key.length()
+    return read_digits(json, start)
+  }
+
+  // Execute a minimal program: print the extracted integer and exit code 0
+  run(json) {
+    @n = parse_first_int(json)
+    print(n)
+    return 0
+  }
+}

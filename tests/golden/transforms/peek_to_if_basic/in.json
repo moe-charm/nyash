@@ -1,0 +1,24 @@
+{
+  "kind": "Program",
+  "statements": [
+    {
+      "kind": "Print",
+      "expression": {
+        "kind": "PeekExpr",
+        "scrutinee": { "kind": "Variable", "name": "x" },
+        "arms": [
+          {
+            "literal": { "kind": "Literal", "value": {"type": "int", "value": 1} },
+            "body": { "kind": "Literal", "value": {"type": "string", "value": "one"} }
+          },
+          {
+            "literal": { "kind": "Literal", "value": {"type": "int", "value": 2} },
+            "body": { "kind": "Literal", "value": {"type": "string", "value": "two"} }
+          }
+        ],
+        "else": { "kind": "Literal", "value": {"type": "string", "value": "other"} }
+      }
+    }
+  ]
+}
+

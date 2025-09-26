@@ -1,27 +1,67 @@
-use super::{MirInstruction, EffectMask, Effect, ConstValue, ValueId};
+use super::{ConstValue, Effect, EffectMask, MirInstruction, ValueId};
+use crate::ast::{ASTNode, CallExpr};
 use crate::mir::TypeOpKind;
-use crate::mir::loop_builder::LoopBuilder;
-use crate::ast::ASTNode;
-use super::phi::extract_assigned_var;
+use crate::mir::utils::is_current_block_terminated;
 
 impl super::MirBuilder {
     // Print statement: env.console.log(value) with early TypeOp handling
     pub(super) fn build_print_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
         super::utils::builder_debug_log("enter build_print_statement");
+        // Prefer wrapper for simple function-call pattern (non-breaking refactor)
+        if let Ok(call) = CallExpr::try_from(expression.clone()) {
+            if (call.name == "isType" || call.name == "asType") && call.arguments.len() == 2 {
+                super::utils::builder_debug_log("pattern: print(FunctionCall isType|asType) [via wrapper]");
+                if let Some(type_name) = super::MirBuilder::extract_string_literal(&call.arguments[1]) {
+                    super::utils::builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
+                    let val = self.build_expression(call.arguments[0].clone())?;
+                    let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
+                    let dst = self.value_gen.next();
+                    let op = if call.name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
+                    super::utils::builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
+                    self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: None,
+                        iface_name: "env.console".to_string(),
+                        method_name: "log".to_string(),
+                        args: vec![dst],
+                        effects: EffectMask::PURE.add(Effect::Io),
+                    })?;
+                    return Ok(dst);
+                } else {
+                    super::utils::builder_debug_log("extract_string_literal FAIL [via wrapper]");
+                }
+            }
+        }
+
         match &expression {
             // print(isType(val, "Type")) / print(asType(...))
-            ASTNode::FunctionCall { name, arguments, .. }
-                if (name == "isType" || name == "asType") && arguments.len() == 2 =>
-            {
+            ASTNode::FunctionCall {
+                name, arguments, ..
+            } if (name == "isType" || name == "asType") && arguments.len() == 2 => {
                 super::utils::builder_debug_log("pattern: print(FunctionCall isType|asType)");
                 if let Some(type_name) = super::MirBuilder::extract_string_literal(&arguments[1]) {
-                    super::utils::builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
+                    super::utils::builder_debug_log(&format!(
+                        "extract_string_literal OK: {}",
+                        type_name
+                    ));
                     let val = self.build_expression(arguments[0].clone())?;
                     let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
                     let dst = self.value_gen.next();
-                    let op = if name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
-                    super::utils::builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
-                    self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                    let op = if name == "isType" {
+                        TypeOpKind::Check
+                    } else {
+                        TypeOpKind::Cast
+                    };
+                    super::utils::builder_debug_log(&format!(
+                        "emit TypeOp {:?} value={} dst= {}",
+                        op, val, dst
+                    ));
+                    self.emit_instruction(MirInstruction::TypeOp {
+                        dst,
+                        op,
+                        value: val,
+                        ty,
+                    })?;
                     self.emit_instruction(MirInstruction::ExternCall {
                         dst: None,
                         iface_name: "env.console".to_string(),
@@ -35,18 +75,36 @@ impl super::MirBuilder {
                 }
             }
             // print(obj.is("Type")) / print(obj.as("Type"))
-            ASTNode::MethodCall { object, method, arguments, .. }
-                if (method == "is" || method == "as") && arguments.len() == 1 =>
-            {
+            ASTNode::MethodCall {
+                object,
+                method,
+                arguments,
+                ..
+            } if (method == "is" || method == "as") && arguments.len() == 1 => {
                 super::utils::builder_debug_log("pattern: print(MethodCall is|as)");
                 if let Some(type_name) = super::MirBuilder::extract_string_literal(&arguments[0]) {
-                    super::utils::builder_debug_log(&format!("extract_string_literal OK: {}", type_name));
+                    super::utils::builder_debug_log(&format!(
+                        "extract_string_literal OK: {}",
+                        type_name
+                    ));
                     let obj_val = self.build_expression(*object.clone())?;
                     let ty = super::MirBuilder::parse_type_name_to_mir(&type_name);
                     let dst = self.value_gen.next();
-                    let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
-                    super::utils::builder_debug_log(&format!("emit TypeOp {:?} obj={} dst= {}", op, obj_val, dst));
-                    self.emit_instruction(MirInstruction::TypeOp { dst, op, value: obj_val, ty })?;
+                    let op = if method == "is" {
+                        TypeOpKind::Check
+                    } else {
+                        TypeOpKind::Cast
+                    };
+                    super::utils::builder_debug_log(&format!(
+                        "emit TypeOp {:?} obj={} dst= {}",
+                        op, obj_val, dst
+                    ));
+                    self.emit_instruction(MirInstruction::TypeOp {
+                        dst,
+                        op,
+                        value: obj_val,
+                        ty,
+                    })?;
                     self.emit_instruction(MirInstruction::ExternCall {
                         dst: None,
                         iface_name: "env.console".to_string(),
@@ -64,175 +122,60 @@ impl super::MirBuilder {
 
         let value = self.build_expression(expression)?;
         super::utils::builder_debug_log(&format!("fallback print value={}", value));
-        self.emit_instruction(MirInstruction::ExternCall {
-            dst: None,
-            iface_name: "env.console".to_string(),
-            method_name: "log".to_string(),
-            args: vec![value],
-            effects: EffectMask::PURE.add(Effect::Io),
-        })?;
+
+        // Phase 3.2: Use unified call for print statements
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+        if use_unified {
+            // New unified path - treat print as global function
+            self.emit_unified_call(
+                None,  // print returns nothing
+                super::builder_calls::CallTarget::Global("print".to_string()),
+                vec![value],
+            )?;
+        } else {
+            // Legacy path - use ExternCall
+            self.emit_instruction(MirInstruction::ExternCall {
+                dst: None,
+                iface_name: "env.console".to_string(),
+                method_name: "log".to_string(),
+                args: vec![value],
+                effects: EffectMask::PURE.add(Effect::Io),
+            })?;
+        }
         Ok(value)
     }
 
     // Block: sequentially build statements and return last value or Void
     pub(super) fn build_block(&mut self, statements: Vec<ASTNode>) -> Result<ValueId, String> {
+        // Scope hint for bare block (Program)
+        let scope_id = self.current_block.map(|bb| bb.as_u32()).unwrap_or(0);
+        self.hint_scope_enter(scope_id);
         let mut last_value = None;
         for statement in statements {
             last_value = Some(self.build_expression(statement)?);
             // If the current block was terminated by this statement (e.g., return/throw),
             // do not emit any further instructions for this block.
-            if self.is_current_block_terminated() {
+            if is_current_block_terminated(self)? {
                 break;
             }
         }
-        Ok(last_value.unwrap_or_else(|| {
+        let out = last_value.unwrap_or_else(|| {
             let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void }).unwrap();
+            self.emit_instruction(MirInstruction::Const {
+                dst: void_val,
+                value: ConstValue::Void,
+            })
+            .unwrap();
             void_val
-        }))
+        });
+        // Scope leave only if block not already terminated
+        if !self.is_current_block_terminated() {
+            self.hint_scope_leave(scope_id);
+        }
+        Ok(out)
     }
 
-    // If: lower to Branch + Phi, bind reassigned var name if identical
-    pub(super) fn build_if_statement(
-        &mut self,
-        condition: ASTNode,
-        then_branch: ASTNode,
-        else_branch: Option<ASTNode>,
-    ) -> Result<ValueId, String> {
-        let condition_val = self.build_expression(condition)?;
-        let then_block = self.block_gen.next();
-        let else_block = self.block_gen.next();
-        let merge_block = self.block_gen.next();
-        self.emit_instruction(MirInstruction::Branch { condition: condition_val, then_bb: then_block, else_bb: else_block })?;
-
-        // Snapshot variable map before entering branches to avoid cross-branch pollution
-        let pre_if_var_map = self.variable_map.clone();
-        // Pre-analysis: detect then-branch assigned var and capture its pre-if value
-        let assigned_then_pre = extract_assigned_var(&then_branch);
-        let pre_then_var_value: Option<ValueId> = assigned_then_pre
-            .as_ref()
-            .and_then(|name| pre_if_var_map.get(name).copied());
-
-        // then
-        self.current_block = Some(then_block);
-        self.ensure_block_exists(then_block)?;
-        let then_ast_for_analysis = then_branch.clone();
-        // Build then with a clean snapshot of pre-if variables
-        self.variable_map = pre_if_var_map.clone();
-        let then_value_raw = self.build_expression(then_branch)?;
-        let then_var_map_end = self.variable_map.clone();
-        if !self.is_current_block_terminated() { self.emit_instruction(MirInstruction::Jump { target: merge_block })?; }
-
-        // else
-        self.current_block = Some(else_block);
-        self.ensure_block_exists(else_block)?;
-        // Build else with a clean snapshot of pre-if variables
-        let (mut else_value_raw, else_ast_for_analysis, else_var_map_end_opt) = if let Some(else_ast) = else_branch {
-            self.variable_map = pre_if_var_map.clone();
-            let val = self.build_expression(else_ast.clone())?;
-            (val, Some(else_ast), Some(self.variable_map.clone()))
-        } else {
-            let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void })?;
-            (void_val, None, None)
-        };
-        if !self.is_current_block_terminated() { self.emit_instruction(MirInstruction::Jump { target: merge_block })?; }
-
-        // merge + phi
-        self.current_block = Some(merge_block);
-        self.ensure_block_exists(merge_block)?;
-        let result_val = self.normalize_if_else_phi(
-            then_block,
-            else_block,
-            then_value_raw,
-            else_value_raw,
-            &pre_if_var_map,
-            &then_ast_for_analysis,
-            &else_ast_for_analysis,
-            &then_var_map_end,
-            &else_var_map_end_opt,
-            pre_then_var_value,
-        )?;
-
-        Ok(result_val)
-    }
-
-    // Loop: delegate to LoopBuilder
-    pub(super) fn build_loop_statement(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
-        let mut loop_builder = LoopBuilder::new(self);
-        loop_builder.build_loop(condition, body)
-    }
-
-    // Try/Catch/Finally lowering with basic Extern semantics when disabled
-    pub(super) fn build_try_catch_statement(
-        &mut self,
-        try_body: Vec<ASTNode>,
-        catch_clauses: Vec<crate::ast::CatchClause>,
-        finally_body: Option<Vec<ASTNode>>,
-    ) -> Result<ValueId, String> {
-        if std::env::var("NYASH_BUILDER_DISABLE_TRYCATCH").ok().as_deref() == Some("1") {
-            let try_ast = ASTNode::Program { statements: try_body, span: crate::ast::Span::unknown() };
-            let result = self.build_expression(try_ast)?;
-            return Ok(result);
-        }
-        let try_block = self.block_gen.next();
-        let catch_block = self.block_gen.next();
-        let finally_block = if finally_body.is_some() { Some(self.block_gen.next()) } else { None };
-        let exit_block = self.block_gen.next();
-
-        if let Some(catch_clause) = catch_clauses.first() {
-            if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") {
-                eprintln!("[BUILDER] Emitting catch handler for {:?}", catch_clause.exception_type);
-            }
-            let exception_value = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Catch { exception_type: catch_clause.exception_type.clone(), exception_value, handler_bb: catch_block })?;
-        }
-
-        self.emit_instruction(MirInstruction::Jump { target: try_block })?;
-        self.start_new_block(try_block)?;
-        let try_ast = ASTNode::Program { statements: try_body, span: crate::ast::Span::unknown() };
-        let _try_result = self.build_expression(try_ast)?;
-        if !self.is_current_block_terminated() { let next_target = finally_block.unwrap_or(exit_block); self.emit_instruction(MirInstruction::Jump { target: next_target })?; }
-
-        self.start_new_block(catch_block)?;
-        if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") { eprintln!("[BUILDER] Enter catch block {:?}", catch_block); }
-        if let Some(catch_clause) = catch_clauses.first() {
-            if std::env::var("NYASH_DEBUG_TRYCATCH").ok().as_deref() == Some("1") { eprintln!("[BUILDER] Emitting catch handler for {:?}", catch_clause.exception_type); }
-            let catch_ast = ASTNode::Program { statements: catch_clause.body.clone(), span: crate::ast::Span::unknown() };
-            self.build_expression(catch_ast)?;
-        }
-        if !self.is_current_block_terminated() { let next_target = finally_block.unwrap_or(exit_block); self.emit_instruction(MirInstruction::Jump { target: next_target })?; }
-
-        if let (Some(finally_block_id), Some(finally_statements)) = (finally_block, finally_body) {
-            self.start_new_block(finally_block_id)?;
-            let finally_ast = ASTNode::Program { statements: finally_statements, span: crate::ast::Span::unknown() };
-            self.build_expression(finally_ast)?;
-            self.emit_instruction(MirInstruction::Jump { target: exit_block })?;
-        }
-
-        self.start_new_block(exit_block)?;
-        let result = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const { dst: result, value: ConstValue::Void })?;
-        Ok(result)
-    }
-
-    // Throw: emit Throw or fallback to env.debug.trace when disabled
-    pub(super) fn build_throw_statement(&mut self, expression: ASTNode) -> Result<ValueId, String> {
-        if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
-            let v = self.build_expression(expression)?;
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: None,
-                iface_name: "env.debug".to_string(),
-                method_name: "trace".to_string(),
-                args: vec![v],
-                effects: EffectMask::PURE.add(Effect::Debug),
-            })?;
-            return Ok(v);
-        }
-        let exception_value = self.build_expression(expression)?;
-        self.emit_instruction(MirInstruction::Throw { exception: exception_value, effects: EffectMask::PANIC })?;
-        Ok(exception_value)
-    }
 
     // Local declarations with optional initializers
     pub(super) fn build_local_statement(
@@ -255,7 +198,15 @@ impl super::MirBuilder {
     }
 
     // Return statement
-    pub(super) fn build_return_statement(&mut self, value: Option<Box<ASTNode>>) -> Result<ValueId, String> {
+    pub(super) fn build_return_statement(
+        &mut self,
+        value: Option<Box<ASTNode>>,
+    ) -> Result<ValueId, String> {
+        // Enforce cleanup policy
+        if self.in_cleanup_block && !self.cleanup_allow_return {
+            return Err("return is not allowed inside cleanup block (enable NYASH_CLEANUP_ALLOW_RETURN=1 to permit)".to_string());
+        }
+
         let return_value = if let Some(expr) = value {
             self.build_expression(*expr)?
         } else {
@@ -263,20 +214,53 @@ impl super::MirBuilder {
             self.emit_instruction(MirInstruction::Const { dst: void_dst, value: ConstValue::Void })?;
             void_dst
         };
-        self.emit_instruction(MirInstruction::Return { value: Some(return_value) })?;
-        Ok(return_value)
+
+        if self.return_defer_active {
+            // Defer: copy into slot and jump to target
+            if let (Some(slot), Some(target)) = (self.return_defer_slot, self.return_defer_target) {
+                self.return_deferred_emitted = true;
+                self.emit_instruction(MirInstruction::Copy { dst: slot, src: return_value })?;
+                if !self.is_current_block_terminated() {
+                    self.emit_instruction(MirInstruction::Jump { target })?;
+                }
+                Ok(return_value)
+            } else {
+                // Fallback: no configured slot/target; emit a real return
+                self.emit_instruction(MirInstruction::Return { value: Some(return_value) })?;
+                Ok(return_value)
+            }
+        } else {
+            // Normal return
+            self.emit_instruction(MirInstruction::Return { value: Some(return_value) })?;
+            Ok(return_value)
+        }
     }
 
     // Nowait: prefer env.future.spawn_instance if method call; else FutureNew
-    pub(super) fn build_nowait_statement(&mut self, variable: String, expression: ASTNode) -> Result<ValueId, String> {
-        if let ASTNode::MethodCall { object, method, arguments, .. } = expression.clone() {
+    pub(super) fn build_nowait_statement(
+        &mut self,
+        variable: String,
+        expression: ASTNode,
+    ) -> Result<ValueId, String> {
+        if let ASTNode::MethodCall {
+            object,
+            method,
+            arguments,
+            ..
+        } = expression.clone()
+        {
             let recv_val = self.build_expression(*object)?;
             let mname_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: mname_id, value: super::ConstValue::String(method.clone()) })?;
+            self.emit_instruction(MirInstruction::Const {
+                dst: mname_id,
+                value: super::ConstValue::String(method.clone()),
+            })?;
             let mut arg_vals: Vec<ValueId> = Vec::with_capacity(2 + arguments.len());
             arg_vals.push(recv_val);
             arg_vals.push(mname_id);
-            for a in arguments.into_iter() { arg_vals.push(self.build_expression(a)?); }
+            for a in arguments.into_iter() {
+                arg_vals.push(self.build_expression(a)?);
+            }
             let future_id = self.value_gen.next();
             self.emit_instruction(MirInstruction::ExternCall {
                 dst: Some(future_id),
@@ -290,30 +274,46 @@ impl super::MirBuilder {
         }
         let expression_value = self.build_expression(expression)?;
         let future_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::FutureNew { dst: future_id, value: expression_value })?;
+        self.emit_instruction(MirInstruction::FutureNew {
+            dst: future_id,
+            value: expression_value,
+        })?;
         self.variable_map.insert(variable.clone(), future_id);
         Ok(future_id)
     }
 
     // Await: insert Safepoint before/after and emit Await
-    pub(super) fn build_await_expression(&mut self, expression: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_await_expression(
+        &mut self,
+        expression: ASTNode,
+    ) -> Result<ValueId, String> {
         let future_value = self.build_expression(expression)?;
         self.emit_instruction(MirInstruction::Safepoint)?;
         let result_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Await { dst: result_id, future: future_value })?;
+        self.emit_instruction(MirInstruction::Await {
+            dst: result_id,
+            future: future_value,
+        })?;
         self.emit_instruction(MirInstruction::Safepoint)?;
         Ok(result_id)
     }
 
     // me: resolve to param if present; else symbolic const (stable mapping)
     pub(super) fn build_me_expression(&mut self) -> Result<ValueId, String> {
-        if let Some(id) = self.variable_map.get("me").cloned() { return Ok(id); }
+        if let Some(id) = self.variable_map.get("me").cloned() {
+            return Ok(id);
+        }
         let me_value = self.value_gen.next();
-        let me_tag = if let Some(ref cls) = self.current_static_box { cls.clone() } else { "__me__".to_string() };
-        self.emit_instruction(MirInstruction::Const { dst: me_value, value: ConstValue::String(me_tag) })?;
+        let me_tag = if let Some(ref cls) = self.current_static_box {
+            cls.clone()
+        } else {
+            "__me__".to_string()
+        };
+        self.emit_instruction(MirInstruction::Const {
+            dst: me_value,
+            value: ConstValue::String(me_tag),
+        })?;
         self.variable_map.insert("me".to_string(), me_value);
         Ok(me_value)
     }
 }
-
-

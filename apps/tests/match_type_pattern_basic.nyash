@@ -1,0 +1,13 @@
+static box Main {
+  main(args) {
+    // Type-pattern matching MVP: IntegerBox(n) / StringBox(s)
+    local x = 42
+    local r = match x {
+      IntegerBox(n) => { print(n) 10 }
+      StringBox(s) => { print(s) 20 }
+      _ => 30
+    }
+    return r
+  }
+}
+

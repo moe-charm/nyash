@@ -1,0 +1,8 @@
+box MacroBoxSpec {
+    static function name() { return "NyIdentity" }
+    static function expand(ast) {
+        // identity transform
+        return ast
+    }
+}
+

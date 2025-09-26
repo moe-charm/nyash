@@ -1,0 +1,27 @@
+Phase 10.4d — Barrier Strict Mode (CI/Local)
+
+Goal
+- Catch missing Write-Barrier quickly in development and CI.
+
+How-To (Local)
+1) Build with default features:
+   cargo build --release -j32
+2) Run with CountingGc + Strict Barrier + Trace:
+   (in code) build runtime via NyashRuntimeBuilder::with_counting_gc()
+   (env)
+   set NYASH_GC_BARRIER_STRICT=1
+   set NYASH_GC_TRACE=1
+   nyash <program.nyash>
+
+Expected
+- Barrier sites log to stderr.
+- On any mutating site without barrier increment, process panics with site name.
+
+CI Suggestion
+- Add a job that runs selected examples/tests with CountingGc enabled and
+  NYASH_GC_BARRIER_STRICT=1. Fail build on panic.
+
+Notes
+- Strict mode requires CountingGc; otherwise the helper panics to avoid false negatives.
+- Use NYASH_GC_TRACE=2 for detailed roots breakdown at end-of-run when investigating.
+

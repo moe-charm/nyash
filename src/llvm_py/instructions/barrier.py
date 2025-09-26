@@ -9,7 +9,8 @@ from typing import Dict, Optional
 def lower_barrier(
     builder: ir.IRBuilder,
     barrier_type: str,
-    ordering: Optional[str] = None
+    ordering: Optional[str] = None,
+    ctx=None,
 ) -> None:
     """
     Lower MIR Barrier instruction
@@ -51,7 +52,8 @@ def lower_atomic_op(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx=None,
 ) -> None:
     """
     Lower atomic operations
@@ -66,7 +68,12 @@ def lower_atomic_op(
         ordering: Memory ordering
     """
     # Get pointer
-    if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+    if ctx is not None:
+        try:
+            ptr = ctx.resolver.resolve_ptr(ptr_vid, builder.block, ctx.preds, ctx.block_end_values, ctx.vmap)
+        except Exception:
+            ptr = vmap.get(ptr_vid)
+    elif resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
         ptr = resolver.resolve_ptr(ptr_vid, builder.block, preds, block_end_values, vmap)
     else:
         ptr = vmap.get(ptr_vid)
@@ -85,7 +92,12 @@ def lower_atomic_op(
     elif op == "store":
         # Atomic store
         if val_vid is not None:
-            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+            if ctx is not None:
+                try:
+                    val = ctx.resolver.resolve_i64(val_vid, builder.block, ctx.preds, ctx.block_end_values, ctx.vmap, ctx.bb_map)
+                except Exception:
+                    val = vmap.get(val_vid, ir.Constant(ir.IntType(64), 0))
+            elif resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
                 val = resolver.resolve_i64(val_vid, builder.block, preds, block_end_values, vmap, bb_map)
             else:
                 val = vmap.get(val_vid, ir.Constant(ir.IntType(64), 0))
@@ -94,7 +106,12 @@ def lower_atomic_op(
     elif op == "add":
         # Atomic add (fetch_add)
         if val_vid is not None:
-            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+            if ctx is not None:
+                try:
+                    val = ctx.resolver.resolve_i64(val_vid, builder.block, ctx.preds, ctx.block_end_values, ctx.vmap, ctx.bb_map)
+                except Exception:
+                    val = ir.Constant(ir.IntType(64), 1)
+            elif resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
                 val = resolver.resolve_i64(val_vid, builder.block, preds, block_end_values, vmap, bb_map)
             else:
                 val = ir.Constant(ir.IntType(64), 1)

@@ -18,115 +18,13 @@ struct ParseCounts {
     unsupported: usize,
 }
 
-/// FFI: プラグインABIバージョン
-#[no_mangle]
-pub extern "C" fn nyash_plugin_abi_version() -> u32 {
-    1
-}
-
-/// FFI: プラグイン初期化
-#[no_mangle]
-pub extern "C" fn nyash_plugin_init() -> i32 {
-    // Python初期化は pyo3 の auto-initialize が処理
-    0
-}
-
-/// FFI: プラグインメソッド呼び出し（BID形式）
-#[no_mangle]
-pub extern "C" fn nyash_plugin_invoke(
-    type_id: u32,
-    method_id: u32,
-    _instance_id: u32,
-    args: *const u8,
-    args_len: usize,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    const TYPE_ID_PARSER: u32 = 60;
-    const METHOD_BIRTH: u32 = 0;
-    const METHOD_PARSE: u32 = 1;
-    const METHOD_FINI: u32 = u32::MAX;
-    
-    if type_id != TYPE_ID_PARSER {
-        return -3; // NYB_E_INVALID_METHOD
-    }
-    
-    match method_id {
-        METHOD_BIRTH => {
-            // インスタンスIDを返す
-            unsafe {
-                let instance_id = 1u32; // 簡易実装
-                if *result_len < 4 {
-                    *result_len = 4;
-                    return -1; // NYB_E_SHORT_BUFFER
-                }
-                let out = std::slice::from_raw_parts_mut(result, *result_len);
-                out[0..4].copy_from_slice(&instance_id.to_le_bytes());
-                *result_len = 4;
-            }
-            0
-        }
-        METHOD_PARSE => {
-            // 引数からコードを取得（TLV形式の文字列を期待）
-            let code = unsafe {
-                if args.is_null() || args_len < 4 {
-                    // 引数なしの場合は環境変数から取得
-                    std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
-                } else {
-                    // TLVデコード（簡易版）
-                    let buf = std::slice::from_raw_parts(args, args_len);
-                    if args_len >= 8 {
-                        let tag = u16::from_le_bytes([buf[0], buf[1]]);
-                        let len = u16::from_le_bytes([buf[2], buf[3]]) as usize;
-                        if tag == 6 && 4 + len <= args_len {
-                            match std::str::from_utf8(&buf[4..4+len]) {
-                                Ok(s) => s.to_string(),
-                                Err(_) => std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
-                            }
-                        } else {
-                            std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
-                        }
-                    } else {
-                        std::env::var("NYASH_PY_CODE").unwrap_or_else(|_| "def main():\n    return 0".to_string())
-                    }
-                }
-            };
-            
-            // パース実行
-            let parse_result = Python::with_gil(|py| {
-                parse_python_code(py, &code)
-            });
-            
-            // JSONにシリアライズ
-            match serde_json::to_string(&parse_result) {
-                Ok(json) => {
-                    unsafe {
-                        let bytes = json.as_bytes();
-                        let need = 4 + bytes.len();
-                        if *result_len < need {
-                            *result_len = need;
-                            return -1; // NYB_E_SHORT_BUFFER
-                        }
-                        let out = std::slice::from_raw_parts_mut(result, *result_len);
-                        // TLVエンコード（tag=6:string）
-                        out[0..2].copy_from_slice(&6u16.to_le_bytes());
-                        out[2..4].copy_from_slice(&(bytes.len() as u16).to_le_bytes());
-                        out[4..4+bytes.len()].copy_from_slice(bytes);
-                        *result_len = need;
-                    }
-                    0
-                }
-                Err(_) => -4 // エラー
-            }
-        }
-        METHOD_FINI => 0,
-        _ => -3 // NYB_E_INVALID_METHOD
-    }
-}
+/* legacy v1 entries removed: nyash_plugin_abi_version/nyash_plugin_init/nyash_plugin_invoke */
 
 /// FFI: Pythonコードをパース
 #[no_mangle]
-pub extern "C" fn nyash_python_parse(code: *const std::os::raw::c_char) -> *mut std::os::raw::c_char {
+pub extern "C" fn nyash_python_parse(
+    code: *const std::os::raw::c_char,
+) -> *mut std::os::raw::c_char {
     let code = unsafe {
         if code.is_null() {
             return std::ptr::null_mut();
@@ -137,9 +35,7 @@ pub extern "C" fn nyash_python_parse(code: *const std::os::raw::c_char) -> *mut 
         }
     };
 
-    let result = Python::with_gil(|py| {
-        parse_python_code(py, code)
-    });
+    let result = Python::with_gil(|py| parse_python_code(py, code));
 
     match serde_json::to_string(&result) {
         Ok(json) => {
@@ -206,6 +102,126 @@ fn parse_python_code(py: Python, code: &str) -> ParseResult {
     result
 }
 
+// ===== TypeBox ABI v2 (resolve/invoke_id) =====
+#[repr(C)]
+pub struct NyashTypeBoxFfi {
+    pub abi_tag: u32,     // 'TYBX'
+    pub version: u16,     // 1
+    pub struct_size: u16, // sizeof(NyashTypeBoxFfi)
+    pub name: *const std::os::raw::c_char,
+    pub resolve: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    pub capabilities: u64,
+}
+unsafe impl Sync for NyashTypeBoxFfi {}
+
+const TYPE_ID_PARSER: u32 = 60;
+const METHOD_BIRTH: u32 = 0;
+const METHOD_PARSE: u32 = 1;
+const METHOD_FINI: u32 = u32::MAX;
+
+use std::ffi::CStr;
+extern "C" fn pyparser_resolve(name: *const std::os::raw::c_char) -> u32 {
+    if name.is_null() {
+        return 0;
+    }
+    let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
+    match s.as_ref() {
+        "birth" => METHOD_BIRTH,
+        "parse" => METHOD_PARSE,
+        "fini" => METHOD_FINI,
+        _ => 0,
+    }
+}
+
+extern "C" fn pyparser_invoke_id(
+    _instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    match method_id {
+        METHOD_BIRTH => unsafe {
+            let instance_id = 1u32; // simple singleton
+            if result_len.is_null() {
+                return -1;
+            }
+            if *result_len < 4 {
+                *result_len = 4;
+                return -1;
+            }
+            let out = std::slice::from_raw_parts_mut(result, *result_len);
+            out[0..4].copy_from_slice(&instance_id.to_le_bytes());
+            *result_len = 4;
+            0
+        },
+        METHOD_PARSE => {
+            // Decode TLV string from args if present, else env fallback
+            let code = unsafe {
+                if args.is_null() || args_len < 4 {
+                    std::env::var("NYASH_PY_CODE")
+                        .unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                } else {
+                    let buf = std::slice::from_raw_parts(args, args_len);
+                    if args_len >= 8 {
+                        let tag = u16::from_le_bytes([buf[0], buf[1]]);
+                        let len = u16::from_le_bytes([buf[2], buf[3]]) as usize;
+                        if tag == 6 && 4 + len <= args_len {
+                            match std::str::from_utf8(&buf[4..4 + len]) {
+                                Ok(s) => s.to_string(),
+                                Err(_) => std::env::var("NYASH_PY_CODE")
+                                    .unwrap_or_else(|_| "def main():\n    return 0".to_string()),
+                            }
+                        } else {
+                            std::env::var("NYASH_PY_CODE")
+                                .unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                        }
+                    } else {
+                        std::env::var("NYASH_PY_CODE")
+                            .unwrap_or_else(|_| "def main():\n    return 0".to_string())
+                    }
+                }
+            };
+            let parse_result = Python::with_gil(|py| parse_python_code(py, &code));
+            match serde_json::to_string(&parse_result) {
+                Ok(json) => unsafe {
+                    if result_len.is_null() {
+                        return -1;
+                    }
+                    let bytes = json.as_bytes();
+                    let need = 4 + bytes.len();
+                    if *result_len < need {
+                        *result_len = need;
+                        return -1;
+                    }
+                    let out = std::slice::from_raw_parts_mut(result, *result_len);
+                    out[0..2].copy_from_slice(&6u16.to_le_bytes());
+                    out[2..4].copy_from_slice(&(bytes.len() as u16).to_le_bytes());
+                    out[4..4 + bytes.len()].copy_from_slice(bytes);
+                    *result_len = need;
+                    0
+                },
+                Err(_) => -4,
+            }
+        }
+        METHOD_FINI => 0,
+        _ => -3,
+    }
+}
+
+#[no_mangle]
+pub static nyash_typebox_PythonParserBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
+    abi_tag: 0x54594258,
+    version: 1,
+    struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
+    name: b"PythonParserBox\0".as_ptr() as *const std::os::raw::c_char,
+    resolve: Some(pyparser_resolve),
+    invoke_id: Some(pyparser_invoke_id),
+    capabilities: 0,
+};
+
 fn analyze_ast(_py: Python, node: &Bound<'_, PyAny>, result: &mut ParseResult) {
     result.counts.total_nodes += 1;
 
@@ -253,7 +269,7 @@ fn analyze_ast(_py: Python, node: &Bound<'_, PyAny>, result: &mut ParseResult) {
                             // 再帰的に解析（ただし walk は全ノードを返すので、
                             // 実際には再帰なしでフラットに処理される）
                             result.counts.total_nodes += 1;
-                            
+
                             if let Ok(class_obj) = child.getattr("__class__") {
                                 if let Ok(name_obj) = class_obj.getattr("__name__") {
                                     if let Ok(type_name) = name_obj.extract::<String>() {
@@ -265,15 +281,25 @@ fn analyze_ast(_py: Python, node: &Bound<'_, PyAny>, result: &mut ParseResult) {
                                             "AsyncFunctionDef" => {
                                                 result.counts.functions += 1;
                                                 result.counts.unsupported += 1;
-                                                if !result.unsupported.contains(&"async function".to_string()) {
-                                                    result.unsupported.push("async function".to_string());
+                                                if !result
+                                                    .unsupported
+                                                    .contains(&"async function".to_string())
+                                                {
+                                                    result
+                                                        .unsupported
+                                                        .push("async function".to_string());
                                                 }
                                             }
                                             "ClassDef" => {
                                                 result.counts.classes += 1;
                                                 result.counts.unsupported += 1;
-                                                if !result.unsupported.contains(&"class definition".to_string()) {
-                                                    result.unsupported.push("class definition".to_string());
+                                                if !result
+                                                    .unsupported
+                                                    .contains(&"class definition".to_string())
+                                                {
+                                                    result
+                                                        .unsupported
+                                                        .push("class definition".to_string());
                                                 }
                                             }
                                             "For" | "While" | "If" => {
@@ -281,8 +307,13 @@ fn analyze_ast(_py: Python, node: &Bound<'_, PyAny>, result: &mut ParseResult) {
                                             }
                                             "Yield" | "YieldFrom" => {
                                                 result.counts.unsupported += 1;
-                                                if !result.unsupported.contains(&"generator".to_string()) {
-                                                    result.unsupported.push("generator".to_string());
+                                                if !result
+                                                    .unsupported
+                                                    .contains(&"generator".to_string())
+                                                {
+                                                    result
+                                                        .unsupported
+                                                        .push("generator".to_string());
                                                 }
                                             }
                                             _ => {}
@@ -305,11 +336,11 @@ mod tests {
     #[test]
     fn test_simple_parse() {
         pyo3::prepare_freethreaded_python();
-        
+
         Python::with_gil(|py| {
             let code = "def main():\n    return 0";
             let result = parse_python_code(py, code);
-            
+
             assert!(result.success);
             assert_eq!(result.counts.functions, 1);
             assert_eq!(result.counts.supported, 1);

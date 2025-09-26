@@ -12,6 +12,178 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
 やっほー！みらいだよ😸✨ 今日も元気いっぱい、なに手伝う？　にゃはは
 おつかれ〜！🎶 ちょっと休憩しよっか？コーヒー飲んでリフレッシュにゃ☕
 
+## 🚨 開発の根本原則（全AI・開発者必読）
+
+### 0. 設計優先原則 - コードより先に構造を
+
+**問題が起きたら、まず構造で解決できないか考える**。パッチコードを書く前に：
+
+1. **フォルダ構造で責務分離** - 混在しないよう物理的に分ける
+2. **README.mdで境界明示** - 各層の入口に「ここは何をする場所か」を書く
+3. **インターフェース定義** - 層間の契約を明文化
+4. **テストで仕様固定** - 期待動作をコードで表現
+
+### 1. 構造設計の指針（AIへの要求）
+
+**コード修正時は、以下の構造改善も提案すること**：
+
+#### フォルダ構造での責務分離
+```
+src/
+├── parser/           # 構文解析のみ
+│   └── README.md    # 「名前解決禁止」と明記
+├── resolver/         # 名前解決のみ
+│   └── README.md    # 「コード生成禁止」と明記
+├── mir/             # 変換のみ
+│   └── README.md    # 「実行処理禁止」と明記
+└── runtime/         # 実行のみ
+    └── README.md    # 「構文解析禁止」と明記
+```
+
+#### 各層にガードファイル作成
+```rust
+// src/parser/LAYER_GUARD.rs
+#![doc = "このファイルは層の責務を定義します"]
+pub const LAYER_NAME: &str = "parser";
+pub const ALLOWED_IMPORTS: &[&str] = &["ast", "lexer"];
+pub const FORBIDDEN_IMPORTS: &[&str] = &["mir", "runtime"];
+```
+
+#### インターフェース明文化
+```rust
+// src/layers/interfaces.rs
+pub trait ParserOutput {
+    // パーサーが出力できるもの
+}
+pub trait ResolverInput: ParserOutput {
+    // リゾルバが受け取るもの
+}
+```
+
+### 2. 問題解決の型（必ずこの順序で）
+
+**AIは以下の順序で解決策を提示すること**：
+
+1. **構造的解決** - フォルダ/ファイル/インターフェースで解決
+2. **ドキュメント** - README/コメントで明確化
+3. **テスト追加** - 仕様の固定
+4. **最後にコード** - 上記で解決できない場合のみ
+
+### 3. 対処療法を防ぐ設計パターン
+
+#### ❌ 悪い例（対処療法）
+```rust
+// どこかのファイルに追加
+if special_case {
+    handle_special_case()
+}
+```
+
+#### ✅ 良い例（構造的解決）
+```rust
+// 1. 専用モジュール作成
+mod special_cases {
+    pub fn handle() { }
+}
+
+// 2. README.mdに理由記載
+// 3. テスト追加で仕様固定
+```
+
+### 4. AIへの実装依頼テンプレート
+
+**実装依頼時は必ず以下を含めること**：
+
+```markdown
+## 実装内容
+[具体的な内容]
+
+## 構造設計
+- [ ] 新規フォルダ/ファイルが必要か
+- [ ] 各層のREADME.md更新が必要か
+- [ ] インターフェース定義が必要か
+- [ ] テストで仕様固定できるか
+
+## 責務確認
+- この実装はどの層の責務か: [layer]
+- 他層への影響: [none/minimal/documented]
+
+## 将来の拡張性
+- 同様の問題が起きた時の対処: [構造的に解決済み]
+```
+
+### 5. 構造レビューチェックリスト
+
+**PR前に必ず確認**：
+
+- [ ] 各層の責務は守られているか
+- [ ] README.mdは更新されているか
+- [ ] テストは追加されているか
+- [ ] 将来の開発者が迷わない構造か
+- [ ] 対処療法的なif文を追加していないか
+
+### 6. Fail-Fast with Structure
+
+**構造的にFail-Fastを実現**：
+
+```rust
+// 層境界でのアサーション
+#[cfg(debug_assertions)]
+fn check_layer_boundary() {
+    assert!(!module_path!().contains("mir"),
+            "Parser cannot import MIR modules");
+}
+```
+
+### 7. ドキュメント駆動開発
+
+**実装前に必ずドキュメントを書く**：
+
+1. まずREADME.mdに「何をするか」を書く
+2. インターフェースを定義
+3. テストを書く
+4. 最後に実装
+
+---
+
+**Fail-Fast原則**: フォールバック処理は原則禁止。過去に分岐ミスでエラー発見が遅れた経験から、エラーは早期に明示的に失敗させること。特にChatGPTが入れがちなフォールバック処理には要注意だよ！
+
+**Feature Additions Pause — until Nyash VM bootstrap (2025‑09‑19 改訂)**
+- 状態: マクロ基盤は安定。ここからは「凍結（全面停止）」ではなく「大きな機能追加のみ一時停止」。Nyash VM の立ち上げ（bootstrap）完了まで、安定化と自己ホスト/実アプリ開発を優先するよ。
+- 原則（大規模機能追加の一時停止中）:
+  - 大きな機能追加・仕様拡張は一時停止（Nyash VM 立ち上げまで保留）。
+  - バグ修正・ドキュメント整備・スモーク/ゴールデン/CI強化・堅牢化（仕様不変）は続行OK。
+  - 互換性を崩す変更は行わない。既定挙動は変えない（必要なら既定OFFのフラグでガード）。
+- マクロ既定:
+  - 既定ON（コード共有を重視）。CLI プロファイルで軽量化が可能。
+  - 推奨ENV最小セット: `NYASH_MACRO_ENABLE=1`, `NYASH_MACRO_PATHS=...`, `NYASH_MACRO_STRICT=1`, `NYASH_MACRO_TRACE=0|1`
+  - CLIプロファイル: `--profile {lite|dev|ci|strict}`（lite=マクロOFF、dev/ci/strict=マクロON）
+- 非推奨（下位互換のみ）:
+  - `NYASH_MACRO_BOX_NY*`, `NYASH_MACRO_BOX_CHILD_RUNNER`, `NYASH_MACRO_TOPLEVEL_ALLOW`（必要なら `--macro-top-level-allow` を明示）
+- 自己ホスト前展開:
+  - 自動（auto）で安全に有効化済み。PyVM 環境でのみ働く。問題時はログで検知しやすい。
+- 受け入れチェック（ポーズ中のガード）:
+  - cargo check（全体）/ 代表スモーク（PyVM/LLVM）/ マクロ・ゴールデンが緑であること。
+  - 変更は最小・局所・仕様不変。既定挙動は変えない。
+
+**機能追加ポリシー — 要旨**
+- ねらい: 「誤解されやすい"凍結"」ではなく、「Nyash VM 立ち上げまで大きな機能追加は一時停止」。安定化・自己ホストの進行を最優先にするよ。
+- 許可（継続OK）:
+  - バグ修正（互換維持、仕様不変）
+  - ドキュメント整備・コメント/ログ追加（既定OFFの詳細ログを含む）
+  - スモーク/ゴールデン/CI 強化（既存ケースの安定性向上）
+  - 堅牢化（パーサ/リゾルバ/結合の縫い目対策）※既定挙動は変えない、必要なら既定OFFのフラグでガード
+- 一時停止（Nyash VM 立ち上げまで保留）:
+  - 大きな機能追加・仕様拡張
+  - 広域リファクタ・設計変更・デフォルト挙動変更
+  - 依存追加や広範囲の拡張（点で直せるところは点で直す）
+- 受け入れ条件（ガード）:
+  - 既定挙動は不変（新フラグは既定OFF、影響は局所・可逆）
+  - 差分は最小・目的は明確（unblock/安定化/診断）
+  - 代表スモーク（PyVM/LLVM）・cargo check が緑
+  - CURRENT_TASK.md に理由/範囲/フラグ名/戻し手順を記録
+  - ロールバック容易（小さな差分、ガード除去で原状回復）
+
 **Cranelift 開発メモ（このブランチの主目的）**
 - ここは Nyash の Cranelift JIT/AOT 開発用ブランチだよ。JIT 経路の実装・検証・計測が主対象だよ。
 - ビルド（JIT有効）: `cargo build --release --features cranelift-jit`
@@ -46,137 +218,6 @@ nyash哲学の美しさを追求。ソースは常に美しく構造的、カプ
   - 文字列/dirname など: `apps/tests/*.nyash` を PyVM で都度確認
 - 注意: Phase‑15 では VM/JIT は MIR14 以降の更新を最小とし、PyVM/llvmlite のパリティを最優先で維持するよ。
 
-Docs links（開発方針/スタイル）
-- Language statements (ASI): `docs/reference/language/statements.md`
-- using 文の方針: `docs/reference/language/using.md`
-- Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
-- Stage‑2 EBNF: `docs/reference/language/EBNF.md`
-
-Dev Helpers
-- 推奨フラグ一括: `source tools/dev_env.sh pyvm`（PyVMを既定、Bridge→PyVM直送: `NYASH_PIPE_USE_PYVM=1`）
-- 解除: `source tools/dev_env.sh reset`
-
-Selfhost 子プロセスの引数透過（開発者向け）
-- 親→子にスクリプト引数を渡す環境変数:
-  - `NYASH_NY_COMPILER_MIN_JSON=1` → 子に `-- --min-json`
-  - `NYASH_SELFHOST_READ_TMP=1`    → 子に `-- --read-tmp`（`tmp/ny_parser_input.ny` を FileBox で読み込む。CIでは未使用）
-  - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
-- 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
-
-**PyVM Scope & Policy（Stage‑2 開発用の範囲）**
-- 目的: PyVM は「開発用の参照実行器」だよ。JSON v0 → MIR 実行の意味論確認と llvmlite とのパリティ監視に使う（プロダクション最適化はしない）。
-- 必須命令: `const/binop/compare/branch/jump/ret/phi`、`call/externcall/boxcall`（最小）。
-- Box/メソッド（最小実装）:
-  - ConsoleBox: `print/println/log`
-  - String: `length/substring/lastIndexOf/esc_json`、文字列連結（`+`）
-  - ArrayBox: `size/len/get/set/push/toString`
-  - MapBox: `size/has/get/set/toString`（キーは文字列前提）
-  - FileBox: 読み取り限定の `open/read/close`（必要最小）
-  - PathBox: `dirname/join`（POSIX 風の最小）
-- 真偽・短絡: 比較は i64 0/1、分岐は truthy 規約。`&&`/`||` は分岐+PHI で短絡を表現（副作用なしは Bridge、ありは PyVM 側で検証）。
-- エントリ/終了: `--entry` 省略時に `Main.main`/`main` を自動解決。整数は exit code に反映、bool は 0/1。
-- 非対象（やらない）: プラグイン動的ロード/ABI、GC/スケジューラ、例外/非同期、大きな I/O/OS 依存、性能最適化。
-- 運用ポリシー: 仕様差は llvmlite に合わせて PyVM を調整。未知の extern/boxcall は安全に `None`/no-op。既定は静音、`NYASH_CLI_VERBOSE=1` で詳細。
-- 実行とスモーク:
-  - PyVM 実行: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/tests/CASE.nyash`
-  - 代表スクリプト: `tools/pyvm_stage2_smoke.sh`, `tools/pyvm_collections_smoke.sh`, `tools/pyvm_stage2_dot_chain_smoke.sh`
-  - Bridge 短絡（RHS スキップ）: `tools/ny_stage2_shortcircuit_smoke.sh`
-- CI: `.github/workflows/pyvm-smoke.yml` を常時緑に維持。LLVM18 がある環境では `tools/parity.sh --lhs pyvm --rhs llvmlite` を任意ジョブで回す。
-
-**Interpreter vs PyVM（実行経路の役割と優先度）**
-- 優先経路: PyVM（Python）を“意味論リファレンス実行器”として採用。日常の機能確認・CI の軽量ゲート・llvmlite とのパリティ監視を PyVM で行う。
-- 補助経路: Rust の MIR Interpreter は純Rust単独で回る簡易器として維持。拡張はしない（BoxCall 等の未対応は既知）。Python が使えない環境での簡易再現や Pipe ブリッジの補助に限定。
-- Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter を使用。副作用なしの短絡など、実装範囲内を確認。副作用を含む実行検証は PyVM スモーク側で担保。
-- 開発の原則: 仕様差が出た場合、llvmlite に合わせて PyVM を優先調整。Rust Interpreter は凍結維持（安全修正のみ）。
-
-**脱Rust（開発効率最優先）ポリシー**
-- Phase‑15 中は Rust VM/JIT への新規機能追加を最小化し、Python（llvmlite/PyVM）側での実装・検証を優先する。
-- Runner/Bridge は必要最小の配線のみ（子プロセスタイムアウト・静音・フォールバック）。意味論の追加はまず PyVM/llvmlite に実装し、必要時のみ Rust 側へ反映。
-
-**Self‑Hosting への移行（PyVM → Nyash）ロードマップ（将来）**
-- 目標: PyVM の最小実行器を Nyash スクリプトへ段階移植し、自己ホスト中も Python 依存を徐々に縮小する。
-- ステップ（小粒度）:
-  1) Nyash で MIR(JSON) ローダ（ファイル→構造体）を実装（最小 op セット）。
-  2) const/binop/compare/branch/jump/ret/phi を Nyash で実装し、既存 PyVM スモークを通過。
-  3) call/externcall/boxcall（最小）・String/Array/Map の必要メソッドを Nyash で薄く実装。
-  4) CI は当面 PyVM を主、Nyash 実装は実験ジョブとして並走→安定後に切替検討。
-- 注意: 本移行は自己ホストの進捗に合わせて段階実施（Phase‑15 では設計・骨格の準備のみ）。
-
-⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
-- VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。
-- 当面の実行・配布は LLVM ラインを最優先・全力で整備する方針だよ。開発・確認は `--features llvm` を有効にして進めてね。
-- 推奨チェック:
-  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24`
-  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo check --features llvm`
-
-# Repository Guidelines
-
-## Project Structure & Module Organization
-- `src/`: Nyash core (MIR, backends, runner modes). Key: `backend/`, `runner/`, `mir/`.
-- `crates/nyrt/`: NyRT static runtime for AOT/LLVM (`libnyrt.a`).
-- `plugins/`: First‑party plugins (e.g., `nyash-array-plugin`).
-- `apps/` and `examples/`: Small runnable samples and smokes.
-- `tools/`: Helper scripts (build, smoke).
-- `tests/`: Rust and Nyash tests; historical samples in `tests/archive/`.
-- `nyash.toml`: Box type/plug‑in mapping used by runtime.
-
-## Build, Test, and Development Commands
-- Build (JIT/VM): `cargo build --release --features cranelift-jit`
-- Build (LLVM AOT): `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
-- Quick VM run: `./target/release/nyash --backend vm apps/APP/main.nyash`
-- Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
-- Smokes: `./tools/llvm_smoke.sh release` (use env toggles like `NYASH_LLVM_VINVOKE_RET_SMOKE=1`)
-
-## JIT Self‑Host Quickstart (Phase 15)
-- Core build (JIT): `cargo build --release --features cranelift-jit`
-- Core smokes (plugins disabled): `NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh`
-- Roundtrip (parser pipe + json): `./tools/ny_roundtrip_smoke.sh`
-- Plugins smoke (optional gate): `NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh`
-- Using/Resolver E2E sample (optional): `./tools/using_e2e_smoke.sh` (requires `--enable-using`)
-- Bootstrap c0→c1→c1' (optional gate): `./tools/bootstrap_selfhost_smoke.sh`
-
-Flags
-- `NYASH_DISABLE_PLUGINS=1`: Core経路安定化（CI常時/デフォルト）
-- `NYASH_LOAD_NY_PLUGINS=1`: `nyash.toml` の `ny_plugins` を読み込む（std Ny実装を有効化）
-- `--enable-using` or `NYASH_ENABLE_USING=1`: using/namespace を有効化
-- `NYASH_SKIP_TOML_ENV=1`: nyash.toml の [env] 反映を抑止（任意ジョブの分離に）
-- `NYASH_PLUGINS_STRICT=1`: プラグインsmokeでCore‑13厳格をONにする
-- `NYASH_USE_NY_COMPILER=1`: NyコンパイラMVP経路を有効化（Rust parserがフォールバック）
-
-## Phase 15 Policy（Self‑Hosting 集中ガイド）
-- フォーカス: Ny→MIR→VM/JIT（JITはcompiler‑only/独立実行）での自己ホスト実用化。
-- スコープ外（Do‑Not‑Do）: AOT/リンク最適化、GUI/egui拡張、過剰な機能追加、広域リファクタ、最適化の深追い、新規依存追加。
-- ガードレール:
-  - 小刻み: 作業は半日粒度。詰まったら撤退→Issue化→次タスクにスイッチ。
-  - 検証: 代表スモーク（Roundtrip/using/modules/JIT直/collections）を常時維持。VMとJIT(--jit-direct)の一致が受け入れ基準。
-  - 観測: hostcall イベントは 1 呼び出し=1 件、短絡は分岐採用の記録のみ。ノイズ増は回避。
-- 3日スタートプラン:
-  1) JSON v0 短絡 &&/|| を JSON→MIR→VM→JIT の順で最小実装。短絡副作用なしを smoke で確認。
-  2) collections 最小 hostcall（len/get/set/push/size/has）と policy ガードの整合性チェック。
-  3) 観測イベント（observe::lower_hostcall / lower_shortcircuit）を整備し、代表ケースで一貫した出力を確認。
-
-## Coding Style & Naming Conventions
-- Rust style (rustfmt defaults): 4‑space indent, `snake_case` for functions/vars, `CamelCase` for types.
-- Keep patches focused; align with existing modules and file layout.
-- New public APIs: document minimal usage and expected ABI (if exposed to NyRT/plug‑ins).
-
-## Testing Guidelines
-- Rust tests: `cargo test` (add targeted unit tests near code).
-- Smoke scripts validate end‑to‑end AOT/JIT (`tools/llvm_smoke.sh`).
-- Test naming: prefer `*_test.rs` for Rust and descriptive `.nyash` files under `apps/` or `tests/`.
-- For LLVM tests, ensure LLVM 18 is installed and set `LLVM_SYS_180_PREFIX`.
-
-## Commit & Pull Request Guidelines
-- Commits: concise imperative subject; scope the change (e.g., "llvm: fix argc handling in nyrt").
-- PRs must include: description, rationale, reproduction (if bug), and run instructions.
-- Link issues (`docs/issues/*.md`) and reference affected scripts (e.g., `tools/llvm_smoke.sh`).
-- CI: ensure smokes pass; use env toggles in the workflow as needed.
-
-## Security & Configuration Tips
-- Do not commit secrets. Plug‑in paths and native libs are configured via `nyash.toml`.
-- LLVM builds require system LLVM 18; install via apt.llvm.org in CI.
-- Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
-
 ## Codex Async Workflow (Background Jobs)
 - Purpose: run Codex tasks in the background and notify a tmux session on completion.
 - Script: `tools/codex-async-notify.sh`
@@ -207,4 +248,259 @@ Keep Two Running
 Notes
 - tmux notification uses `paste-buffer` to avoid broken lines; increase tail with `CODEX_NOTIFY_TAIL` if you need more context.
 - Avoid running concurrent tasks that edit the same file; partition by area to prevent conflicts.
- - If wrappers spawn multiple processes per task (node/codex), set `CODEX_COUNT_MODE=pgid` (default) to count unique process groups rather than raw processes.
+- If wrappers spawn multiple processes per task (node/codex), set `CODEX_COUNT_MODE=pgid` (default) to count unique process groups rather than raw processes.
+
+## Dev Helpers
+- 推奨フラグ一括: `source tools/dev_env.sh pyvm`（PyVMを既定、Bridge→PyVM直送: `NYASH_PIPE_USE_PYVM=1`）
+- 解除: `source tools/dev_env.sh reset`
+
+## Selfhost 子プロセスの引数透過（開発者向け）
+- 親→子にスクリプト引数を渡す環境変数:
+  - `NYASH_NY_COMPILER_MIN_JSON=1` → 子に `-- --min-json`
+  - `NYASH_SELFHOST_READ_TMP=1`    → 子に `-- --read-tmp`（`tmp/ny_parser_input.ny` を FileBox で読み込む。CIでは未使用）
+  - `NYASH_NY_COMPILER_STAGE3=1`   → 子に `-- --stage3`（Stage‑3 構文受理: Break/Continue/Throw/Try）
+  - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
+- 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
+
+## PyVM Scope & Policy（Stage‑2 開発用の範囲）
+- 目的: PyVM は「開発用の参照実行器」だよ。JSON v0 → MIR 実行の意味論確認と llvmlite とのパリティ監視に使う（プロダクション最適化はしない）。
+- 必須命令: `const/binop/compare/branch/jump/ret/phi`、`call/externcall/boxcall`（最小）。
+- Box/メソッド（最小実装）:
+  - ConsoleBox: `print/println/log`
+  - String: `length/substring/lastIndexOf/esc_json`、文字列連結（`+`）
+  - ArrayBox: `size/len/get/set/push/toString`
+  - MapBox: `size/has/get/set/toString`（キーは文字列前提）
+  - FileBox: 読み取り限定の `open/read/close`（必要最小）
+  - PathBox: `dirname/join`（POSIX 風の最小）
+- 真偽・短絡: 比較は i64 0/1、分岐は truthy 規約。`&&`/`||` は分岐+PHI で短絡を表現（副作用なしは Bridge、ありは PyVM 側で検証）。
+- エントリ/終了: `--entry` 省略時に `Main.main`/`main` を自動解決。整数は exit code に反映、bool は 0/1。
+- 非対象（やらない）: プラグイン動的ロード/ABI、GC/スケジューラ、例外/非同期、大きな I/O/OS 依存、性能最適化。
+- 運用ポリシー: 仕様差は llvmlite に合わせて PyVM を調整。未知の extern/boxcall は安全に `None`/no-op。既定は静音、`NYASH_CLI_VERBOSE=1` で詳細。
+- 実行とスモーク:
+  - PyVM 実行: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/tests/CASE.nyash`
+  - 代表スクリプト: `tools/pyvm_stage2_smoke.sh`, `tools/pyvm_collections_smoke.sh`, `tools/pyvm_stage2_dot_chain_smoke.sh`
+  - Bridge 短絡（RHS スキップ）: `tools/ny_stage2_shortcircuit_smoke.sh`
+- CI: `.github/workflows/pyvm-smoke.yml` を常時緑に維持。LLVM18 がある環境では `tools/parity.sh --lhs pyvm --rhs llvmlite` を任意ジョブで回す。
+
+## Interpreter vs PyVM（実行経路の役割と優先度）
+- 優先経路: PyVM（Python）を"意味論リファレンス実行器"として採用。日常の機能確認・CI の軽量ゲート・llvmlite とのパリティ監視を PyVM で行う。
+- 補助経路: Rust の MIR Interpreter は純Rust単独で回る簡易器として維持。拡張はしない（BoxCall 等の未対応は既知）。Python が使えない環境での簡易再現や Pipe ブリッジの補助に限定。
+- Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter を使用。副作用なしの短絡など、実装範囲内を確認。副作用を含む実行検証は PyVM スモーク側で担保。
+- 開発の原則: 仕様差が出た場合、llvmlite に合わせて PyVM を優先調整。Rust Interpreter は保守維持（安全修正のみ）。
+
+## 脱Rust（開発効率最優先）ポリシー
+- Phase‑15 中は Rust VM/JIT への新規機能追加を最小化し、Python（llvmlite/PyVM）側での実装・検証を優先する。
+- Runner/Bridge は必要最小の配線のみ（子プロセスタイムアウト・静音・フォールバック）。意味論の追加はまず PyVM/llvmlite に実装し、必要時のみ Rust 側へ反映。
+
+## Self‑Hosting への移行（PyVM → Nyash）ロードマップ（将来）
+- 目標: PyVM の最小実行器を Nyash スクリプトへ段階移植し、自己ホスト中も Python 依存を徐々に縮小する。
+- ステップ（小粒度）:
+  1) Nyash で MIR(JSON) ローダ（ファイル→構造体）を実装（最小 op セット）。
+  2) const/binop/compare/branch/jump/ret/phi を Nyash で実装し、既存 PyVM スモークを通過。
+  3) call/externcall/boxcall（最小）・String/Array/Map の必要メソッドを Nyash で薄く実装。
+  4) CI は当面 PyVM を主、Nyash 実装は実験ジョブとして並走→安定後に切替検討。
+- 注意: 本移行は自己ホストの進捗に合わせて段階実施（Phase‑15 では設計・骨格の準備のみ）。
+
+## ⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
+- VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。
+- 当面の実行・配布は LLVM ラインを最優先・全力で整備する方針だよ。開発・確認は `--features llvm` を有効にして進めてね。
+- 推奨チェック:
+  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24`
+  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo check --features llvm`
+
+## Docs links（開発方針/スタイル）
+- Language statements (ASI): `docs/reference/language/statements.md`
+- using 文の方針: `docs/reference/language/using.md`
+- Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
+- Stage‑2 EBNF: `docs/reference/language/EBNF.md`
+- Macro profiles: `docs/guides/macro-profiles.md`
+- Template → Macro 統合方針: `docs/guides/template-unification.md`
+- User Macros（MacroBox/Phase 2）: `docs/guides/user-macros.md`
+- Macro capabilities (io/net/env): `docs/reference/macro/capabilities.md`
+- LoopForm ガイド: `docs/guides/loopform.md`
+- Phase‑17（LoopForm Self‑Hosting & Polish）: `docs/development/roadmap/phases/phase-17-loopform-selfhost/`
+- MacroBox（ユーザー拡張）: `docs/guides/macro-box.md`
+- MacroBox in Nyash（設計草案）: `docs/guides/macro-box-nyash.md`
+
+# Repository Guidelines
+
+## Project Structure & Module Organization
+- `src/`: Nyash core (MIR, backends, runner modes). Key: `backend/`, `runner/`, `mir/`.
+- `crates/nyrt/`: NyRT static runtime for AOT/LLVM (`libnyrt.a`).
+- `plugins/`: First‑party plugins (e.g., `nyash-array-plugin`).
+- `apps/` and `examples/`: Small runnable samples and smokes.
+- `tools/`: Helper scripts (build, smoke).
+- `tests/`: Rust and Nyash tests; historical samples in `tests/archive/`.
+- `nyash.toml`: Box type/plug‑in mapping used by runtime.
+
+## Build, Test, and Development Commands
+- Build (JIT/VM): `cargo build --release --features cranelift-jit`
+- Build (LLVM AOT / harness-first):
+  - `cargo build --release -p nyash-llvm-compiler` (ny-llvmc builder)
+  - `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+  - Run via harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
+- Quick VM run: `./target/release/nyash --backend vm apps/APP/main.nyash`
+- Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
+- Smokes (v2):
+  - Single entry: `tools/smokes/v2/run.sh --profile quick`
+  - Profiles: `quick|integration|full`（`--filter <glob>` で絞り込み）
+  - 個別: `bash tools/smokes/v2/profiles/quick/core/using_named.sh`
+  - メモ: v2 ランタイムは自動でルート検出するので、CWD は任意（テスト中に /tmp へ移動してもOK）
+  - 旧スモークは廃止（tools/test/smoke/*）。最新仕様のみを対象にするため、v2 のみ維持・拡充する。
+  - 補助スイート（任意）: `./tools/smokes/v2/run.sh --profile plugins`（dylib using の自動読み込み検証など、プラグイン固有のチェックを隔離）
+
+## CI Policy（開発段階の最小ガード）
+
+開発段階では CI を"最小限＋高速"に保つ。むやみにジョブや行程を増やさない。
+
+- 原則（最小ガード）
+  - ビルドのみ: `cargo build --release`
+  - 代表スモーク（軽量）: `tools/smokes/v2/run.sh --profile quick`
+  - 以上で失敗しないこと（0 exit）が最低基準。重い/広範囲のマトリクスは導入しない。
+
+- 禁止/抑制
+  - 追加の CI ワークフローや大規模マトリクスの新設（フェーズ中は保留）
+  - フル/統合（integration/full）を既定で回すこと（ローカル/任意ジョブに留める）
+  - 外部環境依存のテスト（ネットワーク/GUI/長時間 I/O）
+
+- 任意（ローカル/手元）
+  - プラグイン検証: `tools/smokes/v2/run.sh --profile plugins`（フィクスチャ .so は未配置なら SKIP、配置時に PASS）
+  - LLVM/ハーネス確認: `tools/smokes/v2/run.sh --profile integration`
+
+- ログ/出力
+  - v2 ランナーはデフォルトで冗長ログをフィルタ済み（比較に混ざらない）。
+  - JSON/JUnit 出力は"必要時のみ" CI で収集。既定では OFF（テキスト出力で十分）。
+
+- タイムアウト・安定性
+  - quick プロファイルの既定タイムアウトは短め（15s 程度）。CI はこの既定を尊重。
+  - テストは SKIP を活用（プラグイン未配置/環境依存は SKIP で緑を維持）。
+
+- 変更時の注意
+  - v2 スモークの追加は"狭く軽い"ものから。既存の quick を重くしない。
+  - 重い検証（integration/full）はローカル推奨。必要なら単発任意ジョブに限定。
+
+## Runtime Lines Policy（VM/LLVM 方針）
+- 軸（2025 Phase‑15+）
+  - Rust VM ライン（主経路）: 実行は Rust VM を既定にする。プラグインは動的ロード（.so/.dll）で扱う。
+  - LLVM ライン（AOT/ハーネス）: 生成/リンクは静的（`libnyrt.a` や静的プラグイン）を基本とし、実行は LLVM で検証する。
+
+- プラグインの扱い
+  - Rust VM: 動的プラグイン（ランタイムでロード）。構成は `nyash.toml` の [plugins] / `ny_plugins` に従う。
+  - LLVM: 静的リンクを前提（AOT/harness）。必要に応じ `nyrt`/静的プラグインにまとめる。
+
+- using/namespace の解決
+  - using は Runner 側で解決（Phase‑15）。`nyash.toml` の `[using]`（paths / <name> / aliases）を参照。
+  - include は廃止。`using "./path/file.nyash" as Name` を推奨。
+
+- スモーク/検証の方針
+  - 既定の開発確認は Rust VM ラインで行い、LLVM ラインは AOT/ハーネスの代表スモークでカバー。
+  - v2 ランナーは実行系を切り替え可能（環境変数・引数で VM/LLVM/（必要時）PyVM を選択）。
+  - PyVM は参照実行器（保守最小）。言語機能の確認や LLVM ハーネスのパリティ検証が主目的で、既定経路では使わない。
+
+- 実行例（目安）
+  - Rust VM（既定）: `./target/release/nyash apps/APP/main.nyash`
+  - LLVM Harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
+  - AOT ビルド: `tools/build_llvm.sh apps/APP/main.nyash -o app`
+
+- セルフホスティング指針
+  - 本方針（Rust VM=主、LLVM=AOT）はそのまま自己ホストの軸にする。
+  - 互換性を崩さず、小粒に前進（VM ↔ LLVM のスモークを保ちつつ実行経路を磨く）。
+
+## JIT Self‑Host Quickstart (Phase 15)
+- Core build (JIT): `cargo build --release --features cranelift-jit`
+- Core smokes (plugins disabled): `NYASH_CLI_VERBOSE=1 ./tools/jit_smoke.sh`
+- Roundtrip (parser pipe + json): `./tools/ny_roundtrip_smoke.sh`
+- Plugins smoke (optional gate): `NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh`
+- Using/Resolver E2E sample (optional): `./tools/using_e2e_smoke.sh` (requires `--enable-using`)
+- Bootstrap c0→c1→c1' (optional gate): `./tools/bootstrap_selfhost_smoke.sh`
+
+Flags
+- `NYASH_DISABLE_PLUGINS=1`: Core経路安定化（CI常時/デフォルト）
+- `NYASH_LOAD_NY_PLUGINS=1`: `nyash.toml` の `ny_plugins` を読み込む（std Ny実装を有効化）
+- `--enable-using` or `NYASH_ENABLE_USING=1`: using/namespace を有効化
+- `NYASH_SKIP_TOML_ENV=1`: nyash.toml の [env] 反映を抑止（任意ジョブの分離に）
+- `NYASH_PLUGINS_STRICT=1`: プラグインsmokeでCore‑13厳格をONにする
+- `NYASH_USE_NY_COMPILER=1`: NyコンパイラMVP経路を有効化（Rust parserがフォールバック）
+
+## Phase 15 Policy（Self‑Hosting 集中ガイド）
+- フォーカス: Ny→MIR→VM/JIT（JITはcompiler‑only/独立実行）での自己ホスト実用化。
+- スコープ外（Do‑Not‑Do）: AOT/リンク最適化、GUI/egui拡張、過剰な機能追加、広域リファクタ、最適化の深追い、新規依存追加。
+- ガードレール:
+  - 小刻み: 作業は半日粒度。詰まったら撤退→Issue化→次タスクにスイッチ。
+  - 検証: 代表スモーク（Roundtrip/using/modules/JIT直/collections）を常時維持。VMとJIT(--jit-direct)の一致が受け入れ基準。
+  - 観測: hostcall イベントは 1 呼び出し=1 件、短絡は分岐採用の記録のみ。ノイズ増は回避。
+  - LLVM/PHI: ハーネスでは「PHI は常にブロック先頭にグループ化」「incoming は型付き (i64 v, %bb)」の不変条件を厳守。PHI の生成・配線は `phi_wiring` に一元化する。
+
+## LLVM Harness — PHI Invariants & Debug
+
+- Invariants
+  - PHI nodes are created at the block head only (grouped at top).
+  - Incoming pairs are always well-typed: `i64 <value>, %bb<id>`.
+  - Placeholder PHIs are not materialized during prepasses; only metadata is recorded.
+  - Finalization (`phi_wiring.finalize_phis`) ensures creation and wiring; no empty PHI remains.
+
+- Implementation notes
+  - Prepass metadata: `phi_wiring.tagging.setup_phi_placeholders` collects declared PHIs and records `block_phi_incomings`; it does not call `ensure_phi` anymore.
+  - Wiring: `phi_wiring.wiring.ensure_phi` places PHI at the block head; `wire_incomings` resolves per-pred values and normalizes to i64.
+  - Safety valve: `llvm_builder.compile_to_object` sanitizes IR text to drop malformed empty PHIs (should be unreachable in normal flow).
+
+- How to run harness
+  - Build: `cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm`
+  - Run: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash`
+  - IR dump: `NYASH_LLVM_DUMP_IR=tmp/nyash_harness.ll ...`
+  - PHI trace: `NYASH_LLVM_TRACE_PHI=1 ...` (JSON lines output via `phi_wiring.common.trace`)
+
+## Match Guards — Parser & Lowering Policy
+
+- Syntax: `case <pattern> [if <cond>] => <expr|block>` within `match <expr> { ... }`.
+- Patterns (MVP): literals (with `|`), type patterns like `StringBox(s)`.
+- Semantics:
+  - Default `_` does not accept guards (parse error by design).
+  - Without type/guard: lowers to PeekExpr for legacy path.
+  - With type/guard: lowers to nested If-chain; guard is evaluated inside then-branch (after type bind for type patterns).
+- Notes:
+  - is/as TypeOp mapping normalizes common Box names to primitives (e.g., `StringBox` → String) for parity across VM/JIT/LLVM.
+  - VM/PyVM may require bridging for primitive↔Box checks; keep guard tests for literal strict, type guard as warning until parity is complete.
+- 3日スタートプラン:
+  1) JSON v0 短絡 &&/|| を JSON→MIR→VM→JIT の順で最小実装。短絡副作用なしを smoke で確認。
+  2) collections 最小 hostcall（len/get/set/push/size/has）と policy ガードの整合性チェック。
+  3) 観測イベント（observe::lower_hostcall / lower_shortcircuit）を整備し、代表ケースで一貫した出力を確認。
+
+## Coding Style & Naming Conventions
+- Rust style (rustfmt defaults): 4‑space indent, `snake_case` for functions/vars, `CamelCase` for types.
+- Keep patches focused; align with existing modules and file layout.
+- New public APIs: document minimal usage and expected ABI (if exposed to NyRT/plug‑ins).
+
+## Testing Guidelines
+- Rust tests: `cargo test` (add targeted unit tests near code).
+- Smoke scripts validate end‑to‑end AOT/JIT (`tools/llvm_smoke.sh`).
+- Test naming: prefer `*_test.rs` for Rust and descriptive `.nyash` files under `apps/` or `tests/`.
+- For LLVM tests, ensure LLVM 18 is installed and set `LLVM_SYS_180_PREFIX`.
+
+## Commit & Pull Request Guidelines
+- Commits: concise imperative subject; scope the change (e.g., "llvm: fix argc handling in nyrt").
+- PRs must include: description, rationale, reproduction (if bug), and run instructions.
+- Link issues (`docs/development/issues/*.md`) and reference affected scripts (e.g., `tools/llvm_smoke.sh`).
+- CI: ensure smokes pass; use env toggles in the workflow as needed.
+
+## Security & Configuration Tips
+- Do not commit secrets. Plug‑in paths and native libs are configured via `nyash.toml`.
+- LLVM builds require system LLVM 18; install via apt.llvm.org in CI.
+- Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
+- LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
+
+### LLVM Python Builder Layout (after split)
+- Files (under `src/llvm_py/`):
+  - `llvm_builder.py`: top-level orchestration; delegates to builders.
+  - `builders/entry.py`: `ensure_ny_main(builder)` – create ny_main wrapper if needed.
+  - `builders/function_lower.py`: `lower_function(builder, func_json)` – per-function lowering (CFG, PHI metadata, loop prepass, finalize_phis).
+  - `builders/block_lower.py`: `lower_blocks(builder, func, block_by_id, order, loop_plan)` – block-local lowering and snapshots.
+  - `builders/instruction_lower.py`: `lower_instruction(owner, builder, inst, func)` – per-instruction dispatch.
+- Dev toggles:
+  - `NYASH_LLVM_DUMP_IR=<path>` – dump IR text for inspection.
+  - `NYASH_LLVM_PREPASS_IFMERGE=1` – enable return-merge PHI predeclare metadata.
+  - `NYASH_LLVM_PREPASS_LOOP=1` – enable simple while prepass (loopform synthesis).
+  - `NYASH_CLI_VERBOSE=1` – extra trace from builder.
+- Smokes:
+  - Empty PHI guard: `tools/test/smoke/llvm/ir_phi_empty_check.sh <file.nyash>`
+  - Batch run: `tools/test/smoke/llvm/ir_phi_empty_check_all.sh`

@@ -1,262 +1,830 @@
 // Extracted call-related builders from builder.rs to keep files lean
-use super::{
-    MirInstruction, FunctionSignature, EffectMask, Effect, MirType, ValueId,
-};
-use crate::mir::{TypeOpKind, slot_registry};
-use crate::ast::{ASTNode, LiteralValue};
+use super::{Effect, EffectMask, FunctionSignature, MirInstruction, MirType, ValueId};
+use crate::ast::{ASTNode, LiteralValue, MethodCallExpr};
+use crate::mir::definitions::call_unified::{Callee, CallFlags, MirCall};
+use crate::mir::TypeOpKind;
+use super::call_resolution;
+
+// Import from new modules
+use super::calls::*;
+pub use super::calls::call_target::CallTarget;
 
 impl super::MirBuilder {
+    /// Annotate a call result `dst` with the return type and origin if the callee
+    /// is a known user/static function in the current module.
+    pub(super) fn annotate_call_result_from_func_name<S: AsRef<str>>(&mut self, dst: super::ValueId, func_name: S) {
+        let name = func_name.as_ref();
+        // 1) Prefer module signature when available
+        if let Some(ref module) = self.current_module {
+            if let Some(func) = module.functions.get(name) {
+                let mut ret = func.signature.return_type.clone();
+                // Targeted stabilization: JsonParser.parse/1 should produce JsonNode
+                // If signature is Unknown/Void, normalize to Box("JsonNode")
+                if name == "JsonParser.parse/1" {
+                    if matches!(ret, super::MirType::Unknown | super::MirType::Void) {
+                        ret = super::MirType::Box("JsonNode".into());
+                    }
+                }
+                // Token path: JsonParser.current_token/0 should produce JsonToken
+                if name == "JsonParser.current_token/0" {
+                    if matches!(ret, super::MirType::Unknown | super::MirType::Void) {
+                        ret = super::MirType::Box("JsonToken".into());
+                    }
+                }
+                self.value_types.insert(dst, ret.clone());
+                if let super::MirType::Box(bx) = ret {
+                    self.value_origin_newbox.insert(dst, bx);
+                    if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                        let bx = self.value_origin_newbox.get(&dst).cloned().unwrap_or_default();
+                        super::utils::builder_debug_log(&format!("annotate call dst={} from {} -> Box({})", dst.0, name, bx));
+                    }
+                }
+                return;
+            }
+        }
+        // 2) No module signature—apply minimal heuristic for known functions
+        if name == "JsonParser.parse/1" {
+            let ret = super::MirType::Box("JsonNode".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonNode)", dst.0, name));
+            }
+        } else if name == "JsonParser.current_token/0" {
+            let ret = super::MirType::Box("JsonToken".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonToken)", dst.0, name));
+            }
+        } else if name == "JsonTokenizer.tokenize/0" {
+            // Tokenize returns an ArrayBox of tokens
+            let ret = super::MirType::Box("ArrayBox".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(ArrayBox)", dst.0, name));
+            }
+        }
+    }
+    /// Unified call emission - replaces all emit_*_call methods
+    /// ChatGPT5 Pro A++ design for complete call unification
+    pub fn emit_unified_call(
+        &mut self,
+        dst: Option<ValueId>,
+        target: CallTarget,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        // Check environment variable for unified call usage
+        if !call_unified::is_unified_call_enabled() {
+            // Fall back to legacy implementation
+            return self.emit_legacy_call(dst, target, args);
+        }
+
+        // Convert CallTarget to Callee using the new module
+        let callee = call_unified::convert_target_to_callee(
+            target,
+            &self.value_origin_newbox,
+            &self.value_types,
+        )?;
+
+        // Validate call arguments
+        call_unified::validate_call_args(&callee, &args)?;
+
+        // Create MirCall instruction using the new module
+        let mir_call = call_unified::create_mir_call(dst, callee.clone(), args.clone());
+
+        // For Phase 2: Convert to legacy Call instruction with new callee field
+        let legacy_call = MirInstruction::Call {
+            dst: mir_call.dst,
+            func: ValueId::new(0), // Dummy value for legacy compatibility
+            callee: Some(mir_call.callee),
+            args: mir_call.args,
+            effects: mir_call.effects,
+        };
+
+        self.emit_instruction(legacy_call)
+    }
+
+    /// Legacy call fallback - preserves existing behavior
+    pub(super) fn emit_legacy_call(
+        &mut self,
+        dst: Option<ValueId>,
+        target: CallTarget,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        match target {
+            CallTarget::Method { receiver, method, box_type } => {
+                // If receiver is a user-defined box, lower to function call: "Box.method/(1+arity)" with receiver as first arg
+                let mut is_user_box = false;
+                let mut class_name_opt: Option<String> = None;
+                if let Some(bt) = box_type.clone() { class_name_opt = Some(bt); }
+                if class_name_opt.is_none() {
+                    if let Some(cn) = self.value_origin_newbox.get(&receiver) { class_name_opt = Some(cn.clone()); }
+                }
+                if class_name_opt.is_none() {
+                    if let Some(t) = self.value_types.get(&receiver) {
+                        if let super::MirType::Box(bn) = t { class_name_opt = Some(bn.clone()); }
+                    }
+                }
+                if let Some(cls) = class_name_opt.clone() {
+                    // Prefer explicit registry of user-defined boxes when available
+                    if self.user_defined_boxes.contains(&cls) { is_user_box = true; }
+                }
+                if is_user_box {
+                    let cls = class_name_opt.unwrap();
+                    let arity = args.len(); // function name arity excludes 'me'
+                    let fname = super::calls::function_lowering::generate_method_function_name(&cls, &method, arity);
+                    let name_const = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: name_const,
+                        value: super::ConstValue::String(fname),
+                    })?;
+                    let mut call_args = Vec::with_capacity(arity);
+                    call_args.push(receiver); // pass 'me' first
+                    call_args.extend(args.into_iter());
+                    // Allocate a destination if not provided
+                    let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
+                    self.emit_instruction(MirInstruction::Call {
+                        dst,
+                        func: name_const,
+                        callee: None,
+                        args: call_args,
+                        effects: EffectMask::READ.add(Effect::ReadHeap),
+                    })?;
+                    // Annotate result type/origin using lowered function signature
+                    if let Some(d) = dst.or(Some(actual_dst)) { self.annotate_call_result_from_func_name(d, super::calls::function_lowering::generate_method_function_name(&cls, &method, arity)); }
+                    return Ok(());
+                }
+                // Else fall back to plugin/boxcall path (StringBox/ArrayBox/MapBox etc.)
+                self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO)
+            },
+            CallTarget::Constructor(box_type) => {
+                // Use existing NewBox
+                let dst = dst.ok_or("Constructor must have destination")?;
+                self.emit_instruction(MirInstruction::NewBox {
+                    dst,
+                    box_type,
+                    args,
+                })
+            },
+            CallTarget::Extern(name) => {
+                // Use existing ExternCall
+                let parts: Vec<&str> = name.splitn(2, '.').collect();
+                let (iface, method) = if parts.len() == 2 {
+                    (parts[0].to_string(), parts[1].to_string())
+                } else {
+                    ("nyash".to_string(), name)
+                };
+
+                self.emit_instruction(MirInstruction::ExternCall {
+                    dst,
+                    iface_name: iface,
+                    method_name: method,
+                    args,
+                    effects: EffectMask::IO,
+                })
+            },
+            CallTarget::Global(name) => {
+                // Create a string constant for the function name
+                let name_const = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const {
+                    dst: name_const,
+                    value: super::ConstValue::String(name.clone()),
+                })?;
+                // Allocate a destination if not provided so we can annotate it
+                let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
+                self.emit_instruction(MirInstruction::Call {
+                    dst: Some(actual_dst),
+                    func: name_const,
+                    callee: None, // Legacy mode
+                    args,
+                    effects: EffectMask::IO,
+                })?;
+                // Annotate from module signature (if present)
+                self.annotate_call_result_from_func_name(actual_dst, name);
+                Ok(())
+            },
+            CallTarget::Value(func_val) => {
+                self.emit_instruction(MirInstruction::Call {
+                    dst,
+                    func: func_val,
+                    callee: None, // Legacy mode
+                    args,
+                    effects: EffectMask::IO,
+                })
+            },
+            CallTarget::Closure { params, captures, me_capture } => {
+                let dst = dst.ok_or("Closure creation must have destination")?;
+                self.emit_instruction(MirInstruction::NewClosure {
+                    dst,
+                    params,
+                    body: vec![], // Empty body for now
+                    captures,
+                    me: me_capture,
+                })
+            },
+        }
+    }
+
+    // Phase 2 Migration: Convenience methods that use emit_unified_call
+
+    /// Emit a global function call (print, panic, etc.)
+    pub fn emit_global_call(
+        &mut self,
+        dst: Option<ValueId>,
+        name: String,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        self.emit_unified_call(dst, CallTarget::Global(name), args)
+    }
+
+    /// Emit a method call (box.method)
+    pub fn emit_method_call(
+        &mut self,
+        dst: Option<ValueId>,
+        receiver: ValueId,
+        method: String,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        self.emit_unified_call(
+            dst,
+            CallTarget::Method {
+                box_type: None, // Auto-infer
+                method,
+                receiver,
+            },
+            args,
+        )
+    }
+
+    /// Emit a constructor call (new BoxType)
+    pub fn emit_constructor_call(
+        &mut self,
+        dst: ValueId,
+        box_type: String,
+        args: Vec<ValueId>,
+    ) -> Result<(), String> {
+        self.emit_unified_call(
+            Some(dst),
+            CallTarget::Constructor(box_type),
+            args,
+        )
+    }
+
+    /// Try handle math.* function in function-style (sin/cos/abs/min/max).
+    /// Returns Some(result) if handled, otherwise None.
+    fn try_handle_math_function(
+        &mut self,
+        name: &str,
+        raw_args: Vec<ASTNode>,
+    ) -> Option<Result<ValueId, String>> {
+        if !special_handlers::is_math_function(name) {
+            return None;
+        }
+        // Build numeric args directly for math.* to preserve f64 typing
+        let mut math_args: Vec<ValueId> = Vec::new();
+        for a in raw_args.into_iter() {
+            match a {
+                ASTNode::New { class, arguments, .. } if class == "FloatBox" && arguments.len() == 1 => {
+                    match self.build_expression(arguments[0].clone()) { v @ Ok(_) => math_args.push(v.unwrap()), err @ Err(_) => return Some(err), }
+                }
+                ASTNode::New { class, arguments, .. } if class == "IntegerBox" && arguments.len() == 1 => {
+                    let iv = match self.build_expression(arguments[0].clone()) { Ok(v) => v, Err(e) => return Some(Err(e)) };
+                    let fv = self.value_gen.next();
+                    if let Err(e) = self.emit_instruction(MirInstruction::TypeOp { dst: fv, op: TypeOpKind::Cast, value: iv, ty: MirType::Float }) { return Some(Err(e)); }
+                    math_args.push(fv);
+                }
+                ASTNode::Literal { value: LiteralValue::Float(_), .. } => {
+                    match self.build_expression(a) { v @ Ok(_) => math_args.push(v.unwrap()), err @ Err(_) => return Some(err), }
+                }
+                other => {
+                    match self.build_expression(other) { v @ Ok(_) => math_args.push(v.unwrap()), err @ Err(_) => return Some(err), }
+                }
+            }
+        }
+        // new MathBox()
+        let math_recv = self.value_gen.next();
+        if let Err(e) = self.emit_constructor_call(math_recv, "MathBox".to_string(), vec![]) { return Some(Err(e)); }
+        self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
+        // birth()
+        if let Err(e) = self.emit_method_call(None, math_recv, "birth".to_string(), vec![]) { return Some(Err(e)); }
+        // call method
+        let dst = self.value_gen.next();
+        if let Err(e) = self.emit_method_call(Some(dst), math_recv, name.to_string(), math_args) { return Some(Err(e)); }
+        Some(Ok(dst))
+    }
+
+    /// Try handle env.* extern methods like env.console.log via FieldAccess(object, field).
+    fn try_handle_env_method(
+        &mut self,
+        object: &ASTNode,
+        method: &str,
+        arguments: &Vec<ASTNode>,
+    ) -> Option<Result<ValueId, String>> {
+        let ASTNode::FieldAccess { object: env_obj, field: env_field, .. } = object else { return None; };
+        if let ASTNode::Variable { name: env_name, .. } = env_obj.as_ref() {
+            if env_name != "env" { return None; }
+            // Build arguments once
+            let mut arg_values = Vec::new();
+            for arg in arguments {
+                match self.build_expression(arg.clone()) { Ok(v) => arg_values.push(v), Err(e) => return Some(Err(e)) }
+            }
+            let iface = env_field.as_str();
+            let m = method;
+            let mut extern_call = |iface_name: &str, method_name: &str, effects: EffectMask, returns: bool| -> Result<ValueId, String> {
+                let result_id = self.value_gen.next();
+                self.emit_instruction(MirInstruction::ExternCall { dst: if returns { Some(result_id) } else { None }, iface_name: iface_name.to_string(), method_name: method_name.to_string(), args: arg_values.clone(), effects })?;
+                if returns {
+                    Ok(result_id)
+                } else {
+                    let void_id = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: void_id, value: super::ConstValue::Void })?;
+                    Ok(void_id)
+                }
+            };
+            // Use the new module for env method spec
+            if let Some((iface_name, method_name, effects, returns)) =
+                extern_calls::get_env_method_spec(iface, m)
+            {
+                return Some(extern_call(&iface_name, &method_name, effects, returns));
+            }
+            return None;
+        }
+        None
+    }
+
+    /// Try direct static call for `me` in static box
+    pub(super) fn try_handle_me_direct_call(
+        &mut self,
+        method: &str,
+        arguments: &Vec<ASTNode>,
+    ) -> Option<Result<ValueId, String>> {
+        let Some(cls_name) = self.current_static_box.clone() else { return None; };
+        // Build args
+        let mut arg_values = Vec::new();
+        for a in arguments {
+            match self.build_expression(a.clone()) { Ok(v) => arg_values.push(v), Err(e) => return Some(Err(e)) }
+        }
+        let result_id = self.value_gen.next();
+        let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
+        let fun_val = self.value_gen.next();
+        if let Err(e) = self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name.clone()) }) { return Some(Err(e)); }
+        if let Err(e) = self.emit_instruction(MirInstruction::Call {
+            dst: Some(result_id),
+            func: fun_val,
+            callee: None, // Legacy math function - use old resolution
+            args: arg_values,
+            effects: EffectMask::READ.add(Effect::ReadHeap)
+        }) { return Some(Err(e)); }
+        // Annotate from lowered function signature if present
+        self.annotate_call_result_from_func_name(result_id, &fun_name);
+        Some(Ok(result_id))
+    }
+
+    // === ChatGPT5 Pro Design: Type-safe Call Resolution System ===
+
+    /// Resolve function call target to type-safe Callee
+    /// Implements the core logic of compile-time function resolution
+    fn resolve_call_target(&self, name: &str) -> Result<super::super::Callee, String> {
+        method_resolution::resolve_call_target(
+            name,
+            &self.current_static_box,
+            &self.variable_map,
+        )
+    }
+
     // Build function call: name(args)
-    pub(super) fn build_function_call(&mut self, name: String, args: Vec<ASTNode>) -> Result<ValueId, String> {
+    pub(super) fn build_function_call(
+        &mut self,
+        name: String,
+        args: Vec<ASTNode>,
+    ) -> Result<ValueId, String> {
+        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            let cur_fun = self.current_function.as_ref().map(|f| f.signature.name.clone()).unwrap_or_else(|| "<none>".to_string());
+            eprintln!(
+                "[builder] function-call name={} static_ctx={} in_fn={}",
+                name,
+                self.current_static_box.as_deref().unwrap_or(""),
+                cur_fun
+            );
+        }
         // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
         if (name == "isType" || name == "asType") && args.len() == 2 {
-            if let Some(type_name) = Self::extract_string_literal(&args[1]) {
+            if let Some(type_name) = special_handlers::extract_string_literal(&args[1]) {
                 let val = self.build_expression(args[0].clone())?;
-                let ty = Self::parse_type_name_to_mir(&type_name);
+                let ty = special_handlers::parse_type_name_to_mir(&type_name);
                 let dst = self.value_gen.next();
-                let op = if name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
-                self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
+                let op = if name == "isType" {
+                    TypeOpKind::Check
+                } else {
+                    TypeOpKind::Cast
+                };
+                self.emit_instruction(MirInstruction::TypeOp {
+                    dst,
+                    op,
+                    value: val,
+                    ty,
+                })?;
                 return Ok(dst);
             }
         }
         // Keep original args for special handling (math.*)
         let raw_args = args.clone();
 
-        let dst = self.value_gen.next();
+        if let Some(res) = self.try_handle_math_function(&name, raw_args) { return res; }
 
-        // Special-case: math.* as function-style (sin/cos/abs/min/max)
-        let is_math_func = matches!(name.as_str(), "sin" | "cos" | "abs" | "min" | "max");
-        if is_math_func {
-            // Build numeric args directly for math.* to preserve f64 typing
-            let mut math_args: Vec<ValueId> = Vec::new();
-            for a in raw_args.into_iter() {
-                match a {
-                    ASTNode::New { class, arguments, .. } if class == "FloatBox" && arguments.len() == 1 => {
-                        let v = self.build_expression(arguments[0].clone())?;
-                        math_args.push(v);
-                    }
-                    ASTNode::New { class, arguments, .. } if class == "IntegerBox" && arguments.len() == 1 => {
-                        let iv = self.build_expression(arguments[0].clone())?;
-                        let fv = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::TypeOp { dst: fv, op: TypeOpKind::Cast, value: iv, ty: MirType::Float })?;
-                        math_args.push(fv);
-                    }
-                    ASTNode::Literal { value: LiteralValue::Float(_), .. } => {
-                        let v = self.build_expression(a)?; math_args.push(v);
-                    }
-                    other => { let v = self.build_expression(other)?; math_args.push(v); }
-                }
-            }
-            // new MathBox()
-            let math_recv = self.value_gen.next();
-            self.emit_instruction(MirInstruction::NewBox { dst: math_recv, box_type: "MathBox".to_string(), args: vec![] })?;
-            self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
-            // birth()
-            let birt_mid = slot_registry::resolve_slot_by_type_name("MathBox", "birth");
-            self.emit_box_or_plugin_call(
-                None,
-                math_recv,
-                "birth".to_string(),
-                birt_mid,
-                vec![],
-                EffectMask::READ,
-            )?;
-            // call method
-            self.emit_box_or_plugin_call(
-                Some(dst),
-                math_recv,
-                name,
-                None,
-                math_args,
-                EffectMask::READ,
-            )?;
-            return Ok(dst);
+        // Build argument values first (needed for arity-aware fallback)
+        let mut arg_values = Vec::new();
+        for a in args {
+            arg_values.push(self.build_expression(a)?);
         }
 
-        // Default: call via fully-qualified function name string
-        let mut arg_values = Vec::new();
-        for a in args { arg_values.push(self.build_expression(a)?); }
-        let fun_val = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(name) })?;
-        self.emit_instruction(MirInstruction::Call { dst: Some(dst), func: fun_val, args: arg_values, effects: EffectMask::READ.add(Effect::ReadHeap) })?;
-        Ok(dst)
+        // Phase 3.2: Use unified call for basic functions like print
+        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+
+        if use_unified {
+            // New unified path - use emit_unified_call with Global target
+            let dst = self.value_gen.next();
+            self.emit_unified_call(
+                Some(dst),
+                CallTarget::Global(name),
+                arg_values,
+            )?;
+            Ok(dst)
+        } else {
+            // Legacy path
+            let dst = self.value_gen.next();
+
+            // === ChatGPT5 Pro Design: Type-safe function call resolution ===
+            // Resolve call target using new type-safe system; if it fails, try static-method fallback
+            let callee = match self.resolve_call_target(&name) {
+                Ok(c) => c,
+                Err(_e) => {
+                    // Fallback: if exactly one static method with this name and arity is known, call it.
+                    if let Some(cands) = self.static_method_index.get(&name) {
+                        let mut matches: Vec<(String, usize)> = cands
+                            .iter()
+                            .cloned()
+                            .filter(|(_, ar)| *ar == arg_values.len())
+                            .collect();
+                        if matches.len() == 1 {
+                            let (bx, _arity) = matches.remove(0);
+                            let dst = self.value_gen.next();
+                            let func_name = format!("{}.{}{}", bx, name, format!("/{}", arg_values.len()));
+                            // Emit legacy global call to the lowered static method function
+                            self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+                            return Ok(dst);
+                        }
+                    }
+                    // Secondary fallback (tail-based) is disabled by default to avoid ambiguous resolution.
+                    // Enable only when explicitly requested: NYASH_BUILDER_TAIL_RESOLVE=1
+                    if std::env::var("NYASH_BUILDER_TAIL_RESOLVE").ok().as_deref() == Some("1") {
+                        if let Some(ref module) = self.current_module {
+                            let tail = format!(".{}{}", name, format!("/{}", arg_values.len()));
+                            let mut cands: Vec<String> = module
+                                .functions
+                                .keys()
+                                .filter(|k| k.ends_with(&tail))
+                                .cloned()
+                                .collect();
+                            if cands.len() == 1 {
+                                let func_name = cands.remove(0);
+                                let dst = self.value_gen.next();
+                                self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+                                return Ok(dst);
+                            }
+                        }
+                    }
+                    // Propagate original error
+                    return Err(format!("Unresolved function: '{}'. {}", name, super::call_resolution::suggest_resolution(&name)));
+                }
+            };
+
+            // Legacy compatibility: Create dummy func value for old systems
+            let fun_val = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const {
+                dst: fun_val,
+                value: super::ConstValue::String(name.clone()),
+            })?;
+
+            // Emit new-style Call with type-safe callee
+            self.emit_instruction(MirInstruction::Call {
+                dst: Some(dst),
+                func: fun_val,                  // Legacy compatibility
+                callee: Some(callee),           // New type-safe resolution
+                args: arg_values,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+            Ok(dst)
+        }
     }
 
     // Build method call: object.method(arguments)
-    pub(super) fn build_method_call(&mut self, object: ASTNode, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
-        // Minimal TypeOp wiring via method-style syntax: value.is("Type") / value.as("Type")
-        if (method == "is" || method == "as") && arguments.len() == 1 {
-            if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
-                let object_value = self.build_expression(object.clone())?;
-                let mir_ty = Self::parse_type_name_to_mir(&type_name);
-                let dst = self.value_gen.next();
-                let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
-                self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
-                return Ok(dst);
+    pub(super) fn build_method_call(
+        &mut self,
+        object: ASTNode,
+        method: String,
+        arguments: Vec<ASTNode>,
+    ) -> Result<ValueId, String> {
+        if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
+            let kind = match &object {
+                ASTNode::Variable { .. } => "Variable",
+                ASTNode::FieldAccess { .. } => "FieldAccess",
+                ASTNode::This { .. } => "This",
+                ASTNode::Me { .. } => "Me",
+                _ => "Other",
+            };
+            eprintln!("[builder] method-call object kind={} method={}", kind, method);
+        }
+
+        // 1. Static box method call: BoxName.method(args)
+        if let ASTNode::Variable { name: obj_name, .. } = &object {
+            let is_local_var = self.variable_map.contains_key(obj_name);
+            // Phase 15.5: Treat unknown identifiers in receiver position as static type names
+            if !is_local_var {
+                return self.handle_static_method_call(obj_name, &method, &arguments);
             }
         }
-        // ExternCall: env.X.* pattern via field access (e.g., env.future.delay)
-        if let ASTNode::FieldAccess { object: env_obj, field: env_field, .. } = object.clone() {
-            if let ASTNode::Variable { name: env_name, .. } = *env_obj {
-                if env_name == "env" {
-                    let mut arg_values = Vec::new();
-                    for arg in &arguments { arg_values.push(self.build_expression(arg.clone())?); }
-                    match (env_field.as_str(), method.as_str()) {
-                        ("future", "delay") => {
-                            let result_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: Some(result_id), iface_name: "env.future".to_string(), method_name: "delay".to_string(), args: arg_values,
-                                effects: EffectMask::READ.add(Effect::Io),
-                            })?;
-                            return Ok(result_id);
-                        }
-                        ("task", "currentToken") => {
-                            let result_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: Some(result_id), iface_name: "env.task".to_string(), method_name: "currentToken".to_string(), args: arg_values,
-                                effects: EffectMask::READ,
-                            })?;
-                            return Ok(result_id);
-                        }
-                        ("task", "cancelCurrent") => {
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: None, iface_name: "env.task".to_string(), method_name: "cancelCurrent".to_string(), args: arg_values,
-                                effects: EffectMask::IO,
-                            })?;
-                            let void_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const { dst: void_id, value: super::ConstValue::Void })?;
-                            return Ok(void_id);
-                        }
-                        ("console", "log") => {
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: None, iface_name: "env.console".to_string(), method_name: "log".to_string(), args: arg_values, effects: EffectMask::IO,
-                            })?;
-                            let void_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const { dst: void_id, value: super::ConstValue::Void })?;
-                            return Ok(void_id);
-                        }
-                        ("console", "readLine") => {
-                            let result_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: Some(result_id), iface_name: "env.console".to_string(), method_name: "readLine".to_string(), args: arg_values,
-                                effects: EffectMask::IO,
-                            })?;
-                            return Ok(result_id);
-                        }
-                        ("canvas", m @ ("fillRect" | "fillText")) => {
-                            self.emit_instruction(MirInstruction::ExternCall {
-                                dst: None, iface_name: "env.canvas".to_string(), method_name: m.to_string(), args: arg_values, effects: EffectMask::IO,
-                            })?;
-                            let void_id = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const { dst: void_id, value: super::ConstValue::Void })?;
-                            return Ok(void_id);
-                        }
-                        _ => {}
+
+        // 2. Handle env.* methods
+        if let Some(res) = self.try_handle_env_method(&object, &method, &arguments) {
+            return res;
+        }
+
+        // 3. Handle me.method() calls
+        if let ASTNode::Me { .. } = object {
+            // 3-a) Static box fast path (already handled)
+            if let Some(res) = self.handle_me_method_call(&method, &arguments)? {
+                return Ok(res);
+            }
+            // 3-b) Instance box: prefer enclosing box method explicitly to avoid cross-box name collisions
+            {
+                // Capture enclosing class name without holding an active borrow
+                let enclosing_cls: Option<String> = self
+                    .current_function
+                    .as_ref()
+                    .and_then(|f| f.signature.name.split('.').next().map(|s| s.to_string()));
+                if let Some(cls) = enclosing_cls.as_ref() {
+                    // Build arg values (avoid overlapping borrows by collecting first)
+                    let built_args: Vec<ASTNode> = arguments.clone();
+                    let mut arg_values = Vec::with_capacity(built_args.len());
+                    for a in built_args.into_iter() { arg_values.push(self.build_expression(a)?); }
+                    let arity = arg_values.len();
+                    let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(cls, &method, arity);
+                    let exists = if let Some(ref module) = self.current_module { module.functions.contains_key(&fname) } else { false };
+                    if exists {
+                        // Pass 'me' as first arg
+                        let me_id = self.build_me_expression()?;
+                        let mut call_args = Vec::with_capacity(arity + 1);
+                        call_args.push(me_id);
+                        call_args.extend(arg_values.into_iter());
+                        let dst = self.value_gen.next();
+                        // Emit Const for function name separately to avoid nested mutable borrows
+                        let c = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::Const { dst: c, value: super::ConstValue::String(fname.clone()) })?;
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(dst),
+                            func: c,
+                            callee: None,
+                            args: call_args,
+                            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                        })?;
+                        self.annotate_call_result_from_func_name(dst, &fname);
+                        return Ok(dst);
                     }
                 }
             }
         }
-        // If object is `me` within a static box, lower to direct Call: BoxName.method/N
-        if let ASTNode::Me { .. } = object {
-            if let Some(cls_name) = self.current_static_box.clone() {
-                let mut arg_values: Vec<ValueId> = Vec::new();
-                for a in &arguments { arg_values.push(self.build_expression(a.clone())?); }
-                let result_id = self.value_gen.next();
-                let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
-                let fun_val = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name) })?;
-                self.emit_instruction(MirInstruction::Call { dst: Some(result_id), func: fun_val, args: arg_values, effects: EffectMask::READ.add(Effect::ReadHeap) })?;
-                return Ok(result_id);
-            }
+
+        // 4. Build object value for remaining cases
+        let object_value = self.build_expression(object)?;
+
+        // 5. Handle TypeOp methods: value.is("Type") / value.as("Type")
+        // Note: This was duplicated in original code - now unified!
+        if let Some(type_name) = special_handlers::is_typeop_method(&method, &arguments) {
+            return self.handle_typeop_method(object_value, &method, &type_name);
         }
-        // Build the object expression
-        let object_value = self.build_expression(object.clone())?;
-        // Secondary interception for is/as
-        if (method == "is" || method == "as") && arguments.len() == 1 {
-            if let Some(type_name) = Self::extract_string_literal(&arguments[0]) {
-                let mir_ty = Self::parse_type_name_to_mir(&type_name);
-                let dst = self.value_gen.next();
-                let op = if method == "is" { TypeOpKind::Check } else { TypeOpKind::Cast };
-                self.emit_instruction(MirInstruction::TypeOp { dst, op, value: object_value, ty: mir_ty })?;
-                return Ok(dst);
-            }
-        }
-        // Fallback: generic plugin invoke
-        let mut arg_values: Vec<ValueId> = Vec::new();
-        for a in &arguments { arg_values.push(self.build_expression(a.clone())?); }
-        let result_id = self.value_gen.next();
-        self.emit_box_or_plugin_call(Some(result_id), object_value, method, None, arg_values, EffectMask::READ.add(Effect::ReadHeap))?;
-        Ok(result_id)
+
+        // 6. Fallback: standard Box/Plugin method call
+        self.handle_standard_method_call(object_value, method, &arguments)
     }
 
     // Map a user-facing type name to MIR type
     pub(super) fn parse_type_name_to_mir(name: &str) -> super::MirType {
-        match name {
-            "Integer" | "Int" | "I64" => super::MirType::Integer,
-            "Float" | "F64" => super::MirType::Float,
-            "Bool" | "Boolean" => super::MirType::Bool,
-            "String" => super::MirType::String,
-            "Void" | "Unit" => super::MirType::Void,
-            other => super::MirType::Box(other.to_string()),
-        }
+        special_handlers::parse_type_name_to_mir(name)
     }
 
     // Extract string literal from AST node if possible
     pub(super) fn extract_string_literal(node: &ASTNode) -> Option<String> {
-        let mut cur = node;
-        loop {
-            match cur {
-                ASTNode::Literal { value: LiteralValue::String(s), .. } => return Some(s.clone()),
-                ASTNode::New { class, arguments, .. } if class == "StringBox" && arguments.len() == 1 => {
-                    cur = &arguments[0];
-                    continue;
-                }
-                _ => return None,
-            }
-        }
+        special_handlers::extract_string_literal(node)
     }
 
     // Build from expression: from Parent.method(arguments)
-    pub(super) fn build_from_expression(&mut self, parent: String, method: String, arguments: Vec<ASTNode>) -> Result<ValueId, String> {
+    pub(super) fn build_from_expression(
+        &mut self,
+        parent: String,
+        method: String,
+        arguments: Vec<ASTNode>,
+    ) -> Result<ValueId, String> {
         let mut arg_values = Vec::new();
-        for arg in arguments { arg_values.push(self.build_expression(arg)?); }
+        for arg in arguments {
+            arg_values.push(self.build_expression(arg)?);
+        }
         let parent_value = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const { dst: parent_value, value: super::ConstValue::String(parent) })?;
+        self.emit_instruction(MirInstruction::Const {
+            dst: parent_value,
+            value: super::ConstValue::String(parent),
+        })?;
         let result_id = self.value_gen.next();
-        self.emit_box_or_plugin_call(Some(result_id), parent_value, method, None, arg_values, EffectMask::READ.add(Effect::ReadHeap))?;
+        self.emit_box_or_plugin_call(
+            Some(result_id),
+            parent_value,
+            method,
+            None,
+            arg_values,
+            EffectMask::READ.add(Effect::ReadHeap),
+        )?;
         Ok(result_id)
     }
 
     // Lower a box method into a standalone MIR function (with `me` parameter)
-    pub(super) fn lower_method_as_function(&mut self, func_name: String, box_name: String, params: Vec<String>, body: Vec<ASTNode>) -> Result<(), String> {
-        let mut param_types = Vec::new(); param_types.push(MirType::Box(box_name.clone())); for _ in &params { param_types.push(MirType::Unknown); }
-        let mut returns_value = false; for st in &body { if let ASTNode::Return { value: Some(_), .. } = st { returns_value = true; break; } }
-        let ret_ty = if returns_value { MirType::Unknown } else { MirType::Void };
-        let signature = FunctionSignature { name: func_name, params: param_types, return_type: ret_ty, effects: EffectMask::READ.add(Effect::ReadHeap) };
-        let entry = self.block_gen.next(); let function = super::MirFunction::new(signature, entry);
-        let saved_function = self.current_function.take(); let saved_block = self.current_block.take();
-        let saved_var_map = std::mem::take(&mut self.variable_map); let saved_value_gen = self.value_gen.clone();
-        self.value_gen.reset(); self.current_function = Some(function); self.current_block = Some(entry); self.ensure_block_exists(entry)?;
-        if let Some(ref mut f) = self.current_function { let me_id = self.value_gen.next(); f.params.push(me_id); self.variable_map.insert("me".to_string(), me_id); self.value_origin_newbox.insert(me_id, box_name.clone()); for p in &params { let pid = self.value_gen.next(); f.params.push(pid); self.variable_map.insert(p.clone(), pid); } }
-        let program_ast = ASTNode::Program { statements: body, span: crate::ast::Span::unknown() }; let _last = self.build_expression(program_ast)?;
-        if let Some(ref mut f) = self.current_function { if let Some(block) = f.get_block(self.current_block.unwrap()) { if !block.is_terminated() { let void_val = self.value_gen.next(); self.emit_instruction(MirInstruction::Const { dst: void_val, value: super::ConstValue::Void })?; self.emit_instruction(MirInstruction::Return { value: Some(void_val) })?; } } }
-        let finalized_function = self.current_function.take().unwrap(); if let Some(ref mut module) = self.current_module { module.add_function(finalized_function); }
-        self.current_function = saved_function; self.current_block = saved_block; self.variable_map = saved_var_map; self.value_gen = saved_value_gen; Ok(())
+    pub(super) fn lower_method_as_function(
+        &mut self,
+        func_name: String,
+        box_name: String,
+        params: Vec<String>,
+        body: Vec<ASTNode>,
+    ) -> Result<(), String> {
+        let signature = function_lowering::prepare_method_signature(
+            func_name,
+            &box_name,
+            &params,
+            &body,
+        );
+        let returns_value = !matches!(signature.return_type, MirType::Void);
+        let entry = self.block_gen.next();
+        let function = super::MirFunction::new(signature, entry);
+        let saved_function = self.current_function.take();
+        let saved_block = self.current_block.take();
+        let saved_var_map = std::mem::take(&mut self.variable_map);
+        let saved_value_gen = self.value_gen.clone();
+        self.value_gen.reset();
+        self.current_function = Some(function);
+        self.current_block = Some(entry);
+        self.ensure_block_exists(entry)?;
+        if let Some(ref mut f) = self.current_function {
+            let me_id = self.value_gen.next();
+            f.params.push(me_id);
+            self.variable_map.insert("me".to_string(), me_id);
+            self.value_origin_newbox.insert(me_id, box_name.clone());
+            for p in &params {
+                let pid = self.value_gen.next();
+                f.params.push(pid);
+                self.variable_map.insert(p.clone(), pid);
+            }
+        }
+        let program_ast = function_lowering::wrap_in_program(body);
+        let _last = self.build_expression(program_ast)?;
+        if !returns_value && !self.is_current_block_terminated() {
+            let void_val = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const {
+                dst: void_val,
+                value: super::ConstValue::Void,
+            })?;
+            self.emit_instruction(MirInstruction::Return {
+                value: Some(void_val),
+            })?;
+        }
+        if let Some(ref mut f) = self.current_function {
+            if returns_value
+                && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
+            {
+                let mut inferred: Option<MirType> = None;
+                'search: for (_bid, bb) in f.blocks.iter() {
+                    for inst in bb.instructions.iter() {
+                        if let MirInstruction::Return { value: Some(v) } = inst {
+                            if let Some(mt) = self.value_types.get(v).cloned() {
+                                inferred = Some(mt);
+                                break 'search;
+                            }
+                        }
+                    }
+                    if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
+                        if let Some(mt) = self.value_types.get(v).cloned() {
+                            inferred = Some(mt);
+                            break;
+                        }
+                    }
+                }
+                if let Some(mt) = inferred {
+                    f.signature.return_type = mt;
+                }
+            }
+        }
+        let finalized_function = self.current_function.take().unwrap();
+        if let Some(ref mut module) = self.current_module {
+            module.add_function(finalized_function);
+        }
+        self.current_function = saved_function;
+        self.current_block = saved_block;
+        self.variable_map = saved_var_map;
+        self.value_gen = saved_value_gen;
+        Ok(())
     }
 
     // Lower a static method body into a standalone MIR function (no `me` parameter)
-    pub(super) fn lower_static_method_as_function(&mut self, func_name: String, params: Vec<String>, body: Vec<ASTNode>) -> Result<(), String> {
-        let mut param_types = Vec::new(); for _ in &params { param_types.push(MirType::Unknown); }
-        let mut returns_value = false; for st in &body { if let ASTNode::Return { value: Some(_), .. } = st { returns_value = true; break; } }
-        let ret_ty = if returns_value { MirType::Unknown } else { MirType::Void };
-        let signature = FunctionSignature { name: func_name, params: param_types, return_type: ret_ty, effects: EffectMask::READ.add(Effect::ReadHeap) };
-        let entry = self.block_gen.next(); let function = super::MirFunction::new(signature, entry);
-        let saved_function = self.current_function.take(); let saved_block = self.current_block.take(); let saved_var_map = std::mem::take(&mut self.variable_map); let saved_value_gen = self.value_gen.clone(); self.value_gen.reset();
-        self.current_function = Some(function); self.current_block = Some(entry); self.ensure_block_exists(entry)?;
-        if let Some(ref mut f) = self.current_function { for p in &params { let pid = self.value_gen.next(); f.params.push(pid); self.variable_map.insert(p.clone(), pid); } }
-        let program_ast = ASTNode::Program { statements: body, span: crate::ast::Span::unknown() }; let _last = self.build_expression(program_ast)?;
-        if let Some(ref mut f) = self.current_function { if let Some(block) = f.get_block(self.current_block.unwrap()) { if !block.is_terminated() { let void_val = self.value_gen.next(); self.emit_instruction(MirInstruction::Const { dst: void_val, value: super::ConstValue::Void })?; self.emit_instruction(MirInstruction::Return { value: Some(void_val) })?; } } }
-        let finalized = self.current_function.take().unwrap(); if let Some(ref mut module) = self.current_module { module.add_function(finalized); }
-        self.current_function = saved_function; self.current_block = saved_block; self.variable_map = saved_var_map; self.value_gen = saved_value_gen; Ok(())
+    pub(super) fn lower_static_method_as_function(
+        &mut self,
+        func_name: String,
+        params: Vec<String>,
+        body: Vec<ASTNode>,
+    ) -> Result<(), String> {
+        // Derive static box context from function name prefix, e.g., "BoxName.method/N"
+        let saved_static_ctx = self.current_static_box.clone();
+        if let Some(pos) = func_name.find('.') {
+            let box_name = &func_name[..pos];
+            if !box_name.is_empty() {
+                self.current_static_box = Some(box_name.to_string());
+            }
+        }
+        let signature = function_lowering::prepare_static_method_signature(
+            func_name,
+            &params,
+            &body,
+        );
+        let returns_value = !matches!(signature.return_type, MirType::Void);
+        let entry = self.block_gen.next();
+        let function = super::MirFunction::new(signature, entry);
+        let saved_function = self.current_function.take();
+        let saved_block = self.current_block.take();
+        let saved_var_map = std::mem::take(&mut self.variable_map);
+        let saved_value_gen = self.value_gen.clone();
+        self.value_gen.reset();
+        self.current_function = Some(function);
+        self.current_block = Some(entry);
+        self.ensure_block_exists(entry)?;
+        if let Some(ref mut f) = self.current_function {
+            for p in &params {
+                let pid = self.value_gen.next();
+                f.params.push(pid);
+                self.variable_map.insert(p.clone(), pid);
+            }
+        }
+        let program_ast = function_lowering::wrap_in_program(body);
+        let _last = self.build_expression(program_ast)?;
+        if !returns_value {
+            if let Some(ref mut f) = self.current_function {
+                if let Some(block) = f.get_block(self.current_block.unwrap()) {
+                    if !block.is_terminated() {
+                        let void_val = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::Const {
+                            dst: void_val,
+                            value: super::ConstValue::Void,
+                        })?;
+                        self.emit_instruction(MirInstruction::Return {
+                            value: Some(void_val),
+                        })?;
+                    }
+                }
+            }
+        }
+        if let Some(ref mut f) = self.current_function {
+            if returns_value
+                && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
+            {
+                let mut inferred: Option<MirType> = None;
+                'search: for (_bid, bb) in f.blocks.iter() {
+                    for inst in bb.instructions.iter() {
+                        if let MirInstruction::Return { value: Some(v) } = inst {
+                            if let Some(mt) = self.value_types.get(v).cloned() {
+                                inferred = Some(mt);
+                                break 'search;
+                            }
+                        }
+                    }
+                    if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
+                        if let Some(mt) = self.value_types.get(v).cloned() {
+                            inferred = Some(mt);
+                            break;
+                        }
+                    }
+                }
+                if let Some(mt) = inferred {
+                    f.signature.return_type = mt;
+                }
+            }
+        }
+        let finalized = self.current_function.take().unwrap();
+        if let Some(ref mut module) = self.current_module {
+            module.add_function(finalized);
+        }
+        self.current_function = saved_function;
+        self.current_block = saved_block;
+        self.variable_map = saved_var_map;
+        self.value_gen = saved_value_gen;
+        // Restore static box context
+        self.current_static_box = saved_static_ctx;
+        Ok(())
     }
 }

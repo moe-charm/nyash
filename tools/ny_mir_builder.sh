@@ -56,9 +56,16 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
 fi
 
 # Build nyash + NyRT as needed
-_LLVMPREFIX=$(llvm-config-18 --prefix)
-LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-  cargo build --release -j 24 --features llvm >/dev/null
+LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+  # Legacy inkwell needs LLVM_SYS_180_PREFIX
+  _LLVMPREFIX=$(llvm-config-18 --prefix)
+  LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+    cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
+else
+  # llvm-harness (default) doesn't need LLVM_SYS_180_PREFIX
+  cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
+fi
 if [[ "$EMIT" == "exe" ]]; then
   (cd crates/nyrt && cargo build --release -j 24 >/dev/null)
 fi
@@ -88,8 +95,13 @@ case "$EMIT" in
     export NYASH_LLVM_DUMP_LL=1
     export NYASH_LLVM_LL_OUT="$OUT"
     if [[ "$VERIFY" == "1" ]]; then export NYASH_LLVM_VERIFY=1; fi
-    cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-      ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+      cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    else
+      cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 \
+        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    fi
     if [[ ! -f "$OUT" ]]; then echo "error: failed to produce $OUT" >&2; exit 4; fi
     [[ "$QUIET" == "0" ]] && echo "OK ll:$OUT"
     ;;
@@ -97,8 +109,13 @@ case "$EMIT" in
     export NYASH_LLVM_OBJ_OUT="$OUT"
     if [[ "$VERIFY" == "1" ]]; then export NYASH_LLVM_VERIFY=1; fi
     rm -f "$OUT"
-    cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-      ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+      cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    else
+      cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 \
+        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    fi
     if [[ ! -f "$OUT" ]]; then echo "error: failed to produce $OUT" >&2; exit 4; fi
     [[ "$QUIET" == "0" ]] && echo "OK obj:$OUT"
     ;;
@@ -108,8 +125,13 @@ case "$EMIT" in
     export NYASH_LLVM_OBJ_OUT="$OBJ"
     if [[ "$VERIFY" == "1" ]]; then export NYASH_LLVM_VERIFY=1; fi
     rm -f "$OBJ"
-    cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-      ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+      cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    else
+      cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 \
+        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+    fi
     if [[ ! -f "$OBJ" ]]; then echo "error: failed to produce object $OBJ" >&2; exit 4; fi
     # Link with NyRT
     NYRT_BASE=${NYRT_DIR:-"$PWD/crates/nyrt"}

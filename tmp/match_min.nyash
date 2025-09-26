@@ -1,0 +1,9 @@
+static box Main {
+  main(args) {
+    local r = match 42 {
+      IntegerBox(n) => 1,
+      _ => 0
+    }
+    return r
+  }
+}

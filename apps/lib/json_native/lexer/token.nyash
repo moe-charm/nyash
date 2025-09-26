@@ -1,0 +1,257 @@
+// JsonToken — JSON字句解析の基本単位（美しいモジュラー設計）
+// 責務: JSONトークンの定義と操作
+
+// 🎯 JSONトークンの種類定義
+static box TokenType {
+    // リテラル値
+    NULL() { return "NULL" }
+    TRUE() { return "TRUE" }
+    FALSE() { return "FALSE" }
+    NUMBER() { return "NUMBER" }
+    STRING() { return "STRING" }
+    
+    // 構造文字
+    LBRACE() { return "LBRACE" }     // {
+    RBRACE() { return "RBRACE" }     // }
+    LBRACKET() { return "LBRACKET" } // [
+    RBRACKET() { return "RBRACKET" } // ]
+    COMMA() { return "COMMA" }       // ,
+    COLON() { return "COLON" }       // :
+    
+    // 制御トークン
+    EOF() { return "EOF" }           // 終端
+    ERROR() { return "ERROR" }       // エラー
+    
+    // 空白（通常は無視、デバッグ用）
+    WHITESPACE() { return "WHITESPACE" }
+}
+
+// 🌟 JSONトークン（Everything is Box）
+box JsonToken {
+    type: StringBox        // トークンタイプ
+    value: StringBox       // トークンの値
+    start: IntegerBox      // 開始位置
+    end: IntegerBox        // 終了位置
+    line: IntegerBox       // 行番号（エラー報告用）
+    column: IntegerBox     // 列番号（エラー報告用）
+    
+    birth(token_type, token_value, start_pos, end_pos) {
+        me.type = token_type
+        me.value = token_value
+        me.start = start_pos
+        me.end = end_pos
+        me.line = 1
+        me.column = start_pos + 1
+    }
+    
+    // ===== アクセッサーメソッド =====
+    
+    get_type() { return me.type }
+    get_value() { return me.value }
+    get_start() { return me.start }
+    get_end() { return me.end }
+    get_line() { return me.line }
+    get_column() { return me.column }
+    
+    // 位置情報の設定（トークナイザーから付与）
+    set_line_column(line, column) {
+        me.line = line
+        me.column = column
+        return me
+    }
+    
+    // ===== 判定メソッド =====
+    
+    is_literal() {
+        return me.type == "NULL" or me.type == "TRUE" or me.type == "FALSE" or me.type == "NUMBER" or me.type == "STRING"
+    }
+    
+    is_structural() {
+        return me.type == "LBRACE" or me.type == "RBRACE" or me.type == "LBRACKET" or me.type == "RBRACKET" or me.type == "COMMA" or me.type == "COLON"
+    }
+    
+    is_value_start() {
+        return me.is_literal() or me.type == "LBRACE" or me.type == "LBRACKET"
+    }
+    
+    is_error() {
+        return me.type == "ERROR"
+    }
+    
+    is_eof() {
+        return me.type == "EOF"
+    }
+    
+    // ===== デバッグ用メソッド =====
+    
+    to_string() {
+        return me.type + "(" + me.value + ") at " + me.start + "-" + me.end
+    }
+    
+    to_debug_string() {
+        return me.type + "{value: \"" + me.value + "\", pos: " + me.start + "-" + me.end + ", line: " + me.line + ", col: " + me.column + "}"
+    }
+}
+
+// 🏭 トークンファクトリー（便利メソッド集）
+static box TokenFactory {
+    
+    // リテラル値トークン
+    create_null(start, end) {
+        return new JsonToken("NULL", "null", start, end)
+    }
+    
+    create_true(start, end) {
+        return new JsonToken("TRUE", "true", start, end)
+    }
+    
+    create_false(start, end) {
+        return new JsonToken("FALSE", "false", start, end)
+    }
+    
+    create_number(value, start, end) {
+        return new JsonToken("NUMBER", value, start, end)
+    }
+    
+    create_string(value, start, end) {
+        return new JsonToken("STRING", value, start, end)
+    }
+    
+    // 構造文字トークン
+    create_lbrace(start) {
+        return new JsonToken("LBRACE", "{", start, start + 1)
+    }
+    
+    create_rbrace(start) {
+        return new JsonToken("RBRACE", "}", start, start + 1)
+    }
+    
+    create_lbracket(start) {
+        return new JsonToken("LBRACKET", "[", start, start + 1)
+    }
+    
+    create_rbracket(start) {
+        return new JsonToken("RBRACKET", "]", start, start + 1)
+    }
+    
+    create_comma(start) {
+        return new JsonToken("COMMA", ",", start, start + 1)
+    }
+    
+    create_colon(start) {
+        return new JsonToken("COLON", ":", start, start + 1)
+    }
+    
+    // 制御トークン
+    create_eof(pos) {
+        return new JsonToken("EOF", "", pos, pos)
+    }
+    
+    create_error(message, start, end) {
+        return new JsonToken("ERROR", message, start, end)
+    }
+    
+    create_whitespace(value, start, end) {
+        return new JsonToken("WHITESPACE", value, start, end)
+    }
+    
+    // ===== 文字からトークンタイプを判定 =====
+    
+    char_to_token_type(ch) {
+        return match ch {
+            "{" => "LBRACE",
+            "}" => "RBRACE",
+            "[" => "LBRACKET",
+            "]" => "RBRACKET",
+            "," => "COMMA",
+            ":" => "COLON",
+            _ => null
+        }
+    }
+    
+    // 文字が構造文字かどうか判定
+    is_structural_char(ch) {
+        return ch == "{" or ch == "}" or ch == "[" or ch == "]" or ch == "," or ch == ":"
+    }
+    
+    // 文字が空白かどうか判定
+    is_whitespace_char(ch) {
+        return ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    }
+    
+    // 文字が数値の開始文字かどうか判定
+    is_number_start_char(ch) {
+        return ch == "-" or (ch >= "0" and ch <= "9")
+    }
+    
+    // キーワードからトークンタイプを判定
+    keyword_to_token_type(keyword) {
+        return match keyword {
+            "null" => "NULL",
+            "true" => "TRUE",
+            "false" => "FALSE",
+            _ => null
+        }
+    }
+}
+
+// 📊 トークン統計（デバッグ・分析用）
+static box TokenStats {
+    
+    analyze_tokens(tokens) {
+        local stats = new MapBox()
+        
+        // トークンタイプ別カウント
+        local type_counts = new MapBox()
+        local i = 0
+        
+        loop(i < tokens.length()) {
+            local token = tokens.get(i)
+            local type = token.get_type()
+            
+            if type_counts.has(type) {
+                local count = type_counts.get(type) + 1
+                type_counts.set(type, count)
+            } else {
+                type_counts.set(type, 1)
+            }
+            
+            i = i + 1
+        }
+        
+        stats.set("type_counts", type_counts)
+        stats.set("total_tokens", tokens.length())
+        
+        // エラートークンの存在チェック
+        local has_errors = type_counts.has("ERROR")
+        stats.set("has_errors", has_errors)
+        
+        if has_errors {
+            stats.set("error_count", type_counts.get("ERROR"))
+        }
+        
+        return stats
+    }
+    
+    print_stats(stats) {
+        print("📊 Token Analysis Results:")
+        print("Total tokens: " + stats.get("total_tokens"))
+        print("Has errors: " + stats.get("has_errors"))
+        
+        if stats.get("has_errors") {
+            print("Error count: " + stats.get("error_count"))
+        }
+        
+        print("\nToken type breakdown:")
+        local type_counts = stats.get("type_counts")
+        local keys = type_counts.keys()
+        local i = 0
+        
+        loop(i < keys.length()) {
+            local type = keys.get(i)
+            local count = type_counts.get(type)
+            print("  " + type + ": " + count)
+            i = i + 1
+        }
+    }
+}

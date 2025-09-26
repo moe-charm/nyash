@@ -1,36 +1,31 @@
 /*!
  * MIR Loop Builder - SSA形式でのループ構築専用モジュール
- * 
+ *
  * Sealed/Unsealed blockとPhi nodeを使った正しいループ実装
  * Based on Gemini's recommendation for proper SSA loop handling
  */
 
-use super::{
-    MirInstruction, BasicBlockId, ValueId, 
-    ConstValue
-};
+use super::{BasicBlockId, ConstValue, MirInstruction, ValueId};
+use crate::mir::phi_core::loop_phi::IncompletePhi;
 use crate::ast::ASTNode;
 use std::collections::HashMap;
 
-/// 不完全なPhi nodeの情報
-#[derive(Debug, Clone)]
-struct IncompletePhi {
-    /// Phi nodeの結果ValueId
-    phi_id: ValueId,
-    /// 変数名
-    var_name: String,
-    /// 既知の入力値 (predecessor block id, value)
-    known_inputs: Vec<(BasicBlockId, ValueId)>,
-}
+// Phase 15 段階的根治戦略：制御フローユーティリティ
+use super::utils::{
+    is_current_block_terminated,
+    capture_actual_predecessor_and_jump,
+};
+
+// IncompletePhi has moved to phi_core::loop_phi
 
 /// ループビルダー - SSA形式でのループ構築を管理
 pub struct LoopBuilder<'a> {
     /// 親のMIRビルダーへの参照
     parent_builder: &'a mut super::builder::MirBuilder,
-    
+
     /// ループ内で追跡する変数の不完全Phi node
     incomplete_phis: HashMap<BasicBlockId, Vec<IncompletePhi>>,
-    
+
     /// ブロックごとの変数マップ（スコープ管理）
     #[allow(dead_code)]
     block_var_maps: HashMap<BasicBlockId, HashMap<String, ValueId>>,
@@ -40,61 +35,180 @@ pub struct LoopBuilder<'a> {
 
     /// continue文からの変数スナップショット
     continue_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
+
+    /// break文からの変数スナップショット（exit PHI生成用）
+    exit_snapshots: Vec<(BasicBlockId, HashMap<String, ValueId>)>,
+
+    // フェーズM: no_phi_modeフィールド削除（常にPHI使用）
 }
 
+
 impl<'a> LoopBuilder<'a> {
+    // Implement phi_core LoopPhiOps on LoopBuilder for in-place delegation
+    
+    // =============================================================
+    // Control Helpers — break/continue/jumps/unreachable handling
+    // =============================================================
+
+    /// Emit a jump to `target` from the current block and record predecessor metadata.
+    fn jump_with_pred(&mut self, target: BasicBlockId) -> Result<(), String> {
+        let cur_block = self.current_block()?;
+        self.emit_jump(target)?;
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, target, cur_block);
+        Ok(())
+    }
+
+    /// Switch insertion to a fresh (unreachable) block and place a Void const to keep callers satisfied.
+    fn switch_to_unreachable_block_with_void(&mut self) -> Result<ValueId, String> {
+        let next_block = self.new_block();
+        self.set_current_block(next_block)?;
+        let void_id = self.new_value();
+        self.emit_const(void_id, ConstValue::Void)?;
+        Ok(void_id)
+    }
+
+    /// Handle a `break` statement: jump to loop exit and continue in a fresh unreachable block.
+    fn do_break(&mut self) -> Result<ValueId, String> {
+        // Snapshot variables at break point for exit PHI generation
+        let snapshot = self.get_current_variable_map();
+        let cur_block = self.current_block()?;
+        self.exit_snapshots.push((cur_block, snapshot));
+
+        if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
+            self.jump_with_pred(exit_bb)?;
+        }
+        self.switch_to_unreachable_block_with_void()
+    }
+
+    /// Handle a `continue` statement: snapshot vars, jump to loop header, then continue in a fresh unreachable block.
+    fn do_continue(&mut self) -> Result<ValueId, String> {
+        // Snapshot variables at current block to be considered as a predecessor input
+        let snapshot = self.get_current_variable_map();
+        let cur_block = self.current_block()?;
+        self.block_var_maps.insert(cur_block, snapshot.clone());
+        self.continue_snapshots.push((cur_block, snapshot));
+
+        if let Some(header) = self.loop_header {
+            self.jump_with_pred(header)?;
+        }
+
+        self.switch_to_unreachable_block_with_void()
+    }
+
+    // =============================================================
+    // Lifecycle — create builder, main loop construction
+    // =============================================================
     /// 新しいループビルダーを作成
     pub fn new(parent: &'a mut super::builder::MirBuilder) -> Self {
+        // フェーズM: no_phi_mode初期化削除
         Self {
             parent_builder: parent,
             incomplete_phis: HashMap::new(),
             block_var_maps: HashMap::new(),
             loop_header: None,
             continue_snapshots: Vec::new(),
+            exit_snapshots: Vec::new(),  // exit PHI用のスナップショット
+            // フェーズM: no_phi_modeフィールド削除
         }
     }
-    
+
     /// SSA形式でループを構築
     pub fn build_loop(
         &mut self,
         condition: ASTNode,
         body: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Pre-scan body for simple carrier pattern (up to 2 assigned variables, no break/continue)
+        let mut assigned_vars: Vec<String> = Vec::new();
+        let mut has_ctrl = false;
+        for st in &body { crate::mir::phi_core::loop_phi::collect_carrier_assigns(st, &mut assigned_vars, &mut has_ctrl); }
+        if !has_ctrl && !assigned_vars.is_empty() && assigned_vars.len() <= 2 {
+            // Emit a carrier hint (no-op sink by default; visible with NYASH_MIR_TRACE_HINTS=1)
+            self.parent_builder.hint_loop_carrier(assigned_vars.clone());
+        }
+
         // 1. ブロックの準備
         let preheader_id = self.current_block()?;
-        let header_id = self.new_block();
-        let body_id = self.new_block();
-        let after_loop_id = self.new_block();
+        let trace = std::env::var("NYASH_LOOP_TRACE").ok().as_deref() == Some("1");
+        let (header_id, body_id, after_loop_id) =
+            crate::mir::builder::loops::create_loop_blocks(self.parent_builder);
+        if trace {
+            eprintln!(
+                "[loop] blocks preheader={:?} header={:?} body={:?} exit={:?}",
+                preheader_id, header_id, body_id, after_loop_id
+            );
+        }
         self.loop_header = Some(header_id);
         self.continue_snapshots.clear();
-        // Push loop context to parent builder (for nested break/continue lowering)
-        crate::mir::builder::loops::push_loop_context(self.parent_builder, header_id, after_loop_id);
-        
+
         // 2. Preheader -> Header へのジャンプ
         self.emit_jump(header_id)?;
-        let _ = self.add_predecessor(header_id, preheader_id);
-        
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, header_id, preheader_id);
+
         // 3. Headerブロックの準備（unsealed状態）
         self.set_current_block(header_id)?;
+        // Hint: loop header (no-op sink)
+        self.parent_builder.hint_loop_header();
         let _ = self.mark_block_unsealed(header_id);
-        
+
         // 4. ループ変数のPhi nodeを準備
         // ここでは、ループ内で変更される可能性のある変数を事前に検出するか、
         // または変数アクセス時に遅延生成する
         self.prepare_loop_variables(header_id, preheader_id)?;
-        
+
         // 5. 条件評価（Phi nodeの結果を使用）
+        // Heuristic pre-pin: if condition is a comparison, evaluate its operands and pin them
+        // so that the loop body/next iterations can safely reuse these values across blocks.
+        if crate::config::env::mir_pre_pin_compare_operands() {
+        if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
+            use crate::ast::BinaryOperator as BO;
+            match operator {
+                BO::Equal | BO::NotEqual | BO::Less | BO::LessEqual | BO::Greater | BO::GreaterEqual => {
+                    if let Ok(lhs_v) = self.parent_builder.build_expression((**left).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(lhs_v, "@loop_if_lhs");
+                    }
+                    if let Ok(rhs_v) = self.parent_builder.build_expression((**right).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(rhs_v, "@loop_if_rhs");
+                    }
+                }
+                _ => {}
+            }
+        }
+        }
         let condition_value = self.build_expression_with_phis(condition)?;
-        
+
         // 6. 条件分岐
+        let pre_branch_bb = self.current_block()?;
         self.emit_branch(condition_value, body_id, after_loop_id)?;
-        let _ = self.add_predecessor(body_id, header_id);
-        let _ = self.add_predecessor(after_loop_id, header_id);
-        
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, body_id, header_id);
+        let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, after_loop_id, header_id);
+        if trace {
+            eprintln!(
+                "[loop] header branched to body={:?} and exit={:?}",
+                body_id, after_loop_id
+            );
+        }
+
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
+        // Materialize pinned slots at entry via single-pred Phi
+        let names: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
+        for name in names {
+            if !name.starts_with("__pin$") { continue; }
+            if let Some(&pre_v) = self.parent_builder.variable_map.get(&name) {
+                let phi_val = self.new_value();
+                self.emit_phi_at_block_start(body_id, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                self.update_variable(name, phi_val);
+            }
+        }
+        // Scope enter for loop body
+        self.parent_builder.hint_scope_enter(0);
         // Optional safepoint per loop-iteration
-        if std::env::var("NYASH_BUILDER_SAFEPOINT_LOOP").ok().as_deref() == Some("1") {
+        if std::env::var("NYASH_BUILDER_SAFEPOINT_LOOP")
+            .ok()
+            .as_deref()
+            == Some("1")
+        {
             self.emit_safepoint()?;
         }
 
@@ -105,141 +219,172 @@ impl<'a> LoopBuilder<'a> {
         // 8. Latchブロック（ボディの最後）からHeaderへ戻る
         // 現在の挿入先が latch（最後のブロック）なので、そのブロックIDでスナップショットを保存する
         let latch_id = self.current_block()?;
+        // Hint: loop latch (no-op sink)
+        self.parent_builder.hint_loop_latch();
+        // Scope leave for loop body
+        self.parent_builder.hint_scope_leave(0);
         let latch_snapshot = self.get_current_variable_map();
         // 以前は body_id に保存していたが、複数ブロックのボディや continue 混在時に不正確になるため
         // 実際の latch_id に対してスナップショットを紐づける
-        self.block_var_maps.insert(latch_id, latch_snapshot);
-        self.emit_jump(header_id)?;
-        let _ = self.add_predecessor(header_id, latch_id);
-        
+        crate::mir::phi_core::loop_phi::save_block_snapshot(
+            &mut self.block_var_maps,
+            latch_id,
+            &latch_snapshot,
+        );
+        // Only jump back to header if the latch block is not already terminated
+        {
+            let need_jump = {
+                if let Some(ref fun_ro) = self.parent_builder.current_function {
+                    if let Some(bb) = fun_ro.get_block(latch_id) {
+                        !bb.is_terminated()
+                    } else {
+                        true
+                    }
+                } else {
+                    true
+                }
+            };
+            if need_jump {
+                self.emit_jump(header_id)?;
+                let _ = crate::mir::builder::loops::add_predecessor(
+                    self.parent_builder,
+                    header_id,
+                    latch_id,
+                );
+            }
+        }
+
         // 9. Headerブロックをシール（全predecessors確定）
         self.seal_block(header_id, latch_id)?;
-        
-        // 10. ループ後の処理
+        if trace {
+            eprintln!(
+                "[loop] sealed header={:?} with latch={:?}",
+                header_id, latch_id
+            );
+        }
+
+        // 10. ループ後の処理 - Exit PHI生成
         self.set_current_block(after_loop_id)?;
+
+        // Exit PHIの生成 - break時点での変数値を統一
+        self.create_exit_phis(header_id, after_loop_id)?;
+
         // Pop loop context
         crate::mir::builder::loops::pop_loop_context(self.parent_builder);
 
         // void値を返す
         let void_dst = self.new_value();
         self.emit_const(void_dst, ConstValue::Void)?;
-
+        if trace {
+            eprintln!("[loop] exit={:?} return void=%{:?}", after_loop_id, void_dst);
+        }
         Ok(void_dst)
     }
-    
+
+    // =============================================================
+    // PHI Helpers — prepare/finalize PHIs and block sealing
+    // =============================================================
     /// ループ変数の準備（事前検出または遅延生成）
     fn prepare_loop_variables(
         &mut self,
         header_id: BasicBlockId,
         preheader_id: BasicBlockId,
     ) -> Result<(), String> {
-        // 現在の変数マップから、ループで使用される可能性のある変数を取得
         let current_vars = self.get_current_variable_map();
-        // preheader時点のスナップショット（後でphi入力の解析に使う）
-        self.block_var_maps.insert(preheader_id, current_vars.clone());
-        
-        // 各変数に対して不完全なPhi nodeを作成
-        let mut incomplete_phis = Vec::new();
-        for (var_name, &value_before) in &current_vars {
-            let phi_id = self.new_value();
-            
-            // 不完全なPhi nodeを作成（preheaderからの値のみ設定）
-            let incomplete_phi = IncompletePhi {
-                phi_id,
-                var_name: var_name.clone(),
-                known_inputs: vec![(preheader_id, value_before)],
-            };
-            
-            incomplete_phis.push(incomplete_phi);
-            
-            // 変数マップを更新（Phi nodeの結果を使用）
-            self.update_variable(var_name.clone(), phi_id);
-        }
-        
-        // 不完全なPhi nodeを記録
-        self.incomplete_phis.insert(header_id, incomplete_phis);
-        
+        crate::mir::phi_core::loop_phi::save_block_snapshot(
+            &mut self.block_var_maps,
+            preheader_id,
+            &current_vars,
+        );
+        let incs = crate::mir::phi_core::loop_phi::prepare_loop_variables_with(
+            self,
+            header_id,
+            preheader_id,
+            &current_vars,
+        )?;
+        self.incomplete_phis.insert(header_id, incs);
         Ok(())
     }
-    
+
     /// ブロックをシールし、不完全なPhi nodeを完成させる
-    fn seal_block(
-        &mut self,
-        block_id: BasicBlockId,
-        latch_id: BasicBlockId,
-    ) -> Result<(), String> {
-        // 不完全なPhi nodeを取得
+    fn seal_block(&mut self, block_id: BasicBlockId, latch_id: BasicBlockId) -> Result<(), String> {
         if let Some(incomplete_phis) = self.incomplete_phis.remove(&block_id) {
-            for mut phi in incomplete_phis {
-                for (cid, snapshot) in &self.continue_snapshots {
-                    if let Some(v) = snapshot.get(&phi.var_name) {
-                        phi.known_inputs.push((*cid, *v));
-                    }
-                }
-
-                let value_after = self
-                    .get_variable_at_block(&phi.var_name, latch_id)
-                    .ok_or_else(|| {
-                        format!("Variable {} not found at latch block", phi.var_name)
-                    })?;
-
-                phi.known_inputs.push((latch_id, value_after));
-
-                self.emit_phi_at_block_start(block_id, phi.phi_id, phi.known_inputs)?;
-                self.update_variable(phi.var_name.clone(), phi.phi_id);
-            }
+            let cont_snaps = self.continue_snapshots.clone();
+            crate::mir::phi_core::loop_phi::seal_incomplete_phis_with(
+                self,
+                block_id,
+                latch_id,
+                incomplete_phis,
+                &cont_snaps,
+            )?;
         }
-        
-        // ブロックをシール済みとしてマーク
         self.mark_block_sealed(block_id)?;
-        
         Ok(())
     }
-    
+
+    /// Exitブロックで変数のPHIを生成（breakポイントでの値を統一）
+    fn create_exit_phis(&mut self, header_id: BasicBlockId, exit_id: BasicBlockId) -> Result<(), String> {
+        let header_vars = self.get_current_variable_map();
+        let exit_snaps = self.exit_snapshots.clone();
+        crate::mir::phi_core::loop_phi::build_exit_phis_with(
+            self,
+            header_id,
+            exit_id,
+            &header_vars,
+            &exit_snaps,
+        )
+    }
+
     // --- ヘルパーメソッド（親ビルダーへの委譲） ---
-    
+
     fn current_block(&self) -> Result<BasicBlockId, String> {
-        self.parent_builder.current_block
+        self.parent_builder
+            .current_block
             .ok_or_else(|| "No current block".to_string())
     }
-    
+
     fn new_block(&mut self) -> BasicBlockId {
         self.parent_builder.block_gen.next()
     }
-    
+
     fn new_value(&mut self) -> ValueId {
         self.parent_builder.value_gen.next()
     }
-    
+
     fn set_current_block(&mut self, block_id: BasicBlockId) -> Result<(), String> {
         self.parent_builder.start_new_block(block_id)
     }
-    
+
     fn emit_jump(&mut self, target: BasicBlockId) -> Result<(), String> {
-        self.parent_builder.emit_instruction(MirInstruction::Jump { target })
+        self.parent_builder
+            .emit_instruction(MirInstruction::Jump { target })
     }
-    
+
     fn emit_branch(
         &mut self,
         condition: ValueId,
         then_bb: BasicBlockId,
         else_bb: BasicBlockId,
     ) -> Result<(), String> {
-        self.parent_builder.emit_instruction(MirInstruction::Branch {
-            condition,
-            then_bb,
-            else_bb,
-        })
+        self.parent_builder
+            .emit_instruction(MirInstruction::Branch {
+                condition,
+                then_bb,
+                else_bb,
+            })
     }
-    
+
     fn emit_safepoint(&mut self) -> Result<(), String> {
-        self.parent_builder.emit_instruction(MirInstruction::Safepoint)
+        self.parent_builder
+            .emit_instruction(MirInstruction::Safepoint)
     }
-    
+
     fn emit_const(&mut self, dst: ValueId, value: ConstValue) -> Result<(), String> {
-        self.parent_builder.emit_instruction(MirInstruction::Const { dst, value })
+        self.parent_builder
+            .emit_instruction(MirInstruction::Const { dst, value })
     }
-    
+
+    /// ブロック先頭に PHI 命令を挿入（不変条件: PHI は常にブロック先頭）
     fn emit_phi_at_block_start(
         &mut self,
         block_id: BasicBlockId,
@@ -260,7 +405,8 @@ impl<'a> LoopBuilder<'a> {
             Err("No current function".to_string())
         }
     }
-    
+
+    #[allow(dead_code)]
     fn add_predecessor(&mut self, block: BasicBlockId, pred: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.parent_builder.current_function {
             if let Some(block) = function.get_block_mut(block) {
@@ -273,13 +419,13 @@ impl<'a> LoopBuilder<'a> {
             Err("No current function".to_string())
         }
     }
-    
+
     fn mark_block_unsealed(&mut self, _block_id: BasicBlockId) -> Result<(), String> {
         // ブロックはデフォルトでunsealedなので、特に何もしない
         // （既にBasicBlock::newでsealed: falseに初期化されている）
         Ok(())
     }
-    
+
     fn mark_block_sealed(&mut self, block_id: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.parent_builder.current_function {
             if let Some(block) = function.get_block_mut(block_id) {
@@ -292,132 +438,247 @@ impl<'a> LoopBuilder<'a> {
             Err("No current function".to_string())
         }
     }
-    
+
+    // =============================================================
+    // Variable Map Utilities — snapshots and rebinding
+    // =============================================================
     fn get_current_variable_map(&self) -> HashMap<String, ValueId> {
         self.parent_builder.variable_map.clone()
     }
-    
+
     fn update_variable(&mut self, name: String, value: ValueId) {
         self.parent_builder.variable_map.insert(name, value);
     }
-    
+
     fn get_variable_at_block(&self, name: &str, block_id: BasicBlockId) -> Option<ValueId> {
         // まずブロックごとのスナップショットを優先
         if let Some(map) = self.block_var_maps.get(&block_id) {
-            if let Some(v) = map.get(name) { return Some(*v); }
+            if let Some(v) = map.get(name) {
+                return Some(*v);
+            }
         }
         // フォールバック：現在の変数マップ（単純ケース用）
         self.parent_builder.variable_map.get(name).copied()
     }
-    
+
     fn build_expression_with_phis(&mut self, expr: ASTNode) -> Result<ValueId, String> {
         // Phi nodeの結果を考慮しながら式を構築
         self.parent_builder.build_expression(expr)
     }
-    
+
     fn build_statement(&mut self, stmt: ASTNode) -> Result<ValueId, String> {
         match stmt {
-            ASTNode::If { condition, then_body, else_body, .. } => {
-                // Lower a simple if inside loop, ensuring continue/break inside branches are handled
-                let cond_val = self.parent_builder.build_expression(*condition.clone())?;
-                let then_bb = self.new_block();
-                let else_bb = self.new_block();
-                let merge_bb = self.new_block();
-                self.emit_branch(cond_val, then_bb, else_bb)?;
-
-                // then
-                self.set_current_block(then_bb)?;
-                for s in then_body.iter().cloned() {
-                    let _ = self.build_statement(s)?;
-                    // Stop if block terminated
-                    let cur_id = self.current_block()?;
-                    let terminated = {
-                        if let Some(ref fun_ro) = self.parent_builder.current_function {
-                            if let Some(bb) = fun_ro.get_block(cur_id) { bb.is_terminated() } else { false }
-                        } else { false }
-                    };
-                    if terminated { break; }
-                }
-                // Only jump to merge if not already terminated (e.g., continue/break)
-                {
-                    let cur_id = self.current_block()?;
-                    let need_jump = {
-                        if let Some(ref fun_ro) = self.parent_builder.current_function {
-                            if let Some(bb) = fun_ro.get_block(cur_id) { !bb.is_terminated() } else { false }
-                        } else { false }
-                    };
-                    if need_jump { self.emit_jump(merge_bb)?; }
-                }
-
-                // else
-                self.set_current_block(else_bb)?;
-                if let Some(es) = else_body {
-                    for s in es.into_iter() {
-                        let _ = self.build_statement(s)?;
-                        let cur_id = self.current_block()?;
-                        let terminated = {
-                            if let Some(ref fun_ro) = self.parent_builder.current_function {
-                                if let Some(bb) = fun_ro.get_block(cur_id) { bb.is_terminated() } else { false }
-                            } else { false }
-                        };
-                        if terminated { break; }
+            // Ensure nested bare blocks inside loops are lowered with loop-aware semantics
+            ASTNode::Program { statements, .. } => {
+                let mut last = None;
+                for s in statements.into_iter() {
+                    last = Some(self.build_statement(s)?);
+                    // フェーズS修正：統一終端検出ユーティリティ使用
+                    if is_current_block_terminated(self.parent_builder)? {
+                        break;
                     }
                 }
-                {
-                    let cur_id = self.current_block()?;
-                    let need_jump = {
-                        if let Some(ref fun_ro) = self.parent_builder.current_function {
-                            if let Some(bb) = fun_ro.get_block(cur_id) { !bb.is_terminated() } else { false }
-                        } else { false }
-                    };
-                    if need_jump { self.emit_jump(merge_bb)?; }
-                }
-
-                // Continue at merge
-                self.set_current_block(merge_bb)?;
-                let void_id = self.new_value();
-                self.emit_const(void_id, ConstValue::Void)?;
-                Ok(void_id)
+                Ok(last.unwrap_or_else(|| {
+                    let void_id = self.new_value();
+                    // Emit a void const to keep SSA consistent when block is empty
+                    let _ = self.emit_const(void_id, ConstValue::Void);
+                    void_id
+                }))
             }
-            ASTNode::Break { .. } => {
-                // Jump to loop exit (after_loop_id) if available
-                let cur_block = self.current_block()?;
-                // Ensure parent has recorded current loop exit; if not, record now
-                if crate::mir::builder::loops::current_exit(self.parent_builder).is_none() {
-                    // Determine after_loop by peeking the next id used earlier:
-                    // In this builder, after_loop_id was created above; record it for nested lowering
-                    // We approximate by using the next block id minus 1 (after_loop) which we set below before branch
-                }
-                if let Some(exit_bb) = crate::mir::builder::loops::current_exit(self.parent_builder) {
-                    self.emit_jump(exit_bb)?;
-                    let _ = self.add_predecessor(exit_bb, cur_block);
-                }
-                // Keep building in a fresh (unreachable) block to satisfy callers
-                let next_block = self.new_block();
-                self.set_current_block(next_block)?;
-                let void_id = self.new_value();
-                self.emit_const(void_id, ConstValue::Void)?;
-                Ok(void_id)
-            }
-            ASTNode::Continue { .. } => {
-                let snapshot = self.get_current_variable_map();
-                let cur_block = self.current_block()?;
-                self.block_var_maps.insert(cur_block, snapshot.clone());
-                self.continue_snapshots.push((cur_block, snapshot));
-
-                if let Some(header) = self.loop_header {
-                    self.emit_jump(header)?;
-                    let _ = self.add_predecessor(header, cur_block);
-                }
-
-                let next_block = self.new_block();
-                self.set_current_block(next_block)?;
-
-                let void_id = self.new_value();
-                self.emit_const(void_id, ConstValue::Void)?;
-                Ok(void_id)
-            }
+            ASTNode::If { condition, then_body, else_body, .. } =>
+                self.lower_if_in_loop(*condition, then_body, else_body),
+            ASTNode::Break { .. } => self.do_break(),
+            ASTNode::Continue { .. } => self.do_continue(),
             other => self.parent_builder.build_expression(other),
+        }
+    }
+
+    /// Lower an if-statement inside a loop, preserving continue/break semantics and emitting PHIs per assigned variable.
+    fn lower_if_in_loop(
+        &mut self,
+        condition: ASTNode,
+        then_body: Vec<ASTNode>,
+        else_body: Option<Vec<ASTNode>>,
+    ) -> Result<ValueId, String> {
+        // Pre-pin comparison operands to slots so repeated uses across blocks are safe
+        if crate::config::env::mir_pre_pin_compare_operands() {
+        if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
+            use crate::ast::BinaryOperator as BO;
+            match operator {
+                BO::Equal | BO::NotEqual | BO::Less | BO::LessEqual | BO::Greater | BO::GreaterEqual => {
+                    if let Ok(lhs_v) = self.parent_builder.build_expression((**left).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(lhs_v, "@loop_if_lhs");
+                    }
+                    if let Ok(rhs_v) = self.parent_builder.build_expression((**right).clone()) {
+                        let _ = self.parent_builder.pin_to_slot(rhs_v, "@loop_if_rhs");
+                    }
+                }
+                _ => {}
+            }
+        }
+        }
+        // Evaluate condition and create blocks
+        let cond_val = self.parent_builder.build_expression(condition)?;
+        let then_bb = self.new_block();
+        let else_bb = self.new_block();
+        let merge_bb = self.new_block();
+        let pre_branch_bb = self.current_block()?;
+        self.emit_branch(cond_val, then_bb, else_bb)?;
+
+        // Capture pre-if variable map (used for phi normalization)
+        let pre_if_var_map = self.get_current_variable_map();
+        let trace_if = std::env::var("NYASH_IF_TRACE").ok().as_deref() == Some("1");
+        // (legacy) kept for earlier merge style; now unified helpers compute deltas directly.
+
+        // then branch
+        self.set_current_block(then_bb)?;
+        // Materialize all variables at entry via single-pred Phi (correctness-first)
+        let names_then: Vec<String> = self
+            .parent_builder
+            .variable_map
+            .keys()
+            .filter(|n| !n.starts_with("__pin$"))
+            .cloned()
+            .collect();
+        for name in names_then {
+            if let Some(&pre_v) = pre_if_var_map.get(&name) {
+                let phi_val = self.new_value();
+                self.emit_phi_at_block_start(then_bb, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                let name_for_log = name.clone();
+                self.update_variable(name, phi_val);
+                if trace_if {
+                    eprintln!(
+                        "[if-trace] then-entry phi var={} pre={:?} -> dst={:?}",
+                        name_for_log, pre_v, phi_val
+                    );
+                }
+            }
+        }
+        for s in then_body.iter().cloned() {
+            let _ = self.build_statement(s)?;
+            // フェーズS修正：統一終端検出ユーティリティ使用
+            if is_current_block_terminated(self.parent_builder)? { 
+                break; 
+            }
+        }
+        let then_var_map_end = self.get_current_variable_map();
+        // フェーズS修正：最強モード指摘の「実到達predecessor捕捉」を統一
+        let then_pred_to_merge = capture_actual_predecessor_and_jump(
+            self.parent_builder, 
+            merge_bb
+        )?;
+
+        // else branch
+        self.set_current_block(else_bb)?;
+        // Materialize all variables at entry via single-pred Phi (correctness-first)
+        let names2: Vec<String> = self
+            .parent_builder
+            .variable_map
+            .keys()
+            .filter(|n| !n.starts_with("__pin$"))
+            .cloned()
+            .collect();
+        for name in names2 {
+            if let Some(&pre_v) = pre_if_var_map.get(&name) {
+                let phi_val = self.new_value();
+                self.emit_phi_at_block_start(else_bb, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                let name_for_log = name.clone();
+                self.update_variable(name, phi_val);
+                if trace_if {
+                    eprintln!(
+                        "[if-trace] else-entry phi var={} pre={:?} -> dst={:?}",
+                        name_for_log, pre_v, phi_val
+                    );
+                }
+            }
+        }
+        let mut else_var_map_end_opt: Option<HashMap<String, ValueId>> = None;
+        if let Some(es) = else_body.clone() {
+            for s in es.into_iter() {
+                let _ = self.build_statement(s)?;
+                // フェーズS修正：統一終端検出ユーティリティ使用
+                if is_current_block_terminated(self.parent_builder)? { 
+                    break; 
+                }
+            }
+            else_var_map_end_opt = Some(self.get_current_variable_map());
+        }
+        // フェーズS修正：else branchでも統一実到達predecessor捕捉
+        let else_pred_to_merge = capture_actual_predecessor_and_jump(
+            self.parent_builder, 
+            merge_bb
+        )?;
+
+        // Continue at merge
+        self.set_current_block(merge_bb)?;
+
+        let mut vars: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
+        crate::mir::phi_core::if_phi::collect_assigned_vars(&then_prog, &mut vars);
+        if let Some(es) = &else_body {
+            let else_prog = ASTNode::Program { statements: es.clone(), span: crate::ast::Span::unknown() };
+            crate::mir::phi_core::if_phi::collect_assigned_vars(&else_prog, &mut vars);
+        }
+
+        // Reset to pre-if map before rebinding to ensure a clean environment
+        self.parent_builder.variable_map = pre_if_var_map.clone();
+        // Use shared helper to merge modified variables at merge block
+        struct Ops<'b, 'a>(&'b mut LoopBuilder<'a>);
+        impl<'b, 'a> crate::mir::phi_core::if_phi::PhiMergeOps for Ops<'b, 'a> {
+            fn new_value(&mut self) -> ValueId { self.0.new_value() }
+            fn emit_phi_at_block_start(
+                &mut self,
+                block: BasicBlockId,
+                dst: ValueId,
+                inputs: Vec<(BasicBlockId, ValueId)>,
+            ) -> Result<(), String> { self.0.emit_phi_at_block_start(block, dst, inputs) }
+            fn update_var(&mut self, name: String, value: ValueId) { self.0.parent_builder.variable_map.insert(name, value); }
+            fn debug_verify_phi_inputs(&mut self, merge_bb: BasicBlockId, inputs: &[(BasicBlockId, ValueId)]) {
+                if let Some(ref func) = self.0.parent_builder.current_function {
+                    crate::mir::phi_core::common::debug_verify_phi_inputs(func, merge_bb, inputs);
+                }
+            }
+        }
+        // Reset to pre-if snapshot, then delegate to shared helper
+        self.parent_builder.variable_map = pre_if_var_map.clone();
+        let mut ops = Ops(self);
+        crate::mir::phi_core::if_phi::merge_modified_at_merge_with(
+            &mut ops,
+            merge_bb,
+            then_bb,
+            else_bb,
+            then_pred_to_merge,
+            else_pred_to_merge,
+            &pre_if_var_map,
+            &then_var_map_end,
+            &else_var_map_end_opt,
+            None,
+        )?;
+        let void_id = self.new_value();
+        self.emit_const(void_id, ConstValue::Void)?;
+        Ok(void_id)
+    }
+}
+
+// Implement phi_core LoopPhiOps on LoopBuilder for in-place delegation
+impl crate::mir::phi_core::loop_phi::LoopPhiOps for LoopBuilder<'_> {
+    fn new_value(&mut self) -> ValueId { self.new_value() }
+    fn emit_phi_at_block_start(
+        &mut self,
+        block: BasicBlockId,
+        dst: ValueId,
+        inputs: Vec<(BasicBlockId, ValueId)>,
+    ) -> Result<(), String> {
+        self.emit_phi_at_block_start(block, dst, inputs)
+    }
+    fn update_var(&mut self, name: String, value: ValueId) { self.update_variable(name, value) }
+    fn get_variable_at_block(&mut self, name: &str, block: BasicBlockId) -> Option<ValueId> {
+        // Call the inherent method (immutable borrow) to avoid recursion
+        LoopBuilder::get_variable_at_block(self, name, block)
+    }
+    fn debug_verify_phi_inputs(&mut self, merge_bb: BasicBlockId, inputs: &[(BasicBlockId, ValueId)]) {
+        if let Some(ref func) = self.parent_builder.current_function {
+            crate::mir::phi_core::common::debug_verify_phi_inputs(func, merge_bb, inputs);
         }
     }
 }

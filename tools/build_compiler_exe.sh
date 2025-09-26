@@ -38,15 +38,22 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
   exit 2
 fi
 
-# 1) Build nyash with LLVM harness
-echo "[1/4] Building nyash (LLVM harness) ..."
-_LLVMPREFIX=$(llvm-config-18 --prefix)
-LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-  cargo build --release -j 24 --features llvm >/dev/null
+# 1) Build nyash with LLVM backend
+LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+echo "[1/4] Building nyash (${LLVM_FEATURE}) ..."
+if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+  # Legacy inkwell needs LLVM_SYS_180_PREFIX
+  _LLVMPREFIX=$(llvm-config-18 --prefix)
+  LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+    cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
+else
+  # llvm-harness (default) doesn't need LLVM_SYS_180_PREFIX
+  cargo build --release -j 24 --features "${LLVM_FEATURE}" >/dev/null
+fi
 
 # 2) Emit + link compiler.nyash → EXE
 echo "[2/4] Emitting + linking selfhost compiler ..."
-tools/build_llvm.sh apps/selfhost-compiler/compiler.nyash -o "$OUT"
+tools/build_llvm.sh apps/selfhost/compiler/compiler.nyash -o "$OUT"
 
 if [[ "$PACK" == "0" ]]; then
   echo "✅ Built: ./$OUT"
@@ -94,4 +101,3 @@ echo "     (cd $DIST && ./$(basename "$OUT") tmp/sample.nyash > sample.json)"
 echo "     head -n1 sample.json"
 
 exit 0
-

@@ -1,0 +1,36 @@
+// ArrayExtBox: tiny helpers for arrays
+static box ArrayExtBox {
+  each(arr, fn) {
+    local i = 0
+    local n = arr.size()
+    loop (i < n) { fn(arr.get(i), i)  i = i + 1 }
+    return arr
+  }
+  map(arr, fn) {
+    local out = []
+    local i = 0
+    local n = arr.size()
+    loop (i < n) { out.push(fn(arr.get(i)))  i = i + 1 }
+    return out
+  }
+  filter(arr, fn) {
+    local out = []
+    local i = 0
+    local n = arr.size()
+    loop (i < n) {
+      local v = arr.get(i)
+      if fn(v) { out.push(v) }
+      i = i + 1
+    }
+    return out
+  }
+  join(arr, delim) {
+    local n = arr.size()
+    if n == 0 { return "" }
+    local s = arr.get(0)
+    local i = 1
+    loop (i < n) { s = s + delim + arr.get(i)  i = i + 1 }
+    return s
+  }
+}
+

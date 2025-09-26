@@ -1,0 +1,22 @@
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":12}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":34}}}}]}"
+    local n = json.length()
+    local pos = json.indexOf("\"expression\":{")
+    // find first '{' after pos
+    local i0 = pos
+    loop (i0 < n) { if json.substring(i0, i0+1) == "{" { break }  i0 = i0 + 1 }
+    local i = i0
+    local open = 0
+    local close = 0
+    loop (i < n) {
+      local ch = json.substring(i, i+1)
+      if ch == "{" { open = open + 1 }
+      if ch == "}" { close = close + 1 }
+      i = i + 1
+    }
+    print(open)
+    print(close)
+    return 0
+  }
+}

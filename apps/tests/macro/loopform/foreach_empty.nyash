@@ -1,0 +1,5 @@
+local arr = []
+foreach(arr, "x", fn() {
+  print(x)
+})
+

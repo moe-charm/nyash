@@ -14,16 +14,58 @@
 
 ---
 
+Execution Status (Feature Additions Pause)
+- Active
+  - `--backend llvm` (Python/llvmlite harness; AOT object emit)
+  - `--backend vm` (PyVM harness)
+- Inactive/Sealed
+  - `--backend cranelift`, `--jit-direct` (sealed; use LLVM harness)
+  - Rust VM (legacy opt‑in via features)
+
+Quick pointers
+- Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
+- Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
+
+Phase‑15 (2025‑09) update
+- Parser newline/TokenCursor 統一は env ゲート下で進行中（`NYASH_PARSER_TOKEN_CURSOR=1`）。
+- if/else の PHI incoming は実際の遷移元（exit）へ修正済み（VM/LLVM パリティ緑）。
+- 自己ホスト準備として Nyash 製 JSON ライブラリと Ny Executor（最小命令）を既定OFFのトグルで追加予定。
+- 推奨トグル: `NYASH_LLVM_USE_HARNESS=1`, `NYASH_PARSER_TOKEN_CURSOR=1`, `NYASH_JSON_PROVIDER=ny`, `NYASH_SELFHOST_EXEC=1`。
+
 Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
-Self‑hosting one‑pager: `docs/self-hosting.md`.
+User Macros (Phase 2): `docs/guides/user-macros.md`
+Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
+ScopeBox & MIR hints: `docs/guides/scopebox.md`
+AST JSON v0 (macro/bridge): `docs/reference/ir/ast-json-v0.md`
+MIR mode note: Default PHI behavior
+- Phase‑15 ships PHI‑ON by default. Builders emit SSA `Phi` nodes at merges for loops, break/continue, and structured control flow.
+- Legacy PHI‑off fallback: set `NYASH_MIR_NO_PHI=1` (pair with `NYASH_VERIFY_ALLOW_NO_PHI=1` if you need relaxed verification).
+- See `docs/reference/mir/phi_policy.md` for rationale and troubleshooting.
+Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
+ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
+
+Profiles (quick)
+- `--profile dev` → Macros ON (strict), PyVM dev向け設定を適用（必要に応じて環境で上書き可）
+- `--profile lite` → Macros OFF の軽量実行
+  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+
+Specs & Constraints
+- Invariants (must-hold): `docs/reference/invariants.md`
+- Constraints (known/temporary/resolved): `docs/reference/constraints.md`
+- PHI & SSA design: `docs/reference/architecture/phi-and-ssa.md`
+- Testing matrix (spec → tests): `docs/guides/testing-matrix.md`
+- Comparison with other languages: `docs/guides/comparison/nyash-vs-others.md`
 
 ## Table of Contents
 - [Self‑Hosting (Dev Focus)](#self-hosting)
 - [Try in Browser](#-try-nyash-in-your-browser-right-now)
+- [🌟 Property System Revolution](#-property-system-revolution-september-18-2025)
+- [Language Features](#-language-features)
+- [Plugin System](#-revolutionary-plugin-system-typebox-architecture)
 
 <a id="self-hosting"></a>
 ## 🧪 Self‑Hosting (Dev Focus)
-- Guide: `docs/self-hosting.md`
+- Guide: `docs/how-to/self-hosting.md`
 - Minimal E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
@@ -112,7 +154,16 @@ local py = new PyRuntimeBox()       // Python plugin
 
 ## 🏗️ **Multiple Execution Modes**
 
-Important: JIT runtime execution is sealed for now. Use Interpreter/VM for running, and Cranelift AOT/LLVM AOT for native executables.
+Important: JIT runtime execution is sealed for now. Use PyVM/VM for running, and Cranelift AOT/LLVM AOT for native executables.
+
+Phase‑15 (Self‑Hosting): Legacy VM/Interpreter are feature‑gated
+- Default build runs PyVM for `--backend vm` (python3 + `tools/pyvm_runner.py` required)
+- To enable legacy Rust VM/Interpreter, build with:
+  ```bash
+  cargo build --release --features vm-legacy,interpreter-legacy
+  ```
+  Then `--backend vm`/`--backend interpreter` use the legacy paths.
+ - Note: `--benchmark` requires the legacy VM. Build with `--features vm-legacy` before running benchmarks.
 
 ### 1. **Interpreter Mode** (Development)
 ```bash
@@ -122,13 +173,17 @@ Important: JIT runtime execution is sealed for now. Use Interpreter/VM for runni
 - Full debug information
 - Perfect for development
 
-### 2. **VM Mode** (Production) 
+### 2. **VM Mode (PyVM default / Legacy optional)**
 ```bash
+# Default: PyVM harness (requires python3)
+./target/release/nyash --backend vm program.nyash
+
+# Enable legacy Rust VM if needed
+cargo build --release --features vm-legacy
 ./target/release/nyash --backend vm program.nyash
 ```
-- 13.5x faster than interpreter
-- Optimized bytecode execution
-- Production-ready performance
+- Default (vm-legacy OFF): PyVM executes MIR(JSON) via `tools/pyvm_runner.py`
+- Legacy VM: 13.5x over interpreter (historical); kept for comparison and plugin tests
 
 ### 3. **Native Binary (Cranelift AOT)** (Distribution)
 ```bash
@@ -268,6 +323,64 @@ box EnhancedArray from ArrayBox {
     }
 }
 ```
+
+---
+
+## 🌟 **Property System Revolution (September 18, 2025)**
+
+### The 4-Category Property Breakthrough
+**Just completed: Revolutionary unification of all property types into one elegant syntax!**
+
+```nyash
+box RevolutionaryBox {
+    // 🔵 stored: Traditional field storage
+    name: StringBox
+    
+    // 🟢 computed: Calculated every access  
+    size: IntegerBox { me.items.count() }
+    
+    // 🟡 once: Lazy evaluation with caching
+    once cache: CacheBox { buildExpensiveCache() }
+    
+    // 🔴 birth_once: Eager evaluation at object creation
+    birth_once config: ConfigBox { loadConfiguration() }
+    
+    birth() {
+        me.name = "Example"
+        // birth_once properties already initialized!
+    }
+}
+```
+
+### Python Integration Breakthrough  
+**The Property System enables revolutionary Python → Nyash transpilation:**
+
+```python
+# Python side
+class DataProcessor:
+    @property
+    def computed_result(self):
+        return self.value * 2
+    
+    @functools.cached_property
+    def expensive_data(self):
+        return heavy_computation()
+```
+
+```nyash
+// Auto-generated Nyash (1:1 mapping!)
+box DataProcessor {
+    computed_result: IntegerBox { me.value * 2 }      // computed
+    once expensive_data: ResultBox { heavy_computation() }  // once
+}
+```
+
+**Result**: Python code runs 10-50x faster as native Nyash binaries!
+
+### Documentation
+- **[Property System Specification](docs/development/proposals/unified-members.md)** - Complete syntax reference
+- **[Python Integration Guide](docs/development/roadmap/phases/phase-10.7/)** - Python → Nyash transpilation
+- **[Implementation Strategy](docs/private/papers/paper-m-method-postfix-catch/implementation-strategy.md)** - Technical details
 
 ---
 

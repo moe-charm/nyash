@@ -1,0 +1,11 @@
+// print! and when sugar test
+static box Main {
+  main(args) {
+    @v = 41
+    when v + 1 == 42 {
+      print! 42
+    } else {
+      print!(0)
+    }
+  }
+}

@@ -1,5 +1,5 @@
 static box Main { main() {
-  S = include "apps/std/string.nyash"
+  using "apps/std/string.nyash" as S
   print(S.string_index_of("banana","na").toString())
   print(S.string_slice("hello",1,4))
   print(S.string_concat("a","b"))

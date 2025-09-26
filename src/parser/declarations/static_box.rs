@@ -1,256 +1,80 @@
 /*!
  * Static Box Definition Parser
- * 
+ *
  * static box宣言と関連ヘルパー関数
  */
 
-use crate::tokenizer::TokenType;
 use crate::ast::{ASTNode, Span};
-use crate::parser::{NyashParser, ParseError};
 use crate::parser::common::ParserUtils;
+use crate::parser::{NyashParser, ParseError};
+use crate::tokenizer::TokenType;
 use std::collections::HashMap;
 
 impl NyashParser {
     /// static box宣言をパース: static box Name { ... }
     pub fn parse_static_box(&mut self) -> Result<ASTNode, ParseError> {
         self.consume(TokenType::BOX)?;
-        
-        let name = if let TokenType::IDENTIFIER(name) = &self.current_token().token_type {
-            let name = name.clone();
-            self.advance();
-            name
-        } else {
-            let line = self.current_token().line;
-            return Err(ParseError::UnexpectedToken {
-                found: self.current_token().token_type.clone(),
-                expected: "identifier".to_string(),
-                line,
-            });
-        };
-        
-        // 🔥 ジェネリクス型パラメータのパース (<T, U>)
-        let type_parameters = if self.match_token(&TokenType::LESS) {
-            self.advance(); // consume '<'
-            let mut params = Vec::new();
-            
-            loop {
-                if let TokenType::IDENTIFIER(param_name) = &self.current_token().token_type {
-                    params.push(param_name.clone());
-                    self.advance();
-                    
-                    if self.match_token(&TokenType::COMMA) {
-                        self.advance(); // consume ','
-                    } else {
-                        break;
-                    }
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "type parameter name".to_string(),
-                        line,
-                    });
-                }
-            }
-            
-            self.consume(TokenType::GREATER)?; // consume '>'
-            params
-        } else {
-            Vec::new()
-        };
-        
-        // from句のパース（Multi-delegation）- static boxでもデリゲーション可能 🚀
-        let extends = if self.match_token(&TokenType::FROM) {
-            self.advance(); // consume 'from'
-            
-            let mut parent_list = Vec::new();
-            
-            loop {
-                if let TokenType::IDENTIFIER(parent_name) = &self.current_token().token_type {
-                    parent_list.push(parent_name.clone());
-                    self.advance();
-                    
-                    if self.match_token(&TokenType::COMMA) {
-                        self.advance(); // consume ','
-                    } else {
-                        break;
-                    }
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "parent class name".to_string(),
-                        line,
-                    });
-                }
-            }
-            
-            parent_list
-        } else {
-            Vec::new()
-        };
-        
-        // interface句のパース（インターフェース実装）- static boxでもinterface実装可能
-        let implements = if self.match_token(&TokenType::INTERFACE) {
-            self.advance(); // consume 'interface'
-            
-            let mut interface_list = Vec::new();
-            
-            loop {
-                if let TokenType::IDENTIFIER(interface_name) = &self.current_token().token_type {
-                    interface_list.push(interface_name.clone());
-                    self.advance();
-                    
-                    if self.match_token(&TokenType::COMMA) {
-                        self.advance(); // consume ','
-                    } else {
-                        break;
-                    }
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "interface name".to_string(),
-                        line,
-                    });
-                }
-            }
-            
-            interface_list
-        } else {
-            vec![]
-        };
-        
+        let (name, type_parameters, extends, implements) =
+            crate::parser::declarations::static_def::header::parse_static_header(self)?;
+
         self.consume(TokenType::LBRACE)?;
-        self.skip_newlines(); // ブレース後の改行をスキップ
-        
+
         let mut fields = Vec::new();
         let mut methods = HashMap::new();
         let constructors = HashMap::new();
         let mut init_fields = Vec::new();
-        let mut weak_fields = Vec::new();  // 🔗 Track weak fields for static box
-        let mut static_init = None;
-        
+        let mut weak_fields = Vec::new(); // 🔗 Track weak fields for static box
+        let mut static_init: Option<Vec<ASTNode>> = None;
+
+        // Track last inserted method name to allow postfix catch/cleanup fallback parsing
+        let mut last_method_name: Option<String> = None;
         while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-            self.skip_newlines(); // ループ開始時に改行をスキップ
-            
+            // Tolerate blank lines between members
+            while self.match_token(&TokenType::NEWLINE) { self.advance(); }
+            let trace = std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1");
+            if trace {
+                eprintln!(
+                    "[parser][static-box] loop token={:?}",
+                    self.current_token().token_type
+                );
+            }
+
+            // Fallback: method-level postfix catch/cleanup immediately following a method
+            if crate::parser::declarations::box_def::members::postfix::try_parse_method_postfix_after_last_method(
+                self, &mut methods, &last_method_name,
+            )? { continue; }
+
             // RBRACEに到達していればループを抜ける
             if self.match_token(&TokenType::RBRACE) {
                 break;
             }
-            
-            // 🔥 static { } ブロックの処理
-            if self.match_token(&TokenType::STATIC) {
-                self.advance(); // consume 'static'
-                self.consume(TokenType::LBRACE)?;
-                
-                let mut static_body = Vec::new();
-                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    self.skip_newlines();
-                    if !self.match_token(&TokenType::RBRACE) {
-                        static_body.push(self.parse_statement()?);
-                    }
-                }
-                
-                self.consume(TokenType::RBRACE)?;
-                static_init = Some(static_body);
+
+            // 🔥 static 初期化子の処理（厳密ゲート互換）
+            if let Some(body) = crate::parser::declarations::static_def::members::parse_static_initializer_if_any(self)? {
+                static_init = Some(body);
                 continue;
-            }
-            
-            // initブロックの処理
-            if self.match_token(&TokenType::INIT) {
-                self.advance(); // consume 'init'
-                self.consume(TokenType::LBRACE)?;
-                
-                // initブロック内のフィールド定義を読み込み
-                while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                    self.skip_newlines();
-                    
-                    if self.match_token(&TokenType::RBRACE) {
-                        break;
+            } else if self.match_token(&TokenType::STATIC) {
+                // 互換用の暫定ガード（既定OFF）: using テキスト結合の継ぎ目で誤って 'static' が入った場合に
+                // ループを抜けて外側の '}' 消費に委ねる。既定では無効化し、文脈エラーとして扱う。
+                if std::env::var("NYASH_PARSER_SEAM_BREAK_ON_STATIC").ok().as_deref() == Some("1") {
+                    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                        eprintln!("[parser][static-box][seam] encountered 'static' inside static box; breaking (compat shim)");
                     }
-                    
-                    // Check for weak modifier
-                    let is_weak = if self.match_token(&TokenType::WEAK) {
-                        self.advance(); // consume 'weak'
-                        true
-                    } else {
-                        false
-                    };
-                    
-                    if let TokenType::IDENTIFIER(field_name) = &self.current_token().token_type {
-                        init_fields.push(field_name.clone());
-                        if is_weak {
-                            weak_fields.push(field_name.clone()); // 🔗 Add to weak fields list
-                        }
-                        self.advance();
-                        
-                        // カンマがあればスキップ
-                        if self.match_token(&TokenType::COMMA) {
-                            self.advance();
-                        }
-                    } else {
-                        // 不正なトークンがある場合はエラー
-                        return Err(ParseError::UnexpectedToken {
-                            expected: if is_weak { "field name after 'weak'" } else { "field name" }.to_string(),
-                            found: self.current_token().token_type.clone(),
-                            line: self.current_token().line,
-                        });
-                    }
+                    break;
                 }
-                
-                self.consume(TokenType::RBRACE)?;
-                continue;
             }
-            
+
+            // initブロックの処理（共通ヘルパに委譲）
+            if crate::parser::declarations::box_def::members::fields::parse_init_block_if_any(
+                self, &mut init_fields, &mut weak_fields,
+            )? { continue; }
+
             if let TokenType::IDENTIFIER(field_or_method) = &self.current_token().token_type {
                 let field_or_method = field_or_method.clone();
                 self.advance();
-                
-                // メソッド定義か？
-                if self.match_token(&TokenType::LPAREN) {
-                    // メソッド定義
-                    self.advance(); // consume '('
-                    
-                    let mut params = Vec::new();
-                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
-                        if let TokenType::IDENTIFIER(param) = &self.current_token().token_type {
-                            params.push(param.clone());
-                            self.advance();
-                        }
-                        
-                        if self.match_token(&TokenType::COMMA) {
-                            self.advance();
-                        }
-                    }
-                    
-                    self.consume(TokenType::RPAREN)?;
-                    self.consume(TokenType::LBRACE)?;
-                    
-                    let mut body = Vec::new();
-                    while !self.match_token(&TokenType::RBRACE) && !self.is_at_end() {
-                        self.skip_newlines();
-                        if !self.match_token(&TokenType::RBRACE) {
-                            body.push(self.parse_statement()?);
-                        }
-                    }
-                    
-                    self.consume(TokenType::RBRACE)?;
-                    
-                    let method = ASTNode::FunctionDeclaration {
-                        name: field_or_method.clone(),
-                        params,
-                        body,
-                        is_static: false,  // static box内のメソッドは通常メソッド
-                        is_override: false, // デフォルトは非オーバーライド
-                        span: Span::unknown(),
-                    };
-                    
-                    methods.insert(field_or_method, method);
-                } else {
-                    // フィールド定義
-                    fields.push(field_or_method);
-                }
+                crate::parser::declarations::static_def::members::try_parse_method_or_field(
+                    self, field_or_method, &mut methods, &mut fields, &mut last_method_name,
+                )?;
             } else {
                 return Err(ParseError::UnexpectedToken {
                     expected: "method or field name".to_string(),
@@ -259,17 +83,44 @@ impl NyashParser {
                 });
             }
         }
-        
-        self.consume(TokenType::RBRACE)?;
-        
+
+        // Tolerate trailing NEWLINE(s) before the closing '}' of the static box
+        while self.match_token(&TokenType::NEWLINE) { self.advance(); }
+        if std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1") {
+            eprintln!(
+                "[parser][static-box] closing '}}' at token={:?}",
+                self.current_token().token_type
+            );
+        }
+        if self.match_token(&TokenType::RBRACE) {
+            self.consume(TokenType::RBRACE)?;
+        } else if self.is_at_end() {
+            // Safety valve: if EOF is reached right after members (common at file end),
+            // accept as implicitly closed static box. This keeps behavior stable for
+            // well-formed sources and avoids false negatives on seam edges.
+            if std::env::var("NYASH_PARSER_TRACE_STATIC").ok().as_deref() == Some("1") {
+                eprintln!("[parser][static-box] accepting EOF as closing '}}' (at file end)");
+            }
+        } else {
+            // Still something else here; report a structured error
+            let line = self.current_token().line;
+            return Err(ParseError::UnexpectedToken {
+                expected: "RBRACE".to_string(),
+                found: self.current_token().token_type.clone(),
+                line,
+            });
+        }
+
         // 🔥 Static初期化ブロックから依存関係を抽出
         if let Some(ref init_stmts) = static_init {
             let dependencies = self.extract_dependencies_from_statements(init_stmts);
-            self.static_box_dependencies.insert(name.clone(), dependencies);
+            self.static_box_dependencies
+                .insert(name.clone(), dependencies);
         } else {
-            self.static_box_dependencies.insert(name.clone(), std::collections::HashSet::new());
+            self.static_box_dependencies
+                .insert(name.clone(), std::collections::HashSet::new());
         }
-        
+
         Ok(ASTNode::BoxDeclaration {
             name,
             fields,
@@ -278,13 +129,13 @@ impl NyashParser {
             methods,
             constructors,
             init_fields,
-            weak_fields,  // 🔗 Add weak fields to static box construction
+            weak_fields, // 🔗 Add weak fields to static box construction
             is_interface: false,
             extends,
             implements,
             type_parameters,
-            is_static: true,  // 🔥 static boxフラグを設定
-            static_init,      // 🔥 static初期化ブロック
+            is_static: true, // 🔥 static boxフラグを設定
+            static_init,     // 🔥 static初期化ブロック
             span: Span::unknown(),
         })
     }

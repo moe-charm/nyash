@@ -15,7 +15,31 @@
 ---
 
 開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
-セルフホスト1枚ガイド: `docs/self-hosting.md`
+ユーザーマクロ（Phase 2）: `docs/guides/user-macros.md`
+AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
+セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
+ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
+
+Phase‑15（2025‑09）アップデート
+- LLVM は Python/llvmlite ハーネスを優先（`NYASH_LLVM_USE_HARNESS=1`）。Rust VM/JIT は保守・比較用途。
+- パーサの改行処理は TokenCursor に統一中（`NYASH_PARSER_TOKEN_CURSOR=1`）。
+- if/else の PHI は実際の遷移元（exit）を pred として使用（VM/LLVM パリティ緑）。
+- 自己ホスト準備として Ny 製 JSON ライブラリと Ny Executor（最小命令）を既定OFFトグルで段階導入予定。
+- 推奨トグル: `NYASH_LLVM_USE_HARNESS=1`, `NYASH_PARSER_TOKEN_CURSOR=1`, `NYASH_JSON_PROVIDER=ny`, `NYASH_SELFHOST_EXEC=1`。
+
+仕様と既知制約
+- 必須不変条件（Invariants）: `docs/reference/invariants.md`
+- 制約（既知/一時/解消済み）: `docs/reference/constraints.md`
+- PHI と SSA の設計: `docs/reference/architecture/phi-and-ssa.md`
+  - 既定のPHI挙動: Phase‑15 で PHI-ON（MIR14）が標準になったよ。ループ・break/continue・構造化制御の合流で PHI を必ず生成するよ。
+  - レガシー互換: `NYASH_MIR_NO_PHI=1`（必要なら `NYASH_VERIFY_ALLOW_NO_PHI=1` も）で PHI-OFF（エッジコピー）に切り替えできるよ。
+- テスト行列（仕様→テスト対応）: `docs/guides/testing-matrix.md`
+- 他言語との比較: `docs/guides/comparison/nyash-vs-others.md`
+
+プロファイル（クイック）
+- `--profile dev` → マクロON（strict）、PyVM 開発向けの既定を適用（必要に応じて環境で上書き可）
+- `--profile lite` → マクロOFF の軽量実行
+  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
 
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)
@@ -23,7 +47,7 @@
 
 <a id="self-hosting"></a>
 ## 🧪 Self-Hosting（自己ホスト開発）
-- ガイド: `docs/self-hosting.md`
+- ガイド: `docs/how-to/self-hosting.md`
 - 最小E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - スモーク: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
@@ -108,7 +132,15 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 
 ## 🏗️ **複数の実行モード**
 
-重要: 現在、JIT ランタイム実行はデバッグ容易性のため封印しています。実行は「インタープリター／VM」、配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」の4体制です。
+重要: 現在、JIT ランタイム実行は封印中です。実行は「PyVM（既定）／VM（任意でレガシー有効）」、配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」の4体制です。
+
+Phase‑15（自己ホスト期）: VM/インタープリタはフィーチャーで切替
+- 既定ビルド: `--backend vm` は PyVM 実行（python3 + `tools/pyvm_runner.py` が必要）
+- レガシー Rust VM/インタープリターを有効化するには:
+  ```bash
+  cargo build --release --features vm-legacy,interpreter-legacy
+  ```
+  以降、`--backend vm`/`--backend interpreter` が従来経路で動作します。
 
 ### 1. **インタープリターモード** （開発用）
 ```bash
@@ -118,13 +150,18 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 - 完全なデバッグ情報
 - 開発に最適
 
-### 2. **VMモード** （本番用）
+### 2. **VMモード（既定は PyVM／レガシーは任意）**
 ```bash
+# 既定: PyVM ハーネス（python3 必要）
+./target/release/nyash --backend vm program.nyash
+
+# レガシー Rust VM を使う場合
+cargo build --release --features vm-legacy
 ./target/release/nyash --backend vm program.nyash
 ```
-- インタープリターより13.5倍高速
-- 最適化されたバイトコード実行
-- 本番環境対応のパフォーマンス
+- 既定（vm-legacy OFF）: MIR(JSON) を出力して `tools/pyvm_runner.py` で実行
+- レガシー VM: インタープリター比で 13.5x（歴史的実測）。比較・検証用途で維持
+ - 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
 
 ### 3. **ネイティブバイナリ（Cranelift AOT）** （配布用）
 ```bash

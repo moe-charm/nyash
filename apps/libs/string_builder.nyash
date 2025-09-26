@@ -1,0 +1,15 @@
+// StringBuilderBox: simple buffered concatenation
+static box StringBuilderBox {
+  birth() { me._buf = [] }
+  append(s) { me._buf.push(s)  return me }
+  toString() {
+    // join by empty string
+    local n = me._buf.size()
+    if n == 0 { return "" }
+    local out = me._buf.get(0)
+    local i = 1
+    loop (i < n) { out = out + me._buf.get(i)  i = i + 1 }
+    return out
+  }
+}
+

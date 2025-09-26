@@ -1,0 +1,10 @@
+using json as JsonParserModule
+
+static box Main {
+  main() {
+    local p = JsonParserModule.create_parser()
+    local r = p.parse("\"hello\"")
+    if (r == null) { print("null") } else { print(r.toString()) }
+    return 0
+  }
+}

@@ -1,0 +1,9 @@
+static box Main {
+  main(args) {
+    if args { print("ARGS-OK") } else { print("ARGS-NONE") }
+    if args { print(args.size()) }
+    local json = args.get(0)
+    if json { print("HAS-JSON") } else { print("NO-JSON") }
+    return 0
+  }
+}

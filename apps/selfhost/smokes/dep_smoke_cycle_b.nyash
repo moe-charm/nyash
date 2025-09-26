@@ -1,7 +1,6 @@
 // cycle B -> A
-include "dep_smoke_cycle_a.nyash"
+using "dep_smoke_cycle_a.nyash"
 
 box B {
   id() { return 2 }
 }
-

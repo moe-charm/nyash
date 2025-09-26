@@ -1,6 +1,9 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, mir::{MirCompiler, MirInstruction}};
 use nyash_rust::mir::passes::method_id_inject::inject_method_ids;
+use nyash_rust::{
+    mir::{MirCompiler, MirInstruction},
+    parser::NyashParser,
+};
 use std::{fs, process};
 
 impl NyashRunner {
@@ -12,20 +15,102 @@ impl NyashRunner {
         // Read the file
         let code = match fs::read_to_string(filename) {
             Ok(content) => content,
-            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+            Err(e) => {
+                eprintln!("❌ Error reading file {}: {}", filename, e);
+                process::exit(1);
+            }
         };
 
-        // Parse to AST
-        let ast = match NyashParser::parse_from_string(&code) {
+        // Using handling (AST prelude merge like common/vm paths)
+        let use_ast = crate::config::env::using_ast_enabled();
+        let mut code_ref: &str = &code;
+        let cleaned_code_owned;
+        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        if crate::config::env::enable_using() {
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
+                self, &code, filename,
+            ) {
+                Ok((clean, paths)) => {
+                    cleaned_code_owned = clean;
+                    code_ref = &cleaned_code_owned;
+                    if !paths.is_empty() && !use_ast {
+                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        std::process::exit(1);
+                    }
+                    if use_ast {
+                        for prelude_path in paths {
+                            match std::fs::read_to_string(&prelude_path) {
+                                Ok(src) => {
+                                    match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &src, &prelude_path) {
+                                        Ok((clean_src, _nested)) => {
+                                            match NyashParser::parse_from_string(&clean_src) {
+                                                Ok(ast) => prelude_asts.push(ast),
+                                                Err(e) => {
+                                                    eprintln!("❌ Parse error in using prelude {}: {}", prelude_path, e);
+                                                    std::process::exit(1);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("❌ {}", e);
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Error reading using prelude {}: {}", prelude_path, e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        // Pre-expand '@name[:T] = expr' sugar at line-head (same as common path)
+        let preexpanded_owned = crate::runner::modes::common_util::resolve::preexpand_at_local(code_ref);
+        code_ref = &preexpanded_owned;
+
+        // Parse to AST (main)
+        let main_ast = match NyashParser::parse_from_string(code_ref) {
             Ok(ast) => ast,
-            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+            Err(e) => {
+                eprintln!("❌ Parse error: {}", e);
+                process::exit(1);
+            }
         };
+        // Merge preludes + main when enabled
+        let ast = if use_ast && !prelude_asts.is_empty() {
+            use nyash_rust::ast::ASTNode;
+            let mut combined: Vec<ASTNode> = Vec::new();
+            for a in prelude_asts {
+                if let ASTNode::Program { statements, .. } = a {
+                    combined.extend(statements);
+                }
+            }
+            if let ASTNode::Program { statements, .. } = main_ast.clone() {
+                combined.extend(statements);
+            }
+            ASTNode::Program { statements: combined, span: nyash_rust::ast::Span::unknown() }
+        } else {
+            main_ast
+        };
+        // Macro expansion (env-gated) after merge
+        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
+        let ast = crate::runner::modes::macro_child::normalize_core_pass(&ast);
 
         // Compile to MIR
         let mut mir_compiler = MirCompiler::new();
         let compile_result = match mir_compiler.compile(ast) {
             Ok(result) => result,
-            Err(e) => { eprintln!("❌ MIR compilation error: {}", e); process::exit(1); }
+            Err(e) => {
+                eprintln!("❌ MIR compilation error: {}", e);
+                process::exit(1);
+            }
         };
 
         println!("📊 MIR Module compiled successfully!");
@@ -35,8 +120,14 @@ impl NyashRunner {
         #[allow(unused_mut)]
         let mut module = compile_result.module.clone();
         let injected = inject_method_ids(&mut module);
-        if injected > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("[LLVM] method_id injected: {} places", injected);
+        if injected > 0 { crate::cli_v!("[LLVM] method_id injected: {} places", injected); }
+
+        // Dev/Test helper: allow executing via PyVM harness when requested
+        if std::env::var("SMOKES_USE_PYVM").ok().as_deref() == Some("1") {
+            match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
+                Ok(code) => { std::process::exit(code); }
+                Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
+            }
         }
 
         // If explicit object path is requested, emit object only
@@ -44,52 +135,12 @@ impl NyashRunner {
             #[cfg(feature = "llvm-harness")]
             {
                 // Harness path (optional): if NYASH_LLVM_USE_HARNESS=1, try Python/llvmlite first.
-                let use_harness = std::env::var("NYASH_LLVM_USE_HARNESS").ok().as_deref() == Some("1");
-                if use_harness {
-                            if let Some(parent) = std::path::Path::new(&_out_path).parent() { let _ = std::fs::create_dir_all(parent); }
-                    let py = which::which("python3").ok();
-                    if let Some(py3) = py {
-                        let harness = std::path::Path::new("tools/llvmlite_harness.py");
-                        if harness.exists() {
-                            // 1) Emit MIR(JSON) to a temp file
-                            let tmp_dir = std::path::Path::new("tmp");
-                            let _ = std::fs::create_dir_all(tmp_dir);
-                            let mir_json_path = tmp_dir.join("nyash_harness_mir.json");
-                            if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness(&module, &mir_json_path) {
-                                eprintln!("❌ MIR JSON emit error: {}", e);
-                                process::exit(1);
-                            }
-                            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                eprintln!("[Runner/LLVM] using llvmlite harness → {} (mir={})", _out_path, mir_json_path.display());
-                            }
-                            // 2) Run harness with --in/--out（失敗時は即エラー）
-                            let status = std::process::Command::new(py3)
-                                .args([harness.to_string_lossy().as_ref(), "--in", &mir_json_path.display().to_string(), "--out", &_out_path])
-                                .status().map_err(|e| format!("spawn harness: {}", e)).unwrap();
-                            if !status.success() {
-                                eprintln!("❌ llvmlite harness failed (status={})", status.code().unwrap_or(-1));
-                                process::exit(1);
-                            }
-                            // Verify
-                                match std::fs::metadata(&_out_path) {
-                                    Ok(meta) if meta.len() > 0 => {
-                                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                                            eprintln!("[LLVM] object emitted by harness: {} ({} bytes)", _out_path, meta.len());
-                                        }
-                                        return;
-                                    }
-                                    _ => {
-                                        eprintln!("❌ harness output not found or empty: {}", _out_path);
-                                        process::exit(1);
-                                    }
-                                }
-                        } else {
-                            eprintln!("❌ harness script not found: {}", harness.display());
-                            process::exit(1);
-                        }
+                if crate::config::env::llvm_use_harness() {
+                    if let Err(e) = crate::runner::modes::common_util::exec::llvmlite_emit_object(&module, &_out_path, 20_000) {
+                        eprintln!("❌ {}", e);
+                        process::exit(1);
                     }
-                    eprintln!("❌ python3 not found in PATH. Install Python 3 to use the harness.");
-                    process::exit(1);
+                    return;
                 }
                 // Verify object presence and size (>0)
                 match std::fs::metadata(&_out_path) {
@@ -99,11 +150,18 @@ impl NyashRunner {
                             process::exit(1);
                         }
                         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            eprintln!("[LLVM] object emitted: {} ({} bytes)", _out_path, meta.len());
+                            eprintln!(
+                                "[LLVM] object emitted: {} ({} bytes)",
+                                _out_path,
+                                meta.len()
+                            );
                         }
                     }
                     Err(e) => {
-                        eprintln!("❌ harness output not found after emit: {} ({})", _out_path, e);
+                        eprintln!(
+                            "❌ harness output not found after emit: {} ({})",
+                            _out_path, e
+                        );
                         process::exit(1);
                     }
                 }
@@ -116,20 +174,29 @@ impl NyashRunner {
                 if let Some(parent) = std::path::Path::new(&_out_path).parent() {
                     let _ = std::fs::create_dir_all(parent);
                 }
-                if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                    eprintln!("[Runner/LLVM] emitting object to {} (cwd={})", _out_path, std::env::current_dir().map(|p| p.display().to_string()).unwrap_or_default());
-                }
+                crate::cli_v!(
+                    "[Runner/LLVM] emitting object to {} (cwd={})",
+                    _out_path,
+                    std::env::current_dir()
+                        .map(|p| p.display().to_string())
+                        .unwrap_or_default()
+                );
                 if let Err(e) = llvm_compile_to_object(&module, &_out_path) {
                     eprintln!("❌ LLVM object emit error: {}", e);
                     process::exit(1);
                 }
                 match std::fs::metadata(&_out_path) {
                     Ok(meta) if meta.len() > 0 => {
-                        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                            eprintln!("[LLVM] object emitted: {} ({} bytes)", _out_path, meta.len());
-                        }
+                        crate::cli_v!(
+                            "[LLVM] object emitted: {} ({} bytes)",
+                            _out_path,
+                            meta.len()
+                        );
                     }
-                    _ => { eprintln!("❌ LLVM object not found or empty: {}", _out_path); process::exit(1); }
+                    _ => {
+                        eprintln!("❌ LLVM object not found or empty: {}", _out_path);
+                        process::exit(1);
+                    }
                 }
                 return;
             }
@@ -137,6 +204,40 @@ impl NyashRunner {
             {
                 eprintln!("❌ LLVM backend not available (object emit).");
                 process::exit(1);
+            }
+        }
+
+        // Execute via LLVM backend (harness preferred)
+        #[cfg(feature = "llvm-harness")]
+        {
+            if crate::config::env::llvm_use_harness() {
+                // Prefer producing a native executable via ny-llvmc, then execute it
+                let exe_out = "tmp/nyash_llvm_run";
+                let libs = std::env::var("NYASH_LLVM_EXE_LIBS").ok();
+                match crate::runner::modes::common_util::exec::ny_llvmc_emit_exe_lib(
+                    &module,
+                    exe_out,
+                    None,
+                    libs.as_deref(),
+                ) {
+                    Ok(()) => {
+                        match crate::runner::modes::common_util::exec::run_executable(exe_out, &[], 20_000) {
+                            Ok((code, _timed_out)) => {
+                                println!("✅ LLVM (harness) execution completed (exit={})", code);
+                                std::process::exit(code);
+                            }
+                            Err(e) => {
+                                eprintln!("❌ run executable error: {}", e);
+                                std::process::exit(1);
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("❌ ny-llvmc emit-exe error: {}", e);
+                        eprintln!("   Hint: build ny-llvmc: cargo build -p nyash-llvm-compiler --release");
+                        std::process::exit(1);
+                    }
+                }
             }
         }
 
@@ -156,8 +257,11 @@ impl NyashRunner {
                         println!("✅ LLVM execution completed (non-integer result)!");
                         println!("📊 Result: {}", result.to_string_box().value);
                     }
-                },
-                Err(e) => { eprintln!("❌ LLVM execution error: {}", e); process::exit(1); }
+                }
+                Err(e) => {
+                    eprintln!("❌ LLVM execution error: {}", e);
+                    process::exit(1);
+                }
             }
         }
         #[cfg(all(not(feature = "llvm-inkwell-legacy")))]
@@ -168,8 +272,14 @@ impl NyashRunner {
                 for (_bid, block) in &main_func.blocks {
                     for inst in &block.instructions {
                         match inst {
-                            MirInstruction::Return { value: Some(_) } => { println!("✅ Mock exit code: 42"); process::exit(42); }
-                            MirInstruction::Return { value: None } => { println!("✅ Mock exit code: 0"); process::exit(0); }
+                            MirInstruction::Return { value: Some(_) } => {
+                                println!("✅ Mock exit code: 42");
+                                process::exit(42);
+                            }
+                            MirInstruction::Return { value: None } => {
+                                println!("✅ Mock exit code: 0");
+                                process::exit(0);
+                            }
                             _ => {}
                         }
                     }

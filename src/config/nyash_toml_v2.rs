@@ -1,5 +1,5 @@
 //! nyash.toml v2 configuration parser
-//! 
+//!
 //! Ultimate simple design: nyash.toml-centric architecture + minimal FFI
 //! No Host VTable, single entry point (nyash_plugin_invoke)
 
@@ -12,7 +12,7 @@ pub struct NyashConfigV2 {
     /// Library definitions (multi-box capable)
     #[serde(default)]
     pub libraries: HashMap<String, LibraryDefinition>,
-    
+
     /// Plugin search paths
     #[serde(default)]
     pub plugin_paths: PluginPaths,
@@ -31,7 +31,7 @@ pub struct NyashConfigV2 {
 pub struct LibraryDefinition {
     /// Box types provided by this library
     pub boxes: Vec<String>,
-    
+
     /// Path to the shared library
     pub path: String,
 }
@@ -48,11 +48,11 @@ pub struct PluginPaths {
 pub struct BoxTypeConfig {
     /// Box type ID
     pub type_id: u32,
-    
+
     /// ABI version (default: 1)
     #[serde(default = "default_abi_version")]
     pub abi_version: u32,
-    
+
     /// Method definitions
     pub methods: HashMap<String, MethodDefinition>,
 
@@ -68,7 +68,7 @@ pub struct MethodDefinition {
     pub method_id: u32,
     /// Optional argument declarations (v2.1+)
     #[serde(default)]
-    pub args: Option<Vec<ArgDecl>>, 
+    pub args: Option<Vec<ArgDecl>>,
     /// Optional: wrap return and errors into ResultBox when true
     #[serde(default)]
     pub returns_result: bool,
@@ -128,29 +128,47 @@ impl NyashConfigV2 {
         let plugins = if let Some(tbl) = config.get("plugins").and_then(|v| v.as_table()) {
             let mut m = HashMap::new();
             for (k, v) in tbl.iter() {
-                if let Some(s) = v.as_str() { m.insert(k.clone(), s.to_string()); }
+                if let Some(s) = v.as_str() {
+                    m.insert(k.clone(), s.to_string());
+                }
             }
             m
-        } else { HashMap::new() };
+        } else {
+            HashMap::new()
+        };
 
         // Extract optional box_types map
         let box_types = if let Some(tbl) = config.get("box_types").and_then(|v| v.as_table()) {
             let mut m = HashMap::new();
-            for (k, v) in tbl.iter() { if let Some(id) = v.as_integer() { m.insert(k.clone(), id as u32); } }
+            for (k, v) in tbl.iter() {
+                if let Some(id) = v.as_integer() {
+                    m.insert(k.clone(), id as u32);
+                }
+            }
             m
-        } else { HashMap::new() };
+        } else {
+            HashMap::new()
+        };
 
-        Ok(NyashConfigV2 { libraries, plugin_paths, plugins, box_types })
+        Ok(NyashConfigV2 {
+            libraries,
+            plugin_paths,
+            plugins,
+            box_types,
+        })
     }
-    
+
     /// Parse library definitions with nested box configs
-    fn parse_libraries(config: &mut toml::Value) -> Result<HashMap<String, LibraryDefinition>, Box<dyn std::error::Error>> {
+    fn parse_libraries(
+        config: &mut toml::Value,
+    ) -> Result<HashMap<String, LibraryDefinition>, Box<dyn std::error::Error>> {
         let mut libraries = HashMap::new();
-        
+
         if let Some(libs_section) = config.get("libraries").and_then(|v| v.as_table()) {
             for (lib_name, lib_value) in libs_section {
                 if let Some(lib_table) = lib_value.as_table() {
-                    let boxes = lib_table.get("boxes")
+                    let boxes = lib_table
+                        .get("boxes")
                         .and_then(|v| v.as_array())
                         .map(|arr| {
                             arr.iter()
@@ -159,40 +177,44 @@ impl NyashConfigV2 {
                                 .collect()
                         })
                         .unwrap_or_default();
-                    
-                    let path = lib_table.get("path")
+
+                    let path = lib_table
+                        .get("path")
                         .and_then(|v| v.as_str())
                         .unwrap_or(lib_name)
                         .to_string();
-                    
-                    libraries.insert(lib_name.clone(), LibraryDefinition {
-                        boxes,
-                        path,
-                    });
+
+                    libraries.insert(lib_name.clone(), LibraryDefinition { boxes, path });
                 }
             }
         }
-        
+
         Ok(libraries)
     }
-    
+
     /// Get box configuration from nested structure
     /// e.g., [libraries."libnyash_filebox_plugin.so".FileBox]
-    pub fn get_box_config(&self, lib_name: &str, box_name: &str, config_value: &toml::Value) -> Option<BoxTypeConfig> {
+    pub fn get_box_config(
+        &self,
+        lib_name: &str,
+        box_name: &str,
+        config_value: &toml::Value,
+    ) -> Option<BoxTypeConfig> {
         config_value
             .get("libraries")
             .and_then(|v| v.get(lib_name))
             .and_then(|v| v.get(box_name))
             .and_then(|v| v.clone().try_into::<BoxTypeConfig>().ok())
     }
-    
+
     /// Find library that provides a specific box type
     pub fn find_library_for_box(&self, box_type: &str) -> Option<(&str, &LibraryDefinition)> {
-        self.libraries.iter()
+        self.libraries
+            .iter()
             .find(|(_, lib)| lib.boxes.contains(&box_type.to_string()))
             .map(|(name, lib)| (name.as_str(), lib))
     }
-    
+
     /// Resolve plugin path from search paths
     pub fn resolve_plugin_path(&self, plugin_name: &str) -> Option<String> {
         // Try exact path first
@@ -203,8 +225,14 @@ impl NyashConfigV2 {
         let mut paths: Vec<String> = Vec::new();
         paths.extend(self.plugin_paths.search_paths.iter().cloned());
         if let Ok(envp) = std::env::var("NYASH_PLUGIN_PATHS") {
-            let sep = if cfg!(target_os = "windows") { ';' } else { ':' };
-            for p in envp.split(sep).filter(|s| !s.is_empty()) { paths.push(p.to_string()); }
+            let sep = if cfg!(target_os = "windows") {
+                ';'
+            } else {
+                ':'
+            };
+            for p in envp.split(sep).filter(|s| !s.is_empty()) {
+                paths.push(p.to_string());
+            }
         }
         // Search in effective paths
         for search_path in &paths {
@@ -213,7 +241,7 @@ impl NyashConfigV2 {
                 return Some(path.to_string_lossy().to_string());
             }
         }
-        
+
         None
     }
 }
@@ -221,7 +249,7 @@ impl NyashConfigV2 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_v2_config() {
         let toml_str = r#"
@@ -240,13 +268,17 @@ open = { method_id = 1 }
 close = { method_id = 4 }
 "#;
         let nyash_config = NyashConfigV2::from_str(toml_str).unwrap();
-        assert!(nyash_config.libraries.contains_key("libnyash_filebox_plugin.so"));
+        assert!(nyash_config
+            .libraries
+            .contains_key("libnyash_filebox_plugin.so"));
         let (lib_name, lib_def) = nyash_config.find_library_for_box("FileBox").unwrap();
         assert_eq!(lib_name, "libnyash_filebox_plugin.so");
         assert_eq!(lib_def.boxes, vec!["FileBox".to_string()]);
         // Nested box config should be retrievable
         let raw: toml::Value = toml::from_str(toml_str).unwrap();
-        let box_conf = nyash_config.get_box_config("libnyash_filebox_plugin.so", "FileBox", &raw).unwrap();
+        let box_conf = nyash_config
+            .get_box_config("libnyash_filebox_plugin.so", "FileBox", &raw)
+            .unwrap();
         assert_eq!(box_conf.type_id, 6);
     }
 }

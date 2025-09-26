@@ -54,9 +54,7 @@ pub(super) fn to_i64_any<'ctx>(
             let castp = builder
                 .build_pointer_cast(tmp, fptr_ty, "i64p_to_f64p")
                 .map_err(|e| e.to_string())?;
-            builder
-                .build_store(castp, fv)
-                .map_err(|e| e.to_string())?;
+            builder.build_store(castp, fv).map_err(|e| e.to_string())?;
             builder
                 .build_load(i64t, tmp, "ld_f2i")
                 .map_err(|e| e.to_string())?

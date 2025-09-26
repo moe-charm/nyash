@@ -21,6 +21,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 import os
+from .ops_core import (
+    op_phi,
+    op_const,
+    op_binop,
+    op_compare,
+    op_typeop,
+    op_unop,
+    op_copy,
+)
+from .ops_box import op_newbox, op_boxcall
+from .ops_ctrl import op_externcall
+from .ops_flow import op_branch, op_jump, op_ret, op_call
+from .intrinsic import try_intrinsic as _intrinsic_try
 
 
 @dataclass
@@ -39,13 +52,70 @@ class Function:
 class PyVM:
     def __init__(self, program: Dict[str, Any]):
         self.functions: Dict[str, Function] = {}
+        self._debug = os.environ.get('NYASH_PYVM_DEBUG') in ('1','true','on')
+        # Targeted trace controls (default OFF)
+        self._trace_fn = os.environ.get('NYASH_PYVM_TRACE_FN')
+        self._trace_reg = os.environ.get('NYASH_PYVM_TRACE_REG')  # string compare
+        self._cur_fn: Optional[str] = None
         for f in program.get("functions", []):
             name = f.get("name")
             params = [int(p) for p in f.get("params", [])]
             bmap: Dict[int, Block] = {}
             for bb in f.get("blocks", []):
                 bmap[int(bb.get("id"))] = Block(id=int(bb.get("id")), instructions=list(bb.get("instructions", [])))
+            # Register each function inside the loop (bugfix)
             self.functions[name] = Function(name=name, params=params, blocks=bmap)
+
+    def _dbg(self, *a):
+        if self._debug:
+            try:
+                import sys as _sys
+                print(*a, file=_sys.stderr)
+            except Exception:
+                pass
+
+    def _type_name(self, v: Any) -> str:
+        """Pretty type name for debug traces mapped to MIR conventions."""
+        if v is None:
+            return "null"
+        if isinstance(v, bool):
+            # Booleans are encoded as i64 0/1 in MIR
+            return "i64"
+        if isinstance(v, int):
+            return "i64"
+        if isinstance(v, float):
+            return "f64"
+        if isinstance(v, str):
+            return "string"
+        if isinstance(v, dict) and "__box__" in v:
+            return f"Box({v.get('__box__')})"
+        return type(v).__name__
+
+    # --- Capability helpers (macro sandbox) ---
+    def _macro_sandbox_active(self) -> bool:
+        """Detect if we are running under macro sandbox.
+
+        Heuristics:
+        - Explicit flag NYASH_MACRO_SANDBOX=1
+        - Macro child default envs (plugins off + macro off)
+        - Any MACRO_CAP_* enabled
+        """
+        if os.environ.get("NYASH_MACRO_SANDBOX", "0") in ("1", "true", "on"):
+            return True
+        if os.environ.get("NYASH_DISABLE_PLUGINS") in ("1", "true", "on") and os.environ.get("NYASH_MACRO_ENABLE") in ("0", "false", "off"):
+            return True
+        if self._cap_env() or self._cap_io() or self._cap_net():
+            return True
+        return False
+
+    def _cap_env(self) -> bool:
+        return os.environ.get("NYASH_MACRO_CAP_ENV", "0") in ("1", "true", "on")
+
+    def _cap_io(self) -> bool:
+        return os.environ.get("NYASH_MACRO_CAP_IO", "0") in ("1", "true", "on")
+
+    def _cap_net(self) -> bool:
+        return os.environ.get("NYASH_MACRO_CAP_NET", "0") in ("1", "true", "on")
 
     def _read(self, regs: Dict[int, Any], v: Optional[int]) -> Any:
         if v is None:
@@ -55,7 +125,14 @@ class PyVM:
     def _set(self, regs: Dict[int, Any], dst: Optional[int], val: Any) -> None:
         if dst is None:
             return
-        regs[int(dst)] = val
+        rid = int(dst)
+        regs[rid] = val
+        try:
+            if self._trace_fn and self._cur_fn == self._trace_fn:
+                if self._trace_reg is None or self._trace_reg == str(rid):
+                    self._dbg(f"[pyvm][set] fn={self._cur_fn} r{rid}={val}")
+        except Exception:
+            pass
 
     def _truthy(self, v: Any) -> bool:
         if isinstance(v, bool):
@@ -69,13 +146,62 @@ class PyVM:
     def _is_console(self, v: Any) -> bool:
         return isinstance(v, dict) and v.get("__box__") == "ConsoleBox"
 
+    def _sandbox_allow_newbox(self, box_type: str) -> bool:
+        """Allow-list for constructing boxes under macro sandbox."""
+        if not self._macro_sandbox_active():
+            return True
+        if box_type in ("ConsoleBox", "StringBox", "ArrayBox", "MapBox"):
+            return True
+        if box_type in ("FileBox", "PathBox", "DirBox"):
+            return self._cap_io()
+        # Simple net-related boxes
+        if box_type in ("HTTPBox", "HttpBox", "SocketBox"):
+            return self._cap_net()
+        # Unknown boxes are denied in sandbox
+        return False
+
+    def _sandbox_allow_boxcall(self, recv: Any, method: Optional[str]) -> bool:
+        if not self._macro_sandbox_active():
+            return True
+        # Console methods are fine
+        if self._is_console(recv):
+            return True
+        # String methods (our VM treats StringBox receiver as Python str)
+        if isinstance(recv, str):
+            return method in ("length", "substring", "lastIndexOf", "indexOf")
+        # File/Path/Dir need IO cap
+        if isinstance(recv, dict) and recv.get("__box__") in ("FileBox", "PathBox", "DirBox"):
+            return self._cap_io()
+        # Other boxes are denied in sandbox
+        return False
+
     def run(self, entry: str) -> Any:
         fn = self.functions.get(entry)
         if fn is None:
             raise RuntimeError(f"entry function not found: {entry}")
+        self._dbg(f"[pyvm] run entry={entry}")
         return self._exec_function(fn, [])
 
+    def run_args(self, entry: str, args: list[Any]) -> Any:
+        fn = self.functions.get(entry)
+        if fn is None:
+            raise RuntimeError(f"entry function not found: {entry}")
+        self._dbg(f"[pyvm] run entry={entry} argv={args}")
+        call_args = list(args)
+        # If entry is a typical main (main / *.main), pack argv into an ArrayBox-like value
+        # to match Nyash's `main(args)` convention regardless of param count.
+        try:
+            if entry == 'main' or entry.endswith('.main'):
+                call_args = [{"__box__": "ArrayBox", "__arr": list(args)}]
+            elif fn.params and len(fn.params) == 1:
+                call_args = [{"__box__": "ArrayBox", "__arr": list(args)}]
+        except Exception:
+            pass
+        return self._exec_function(fn, call_args)
+
     def _exec_function(self, fn: Function, args: List[Any]) -> Any:
+        self._cur_fn = fn.name
+        self._dbg(f"[pyvm] call {fn.name} args={args}")
         # Intrinsic fast path for small helpers used in smokes
         ok, ret = self._try_intrinsic(fn.name, args)
         if ok:
@@ -112,8 +238,17 @@ class PyVM:
         cur = min(fn.blocks.keys())
         prev: Optional[int] = None
 
-        # Simple block execution loop
+        # Simple block execution loop with step budget to avoid infinite hangs
+        max_steps = 0
+        try:
+            max_steps = int(os.environ.get("NYASH_PYVM_MAX_STEPS", "200000"))
+        except Exception:
+            max_steps = 200000
+        steps = 0
         while True:
+            steps += 1
+            if max_steps and steps > max_steps:
+                raise RuntimeError(f"pyvm: max steps exceeded ({max_steps}) in function {fn.name}")
             block = fn.blocks.get(cur)
             if block is None:
                 raise RuntimeError(f"block not found: {cur}")
@@ -124,358 +259,68 @@ class PyVM:
                 op = inst.get("op")
 
                 if op == "phi":
-                    # incoming: prefer [[vid, pred_bid]], but accept [pred_bid, vid] robustly
-                    incoming = inst.get("incoming", [])
-                    chosen: Any = None
-                    for pair in incoming:
-                        if not isinstance(pair, (list, tuple)) or len(pair) < 2:
-                            continue
-                        a, b = pair[0], pair[1]
-                        # Case 1: [vid, pred]
-                        if prev is not None and int(b) == int(prev) and int(a) in regs:
-                            chosen = regs.get(int(a))
-                            break
-                        # Case 2: [pred, vid]
-                        if prev is not None and int(a) == int(prev) and int(b) in regs:
-                            chosen = regs.get(int(b))
-                            break
-                    if chosen is None and incoming:
-                        # Fallback to first element that resolves to a known vid
-                        for pair in incoming:
-                            if not isinstance(pair, (list, tuple)) or len(pair) < 2:
-                                continue
-                            a, b = pair[0], pair[1]
-                            if int(a) in regs:
-                                chosen = regs.get(int(a)); break
-                            if int(b) in regs:
-                                chosen = regs.get(int(b)); break
-                    self._set(regs, inst.get("dst"), chosen)
+                    op_phi(self, inst, regs, prev)
                     i += 1
                     continue
 
                 if op == "const":
-                    val = inst.get("value", {})
-                    ty = val.get("type")
-                    vv = val.get("value")
-                    if ty == "i64":
-                        out = int(vv)
-                    elif ty == "f64":
-                        out = float(vv)
-                    elif ty == "string":
-                        out = str(vv)
-                    elif isinstance(ty, dict) and ty.get('kind') in ('handle','ptr') and ty.get('box_type') == 'StringBox':
-                        # Treat handle/pointer-typed string constants as Python str for VM semantics
-                        out = str(vv)
-                    else:
-                        out = None
-                    self._set(regs, inst.get("dst"), out)
+                    op_const(self, inst, regs)
                     i += 1
                     continue
 
                 if op == "binop":
-                    operation = inst.get("operation")
-                    a = self._read(regs, inst.get("lhs"))
-                    b = self._read(regs, inst.get("rhs"))
-                    res: Any = None
-                    if operation == "+":
-                        if isinstance(a, str) or isinstance(b, str):
-                            res = (str(a) if a is not None else "") + (str(b) if b is not None else "")
-                        else:
-                            av = 0 if a is None else int(a)
-                            bv = 0 if b is None else int(b)
-                            res = av + bv
-                    elif operation == "-":
-                        av = 0 if a is None else int(a)
-                        bv = 0 if b is None else int(b)
-                        res = av - bv
-                    elif operation == "*":
-                        av = 0 if a is None else int(a)
-                        bv = 0 if b is None else int(b)
-                        res = av * bv
-                    elif operation == "/":
-                        # integer division semantics for now
-                        av = 0 if a is None else int(a)
-                        bv = 1 if b in (None, 0) else int(b)
-                        res = av // bv
-                    elif operation == "%":
-                        av = 0 if a is None else int(a)
-                        bv = 1 if b in (None, 0) else int(b)
-                        res = av % bv
-                    elif operation in ("&", "|", "^"):
-                        # treat as bitwise on ints
-                        ai, bi = (0 if a is None else int(a)), (0 if b is None else int(b))
-                        if operation == "&":
-                            res = ai & bi
-                        elif operation == "|":
-                            res = ai | bi
-                        else:
-                            res = ai ^ bi
-                    elif operation in ("<<", ">>"):
-                        ai, bi = (0 if a is None else int(a)), (0 if b is None else int(b))
-                        res = (ai << bi) if operation == "<<" else (ai >> bi)
-                    else:
-                        raise RuntimeError(f"unsupported binop: {operation}")
-                    self._set(regs, inst.get("dst"), res)
+                    op_binop(self, inst, regs)
                     i += 1
                     continue
 
                 if op == "compare":
-                    operation = inst.get("operation")
-                    a = self._read(regs, inst.get("lhs"))
-                    b = self._read(regs, inst.get("rhs"))
-                    res: bool
-                    if operation == "==":
-                        res = (a == b)
-                    elif operation == "!=":
-                        res = (a != b)
-                    elif operation == "<":
-                        res = (a < b)
-                    elif operation == "<=":
-                        res = (a <= b)
-                    elif operation == ">":
-                        res = (a > b)
-                    elif operation == ">=":
-                        res = (a >= b)
-                    else:
-                        raise RuntimeError(f"unsupported compare: {operation}")
-                    # VM convention: booleans are i64 0/1
-                    self._set(regs, inst.get("dst"), 1 if res else 0)
+                    op_compare(self, inst, regs)
+                    i += 1
+                    continue
+
+                if op == "typeop":
+                    op_typeop(self, inst, regs)
                     i += 1
                     continue
 
                 if op == "unop":
-                    kind = inst.get("kind")
-                    src = self._read(regs, inst.get("src"))
-                    out: Any
-                    if kind == "neg":
-                        if isinstance(src, (int, float)):
-                            out = -src
-                        elif src is None:
-                            out = 0
-                        else:
-                            try:
-                                out = -int(src)
-                            except Exception:
-                                out = 0
-                    elif kind == "not":
-                        out = 0 if self._truthy(src) else 1
-                    elif kind == "bitnot":
-                        out = ~int(src) if src is not None else -1
-                    else:
-                        out = None
-                    self._set(regs, inst.get("dst"), out)
+                    op_unop(self, inst, regs)
                     i += 1
                     continue
 
                 if op == "newbox":
-                    btype = inst.get("type")
-                    if btype == "ConsoleBox":
-                        val = {"__box__": "ConsoleBox"}
-                    elif btype == "StringBox":
-                        # empty string instance
-                        val = ""
-                    elif btype == "ArrayBox":
-                        val = {"__box__": "ArrayBox", "__arr": []}
-                    elif btype == "MapBox":
-                        val = {"__box__": "MapBox", "__map": {}}
-                    else:
-                        # Unknown box -> opaque
-                        val = {"__box__": btype}
-                    self._set(regs, inst.get("dst"), val)
+                    op_newbox(self, inst, regs)
+                    i += 1
+                    continue
+
+                if op == "copy":
+                    op_copy(self, inst, regs)
                     i += 1
                     continue
 
                 if op == "boxcall":
-                    recv = self._read(regs, inst.get("box"))
-                    method = inst.get("method")
-                    args = [self._read(regs, a) for a in inst.get("args", [])]
-                    out: Any = None
-                    # ConsoleBox methods
-                    if method in ("print", "println", "log") and self._is_console(recv):
-                        s = args[0] if args else ""
-                        if s is None:
-                            s = ""
-                        if method == "println":
-                            print(str(s))
-                        else:
-                            # println is the primary one used by smokes; keep print/log equivalent
-                            print(str(s))
-                        out = 0
-                    # FileBox methods (minimal read-only)
-                    elif isinstance(recv, dict) and recv.get("__box__") == "FileBox":
-                        if method == "open":
-                            path = str(args[0]) if len(args) > 0 else ""
-                            mode = str(args[1]) if len(args) > 1 else "r"
-                            ok = 0
-                            content = None
-                            if mode == "r":
-                                try:
-                                    with open(path, "r", encoding="utf-8") as f:
-                                        content = f.read()
-                                    ok = 1
-                                except Exception:
-                                    ok = 0
-                                    content = None
-                            recv["__open"] = (ok == 1)
-                            recv["__path"] = path
-                            recv["__content"] = content
-                            out = ok
-                        elif method == "read":
-                            if isinstance(recv.get("__content"), str):
-                                out = recv.get("__content")
-                            else:
-                                out = None
-                        elif method == "close":
-                            recv["__open"] = False
-                            out = 0
-                        else:
-                            out = None
-                    # PathBox methods (posix-like)
-                    elif isinstance(recv, dict) and recv.get("__box__") == "PathBox":
-                        if method == "dirname":
-                            p = str(args[0]) if args else ""
-                            # Normalize to POSIX-style
-                            out = os.path.dirname(p)
-                            if out == "":
-                                out = "."
-                        elif method == "join":
-                            base = str(args[0]) if len(args) > 0 else ""
-                            rel = str(args[1]) if len(args) > 1 else ""
-                            out = os.path.join(base, rel)
-                        else:
-                            out = None
-                    # ArrayBox minimal methods
-                    elif isinstance(recv, dict) and recv.get("__box__") == "ArrayBox":
-                        arr = recv.get("__arr", [])
-                        if method in ("len", "size"):
-                            out = len(arr)
-                        elif method == "get":
-                            idx = int(args[0]) if args else 0
-                            out = arr[idx] if 0 <= idx < len(arr) else None
-                        elif method == "set":
-                            idx = int(args[0]) if len(args) > 0 else 0
-                            val = args[1] if len(args) > 1 else None
-                            if 0 <= idx < len(arr):
-                                arr[idx] = val
-                            elif idx == len(arr):
-                                arr.append(val)
-                            else:
-                                # extend with None up to idx, then set
-                                while len(arr) < idx:
-                                    arr.append(None)
-                                arr.append(val)
-                            out = 0
-                        elif method == "push":
-                            val = args[0] if args else None
-                            arr.append(val)
-                            out = len(arr)
-                        elif method == "toString":
-                            out = "[" + ",".join(str(x) for x in arr) + "]"
-                        else:
-                            out = None
-                        recv["__arr"] = arr
-                    # MapBox minimal methods
-                    elif isinstance(recv, dict) and recv.get("__box__") == "MapBox":
-                        m = recv.get("__map", {})
-                        if method == "size":
-                            out = len(m)
-                        elif method == "has":
-                            key = str(args[0]) if args else ""
-                            out = 1 if key in m else 0
-                        elif method == "get":
-                            key = str(args[0]) if args else ""
-                            out = m.get(key)
-                        elif method == "set":
-                            key = str(args[0]) if len(args) > 0 else ""
-                            val = args[1] if len(args) > 1 else None
-                            m[key] = val
-                            out = 0
-                        elif method == "toString":
-                            items = ",".join(f"{k}:{m[k]}" for k in m)
-                            out = "{" + items + "}"
-                        else:
-                            out = None
-                        recv["__map"] = m
-                    elif method == "esc_json":
-                        # Escape backslash and double-quote in the given string argument
-                        s = args[0] if args else ""
-                        s = "" if s is None else str(s)
-                        out_chars = []
-                        for ch in s:
-                            if ch == "\\":
-                                out_chars.append("\\\\")
-                            elif ch == '"':
-                                out_chars.append('\\"')
-                            else:
-                                out_chars.append(ch)
-                        out = "".join(out_chars)
-                    elif method == "length":
-                        out = len(str(recv))
-                    elif method == "substring":
-                        s = str(recv)
-                        start = int(args[0]) if len(args) > 0 else 0
-                        end = int(args[1]) if len(args) > 1 else len(s)
-                        out = s[start:end]
-                    elif method == "lastIndexOf":
-                        s = str(recv)
-                        needle = str(args[0]) if args else ""
-                        out = s.rfind(needle)
-                    else:
-                        # Unimplemented method -> no-op
-                        out = None
-                    self._set(regs, inst.get("dst"), out)
+                    op_boxcall(self, fn, inst, regs)
                     i += 1
                     continue
 
                 if op == "externcall":
-                    func = inst.get("func")
-                    args = [self._read(regs, a) for a in inst.get("args", [])]
-                    out: Any = None
-                    if func == "nyash.console.println":
-                        s = args[0] if args else ""
-                        if s is None:
-                            s = ""
-                        print(str(s))
-                        out = 0
-                    else:
-                        # Unknown extern
-                        out = None
-                    self._set(regs, inst.get("dst"), out)
+                    op_externcall(self, inst, regs)
                     i += 1
                     continue
 
                 if op == "branch":
-                    cond = self._read(regs, inst.get("cond"))
-                    tid = int(inst.get("then"))
-                    eid = int(inst.get("else"))
-                    prev = cur
-                    cur = tid if self._truthy(cond) else eid
-                    # Restart execution at next block
+                    prev, cur = op_branch(self, inst, regs, cur, prev)
                     break
 
                 if op == "jump":
-                    tgt = int(inst.get("target"))
-                    prev = cur
-                    cur = tgt
+                    prev, cur = op_jump(self, inst, regs, cur, prev)
                     break
 
                 if op == "ret":
-                    v = self._read(regs, inst.get("value"))
-                    return v
+                    return op_ret(self, inst, regs)
 
                 if op == "call":
-                    # Resolve function name from value or take as literal
-                    fval = inst.get("func")
-                    fname = self._read(regs, fval)
-                    if not isinstance(fname, str):
-                        # Fallback: if JSON encoded a literal name
-                        fname = fval if isinstance(fval, str) else None
-                    call_args = [self._read(regs, a) for a in inst.get("args", [])]
-                    result = None
-                    if isinstance(fname, str) and fname in self.functions:
-                        callee = self.functions[fname]
-                        result = self._exec_function(callee, call_args)
-                    # Store result if needed
+                    result = op_call(self, fn, inst, regs)
                     self._set(regs, inst.get("dst"), result)
                     i += 1
                     continue
@@ -488,24 +333,4 @@ class PyVM:
                 return 0
 
     def _try_intrinsic(self, name: str, args: List[Any]) -> Tuple[bool, Any]:
-        try:
-            if name == "Main.esc_json/1":
-                s = "" if not args else ("" if args[0] is None else str(args[0]))
-                out = []
-                for ch in s:
-                    if ch == "\\":
-                        out.append("\\\\")
-                    elif ch == '"':
-                        out.append('\\"')
-                    else:
-                        out.append(ch)
-                return True, "".join(out)
-            if name == "Main.dirname/1":
-                p = "" if not args else ("" if args[0] is None else str(args[0]))
-                d = os.path.dirname(p)
-                if d == "":
-                    d = "."
-                return True, d
-        except Exception:
-            pass
-        return (False, None)
+        return _intrinsic_try(name, args)

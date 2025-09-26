@@ -1,0 +1,211 @@
+name: min-gate
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Cargo check (default features)
+        run: cargo check --all-targets -q
+
+  # Disabled by default to keep CI light; run locally when needed
+  pyvm-smoke:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep (for smokes)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Run PyVM Stage-2 smokes
+        run: bash tools/pyvm_stage2_smoke.sh
+
+      - name: JSON smoke — collect_prints (PyVM+plugins)
+        run: bash tools/test/smoke/selfhost/jsonbox_collect_prints.sh
+
+      - name: JSON smoke — parse error (PyVM+plugins)
+        run: bash tools/test/smoke/selfhost/jsonbox_parse_err.sh
+
+  # Disabled by default to keep CI light; run locally when needed
+  macro-golden:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release -q
+
+      - name: Macro golden — identity
+        run: bash tools/test/golden/macro/identity_user_macro_golden.sh
+
+      - name: Macro golden — upper string
+        run: bash tools/test/golden/macro/upper_string_user_macro_golden.sh
+
+      - name: Macro golden — array prepend zero
+        run: bash tools/test/golden/macro/array_prepend_zero_user_macro_golden.sh
+
+      - name: Macro golden — array empty
+        run: bash tools/test/golden/macro/array_empty_user_macro_golden.sh
+
+      - name: Macro golden — array nested
+        run: bash tools/test/golden/macro/array_nested_user_macro_golden.sh
+
+      - name: Macro golden — array mixed
+        run: bash tools/test/golden/macro/array_mixed_user_macro_golden.sh
+
+      - name: Macro golden — map insert tag
+        run: bash tools/test/golden/macro/map_insert_tag_user_macro_golden.sh
+
+      - name: Macro golden — map multi
+        run: bash tools/test/golden/macro/map_multi_user_macro_golden.sh
+
+      - name: Macro golden — map escape
+        run: bash tools/test/golden/macro/map_esc_user_macro_golden.sh
+      - name: Macro golden — if then → loopform (gated)
+        run: bash tools/test/golden/macro/if_then_loopform_user_macro_golden.sh
+
+  # Disabled by default to keep CI light; run locally when needed
+  macro-smokes-lite:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep (for smokes)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Build (release)
+        run: cargo build --release -q
+
+      - name: Smoke — match guard literal OR
+        run: bash tools/test/smoke/macro/match_guard_literal_or_smoke.sh
+
+      - name: Smoke — match guard type (no PeekExpr)
+        run: bash tools/test/smoke/macro/match_guard_type_smoke.sh
+
+      - name: Smoke — MIR hints Scope enter/leave
+        run: bash tools/test/smoke/mir/hints_trace_smoke.sh
+
+      - name: Smoke — MIR hints JoinResult (two vars)
+        run: bash tools/test/smoke/mir/hints_join_result_two_vars_smoke.sh
+      - name: Smoke — MIR hints JoinResult (three vars)
+        run: bash tools/test/smoke/mir/hints_join_result_three_vars_smoke.sh
+      - name: Smoke — MIR scope hints (loop+if)
+        run: bash tools/test/smoke/mir/hints_scope_loop_if_smoke.sh
+      - name: Smoke — ScopeBox enabled (no-op)
+        run: bash tools/test/smoke/mir/scopebox_enable_smoke.sh
+      - name: Smoke — Loop PHI values (then-continue)
+        run: bash tools/test/smoke/loop_phi_values.sh
+      - name: Smoke — MacroCtx JSON (ctx caps)
+        run: bash tools/test/smoke/macro/macro_ctx_json_smoke.sh
+      - name: Smoke — UTF-8 CP strings (length/indexOf/substring)
+        run: bash tools/test/smoke/strings/utf8_cp_smoke.sh
+
+  # Disabled by default to keep CI light; run locally when needed
+  llvm-phi-smoke:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install ripgrep (for smokes)
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      - name: Build (llvm + phi)
+        run: |
+          set -euo pipefail
+          # llvm feature（llvm-harness）はLLVM_SYS_180_PREFIX不要
+          cargo build --release --features "llvm,phi-legacy" -q
+
+      - name: LLVM harness — empty PHI check (batch)
+        env:
+          NYASH_MIR_NO_PHI: "0"
+        run: bash tools/test/smoke/llvm/ir_phi_empty_check_all.sh
+
+  # Disabled by default to keep CI light; run locally when needed
+  selfhost-preexpand-smoke:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: rust-check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Rust (stable)
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build (release)
+        run: cargo build --release -q
+
+      - name: Self-host preexpand (upper_string)
+        env:
+          NYASH_USE_NY_COMPILER: "1"
+          NYASH_VM_USE_PY: "1"
+          NYASH_MACRO_BOX: "1"
+          NYASH_MACRO_BOX_NY: "1"
+          NYASH_MACRO_BOX_CHILD_RUNNER: "0"
+          NYASH_MACRO_BOX_NY_PATHS: apps/macros/examples/upper_string_macro.nyash
+        run: |
+          set -euo pipefail
+          out=$(./target/release/nyash --macro-preexpand --backend vm apps/tests/macro_golden_upper_string.nyash 2>&1)
+          echo "$out"
+          echo "$out" | grep -q "HELLO"

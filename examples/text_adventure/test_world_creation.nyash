@@ -1,5 +1,5 @@
 // Test world creation
-include "text_adventure/simple_rooms.nyash"
+using "text_adventure/simple_rooms.nyash"
 
 print("Testing createSimpleWorld()...")
 

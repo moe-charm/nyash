@@ -1,64 +1,62 @@
 /*!
  * QRBox - QRコード生成・読み取りBox
- * 
+ *
  * ## 📝 概要
  * QRコードの生成、読み取り、カスタマイズを統一的に管理するBox。
  * アプリ間連携、データ共有、認証システムに最適。
- * 
+ *
  * ## 🛠️ 利用可能メソッド
- * 
+ *
  * ### 📱 QRコード生成
  * - `generate(text)` - テキストからQRコード生成
  * - `generateURL(url)` - URL用QRコード生成
  * - `generateWiFi(ssid, password, security)` - WiFi設定QR
  * - `generateContact(name, phone, email)` - 連絡先QR
- * 
+ *
  * ### 🎨 カスタマイズ
  * - `setSize(width, height)` - QRコードサイズ設定
  * - `setColors(fg, bg)` - 前景色・背景色設定
  * - `setLogo(image)` - ロゴ埋め込み
  * - `setErrorCorrection(level)` - エラー訂正レベル
- * 
+ *
  * ### 📷 読み取り
  * - `scanFromImage(imageData)` - 画像からQR読み取り
  * - `scanFromCanvas(canvas)` - Canvasから読み取り
  * - `startCamera()` - カメラ読み取り開始
- * 
+ *
  * ### 📊 情報取得
  * - `getDataURL()` - QRコードのData URL取得
  * - `getImageData()` - ImageData形式で取得
  * - `getInfo()` - QRコード情報取得
- * 
+ *
  * ## 💡 使用例
  * ```nyash
  * local qr, canvas
  * qr = new QRBox()
  * canvas = new WebCanvasBox("qr-canvas", 300, 300)
- * 
+ *
  * // 基本的なQRコード生成
  * qr.generate("https://nyash-lang.org")
  * qr.setSize(200, 200)
  * qr.setColors("#000000", "#ffffff")
- * 
+ *
  * // Canvasに描画
  * local imageData = qr.getImageData()
  * canvas.putImageData(imageData, 50, 50)
- * 
+ *
  * // WiFi設定QR
  * qr.generateWiFi("MyWiFi", "password123", "WPA2")
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
 use std::any::Any;
 
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
 
 #[cfg(target_arch = "wasm32")]
-use web_sys::{
-    HtmlCanvasElement, CanvasRenderingContext2d, ImageData
-};
+use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement, ImageData};
 
 /// QRコード管理Box
 #[derive(Debug, Clone)]
@@ -146,7 +144,11 @@ impl QRBox {
     pub fn get_info(&self) -> String {
         format!(
             "Type: {}, Size: {}x{}, Error Correction: {}, Data Length: {}",
-            self.qr_type, self.size.0, self.size.1, self.error_correction, self.data.len()
+            self.qr_type,
+            self.size.0,
+            self.size.1,
+            self.error_correction,
+            self.data.len()
         )
     }
 
@@ -170,7 +172,8 @@ impl QRBox {
                 if let Some(canvas_element) = document.get_element_by_id(canvas_id) {
                     if let Ok(canvas) = canvas_element.dyn_into::<HtmlCanvasElement>() {
                         if let Ok(context) = canvas.get_context("2d") {
-                            if let Ok(ctx) = context.unwrap().dyn_into::<CanvasRenderingContext2d>() {
+                            if let Ok(ctx) = context.unwrap().dyn_into::<CanvasRenderingContext2d>()
+                            {
                                 return self.draw_simple_qr(&ctx);
                             }
                         }
@@ -186,28 +189,29 @@ impl QRBox {
     fn draw_simple_qr(&self, ctx: &CanvasRenderingContext2d) -> bool {
         let module_size = 8;
         let modules = 25; // 25x25のQRコード
-        
+
         // 背景を描画
         ctx.set_fill_style(&wasm_bindgen::JsValue::from_str(&self.background_color));
         ctx.fill_rect(0.0, 0.0, self.size.0 as f64, self.size.1 as f64);
-        
+
         // QRコードパターンを生成（簡易版）
         ctx.set_fill_style(&wasm_bindgen::JsValue::from_str(&self.foreground_color));
-        
+
         // データベースの簡単なハッシュを作成
         let hash = self.simple_hash(&self.data);
-        
+
         for y in 0..modules {
             for x in 0..modules {
                 // ファインダーパターンの描画
                 if (x < 7 && y < 7) || (x >= modules - 7 && y < 7) || (x < 7 && y >= modules - 7) {
-                    if (x == 0 || x == 6 || y == 0 || y == 6) ||
-                       (x >= 2 && x <= 4 && y >= 2 && y <= 4) {
+                    if (x == 0 || x == 6 || y == 0 || y == 6)
+                        || (x >= 2 && x <= 4 && y >= 2 && y <= 4)
+                    {
                         ctx.fill_rect(
                             (x * module_size) as f64,
                             (y * module_size) as f64,
                             module_size as f64,
-                            module_size as f64
+                            module_size as f64,
                         );
                     }
                 } else {
@@ -218,13 +222,13 @@ impl QRBox {
                             (x * module_size) as f64,
                             (y * module_size) as f64,
                             module_size as f64,
-                            module_size as f64
+                            module_size as f64,
                         );
                     }
                 }
             }
         }
-        
+
         true
     }
 
@@ -241,10 +245,16 @@ impl QRBox {
     #[cfg(not(target_arch = "wasm32"))]
     /// Non-WASM環境用のダミー実装
     pub fn draw_to_canvas(&self, canvas_id: &str) -> bool {
-        println!("QRBox: Drawing QR code to canvas '{}' (simulated)", canvas_id);
+        println!(
+            "QRBox: Drawing QR code to canvas '{}' (simulated)",
+            canvas_id
+        );
         println!("  Data: {}", self.data);
         println!("  Size: {}x{}", self.size.0, self.size.1);
-        println!("  Colors: {} on {}", self.foreground_color, self.background_color);
+        println!(
+            "  Colors: {} on {}",
+            self.foreground_color, self.background_color
+        );
         true
     }
 
@@ -264,7 +274,8 @@ impl QRBox {
 
     /// バッチ生成機能
     pub fn generate_batch(&self, data_list: &[String]) -> Vec<String> {
-        data_list.iter()
+        data_list
+            .iter()
             .map(|data| format!("QR for: {}", data))
             .collect()
     }
@@ -279,7 +290,7 @@ impl QRBox {
             "H" => 4,
             _ => 2,
         };
-        
+
         data_len * base_complexity
     }
 }
@@ -288,19 +299,23 @@ impl BoxCore for QRBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "QRBox(type={}, size={}x{})", self.qr_type, self.size.0, self.size.1)
+        write!(
+            f,
+            "QRBox(type={}, size={}x{})",
+            self.qr_type, self.size.0, self.size.1
+        )
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -310,20 +325,23 @@ impl NyashBox for QRBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
 
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("QRBox(type={}, size={}x{})", self.qr_type, self.size.0, self.size.1))
+        StringBox::new(format!(
+            "QRBox(type={}, size={}x{})",
+            self.qr_type, self.size.0, self.size.1
+        ))
     }
 
     fn type_name(&self) -> &'static str {
         "QRBox"
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_qr) = other.as_any().downcast_ref::<QRBox>() {
             BoolBox::new(self.base.id == other_qr.base.id)

@@ -1,0 +1,3 @@
+function main(args) {
+  obj.m1().m2() catch { print("ok") }
+}

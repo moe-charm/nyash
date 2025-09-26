@@ -1,6 +1,7 @@
 // dep_tree_main.nyash — entry script to print JSON tree
 
-include "./apps/selfhost/tools/dep_tree.nyash"
+using "./apps/selfhost/tools/dep_tree.nyash" as DepTree
+using "./apps/selfhost/tools/dep_tree.nyash"
 
 static box Main {
   main(args) {

@@ -1,0 +1,6 @@
+
+# Expect: 7
+local x = 7
+local f = () => { return x }
+local x = 9   # shadow after closure creation should not affect captured value
+print(f())

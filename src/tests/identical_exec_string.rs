@@ -1,18 +1,42 @@
 #[cfg(all(test, not(feature = "jit-direct-only")))]
 mod tests {
     use crate::backend::VM;
-    use crate::mir::{MirModule, MirFunction, FunctionSignature, BasicBlockId, MirInstruction, ConstValue, EffectMask, MirType};
+    use crate::mir::{
+        BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
+        MirModule, MirType,
+    };
 
     fn make_string_len() -> MirModule {
         let mut module = MirModule::new("identical_string".to_string());
-        let sig = FunctionSignature { name: "main".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
+        let sig = FunctionSignature {
+            name: "main".into(),
+            params: vec![],
+            return_type: MirType::Integer,
+            effects: EffectMask::PURE,
+        };
         let mut f = MirFunction::new(sig, BasicBlockId::new(0));
         let bb = f.entry_block;
         let s = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: s, value: ConstValue::String("hello".into()) });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Const {
+                dst: s,
+                value: ConstValue::String("hello".into()),
+            });
         let ln = f.next_value_id();
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(ln), box_val: s, method: "len".into(), args: vec![], method_id: None, effects: EffectMask::PURE });
-        f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: Some(ln) });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::BoxCall {
+                dst: Some(ln),
+                box_val: s,
+                method: "len".into(),
+                args: vec![],
+                method_id: None,
+                effects: EffectMask::PURE,
+            });
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::Return { value: Some(ln) });
         module.add_function(f);
         module
     }
@@ -31,9 +55,13 @@ mod tests {
         let vm_s = vm_out.to_string_box().value;
 
         // JIT
-        let jit_out = crate::backend::cranelift_compile_and_execute(&module, "identical_string").expect("JIT exec");
+        let jit_out = crate::backend::cranelift_compile_and_execute(&module, "identical_string")
+            .expect("JIT exec");
         let jit_s = jit_out.to_string_box().value;
 
-        assert_eq!(vm_s, jit_s, "VM and JIT results should match for String.len");
+        assert_eq!(
+            vm_s, jit_s,
+            "VM and JIT results should match for String.len"
+        );
     }
 }

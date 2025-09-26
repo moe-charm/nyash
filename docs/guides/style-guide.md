@@ -33,6 +33,43 @@ Structure
 - Keep methods short and focused; prefer extracting helpers to maintain clarity.
 - Prefer pure helpers where possible; isolate I/O in specific methods.
 
+Box layout
+- 統一メンバ採用時（`NYASH_ENABLE_UNIFIED_MEMBERS=1`）の推奨順序:
+  1) stored（格納プロパティ: `name: Type [= expr]`）
+  2) computed / once / birth_once（読み専: `name: Type {}` / `once name: Type {}` / `birth_once name: Type {}`）
+  3) methods（`birth` を含む）
+- 既存表記でも同様に「フィールド（格納）を先頭にまとめる」。
+- 先頭群の後ろはメソッドのみを記述する。
+- メンバ間の空行・コメントは許可。アノテーション（将来）もメンバ直前/行末で許可。
+- NG: 最初のメソッド以降に stored を追加すること（リンタ警告／厳格モードでエラー）。
+
+良い例
+```nyash
+box Employee {
+  // データ構造（フィールド）
+  name: StringBox
+  age: IntegerBox
+  department: StringBox
+
+  // ここからメソッド
+  birth(n, a, d) { me.name = n; me.age = a; me.department = d }
+  promote() { }
+}
+```
+
+悪い例（NG）
+```nyash
+box Bad {
+  id: IntegerBox
+  method1() { }
+  name: StringBox  // ❌ フィールドはメソッドの後に置けない
+}
+```
+
+ツール
+- 警告: 既定は警告（`NYASH_CLI_VERBOSE=1` で詳細を表示）。
+- 厳格化: `NYASH_FIELDS_TOP_STRICT=1` でエラーに昇格（Runnerでチェック）。
+
 Examples
 ```nyash
 using core.std as Std
@@ -64,4 +101,3 @@ static box Main {
 CI/Tooling
 - Optional formatter PoC: see `docs/tools/nyfmt/NYFMT_POC_ROADMAP.md`.
 - Keep smoke scripts small and fast; place them under `tools/`.
-

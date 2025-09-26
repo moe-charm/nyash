@@ -1,5 +1,5 @@
 /*! 🚀 Transport Module - Communication Layer Abstraction
- * 
+ *
  * This module defines the Transport trait and implementations for different
  * communication methods (InProcess, WebSocket, WebRTC, etc.)
  */
@@ -37,29 +37,48 @@ pub enum TransportError {
 pub trait Transport: Send + Sync + std::fmt::Debug {
     /// Get the node ID of this transport
     fn node_id(&self) -> &str;
-    
+
     /// Send a message to a specific node
     fn send(&self, to: &str, intent: IntentBox, opts: SendOpts) -> Result<(), TransportError>;
-    
+
     /// Register a callback for receiving messages
     fn on_receive(&mut self, callback: Box<dyn Fn(IntentEnvelope) + Send + Sync>);
-    
+
     /// Check if a node is reachable
     fn is_reachable(&self, node_id: &str) -> bool;
-    
+
     /// Get transport type identifier
     fn transport_type(&self) -> &'static str;
 
     /// Downcast support for dynamic transports
-    fn as_any(&self) -> &dyn std::any::Any where Self: 'static + Sized { self }
-    fn as_any_mut(&mut self) -> &mut dyn std::any::Any where Self: 'static + Sized { self }
+    fn as_any(&self) -> &dyn std::any::Any
+    where
+        Self: 'static + Sized,
+    {
+        self
+    }
+    fn as_any_mut(&mut self) -> &mut dyn std::any::Any
+    where
+        Self: 'static + Sized,
+    {
+        self
+    }
 
     /// Register an intent handler (default: no-op)
-    fn register_intent_handler(&mut self, _intent: &str, _cb: Box<dyn Fn(IntentEnvelope) + Send + Sync>) { }
+    fn register_intent_handler(
+        &mut self,
+        _intent: &str,
+        _cb: Box<dyn Fn(IntentEnvelope) + Send + Sync>,
+    ) {
+    }
 
     /// Debug helper: enumerate known nodes (if supported)
-    fn debug_list_nodes(&self) -> Option<Vec<String>> { None }
-    fn debug_bus_id(&self) -> Option<String> { None }
+    fn debug_list_nodes(&self) -> Option<Vec<String>> {
+        None
+    }
+    fn debug_bus_id(&self) -> Option<String> {
+        None
+    }
 }
 
 pub use inprocess::InProcessTransport;

@@ -1,0 +1,22 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local i = 0
+    local acc = 0
+    try {
+      loop(i < 6) {
+        i = i + 1
+        if (i == 2) { continue }
+        if (i == 5) { throw "boom" }
+        acc = acc + i
+      }
+    } catch (e) {
+      // swallow
+      acc = acc + 100
+    } cleanup {
+      acc = acc + 7
+    }
+    console.println("acc=" + acc)
+    return acc
+  }
+}

@@ -1,0 +1,8 @@
+{"kind":"Program","statements":[
+  {"kind":"Local","variables":["i"],"inits":[{"kind":"Literal","value":{"type":"int","value":0}}]},
+  {"kind":"Loop","condition":{"kind":"BinaryOp","op":"<","left":{"kind":"Variable","name":"i"},"right":{"kind":"Literal","value":{"type":"int","value":3}}},"body":[
+    {"kind":"Print","expression":{"kind":"Variable","name":"i"}},
+    {"kind":"Assignment","target":{"kind":"Variable","name":"i"},"value":{"kind":"BinaryOp","op":"+","left":{"kind":"Variable","name":"i"},"right":{"kind":"Literal","value":{"type":"int","value":1}}}}
+  ]}
+]}
+

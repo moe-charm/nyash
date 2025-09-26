@@ -1,14 +1,14 @@
 /*!
  * ScopeTracker - Track Box instances for proper lifecycle management
- * 
+ *
  * Phase 9.78a: Unified Box lifecycle management for VM
  */
 
-use std::sync::Arc;
 use crate::box_trait::NyashBox;
 use crate::instance_v2::InstanceBox;
 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
+use std::sync::Arc;
 
 /// Tracks Box instances created in different scopes for proper fini calls
 pub struct ScopeTracker {
@@ -26,12 +26,12 @@ impl ScopeTracker {
             roots: vec![Vec::new()],  // Start with one root region
         }
     }
-    
+
     /// Enter a new scope
     pub fn push_scope(&mut self) {
         self.scopes.push(Vec::new());
     }
-    
+
     /// Exit current scope and call fini on all Boxes created in it
     pub fn pop_scope(&mut self) {
         if let Some(scope) = self.scopes.pop() {
@@ -51,25 +51,27 @@ impl ScopeTracker {
                 // Builtin and others: no-op for now
             }
         }
-        
+
         // Ensure we always have at least one scope
-        if self.scopes.is_empty() { self.scopes.push(Vec::new()); }
+        if self.scopes.is_empty() {
+            self.scopes.push(Vec::new());
+        }
     }
-    
+
     /// Register a Box in the current scope
     pub fn register_box(&mut self, nyash_box: Arc<dyn NyashBox>) {
         if let Some(current_scope) = self.scopes.last_mut() {
             current_scope.push(nyash_box);
         }
     }
-    
+
     /// Clear all scopes (used when resetting VM state)
     pub fn clear(&mut self) {
         // Pop all scopes and call fini
         while self.scopes.len() > 1 {
             self.pop_scope();
         }
-        
+
         // Clear the root scope
         if let Some(root_scope) = self.scopes.first_mut() {
             root_scope.clear();
@@ -96,7 +98,9 @@ impl ScopeTracker {
                 eprintln!("[GC] roots: leave");
             }
         }
-        if self.roots.is_empty() { self.roots.push(Vec::new()); }
+        if self.roots.is_empty() {
+            self.roots.push(Vec::new());
+        }
     }
 
     /// Pin a VMValue into the current root region (cheap clone)
@@ -110,15 +114,21 @@ impl ScopeTracker {
     }
 
     /// Total number of pinned roots across all regions (for GC PoC diagnostics)
-    pub fn root_count_total(&self) -> usize { self.roots.iter().map(|r| r.len()).sum() }
+    pub fn root_count_total(&self) -> usize {
+        self.roots.iter().map(|r| r.len()).sum()
+    }
 
     /// Number of active root regions
-    pub fn root_regions(&self) -> usize { self.roots.len() }
+    pub fn root_regions(&self) -> usize {
+        self.roots.len()
+    }
 
     /// Snapshot a flat vector of current roots (cloned) for diagnostics
     pub fn roots_snapshot(&self) -> Vec<crate::backend::vm::VMValue> {
         let mut out = Vec::new();
-        for region in &self.roots { out.extend(region.iter().cloned()); }
+        for region in &self.roots {
+            out.extend(region.iter().cloned());
+        }
         out
     }
 }

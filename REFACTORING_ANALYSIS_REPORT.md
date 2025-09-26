@@ -173,3 +173,9 @@ src/mir/builder/
 The Nyash codebase shows signs of rapid development with opportunities for significant refactoring. The plugin loader consolidation offers the highest impact for maintenance improvement, while the MIR builder modularization will improve long-term extensibility. A phased approach is recommended to minimize disruption while delivering incremental benefits.
 
 The analysis reveals a well-architected system that would benefit from tactical refactoring to improve maintainability without compromising the innovative "Everything is Box" design philosophy.
+
+---
+
+Phase 15 Addendum (Mainline only)
+- Implemented: extracted CLI directives scanning and fields-top lint into `src/runner/cli_directives.rs` to slim `src/runner/mod.rs` without behavior changes.
+- Proposed next steps (non-JIT): see `docs/development/refactoring/candidates_phase15.md` for focused items on Runner/LLVM/VM.

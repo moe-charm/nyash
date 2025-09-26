@@ -2,9 +2,9 @@
 // Nyashの箱システムによる非同期処理の基盤を提供します。
 // 参考: 既存Boxの設計思想
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
 use std::any::Any;
-use std::sync::{Mutex, Condvar, Arc, Weak};
+use std::sync::{Arc, Condvar, Mutex, Weak};
 
 #[derive(Debug)]
 pub struct NyashFutureBox {
@@ -33,7 +33,10 @@ pub struct FutureWeak {
 
 impl Clone for NyashFutureBox {
     fn clone(&self) -> Self {
-        Self { inner: self.inner.clone(), base: BoxBase::new() }
+        Self {
+            inner: self.inner.clone(),
+            base: BoxBase::new(),
+        }
     }
 }
 
@@ -41,13 +44,16 @@ impl NyashFutureBox {
     pub fn new() -> Self {
         Self {
             inner: Arc::new(Inner {
-                state: Mutex::new(FutureState { result: None, ready: false }),
+                state: Mutex::new(FutureState {
+                    result: None,
+                    ready: false,
+                }),
                 cv: Condvar::new(),
             }),
             base: BoxBase::new(),
         }
     }
-    
+
     /// Set the result of the future
     pub fn set_result(&self, value: Box<dyn NyashBox>) {
         let mut st = self.inner.state.lock().unwrap();
@@ -55,7 +61,7 @@ impl NyashFutureBox {
         st.ready = true;
         self.inner.cv.notify_all();
     }
-    
+
     /// Get the result (blocks until ready)
     pub fn get(&self) -> Box<dyn NyashBox> {
         let mut st = self.inner.state.lock().unwrap();
@@ -64,21 +70,25 @@ impl NyashFutureBox {
         }
         st.result.as_ref().unwrap().clone_box()
     }
-    
+
     /// Check if the future is ready
     pub fn ready(&self) -> bool {
         self.inner.state.lock().unwrap().ready
     }
 
     /// Create a non-owning weak handle to this Future's state
-    pub fn downgrade(&self) -> FutureWeak { FutureWeak { inner: Arc::downgrade(&self.inner) } }
+    pub fn downgrade(&self) -> FutureWeak {
+        FutureWeak {
+            inner: Arc::downgrade(&self.inner),
+        }
+    }
 }
 
 impl NyashBox for NyashFutureBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -98,11 +108,9 @@ impl NyashBox for NyashFutureBox {
         }
     }
 
-
     fn type_name(&self) -> &'static str {
         "NyashFutureBox"
     }
-
 
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_future) = other.as_any().downcast_ref::<NyashFutureBox>() {
@@ -117,7 +125,7 @@ impl BoxCore for NyashFutureBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
@@ -135,11 +143,11 @@ impl BoxCore for NyashFutureBox {
             write!(f, "Future(pending)")
         }
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -164,6 +172,8 @@ impl FutureBox {
 impl FutureWeak {
     /// Try to upgrade and check readiness
     pub(crate) fn is_ready(&self) -> Option<bool> {
-        self.inner.upgrade().map(|arc| arc.state.lock().unwrap().ready)
+        self.inner
+            .upgrade()
+            .map(|arc| arc.state.lock().unwrap().ready)
     }
 }

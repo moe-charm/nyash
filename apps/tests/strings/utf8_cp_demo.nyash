@@ -1,0 +1,8 @@
+// UTF-8 CP semantics demo: expect CP-based results under PyVM
+// String: a + é (U+00E9) + 𝄞 (U+1D11E)
+
+local s = "aé𝄞"
+print(s.length())          // expect 3 (code points)
+print(s.indexOf("é"))     // expect 1
+print(s.lastIndexOf("é")) // expect 1
+print(s.substring(1, 3))   // expect "é𝄞"

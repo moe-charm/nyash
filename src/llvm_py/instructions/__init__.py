@@ -7,8 +7,9 @@ Each instruction has its own file, following Rust structure
 from .const import lower_const
 from .binop import lower_binop
 from .compare import lower_compare
-from .jump import lower_jump
-from .branch import lower_branch
+# controlflow
+from .controlflow.jump import lower_jump
+from .controlflow.branch import lower_branch
 from .ret import lower_return
 from .phi import lower_phi
 from .call import lower_call

@@ -1,0 +1,15 @@
+// Macro Expand Runner (PyVM)
+// PoC: reads AST JSON v0 from args[0] and echoes it unchanged.
+// Later: call MacroBoxSpec.expand(ast_json) and print result.
+
+function main(args) {
+    if args.length() == 0 {
+        print("{}")
+        return 0
+    }
+    local j
+    j = args.get(0)
+    print(j)
+    return 0
+}
+

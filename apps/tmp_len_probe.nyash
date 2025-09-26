@@ -2,7 +2,7 @@ static box Main {
   main() {
     print("enter-main")
     local S
-    S = include "apps/std/string.nyash"
+    using "apps/std/string.nyash" as S
     print("after-include")
     local x
     x = S.string_length("abc")

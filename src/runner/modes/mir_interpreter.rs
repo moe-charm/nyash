@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::MirInterpreter, runtime::{NyashRuntime, NyashRuntimeBuilder}, interpreter::SharedState, box_factory::user_defined::UserDefinedBoxFactory};
+use nyash_rust::{parser::NyashParser, mir::MirCompiler, backend::MirInterpreter, runtime::{NyashRuntime, NyashRuntimeBuilder}, box_factory::{SharedState, user_defined::UserDefinedBoxFactory}};
 use std::{fs, process};
 use std::sync::Arc;
 
@@ -17,6 +17,7 @@ impl NyashRunner {
             Ok(ast) => ast,
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
+        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
         // Prepare runtime and collect Box declarations for user-defined types
         let runtime = {
@@ -45,9 +46,7 @@ impl NyashRunner {
         let mut module_interp = compile_result.module.clone();
         if std::env::var("NYASH_VM_ESCAPE_ANALYSIS").ok().as_deref() == Some("1") {
             let removed = nyash_rust::mir::passes::escape::escape_elide_barriers_vm(&mut module_interp);
-            if removed > 0 && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[MIR-Interp] escape_elide_barriers: removed {} barriers", removed);
-            }
+            if removed > 0 { crate::cli_v!("[MIR-Interp] escape_elide_barriers: removed {} barriers", removed); }
         }
 
         // Execute with MIR interpreter
@@ -101,4 +100,3 @@ impl NyashRunner {
         let _ = runtime; // reserved for future GC/safepoint integration
     }
 }
-

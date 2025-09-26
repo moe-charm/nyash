@@ -25,8 +25,18 @@ pub struct NyrtValue {
 }
 
 impl NyrtValue {
-    pub fn void() -> Self { Self { tag: NyrtTag::Void, i64_: 0 } }
-    pub fn i64(v: i64) -> Self { Self { tag: NyrtTag::I64, i64_: v } }
+    pub fn void() -> Self {
+        Self {
+            tag: NyrtTag::Void,
+            i64_: 0,
+        }
+    }
+    pub fn i64(v: i64) -> Self {
+        Self {
+            tag: NyrtTag::I64,
+            i64_: v,
+        }
+    }
 }
 
 /// Nyash ABI のメソッド関数ポインタ（雛形）
@@ -34,7 +44,11 @@ pub type NyrtMethodFn = fn(instance: u64, argc: usize, argv: *const NyrtValue) -
 
 /// スロット定義（雛形）
 #[derive(Clone, Copy)]
-pub struct MethodEntry { pub name: &'static str, pub arity: u8, pub slot: u16 }
+pub struct MethodEntry {
+    pub name: &'static str,
+    pub arity: u8,
+    pub slot: u16,
+}
 
 /// TypeBox（雛形）: 各型の静的メタデータ（スロット一覧付き）
 pub struct TypeBox {
@@ -43,6 +57,13 @@ pub struct TypeBox {
 }
 
 impl TypeBox {
-    pub const fn new(type_name: &'static str) -> Self { Self { type_name, methods: &[] } }
-    pub const fn new_with(type_name: &'static str, methods: &'static [MethodEntry]) -> Self { Self { type_name, methods } }
+    pub const fn new(type_name: &'static str) -> Self {
+        Self {
+            type_name,
+            methods: &[],
+        }
+    }
+    pub const fn new_with(type_name: &'static str, methods: &'static [MethodEntry]) -> Self {
+        Self { type_name, methods }
+    }
 }

@@ -4,9 +4,9 @@ This index points to the currently maintained architectural documents:
 
 - Core Concepts: reference/architecture/nyash_core_concepts.md
 - Execution Backends: reference/architecture/execution-backends.md
-- Lowering Contexts: LOWERING_CONTEXTS.md
-- LLVM Layer Overview: LLVM_LAYER_OVERVIEW.md
-- VM Overview: VM_README.md
-- Cranelift AOT design: backend-cranelift-aot-design.md
+- Lowering Contexts: ../../development/design/legacy/LOWERING_CONTEXTS.md
+- LLVM Layer Overview: ../../development/design/legacy/LLVM_LAYER_OVERVIEW.md
+- VM Overview: vm.md
+- Cranelift AOT design: ../../development/design/legacy/backend-cranelift-aot-design.md
 
 Note: Some long-form papers reside under `private/papers/reference/architecture/`.

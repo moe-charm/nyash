@@ -1,0 +1,5 @@
+
+# Expect: OK:3-hello
+local m = { k: [ "hello", "world" ] }
+m.k.push("!")      # verify method dispatch on nested box
+print("OK:" + 3 + "-" + m.k[0])  # "OK:3-hello"

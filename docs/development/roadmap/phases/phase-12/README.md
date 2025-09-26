@@ -1,5 +1,7 @@
 # Phase 12: Nyashコード共有エコシステム - Everything is Box の実現
 
+> Status note (Phase‑15): このフォルダは「統一TypeBox ABI」の長期設計（青写真）です。現在の main 実装は最小の v2 ABI に収束しており、実用重視で段階導入中です。現行仕様は `docs/reference/plugin-abi/nyash_abi_v2.md` を参照してください。Phase‑12 の要素（create/destroy、型メタ、NyValue、vtable/RC/GC）は前方互換を維持しつつ段階追加予定です。
+
 ## 🌟 最新ブレイクスルー (2025-09-02) - 統一TypeBox ABI誕生！
 
 ### 🚨 究極の発見：ユーザー定義Boxもプラグインに！

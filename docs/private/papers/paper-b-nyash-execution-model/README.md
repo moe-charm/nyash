@@ -1,5 +1,7 @@
 # 論文B: Nyash言語と実行モデル
 
+> Scope (2025-09-19): 本稿の範囲は PyVM と LLVM/llvmlite の2系統に限定。MIR14 は PHI‑off（合流はエッジコピー）、PHI 形成は LLVM ハーネスで行う。JIT/Interpreter は Phase‑15 では補助扱い。詳細は SCOPE.md を参照。
+
 ## 📚 概要
 
 **タイトル**: Nyash: A Box-First Programming Language with Symmetric Memory Management and P2P Intent Model

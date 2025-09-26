@@ -1,0 +1,5 @@
+
+# Expect: 🐱-9-nyash
+local cat = "🐱"
+local s = cat + "-" + (3*3) + "-" + "nyash"
+print(s)

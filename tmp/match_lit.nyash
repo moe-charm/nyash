@@ -1,0 +1,9 @@
+static box Main {
+  main(args) {
+    local r = match 1 {
+      1 => 10,
+      _ => 0
+    }
+    return r
+  }
+}

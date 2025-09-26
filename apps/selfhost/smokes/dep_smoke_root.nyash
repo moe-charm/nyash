@@ -1,5 +1,5 @@
 // root smoke for include-only tree
-include "dep_smoke_child.nyash"
+using "dep_smoke_child.nyash"
 
 box Root {
   main() {
@@ -11,4 +11,3 @@ box Root {
     return 0
   }
 }
-

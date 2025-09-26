@@ -5,7 +5,7 @@
  * Kept separate to thin vm.rs and allow reuse across helpers.
  */
 
-use crate::box_trait::{NyashBox, StringBox, IntegerBox, BoolBox, VoidBox};
+use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
 use crate::mir::ConstValue;
 use std::sync::Arc;
 
@@ -94,7 +94,10 @@ impl VMValue {
     pub fn as_integer(&self) -> Result<i64, VMError> {
         match self {
             VMValue::Integer(i) => Ok(*i),
-            _ => Err(VMError::TypeError(format!("Expected integer, got {:?}", self))),
+            _ => Err(VMError::TypeError(format!(
+                "Expected integer, got {:?}",
+                self
+            ))),
         }
     }
 
@@ -105,11 +108,25 @@ impl VMValue {
             VMValue::Integer(i) => Ok(*i != 0),
             // Pragmatic coercions for dynamic boxes (preserve legacy semantics)
             VMValue::BoxRef(b) => {
-                if let Some(bb) = b.as_any().downcast_ref::<BoolBox>() { return Ok(bb.value); }
-                if let Some(ib) = b.as_any().downcast_ref::<IntegerBox>() { return Ok(ib.value != 0); }
-                if let Some(ib) = b.as_any().downcast_ref::<crate::boxes::integer_box::IntegerBox>() { return Ok(ib.value != 0); }
-                if b.as_any().downcast_ref::<VoidBox>().is_some() { return Ok(false); }
-                Err(VMError::TypeError(format!("Expected bool, got BoxRef({})", b.type_name())))
+                if let Some(bb) = b.as_any().downcast_ref::<BoolBox>() {
+                    return Ok(bb.value);
+                }
+                if let Some(ib) = b.as_any().downcast_ref::<IntegerBox>() {
+                    return Ok(ib.value != 0);
+                }
+                if let Some(ib) = b
+                    .as_any()
+                    .downcast_ref::<crate::boxes::integer_box::IntegerBox>()
+                {
+                    return Ok(ib.value != 0);
+                }
+                if b.as_any().downcast_ref::<VoidBox>().is_some() {
+                    return Ok(false);
+                }
+                Err(VMError::TypeError(format!(
+                    "Expected bool, got BoxRef({})",
+                    b.type_name()
+                )))
             }
             VMValue::Void => Ok(false),
             VMValue::Float(f) => Ok(*f != 0.0),
@@ -120,7 +137,11 @@ impl VMValue {
 
     /// Convert from NyashBox to VMValue
     pub fn from_nyash_box(nyash_box: Box<dyn crate::box_trait::NyashBox>) -> VMValue {
-        if nyash_box.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+        if nyash_box
+            .as_any()
+            .downcast_ref::<crate::boxes::null_box::NullBox>()
+            .is_some()
+        {
             // Treat NullBox as Void in VMValue to align with `null` literal semantics
             VMValue::Void
         } else if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
@@ -129,7 +150,10 @@ impl VMValue {
             VMValue::Bool(bool_box.value)
         } else if let Some(string_box) = nyash_box.as_any().downcast_ref::<StringBox>() {
             VMValue::String(string_box.value.clone())
-        } else if let Some(future_box) = nyash_box.as_any().downcast_ref::<crate::boxes::future::FutureBox>() {
+        } else if let Some(future_box) = nyash_box
+            .as_any()
+            .downcast_ref::<crate::boxes::future::FutureBox>()
+        {
             VMValue::Future(future_box.clone())
         } else {
             VMValue::BoxRef(Arc::from(nyash_box))

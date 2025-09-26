@@ -1,10 +1,10 @@
 /*!
  * Exception Boxes for Nyash try/catch/throw system
- * 
+ *
  * Everything is Box哲学に基づく例外システム
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
 use std::any::Any;
 use std::collections::HashMap;
 
@@ -26,7 +26,7 @@ impl ErrorBox {
             base: BoxBase::new(),
         }
     }
-    
+
     pub fn with_cause(message: &str, cause: ErrorBox) -> Self {
         Self {
             message: message.to_string(),
@@ -35,11 +35,11 @@ impl ErrorBox {
             base: BoxBase::new(),
         }
     }
-    
+
     pub fn add_stack_frame(&mut self, frame: String) {
         self.stack_trace.push(frame);
     }
-    
+
     pub fn get_full_message(&self) -> String {
         let mut msg = self.message.clone();
         if let Some(ref cause) = self.cause {
@@ -53,12 +53,11 @@ impl NyashBox for ErrorBox {
     fn type_name(&self) -> &'static str {
         "ErrorBox"
     }
-    
+
     fn to_string_box(&self) -> StringBox {
         StringBox::new(format!("ErrorBox({})", self.message))
     }
-    
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_error) = other.as_any().downcast_ref::<ErrorBox>() {
             BoolBox::new(self.message == other_error.message)
@@ -66,11 +65,11 @@ impl NyashBox for ErrorBox {
             BoolBox::new(false)
         }
     }
-    
+
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
@@ -89,11 +88,11 @@ impl BoxCore for ErrorBox {
     fn fmt_box(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "ErrorBox({})", self.message)
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -114,7 +113,11 @@ pub fn is_exception_type(exception: &dyn NyashBox, type_name: &str) -> bool {
 }
 
 /// 例外の作成ヘルパー
-pub fn create_exception(_type_name: &str, message: &str, _extra_info: &HashMap<String, String>) -> Box<dyn NyashBox> {
+pub fn create_exception(
+    _type_name: &str,
+    message: &str,
+    _extra_info: &HashMap<String, String>,
+) -> Box<dyn NyashBox> {
     // 現在はErrorBoxのみサポート（シンプル実装）
     Box::new(ErrorBox::new(message))
 }

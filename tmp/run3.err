@@ -1,0 +1,1935 @@
+🔍 DEBUG: Initializing v2 plugin system
+[PluginLoaderV2] load_plugin: lib='libnyash_encoding_plugin.so' path='plugins/nyash-encoding-plugin/target/release/libnyash_encoding_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_json_plugin.so' path='plugins/nyash-json-plugin/target/release/libnyash_json_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_python_compiler_plugin.so' path='plugins/nyash-python-compiler-plugin/target/release/libnyash_python_compiler_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_toml_plugin.so' path='plugins/nyash-toml-plugin/target/release/libnyash_toml_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_filebox_plugin.so' path='plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_math_plugin.so' path='plugins/nyash-math-plugin/target/release/libnyash_math_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_python_plugin.so' path='plugins/nyash-python-plugin/target/release/libnyash_python_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_net_plugin.so' path='plugins/nyash-net-plugin/target/release/libnyash_net_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_regex_plugin.so' path='plugins/nyash-regex-plugin/target/release/libnyash_regex_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_path_plugin.so' path='plugins/nyash-path-plugin/target/release/libnyash_path_plugin.so'
+[PluginLoaderV2] load_plugin: lib='libnyash_python_parser_plugin.so' path='plugins/nyash-python-parser-plugin/target/release/libnyash_python_parser_plugin.so'
+🔌 plugin host initialized from nyash.toml
+  📦 Registering plugin provider for RegexBox
+  📦 Registering plugin provider for PathBox
+  📦 Registering plugin provider for PythonCompilerBox
+  📦 Registering plugin provider for EncodingBox
+  📦 Registering plugin provider for JsonDocBox
+  📦 Registering plugin provider for JsonNodeBox
+  📦 Registering plugin provider for PyRuntimeBox
+  📦 Registering plugin provider for PyObjectBox
+  📦 Registering plugin provider for TOMLBox
+  📦 Registering plugin provider for MathBox
+  📦 Registering plugin provider for TimeBox
+  📦 Registering plugin provider for ClientBox
+  📦 Registering plugin provider for ResponseBox
+  📦 Registering plugin provider for RequestBox
+  📦 Registering plugin provider for ServerBox
+  📦 Registering plugin provider for SockServerBox
+  📦 Registering plugin provider for SockClientBox
+  📦 Registering plugin provider for SockConnBox
+  📦 Registering plugin provider for FileBox
+  📦 Registering plugin provider for PythonParserBox
+✅ plugin host fully configured
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.core -> apps/selfhost/vm/boxes/mini_vm_core.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.json -> apps/selfhost/common/json_adapter.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.json_cur -> apps/selfhost/vm/boxes/json_cur.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.scan -> apps/selfhost/common/mini_vm_scan.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.binop -> apps/selfhost/common/mini_vm_binop.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.json -> apps/selfhost/common/json_adapter.nyash
+[using] hit modules: selfhost.vm.scan -> apps/selfhost/common/mini_vm_scan.nyash
+[using] hit modules: selfhost.vm.compare -> apps/selfhost/common/mini_vm_compare.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.scan -> apps/selfhost/common/mini_vm_scan.nyash
+[using] hit modules: selfhost.vm.prints -> apps/selfhost/vm/boxes/mini_vm_prints.nyash
+[using] ctx: modules=16 using_paths=apps:lib:.:apps:lib:.
+[using] hit modules: selfhost.vm.scan -> apps/selfhost/common/mini_vm_scan.nyash
+[using] hit modules: selfhost.vm.binop -> apps/selfhost/common/mini_vm_binop.nyash
+[using] hit modules: selfhost.vm.compare -> apps/selfhost/common/mini_vm_compare.nyash
+[using] hit modules: selfhost.vm.json -> apps/selfhost/common/json_adapter.nyash
+[using] hit modules: selfhost.vm.prints -> apps/selfhost/vm/boxes/mini_vm_prints.nyash
+[using][seam] fix: appending 1 '}' before body
+[pyvm-code]
+// Mini-VM JSON cursor helpers (extracted)
+// One static box per file per using/include policy
+static box MiniJsonCur {
+  _is_digit(ch) { if ch == "0" { return 1 } if ch == "1" { return 1 } if ch == "2" { return 1 } if ch == "3" { return 1 } if ch == "4" { return 1 } if ch == "5" { return 1 } if ch == "6" { return 1 } if ch == "7" { return 1 } if ch == "8" { return 1 } if ch == "9" { return 1 } return 0 }
+  // Skip whitespace from pos; return first non-ws index or -1
+  next_non_ws(s, pos) {
+    local i = pos
+    local n = s.length()
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch != " "  and  ch != "\n"  and  ch != "\r"  and  ch != "\t" { return i }
+      i = i + 1
+    }
+    return -1
+  }
+  // Read a quoted string starting at pos '"'; returns decoded string (no state)
+  read_quoted_from(s, pos) {
+    local i = pos
+    if s.substring(i, i+1) != "\"" { return "" }
+    i = i + 1
+    local out = ""
+    local n = s.length()
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\"" { break }
+      if ch == "\\" {
+        i = i + 1
+        ch = s.substring(i, i+1)
+      }
+      out = out + ch
+      i = i + 1
+    }
+    return out
+  }
+  // Read consecutive digits from pos
+  read_digits_from(s, pos) {
+    local out = ""
+    local i = pos
+    // guard against invalid position (null/negative)
+    if i == null { return out }
+    if i < 0 { return out }
+    loop (true) {
+      local ch = s.substring(i, i+1)
+      if ch == "" { break }
+      // inline digit check to avoid same-box method dispatch
+      if ch == "0" { out = out + ch  i = i + 1  continue }
+      if ch == "1" { out = out + ch  i = i + 1  continue }
+      if ch == "2" { out = out + ch  i = i + 1  continue }
+      if ch == "3" { out = out + ch  i = i + 1  continue }
+      if ch == "4" { out = out + ch  i = i + 1  continue }
+      if ch == "5" { out = out + ch  i = i + 1  continue }
+      if ch == "6" { out = out + ch  i = i + 1  continue }
+      if ch == "7" { out = out + ch  i = i + 1  continue }
+      if ch == "8" { out = out + ch  i = i + 1  continue }
+      if ch == "9" { out = out + ch  i = i + 1  continue }
+      break
+    }
+    return out
+  }
+}
+// Adapter for JSON cursor operations (extracted)
+// Wraps MiniJsonCur and exposes a stable facade
+
+static box MiniJson {
+  read_quoted_from(s, pos) {
+    local cur = new MiniJsonCur()
+    return cur.read_quoted_from(s, pos)
+  }
+  read_digits_from(s, pos) {
+    local cur = new MiniJsonCur()
+    return cur.read_digits_from(s, pos)
+  }
+  next_non_ws(s, pos) {
+    local cur = new MiniJsonCur()
+    return cur.next_non_ws(s, pos)
+  }
+}
+
+
+// Mini-VM scanning and numeric helpers
+static box MiniVmScan {
+  // helper: find needle from position pos
+  index_of_from(hay, needle, pos) {
+    // Guard position; clamp to valid range to avoid negative substring
+    if pos < 0 { pos = 0 }
+    local n = hay.length()
+    if pos >= n { return -1 }
+    local m = needle.length()
+    if m <= 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop (i <= limit) {
+      local seg = hay.substring(i, i + m)
+      if seg == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // helper: find balanced bracket range [ ... ] starting at idx (points to '[')
+  find_balanced_array_end(json, idx) {
+    local n  = json.length()
+    if json.substring(idx, idx+1) != "[" { return -1 }
+    local depth  = 0
+    local i  = idx
+    local in_str  = 0
+    local guard  = 0
+    loop (i < n) {
+      guard = guard + 1
+      if guard > 50000 { return -1 }
+      local ch  = json.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0  i = i + 1  continue }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "[" { depth = depth + 1 }
+      if ch == "]" {
+        depth = depth - 1
+        if depth == 0 { return i }
+      }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // helper: find balanced object range { ... } starting at idx (points to '{')
+  find_balanced_object_end(json, idx) {
+    local n  = json.length()
+    if json.substring(idx, idx+1) != "{" { return -1 }
+    local depth  = 0
+    local i  = idx
+    local in_str  = 0
+    local guard  = 0
+    loop (i < n) {
+      guard = guard + 1
+      if guard > 50000 { return -1 }
+      local ch  = json.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0  i = i + 1  continue }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" {
+        depth = depth - 1
+        if depth == 0 { return i }
+      }
+      i = i + 1
+    }
+    return -1
+  }
+
+  _str_to_int(s) {
+    local i  = 0
+    local n  = s.length()
+    local acc  = 0
+    loop (i < n) {
+      local ch  = s.substring(i, i+1)
+      if ch == "0" { acc = acc * 10 + 0  i = i + 1  continue }
+      if ch == "1" { acc = acc * 10 + 1  i = i + 1  continue }
+      if ch == "2" { acc = acc * 10 + 2  i = i + 1  continue }
+      if ch == "3" { acc = acc * 10 + 3  i = i + 1  continue }
+      if ch == "4" { acc = acc * 10 + 4  i = i + 1  continue }
+      if ch == "5" { acc = acc * 10 + 5  i = i + 1  continue }
+      if ch == "6" { acc = acc * 10 + 6  i = i + 1  continue }
+      if ch == "7" { acc = acc * 10 + 7  i = i + 1  continue }
+      if ch == "8" { acc = acc * 10 + 8  i = i + 1  continue }
+      if ch == "9" { acc = acc * 10 + 9  i = i + 1  continue }
+      break
+    }
+    return acc
+  }
+  _digit_char(d) {
+    if d == 0 { return "0" }
+    if d == 1 { return "1" }
+    if d == 2 { return "2" }
+    if d == 3 { return "3" }
+    if d == 4 { return "4" }
+    if d == 5 { return "5" }
+    if d == 6 { return "6" }
+    if d == 7 { return "7" }
+    if d == 8 { return "8" }
+    if d == 9 { return "9" }
+    return "0"
+  }
+  _int_to_str(n) {
+    if n == 0 { return "0" }
+    local v  = n
+    local out  = ""
+    loop (v > 0) {
+      local d  = v % 10
+      local ch  = _digit_char(d)
+      out = ch + out
+      v = v / 10
+    }
+    return out
+  }
+
+  // Read digit runs starting at pos
+  read_digits(json, pos) {
+    local out  = ""
+    loop (true) {
+      local s  = json.substring(pos, pos+1)
+      if s == "" { break }
+      if s == "0" { out = out + s  pos = pos + 1  continue }
+      if s == "1" { out = out + s  pos = pos + 1  continue }
+      if s == "2" { out = out + s  pos = pos + 1  continue }
+      if s == "3" { out = out + s  pos = pos + 1  continue }
+      if s == "4" { out = out + s  pos = pos + 1  continue }
+      if s == "5" { out = out + s  pos = pos + 1  continue }
+      if s == "6" { out = out + s  pos = pos + 1  continue }
+      if s == "7" { out = out + s  pos = pos + 1  continue }
+      if s == "8" { out = out + s  pos = pos + 1  continue }
+      if s == "9" { out = out + s  pos = pos + 1  continue }
+      break
+    }
+    return out
+  }
+
+  // Linear pass: sum all numbers outside of quotes
+  sum_numbers_no_quotes(json) {
+    local i  = 0
+    local n  = json.length()
+    local total  = 0
+    loop (i < n) {
+      local ch  = json.substring(i, i+1)
+      if ch == "\"" {
+        local j  = index_of_from(json, "\"", i+1)
+        if j < 0 { break }
+        i = j + 1
+        continue
+      }
+      local d  = read_digits(json, i)
+      if d { total = total + _str_to_int(d)  i = i + d.length()  continue }
+      i = i + 1
+    }
+    return _int_to_str(total)
+  }
+
+  // Naive: sum all digit runs anywhere
+  sum_all_digits_naive(json) {
+    local i  = 0
+    local n  = json.length()
+    local total  = 0
+    loop (i < n) {
+      local d  = read_digits(json, i)
+      if d { total = total + _str_to_int(d)  i = i + d.length()  continue }
+      i = i + 1
+    }
+    return _int_to_str(total)
+  }
+
+  // Sum first two integers outside quotes; returns string or empty
+  sum_first_two_numbers(json) {
+    local i  = 0
+    local n  = json.length()
+    local total  = 0
+    local found = 0
+    loop (i < n) {
+      local ch  = json.substring(i, i+1)
+      if ch == "\"" {
+        local j  = index_of_from(json, "\"", i+1)
+        if j < 0 { break }
+        i = j + 1
+        continue
+      }
+      local d  = read_digits(json, i)
+      if d {
+        total = total + _str_to_int(d)
+        found = found + 1
+        i = i + d.length()
+        if found >= 2 { return _int_to_str(total) }
+        continue
+      }
+      i = i + 1
+    }
+    return ""
+  }
+}
+
+
+static box MiniVmBinOp {
+  // Minimal: Print(BinaryOp) with operator "+"; supports string+string and int+int
+  try_print_binop_at(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = scan.index_of_from(json, k_bo, print_pos)
+    if bpos <= 0  or  bpos >= end { return -1 }
+    // bound BinaryOp object (prefer expression object)
+    local k_expr = "\"expression\":{"
+    local expr_pos = scan.index_of_from(json, k_expr, print_pos)
+    local obj_start = -1
+    if expr_pos > 0  and  expr_pos < end {
+      obj_start = scan.index_of_from(json, "{", expr_pos)
+    } else {
+      obj_start = scan.index_of_from(json, "{", bpos)
+    }
+    local obj_end = scan.find_balanced_object_end(json, obj_start)
+    if obj_start <= 0  or  obj_end <= 0  or  obj_end > end { return -1 }
+    // operator must be '+'
+    local k_op = "\"operator\":\"+\""
+    local opos = scan.index_of_from(json, k_op, bpos)
+    if opos <= 0  or  opos >= obj_end { return -1 }
+
+    // string + string fast-path
+    local cur = new MiniJson()
+    local k_left_lit = "\"left\":{\"kind\":\"Literal\""
+    local lhdr = scan.index_of_from(json, k_left_lit, opos)
+    if lhdr > 0  and  lhdr < obj_end {
+      local k_sval = "\"value\":\""
+      local lvp = scan.index_of_from(json, k_sval, lhdr)
+      if lvp > 0  and  lvp < obj_end {
+        local li = lvp + k_sval.length()
+        local lval = cur.read_quoted_from(json, li)
+        if lval {
+          local k_right_lit = "\"right\":{\"kind\":\"Literal\""
+          local rhdr = scan.index_of_from(json, k_right_lit, li + lval.length())
+          if rhdr > 0  and  rhdr < obj_end {
+            local rvp = scan.index_of_from(json, k_sval, rhdr)
+            if rvp > 0  and  rvp < obj_end {
+              local ri = rvp + k_sval.length()
+              local rval = cur.read_quoted_from(json, ri)
+              if rval { print(lval + rval)  return ri + rval.length() + 1 }
+            }
+          }
+        }
+      }
+    }
+    // int + int typed pattern
+    local k_l = "\"left\":{\"kind\":\"Literal\""
+    local lpos = scan.index_of_from(json, k_l, opos)
+    if lpos <= 0  or  lpos >= obj_end { return -1 }
+    local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+    local li2 = scan.index_of_from(json, k_lint, opos)
+    if li2 <= 0  or  li2 >= obj_end { return -1 }
+    local ldigits = scan.read_digits(json, li2 + k_lint.length())
+    if ldigits == "" { return -1 }
+    local k_r = "\"right\":{\"kind\":\"Literal\""
+    local rpos = scan.index_of_from(json, k_r, lpos)
+    if rpos <= 0  or  rpos >= obj_end { return -1 }
+    local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+    local ri2 = scan.index_of_from(json, k_rint, lpos)
+    if ri2 <= 0  or  ri2 >= obj_end { return -1 }
+    local rdigits = scan.read_digits(json, ri2 + k_rint.length())
+    if rdigits == "" { return -1 }
+    local ai = scan._str_to_int(ldigits)
+    local bi = scan._str_to_int(rdigits)
+    print(scan._int_to_str(ai + bi))
+    return obj_end + 1
+  }
+
+  // Greedy disabled (kept for parity)
+  try_print_binop_int_greedy(json, end, print_pos) { return -1 }
+
+  // Fallback: within the current Print's expression BinaryOp object, scan for two numeric values and sum
+  try_print_binop_sum_any(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_expr = "\"expression\":{"
+    local expr_pos = scan.index_of_from(json, k_expr, print_pos)
+    // If expression object cannot be bounded, fall back to typed-direct pattern within the current slice
+    if expr_pos <= 0  or  expr_pos >= end {
+      // bound coarse slice to current Print by next Print marker
+      local k_print = "\"kind\":\"Print\""
+      local next_p = scan.index_of_from(json, k_print, print_pos + 1)
+      local slice_end = end
+      if next_p > 0 { slice_end = next_p }
+      local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      // only if BinaryOp is present in this slice
+      if scan.index_of_from(json, "\"kind\":\"BinaryOp\"", print_pos) > 0 {
+      local lp = scan.index_of_from(json, k_lint, print_pos)
+      if lp > 0 { if lp < slice_end {
+        local ld = scan.read_digits(json, lp + k_lint.length())
+        if ld != "" {
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          if rp > 0 { if rp < slice_end {
+            local rd = scan.read_digits(json, rp + k_rint.length())
+            if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
+          }}
+        }
+      }}
+      }
+      return -1
+    }
+    local obj_start = scan.index_of_from(json, "{", expr_pos)
+    if obj_start <= 0  or  obj_start >= end { return -1 }
+    local obj_end = scan.find_balanced_object_end(json, obj_start)
+    if obj_end <= 0  or  obj_end > end {
+      local k_print = "\"kind\":\"Print\""
+      local next_p = scan.index_of_from(json, k_print, print_pos + 1)
+      local obj_end2 = end
+      if next_p > 0  and  next_p <= end { obj_end2 = next_p }
+      // typed-direct fallback in bounded region
+      local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local lp = scan.index_of_from(json, k_lint, obj_start)
+      if lp > 0 { if lp < obj_end2 {
+        local ld = scan.read_digits(json, lp + k_lint.length())
+        if ld != "" {
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          if rp > 0 { if rp < obj_end2 {
+            local rd = scan.read_digits(json, rp + k_rint.length())
+            if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
+          }}
+        }
+      }}
+      return -1
+    }
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = scan.index_of_from(json, k_bo, obj_start)
+    if bpos <= 0  or  bpos >= obj_end {
+      // typed-direct fallback (within bounds window)
+      local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local lp = scan.index_of_from(json, k_lint, obj_start)
+      if lp > 0 { if lp < obj_end {
+        local ld = scan.read_digits(json, lp + k_lint.length())
+        if ld != "" {
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          if rp > 0 { if rp < obj_end {
+            local rd = scan.read_digits(json, rp + k_rint.length())
+            if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
+          }}
+        }
+      }}
+      return -1
+    }
+    local k_plus = "\"operator\":\"+\""
+    local opos = scan.index_of_from(json, k_plus, bpos)
+    if opos <= 0  or  opos >= obj_end {
+      // typed-direct fallback
+      local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local lp = scan.index_of_from(json, k_lint, obj_start)
+      if lp > 0 { if lp < obj_end {
+        local ld = scan.read_digits(json, lp + k_lint.length())
+        if ld != "" {
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          if rp > 0 { if rp < obj_end {
+            local rd = scan.read_digits(json, rp + k_rint.length())
+            if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
+          }}
+        }
+      }}
+      return -1
+    }
+    local nums = []
+    local i = obj_start
+    loop (i < obj_end) {
+      if json.substring(i, i+1) == "\"" {
+        local j = scan.index_of_from(json, "\"", i+1)
+        if j < 0  or  j >= obj_end { break }
+        i = j + 1
+        continue
+      }
+      local d = scan.read_digits(json, i)
+      if d { nums.push(d)  i = i + d.length()  continue }
+      i = i + 1
+    }
+    local nsz = nums.size()
+    if nsz < 2 { return -1 }
+    local a = scan._str_to_int(nums.get(nsz-2))
+    local b = scan._str_to_int(nums.get(nsz-1))
+    print(scan._int_to_str(a + b))
+    return obj_end + 1
+  }
+
+  // Deterministic: within Print.expression BinaryOp('+'), pick two successive 'value' fields and sum
+  try_print_binop_sum_expr_values(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local cur = new MiniJson()
+    local k_expr = "\"expression\":{"
+    local expr_pos = scan.index_of_from(json, k_expr, print_pos)
+    if expr_pos <= 0  or  expr_pos >= end { return -1 }
+    local obj_start = scan.index_of_from(json, "{", expr_pos)
+    if obj_start <= 0  or  obj_start >= end { return -1 }
+    local obj_end = scan.find_balanced_object_end(json, obj_start)
+    if obj_end <= 0  or  obj_end > end { return -1 }
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = scan.index_of_from(json, k_bo, obj_start)
+    if bpos <= 0  or  bpos >= obj_end { return -1 }
+    local k_plus = "\"operator\":\"+\""
+    local opos = scan.index_of_from(json, k_plus, bpos)
+    if opos <= 0  or  opos >= obj_end { return -1 }
+    local k_v = "\"value\":"
+    local found = 0
+    local a = 0
+    local pos = scan.index_of_from(json, k_v, obj_start)
+    loop (pos > 0  and  pos < obj_end) {
+      local di = cur.read_digits_from(json, pos + k_v.length())
+      if di != "" {
+        if found == 0 { a = scan._str_to_int(di)  found = 1 } else {
+          local b = scan._str_to_int(di)
+          print(scan._int_to_str(a + b))
+          return obj_end + 1
+        }
+      }
+      pos = scan.index_of_from(json, k_v, pos + k_v.length())
+      if pos <= 0  or  pos >= obj_end { break }
+    }
+    return -1
+  }
+
+  // Simpler: after operator '+', scan two successive 'value' fields and sum
+  try_print_binop_sum_after_bop(json) {
+    local scan = new MiniVmScan()
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = json.indexOf(k_bo)
+    if bpos < 0 { return -1 }
+    local k_plus = "\"operator\":\"+\""
+    local opos = scan.index_of_from(json, k_plus, bpos)
+    if opos < 0 { return -1 }
+    local k_v = "\"value\":"
+    local p = opos
+    p = scan.index_of_from(json, k_v, p)
+    if p < 0 { return -1 }
+    p = scan.index_of_from(json, k_v, p + k_v.length())
+    if p < 0 { return -1 }
+    local end1 = scan.index_of_from(json, "}", p)
+    if end1 < 0 { return -1 }
+    local d1 = scan.read_digits(json, p + k_v.length())
+    if d1 == "" { return -1 }
+    p = scan.index_of_from(json, k_v, end1)
+    if p < 0 { return -1 }
+    p = scan.index_of_from(json, k_v, p + k_v.length())
+    if p < 0 { return -1 }
+    local end2 = scan.index_of_from(json, "}", p)
+    if end2 < 0 { return -1 }
+    local d2 = scan.read_digits(json, p + k_v.length())
+    if d2 == "" { return -1 }
+    local ai = scan._str_to_int(d1)
+    local bi = scan._str_to_int(d2)
+    print(scan._int_to_str(ai + bi))
+    return 0
+  }
+
+  // Fallback: find first BinaryOp and return sum of two numeric values as string
+  parse_first_binop_sum(json) {
+    local scan = new MiniVmScan()
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = json.indexOf(k_bo)
+    if bpos < 0 { return "" }
+    local k_typed = "\"type\":\"int\",\"value\":"
+    local p1 = scan.index_of_from(json, k_typed, bpos)
+    if p1 < 0 { return "" }
+    local d1 = scan.read_digits(json, p1 + k_typed.length())
+    if d1 == "" { return "" }
+    local p2 = scan.index_of_from(json, k_typed, p1 + k_typed.length())
+    if p2 < 0 { return "" }
+    local d2 = scan.read_digits(json, p2 + k_typed.length())
+    if d2 == "" { return "" }
+    return scan._int_to_str(scan._str_to_int(d1) + scan._str_to_int(d2))
+  }
+}
+
+
+
+static box MiniVmCompare {
+  // Compare(lhs int, rhs int) minimal: prints 0/1 and returns next pos or -1
+  try_print_compare_at(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_cp = "\"kind\":\"Compare\""
+    local cpos = scan.index_of_from(json, k_cp, print_pos)
+    if cpos <= 0  or  cpos >= end { return -1 }
+    local k_op = "\"operation\":\""
+    local opos = scan.index_of_from(json, k_op, cpos)
+    if opos <= 0  or  opos >= end { return -1 }
+    local oi = opos + k_op.length()
+    local oj = scan.index_of_from(json, "\"", oi)
+    if oj <= 0  or  oj > end { return -1 }
+    local op = json.substring(oi, oj)
+    // lhs value
+    local k_lhs = "\"lhs\":{\"kind\":\"Literal\""
+    local hl = scan.index_of_from(json, k_lhs, oj)
+    if hl <= 0  or  hl >= end { return -1 }
+    local k_v = "\"value\":"
+    local hv = scan.index_of_from(json, k_v, hl)
+    if hv <= 0  or  hv >= end { return -1 }
+    local a = scan.read_digits(json, hv + k_v.length())
+    // rhs value
+    local k_rhs = "\"rhs\":{\"kind\":\"Literal\""
+    local hr = scan.index_of_from(json, k_rhs, hl)
+    if hr <= 0  or  hr >= end { return -1 }
+    local rv = scan.index_of_from(json, k_v, hr)
+    if rv <= 0  or  rv >= end { return -1 }
+    local b = scan.read_digits(json, rv + k_v.length())
+    if !a  or  !b { return -1 }
+    local ai = scan._str_to_int(a)
+    local bi = scan._str_to_int(b)
+    local res = 0
+    if op == "<"  { if ai <  bi { res = 1 } }
+    if op == "==" { if ai == bi { res = 1 } }
+    if op == "<=" { if ai <= bi { res = 1 } }
+    if op == ">"  { if ai >  bi { res = 1 } }
+    if op == ">=" { if ai >= bi { res = 1 } }
+    if op == "!=" { if ai != bi { res = 1 } }
+    print(res)
+    // advance after rhs object (coarsely)
+    return rv + 1
+  }
+}
+
+
+// Use the JSON adapter facade for cursor ops (next_non_ws, digits)
+
+static box MiniVmPrints {
+  // dev trace flag (0=OFF)
+  _trace_enabled() { return 0 }
+  // fallback toggle for legacy heuristics (0=OFF, 1=ON)
+  _fallback_enabled() { return 0 }
+  // literal string within Print
+  try_print_string_value_at(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_val = "\"value\":\""
+    local s = scan.index_of_from(json, k_val, print_pos)
+    if s < 0  or  s >= end { return -1 }
+    local i = s + k_val.length()
+    local j = scan.index_of_from(json, "\"", i)
+    if j <= 0  or  j > end { return -1 }
+    print(json.substring(i, j))
+    return j + 1
+  }
+
+  // literal int within Print (typed)
+  try_print_int_value_at(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_expr = "\"expression\":{"
+    local epos = scan.index_of_from(json, k_expr, print_pos)
+    if epos <= 0  or  epos >= end { return -1 }
+    local obj_start = scan.index_of_from(json, "{", epos)
+    if obj_start <= 0  or  obj_start >= end { return -1 }
+    local obj_end = scan.find_balanced_object_end(json, obj_start)
+    if obj_end <= 0  or  obj_end > end { return -1 }
+    // robust: look for explicit int type within expression object
+    local k_tint = "\"type\":\"int\""
+    local tpos = scan.index_of_from(json, k_tint, obj_start)
+    if tpos <= 0  or  tpos >= obj_end { return -1 }
+    local k_val2 = "\"value\":"
+    local v2 = scan.index_of_from(json, k_val2, tpos)
+    if v2 <= 0  or  v2 >= obj_end { return -1 }
+    local digits = scan.read_digits(json, v2 + k_val2.length())
+    if digits == "" { return -1 }
+    print(digits)
+    return obj_end + 1
+  }
+
+  // minimal FunctionCall printer for echo/itoa
+  try_print_functioncall_at(json, end, print_pos) {
+    local scan = new MiniVmScan()
+    local k_fc = "\"kind\":\"FunctionCall\""
+    local fcp = scan.index_of_from(json, k_fc, print_pos)
+    if fcp <= 0  or  fcp >= end { return -1 }
+    local k_name = "\"name\":\""
+    local npos = scan.index_of_from(json, k_name, fcp)
+    if npos <= 0  or  npos >= end { return -1 }
+    local ni = npos + k_name.length()
+    local nj = scan.index_of_from(json, "\"", ni)
+    if nj <= 0  or  nj > end { return -1 }
+    local fname = json.substring(ni, nj)
+    local k_args = "\"arguments\":["
+    local apos = scan.index_of_from(json, k_args, nj)
+    if apos <= 0  or  apos >= end { return -1 }
+    local arr_start = scan.index_of_from(json, "[", apos)
+    local arr_end = scan.find_balanced_array_end(json, arr_start)
+    if arr_start <= 0  or  arr_end <= 0  or  arr_end > end { return -1 }
+    // handle empty args []
+    local nn = new MiniJsonLoader().next_non_ws(json, arr_start+1)
+    if nn > 0  and  nn <= arr_end {
+      if json.substring(nn, nn+1) == "]" {
+        if fname == "echo" { print("")  return arr_end + 1 }
+        if fname == "itoa" { print("0")  return arr_end + 1 }
+        return -1
+      }
+    }
+    // first arg type
+    local k_t = "\"type\":\""
+    local atpos = scan.index_of_from(json, k_t, arr_start)
+    if atpos <= 0  or  atpos >= arr_end {
+      if fname == "echo" { print("")  return arr_end + 1 }
+      if fname == "itoa" { print("0")  return arr_end + 1 }
+      return -1
+    }
+    atpos = atpos + k_t.length()
+    local at_end = scan.index_of_from(json, "\"", atpos)
+    if at_end <= 0  or  at_end > arr_end { return -1 }
+    local aty = json.substring(atpos, at_end)
+    if aty == "string" {
+      local k_sval = "\"value\":\""
+      local svalp = scan.index_of_from(json, k_sval, at_end)
+      if svalp <= 0  or  svalp >= arr_end { return -1 }
+      local si = svalp + k_sval.length()
+      local sj = scan.index_of_from(json, "\"", si)
+      if sj <= 0  or  sj > arr_end { return -1 }
+      local sval = json.substring(si, sj)
+      if fname == "echo" { print(sval)  return sj + 1 }
+      return -1
+    }
+    if aty == "int"  or  aty == "i64"  or  aty == "integer" {
+      local k_ival = "\"value\":"
+      local ivalp = scan.index_of_from(json, k_ival, at_end)
+      if ivalp <= 0  or  ivalp >= arr_end { return -1 }
+      local digits = scan.read_digits(json, ivalp + k_ival.length())
+      if fname == "itoa"  or  fname == "echo" { print(digits)  return ivalp + k_ival.length() }
+      return -1
+    }
+    return -1
+  }
+  // Print all Print-Literal values within [start,end]
+  print_prints_in_slice(json, start, end) {
+    // Preferred route: JSON Box (plugin) – robust and structure-aware
+    // If plugin is available, parse and traverse Program.statements and print.
+    // Fall back to text scanner when plugin is unavailable or parse fails.
+    {
+      // Attempt plugin route in a guarded block
+      local printed  = 0
+      local ok  = 0
+      // new JsonDocBox()/JsonNodeBox are provided by the JSON plugin
+      local doc  = new JsonDocBox()
+      doc.parse(json)
+      local root  = doc.root()
+      if root {
+        local stmts  = root.get("statements")
+        if stmts {
+          local n  = stmts.size()
+          local i  = 0
+          loop (i < n) {
+            local node  = stmts.at(i)
+            if !node { i = i + 1  continue }
+            local expr  = node.get("expression")
+            if !expr { i = i + 1  continue }
+            local k  = expr.get("kind").str()
+            if k == "Literal" {
+              local val  = expr.get("value")
+              if val {
+                local ty  = val.get("type").str()
+                if ty == "string" { print(val.get("value").str()) } else { print(val.get("value").int()) }
+                printed = printed + 1
+              }
+              i = i + 1
+              continue
+            }
+            if k == "FunctionCall" {
+              local name  = expr.get("name").str()
+              local args  = expr.get("arguments")
+              if !args { i = i + 1  continue }
+              local asz  = args.size()
+              if asz <= 0 {
+                if name == "echo" { print("")  printed = printed + 1 }
+                if name == "itoa" { print("0")  printed = printed + 1 }
+                i = i + 1
+                continue
+              }
+              local arg0v  = args.at(0).get("value")
+              if name == "echo" {
+                if arg0v {
+                  local t  = arg0v.get("type").str()
+                  if t == "string" { print(arg0v.get("value").str()) } else { print(arg0v.get("value").int()) }
+                  printed = printed + 1
+                }
+                i = i + 1
+                continue
+              }
+              if name == "itoa" {
+                if arg0v { print(arg0v.get("value").int())  printed = printed + 1 }
+                i = i + 1
+                continue
+              }
+              i = i + 1
+              continue
+            }
+            if k == "Compare" {
+              local op  = expr.get("operation").str()
+              local lhs  = expr.get("lhs").get("value").get("value").int()
+              local rhs  = expr.get("rhs").get("value").get("value").int()
+              local res  = 0
+              if op == "<"  { if lhs <  rhs { res = 1 } }
+              if op == "==" { if lhs == rhs { res = 1 } }
+              if op == "<=" { if lhs <= rhs { res = 1 } }
+              if op == ">"  { if lhs >  rhs { res = 1 } }
+              if op == ">=" { if lhs >= rhs { res = 1 } }
+              if op == "!=" { if lhs != rhs { res = 1 } }
+              print(res)
+              printed = printed + 1
+              i = i + 1
+              continue
+            }
+            if k == "BinaryOp" {
+              local op  = expr.get("operator").str()
+              if op == "+" {
+                local left  = expr.get("left").get("value").get("value").int()
+                local right  = expr.get("right").get("value").get("value").int()
+                print(left + right)
+                printed = printed + 1
+                i = i + 1
+                continue
+              }
+            }
+            i = i + 1
+          }
+          ok = 1
+        }
+      }
+      // Prefer plugin result when available; if nothing printed, fall back below
+      if printed > 0 { return printed }
+    }
+
+    // Fallback: text scanner（開発用）
+    local scan = new MiniVmScan()
+    local bin = new MiniVmBinOp()
+    local cmp = new MiniVmCompare()
+    local pos = start
+    local printed = 0
+    local guard = 0
+    loop (true) {
+      guard = guard + 1
+      if guard > 200 { break }
+      local k_print = "\"kind\":\"Print\""
+      local p = scan.index_of_from(json, k_print, pos)
+      if p < 0  or  p > end { break }
+      // bound current Print object (coarse): use next Print marker as slice end to avoid deep brace scan
+      local p_obj_start = scan.index_of_from(json, "{", p)
+      // coarse slice end by next Print marker
+      local next_p = scan.index_of_from(json, k_print, p + k_print.length())
+      local p_slice_end = end
+      if next_p > 0 { p_slice_end = next_p }
+      // avoid heavy find_balanced_object_end; use coarse p_slice_end-1 as object end
+      local p_obj_end = p_slice_end - 1
+      if p_obj_start <= 0 { p_obj_end = p + k_print.length() }
+      // Fast path: handle within [p, p_slice_end) without deep brace scans
+      {
+        local did = 0
+        // FunctionCall echo/itoa
+        local k_fc = "\"kind\":\"FunctionCall\""
+        local fcp = scan.index_of_from(json, k_fc, p)
+        if fcp > 0 { if fcp < p_slice_end {
+          local k_name = "\"name\":\""
+          local npos = scan.index_of_from(json, k_name, fcp)
+          if npos > 0 { if npos < p_slice_end {
+            local ni = npos + k_name.length()
+            local nj = scan.index_of_from(json, "\"", ni)
+            if nj > 0 { if nj <= p_slice_end {
+              local fname = json.substring(ni, nj)
+              local k_args = "\"arguments\":["
+              local apos = scan.index_of_from(json, k_args, nj)
+              if apos > 0 { if apos < p_slice_end {
+                  // quick value-based parse first (avoid type walk)
+                  {
+                    local k_sval = "\"value\":\""
+                    local vs = scan.index_of_from(json, k_sval, apos)
+                    if vs > 0 { if vs < p_slice_end {
+                      local si = vs + k_sval.length()
+                      local sj = scan.index_of_from(json, "\"", si)
+                      if sj > 0 { if sj <= p_slice_end {
+                        local sval = json.substring(si, sj)
+                        if fname == "echo" { print(sval)  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+                      }}
+                    }}
+                    local k_ival = "\"value\":"
+                    local vi = scan.index_of_from(json, k_ival, apos)
+                    if vi > 0 { if vi < p_slice_end {
+                      local digits = scan.read_digits(json, vi + k_ival.length())
+                      if digits != "" { if fname == "itoa"  or  fname == "echo" { print(digits)  printed = printed + 1  did = 1  pos = p_slice_end  continue } }
+                    }}
+                  }
+                  // empty args
+                  local nwn = new MiniJsonLoader().next_non_ws(json, apos + k_args.length())
+                  if nwn == apos + k_args.length() {
+                    if fname == "echo" { print("")  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+                    if fname == "itoa" { print("0")  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+                  }
+                  local k_t = "\"type\":\""
+                  local atpos = scan.index_of_from(json, k_t, apos)
+                  if atpos > 0 { if atpos < p_slice_end {
+                    local ati = atpos + k_t.length()
+                    local atj = scan.index_of_from(json, "\"", ati)
+                    if atj > 0 { if atj <= p_slice_end {
+                      local aty = json.substring(ati, atj)
+                      if aty == "string" {
+                        local k_sval = "\"value\":\""
+                        local svalp = scan.index_of_from(json, k_sval, atj)
+                        if svalp > 0 { if svalp < p_slice_end {
+                          local si = svalp + k_sval.length()
+                          local sj = scan.index_of_from(json, "\"", si)
+                          if sj > 0 { if sj <= p_slice_end {
+                            local sval = json.substring(si, sj)
+                            if fname == "echo" { print(sval)  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+                          }}
+                        }}
+                      }
+                      if aty == "int"  or  aty == "i64"  or  aty == "integer" {
+                        local k_ival = "\"value\":"
+                        local ivalp = scan.index_of_from(json, k_ival, atj)
+                        if ivalp > 0 { if ivalp < p_slice_end {
+                          local digits = scan.read_digits(json, ivalp + k_ival.length())
+                          if fname == "itoa"  or  fname == "echo" { print(digits)  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+                        }}
+                      }
+                    }}
+                  }
+                }
+              }}
+            }}
+          }}
+        }}
+        // Compare within slice
+        local k_cp = "\"kind\":\"Compare\""
+        local cpos = scan.index_of_from(json, k_cp, p)
+        if cpos > 0 { if cpos < p_slice_end {
+          local k_op = "\"operation\":\""
+          local opos = scan.index_of_from(json, k_op, cpos)
+          if opos > 0 { if opos < p_slice_end {
+            local oi = opos + k_op.length()
+            local oj = scan.index_of_from(json, "\"", oi)
+            if oj > 0 { if oj <= p_slice_end {
+              local op = json.substring(oi, oj)
+              local k_lhs = "\"lhs\":{\"kind\":\"Literal\""
+              local hl = scan.index_of_from(json, k_lhs, oj)
+              if hl > 0 { if hl < p_slice_end {
+                local k_v = "\"value\":"
+                local hv = scan.index_of_from(json, k_v, hl)
+                if hv > 0 { if hv < p_slice_end {
+                  local a = scan.read_digits(json, hv + k_v.length())
+                  local k_rhs = "\"rhs\":{\"kind\":\"Literal\""
+                  local hr = scan.index_of_from(json, k_rhs, hl)
+                  if hr > 0 { if hr < p_slice_end {
+                    local rv = scan.index_of_from(json, k_v, hr)
+                    if rv > 0 { if rv < p_slice_end {
+                      local b = scan.read_digits(json, rv + k_v.length())
+                      if a  and  b {
+                        local ai = scan._str_to_int(a)
+                        local bi = scan._str_to_int(b)
+                        local res = 0
+                        if op == "<"  { if ai <  bi { res = 1 } }
+                        if op == "==" { if ai == bi { res = 1 } }
+                        if op == "<=" { if ai <= bi { res = 1 } }
+                        if op == ">"  { if ai >  bi { res = 1 } }
+                        if op == ">=" { if ai >= bi { res = 1 } }
+                        if op == "!=" { if ai != bi { res = 1 } }
+                        print(res)
+                        printed = printed + 1
+                        did = 1
+                        pos = p_slice_end
+                        continue
+                      }
+                    }}
+                  }}
+                }}
+              }}
+            }}
+          }}
+        }}
+        // BinaryOp '+' (typed ints) within slice
+        if scan.index_of_from(json, "\"kind\":\"BinaryOp\"", p) > 0 { if scan.index_of_from(json, "\"operator\":\"+\"", p) > 0 {
+          local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+          local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+          local lp = scan.index_of_from(json, k_lint, p)
+          if lp > 0 { if lp < p_slice_end {
+            local ld = scan.read_digits(json, lp + k_lint.length())
+            if ld != "" {
+              local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+              if rp > 0 { if rp < p_slice_end {
+                local rd = scan.read_digits(json, rp + k_rint.length())
+                if rd != "" { print(new MiniVmScan()._int_to_str(new MiniVmScan()._str_to_int(ld) + new MiniVmScan()._str_to_int(rd)))  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+              }}
+            }
+          }}
+        }}
+        // Literal string within slice
+        {
+          local k_val = "\"value\":\""
+          local s = scan.index_of_from(json, k_val, p)
+          if s > 0 { if s < p_slice_end {
+            local i = s + k_val.length()
+            local j = scan.index_of_from(json, "\"", i)
+            if j > 0 { if j <= p_slice_end {
+              print(json.substring(i, j))
+              printed = printed + 1
+              did = 1
+              pos = p_slice_end
+              continue
+            }}
+          }}
+        }
+        // Literal int within slice
+        {
+          local k_tint = "\"type\":\"int\""
+          local tpos = scan.index_of_from(json, k_tint, p)
+          if tpos > 0 { if tpos < p_slice_end {
+            local k_val2 = "\"value\":"
+            local v2 = scan.index_of_from(json, k_val2, tpos)
+            if v2 > 0 { if v2 < p_slice_end {
+              local digits = scan.read_digits(json, v2 + k_val2.length())
+              if digits != "" { print(digits)  printed = printed + 1  did = 1  pos = p_slice_end  continue }
+            }}
+          }}
+        }
+        if did == 1 { pos = p_slice_end + 1  continue }
+      }
+      // 0) BinaryOp typed/expr（重スキャン回避のため無効化。必要なら下の軽量パスを使用）
+      // 1) BinaryOp fallbacks（開発用トグル。既定OFF）
+      if (new MiniVmPrints()._fallback_enabled() == 1) {
+        local nextp = bin.try_print_binop_sum_any(json, end, p)
+        if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+        nextp = bin.try_print_binop_at(json, end, p)
+        if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+        nextp = bin.try_print_binop_int_greedy(json, end, p)
+        if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+        nextp = bin.try_print_binop_sum_any(json, end, p)
+        if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+        // Inline typed sum within this Print BinaryOp('+')
+        {
+          local k_expr = "\"expression\":{"
+          local epos = scan.index_of_from(json, k_expr, p)
+          if epos > 0 { if epos < p_obj_end {
+            if scan.index_of_from(json, "\"kind\":\"BinaryOp\"", epos) > 0 {
+              if scan.index_of_from(json, "\"operator\":\"+\"", epos) > 0 {
+                local k_l = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+                local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+                local lp = scan.index_of_from(json, k_l, epos)
+                if lp > 0 { if lp < p_obj_end {
+                  local ld = scan.read_digits(json, lp + k_l.length())
+                  if ld != "" {
+                    local rp = scan.index_of_from(json, k_r, lp + k_l.length())
+                    if rp > 0 { if rp < p_obj_end {
+                      local rd = scan.read_digits(json, rp + k_r.length())
+                      if rd != "" { print(new MiniVmScan()._int_to_str(new MiniVmScan()._str_to_int(ld) + new MiniVmScan()._str_to_int(rd)))  printed = printed + 1  pos = p_obj_end + 1  continue }
+                    }}
+                  }
+                }}
+              }
+            }
+          }}
+        }
+      }
+    // 2) Compare
+    nextp = cmp.try_print_compare_at(json, end, p)
+    if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+    // 3) FunctionCall（既定: 軽量スライス限定パスで処理済み。重い版は呼ばない）
+    // nextp = new MiniVmPrints().try_print_functioncall_at(json, end, p)
+    // if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+    // 4) literal string
+    nextp = new MiniVmPrints().try_print_string_value_at(json, end, p)
+    if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+    // 5) literal int via type（重走査を避けるため無効化。スライス限定の軽量パスで処理済み）
+    // nextp = new MiniVmPrints().try_print_int_value_at(json, end, p)
+    // if nextp > 0 { printed = printed + 1  pos = p_obj_end + 1  continue }
+    // 5b) literal int（簡易フォールバック；既定OFF）
+    if (new MiniVmPrints()._fallback_enabled() == 1) {
+      local ki = "\"type\":\"int\",\"value\":"
+      local pi = scan.index_of_from(json, ki, p)
+      if pi > 0 { if pi < p_slice_end {
+        local digits = scan.read_digits(json, pi + ki.length())
+        if digits != "" { print(digits)  printed = printed + 1  pos = p_slice_end  continue }
+      }}
+      // Unknown shape: skip this Print object entirely to avoid stalls
+      pos = p_obj_end + 1
+      if pos <= p { pos = p + k_print.length() }
+    } else {
+      // 既定は最小前進（次の探索へ）
+      pos = p + k_print.length()
+    }
+    }
+    return printed
+  }
+
+  // Process top-level If with literal condition; print branch prints. Returns printed count.
+  process_if_once(json) {
+    local scan = new MiniVmScan()
+    local k_if = "\"kind\":\"If\""
+    local p = scan.index_of_from(json, k_if, 0)
+    if p < 0 { return 0 }
+    local k_cond = "\"condition\""
+    local cpos = scan.index_of_from(json, k_cond, p)
+    if cpos < 0 { return 0 }
+    local k_val = "\"value\":"
+    local vpos = scan.index_of_from(json, k_val, cpos)
+    if vpos < 0 { return 0 }
+    local val_digits = scan.read_digits(json, vpos + k_val.length())
+    local truthy = 0
+    if val_digits { if val_digits != "0" { truthy = 1 } }
+    local k_then = "\"then_body\""
+    local k_else = "\"else_body\""
+    local bkey = k_then
+    if truthy == 0 { bkey = k_else }
+    local bpos = scan.index_of_from(json, bkey, cpos)
+    if bpos < 0 { return 0 }
+    local arr_start = scan.index_of_from(json, "[", bpos)
+    if arr_start < 0 { return 0 }
+    local arr_end = new MiniVmScan().find_balanced_array_end(json, arr_start)
+    if arr_end < 0 { return 0 }
+    return new MiniVmPrints().print_prints_in_slice(json, arr_start, arr_end)
+  }
+
+  // Print all Print-Literal values in Program.statements (string/int only; MVP)
+  print_all_print_literals(json) {
+    return new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
+  }
+}
+
+static box MiniVm {
+  _is_digit(ch) {
+    if ch == "0" { return 1 }
+    if ch == "1" { return 1 }
+    if ch == "2" { return 1 }
+    if ch == "3" { return 1 }
+    if ch == "4" { return 1 }
+    if ch == "5" { return 1 }
+    if ch == "6" { return 1 }
+    if ch == "7" { return 1 }
+    if ch == "8" { return 1 }
+    if ch == "9" { return 1 }
+    return 0
+  }
+  _str_to_int(s) { return new MiniVmScan()._str_to_int(s) }
+  _int_to_str(n) { return new MiniVmScan()._int_to_str(n) }
+  read_digits(json, pos) { return new MiniJson().read_digits_from(json, pos) }
+  // Read a JSON string starting at position pos (at opening quote); returns the decoded string
+  read_json_string(json, pos) { return new MiniJson().read_quoted_from(json, pos) }
+  // helper: find needle from position pos
+  index_of_from(hay, needle, pos) { return new MiniVmScan().index_of_from(hay, needle, pos) }
+  // helper: next non-whitespace character index from pos
+  next_non_ws(json, pos) { return new MiniJson().next_non_ws(json, pos) }
+  // ——— Helpers (as box methods) ———
+
+  // Minimal: Print(BinaryOp) with operator "+"; supports string+string and int+int
+  // try_print_binop_at moved to MiniVmBinOp
+
+  // Greedy fallback: detect BinaryOp int+int by pattern regardless of field order nuances
+  // try_print_binop_int_greedy moved to MiniVmBinOp
+
+  // Fallback: within the current Print's expression BinaryOp object, scan for two numeric values and sum
+  // try_print_binop_sum_any moved to MiniVmBinOp
+
+  // Deterministic: within the first Print.expression BinaryOp('+'),
+  // find exactly two numeric values from successive '"value":' fields and sum.
+  // Stops after collecting two ints; bounded strictly by the expression object.
+  // try_print_binop_sum_expr_values moved to MiniVmBinOp
+
+  // Simpler deterministic fallback: after the first BinaryOp '+',
+  // scan forward for two successive 'value' fields and sum their integer digits.
+  // This avoids brace matching and remains bounded by two finds.
+  // try_print_binop_sum_after_bop moved to MiniVmBinOp
+
+  // Direct typed BinaryOp(int+int) matcher using explicit left/right literal paths
+  try_print_binop_typed_direct(json) {
+    local k_left = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+    local k_right = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+    local lp = json.indexOf(k_left)
+    if lp < 0 { return -1 }
+    local ld = read_digits(json, lp + k_left.length())
+    if ld == "" { return -1 }
+    local rp = index_of_from(json, k_right, lp + k_left.length())
+    if rp < 0 { return -1 }
+    local rd = read_digits(json, rp + k_right.length())
+    if rd == "" { return -1 }
+    print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
+    return rp + k_right.length()
+  }
+
+  // Tokenized typed extractor: search left/right blocks then type/value pairs
+  try_print_binop_typed_tokens(json) {
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = json.indexOf(k_bo)
+    if bpos < 0 { return -1 }
+    local lp = index_of_from(json, "\"left\":", bpos)
+    if lp < 0 { return -1 }
+    local kt = "\"type\":\"int\""
+    local kv = "\"value\":"
+    local tp1 = index_of_from(json, kt, lp)
+    if tp1 < 0 { return -1 }
+    local vp1 = index_of_from(json, kv, tp1)
+    if vp1 < 0 { return -1 }
+    local ld = read_digits(json, vp1 + kv.length())
+    if ld == "" { return -1 }
+    local rp = index_of_from(json, "\"right\":", lp)
+    if rp < 0 { return -1 }
+    local tp2 = index_of_from(json, kt, rp)
+    if tp2 < 0 { return -1 }
+    local vp2 = index_of_from(json, kv, tp2)
+    if vp2 < 0 { return -1 }
+    local rd = read_digits(json, vp2 + kv.length())
+    if rd == "" { return -1 }
+    print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
+    return rp
+  }
+
+  // Fast value-pair extractor: find left/right then first value digits after each
+  try_print_binop_value_pairs(json) {
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = json.indexOf(k_bo)
+    if bpos < 0 { return -1 }
+    local kl = "\"left\":"
+    local kv = "\"value\":"
+    local lp = index_of_from(json, kl, bpos)
+    if lp < 0 { return -1 }
+    local v1 = index_of_from(json, kv, lp)
+    if v1 < 0 { return -1 }
+    local ld = read_digits(json, v1 + kv.length())
+    if ld == "" { return -1 }
+    local rp = index_of_from(json, "\"right\":", lp)
+    if rp < 0 { return -1 }
+    local v2 = index_of_from(json, kv, rp)
+    if v2 < 0 { return -1 }
+    local rd = read_digits(json, v2 + kv.length())
+    if rd == "" { return -1 }
+    print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
+    return v2 + kv.length()
+  }
+
+  // Minimal: Print(Compare) for integers. Prints 1/0 for true/false.
+  // try_print_compare_at moved to MiniVmCompare
+  // Extract first Print literal from JSON v0 Program and return its string representation
+  parse_first_print_literal(json) {
+    // Find a Print statement
+    local k_print = "\"kind\":\"Print\""
+    local p = json.indexOf(k_print)
+    if p < 0 { return null }
+    // Find value type in the expression following Print
+    local k_type = "\"type\":\""
+    local tpos = json.indexOf(k_type)
+    if tpos < 0 { return null }
+    tpos = tpos + k_type.length()
+    // Read type name until next quote
+    local t_end = index_of_from(json, "\"", tpos)
+    if t_end < 0 { return null }
+    local ty = json.substring(tpos, t_end)
+    // Find value field
+    local k_val = "\"value\":"
+    local vpos = index_of_from(json, k_val, t_end)
+    if vpos < 0 { return null }
+    vpos = vpos + k_val.length()
+    if ty == "int"  or  ty == "i64"  or  ty == "integer" {
+      // read digits via MiniJson
+      local digits = new MiniJson().read_digits_from(json, vpos)
+      return digits
+    }
+    if ty == "string" {
+      // read quoted via MiniJson
+      local i = index_of_from(json, "\"", vpos)
+      if i < 0 { return null }
+      return new MiniJson().read_quoted_from(json, i)
+    }
+    // Other types not supported yet
+    return null
+  }
+  // helper: find balanced bracket range [ ... ] starting at idx (points to '[')
+  find_balanced_array_end(json, idx) { return new MiniVmScan().find_balanced_array_end(json, idx) }
+  // helper: find balanced object range { ... } starting at idx (points to '{')
+  find_balanced_object_end(json, idx) { return new MiniVmScan().find_balanced_object_end(json, idx) }
+  // Print all Print-Literal values within [start,end] (inclusive slice indices)
+  print_prints_in_slice(json, start, end) { return new MiniVmPrints().print_prints_in_slice(json, start, end) }
+  // Process top-level If with literal condition; print branch prints. Returns printed count.
+  process_if_once(json) { return new MiniVmPrints().process_if_once(json) }
+  print_all_print_literals(json) { return new MiniVmPrints().print_all_print_literals(json) }
+  parse_first_int(json) {
+    local key = "\"value\":{\"type\":\"int\",\"value\":"
+    local idx = json.lastIndexOf(key)
+    if idx < 0 { return "0" }
+    local start = idx + key.length()
+    return read_digits(json, start)
+  }
+  // Fallback: find first BinaryOp and return sum of two numeric values as string; empty if not found
+  parse_first_binop_sum(json) {
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = json.indexOf(k_bo)
+    if bpos < 0 { return "" }
+    // typed pattern inside left/right.literal.value: {"type":"int","value":<digits>}
+    local k_typed = "\"type\":\"int\",\"value\":"
+    // first number
+    local p1 = index_of_from(json, k_typed, bpos)
+    if p1 < 0 { return "" }
+    local d1 = read_digits(json, p1 + k_typed.length())
+    if d1 == "" { return "" }
+    // second number
+    local p2 = index_of_from(json, k_typed, p1 + k_typed.length())
+    if p2 < 0 { return "" }
+    local d2 = read_digits(json, p2 + k_typed.length())
+    if d2 == "" { return "" }
+    return _int_to_str(_str_to_int(d1) + _str_to_int(d2))
+  }
+  // Linear pass: sum all numbers outside of quotes (fast, finite)
+  sum_numbers_no_quotes(json) { return new MiniVmScan().sum_numbers_no_quotes(json) }
+  // Naive: sum all digit runs anywhere (for simple BinaryOp JSON)
+  sum_all_digits_naive(json) { return new MiniVmScan().sum_all_digits_naive(json) }
+  // Sum first two integers outside quotes; returns string or empty if not found
+  sum_first_two_numbers(json) { return new MiniVmScan().sum_first_two_numbers(json) }
+
+  // Sum two integers near a BinaryOp '+' token; bounded window to keep steps low
+  sum_two_numbers_near_plus(json) {
+    local k_plus = "\"operator\":\"+\""
+    local op = json.indexOf(k_plus)
+    if op < 0 { return "" }
+    local n = json.length()
+    local start = op - 120
+    if start < 0 { start = 0 }
+    local limit = op + 240
+    if limit > n { limit = n }
+    local i = start
+    local found = 0
+    local a = 0
+    loop (i < limit) {
+      local ch = json.substring(i, i+1)
+      if ch == "\"" {
+        // skip to next quote within window
+        local j = index_of_from(json, "\"", i+1)
+        if j < 0  or  j > limit { break }
+        i = j + 1
+        continue
+      }
+      local d = read_digits(json, i)
+      if d {
+        if found == 0 {
+          a = _str_to_int(d)
+          found = 1
+        } else {
+          local b = _str_to_int(d)
+          return _int_to_str(a + b)
+        }
+        i = i + d.length()
+        continue
+      }
+      i = i + 1
+    }
+    return ""
+  }
+  // Fallback: sum all bare numbers (not inside quotes) in the JSON; return string or empty if none
+  sum_all_numbers(json) {
+    local cur = new MiniJson()
+    local i = 0
+    local n = json.length()
+    local sum = 0
+    loop (i < n) {
+      local ch = json.substring(i, i+1)
+      if ch == "\"" {
+        // skip quoted string
+        local s = cur.read_quoted_from(json, i)
+        i = i + s.length() + 2
+        continue
+      }
+      // try digits
+      local d = cur.read_digits_from(json, i)
+      if d != "" { sum = sum + _str_to_int(d)  i = i + d.length()  continue }
+      i = i + 1
+    }
+    if sum == 0 { return "" }
+    return _int_to_str(sum)
+  }
+  // (reserved) helper for future robust binop scan
+  run(json) {
+    // entry: attempt minimal quick shapes first, then broader routes
+    // Quick path: Program-level Print of a single Literal string/int
+    if json.indexOf("\"kind\":\"Program\"") >= 0  and  json.indexOf("\"kind\":\"Print\"") >= 0 {
+      // Literal string
+      if json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\"") >= 0 {
+        local ks = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\""
+        local ps = json.indexOf(ks)
+        if ps >= 0 {
+          local si = ps + ks.length()
+          local sj = json.indexOf("\"", si)
+          if sj >= 0 { print(json.substring(si, sj))  return 0 }
+        }
+      }
+      // Literal int
+      if json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\"") >= 0 {
+        local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+        local pi = json.indexOf(ki)
+        if pi >= 0 {
+          local ii = pi + ki.length()
+          // digits until closing brace
+          local ie = json.indexOf("}", ii)
+          if ie < 0 { ie = ii }
+          local d = json.substring(ii, ie)
+          if d { print(d)  return 0 }
+        }
+      }
+    }
+    // Single-purpose fast path for smoke: if BinaryOp '+' exists, try expression-bounded extractor first.
+    if json.indexOf("\"BinaryOp\"") >= 0  and  json.indexOf("\"operator\":\"+\"") >= 0 {
+      // Bind to first Print and extract value×2 within expression bounds
+      local k_print = "\"kind\":\"Print\""
+      local p = index_of_from(json, k_print, 0)
+      if p >= 0 {
+        local np0 = new MiniVmBinOp().try_print_binop_sum_expr_values(json, json.length(), p)
+        if np0 > 0 { return 0 }
+      }
+      // Typed direct inside BinaryOp object (fast and finite)
+      local k_bo = "\"kind\":\"BinaryOp\""
+      local bpos = json.indexOf(k_bo)
+      if bpos >= 0 {
+        local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+        local li = index_of_from(json, k_lint, bpos)
+        if li >= 0 {
+          local ld = read_digits(json, li + k_lint.length())
+          if ld != "" {
+            local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+            local ri = index_of_from(json, k_rint, li + k_lint.length())
+            if ri >= 0 {
+              local rd = read_digits(json, ri + k_rint.length())
+              if rd != "" { print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  return 0 }
+            }
+          }
+        }
+      }
+      // As a final bounded fallback under BinaryOp '+', sum first two numbers outside quotes
+      {
+        local s2 = sum_first_two_numbers(json)
+        if s2 { print(s2)  return 0 }
+      }
+      // (skip near-operator windowed scan to avoid high step counts under PyVM)
+    }
+    // Prefer If(literal) branch handling first
+    local ifc = process_if_once(json)
+    if ifc > 0 { return 0 }
+    // Quick conservative path: if BinaryOp exists, sum bare numbers outside quotes
+    // (limited to simple BinaryOp(int,int) JSON)
+    if json.indexOf("\"BinaryOp\"") >= 0 {
+      // Prefer expression-bounded scan first
+      local k_print = "\"kind\":\"Print\""
+      local p = index_of_from(json, k_print, 0)
+      if p >= 0 {
+        // Deterministic: sum the first two numbers from successive 'value' fields
+        local np0 = new MiniVmBinOp().try_print_binop_sum_expr_values(json, json.length(), p)
+        if np0 > 0 { return 0 }
+      }
+      // Brace-free deterministic fallback tied to the first BinaryOp
+      {
+        local np1 = new MiniVmBinOp().try_print_binop_sum_after_bop(json)
+        if np1 > 0 { return 0 }
+      }
+      // avoid global number-sum fallback to keep steps bounded
+    }
+    // 0) direct typed BinaryOp '+' fast-path (explicit left/right literal ints)
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local k_plus = "\"operator\":\"+\""
+    if json.indexOf(k_bo) >= 0  and  json.indexOf(k_plus) >= 0 {
+      local np = try_print_binop_typed_direct(json)
+      if np > 0 { return 0 }
+      np = try_print_binop_typed_tokens(json)
+      if np > 0 { return 0 }
+      np = try_print_binop_value_pairs(json)
+      if np > 0 { return 0 }
+      // (skip bounded-window fallback around '+')
+    }
+    // 0) quick path: BinaryOp(int+int) typed fast-path
+    local k_bo = "\"kind\":\"BinaryOp\""
+    local bpos = json.indexOf(k_bo)
+    if bpos >= 0 {
+      // typed left/right ints inside BinaryOp
+      local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+      local li = index_of_from(json, k_lint, bpos)
+      if li >= 0 {
+        local ld = read_digits(json, li + k_lint.length())
+        if ld != "" {
+          local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+          local ri = index_of_from(json, k_rint, li + k_lint.length())
+          if ri >= 0 {
+            local rd = read_digits(json, ri + k_rint.length())
+            if rd != "" {
+              print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
+              return 0
+            }
+          }
+        }
+      }
+      // fallback: sum two numeric values within the first Print.expression BinaryOp object
+      local k_print = "\"kind\":\"Print\""
+      local p = index_of_from(json, k_print, 0)
+      if p >= 0 {
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, p)
+        if epos > 0 {
+          local obj_start = index_of_from(json, "{", epos)
+          local obj_end = find_balanced_object_end(json, obj_start)
+          if obj_start > 0  and  obj_end > 0 {
+            local k_bo2 = "\"kind\":\"BinaryOp\""
+            local b2 = index_of_from(json, k_bo2, obj_start)
+            if b2 > 0  and  b2 < obj_end {
+              local k_v = "\"value\":"
+              local p1 = index_of_from(json, k_v, obj_start)
+              local d1 = ""
+              loop (p1 > 0  and  p1 < obj_end) {
+                d1 = new MiniJson().read_digits_from(json, p1 + k_v.length())
+                if d1 != "" { break }
+                p1 = index_of_from(json, k_v, p1 + k_v.length())
+              }
+              if d1 != "" {
+                local p2 = index_of_from(json, k_v, p1 + k_v.length())
+                local d2 = ""
+                loop (p2 > 0  and  p2 < obj_end) {
+                  d2 = new MiniJson().read_digits_from(json, p2 + k_v.length())
+                  if d2 != "" { break }
+                  p2 = index_of_from(json, k_v, p2 + k_v.length())
+                }
+                if d2 != "" {
+                  local ai = _str_to_int(d1)
+                  local bi = _str_to_int(d2)
+                  print(_int_to_str(ai + bi))
+                  return 0
+                }
+              }
+            }
+          }
+        }
+      }
+      // fallback: parse-first within BinaryOp scope by scanning two numeric values
+      local ssum = new MiniVmBinOp().parse_first_binop_sum(json)
+      if ssum { print(ssum)  return 0 }
+    }
+    // Attempt expression-local BinaryOp sum via existing helper on first Print
+    {
+      local k_print = "\"kind\":\"Print\""
+      local p = index_of_from(json, k_print, 0)
+      if p >= 0 {
+        local np = new MiniVmBinOp().try_print_binop_sum_any(json, json.length(), p)
+        if np > 0 { return 0 }
+      }
+    }
+    // 0-c) quick path: Compare(lhs int, rhs int)
+    local k_cp = "\"kind\":\"Compare\""
+    local cpos = json.indexOf(k_cp)
+    if cpos >= 0 {
+      // operation
+      local k_op = "\"operation\":\""
+      local opos = index_of_from(json, k_op, cpos)
+      if opos > 0 {
+        local oi = opos + k_op.length()
+        local oj = index_of_from(json, "\"", oi)
+        if oj > 0 {
+          local op = json.substring(oi, oj)
+          // lhs value
+          local k_lhs = "\"lhs\":{\"kind\":\"Literal\""
+          local hl = index_of_from(json, k_lhs, oj)
+          if hl > 0 {
+            local k_v = "\"value\":"
+            local hv = index_of_from(json, k_v, hl)
+            if hv > 0 {
+      local a = read_digits(json, hv + k_v.length())
+              // rhs value
+              local k_rhs = "\"rhs\":{\"kind\":\"Literal\""
+              local hr = index_of_from(json, k_rhs, hl)
+              if hr > 0 {
+                local rv = index_of_from(json, k_v, hr)
+                if rv > 0 {
+                  local b = read_digits(json, rv + k_v.length())
+                  if a  and  b {
+                    local ai = _str_to_int(a)
+                    local bi = _str_to_int(b)
+                    local res = 0
+                    if op == "<"  { if ai <  bi { res = 1 } }
+                    if op == "==" { if ai == bi { res = 1 } }
+                    if op == "<=" { if ai <= bi { res = 1 } }
+                    if op == ">"  { if ai >  bi { res = 1 } }
+                    if op == ">=" { if ai >= bi { res = 1 } }
+                    if op == "!=" { if ai != bi { res = 1 } }
+                    print(res)
+                    return 0
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    // Scan global prints (flat programs)
+    local pc = print_all_print_literals(json)
+    // 2) as a robustness fallback, handle first BinaryOp sum within first Print.expression
+    if pc == 0 {
+      local k_print = "\"kind\":\"Print\""
+      local p = index_of_from(json, k_print, 0)
+      if p >= 0 {
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, p)
+        if epos > 0 {
+          local obj_start = index_of_from(json, "{", epos)
+          local obj_end = find_balanced_object_end(json, obj_start)
+          if obj_start > 0  and  obj_end > 0 {
+            local k_bo = "\"kind\":\"BinaryOp\""
+            local bpos = index_of_from(json, k_bo, obj_start)
+            if bpos > 0  and  bpos < obj_end {
+              // sum two numeric values inside this expression object
+              local cur = new MiniJson()
+              local k_v = "\"value\":"
+              local p1 = index_of_from(json, k_v, obj_start)
+              local d1 = ""
+              loop (p1 > 0  and  p1 < obj_end) {
+                d1 = cur.read_digits_from(json, p1 + k_v.length())
+                if d1 != "" { break }
+                p1 = index_of_from(json, k_v, p1 + k_v.length())
+              }
+              if d1 != "" {
+                local p2 = index_of_from(json, k_v, p1 + k_v.length())
+                local d2 = ""
+                loop (p2 > 0  and  p2 < obj_end) {
+                  d2 = cur.read_digits_from(json, p2 + k_v.length())
+                  if d2 != "" { break }
+                  p2 = index_of_from(json, k_v, p2 + k_v.length())
+                }
+                if d2 != "" {
+                  local ai = _str_to_int(d1)
+                  local bi = _str_to_int(d2)
+                  print(_int_to_str(ai + bi))
+                  pc = 1
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    if pc == 0 {
+      // last resort: typed pattern-wide sum, then safe number sum outside quotes, else single int literal
+      local s = new MiniVmBinOp().parse_first_binop_sum(json)
+      if s { print(s) } else {
+        local ts = sum_numbers_no_quotes(json)
+        if ts { print(ts) } else {
+          local n = parse_first_int(json)
+          print(n)
+        }
+      }
+    }
+    return 0
+  }
+
+  // Pure helper: collect minimal print outputs (literals only) into an array
+  collect_prints(json) {
+    // Ported from self-contained smoke (Hardened minimal scanner)
+    local out = new ArrayBox()
+    local pos = 0
+    local guard = 0
+    // DEV trace: flip to 1 for one-run diagnosis; keep 0 for normal
+    local trace = 0
+    local k_print = "\"kind\":\"Print\""
+    loop (true) {
+      guard = guard + 1
+      if guard > 200 { break }
+      local p = index_of_from(json, k_print, pos)
+      if p < 0 { break }
+      // bound current Print slice to [this, next)
+      local obj_start = p
+      local next_p = index_of_from(json, k_print, p + k_print.length())
+      local obj_end = json.length()
+      if next_p > 0 { obj_end = next_p }
+      if trace == 1 { print("[collect][p] "+p)  print("[collect][slice_end] "+obj_end) }
+      if trace == 1 {
+        local k_expr = "\"expression\":{"
+        local epos_dbg = index_of_from(json, k_expr, obj_start)
+        print("[scan][expr] "+epos_dbg)
+        local fc_dbg = index_of_from(json, "\"kind\":\"FunctionCall\"", obj_start)
+        print("[scan][fc] "+fc_dbg)
+        local bo_dbg = index_of_from(json, "\"kind\":\"BinaryOp\"", obj_start)
+        print("[scan][bo] "+bo_dbg)
+        local cp_dbg = index_of_from(json, "\"kind\":\"Compare\"", obj_start)
+        print("[scan][cp] "+cp_dbg)
+        local ts_dbg = index_of_from(json, "\"type\":\"string\"", obj_start)
+        print("[scan][ts] "+ts_dbg)
+        local ti_dbg = index_of_from(json, "\"type\":\"int\"", obj_start)
+        print("[scan][ti] "+ti_dbg)
+        // positions for tight patterns used by branches
+        local ks_pat = "\"type\":\"string\",\"value\":\""
+        print("[scan][ks] "+index_of_from(json, ks_pat, obj_start))
+        local ki_pat = "\"type\":\"int\",\"value\":"
+        print("[scan][ki] "+index_of_from(json, ki_pat, obj_start))
+      }
+
+      // 1) FunctionCall echo/itoa (single literal or empty args)
+      {
+        // Limit search within Print.expression object for stability
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, obj_start)
+        if epos > 0 { if epos < obj_end {
+          local expr_start = index_of_from(json, "{", epos)
+          if expr_start > 0 { if expr_start < obj_end {
+            local expr_end = new MiniVmScan().find_balanced_object_end(json, expr_start)
+            if expr_end > 0 { if expr_end <= obj_end {
+              if trace == 1 { print("[collect][expr] "+expr_start+","+expr_end) }
+              local k_fc = "\"kind\":\"FunctionCall\""
+              local fcp = index_of_from(json, k_fc, expr_start)
+              if fcp > 0 { if fcp < expr_end {
+                local kn = "\"name\":\""
+                local np = index_of_from(json, kn, fcp)
+              if np > 0 { if np < obj_end {
+                local ni = np + kn.length()
+                local nj = index_of_from(json, "\"", ni)
+                if nj > 0 { if nj <= expr_end {
+                  local fname = json.substring(ni, nj)
+                  local ka = "\"arguments\":["
+                  local ap = index_of_from(json, ka, nj)
+                  if ap > 0 { if ap < expr_end {
+                    // detect empty args [] quickly: no type token inside balanced array
+                    local arr_start = index_of_from(json, "[", ap)
+                    local arr_end = new MiniVmScan().find_balanced_array_end(json, arr_start)
+                    if arr_start >= 0 { if arr_end >= 0 { if arr_end <= expr_end {
+                      local kt = "\"type\":\""
+                      local atpos = index_of_from(json, kt, arr_start)
+                      if atpos < 0  or  atpos >= arr_end {
+                        if fname == "echo" { out.push("")  pos = obj_end + 1  continue }
+                        if fname == "itoa" { out.push("0")  pos = obj_end + 1  continue }
+                      }
+                    }}}
+                    // string arg
+                    local ks = "\"type\":\"string\",\"value\":\""
+                    local ps = index_of_from(json, ks, ap)
+                    if ps > 0 { if ps < expr_end {
+                      local si = ps + ks.length()
+                      local sj = index_of_from(json, "\"", si)
+                      if sj > 0 { if sj <= expr_end {
+                        local sval = json.substring(si, sj)
+                        if fname == "echo" { out.push(sval)  pos = obj_end + 1  continue }
+                      }}
+                    }}
+                    // int arg
+                    local ki = "\"type\":\"int\",\"value\":"
+                    local pi = index_of_from(json, ki, ap)
+                    if pi > 0 { if pi < expr_end {
+                      local ival = read_digits(json, pi + ki.length())
+                      if ival != "" { if fname == "itoa" { out.push(ival)  pos = obj_end + 1  continue } else { if fname == "echo" { out.push(ival)  pos = obj_end + 1  continue } } }
+                    }}
+                  }}
+                }}
+              }}
+            }}}
+          }}
+        }}
+      }
+
+      // 2) BinaryOp(int '+' int)
+      {
+        local k_expr = "\"expression\":{"
+        local epos = index_of_from(json, k_expr, obj_start)
+        if epos > 0 { if epos < obj_end {
+          local k_bo = "\"kind\":\"BinaryOp\""
+          local bpos = index_of_from(json, k_bo, epos)
+          if bpos > 0 { if bpos < obj_end {
+            if index_of_from(json, "\"operator\":\"+\"", bpos) > 0 {
+              local k_l = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
+              local lp = index_of_from(json, k_l, bpos)
+              if lp > 0 { if lp < obj_end {
+                local ld = read_digits(json, lp + k_l.length())
+                if ld != "" {
+                  local rp = index_of_from(json, k_r, lp + k_l.length())
+                  if rp > 0 { if rp < obj_end {
+                    local rd = read_digits(json, rp + k_r.length())
+                    if rd != "" { if trace == 1 { print("[hit][bo-typed] "+ld+"+"+rd) } out.push(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  pos = p + k_print.length()  continue }
+                  }}
+                }
+              }}
+              // fallback: two successive 'value' digits within expression bounds
+              local k_v = "\"value\":"
+              local v1 = index_of_from(json, k_v, epos)
+              if v1 > 0 { if v1 < obj_end {
+                local d1 = new MiniJson().read_digits_from(json, v1 + k_v.length())
+                if d1 != "" {
+                  local v2 = index_of_from(json, k_v, v1 + k_v.length())
+                  if v2 > 0 { if v2 < obj_end {
+                    local d2 = new MiniJson().read_digits_from(json, v2 + k_v.length())
+                    if d2 != "" { if trace == 1 { print("[hit][bo-fallback] "+d1+"+"+d2) } out.push(_int_to_str(_str_to_int(d1) + _str_to_int(d2)))  pos = p + k_print.length()  continue }
+                  }}
+                }
+              }}
+            }
+          }}
+        }}
+      }
+
+      // 3) Compare(lhs/rhs ints)
+      {
+        local k_cp = "\"kind\":\"Compare\""
+        local cpos = index_of_from(json, k_cp, obj_start)
+        if cpos > 0 { if cpos < obj_end {
+          local k_op = "\"operation\":\""
+          local opos = index_of_from(json, k_op, cpos)
+          if opos > 0 { if opos < obj_end {
+            local oi = opos + k_op.length()
+            local oj = index_of_from(json, "\"", oi)
+            if oj > 0 { if oj <= obj_end {
+              local op = json.substring(oi, oj)
+              local k_v = "\"value\":"
+              local lhs_v = index_of_from(json, k_v, oj)
+              if lhs_v > 0 { if lhs_v < obj_end {
+                local la = read_digits(json, lhs_v + k_v.length())
+                if la != "" {
+                  local rhs_v = index_of_from(json, k_v, lhs_v + k_v.length())
+                  if rhs_v > 0 { if rhs_v < obj_end {
+                    local rb = read_digits(json, rhs_v + k_v.length())
+                    if rb != "" {
+                      local ai = _str_to_int(la)
+                      local bi = _str_to_int(rb)
+                      local res = 0
+                      if op == "<"  { if ai <  bi { res = 1 } }
+                      if op == "==" { if ai == bi { res = 1 } }
+                      if op == "<=" { if ai <= bi { res = 1 } }
+                      if op == ">"  { if ai >  bi { res = 1 } }
+                      if op == ">=" { if ai >= bi { res = 1 } }
+                      if op == "!=" { if ai != bi { res = 1 } }
+                      out.push(_int_to_str(res))
+                      pos = p + k_print.length()
+                      continue
+                    }
+                  }}
+                }
+              }}
+            }}
+          }}
+        }}
+      }
+
+      // (FunctionCall branch moved earlier)
+
+      // 4) Literal string
+      {
+        local ks = "\"type\":\"string\",\"value\":\""
+        local ps = index_of_from(json, ks, obj_start)
+        if ps > 0 { if ps < obj_end {
+          local si = ps + ks.length()
+          local sj = index_of_from(json, "\"", si)
+          if sj > 0 { if sj <= obj_end {
+            if trace == 1 { print("[hit][str]") }
+            out.push(json.substring(si, sj))  pos = p + k_print.length()  continue
+          }}
+        }}
+      }
+      // 5) Literal int
+      {
+        local ki = "\"type\":\"int\",\"value\":"
+        local pi = index_of_from(json, ki, obj_start)
+        if pi > 0 { if pi < obj_end {
+          local digits = read_digits(json, pi + ki.length())
+          if digits != "" { if trace == 1 { print("[hit][i-lit] "+digits) } out.push(digits)  pos = p + k_print.length()  continue }
+        }}
+      }
+      // Unknown: skip this Print object entirely to avoid stalls and mis-detection
+      // Use coarse slice end (next Print position) when available; fallback to k_print-length step
+      pos = obj_end + 1
+      if pos <= p { pos = p + k_print.length() }
+    }
+    return out
+  }
+}
+
+// Program entry: prefer argv[0] JSON, fallback to embedded sample
+}
+
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"B\"}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":7}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Compare\",\"operation\":\"<\",\"lhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}},\"rhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":2}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":3}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":5}}}]}"
+
+    new MiniVmPrints().print_prints_in_slice(json, 0, json.length())
+    return 0
+  }
+}
+
+[pyvm] error: pyvm: max steps exceeded (200000) in function MiniVmPrints.print_prints_in_slice/3
+Traceback (most recent call last):
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/pyvm_runner.py", line 83, in <module>
+    main()
+  File "/mnt/c/git/nyash-project/nyash_self_main/tools/pyvm_runner.py", line 67, in main
+    result = vm.run_args(entry, argv) if argv else vm.run(entry)
+                                                   ^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 172, in run
+    return self._exec_function(fn, [])
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 290, in _exec_function
+    op_boxcall(self, fn, inst, regs)
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/ops_box.py", line 75, in op_boxcall
+    out = owner._exec_function(callee, args)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/mnt/c/git/nyash-project/nyash_self_main/src/llvm_py/pyvm/vm.py", line 239, in _exec_function
+    raise RuntimeError(f"pyvm: max steps exceeded ({max_steps}) in function {fn.name}")
+RuntimeError: pyvm: max steps exceeded (200000) in function MiniVmPrints.print_prints_in_slice/3

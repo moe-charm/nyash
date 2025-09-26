@@ -1,9 +1,9 @@
 /*!
  * Unified Box Factory Architecture
- * 
+ *
  * Phase 9.78: 統合BoxFactoryアーキテクチャ
  * すべてのBox生成（ビルトイン、ユーザー定義、プラグイン）を統一的に扱う
- * 
+ *
  * Design principles:
  * - "Everything is Box" 哲学の実装レベルでの体現
  * - birth/finiライフサイクルの明確な責務分離
@@ -11,9 +11,60 @@
  */
 
 use crate::box_trait::NyashBox;
-use crate::interpreter::RuntimeError;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+
+/// Factory Priority Policy for Box creation (Phase 15.5 "Everything is Plugin")
+///
+/// Determines the order in which different Box factories are consulted
+/// during Box creation to solve the StringBox/IntegerBox plugin priority issue.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FactoryPolicy {
+    /// Strict Plugin Priority: plugins > user > builtin
+    /// ⚡ SOLVES THE CORE PROBLEM: Plugins have highest priority
+    /// Use when plugins should completely replace builtins (Phase 15.5)
+    StrictPluginFirst,
+
+    /// Compatible Plugin Priority: plugins > builtin > user
+    /// 🔧 Compatibility mode: Plugins first, but builtins before user-defined
+    /// Use for gradual migration scenarios
+    CompatPluginFirst,
+
+    /// Legacy Builtin Priority: builtin > user > plugin (CURRENT DEFAULT)
+    /// ⚠️ PROBLEMATIC: Plugins can never override builtins
+    /// Only use for compatibility with existing setups
+    BuiltinFirst,
+}
+
+/// Factory type classification for policy-based ordering
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FactoryType {
+    /// Built-in factory (StringBox, IntegerBox, etc.)
+    Builtin,
+    /// User-defined Box factory
+    User,
+    /// Plugin-provided Box factory
+    Plugin,
+}
+
+/// Runtime error types for Box operations
+#[derive(Debug, thiserror::Error)]
+pub enum RuntimeError {
+    #[error("invalid operation: {message}")]
+    InvalidOperation { message: String },
+    #[error("type error: {message}")]
+    TypeError { message: String },
+}
+
+/// Shared state for interpreter context (legacy compatibility)
+#[derive(Debug, Default, Clone)]
+pub struct SharedState;
+
+impl SharedState {
+    pub fn new() -> Self {
+        Self
+    }
+}
 
 /// Unified interface for all Box creation
 pub trait BoxFactory: Send + Sync {
@@ -23,15 +74,15 @@ pub trait BoxFactory: Send + Sync {
         name: &str,
         args: &[Box<dyn NyashBox>],
     ) -> Result<Box<dyn NyashBox>, RuntimeError>;
-    
+
     /// Check if this factory is currently available
     fn is_available(&self) -> bool {
         true
     }
-    
+
     /// Get list of Box types this factory can create
     fn box_types(&self) -> Vec<&str>;
-    
+
     /// Check if this factory supports birth/fini lifecycle
     fn supports_birth(&self) -> bool {
         true
@@ -41,74 +92,176 @@ pub trait BoxFactory: Send + Sync {
     fn is_builtin_factory(&self) -> bool {
         false
     }
+
+    /// Identify factory type for policy-based priority ordering
+    fn factory_type(&self) -> FactoryType {
+        if self.is_builtin_factory() {
+            FactoryType::Builtin
+        } else {
+            FactoryType::Plugin // Default assumption for external factories
+        }
+    }
 }
 
 /// Registry that manages all BoxFactory implementations
 pub struct UnifiedBoxRegistry {
-    /// Ordered list of factories (priority: builtin > user > plugin)
+    /// Ordered list of factories with policy-based priority
     pub factories: Vec<Arc<dyn BoxFactory>>,
-    
+
     /// Quick lookup cache for performance
     type_cache: RwLock<HashMap<String, usize>>, // maps type name to factory index
+
+    /// Factory priority policy (Phase 15.5: Everything is Plugin)
+    policy: FactoryPolicy,
 }
 
 impl UnifiedBoxRegistry {
-    /// Create a new empty registry
+    /// Create a new empty registry with default policy
     pub fn new() -> Self {
+        Self::with_policy(FactoryPolicy::BuiltinFirst)
+    }
+
+    /// Create a new empty registry with specified policy
+    pub fn with_policy(policy: FactoryPolicy) -> Self {
         Self {
             factories: Vec::new(),
             type_cache: RwLock::new(HashMap::new()),
+            policy,
         }
     }
-    
-    /// Register a new factory
-    pub fn register(&mut self, factory: Arc<dyn BoxFactory>) {
-        // Get all types this factory can create
-        let types = factory.box_types();
-        let factory_index = self.factories.len();
-        
-        // Update cache
-        let mut cache = self.type_cache.write().unwrap();
-        // Reserved core types that must remain builtin-owned
-        fn is_reserved_type(name: &str) -> bool {
-            matches!(
-                name,
-                // Core value types
-                "StringBox" | "IntegerBox" | "BoolBox" | "FloatBox" | "NullBox"
-                    // Core containers and result
-                    | "ArrayBox" | "MapBox" | "ResultBox"
-                    // Core method indirection
-                    | "MethodBox"
-            )
-        }
-        for type_name in types {
-            // Enforce reserved names: only builtin factory may claim them
-            if is_reserved_type(type_name) && !factory.is_builtin_factory() {
-                eprintln!(
-                    "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
-                    type_name, factory_index
-                );
-                continue;
-            }
 
-            // First registered factory wins (priority order)
-            let entry = cache.entry(type_name.to_string());
-            use std::collections::hash_map::Entry;
-            match entry {
-                Entry::Occupied(existing) => {
-                    // Collision: type already claimed by earlier factory
-                    eprintln!("[UnifiedBoxRegistry] ⚠️ Duplicate registration for '{}': keeping factory #{}, ignoring later factory #{}",
-                              existing.key(), existing.get(), factory_index);
+    /// Create registry with policy from environment variable (Phase 15.5 setup)
+    pub fn with_env_policy() -> Self {
+        let policy = match std::env::var("NYASH_BOX_FACTORY_POLICY").ok().as_deref() {
+            Some("compat_plugin_first") => FactoryPolicy::CompatPluginFirst,
+            Some("builtin_first") => FactoryPolicy::BuiltinFirst,
+            Some("strict_plugin_first") | _ => FactoryPolicy::StrictPluginFirst, // Phase 15.5: Plugin First DEFAULT!
+        };
+
+        eprintln!("[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)", policy);
+        Self::with_policy(policy)
+    }
+
+    /// Get current factory policy
+    pub fn get_policy(&self) -> FactoryPolicy {
+        self.policy
+    }
+
+    /// Set factory policy and rebuild cache to reflect new priorities
+    pub fn set_policy(&mut self, policy: FactoryPolicy) {
+        if self.policy != policy {
+            self.policy = policy;
+            self.rebuild_cache();
+        }
+    }
+
+    /// Rebuild type cache based on current policy
+    fn rebuild_cache(&mut self) {
+        // Clear existing cache
+        let mut cache = self.type_cache.write().unwrap();
+        cache.clear();
+
+        // Get factory priority order based on policy
+        let factory_order = self.get_factory_order_by_policy();
+
+        // Re-register types with policy-based priority
+        for &factory_index in factory_order.iter() {
+            if let Some(factory) = self.factories.get(factory_index) {
+                let types = factory.box_types();
+
+                // Reserved core types that must remain builtin-owned
+                fn is_reserved_type(name: &str) -> bool {
+                    // Phase 15.5: 環境変数でプラグイン優先モード時は保護解除
+                    if std::env::var("NYASH_USE_PLUGIN_BUILTINS").is_ok() {
+                        if let Ok(types) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
+                            if types.split(',').any(|t| t.trim() == name) {
+                                return false;  // 予約型として扱わない
+                            }
+                        }
+                    }
+                    matches!(
+                        name,
+                        // Core value types
+                        "StringBox" | "IntegerBox" | "BoolBox" | "FloatBox" | "NullBox"
+                            // Core containers and result
+                            | "ArrayBox" | "MapBox" | "ResultBox"
+                            // Core method indirection
+                            | "MethodBox"
+                    )
                 }
-                Entry::Vacant(v) => {
-                    v.insert(factory_index);
+
+                for type_name in types {
+                    // Enforce reserved names: only builtin factory may claim them
+                    if is_reserved_type(type_name) && !factory.is_builtin_factory() {
+                        eprintln!(
+                            "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
+                            type_name, factory_index
+                        );
+                        continue;
+                    }
+
+                    // Policy-based priority: first in order wins
+                    let entry = cache.entry(type_name.to_string());
+                    use std::collections::hash_map::Entry;
+                    match entry {
+                        Entry::Occupied(existing) => {
+                            // Collision: type already claimed by higher-priority factory
+                            eprintln!("[UnifiedBoxRegistry] ⚠️ Policy '{}': type '{}' kept by higher priority factory #{}, ignoring factory #{}",
+                                      format!("{:?}", self.policy), existing.key(), existing.get(), factory_index);
+                        }
+                        Entry::Vacant(v) => {
+                            v.insert(factory_index);
+                        }
+                    }
                 }
             }
         }
-        
-        self.factories.push(factory);
     }
-    
+
+    /// Get factory indices ordered by current policy priority
+    fn get_factory_order_by_policy(&self) -> Vec<usize> {
+        let mut factory_indices: Vec<usize> = (0..self.factories.len()).collect();
+
+        // Sort by factory type according to policy
+        factory_indices.sort_by_key(|&index| {
+            if let Some(factory) = self.factories.get(index) {
+                let factory_type = factory.factory_type();
+
+                match self.policy {
+                    FactoryPolicy::StrictPluginFirst => match factory_type {
+                        FactoryType::Plugin => 0,   // Highest priority
+                        FactoryType::User => 1,     // Medium priority
+                        FactoryType::Builtin => 2,  // Lowest priority
+                    },
+                    FactoryPolicy::CompatPluginFirst => match factory_type {
+                        FactoryType::Plugin => 0,   // Highest priority
+                        FactoryType::Builtin => 1,  // Medium priority
+                        FactoryType::User => 2,     // Lowest priority
+                    },
+                    FactoryPolicy::BuiltinFirst => match factory_type {
+                        FactoryType::Builtin => 0,  // Highest priority (current default)
+                        FactoryType::User => 1,     // Medium priority
+                        FactoryType::Plugin => 2,   // Lowest priority
+                    },
+                }
+            } else {
+                999 // Invalid factory index, put at end
+            }
+        });
+
+        factory_indices
+    }
+
+    /// Register a new factory (policy-aware)
+    pub fn register(&mut self, factory: Arc<dyn BoxFactory>) {
+        // Simply add to the factory list
+        self.factories.push(factory);
+
+        // Rebuild cache to apply policy-based priority ordering
+        // This ensures new factory is properly integrated with current policy
+        self.rebuild_cache();
+    }
+
     /// Create a Box using the unified interface
     pub fn create_box(
         &self,
@@ -119,8 +272,12 @@ impl UnifiedBoxRegistry {
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             use crate::runtime::{get_global_registry, BoxProvider};
             // Allowlist types for override: env NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox" (default: none)
-            let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
-                list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+            let allow: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES")
+            {
+                list.split(',')
+                    .map(|s| s.trim().to_string())
+                    .filter(|s| !s.is_empty())
+                    .collect()
             } else {
                 vec![]
             };
@@ -128,8 +285,11 @@ impl UnifiedBoxRegistry {
                 let v2 = get_global_registry();
                 if let Some(provider) = v2.get_provider(name) {
                     if let BoxProvider::Plugin(_lib) = provider {
-                        return v2.create_box(name, args)
-                            .map_err(|e| RuntimeError::InvalidOperation { message: format!("Plugin Box creation failed: {}", e) });
+                        return v2.create_box(name, args).map_err(|e| {
+                            RuntimeError::InvalidOperation {
+                                message: format!("Plugin Box creation failed: {}", e),
+                            }
+                        });
                     }
                 }
             }
@@ -144,20 +304,28 @@ impl UnifiedBoxRegistry {
             }
         }
         drop(cache);
-        
+
         // Linear search through all factories
-        for factory in &self.factories {
+        for (fi, factory) in self.factories.iter().enumerate() {
             if !factory.is_available() {
                 continue;
             }
-            
+
             // For factories that advertise types, check if they support this type
             let box_types = factory.box_types();
             if !box_types.is_empty() && !box_types.contains(&name) {
                 continue;
             }
-            
+
             // Try to create the box (factories with empty box_types() will always be tried)
+            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[UnifiedBoxRegistry] try factory#{} {:?} for {}",
+                    fi,
+                    factory.factory_type(),
+                    name
+                );
+            }
             match factory.create_box(name, args) {
                 Ok(boxed) => return Ok(boxed),
                 Err(_) => continue, // Try next factory
@@ -185,19 +353,25 @@ impl UnifiedBoxRegistry {
             let cache = self.type_cache.read().unwrap();
             if let Some(&idx) = cache.get(name) {
                 if let Some(factory) = self.factories.get(idx) {
-                    if factory.is_available() { return true; }
+                    if factory.is_available() {
+                        return true;
+                    }
                 }
             }
         }
         // Fallback: scan factories that can enumerate types
         for factory in &self.factories {
-            if !factory.is_available() { continue; }
+            if !factory.is_available() {
+                continue;
+            }
             let types = factory.box_types();
-            if !types.is_empty() && types.contains(&name) { return true; }
+            if !types.is_empty() && types.contains(&name) {
+                return true;
+            }
         }
         false
     }
-    
+
     /// Get all available Box types
     pub fn available_types(&self) -> Vec<String> {
         let mut types = Vec::new();
@@ -214,15 +388,19 @@ impl UnifiedBoxRegistry {
     }
 }
 
-/// Re-export submodules
-pub mod user_defined;
-pub mod plugin;
 pub mod builtin;
+pub mod plugin;
+/// Re-export submodules
+#[cfg(feature = "interpreter-legacy")]
+pub mod user_defined;
+
+// Phase 15.5: Separated builtin implementations for easy deletion
+pub mod builtin_impls;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_registry_creation() {
         let registry = UnifiedBoxRegistry::new();

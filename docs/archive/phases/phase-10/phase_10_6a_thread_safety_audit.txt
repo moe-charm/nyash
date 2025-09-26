@@ -1,0 +1,64 @@
+Phase 10.6a — Thread-Safety Audit (TXT)
+
+Scope
+- Audit Send/Sync policy for core runtime + Box families.
+- Classify: Allowed (Send+Sync), Not-Send (single-threaded), Needs-Wrapper (guarded by RwLock/mpsc/etc.).
+- Output concrete action items for hardening.
+
+Legend
+- ALLOW: Safe to share/send across threads as-is.
+- NO-SEND: Must remain thread-confined; do not share.
+- WRAP: Provide wrapper/adapter to safely share (interior mutability / channels / handles).
+
+Runtime Components
+- NyashRuntime: WRAP — shared via Arc; subcomponents must be audited (registry/decls RwLock OK).
+- GcHooks: ALLOW — trait requires Send+Sync; CountingGc is Send+Sync by design.
+- TypeMeta/CacheVersions: WRAP — global tables; protect via atomic/versioning (already present) + RwLock where needed.
+- Scheduler (planned): WRAP — explicit abstraction (cooperative); no global mutable state.
+
+VM Values / Execution
+- VMValue: ALLOW (data) / WRAP (BoxRef) — primitives OK; BoxRef must only be shared via immutable Box API.
+- ScopeTracker: NO-SEND — per-VM; not shared. Access confined to single thread.
+- JIT Manager: WRAP — read-mostly maps; guard with RwLock if shared, or keep per-VM.
+
+Builtin Boxes (initial pass)
+- IntegerBox/BoolBox/StringBox: ALLOW (immutable data semantics).
+- FloatBox (math): ALLOW (stateless ops; string-ification only).
+- ArrayBox/MapBox: WRAP — interior mutability required (RwLock); Write-Barrier remains required.
+- Buffer/IO/Net/Time/Audio/etc.: WRAP — external handles; use Arc + internal locks; expose async/channel for ops.
+- FutureBox: WRAP — already uses RwLock pattern; verify methods are non-blocking and Send+Sync where applicable.
+- ChannelBox: WRAP — backed by mpsc/crossbeam; ensure senders/receivers are Send.
+
+Plugin Boxes
+- PluginBoxV2: WRAP — FFI handle; calls marshalled via TLV; all access through thread-safe host layer.
+
+Interpreter/Runner Layers
+- Parser/Tokenizer/AST: ALLOW (not shared at runtime).
+- Runner (VM backend): NO-SEND — execution confined to the owning thread.
+
+Policies and Enforcement
+1) Marker traits (for docs only):
+   - ThreadSafeBox (Doc): Box types that are Send+Sync-safe as value semantics.
+   - HandleBox (Doc): wraps external/native handles; must be behind RwLock/Mutex and non-blocking APIs.
+2) Constructor guidance:
+   - For WRAP boxes, store state under RwLock/Mutex; prefer RwLock (read-mostly).
+   - Avoid blocking in methods; prefer async/task dispatch via scheduler abstraction.
+3) Sharing rules:
+   - VMValue::BoxRef must not be mutated without Write-Barrier when GC is active.
+   - Cross-thread sharing limited to BoxRef with immutable APIs or actor-like message passing.
+4) Testing:
+   - Add feature-gated thread-smoke tests (spawn two threads, share ALLOW boxes, ensure no UB).
+   - Add Mutex/RwLock poisoning handling policies (map to Nyash exceptions if needed).
+
+Immediate Action Items
+- [A1] Document per-Box classification in code headers (short note + rationale).
+- [A2] Ensure ArrayBox/MapBox internals use RwLock and respect Write-Barrier (already partially in place; verify set/push paths).
+- [A3] PluginBoxV2 calls remain serialized through host; confirm Send on host dispatch closures.
+- [A4] Introduce lightweight scheduler trait (single-threaded impl first); route blocking ops via scheduler.
+- [A5] Add CI job to run with NYASH_GC_BARRIER_STRICT=1 and CountingGc for barrier regression.
+
+Future (10_6b/10_6c tie-ins)
+- Scheduler + cooperative safepoint policy across threads.
+- Per-thread root regions; ensure root pin/unpin remains thread-local.
+- Card marking/write barrier strategy for shared objects modified across threads (design doc first).
+

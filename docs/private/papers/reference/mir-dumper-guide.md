@@ -1,5 +1,7 @@
 # MIR Dumper Output Guide
 
+> Note: 本ガイドの正典は `docs/reference/mir-dumper-guide.md` にあります（papers 配下は参照用のコピーです）。
+
 MIRダンプ出力を正しく読み解くためのガイドです。
 
 ## BoxCall vs 通常のCall の見分け方

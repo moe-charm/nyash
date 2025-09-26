@@ -1,0 +1,13 @@
+{"kind":"Program","statements":[
+  {"kind":"BoxDeclaration","name":"Worker","methods":{
+    "run": {"kind":"FunctionDeclaration","name":"run","params":[],"body":[{"kind":"Return","value":{"kind":"Literal","value":{"type":"int","value":0}}}],"static":false,"override":false}
+  }},
+  {"kind":"FunctionDeclaration","name":"main","params":["args"],"body":[
+    {"kind":"Local","variables":["w"],"inits":[{"kind":"New","class":"Worker","args":[]}]},
+    {"kind":"TryCatch",
+      "try":[{"kind":"MethodCall","object":{"kind":"Variable","name":"w"},"method":"run","arguments":[]}],
+      "catch":[{"type":"Error","var":"e","body":[{"kind":"Print","expression":{"kind":"Variable","name":"e"}}]}],
+      "cleanup":null}
+  ]}
+]}
+

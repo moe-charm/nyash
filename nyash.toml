@@ -1,12 +1,401 @@
 [env]
 # Put environment defaults used by tools or examples if needed
+# Enable using resolver by default (can be disabled with NYASH_SKIP_TOML_ENV=1)
+NYASH_ENABLE_USING = "1"
+# Enable dev sugar preexpand for @ local alias (line-head) during parsing
+NYASH_DEV_AT_LOCAL = "1"
 
 [using]
 paths = ["apps", "lib", "."]
 
+# Optional package-style entries (opt-in via using resolver)
+[using.json_native]
+path = "apps/lib/json_native/"
+main = "parser/parser.nyash"
+
+# JSON Native – String utilities as a standalone package (single-file)
+[using.string_utils]
+path = "apps/lib/json_native/utils/string.nyash"
+
+[using.aliases]
+# Resolve `using json as ...` to json_native when desired
+json = "json_native"
+StringUtils = "string_utils"
+
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
-selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.nyash"
-selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.nyash"
-selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.nyash"
+selfhost.compiler.debug = "apps/selfhost/compiler/boxes/debug_box.nyash"
+selfhost.compiler.parser = "apps/selfhost/compiler/boxes/parser_box.nyash"
+selfhost.compiler.emitter = "apps/selfhost/compiler/boxes/emitter_box.nyash"
+selfhost.compiler.mir = "apps/selfhost/compiler/boxes/mir_emitter_box.nyash"
+selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.nyash"
+selfhost.vm.json = "apps/selfhost/common/json_adapter.nyash"
+selfhost.vm.core = "apps/selfhost/vm/boxes/mini_vm_core.nyash"
+selfhost.vm.scan = "apps/selfhost/common/mini_vm_scan.nyash"
+selfhost.vm.binop = "apps/selfhost/common/mini_vm_binop.nyash"
+selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.nyash"
+selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.nyash"
+selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.nyash"
 
+# Temporary alias keys (migration aid; keys kept stable)
+selfhost.common.json = "apps/selfhost/common/json_adapter.nyash"
+selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.nyash"
+selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.nyash"
+selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.nyash"
+
+# v2 Plugin libraries (loader reads these for TypeBox ABI)
+[libraries]
+[libraries."libnyash_filebox_plugin.so"]
+boxes = ["FileBox"]
+path = "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so"
+
+[libraries."libnyash_filebox_plugin.so".FileBox]
+type_id = 6
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_filebox_plugin.so".FileBox.methods]
+birth = { method_id = 0 }
+open = { method_id = 4 }
+read = { method_id = 5 }
+write = { method_id = 6 }
+close = { method_id = 7 }
+exists = { method_id = 8 }
+copyFrom = { method_id = 9 }
+cloneSelf = { method_id = 10 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_path_plugin.so"]
+boxes = ["PathBox"]
+path = "plugins/nyash-path-plugin/libnyash_path_plugin.so"
+
+[libraries."libnyash_path_plugin.so".PathBox]
+type_id = 55
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_path_plugin.so".PathBox.methods]
+birth = { method_id = 0 }
+join = { method_id = 4 }
+dirname = { method_id = 5 }
+basename = { method_id = 6 }
+extname = { method_id = 7 }
+isAbs = { method_id = 8 }
+normalize = { method_id = 9 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_math_plugin.so"]
+boxes = ["MathBox", "TimeBox"]
+path = "plugins/nyash-math-plugin/libnyash_math_plugin.so"
+
+[libraries."libnyash_math_plugin.so".MathBox]
+type_id = 50
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_math_plugin.so".MathBox.methods]
+birth = { method_id = 0 }
+sqrt = { method_id = 4 }
+sin = { method_id = 5 }
+cos = { method_id = 6 }
+round = { method_id = 7 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_math_plugin.so".TimeBox]
+type_id = 51
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_math_plugin.so".TimeBox.methods]
+birth = { method_id = 0 }
+now = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_regex_plugin.so"]
+boxes = ["RegexBox"]
+path = "plugins/nyash-regex-plugin/libnyash_regex_plugin.so"
+
+[libraries."libnyash_regex_plugin.so".RegexBox]
+type_id = 52
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_regex_plugin.so".RegexBox.methods]
+birth = { method_id = 0 }
+compile = { method_id = 4 }
+isMatch = { method_id = 5 }
+find = { method_id = 6 }
+replaceAll = { method_id = 7 }
+split = { method_id = 8 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so"]
+boxes = ["ClientBox", "ResponseBox", "RequestBox", "ServerBox", "SockServerBox", "SockClientBox", "SockConnBox"]
+path = "plugins/nyash-net-plugin/libnyash_net_plugin.so"
+
+[libraries."libnyash_net_plugin.so".ClientBox]
+type_id = 23
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".ClientBox.methods]
+birth = { method_id = 0 }
+get = { method_id = 4 }
+post = { method_id = 5 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".ResponseBox]
+type_id = 22
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".ResponseBox.methods]
+birth = { method_id = 0 }
+setStatus = { method_id = 4 }
+setHeader = { method_id = 5 }
+write = { method_id = 6 }
+readBody = { method_id = 7 }
+getStatus = { method_id = 8 }
+getHeader = { method_id = 9 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".RequestBox]
+type_id = 21
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".RequestBox.methods]
+birth = { method_id = 0 }
+path = { method_id = 4 }
+readBody = { method_id = 5 }
+respond = { method_id = 6 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".ServerBox]
+type_id = 20
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".ServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 4 }
+stop = { method_id = 5 }
+accept = { method_id = 6 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".SockServerBox]
+type_id = 30
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".SockServerBox.methods]
+birth = { method_id = 0 }
+start = { method_id = 4 }
+stop = { method_id = 5 }
+accept = { method_id = 6 }
+acceptTimeout = { method_id = 7 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".SockClientBox]
+type_id = 32
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".SockClientBox.methods]
+birth = { method_id = 0 }
+connect = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_net_plugin.so".SockConnBox]
+type_id = 31
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_net_plugin.so".SockConnBox.methods]
+birth = { method_id = 0 }
+send = { method_id = 4 }
+recv = { method_id = 5 }
+close = { method_id = 6 }
+recvTimeout = { method_id = 7 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_encoding_plugin.so"]
+boxes = ["EncodingBox"]
+path = "plugins/nyash-encoding-plugin/libnyash_encoding_plugin.so"
+
+[libraries."libnyash_encoding_plugin.so".EncodingBox]
+type_id = 53
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_encoding_plugin.so".EncodingBox.methods]
+birth = { method_id = 0 }
+toUtf8Bytes = { method_id = 4 }
+fromUtf8Bytes = { method_id = 5 }
+base64Encode = { method_id = 6 }
+base64Decode = { method_id = 7 }
+hexEncode = { method_id = 8 }
+hexDecode = { method_id = 9 }
+fini = { method_id = 4294967295 }
+
+# Provider Verify — minimal required methods (dev warn by default)
+[verify.required_methods]
+# Note: Dynamic plugins may not be present in dev; preflight runs in warn mode.
+StringBox = ["length", "concat"]
+ArrayBox  = ["len", "push", "get"]
+MapBox    = ["has", "get", "set"]
+ConsoleBox = ["print"]
+
+[libraries."libnyash_json_plugin.so"]
+boxes = ["JsonDocBox", "JsonNodeBox"]
+path = "plugins/nyash-json-plugin/libnyash_json_plugin.so"
+
+[libraries."libnyash_json_plugin.so".JsonDocBox]
+type_id = 70
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonDocBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 4 }
+root = { method_id = 5 }
+error = { method_id = 6 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox]
+type_id = 71
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox.methods]
+birth = { method_id = 0 }
+kind = { method_id = 4 }
+get = { method_id = 5 }
+size = { method_id = 6 }
+at = { method_id = 7 }
+str = { method_id = 8 }
+int = { method_id = 9 }
+bool = { method_id = 10 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_toml_plugin.so"]
+boxes = ["TOMLBox"]
+path = "plugins/nyash-toml-plugin/libnyash_toml_plugin.so"
+
+[libraries."libnyash_toml_plugin.so".TOMLBox]
+type_id = 54
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_toml_plugin.so".TOMLBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 4 }
+get = { method_id = 5 }
+toJson = { method_id = 6 }
+fini = { method_id = 4294967295 }
+
+# Python (v2 TypeBox) plugins
+[libraries."libnyash_python_plugin.so"]
+boxes = ["PyRuntimeBox", "PyObjectBox"]
+path = "plugins/nyash-python-plugin/libnyash_python_plugin.so"
+
+[libraries."libnyash_python_plugin.so".PyRuntimeBox]
+type_id = 40
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_python_plugin.so".PyRuntimeBox.methods]
+birth = { method_id = 0 }
+eval = { method_id = 4 }
+import = { method_id = 5 }
+evalR = { method_id = 11 }
+importR = { method_id = 12 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_python_plugin.so".PyObjectBox]
+type_id = 41
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_python_plugin.so".PyObjectBox.methods]
+birth = { method_id = 0 }
+getattr = { method_id = 4 }
+call = { method_id = 5 }
+str = { method_id = 6 }
+callKw = { method_id = 5 }
+getattrR = { method_id = 11 }
+callR = { method_id = 12 }
+callKwR = { method_id = 15 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_python_parser_plugin.so"]
+boxes = ["PythonParserBox"]
+path = "plugins/nyash-python-parser-plugin/libnyash_python_parser_plugin.so"
+
+[libraries."libnyash_python_parser_plugin.so".PythonParserBox]
+type_id = 60
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_python_parser_plugin.so".PythonParserBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_python_compiler_plugin.so"]
+boxes = ["PythonCompilerBox"]
+path = "plugins/nyash-python-compiler-plugin/libnyash_python_compiler_plugin.so"
+
+[libraries."libnyash_python_compiler_plugin.so".PythonCompilerBox]
+type_id = 61
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_python_compiler_plugin.so".PythonCompilerBox.methods]
+birth = { method_id = 0 }
+compile = { method_id = 4 }
+fini = { method_id = 4294967295 }
+# StringBox Plugin (Core Box replacement)
+[libraries."libnyash_string_plugin.so"]
+boxes = ["StringBox"]
+path = "plugins/nyash-string-plugin/libnyash_string_plugin.so"
+
+[libraries."libnyash_string_plugin.so".StringBox]
+type_id = 10
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_string_plugin.so".StringBox.methods]
+birth = { method_id = 0 }
+length = { method_id = 1 }
+isEmpty = { method_id = 2 }
+charCodeAt = { method_id = 3 }
+concat = { method_id = 4 }
+fromUtf8 = { method_id = 5 }
+toUtf8 = { method_id = 6 }
+# Note: Below methods are not implemented yet
+# substring = { method_id = 8 }
+# indexOf = { method_id = 10 }
+# lastIndexOf = { method_id = 11 }
+# replace = { method_id = 12 }
+# split = { method_id = 13 }
+# trim = { method_id = 14 }
+# toUpper = { method_id = 15 }
+# toLower = { method_id = 16 }
+fini = { method_id = 4294967295 }
+
+# IntegerBox Plugin (Core Box replacement)
+[libraries."libnyash_integer_plugin.so"]
+boxes = ["IntegerBox"]
+path = "plugins/nyash-integer-plugin/libnyash_integer_plugin.so"
+
+[libraries."libnyash_integer_plugin.so".IntegerBox]
+type_id = 12
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_integer_plugin.so".IntegerBox.methods]
+birth = { method_id = 0 }
+get = { method_id = 1 }
+set = { method_id = 2 }
+fini = { method_id = 4294967295 }

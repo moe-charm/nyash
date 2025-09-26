@@ -1,5 +1,5 @@
 // Test file for simple_rooms.nyash
-include "text_adventure/simple_rooms.nyash"
+using "text_adventure/simple_rooms.nyash"
 
 print("🏰 Testing Simple Rooms Module...")
 

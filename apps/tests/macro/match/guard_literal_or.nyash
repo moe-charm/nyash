@@ -1,0 +1,8 @@
+local d = 2
+local r = match d {
+  1 if (1 < 2) => 10
+  2 if (2 < 3) => 20
+  _ => 30
+}
+print(r)
+

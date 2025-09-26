@@ -41,11 +41,16 @@ NYASH_DISABLE_PLUGINS = "1"
 - （今後）タスク/スケジューラ関連の変数は `runtime.*` 名で集約予定
 
 ## LLVM/AOT
-- LLVM_SYS_180_PREFIX: LLVM 18 のパス指定
+- NYASH_LLVM_FEATURE: LLVM機能選択（"llvm"(default) または "llvm-inkwell-legacy"）
+- LLVM_SYS_180_PREFIX: LLVM 18 のパス指定（llvm-inkwell-legacy使用時のみ必要）
 - NYASH_LLVM_VINVOKE_RET_SMOKE, NYASH_LLVM_ARRAY_RET_SMOKE: CI 用スモークトグル
-- NYASH_LLVM_OBJ_OUT: Rust LLVM 経路で生成する `.o` の出力パス（Runner/スクリプトが尊重）
+- NYASH_LLVM_OBJ_OUT: LLVM経路で生成する `.o` の出力パス（Runner/スクリプトが尊重）
 - NYASH_AOT_OBJECT_OUT: AOT パイプラインで使用する `.o` 出力ディレクトリ/パス
 - NYASH_LLVM_USE_HARNESS: "1" で llvmlite ハーネス経路を有効化（MIR(JSON)→Python→.ll→llc→.o）
+
+### LLVM Feature 詳細
+- **llvm** (デフォルト): llvmlite Python ハーネス使用、LLVM_SYS_180_PREFIX不要
+- **llvm-inkwell-legacy**: Rust inkwell bindings使用、LLVM_SYS_180_PREFIX必要
 
 ## 管理方針（提案）
 - コード側: `src/config/env.rs` を単一の集約窓口に（JIT は `jit::config` に委譲）。

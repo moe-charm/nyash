@@ -1,0 +1,6 @@
+static box Main {
+  main(args) {
+    { print("x") 0 }
+    return 0
+  }
+}

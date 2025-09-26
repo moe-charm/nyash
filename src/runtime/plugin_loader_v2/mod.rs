@@ -9,4 +9,3 @@ mod stub;
 pub use enabled::*;
 #[cfg(any(not(feature = "plugins"), target_arch = "wasm32"))]
 pub use stub::*;
-

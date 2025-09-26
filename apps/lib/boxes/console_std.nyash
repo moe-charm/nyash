@@ -1,0 +1,27 @@
+// ConsoleStd — minimal standard console helpers (commonized API)
+
+// Global helper to avoid name shadowing when invoking the language-level print.
+function __console_std_emit(value) {
+  print(value)
+  return 0
+}
+
+static box ConsoleStd {
+  // print/println/log: convert null to "" and return 0
+  print(x) {
+    if x == null { x = "" }
+    __console_std_emit(x)
+    return 0
+  }
+  println(x) {
+    if x == null { x = "" }
+    __console_std_emit(x)
+    return 0
+  }
+  log(x) {
+    if x == null { x = "" }
+    __console_std_emit(x)
+    return 0
+  }
+}
+

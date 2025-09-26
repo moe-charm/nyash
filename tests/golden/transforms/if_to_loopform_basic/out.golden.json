@@ -1,0 +1,44 @@
+{
+  "kind": "Program",
+  "statements": [
+    {
+      "kind": "Loop",
+      "condition": {
+        "kind": "Literal",
+        "value": {
+          "type": "int",
+          "value": 1
+        }
+      },
+      "body": [
+        {
+          "kind": "If",
+          "condition": {
+            "kind": "Literal",
+            "value": {
+              "type": "bool",
+              "value": true
+            }
+          },
+          "then": [
+            {
+              "kind": "Print",
+              "expression": {
+                "kind": "Literal",
+                "value": {
+                  "type": "string",
+                  "value": "yes"
+                }
+              }
+            }
+          ],
+          "else": null
+        },
+        {
+          "kind": "Break"
+        }
+      ]
+    }
+  ]
+}
+

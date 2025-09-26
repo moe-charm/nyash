@@ -5,12 +5,14 @@ Based on src/backend/llvm/compiler/codegen/instructions/resolver.rs
 
 from typing import Dict, Optional, Any, Tuple
 import os
+from trace import phi as trace_phi
+from trace import values as trace_values
 import llvmlite.ir as ir
 
 class Resolver:
     """
     Centralized value resolution with per-block caching.
-    Following the Core Invariants from LLVM_LAYER_OVERVIEW.md:
+    Following the Core Invariants from docs/development/design/legacy/LLVM_LAYER_OVERVIEW.md:
     - Resolver-only reads
     - Localize at block start (PHI creation)
     - Cache per (block, value) to avoid redundant PHIs
@@ -26,6 +28,13 @@ class Resolver:
             # Legacy constructor (vmap, bb_map) — builder/module will be set later when available
             self.builder = None
             self.module = None
+            try:
+                # Keep references to global maps when provided
+                self.global_vmap = a if isinstance(a, dict) else None
+                self.global_bb_map = b if isinstance(b, dict) else None
+            except Exception:
+                self.global_vmap = None
+                self.global_bb_map = None
         
         # Caches: (block_name, value_id) -> llvm value
         self.i64_cache: Dict[Tuple[str, int], ir.Value] = {}
@@ -95,9 +104,33 @@ class Resolver:
                 bmap = self.block_phi_incomings.get(block_id)
                 if isinstance(bmap, dict) and value_id in bmap:
                     existing_cur = vmap.get(value_id)
-                    if existing_cur is not None and hasattr(existing_cur, 'add_incoming'):
+                    # Fallback: try builder/global vmap when local map lacks placeholder
+                    try:
+                        if (existing_cur is None or not hasattr(existing_cur, 'add_incoming')) and hasattr(self, 'global_vmap') and isinstance(self.global_vmap, dict):
+                            gcand = self.global_vmap.get(value_id)
+                            if gcand is not None and hasattr(gcand, 'add_incoming'):
+                                existing_cur = gcand
+                    except Exception:
+                        pass
+                    # Use placeholder only if it belongs to the current block; otherwise
+                    # create/ensure a local PHI at the current block head to dominate uses.
+                    is_phi_here = False
+                    try:
+                        is_phi_here = (
+                            existing_cur is not None
+                            and hasattr(existing_cur, 'add_incoming')
+                            and getattr(getattr(existing_cur, 'basic_block', None), 'name', None) == current_block.name
+                        )
+                    except Exception:
+                        is_phi_here = False
+                    if is_phi_here:
                         self.i64_cache[cache_key] = existing_cur
                         return existing_cur
+                    # Do not synthesize PHI here; expect predeclared placeholder exists.
+                    # Fallback to 0 to keep IR consistent if placeholder is missing (should be rare).
+                    zero = ir.Constant(self.i64, 0)
+                    self.i64_cache[cache_key] = zero
+                    return zero
         except Exception:
             pass
         
@@ -116,37 +149,21 @@ class Resolver:
         if defined_here:
             existing = vmap.get(value_id)
             if existing is not None and hasattr(existing, 'type') and isinstance(existing.type, ir.IntType) and existing.type.width == 64:
-                if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                    print(f"[resolve] local reuse: bb{bid} v{value_id}", flush=True)
+                trace_values(f"[resolve] local reuse: bb{bid} v{value_id}")
                 self.i64_cache[cache_key] = existing
                 return existing
         else:
-            # Prefer a directly available SSA value from vmap（同一ブロック直前定義の再利用）。
-            # def_blocks が未更新でも、vmap に存在するなら局所定義とみなす。
-            try:
-                existing = vmap.get(value_id)
-            except Exception:
-                existing = None
-            if existing is not None and hasattr(existing, 'type') and isinstance(existing.type, ir.IntType):
-                if existing.type.width == 64:
-                    if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                        print(f"[resolve] vmap-fast reuse: bb{bid} v{value_id}", flush=True)
-                    self.i64_cache[cache_key] = existing
-                    return existing
-                else:
-                    zextd = self.builder.zext(existing, self.i64) if self.builder is not None else ir.Constant(self.i64, 0)
-                    if os.environ.get('NYASH_LLVM_TRACE_VALUES') == '1':
-                        print(f"[resolve] vmap-fast zext: bb{bid} v{value_id}", flush=True)
-                    self.i64_cache[cache_key] = zextd
-                    return zextd
+            # Do NOT blindly reuse vmap across blocks: it may reference values defined
+            # in non-dominating predecessors (e.g., other branches). Only reuse when
+            # defined_here (handled above) or at entry/no-preds (handled below).
+            pass
         
         if not pred_ids:
             # Entry block or no predecessors: prefer local vmap value (already dominating)
             base_val = vmap.get(value_id)
             if base_val is None:
                 result = ir.Constant(self.i64, 0)
-                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-                    print(f"[resolve] bb{bid} v{value_id} entry/no-preds → 0", flush=True)
+                trace_phi(f"[resolve] bb{bid} v{value_id} entry/no-preds → 0")
             else:
                 # If pointer string, box to handle in current block (use local builder)
                 if hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType) and self.module is not None:
@@ -182,8 +199,9 @@ class Resolver:
             return coerced
         else:
             # Multi-pred: if JSON declares a PHI for (current block, value_id),
-            # materialize it on-demand via end-of-block resolver. Otherwise, avoid
-            # synthesizing a localization PHI (return zero to preserve dominance).
+            # materialize it on-demand via end-of-block resolver. Otherwise,
+            # synthesize a localization PHI at the current block head to ensure
+            # dominance for downstream uses (MIR13 PHI-off compatibility).
             try:
                 cur_bid = int(str(current_block.name).replace('bb',''))
             except Exception:
@@ -198,13 +216,15 @@ class Resolver:
                 declared = False
             if declared:
                 # Return existing placeholder if present; do not create a new PHI here.
-                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-                    print(f"[resolve] use placeholder PHI: bb{cur_bid} v{value_id}", flush=True)
+                trace_phi(f"[resolve] use placeholder PHI: bb{cur_bid} v{value_id}")
                 placeholder = vmap.get(value_id)
+                if (placeholder is None or not hasattr(placeholder, 'add_incoming')) and hasattr(self, 'global_vmap') and isinstance(self.global_vmap, dict):
+                    cand = self.global_vmap.get(value_id)
+                    if cand is not None and hasattr(cand, 'add_incoming'):
+                        placeholder = cand
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
-                if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-                    print(f"[resolve] multi-pred no-declare: bb{cur_bid} v{value_id} -> 0", flush=True)
+                # No declared PHI and multi-pred: do not synthesize; fallback to zero
                 result = ir.Constant(self.i64, 0)
         
         # Cache and return
@@ -243,19 +263,14 @@ class Resolver:
                           bb_map: Optional[Dict[int, ir.Block]] = None,
                           _vis: Optional[set] = None) -> ir.Value:
         """Resolve value as i64 at the end of a given block by traversing predecessors if needed."""
-        if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-            try:
-                print(f"[resolve] end_i64 enter: bb{block_id} v{value_id}", flush=True)
-            except Exception:
-                pass
+        trace_phi(f"[resolve] end_i64 enter: bb{block_id} v{value_id}")
         key = (block_id, value_id)
         if key in self._end_i64_cache:
             return self._end_i64_cache[key]
         if _vis is None:
             _vis = set()
         if key in _vis:
-            if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-                print(f"[resolve] cycle detected at end_i64(bb{block_id}, v{value_id}) → 0", flush=True)
+            trace_phi(f"[resolve] cycle detected at end_i64(bb{block_id}, v{value_id}) → 0")
             return ir.Constant(self.i64, 0)
         _vis.add(key)
 
@@ -270,16 +285,21 @@ class Resolver:
                 is_phi_val = hasattr(val, 'add_incoming')
             except Exception:
                 is_phi_val = False
-            if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-                try:
-                    ty = 'phi' if is_phi_val else ('ptr' if hasattr(val, 'type') and isinstance(val.type, ir.PointerType) else ('i'+str(getattr(val.type,'width','?')) if hasattr(val,'type') and isinstance(val.type, ir.IntType) else 'other'))
-                    print(f"[resolve]  snap hit: bb{block_id} v{value_id} type={ty}", flush=True)
-                except Exception:
-                    pass
+            try:
+                ty = 'phi' if is_phi_val else ('ptr' if hasattr(val, 'type') and isinstance(val.type, ir.PointerType) else ('i'+str(getattr(val.type,'width','?')) if hasattr(val,'type') and isinstance(val.type, ir.IntType) else 'other'))
+                trace_phi(f"[resolve]  snap hit: bb{block_id} v{value_id} type={ty}")
+            except Exception:
+                pass
             if is_phi_val:
-                # Using a dominating PHI placeholder as incoming is valid for finalize_phis
-                self._end_i64_cache[key] = val
-                return val
+                # Accept PHI only when it belongs to the same block (dominates end-of-block).
+                try:
+                    belongs_here = (getattr(getattr(val, 'basic_block', None), 'name', b'').decode() if hasattr(getattr(val, 'basic_block', None), 'name') else str(getattr(getattr(val, 'basic_block', None), 'name', ''))) == f"bb{block_id}"
+                except Exception:
+                    belongs_here = False
+                if belongs_here:
+                    self._end_i64_cache[key] = val
+                    return val
+                # Otherwise ignore and try predecessors to avoid self-carry from foreign PHI
             coerced = self._coerce_in_block_to_i64(val, block_id, bb_map)
             self._end_i64_cache[key] = coerced
             return coerced
@@ -295,9 +315,8 @@ class Resolver:
         # Do not use global vmap here; if not materialized by end of this block
         # (or its preds), bail out with zero to preserve dominance.
 
-        if os.environ.get('NYASH_LLVM_TRACE_PHI') == '1':
-            preds_s = ','.join(str(x) for x in pred_ids)
-            print(f"[resolve] end_i64 miss: bb{block_id} v{value_id} preds=[{preds_s}] → 0", flush=True)
+        preds_s = ','.join(str(x) for x in pred_ids)
+        trace_phi(f"[resolve] end_i64 miss: bb{block_id} v{value_id} preds=[{preds_s}] → 0")
         z = ir.Constant(self.i64, 0)
         self._end_i64_cache[key] = z
         return z

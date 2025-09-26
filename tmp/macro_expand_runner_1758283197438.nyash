@@ -1,0 +1,18 @@
+// invalid_json_macro.nyash
+// Macro that returns invalid JSON (for strict error test)
+
+static box MacroBoxSpec {
+  expand(json) {
+    return "NOT_JSON!"
+  }
+}
+
+
+function main(args) {
+    if args.length() == 0 { print("{}"); return 0 }
+    local j, r
+    j = args.get(0)
+    r = MacroBoxSpec.expand(j)
+    print(r)
+    return 0
+}

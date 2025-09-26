@@ -1,29 +1,29 @@
 /*!
  * CanvasLoopBox - アニメーションループ管理Box
- * 
+ *
  * ## 📝 概要
  * ゲームや動的コンテンツのためのアニメーションループを
  * 管理するBox。requestAnimationFrame、フレームレート制御、
  * ループ状態管理を統一的に提供。
- * 
+ *
  * ## 🛠️ 利用可能メソッド
- * 
+ *
  * ### 🎮 ループ制御
  * - `start(callback)` - アニメーションループ開始
  * - `stop()` - アニメーションループ停止
  * - `pause()` - アニメーションループ一時停止
  * - `resume()` - アニメーションループ再開
- * 
+ *
  * ### 📊 フレーム情報
  * - `getFPS()` - 現在のFPS取得
  * - `getFrameCount()` - 総フレーム数取得
  * - `getDeltaTime()` - 前フレームからの経過時間
  * - `setTargetFPS(fps)` - 目標FPS設定
- * 
+ *
  * ### ⏱️ 時間管理
  * - `getElapsedTime()` - ループ開始からの経過時間
  * - `reset()` - タイマーリセット
- * 
+ *
  * ## 💡 使用例
  * ```nyash
  * local loop, canvas, ball_x, ball_y
@@ -31,7 +31,7 @@
  * canvas = new WebCanvasBox("game-canvas", 800, 600)
  * ball_x = 400
  * ball_y = 300
- * 
+ *
  * // ゲームループ
  * loop.start(function(deltaTime) {
  *     // 更新処理
@@ -47,7 +47,7 @@
  * ```
  */
 
-use crate::box_trait::{NyashBox, StringBox, BoolBox, BoxCore, BoxBase};
+use crate::box_trait::{BoolBox, BoxBase, BoxCore, NyashBox, StringBox};
 use crate::boxes::TimerBox;
 use std::any::Any;
 
@@ -75,7 +75,7 @@ impl CanvasLoopBox {
     pub fn new() -> Self {
         let timer = TimerBox::new();
         let current_time = timer.now();
-        
+
         Self {
             base: BoxBase::new(),
             is_running: false,
@@ -108,12 +108,16 @@ impl CanvasLoopBox {
         // アニメーションフレーム用のクロージャを作成
         let closure = Closure::wrap(Box::new(move |time: f64| {
             // ここでフレーム処理を実行
-            callback.call1(&JsValue::NULL, &JsValue::from_f64(time)).unwrap_or_default();
+            callback
+                .call1(&JsValue::NULL, &JsValue::from_f64(time))
+                .unwrap_or_default();
         }) as Box<dyn FnMut(f64)>);
 
-        let id = self.timer.request_animation_frame(closure.as_ref().unchecked_ref());
+        let id = self
+            .timer
+            .request_animation_frame(closure.as_ref().unchecked_ref());
         self.animation_id = Some(id);
-        
+
         closure.forget(); // クロージャの所有権を手放す
     }
 
@@ -147,9 +151,9 @@ impl CanvasLoopBox {
         if !self.is_running || self.is_paused {
             return;
         }
-        
+
         self.is_paused = true;
-        
+
         #[cfg(target_arch = "wasm32")]
         {
             if let Some(id) = self.animation_id {
@@ -170,12 +174,16 @@ impl CanvasLoopBox {
         self.last_frame_time = self.timer.now(); // 時間をリセット
 
         let closure = Closure::wrap(Box::new(move |time: f64| {
-            callback.call1(&JsValue::NULL, &JsValue::from_f64(time)).unwrap_or_default();
+            callback
+                .call1(&JsValue::NULL, &JsValue::from_f64(time))
+                .unwrap_or_default();
         }) as Box<dyn FnMut(f64)>);
 
-        let id = self.timer.request_animation_frame(closure.as_ref().unchecked_ref());
+        let id = self
+            .timer
+            .request_animation_frame(closure.as_ref().unchecked_ref());
         self.animation_id = Some(id);
-        
+
         closure.forget();
     }
 
@@ -262,19 +270,23 @@ impl BoxCore for CanvasLoopBox {
     fn box_id(&self) -> u64 {
         self.base.id
     }
-    
+
     fn parent_type_id(&self) -> Option<std::any::TypeId> {
         self.base.parent_type_id
     }
-    
+
     fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "CanvasLoopBox(running={}, fps={:.1})", self.is_running, self.fps)
+        write!(
+            f,
+            "CanvasLoopBox(running={}, fps={:.1})",
+            self.is_running, self.fps
+        )
     }
-    
+
     fn as_any(&self) -> &dyn Any {
         self
     }
-    
+
     fn as_any_mut(&mut self) -> &mut dyn Any {
         self
     }
@@ -284,20 +296,23 @@ impl NyashBox for CanvasLoopBox {
     fn clone_box(&self) -> Box<dyn NyashBox> {
         Box::new(self.clone())
     }
-    
+
     /// 仮実装: clone_boxと同じ（後で修正）
     fn share_box(&self) -> Box<dyn NyashBox> {
         self.clone_box()
     }
 
     fn to_string_box(&self) -> StringBox {
-        StringBox::new(format!("CanvasLoopBox(running={}, fps={:.1})", self.is_running, self.fps))
+        StringBox::new(format!(
+            "CanvasLoopBox(running={}, fps={:.1})",
+            self.is_running, self.fps
+        ))
     }
 
     fn type_name(&self) -> &'static str {
         "CanvasLoopBox"
     }
-    
+
     fn equals(&self, other: &dyn NyashBox) -> BoolBox {
         if let Some(other_loop) = other.as_any().downcast_ref::<CanvasLoopBox>() {
             BoolBox::new(self.base.id == other_loop.base.id)

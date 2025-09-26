@@ -1,0 +1,4 @@
+local c = new CounterBox()
+c.inc()
+c.inc()
+print(c.get())

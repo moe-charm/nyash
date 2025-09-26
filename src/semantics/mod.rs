@@ -9,7 +9,7 @@
 
 #![allow(dead_code)]
 
-use crate::mir::{ValueId, BasicBlockId};
+use crate::mir::{BasicBlockId, ValueId};
 
 /// The unified semantics interface for MIR evaluation/lowering.
 pub trait Semantics {
@@ -55,21 +55,34 @@ pub trait Semantics {
 
     // Host/Box calls
     fn new_box(&mut self, type_id: i64, args: &[Self::Val]) -> Self::Val;
-    fn box_call_tagged(&mut self, type_id: i64, method_id: i64, recv: Self::Val, argv: &[Self::Val], tags: &[i64]) -> Self::Val;
+    fn box_call_tagged(
+        &mut self,
+        type_id: i64,
+        method_id: i64,
+        recv: Self::Val,
+        argv: &[Self::Val],
+        tags: &[i64],
+    ) -> Self::Val;
     fn extern_call(&mut self, iface: &str, method: &str, args: &[Self::Val]) -> Self::Val;
 
     // GC hooks
-    fn barrier_read(&mut self, v: Self::Val) -> Self::Val { v }
-    fn barrier_write(&mut self, _ptr: &Self::Ptr, v: Self::Val) -> Self::Val { v }
+    fn barrier_read(&mut self, v: Self::Val) -> Self::Val {
+        v
+    }
+    fn barrier_write(&mut self, _ptr: &Self::Ptr, v: Self::Val) -> Self::Val {
+        v
+    }
     fn safepoint(&mut self) {}
 }
 
 /// Optional helpers extension — default blanket impl with conveniences.
 pub trait SemanticsExt: Semantics {
-    fn to_bool_hint(&mut self, v: Self::Val) -> Self::Val { v }
+    fn to_bool_hint(&mut self, v: Self::Val) -> Self::Val {
+        v
+    }
 }
 
 impl<T: Semantics> SemanticsExt for T {}
 
+// pub mod clif_adapter; // ARCHIVED: moved to archive/jit-cranelift/
 pub mod vm_impl;
-pub mod clif_adapter;

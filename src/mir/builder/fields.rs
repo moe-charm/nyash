@@ -1,17 +1,39 @@
 // Field access and assignment lowering
-use super::{MirInstruction, ConstValue, ValueId, EffectMask};
-use crate::mir::slot_registry;
+use super::{ConstValue, EffectMask, MirInstruction, ValueId};
 use crate::ast::ASTNode;
+use crate::mir::slot_registry;
 
 impl super::MirBuilder {
     /// Build field access: object.field
-    pub(super) fn build_field_access(&mut self, object: ASTNode, field: String) -> Result<ValueId, String> {
+    pub(super) fn build_field_access(
+        &mut self,
+        object: ASTNode,
+        field: String,
+    ) -> Result<ValueId, String> {
         let object_clone = object.clone();
-        let object_value = self.build_expression(object)?;
+        let object_value = self.build_expression(object.clone())?;
+
+        // Unified members: if object class is known and has a synthetic getter for `field`,
+        // rewrite to method call `__get_<field>()`.
+        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+            if let Some(map) = self.property_getters_by_box.get(&class_name) {
+                if let Some(kind) = map.get(&field) {
+                    let mname = match kind {
+                        super::PropertyKind::Computed => format!("__get_{}", field),
+                        super::PropertyKind::Once => format!("__get_once_{}", field),
+                        super::PropertyKind::BirthOnce => format!("__get_birth_{}", field),
+                    };
+                    return self.build_method_call(object_clone, mname, vec![]);
+                }
+            }
+        }
 
         // Emit: field name const
         let field_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const { dst: field_name_id, value: ConstValue::String(field.clone()) })?;
+        self.emit_instruction(MirInstruction::Const {
+            dst: field_name_id,
+            value: ConstValue::String(field.clone()),
+        })?;
         // BoxCall: getField(name)
         let field_val = self.value_gen.next();
         self.emit_instruction(MirInstruction::BoxCall {
@@ -23,17 +45,45 @@ impl super::MirBuilder {
             effects: EffectMask::READ,
         })?;
 
-        // Propagate recorded origin class for this field if any
-        if let Some(class_name) = self.field_origin_class.get(&(object_value, field.clone())).cloned() {
+        // Propagate recorded origin class for this field if any (ValueId-scoped)
+        if let Some(class_name) = self
+            .field_origin_class
+            .get(&(object_value, field.clone()))
+            .cloned()
+        {
             self.value_origin_newbox.insert(field_val, class_name);
+        } else if let Some(base_cls) = self.value_origin_newbox.get(&object_value).cloned() {
+            // Cross-function heuristic: use class-level field origin mapping
+            if let Some(fcls) = self
+                .field_origin_by_box
+                .get(&(base_cls.clone(), field.clone()))
+                .cloned()
+            {
+                if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                    super::utils::builder_debug_log(&format!("field-origin hit by box-level map: base={} .{} -> {}", base_cls, field, fcls));
+                }
+                self.value_origin_newbox.insert(field_val, fcls);
+            }
         }
 
         // If base is a known newbox and field is weak, emit WeakLoad (+ optional barrier)
-        let mut inferred_class: Option<String> = self.value_origin_newbox.get(&object_value).cloned();
+        let mut inferred_class: Option<String> =
+            self.value_origin_newbox.get(&object_value).cloned();
         if inferred_class.is_none() {
-            if let ASTNode::FieldAccess { object: inner_obj, field: inner_field, .. } = object_clone {
+            if let ASTNode::FieldAccess {
+                object: inner_obj,
+                field: inner_field,
+                ..
+            } = object_clone
+            {
                 if let Ok(base_id) = self.build_expression(*inner_obj.clone()) {
-                    if let Some(cls) = self.field_origin_class.get(&(base_id, inner_field)).cloned() { inferred_class = Some(cls); }
+                    if let Some(cls) = self
+                        .field_origin_class
+                        .get(&(base_id, inner_field))
+                        .cloned()
+                    {
+                        inferred_class = Some(cls);
+                    }
                 }
             }
         }
@@ -47,24 +97,37 @@ impl super::MirBuilder {
             }
         }
 
-        Ok(field_val)
+        // Correctness-first: slotify field values so they have block-local defs
+        // and participate in PHI merges when reused across branches.
+        let pinned = self.pin_to_slot(field_val, "@field")?;
+        Ok(pinned)
     }
 
     /// Build field assignment: object.field = value
-    pub(super) fn build_field_assignment(&mut self, object: ASTNode, field: String, value: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_field_assignment(
+        &mut self,
+        object: ASTNode,
+        field: String,
+        value: ASTNode,
+    ) -> Result<ValueId, String> {
         let object_value = self.build_expression(object)?;
         let mut value_result = self.build_expression(value)?;
 
         // If base is known and field is weak, create WeakRef before store
         if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
             if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) { value_result = self.emit_weak_new(value_result)?; }
+                if weak_set.contains(&field) {
+                    value_result = self.emit_weak_new(value_result)?;
+                }
             }
         }
 
         // Emit: field name const
         let field_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const { dst: field_name_id, value: ConstValue::String(field.clone()) })?;
+        self.emit_instruction(MirInstruction::Const {
+            dst: field_name_id,
+            value: ConstValue::String(field.clone()),
+        })?;
         // Set the field via BoxCall: setField(name, value)
         self.emit_instruction(MirInstruction::BoxCall {
             dst: None,
@@ -78,13 +141,21 @@ impl super::MirBuilder {
         // Write barrier if weak field
         if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
             if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) { let _ = self.emit_barrier_write(value_result); }
+                if weak_set.contains(&field) {
+                    let _ = self.emit_barrier_write(value_result);
+                }
             }
         }
 
         // Record origin class for this field value if known
-        if let Some(class_name) = self.value_origin_newbox.get(&value_result).cloned() {
-            self.field_origin_class.insert((object_value, field.clone()), class_name);
+        if let Some(val_cls) = self.value_origin_newbox.get(&value_result).cloned() {
+            self.field_origin_class
+                .insert((object_value, field.clone()), val_cls.clone());
+            // Also record class-level mapping if base object class is known
+            if let Some(base_cls) = self.value_origin_newbox.get(&object_value).cloned() {
+                self.field_origin_by_box
+                    .insert((base_cls, field.clone()), val_cls);
+            }
         }
 
         Ok(value_result)

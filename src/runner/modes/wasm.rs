@@ -19,6 +19,7 @@ impl NyashRunner {
             Ok(ast) => ast,
             Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
         };
+        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
         // Compile to MIR
         let mut mir_compiler = MirCompiler::new();
@@ -35,7 +36,8 @@ impl NyashRunner {
         };
 
         // Determine output file
-        let output = self.config.output_file.as_deref().unwrap_or_else(|| {
+        let groups = self.config.as_groups();
+        let output = groups.output_file.as_deref().unwrap_or_else(|| {
             if filename.ends_with(".nyash") { filename.strip_suffix(".nyash").unwrap_or(filename) } else { filename }
         });
         let output_file = format!("{}.wat", output);
@@ -46,4 +48,3 @@ impl NyashRunner {
         }
     }
 }
-

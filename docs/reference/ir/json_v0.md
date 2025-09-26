@@ -14,6 +14,9 @@ Statements (`StmtV0`)
 - `Local { name, expr }` (Stage‑2)
 - `If { cond, then: Stmt[], else?: Stmt[] }` (Stage‑2)
 - `Loop { cond, body: Stmt[] }` (Stage‑2; while(cond) body)
+- `Break` (Stage‑3; exits current loop)
+- `Continue` (Stage‑3; jumps to loop head)
+- `Try { try: Stmt[], catches?: Catch[], finally?: Stmt[] }` (Stage‑3 skeleton; surface syntax uses `cleanup`, but the v0 field name remains `finally` for compatibility; currently lowered as sequential `try` body only when runtime support is absent)
 
 Expressions (`ExprV0`)
 - `Int { value }` where `value` is JSON number or digit string
@@ -26,6 +29,7 @@ Expressions (`ExprV0`)
 - `Method { recv: Expr, method: string, args[] }` (box method)
 - `New { class: string, args[] }` (construct Box)
 - `Var { name: string }`
+- `Throw { expr }` (Stage‑3; currently degrades to expression statement when runtime semantics are disabled)
 
 CFG conventions (lowered by the bridge)
 - If: create `then_bb`, `else_bb`, `merge_bb`. Both branches jump to merge if unterminated.
@@ -33,12 +37,11 @@ CFG conventions (lowered by the bridge)
 - Short‑circuit Logical: create `rhs_bb`, `fall_bb`, `merge_bb` with constants on fall path.
 - All blocks end with a terminator (branch/jump/return).
 
-PHI merging (current behavior)
-- If: locals updated in `then`/`else` merge at `merge_bb` via `phi`.
-  - Else欠落時は else 側に分岐前(base)を採用。
-  - 片側にしか存在しない新規変数はスコープ外として外へ未伝播。
-- Loop: `cond_bb` にヘッダ PHI を先置き（preheader/base と latch/body end を合流）。
-- 目的: Stage‑2 を早期に安定化させるための橋渡し。将来（LoopForm= MIR18）では LoopForm からの逆Loweringで PHI を自動化予定。
+PHI merging（Phase‑15 終盤の方針）
+- MIR 生成層は PHI を生成しない（MIR13 運用）。If/Loop の合流は LLVM 層（llvmlite/Resolver）が PHI を合成。
+- ループは既存 CFG（preheader→cond→{body|exit}; body→cond）の検出により、ヘッダ BB で搬送値の PHI を構築。
+- 将来（LoopForm= MIR18）では LoopForm 占位命令から逆 Lowering で PHI を自動化予定。
+ - PHI‑off 運用（Builder 側の規約）: merge 内に copy を置かず、then/else の pred へ edge_copy のみを挿入（self‑copy は No‑Op）。use‑before‑def と重複 copy を原理的に回避する。
 
 Type meta (emitter/LLVM harness cooperation)
 - `+` with any string operand → string concat path（handle固定）。
@@ -47,6 +50,15 @@ Type meta (emitter/LLVM harness cooperation)
 Special notes
 - `Var("me")`: Bridge 既定では未定義エラー。デバッグ用に `NYASH_BRIDGE_ME_DUMMY=1` でダミー `NewBox{class}` を注入可（`NYASH_BRIDGE_ME_CLASS` 省略時は `Main`）。
 - `--ny-parser-pipe` は stdin の JSON v0 を受け取り、MIR→MIR‑Interp 経由で実行する。
+
+Unified Members (Phase‑15)
+- Source‑level unified members (stored/computed/once/birth_once) are lowered before JSON emission into regular slots/methods; JSON v0 remains unchanged.
+- Lowering conventions:
+  - stored → slot (initializer becomes a one‑time evaluation in construction path)
+  - computed → synthetic getter method; field read becomes method call
+  - once → synthetic getter + hidden `Option<T>` slot with first‑read initialization; uncaught exception on first read poisons the property and rethrows on subsequent reads
+  - birth_once → hidden slot initialized before user `birth` body in declaration order; uncaught exception aborts construction
+  - method postfix `catch/cleanup` lower to try/catch/finally when Stage‑3 is enabled; when disabled, bodies execute without handlers
 
 CLI/Env cheatsheet
 - Pipe: `echo '{...}' | target/release/nyash --ny-parser-pipe`
@@ -78,3 +90,5 @@ If with local + PHI merge
   {"type":"Return","expr":{"type":"Var","name":"x"}}
 ]}
 ```
+- `Break` / `Continue` are emitted when Stage‑3 gate is enabled. When the bridge is compiled without Stage‑3 lowering, frontends may degrade them into `Expr(Int(0))` as a safety fallback.
+- `Try` nodes include optional `catches` entries of the form `{ param?: string, typeHint?: string, body: Stmt[] }`. Until runtime exception semantics land, downstream lowers only the `try` body and ignores handlers/`finally`.

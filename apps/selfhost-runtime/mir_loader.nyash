@@ -1,0 +1,128 @@
+// Ny Executor — Stage 1 minimal MIR(JSON v0) loader
+// - Reads JSON from file (args[0]) using FileBox
+// - Parses via JsonDocBox → root JsonNodeBox
+// - Extracts simple summary: version, kind, body_len
+
+static box MirLoader {
+  // Load file content as string; returns null on error
+  read_file(path) {
+    if !path { return null }
+    @f = new FileBox()
+    @ok = f.open(path, "r")
+    if ok != 1 { return null }
+    @s = f.read()
+    f.close()
+    return s
+  }
+
+  // Parse JSON text into JsonNodeBox root; returns null on error
+  parse_root(json_text) {
+    if !json_text { return null }
+    @doc = new JsonDocBox()
+    doc.parse(json_text)
+    @root = doc.root()
+    return root
+  }
+
+  // Summarize MIR(JSON v0) — returns a MapBox with keys: version(int), kind(string), body_len(int)
+  // Returns null if JSON is invalid or missing required fields.
+  summarize_root(root) {
+    if !root { return null }
+    @vnode = root.get("version")
+    @knode = root.get("kind")
+    @bnode = root.get("body")
+    @ver = vnode.int()
+    @kind = knode.str()
+    @blen = bnode.size()
+    @m = new MapBox()
+    m.set("version", ver)
+    m.set("kind", kind)
+    m.set("body_len", blen)
+    return m
+  }
+
+  // Detect JSON format: "v0_program" | "harness" | "unknown"
+  detect_format(root) {
+    if !root { return "unknown" }
+    @v = root.get("version")
+    @k = root.get("kind")
+    if v && k { return "v0_program" }
+    @f = root.get("functions")
+    if f { return "harness" }
+    return "unknown"
+  }
+
+  // Summarize harness MIR JSON (root.functions)
+  summarize_harness(root) {
+    if !root { return null }
+    @fn = root.get("functions")
+    @m = new MapBox()
+    if fn {
+      @flen = fn.size()
+      m.set("functions_len", flen)
+    } else {
+      m.set("functions_len", 0)
+    }
+    return m
+  }
+
+  // Count statement kinds in Program.body (known subset)
+  summarize_stmt_kinds(root) {
+    if !root { return null }
+    @bnode = root.get("body")
+    @n = bnode.size()
+    @r = 0 @e = 0 @l = 0 @iff = 0 @lp = 0 @br = 0 @ct = 0 @tr = 0 @ex = 0
+    @i = 0
+    while i < n {
+      @st = bnode.at(i)
+      @t = st.get("type").str()
+      if t == "Return" { r = r + 1 }
+      else if t == "Expr" { e = e + 1 }
+      else if t == "Local" { l = l + 1 }
+      else if t == "If" { iff = iff + 1 }
+      else if t == "Loop" { lp = lp + 1 }
+      else if t == "Break" { br = br + 1 }
+      else if t == "Continue" { ct = ct + 1 }
+      else if t == "Try" { tr = tr + 1 }
+      else if t == "Extern" { ex = ex + 1 }
+      i = i + 1
+    }
+    @m = new MapBox()
+    m.set("Return", r)
+    m.set("Expr", e)
+    m.set("Local", l)
+    m.set("If", iff)
+    m.set("Loop", lp)
+    m.set("Break", br)
+    m.set("Continue", ct)
+    m.set("Try", tr)
+    m.set("Extern", ex)
+    return m
+  }
+
+  // High-level: load+parse+summarize from path
+  load_summary(path) {
+    @s = me.read_file(path)
+    if !s { return null }
+    @root = me.parse_root(s)
+    if !root { return null }
+    @fmt = me.detect_format(root)
+    @m = new MapBox()
+    m.set("format", fmt)
+    if fmt == "v0_program" {
+      @v0 = me.summarize_root(root)
+      if v0 {
+        // merge into m
+        m.set("version", v0.get("version"))
+        m.set("kind", v0.get("kind"))
+        m.set("body_len", v0.get("body_len"))
+      }
+    } else if fmt == "harness" {
+      @h = me.summarize_harness(root)
+      if h { m.set("functions_len", h.get("functions_len")) }
+    }
+    return m
+  }
+
+  main(args) { return 0 }
+}

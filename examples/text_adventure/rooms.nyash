@@ -1,7 +1,7 @@
 // Text Adventure Game - Rooms Module
 // ルームシステムの実装
 
-include "text_adventure/items.nyash"
+using "text_adventure/items.nyash"
 
 // 基本ルームBox
 box Room {

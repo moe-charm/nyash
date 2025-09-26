@@ -1,5 +1,7 @@
 # 論文A: MIR14で作る万能実行系
 
+> Scope (2025-09-19): 本稿の実験・評価は PyVM（意味論リファレンス）と LLVM/llvmlite（AOT/EXEハーネス）に限定する。MIR は PHI‑off（合流はエッジコピー）で、PHI 形成は LLVM 側で合成する。詳細は SCOPE.md を参照。
+
 ## 📚 概要
 
 **タイトル**: From Interpreter to Native GUI Apps: Universal Execution with 14 Core Instructions

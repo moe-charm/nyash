@@ -1,0 +1,10 @@
+{"version":0,"kind":"Program","body":[
+  {"type":"Local","name":"i","expr":{"type":"Int","value":0}},
+  {"type":"Loop","cond":{"type":"Bool","value":true},"body":[
+    {"type":"Expr","expr":{"type":"Binary","op":"+","lhs":{"type":"Var","name":"i"},"rhs":{"type":"Int","value":1}}},
+    {"type":"If","cond":{"type":"Compare","op":"==","lhs":{"type":"Var","name":"i"},"rhs":{"type":"Int","value":3}},
+      "then":[{"type":"Break"}]},
+    {"type":"Continue"}
+  ]},
+  {"type":"Return","expr":{"type":"Var","name":"i"}}
+]}

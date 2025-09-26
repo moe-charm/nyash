@@ -1,305 +1,55 @@
-# MIR14: Everything is Boxによる実践的ミニマル中間表現
+# 14命令のミニマルIRによる統一実行基盤設計（MIR14, PHIオフ方針）
+著者: Nyash Project
 
-## 概要
+要旨
+Nyashは「Everything is Box」哲学を核に、14命令（MIR14）の最小IRでInterpreter/VM/JIT/AOT/GUIを目指してきた。本稿ではPhase‑15における設計判断として、MIR側のPHI生成を停止（PHI‑off, エッジコピー合流）し、PHI形成をLLVMハーネス側に委譲する方針を採用した経緯と効果を報告する。現在の評価範囲はPyVM（意味論リファレンス）とLLVM/llvmlite（AOT/EXEハーネス）に限定し、両者のパリティおよびLLVM側の性能・安定性を中心に示す。
 
-本論文では、初期の27命令から13命令への積極的削減を経て、実用性を考慮して14命令に収束した中間表現（IR）設計「MIR14」を提案する。従来のIR設計では数十から数百の命令が必要とされてきたが、我々は「Everything is Box」という設計哲学に基づき、すべてのメモリアクセスをBoxCallに統一することで、Load/Store命令を完全に廃止した。しかし、単項演算（UnaryOp）の再導入により、理論的最小性と実践的効率性のバランスを実現した。MIR14はInterpreter、VM、JIT、LLVMの4つの実行バックエンドで実証され、実用的なアプリケーションの動作を確認した。
+> 更新メモ（2025-09-26）: Phase‑15 では PHI-on（MIR14）が既定に復帰したよ。この資料はPHI-off方針をアーカイブとして残しているよ。現行のポリシーは `docs/reference/mir/phi_policy.md` を参照してね。
 
 ## 1. はじめに
+最小IRで多様な実行形態を統一する挑戦では、IRの表現力と実装コストの均衡が鍵となる。Nyashは命令の削減（27→13→14）とAPI統一（BoxCall）でIRを簡素に保ちつつ、評価基準をPyVM意味論とLLVM生成物に絞ることで、開発・検証速度を高めた。
 
-プログラミング言語の中間表現（IR）は、高水準言語と機械語の橋渡しをする重要な抽象層である。LLVM IRは約60の基本命令、WebAssemblyは約170の命令を持つなど、既存のIRは複雑化の一途を辿っている。
+## 2. MIR14の設計原則
+- 命令セット: const/binop/unary/compare/branch/jump/ret/phi/call/boxcall/typeop/arrayget/arrayset/cast/…（詳細は `docs/reference/mir/INSTRUCTION_SET.md`）
+- Box中心: 呼び出しとABI境界はBoxCall/PluginInvokeに一本化
+- 可観測性: JSON v0、IRダンプ、PHI配線トレースを整備
+- 非対象（現段階）: MIR側の最適PHI配置の探索・検証（責務をLLVMへ移譲）
 
-本研究では、逆転の発想により「どこまでIRを単純化できるか」に挑戦した。27命令から始まり、BoxCallへの統一により13命令まで削減したが、実装経験から「最低限の算術演算は直接あった方が良い」という判断でUnaryOpを復活させ、最終的に14命令（Core-13 + UnaryOp）に収束した。この進化過程は、理論と実践のバランスを示す貴重な事例である。
+## 3. PHIオフ方針とLLVM側合成
+- 方針: MIRはPHIを出さず、分岐合流は「合流先で参照される値」を各前任ブロックからエッジコピーで集約
+- LLVM: ブロック先頭にPHIを形成（typed incoming）、if‑merge前宣言等で安定性向上
+- 不変条件（LLVM側）: PHIはブロック先頭にのみ配置、incomingは型付き `i64 <v>, %bb`（詳細: `docs/reference/mir/phi_invariants.md`）
+- トグル:
+  - 既定: `NYASH_MIR_NO_PHI=0`（PHI-on）
+  - レガシー再現: `NYASH_MIR_NO_PHI=1`（PHI-off） + `NYASH_VERIFY_ALLOW_NO_PHI=1`
 
-本稿はIR層（MIR14）に焦点を当てる。言語Nyashそのものの設計思想やbirth/fini対称メモリ管理、P2P Intentモデル、多層実行アーキテクチャ等の詳細は、別論文（論文B: Nyash言語と実行モデル）で報告・拡張予定である。
+## 4. 実装概要（評価対象）
+- PyVM: JSON v0→MIR実行の意味論基準。短絡やtruthy規約の基準線
+- LLVM/llvmlite: AOT/EXE生成・IRダンプ・PHI合成の実働ライン
+- 実行例:
+  - LLVMハーネス: `NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_DUMP_IR=tmp/nyash.ll ...`
+  - PHIトレース: `NYASH_LLVM_TRACE_PHI=1`
 
-## 2. MIR14の設計哲学
-
-### 2.1 Everything is Box
-
-MIR14の核心は「Everything is Box」という設計原則である。従来のIRでは、メモリアクセス、配列操作、オブジェクトフィールドアクセスなどが個別の命令として実装されていた。我々はこれらをすべて「Boxへのメッセージパッシング」として統一した。
-
-```
-従来のアプローチ:
-- Load/Store（メモリアクセス）
-- GetElement/SetElement（配列）  
-- GetField/SetField（オブジェクト）
-- Call（関数呼び出し）
-
-MIR14のアプローチ:
-- BoxCall（すべて統一）
-```
-
-### 2.2 実践的な14命令への収束
-
-初期の27命令から13命令への削減は成功したが、実装経験から以下の理由でUnaryOpを復活させ14命令とした：
-
-1. **可読性**: 引数なし/ありの区別が明確
-2. **最適化**: JITコンパイラでの特殊化が容易
-3. **教育的価値**: IRの学習が容易
-
-## 3. MIR13命令セット
-
-### 3.1 基本13命令（Core‑13）
-
-MIR13は次の13命令で固定する（実装も既定ONに統一）。
-
-| 命令 | 説明 | 代表用途 |
-|------|------|---------|
-| **Const** | 即値・アドレス等の定数生成 | リテラル、初期化 |
-| **BinOp** | 二項演算 | 加減乗除、ビット演算 |
-| **Compare** | 比較演算 | 等値/不等/大小関係 |
-| **Jump** | 無条件遷移 | ループ、ブロック遷移 |
-| **Branch** | 条件分岐遷移 | if/while 条件 |
-| **Return** | 関数復帰 | 戻り値返却 |
-| **Phi** | SSA合流 | 分岐後の値統合 |
-| **Call** | 直接/間接呼出し | ユーザー関数呼出し |
-| **BoxCall** | Boxへのメッセージ呼出し | フィールド/メソッド/配列操作の統一 |
-| **ExternCall** | ランタイム/プラグイン呼出し | ホスト関数、FFI 統合 |
-| **TypeOp** | 型関連演算 | 型判定・型変換（統合） |
-| **Safepoint** | 安全点 | GC/割込み協調 |
-| **Barrier** | バリア | 書込/読込バリア等の最小表現 |
-
-### 3.2 BoxCallによる統一
-
-従来は個別命令だった操作がBoxCallで統一される（必要に応じてExternCallでホストへ委譲）：
-
-```mir
-// 配列アクセス
-v3 = BoxCall(v1, "get", v2)           // array[index]
-// 配列代入
-v4 = BoxCall(v1, "set", v2, v3)       // array[index] = value
-// フィールドアクセス
-v5 = BoxCall(v1, "getField", "name")  // object.name
-// メソッド呼出し
-v6 = BoxCall(v1, "add", v2)           // object.add(arg)
-// ホスト（ランタイム/プラグイン）呼出し
-v7 = ExternCall("env.runtime", "checkpoint")
-```
-
-## 4. 実装と評価
-
-### 4.1 3つの実行バックエンド
-
-MIR13は以下の3つのバックエンドで実装・検証された：
-
-1. **Interpreter**: 開発・デバッグ用、即座に実行可能
-2. **VM**: スタックマシンによる高速実行
-3. **JIT**: Craneliftによる最速ネイティブコード生成
-
-注記（実装マイルストン）：2025-09-04 に、JIT/ネイティブEXE経由での Windows GUI 表示（ネイティブウィンドウ生成と描画）を確認した。これはMIR13ベースの実行系がOSネイティブ機能まで到達したことを示すものであり、以降のGUI応用評価の基盤となる。
-
-### 4.2 実アプリケーションでの検証
-
-以下の実用的なアプリケーションが動作を確認：
-- テキストエディタ（Kilo移植版）
-- HTTPサーバー 
-- P2P通信システム
-- LISPインタープリター
-  - Windows GUIアプリ（ネイティブEXE）: 2025-09-04 に表示確認
-  - スクリーンショットは論文B（Nyash言語と実行モデル）の図を参照（figures/gui-win.png）。
-
-### 4.3 性能評価
-
-#### 4.3.0 再現手順（Artifact & Scripts）
-本論文の性能評価は、リポジトリ同梱のスクリプトで再現可能である。
-
-1. 環境情報の収集（自動生成）
-   - `docs/private/papers/paper-a-mir13-ir-design/_artifacts/COLLECT_ENV.sh` を実行すると、CPU/OS/Rust/Cranelift/コミットIDを `ENVIRONMENT.txt` に記録する。
-2. ビルド（フルモード）
-   - `cargo build --release --features cranelift-jit`
-3. ベンチ実行
-   - `docs/private/papers/paper-a-mir13-ir-design/_artifacts/RUN_BENCHMARKS.sh`
-   - `hyperfine` があればCSVにエクスポート、無い場合はフォールバック計測を行う。
-4. 結果
-   - `_artifacts/results/*.csv` に各モード（Interpreter/VM/JIT/AOT）の結果を保存。
-
-注: AOT（ネイティブEXE）は `tools/build_aot.sh` が利用可能な場合のみ測定する（無ければ自動スキップ）。
-また、LLVMバックエンド経由のAOT計測も可能である（`USE_LLVM_AOT=1`）。
-  - 依存: `llvm-config-18`（LLVM 18 開発環境）
-  - 例: `USE_LLVM_AOT=1 SKIP_INTERP=1 ./RUN_BENCHMARKS.sh`
-
-さらに、Cranelift JIT からの直接AOT（`--jit-direct`、本実装では「JIT-AOT」と表記）も計測可能である（`USE_JIT_AOT=1`）。
-  - 例: `USE_EXE_ONLY=1 USE_JIT_AOT=1 SKIP_INTERP=1 ./RUN_BENCHMARKS.sh`
-
-#### 4.3.x 最適化状況と注意
-現時点の実装は、最適化処理を徹底していない（例：インライン化、ICの高度化、ボックス形状多態の特殊化、VM命令選択のチューニングなどは限定的）。従って、提示する数値は「素の実装に近いベースライン」であり、今後の最適化で改善余地が大きい。再現スクリプトはモード差が観測しやすいよう、負荷を軽量〜中程度に設定している（遅い環境では `SKIP_INTERP=1` でインタープリタ計測を省略可能）。
-
-#### 4.3.4 初回測定（中央値/平均）
-以下は `_artifacts/results/*.csv` を `gen_table.py` で集計した初回結果（ミリ秒）。測定は各10回（一部7回）で、fallbackタイマを用いた概算である（hyperfine未使用）。
-
-注: 表示幅の都合でファイル名列は省略し、ケース名（Label）のみを掲載。詳細は `_artifacts/results/` を参照。
-
-| Label | N | Median (ms) | Mean (ms) |
-|-------|---|-------------:|----------:|
-| jit-aot_min_string_len | 10 | 60.0 | 80.1 |
-| vm-aot_min_string_len  | 10 | 158.5 | 159.2 |
-| jit-bench_aot_len_heavy | 10 | 579.0 | 579.6 |
-| vm-bench_aot_len_heavy  | 7  | 592.0 | 595.1 |
-| jit-bench_aot_len_light | 10 | 209.0 | 209.1 |
-| vm-bench_aot_len_light  | 10 | 209.0 | 208.9 |
-| jit-bench_aot_len_medium | 10 | 284.0 | 284.4 |
-| vm-bench_aot_len_medium  | 10 | 288.0 | 288.2 |
-| interp-bench_heavy      | 10 | 155.0 | 155.0 |
-| jit-bench_heavy         | 10 | 150.0 | 150.1 |
-| vm-bench_heavy          | 10 | 149.0 | 149.5 |
-| interp-bench_light      | 10 | 146.0 | 149.3 |
-| jit-bench_light         | 10 | 589.5 | 590.1 |
-| vm-bench_light          | 10 | 584.5 | 583.8 |
-| interp-bench_medium     | 10 | 150.0 | 149.3 |
-| jit-bench_medium        | 10 | 153.5 | 153.6 |
-| vm-bench_medium         | 10 | 153.0 | 153.1 |
-
-備考: hyperfine 導入後は中央値/標準偏差付きで更新予定。負荷調整やAOT（LLVM/JIT）列の安定化に応じて表は差し替える。
-
-#### 4.3.1 相対性能
-MIR13の3つのバックエンド間での相対実行時間：
-- Interpreter: 1.0x（基準）
-- VM: 10-50x高速
-- JIT: 100-500x高速
-
-#### 4.3.2 絶対性能比較
-標準的なベンチマーク（Fibonacci、行列演算、文字列処理）での比較：
-- Python 3.11: 1.0x（基準）
-- Nyash Interpreter: 0.8-1.2x
-- Nyash VM: 8-40x
-- Nyash JIT: 80-400x
-- Go 1.21: 100-600x
-- Rust (release): 150-800x
-
-#### 4.3.3 BoxCallのオーバーヘッド分析
-マイクロベンチマークによる分析：
-- 配列アクセス: 従来のLoad/Store比で1.2-1.5倍のオーバーヘッド
-- JIT最適化後: インライン化により0.95-1.1倍まで改善
-- メソッド呼び出し: 動的ディスパッチを含むため2-3倍だが、ICで1.1-1.3倍まで改善
-
-### 4.4 実装公開と再現性（Availability）
-本研究の実装と評価スクリプトは以下で公開している。
-- リポジトリ: https://github.com/moe-charm/nyash
-- 対象コミット: `_artifacts/ENVIRONMENT.txt` に `git rev-parse HEAD` を記録
-- 再現手順: `_artifacts/COLLECT_ENV.sh` と `_artifacts/RUN_BENCHMARKS.sh`
-  - 出力: `_artifacts/results/*.csv`
-
-## 5. 議論
-
-### 5.1 設計の進化：57命令から13命令への道のり
-
-MIR13の13命令セットは、最初から意図的に設計されたものではない。当初57命令で始まったIRを、以下の洞察により段階的に削減した：
-
-1. **メモリアクセスの統一**: Load/Store、GetElement/SetElement、GetField/SetFieldがすべてオブジェクトへの操作として統一可能
-2. **メッセージパッシングへの抽象化**: すべての操作を「Boxへのメッセージ」として見ることでBoxCallに集約
-3. **型操作の統合**: TypeCheck/Castを単一のCast命令に統合
-
-この削減過程は、IR設計における本質的な要素の発見プロセスであり、結果として得られた13命令は実践的な検証を経た最小セットである。
-
-### 5.2 なぜ13命令で十分なのか
-
-1. **抽象度の適切性**: Boxという適切な抽象化により、低レベル詳細を隠蔽
-2. **実行時システムとの分担**: 複雑性をランタイムに委譲
-3. **最小限の制御構造**: Jump/Branch/Phiで全制御フローを表現
-
-### 5.3 ランタイムシステムの役割
-
-MIR13の単純性は、洗練されたランタイムシステムとの協調によって実現される：
-
-1. **Boxの内部表現**: 各Boxは型タグ、参照カウント、データペイロードを持つ
-2. **ホスト関数インターフェース**: BoxCallはランタイムのネイティブ関数を効率的に呼び出す
-3. **メモリ管理**: 参照カウントベースの決定的メモリ管理（GCオプション付き）
-
-この設計により、IR自体の複雑性を最小限に抑えながら、実用的な性能を達成している。
-
-### 5.3bis 代表的操作のLowering例（MIR13→BoxCall）
-以下は高水準操作が13命令（概念上）に落ちる代表例である。
-
-```mir
-// 例1: 配列アクセスと更新（a[i]、a[i]=v）
-%a   = ...                 // ArrayBox
-%i   = ...                 // IntBox
-%v   = ...                 // 任意のBox
-%x   = BoxCallWith(%a, "get", %i)           // load → BoxCallWith
-%ok  = BoxCallWith(%a, "set", %i, %v)       // store → BoxCallWith
-
-// 例2: フィールド読み書き（obj.name、obj.name=v）
-%obj = ...                 // ObjectBox
-%nm  = Const("name")
-%cur = BoxCallWith(%obj, "getField", %nm)
-%ok2 = BoxCallWith(%obj, "setField", %nm, %v)
-
-// 例3: メソッド呼び出し（obj.add(arg)）
-%res = BoxCallWith(%obj, "add", %v)
-
-// 例4: 外部（プラグイン）関数呼び出し（host.fn(args…)）
-%h   = ...                 // HostBox
-%r   = BoxCallWith(%h, "fn", %arg1, %arg2)
-
-// 制御構造はJump/Branch/Phiで表現
-branch %cond, ^T, ^F
-^T:  ...
-     jump ^K
-^F:  ...
-^K:  %y = phi(%yT, %yF)
-```
-
-### 5.4 限界と将来展望
-
-- SIMD命令は現在未対応（BoxCall拡張で対応予定）
-- 並列実行最適化の余地あり
-- WASM/LLVMバックエンドは開発中
+## 5. 評価計画
+- パリティ: PyVM vs LLVMの出力一致（代表スモーク）
+- 性能: LLVMの実行時間/起動時間/メモリ
+- 安定性: PHIトレース整合、空PHI未発生の確認
+- 再現コマンド:
+  - parity: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/CASE.nyash`
+  - build paper (PDF/TeX): `tools/papers/build.sh a-jp`
 
 ## 6. 関連研究
-
-### 6.1 既存のIR設計との比較
-
-| IR | 命令数 | メモリモデル | 主な特徴 |
-|---|--------|------------|----------|
-| LLVM IR | 約60 | Load/Store明示 | SSA形式、型付き |
-| WebAssembly | 約170 | スタックマシン | セキュリティ重視 |
-| JVM Bytecode | 約200 | スタック+ローカル | オブジェクト指向 |
-| MIR13 | 13 | BoxCall統一 | 最小命令セット |
-
-### 6.2 メッセージパッシングIRの系譜
-
-- **Smalltalk**: すべてはオブジェクト、すべてはメッセージ
-- **Self**: プロトタイプベースオブジェクト
-- **PyPy**: RPythonのオブジェクト空間
-- **Truffle/Graal**: 動的言語のための抽象解釈
-
-MIR13はこれらの思想を低レベルIRに適用し、Load/Store命令の完全廃止という新境地を開拓した。
-
-#### 補足: Wasm GCとTyped Objectsとの比較
-近年のWasm GC拡張やTyped Objectsの動向は、高レベル型をWasm上に安全に表現することを目指している。一方MIR13は「命令数最小化」と「BoxCallによる操作統一」を主眼に置き、型表現やメモリモデルの複雑さをIRではなくランタイムへ委譲する。したがって、目的関数（安全な型表現 vs. 最小命令と実装容易性）が異なり、補完的関係にある。
+最小IR設計（LLVM/MLIR等）と、多層実行（Truffle/Graal）に対する立ち位置を簡潔に比較。Nyashは「IRは最小・PHIは生成系に委譲」という分担で整合を取る点に新規性。
 
 ## 7. 結論
+MIR14の簡素化とPHI委譲により、設計・検証・配布ラインを細く強く維持できた。今後はLoopForm（MIR17）や実行器の拡張を、PyVM/LLVMの二系統基準で段階的に進める。
 
-MIR13は、13命令という極めて小さな命令セットで完全なプログラミング言語を実装できることを実証した。「Everything is Box」の設計哲学により、従来は数十の命令が必要だった操作をBoxCallに統一し、Load/Store命令を完全に廃止した。技術的には12命令も可能だが、可読性のために意図的に13命令を選択した。3つの実行バックエンドでの動作確認により、実用性も証明された。
+### 謝辞
+AI協働（ChatGPT/Gemini）とコミュニティ貢献に感謝する。
 
-本研究は、プログラミング言語設計における「少ないことは豊かである」という原則の究極の実証である。
+### 付録
+- 主要トグル: `NYASH_MIR_NO_PHI`, `NYASH_LLVM_USE_HARNESS`, `NYASH_LLVM_TRACE_PHI`
+- 仕様参照: `docs/reference/mir/INSTRUCTION_SET.md`, `docs/reference/mir/phi_invariants.md`
 
-## 謝辞
-
-本論文の執筆にあたり、Anthropic Claude、OpenAI ChatGPT（Codex CLI経由）、Google Gemini の支援（ブレインストーミング、下書き、コード補助、校正）を受けた。生成物はすべて著者がレビュー・修正し、最終的な設計判断・統合・評価は著者が行った。開発は2025-08-03頃に着手し、初回コミットは2025-08-09である。AI時代の研究開発における新しい協働形態の実例として、これを明記する。
-
-## 参考文献
-
-[省略]
-
----
-
-## 付録：なぜ12命令にしないのか
-
-BoxCallとBoxCallWithは技術的に統合可能である：
-
-```mir
-// 統合版（12命令）
-v1 = BoxCall(obj, "method", [])      // 引数なし
-v2 = BoxCall(obj, "method", [arg1])  // 引数あり
-
-// 現在の分離版（13命令）  
-v1 = BoxCall(obj, "method")          // 明確に引数なし
-v2 = BoxCallWith(obj, "method", arg1) // 明確に引数あり
-```
-
-しかし、以下の理由から分離を維持：
-1. パターンマッチングが単純
-2. 最適化パスが書きやすい
-3. エラーメッセージが分かりやすい
-4. 「13」という数字の美しさ（主観的だが重要）
+### キーワード
+ミニマルIR, SSA, PHI合成, LLVM, PyVM, BoxCall, 統一実行

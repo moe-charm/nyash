@@ -1,0 +1,40 @@
+static box MiniVmTmp {
+  index_of_from(hay, needle, pos) {
+    local tail = hay.substring(pos, hay.length())
+    local rel = tail.indexOf(needle)
+    if rel < 0 { return -1 } else { return pos + rel }
+  }
+  find_balanced_object_end(json, idx) {
+    local n = json.length()
+    if json.substring(idx, idx+1) != "{" { return -1 }
+    local depth = 0
+    local i = idx
+    loop (i < n) {
+      local ch = json.substring(i, i+1)
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" {
+        depth = depth - 1
+        if depth == 0 { return i }
+      }
+      i = i + 1
+    }
+    return -1
+  }
+}
+static box Main {
+  main(args) {
+    local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":12}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":34}}}}]}"
+    local key = "\"expression\":{"
+    local pos = json.indexOf(key)
+    local vm = new MiniVmTmp()
+    local obj_start = vm.index_of_from(json, "{", pos)
+    local obj_end = vm.find_balanced_object_end(json, obj_start)
+    print(obj_start)
+    print(obj_end)
+    // scan value keys
+    local k_v = "\"value\":"
+    local p = vm.index_of_from(json, k_v, obj_start)
+    print(p)
+    return 0
+  }
+}

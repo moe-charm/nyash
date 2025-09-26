@@ -19,67 +19,207 @@
  *   - 400..: Console 系（log/warn/error/clear）
  */
 
-use super::type_box_abi::{TypeBox, MethodEntry};
+use super::type_box_abi::{MethodEntry, TypeBox};
 
 // 最小サンプル: MapBox の TypeBox を事前登録（Tier-1 PoC 用）
 // --- ArrayBox ---
 const ARRAY_METHODS: &[MethodEntry] = &[
-    MethodEntry { name: "get", arity: 1, slot: 100 },
-    MethodEntry { name: "set", arity: 2, slot: 101 },
-    MethodEntry { name: "len", arity: 0, slot: 102 },
-    MethodEntry { name: "length", arity: 0, slot: 102 },
+    MethodEntry {
+        name: "get",
+        arity: 1,
+        slot: 100,
+    },
+    MethodEntry {
+        name: "set",
+        arity: 2,
+        slot: 101,
+    },
+    MethodEntry {
+        name: "len",
+        arity: 0,
+        slot: 102,
+    },
+    MethodEntry {
+        name: "length",
+        arity: 0,
+        slot: 102,
+    },
     // P0: vtable coverage extension
-    MethodEntry { name: "push", arity: 1, slot: 103 },
-    MethodEntry { name: "pop", arity: 0, slot: 104 },
-    MethodEntry { name: "clear", arity: 0, slot: 105 },
+    MethodEntry {
+        name: "push",
+        arity: 1,
+        slot: 103,
+    },
+    MethodEntry {
+        name: "pop",
+        arity: 0,
+        slot: 104,
+    },
+    MethodEntry {
+        name: "clear",
+        arity: 0,
+        slot: 105,
+    },
     // P1: contains/indexOf/join
-    MethodEntry { name: "contains", arity: 1, slot: 106 },
-    MethodEntry { name: "indexOf", arity: 1, slot: 107 },
-    MethodEntry { name: "join", arity: 1, slot: 108 },
+    MethodEntry {
+        name: "contains",
+        arity: 1,
+        slot: 106,
+    },
+    MethodEntry {
+        name: "indexOf",
+        arity: 1,
+        slot: 107,
+    },
+    MethodEntry {
+        name: "join",
+        arity: 1,
+        slot: 108,
+    },
     // P2: sort/reverse/slice
-    MethodEntry { name: "sort", arity: 0, slot: 109 },
-    MethodEntry { name: "reverse", arity: 0, slot: 110 },
-    MethodEntry { name: "slice", arity: 2, slot: 111 },
+    MethodEntry {
+        name: "sort",
+        arity: 0,
+        slot: 109,
+    },
+    MethodEntry {
+        name: "reverse",
+        arity: 0,
+        slot: 110,
+    },
+    MethodEntry {
+        name: "slice",
+        arity: 2,
+        slot: 111,
+    },
 ];
 static ARRAYBOX_TB: TypeBox = TypeBox::new_with("ArrayBox", ARRAY_METHODS);
 
 // --- MapBox ---
 const MAP_METHODS: &[MethodEntry] = &[
-    MethodEntry { name: "size", arity: 0, slot: 200 },
-    MethodEntry { name: "len", arity: 0, slot: 201 },
-    MethodEntry { name: "has", arity: 1, slot: 202 },
-    MethodEntry { name: "get", arity: 1, slot: 203 },
-    MethodEntry { name: "set", arity: 2, slot: 204 },
+    MethodEntry {
+        name: "size",
+        arity: 0,
+        slot: 200,
+    },
+    MethodEntry {
+        name: "len",
+        arity: 0,
+        slot: 201,
+    },
+    MethodEntry {
+        name: "has",
+        arity: 1,
+        slot: 202,
+    },
+    MethodEntry {
+        name: "get",
+        arity: 1,
+        slot: 203,
+    },
+    MethodEntry {
+        name: "set",
+        arity: 2,
+        slot: 204,
+    },
     // Extended
-    MethodEntry { name: "delete", arity: 1, slot: 205 }, // alias: remove (同一スロット)
-    MethodEntry { name: "remove", arity: 1, slot: 205 },
-    MethodEntry { name: "keys", arity: 0, slot: 206 },
-    MethodEntry { name: "values", arity: 0, slot: 207 },
-    MethodEntry { name: "clear", arity: 0, slot: 208 },
+    MethodEntry {
+        name: "delete",
+        arity: 1,
+        slot: 205,
+    }, // alias: remove (同一スロット)
+    MethodEntry {
+        name: "remove",
+        arity: 1,
+        slot: 205,
+    },
+    MethodEntry {
+        name: "keys",
+        arity: 0,
+        slot: 206,
+    },
+    MethodEntry {
+        name: "values",
+        arity: 0,
+        slot: 207,
+    },
+    MethodEntry {
+        name: "clear",
+        arity: 0,
+        slot: 208,
+    },
 ];
 static MAPBOX_TB: TypeBox = TypeBox::new_with("MapBox", MAP_METHODS);
 
 // --- StringBox ---
 const STRING_METHODS: &[MethodEntry] = &[
-    MethodEntry { name: "len", arity: 0, slot: 300 },
+    MethodEntry {
+        name: "len",
+        arity: 0,
+        slot: 300,
+    },
     // P1: extend String vtable
-    MethodEntry { name: "substring", arity: 2, slot: 301 },
-    MethodEntry { name: "concat", arity: 1, slot: 302 },
-    MethodEntry { name: "indexOf", arity: 1, slot: 303 },
-    MethodEntry { name: "replace", arity: 2, slot: 304 },
-    MethodEntry { name: "trim", arity: 0, slot: 305 },
-    MethodEntry { name: "toUpper", arity: 0, slot: 306 },
-    MethodEntry { name: "toLower", arity: 0, slot: 307 },
+    MethodEntry {
+        name: "substring",
+        arity: 2,
+        slot: 301,
+    },
+    MethodEntry {
+        name: "concat",
+        arity: 1,
+        slot: 302,
+    },
+    MethodEntry {
+        name: "indexOf",
+        arity: 1,
+        slot: 303,
+    },
+    MethodEntry {
+        name: "replace",
+        arity: 2,
+        slot: 304,
+    },
+    MethodEntry {
+        name: "trim",
+        arity: 0,
+        slot: 305,
+    },
+    MethodEntry {
+        name: "toUpper",
+        arity: 0,
+        slot: 306,
+    },
+    MethodEntry {
+        name: "toLower",
+        arity: 0,
+        slot: 307,
+    },
 ];
 static STRINGBOX_TB: TypeBox = TypeBox::new_with("StringBox", STRING_METHODS);
 
 // --- ConsoleBox --- (WASM v2 unified dispatch 用の雛形)
 // 400: log(..), 401: warn(..), 402: error(..), 403: clear()
 const CONSOLE_METHODS: &[MethodEntry] = &[
-    MethodEntry { name: "log", arity: 1, slot: 400 },
-    MethodEntry { name: "warn", arity: 1, slot: 401 },
-    MethodEntry { name: "error", arity: 1, slot: 402 },
-    MethodEntry { name: "clear", arity: 0, slot: 403 },
+    MethodEntry {
+        name: "log",
+        arity: 1,
+        slot: 400,
+    },
+    MethodEntry {
+        name: "warn",
+        arity: 1,
+        slot: 401,
+    },
+    MethodEntry {
+        name: "error",
+        arity: 1,
+        slot: 402,
+    },
+    MethodEntry {
+        name: "clear",
+        arity: 0,
+        slot: 403,
+    },
 ];
 static CONSOLEBOX_TB: TypeBox = TypeBox::new_with("ConsoleBox", CONSOLE_METHODS);
 
@@ -90,10 +230,26 @@ static CONSOLEBOX_TB: TypeBox = TypeBox::new_with("ConsoleBox", CONSOLE_METHODS)
 // 3: has(name)
 // 4: size()
 const INSTANCE_METHODS: &[MethodEntry] = &[
-    MethodEntry { name: "getField", arity: 1, slot: 1 },
-    MethodEntry { name: "setField", arity: 2, slot: 2 },
-    MethodEntry { name: "has", arity: 1, slot: 3 },
-    MethodEntry { name: "size", arity: 0, slot: 4 },
+    MethodEntry {
+        name: "getField",
+        arity: 1,
+        slot: 1,
+    },
+    MethodEntry {
+        name: "setField",
+        arity: 2,
+        slot: 2,
+    },
+    MethodEntry {
+        name: "has",
+        arity: 1,
+        slot: 3,
+    },
+    MethodEntry {
+        name: "size",
+        arity: 0,
+        slot: 4,
+    },
 ];
 static INSTANCEBOX_TB: TypeBox = TypeBox::new_with("InstanceBox", INSTANCE_METHODS);
 
@@ -114,7 +270,9 @@ pub fn resolve_slot_by_name(type_name: &str, method: &str, arity: usize) -> Opti
     let tb = resolve_typebox_by_name(type_name)?;
     let ar = arity as u8;
     for m in tb.methods {
-        if m.name == method && m.arity == ar { return Some(m.slot); }
+        if m.name == method && m.arity == ar {
+            return Some(m.slot);
+        }
     }
     None
 }

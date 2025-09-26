@@ -1,0 +1,71 @@
+// Utils層テスト - StringUtils & EscapeUtilsの動作確認
+
+using "apps/lib/json_native/utils/string.nyash" as StringUtils
+using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+
+print("🧪 Utils層テスト開始")
+
+// ===== StringUtilsテスト =====
+
+print("\n📝 StringUtilsテスト")
+
+// トリム機能テスト
+local trimmed = StringUtils.trim("  hello world  ")
+print("trim test: '" + trimmed + "'")  // 期待値: 'hello world'
+
+// 文字判定テスト
+print("is_digit('5'): " + StringUtils.is_digit("5"))     // true
+print("is_digit('a'): " + StringUtils.is_digit("a"))     // false
+print("is_alpha('A'): " + StringUtils.is_alpha("A"))     // true
+print("is_alpha('1'): " + StringUtils.is_alpha("1"))     // false
+
+// 文字列検索テスト
+print("index_of('hello', 'l'): " + StringUtils.index_of("hello", "l"))  // 2
+print("contains('hello', 'ell'): " + StringUtils.contains("hello", "ell"))  // true
+
+// 大文字小文字変換テスト
+print("to_upper('hello'): " + StringUtils.to_upper("hello"))  // HELLO
+print("to_lower('WORLD'): " + StringUtils.to_lower("WORLD"))  // world
+
+// 配列結合テスト
+local arr = new ArrayBox()
+arr.push("a")
+arr.push("b")
+arr.push("c")
+print("join test: " + StringUtils.join(arr, ","))  // a,b,c
+
+// 数値判定・変換テスト
+print("is_integer('42'): " + StringUtils.is_integer("42"))    // true
+print("is_integer('abc'): " + StringUtils.is_integer("abc"))  // false
+print("parse_integer('42'): " + StringUtils.parse_integer("42"))  // 42
+
+// ===== EscapeUtilsテスト =====
+
+print("\n🔒 EscapeUtilsテスト")
+
+// 基本エスケープテスト
+print("escape_string('hello'): " + EscapeUtils.escape_string("hello"))
+print("escape_string('say \"hi\"'): " + EscapeUtils.escape_string("say \"hi\""))
+
+// クォート機能テスト
+print("quote_string('hello'): " + EscapeUtils.quote_string("hello"))
+
+// アンエスケープテスト
+local escaped = "say \\\"hi\\\""
+local unescaped = EscapeUtils.unescape_string(escaped)
+print("unescape test: " + unescaped)
+
+// クォート除去テスト
+local quoted = "\"hello world\""
+local unquoted = EscapeUtils.unquote_string(quoted)
+print("unquote test: " + unquoted)
+
+// 妥当性検証テスト
+print("validate_string('hello'): " + EscapeUtils.validate_string("hello"))
+print("validate_string('hello\\nworld'): " + EscapeUtils.validate_string("hello\\nworld"))
+
+// 安全表示テスト
+print("safe_display('hello\\tworld'): " + EscapeUtils.safe_display("hello\tworld"))
+
+print("\n✅ Utils層テスト完了！")
+print("🎯 美しいモジュラー設計の威力を確認")

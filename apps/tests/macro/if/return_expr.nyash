@@ -1,0 +1,7 @@
+function main() {
+  if (1 < 2) {
+    return 10
+  } else {
+    return 20
+  }
+}

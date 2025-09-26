@@ -4,7 +4,9 @@ Handles regular function calls (not BoxCall or ExternCall)
 """
 
 import llvmlite.ir as ir
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Any
+from trace import debug as trace_debug
+from instructions.safepoint import insert_automatic_safepoint
 
 def lower_call(
     builder: ir.IRBuilder,
@@ -16,7 +18,8 @@ def lower_call(
     resolver=None,
     preds=None,
     block_end_values=None,
-    bb_map=None
+    bb_map=None,
+    ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR Call instruction
@@ -30,6 +33,57 @@ def lower_call(
         vmap: Value map
         resolver: Optional resolver for type handling
     """
+    # If BuildCtx is provided, prefer its maps for consistency.
+    if ctx is not None:
+        try:
+            if getattr(ctx, 'resolver', None) is not None:
+                resolver = ctx.resolver
+            if getattr(ctx, 'preds', None) is not None and preds is None:
+                preds = ctx.preds
+            if getattr(ctx, 'block_end_values', None) is not None and block_end_values is None:
+                block_end_values = ctx.block_end_values
+            if getattr(ctx, 'bb_map', None) is not None and bb_map is None:
+                bb_map = ctx.bb_map
+        except Exception:
+            pass
+    # Insert an automatic safepoint after the function call
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+            insert_automatic_safepoint(builder, module, "function_call")
+    except Exception:
+        pass
+    # Short-hands with ctx (backward-compatible fallback)
+    r = resolver
+    p = preds
+    bev = block_end_values
+    bbm = bb_map
+    if ctx is not None:
+        try:
+            r = getattr(ctx, 'resolver', r)
+            p = getattr(ctx, 'preds', p)
+            bev = getattr(ctx, 'block_end_values', bev)
+            bbm = getattr(ctx, 'bb_map', bbm)
+        except Exception:
+            pass
+
+    # Resolver helpers (prefer resolver when available)
+    def _res_i64(vid: int):
+        if r is not None and p is not None and bev is not None and bbm is not None:
+            try:
+                return r.resolve_i64(vid, builder.block, p, bev, vmap, bbm)
+            except Exception:
+                return None
+        return vmap.get(vid)
+
+    def _res_ptr(vid: int):
+        if r is not None and p is not None and bev is not None:
+            try:
+                return r.resolve_ptr(vid, builder.block, p, bev, vmap)
+            except Exception:
+                return None
+        return vmap.get(vid)
+
     # Resolve function: accepts string name or value-id referencing a string literal
     actual_name = func_name
     if not isinstance(func_name, str):
@@ -58,11 +112,10 @@ def lower_call(
         arg_val = None
         if i < len(func.args):
             expected_type = func.args[i].type
-            if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
-                if hasattr(expected_type, 'is_pointer') and expected_type.is_pointer:
-                    arg_val = resolver.resolve_ptr(arg_id, builder.block, preds, block_end_values, vmap)
-                else:
-                    arg_val = resolver.resolve_i64(arg_id, builder.block, preds, block_end_values, vmap, bb_map)
+            if hasattr(expected_type, 'is_pointer') and expected_type.is_pointer:
+                arg_val = _res_ptr(arg_id)
+            else:
+                arg_val = _res_i64(arg_id)
         if arg_val is None:
             arg_val = vmap.get(arg_id)
         if arg_val is None:
@@ -88,13 +141,8 @@ def lower_call(
     # Make the call
     result = builder.call(func, call_args, name=f"call_{func_name}")
     # Optional trace for final debugging
-    try:
-        import os
-        if os.environ.get('NYASH_LLVM_TRACE_FINAL') == '1' and isinstance(actual_name, str):
-            if actual_name in ("Main.node_json/3", "Main.esc_json/1", "main"):
-                print(f"[TRACE] call {actual_name} args={len(call_args)}", flush=True)
-    except Exception:
-        pass
+    if isinstance(actual_name, str) and actual_name in ("Main.node_json/3", "Main.esc_json/1", "main"):
+        trace_debug(f"[TRACE] call {actual_name} args={len(call_args)}")
     
     # Store result if needed
     if dst_vid is not None:

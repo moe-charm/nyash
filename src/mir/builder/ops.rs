@@ -1,6 +1,7 @@
-use super::{MirInstruction, ValueId, MirType};
+use super::{MirInstruction, MirType, ValueId};
+use crate::mir::loop_api::LoopBuilderApi; // for current_block()
 use crate::ast::{ASTNode, BinaryOperator};
-use crate::mir::{BinaryOp, UnaryOp, CompareOp, TypeOpKind};
+use crate::mir::{BinaryOp, CompareOp, TypeOpKind, UnaryOp};
 
 // Internal classification for binary operations
 #[derive(Debug)]
@@ -17,6 +18,11 @@ impl super::MirBuilder {
         operator: BinaryOperator,
         right: ASTNode,
     ) -> Result<ValueId, String> {
+        // Short-circuit logical ops: lower to control-flow so RHS is evaluated conditionally
+        if matches!(operator, BinaryOperator::And | BinaryOperator::Or) {
+            return self.build_logical_shortcircuit(left, operator, right);
+        }
+
         let lhs = self.build_expression(left)?;
         let rhs = self.build_expression(right)?;
         let dst = self.value_gen.next();
@@ -52,7 +58,7 @@ impl super::MirBuilder {
             // Comparison operations
             BinaryOpType::Comparison(op) => {
                 // 80/20: If both operands originate from IntegerBox, cast to integer first
-                let (lhs2, rhs2) = if self
+                let (lhs2_raw, rhs2_raw) = if self
                     .value_origin_newbox
                     .get(&lhs)
                     .map(|s| s == "IntegerBox")
@@ -81,7 +87,16 @@ impl super::MirBuilder {
                 } else {
                     (lhs, rhs)
                 };
-                self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
+                // Ensure operands are safe across blocks: pin ephemeral values into slots
+                // This guarantees they participate in PHI merges and have block-local defs.
+                let lhs2 = self.ensure_slotified_for_use(lhs2_raw, "@cmp_lhs")?;
+                let rhs2 = self.ensure_slotified_for_use(rhs2_raw, "@cmp_rhs")?;
+                self.emit_instruction(MirInstruction::Compare {
+                    dst,
+                    op,
+                    lhs: lhs2,
+                    rhs: rhs2,
+                })?;
                 self.value_types.insert(dst, MirType::Bool);
             }
         }
@@ -89,31 +104,238 @@ impl super::MirBuilder {
         Ok(dst)
     }
 
+    /// Lower logical && / || with proper short-circuit semantics.
+    /// Result is a Bool, and RHS is only evaluated if needed.
+    fn build_logical_shortcircuit(
+        &mut self,
+        left: ASTNode,
+        operator: BinaryOperator,
+        right: ASTNode,
+    ) -> Result<ValueId, String> {
+        let is_and = matches!(operator, BinaryOperator::And);
+
+        // Evaluate LHS only once and pin to a slot so it can be reused safely across blocks
+        let lhs_val0 = self.build_expression(left)?;
+        let lhs_val = self.pin_to_slot(lhs_val0, "@sc_lhs")?;
+
+        // Prepare blocks
+        let then_block = self.block_gen.next();
+        let else_block = self.block_gen.next();
+        let merge_block = self.block_gen.next();
+
+        // Branch on LHS truthiness (runtime to_bool semantics in interpreter/LLVM)
+        self.emit_instruction(MirInstruction::Branch {
+            condition: lhs_val,
+            then_bb: then_block,
+            else_bb: else_block,
+        })?;
+        // Record predecessor block for branch (for single-pred PHI materialization)
+        let pre_branch_bb = self.current_block()?;
+
+        // Snapshot variables before entering branches
+        let pre_if_var_map = self.variable_map.clone();
+
+        // ---- THEN branch ----
+        self.start_new_block(then_block)?;
+        self.hint_scope_enter(0);
+        // Reset scope to pre-if snapshot for clean deltas
+        self.variable_map = pre_if_var_map.clone();
+        // Materialize all variables at entry via single-pred PHI (correctness-first)
+        for (name, &pre_v) in pre_if_var_map.iter() {
+            let phi_val = self.value_gen.next();
+            let inputs = vec![(pre_branch_bb, pre_v)];
+            self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
+            self.variable_map.insert(name.clone(), phi_val);
+        }
+
+        // AND: then → evaluate RHS and reduce to bool
+        //  OR: then → constant true
+        let then_value_raw = if is_and {
+            // Reduce arbitrary RHS to bool by branching on its truthiness and returning consts
+            let rhs_true = self.block_gen.next();
+            let rhs_false = self.block_gen.next();
+            let rhs_join = self.block_gen.next();
+            let rhs_val = self.build_expression(right.clone())?;
+            self.emit_instruction(MirInstruction::Branch {
+                condition: rhs_val,
+                then_bb: rhs_true,
+                else_bb: rhs_false,
+            })?;
+            // true path
+            self.start_new_block(rhs_true)?;
+            let t_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_true_exit = self.current_block()?;
+            // false path
+            self.start_new_block(rhs_false)?;
+            let f_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_false_exit = self.current_block()?;
+            // join rhs result into a single bool
+            self.start_new_block(rhs_join)?;
+            let rhs_bool = self.value_gen.next();
+            let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
+            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            }
+            self.emit_instruction(MirInstruction::Phi { dst: rhs_bool, inputs })?;
+            self.value_types.insert(rhs_bool, MirType::Bool);
+            rhs_bool
+        } else {
+            let t_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            t_id
+        };
+        let then_exit_block = self.current_block()?;
+        let then_var_map_end = self.variable_map.clone();
+        if !self.is_current_block_terminated() {
+            self.hint_scope_leave(0);
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
+
+        // ---- ELSE branch ----
+        self.start_new_block(else_block)?;
+        self.hint_scope_enter(0);
+        self.variable_map = pre_if_var_map.clone();
+        // Materialize all variables at entry via single-pred PHI (correctness-first)
+        for (name, &pre_v) in pre_if_var_map.iter() {
+            let phi_val = self.value_gen.next();
+            let inputs = vec![(pre_branch_bb, pre_v)];
+            self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
+            self.variable_map.insert(name.clone(), phi_val);
+        }
+        // AND: else → false
+        //  OR: else → evaluate RHS and reduce to bool
+        let else_value_raw = if is_and {
+            let f_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            f_id
+        } else {
+            let rhs_true = self.block_gen.next();
+            let rhs_false = self.block_gen.next();
+            let rhs_join = self.block_gen.next();
+            let rhs_val = self.build_expression(right)?;
+            self.emit_instruction(MirInstruction::Branch {
+                condition: rhs_val,
+                then_bb: rhs_true,
+                else_bb: rhs_false,
+            })?;
+            // true path
+            self.start_new_block(rhs_true)?;
+            let t_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_true_exit = self.current_block()?;
+            // false path
+            self.start_new_block(rhs_false)?;
+            let f_id = self.value_gen.next();
+            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let rhs_false_exit = self.current_block()?;
+            // join rhs result into a single bool
+            self.start_new_block(rhs_join)?;
+            let rhs_bool = self.value_gen.next();
+            let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
+            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            }
+            self.emit_instruction(MirInstruction::Phi { dst: rhs_bool, inputs })?;
+            self.value_types.insert(rhs_bool, MirType::Bool);
+            rhs_bool
+        };
+        let else_exit_block = self.current_block()?;
+        let else_var_map_end = self.variable_map.clone();
+        if !self.is_current_block_terminated() {
+            self.hint_scope_leave(0);
+            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+        }
+
+        // ---- MERGE ----
+        // Merge block: suppress entry pin copy so PHIs remain first and materialize pins explicitly
+        self.suppress_next_entry_pin_copy();
+        self.start_new_block(merge_block)?;
+        self.push_if_merge(merge_block);
+
+        // Result PHI (bool)
+        let result_val = self.value_gen.next();
+        let inputs = vec![(then_exit_block, then_value_raw), (else_exit_block, else_value_raw)];
+        if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+            crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+        }
+        self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+        self.value_types.insert(result_val, MirType::Bool);
+
+        // Merge modified vars from both branches back into current scope
+        self.merge_modified_vars(
+            then_block,
+            else_block,
+            then_exit_block,
+            Some(else_exit_block),
+            &pre_if_var_map,
+            &then_var_map_end,
+            &Some(else_var_map_end),
+            None,
+        )?;
+
+        self.pop_if_merge();
+        Ok(result_val)
+    }
+
     // Build a unary operation
-    pub(super) fn build_unary_op(&mut self, operator: String, operand: ASTNode) -> Result<ValueId, String> {
+    pub(super) fn build_unary_op(
+        &mut self,
+        operator: String,
+        operand: ASTNode,
+    ) -> Result<ValueId, String> {
         let operand_val = self.build_expression(operand)?;
         // Core-13 純化: UnaryOp を直接 展開（Neg/Not/BitNot）
         if crate::config::env::mir_core13_pure() {
             match operator.as_str() {
                 "-" => {
                     let zero = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: zero, value: crate::mir::ConstValue::Integer(0) })?;
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: zero,
+                        value: crate::mir::ConstValue::Integer(0),
+                    })?;
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp { dst, op: crate::mir::BinaryOp::Sub, lhs: zero, rhs: operand_val })?;
+                    self.emit_instruction(MirInstruction::BinOp {
+                        dst,
+                        op: crate::mir::BinaryOp::Sub,
+                        lhs: zero,
+                        rhs: operand_val,
+                    })?;
                     return Ok(dst);
                 }
                 "!" | "not" => {
                     let f = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: f, value: crate::mir::ConstValue::Bool(false) })?;
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: f,
+                        value: crate::mir::ConstValue::Bool(false),
+                    })?;
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Compare { dst, op: crate::mir::CompareOp::Eq, lhs: operand_val, rhs: f })?;
+                    self.emit_instruction(MirInstruction::Compare {
+                        dst,
+                        op: crate::mir::CompareOp::Eq,
+                        lhs: operand_val,
+                        rhs: f,
+                    })?;
                     return Ok(dst);
                 }
                 "~" => {
                     let all1 = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: all1, value: crate::mir::ConstValue::Integer(-1) })?;
+                    self.emit_instruction(MirInstruction::Const {
+                        dst: all1,
+                        value: crate::mir::ConstValue::Integer(-1),
+                    })?;
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp { dst, op: crate::mir::BinaryOp::BitXor, lhs: operand_val, rhs: all1 })?;
+                    self.emit_instruction(MirInstruction::BinOp {
+                        dst,
+                        op: crate::mir::BinaryOp::BitXor,
+                        lhs: operand_val,
+                        rhs: all1,
+                    })?;
                     return Ok(dst);
                 }
                 _ => {}
@@ -121,7 +343,11 @@ impl super::MirBuilder {
         }
         let dst = self.value_gen.next();
         let mir_op = self.convert_unary_operator(operator)?;
-        self.emit_instruction(MirInstruction::UnaryOp { dst, op: mir_op, operand: operand_val })?;
+        self.emit_instruction(MirInstruction::UnaryOp {
+            dst,
+            op: mir_op,
+            operand: operand_val,
+        })?;
         Ok(dst)
     }
 

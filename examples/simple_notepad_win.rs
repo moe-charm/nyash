@@ -12,7 +12,7 @@ fn main() -> eframe::Result {
             .with_title("Nyash Notepad"),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "Nyash Notepad",
         options,
@@ -28,10 +28,10 @@ fn main() -> eframe::Result {
 fn setup_custom_fonts(ctx: &egui::Context) {
     // Start with the default fonts
     let mut fonts = egui::FontDefinitions::default();
-    
+
     // Use built-in fonts for cross-platform compatibility
     // Note: On Windows, egui will automatically use system fonts
-    
+
     // Tell egui to use these fonts
     ctx.set_fonts(fonts);
 }
@@ -71,13 +71,13 @@ impl eframe::App for NyashNotepad {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                 });
-                
+
                 ui.menu_button("Edit", |ui| {
                     if ui.button("Select All").clicked() {
                         self.status = "Select All (not implemented)".to_string();
                     }
                 });
-                
+
                 ui.menu_button("Help", |ui| {
                     if ui.button("About Nyash").clicked() {
                         self.status = "Nyash - Everything is Box!".to_string();
@@ -85,7 +85,7 @@ impl eframe::App for NyashNotepad {
                 });
             });
         });
-        
+
         // Status bar
         egui::TopBottomPanel::bottom("status_bar").show(ctx, |ui| {
             ui.horizontal(|ui| {
@@ -95,7 +95,7 @@ impl eframe::App for NyashNotepad {
                 });
             });
         });
-        
+
         // Main text editor
         egui::CentralPanel::default().show(ctx, |ui| {
             // Toolbar with ASCII-only labels
@@ -104,27 +104,27 @@ impl eframe::App for NyashNotepad {
                     self.text.clear();
                     self.status = "Text cleared".to_string();
                 }
-                
+
                 ui.separator();
-                
+
                 if ui.button("[Copy]").clicked() {
                     ui.output_mut(|o| o.copied_text = self.text.clone());
                     self.status = "Text copied to clipboard".to_string();
                 }
-                
+
                 if ui.button("[Cut]").clicked() {
                     ui.output_mut(|o| o.copied_text = self.text.clone());
                     self.text.clear();
                     self.status = "Text cut to clipboard".to_string();
                 }
-                
+
                 if ui.button("[Paste]").clicked() {
                     self.status = "Paste (simplified version)".to_string();
                 }
             });
-            
+
             ui.separator();
-            
+
             // Text editor body
             egui::ScrollArea::vertical().show(ui, |ui| {
                 ui.add(
@@ -132,10 +132,10 @@ impl eframe::App for NyashNotepad {
                         .font(egui::TextStyle::Monospace)
                         .desired_width(f32::INFINITY)
                         .desired_rows(20)
-                        .hint_text("Type your text here... nya!")
+                        .hint_text("Type your text here... nya!"),
                 );
             });
-            
+
             // Sample buttons
             ui.separator();
             ui.horizontal(|ui| {
@@ -145,15 +145,17 @@ impl eframe::App for NyashNotepad {
                     self.text.push_str("    init { message }\n");
                     self.text.push_str("    \n");
                     self.text.push_str("    HelloWorld() {\n");
-                    self.text.push_str("        me.message = \"Hello, Nyash World! nya!\"\n");
+                    self.text
+                        .push_str("        me.message = \"Hello, Nyash World! nya!\"\n");
                     self.text.push_str("    }\n");
                     self.text.push_str("}\n");
                     self.status = "Nyash sample code inserted".to_string();
                 }
-                
+
                 if ui.button("Insert Timestamp").clicked() {
                     let now = chrono::Local::now();
-                    self.text.push_str(&format!("\n{}\n", now.format("%Y-%m-%d %H:%M:%S")));
+                    self.text
+                        .push_str(&format!("\n{}\n", now.format("%Y-%m-%d %H:%M:%S")));
                     self.status = "Timestamp inserted".to_string();
                 }
             });

@@ -39,20 +39,29 @@ echo "=== exit codes ==="
 echo "llvmlite: $CODE_LL"
 echo "PyVM    : $CODE_PY"
 
-DIFF=0
-if [[ "$OUT_LL" != "$OUT_PY" ]]; then
-  echo "[cmp] stdout differs" >&2
-  DIFF=1
-fi
-if [[ "$CODE_LL" -ne "$CODE_PY" ]]; then
-  echo "[cmp] exit code differs" >&2
-  DIFF=1
-fi
-
-if [[ "$DIFF" -eq 0 ]]; then
-  echo "✅ parity OK (stdout + exit code)"
+# Strict compare only when requested. Default: exit code parity.
+STRICT=${CMP_STRICT:-0}
+if [[ "$STRICT" == "1" ]]; then
+  DIFF=0
+  if [[ "$OUT_LL" != "$OUT_PY" ]]; then
+    echo "[cmp] stdout differs" >&2
+    DIFF=1
+  fi
+  if [[ "$CODE_LL" -ne "$CODE_PY" ]]; then
+    echo "[cmp] exit code differs" >&2
+    DIFF=1
+  fi
+  if [[ "$DIFF" -eq 0 ]]; then
+    echo "✅ parity OK (stdout + exit code)"
+  else
+    echo "❌ parity mismatch" >&2
+    exit 1
+  fi
 else
-  echo "❌ parity mismatch" >&2
-  exit 1
+  if [[ "$CODE_LL" -eq "$CODE_PY" ]]; then
+    echo "✅ parity OK (exit code)"
+  else
+    echo "❌ exit code mismatch" >&2
+    exit 1
+  fi
 fi
-

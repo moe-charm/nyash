@@ -1,0 +1,46 @@
+// StringExtBox: small helpers that make scripts concise
+static box StringExtBox {
+  trim(s) {
+    // naive: trim spaces and newlines at both ends
+    local i = 0
+    local j = s.length()
+    loop (i < j) {
+      local ch = s.substring(i, i+1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1 } else { break }
+    }
+    loop (j > i) {
+      local ch2 = s.substring(j-1, j)
+      if ch2 == " " || ch2 == "\n" || ch2 == "\r" || ch2 == "\t" { j = j - 1 } else { break }
+    }
+    return s.substring(i, j)
+  }
+  startsWith(s, pref) {
+    return s.substring(0, pref.length()) == pref
+  }
+  endsWith(s, suf) {
+    local n = s.length()
+    local m = suf.length()
+    if m > n { return false }
+    return s.substring(n-m, n) == suf
+  }
+  replace(s, old, neu) {
+    // naive single replacement (first occurrence)
+    local i = s.indexOf(old)
+    if i < 0 { return s }
+    return s.substring(0, i) + neu + s.substring(i + old.length(), s.length())
+  }
+  split(s, delim) {
+    // minimal split (no regex). returns ArrayBox of parts
+    local out = []
+    local pos = 0
+    local dlen = delim.length()
+    loop (true) {
+      local idx = s.indexOf(delim)
+      if idx < 0 { out.push(s)  break }
+      out.push(s.substring(0, idx))
+      s = s.substring(idx + dlen, s.length())
+    }
+    return out
+  }
+}
+
