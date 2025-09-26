@@ -102,6 +102,19 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Dev-safe: stringify(Void) → "null" (最小安全弁)
+        if method == "stringify" {
+            if let VMValue::Void = self.reg_load(box_val)? {
+                if let Some(d) = dst { self.regs.insert(d, VMValue::String("null".to_string())); }
+                return Ok(());
+            }
+            if let VMValue::BoxRef(b) = self.reg_load(box_val)? {
+                if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
+                    if let Some(d) = dst { self.regs.insert(d, VMValue::String("null".to_string())); }
+                    return Ok(());
+                }
+            }
+        }
         // Trace: method call (class inferred from receiver)
         if Self::box_trace_enabled() {
             let cls = match self.reg_load(box_val).unwrap_or(VMValue::Void) {
@@ -888,12 +901,16 @@ impl MirInterpreter {
                 if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); }
                 return Ok(());
             }
-            // VoidBox graceful handling for common container-like methods
-            // Treat null.receiver.* as safe no-ops that return null/0 where appropriate
-            if recv_box.type_name() == "VoidBox" {
-                match method {
+        // VoidBox graceful handling for common container-like methods
+        // Treat null.receiver.* as safe no-ops that return null/0 where appropriate
+        if recv_box.type_name() == "VoidBox" {
+            match method {
                     "object_get" | "array_get" | "toString" => {
                         if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
+                        return Ok(());
+                    }
+                    "stringify" => {
+                        if let Some(d) = dst { self.regs.insert(d, VMValue::String("null".to_string())); }
                         return Ok(());
                     }
                     "array_size" | "length" | "size" => {

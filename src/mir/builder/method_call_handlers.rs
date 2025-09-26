@@ -134,8 +134,8 @@ impl MirBuilder {
                 Some(ref s) if s == "0" || s == "false" || s == "off" => false,
                 Some(ref s) if s == "1" || s == "true" || s == "on" => true,
                 _ => {
-                    // Default: ON for dev/ci, OFF for prod
-                    !crate::config::env::using_is_prod()
+                    // Default: ON (prod/dev/ci) unless明示OFF。再発防止のため常時関数化を優先。
+                    true
                 }
             }
         };

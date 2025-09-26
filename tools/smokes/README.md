@@ -34,3 +34,8 @@ Notes
 - Dev defaults are designed to be non-intrusive: tests remain behavior‑compatible.
 - To repro outside smokes, either pass `--dev` or export `NYASH_DEV=1`.
 
+Heavy JSON probes
+- Heavy JSON tests (nested/roundtrip/query_min) run a tiny parser probe first.
+- The probe's stdout last non-empty line is trimmed and compared to `ok`.
+- If not `ok`, the test is SKIP (parser unavailable), not FAIL. This avoids
+  false negatives due to environment noise or optional dependencies.

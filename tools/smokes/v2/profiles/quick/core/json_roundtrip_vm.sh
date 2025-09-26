@@ -23,7 +23,8 @@ EOF
 
 # Probe heavy parser availability; skip gracefully if not ready
 probe=$(run_nyash_vm -c 'using json as JsonParserModule
-static box Main { main() { local p = JsonParserModule.create_parser() ; local r = p.parse("null") ; if r == null { print("null") } else { print("ok") } return 0 } }' --dev)
+static box Main { main() { local p = JsonParserModule.create_parser()  local r = p.parse("null")  if r == null { print("null") } else { print("ok") } return 0 } }' --dev)
+probe=$(echo "$probe" | tail -n 1 | tr -d '\r' | xargs)
 if [ "$probe" != "ok" ]; then
   test_skip "json_roundtrip_vm" "heavy parser unavailable in quick" || true
   cd /
