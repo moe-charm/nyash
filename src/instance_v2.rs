@@ -245,9 +245,7 @@ impl InstanceBox {
                 .unwrap()
                 .insert(field_name.to_string(), value.clone());
 
-            // fields_ngにも同期
-            // 一時的にNullを設定（型変換が複雑なため）
-            // TODO: SharedNyashBox -> NyashValueの適切な変換を実装
+            // fields_ngにも同期（暫定: Null で占位）
             self.fields_ng
                 .lock()
                 .unwrap()

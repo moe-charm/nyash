@@ -26,9 +26,7 @@ pub struct NyashTypeBoxFfi {
     pub struct_size: u16,
     pub name: *const c_char,
     pub resolve: Option<extern "C" fn(*const c_char) -> u32>,
-    pub invoke_id: Option<
-        extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
-    >,
+    pub invoke_id: Option<extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
     pub capabilities: u32,
 }
 
@@ -38,7 +36,7 @@ unsafe impl Send for NyashTypeBoxFfi {}
 // Export JsonDocBox
 #[no_mangle]
 pub static nyash_typebox_JsonDocBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
-    abi_tag: 0x54594258,  // 'TYBX'
+    abi_tag: 0x54594258, // 'TYBX'
     version: 1,
     struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
     name: b"JsonDocBox\0".as_ptr() as *const c_char,
@@ -50,7 +48,7 @@ pub static nyash_typebox_JsonDocBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 // Export JsonNodeBox
 #[no_mangle]
 pub static nyash_typebox_JsonNodeBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
-    abi_tag: 0x54594258,  // 'TYBX'
+    abi_tag: 0x54594258, // 'TYBX'
     version: 1,
     struct_size: std::mem::size_of::<NyashTypeBoxFfi>() as u16,
     name: b"JsonNodeBox\0".as_ptr() as *const c_char,
@@ -70,14 +68,14 @@ pub static nyash_plugin_version: &[u8] = b"0.1.0\0";
 #[no_mangle]
 pub extern "C" fn nyash_plugin_init() -> i32 {
     // Currently no initialization needed
-    0  // OK
+    0 // OK
 }
 
 // Plugin cleanup (if needed in future)
 #[no_mangle]
 pub extern "C" fn nyash_plugin_fini() -> i32 {
     // Currently no cleanup needed
-    0  // OK
+    0 // OK
 }
 
 #[cfg(test)]

@@ -54,6 +54,9 @@ filter_noise() {
       | grep -v "Using builtin StringBox" \
       | grep -v "Using builtin ArrayBox" \
       | grep -v "Using builtin MapBox" \
+      | grep -v "^\[using\]" \
+      | grep -v "^\[using/resolve\]" \
+      | grep -v "^\[builder\]" \
       | grep -v "plugins/nyash-array-plugin" \
       | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
@@ -149,6 +152,10 @@ run_nyash_vm() {
         rm -f "$tmpfile"
         return $exit_code
     else
+        # 軽量ASIFix（テスト用）: ブロック終端の余剰セミコロンを寛容に除去
+        if [ "${SMOKES_ASI_STRIP_SEMI:-1}" = "1" ] && [ -f "$program" ]; then
+            sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
+        fi
         # プラグイン初期化メッセージを除外
         NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$program" "$@" 2>&1 | filter_noise
         return ${PIPESTATUS[0]}

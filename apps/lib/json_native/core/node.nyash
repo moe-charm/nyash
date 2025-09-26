@@ -212,7 +212,7 @@ static box JsonNode {
                 }
             } else {
                 if me.kind == "int" {
-                    return "" + me.value
+                    return me.value.toString()
                 } else {
                     if me.kind == "float" {
                         // 数値の文字列表現をそのまま出力（引用符なし）
@@ -268,7 +268,14 @@ box JsonNodeInstance {
         me.kind = "null"
         me.value = null
     }
-    
+
+    // インスタンス用: オブジェクトに値を設定
+    object_set(key, node) {
+        if me.kind == "object" {
+            me.value.set(key, node)
+        }
+    }
+
     // インスタンスメソッドとして静的メソッドを呼び出し
     get_kind() { return me.kind }
     as_bool() { 
@@ -289,27 +296,68 @@ box JsonNodeInstance {
         }
         return ""
     }
-    stringify() { 
+    stringify() {
         if me.kind == "null" {
             return "null"
-        } else {
-            if me.kind == "bool" {
-                if me.value {
-                    return "true"
-                } else {
-                    return "false"
-                }
-            } else {
-                if me.kind == "int" {
-                    return "" + me.value
-                } else {
-                    if me.kind == "string" {
-                        return "\"" + me.value + "\""
-                    } else {
-                        return "null"
-                    }
-                }
-            }
         }
+        if me.kind == "bool" {
+            if me.value { return "true" } else { return "false" }
+        }
+        if me.kind == "int" {
+            return me.value.toString()
+        }
+        if me.kind == "float" {
+            return me.value
+        }
+        if me.kind == "string" {
+            return EscapeUtils.quote_string(me.value)
+        }
+        if me.kind == "array" {
+            local parts = new ArrayBox()
+            local i = 0
+            loop(i < me.value.length()) {
+                local elem = me.value.get(i)
+                parts.push(elem.stringify())
+                i = i + 1
+            }
+            return "[" + StringUtils.join(parts, ",") + "]"
+        }
+        if me.kind == "object" {
+            local parts = new ArrayBox()
+            local keys = me.value.keys()
+            local i = 0
+            loop(i < keys.length()) {
+                local key = keys.get(i)
+                local val = me.value.get(key)
+                local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
+                parts.push(pair)
+                i = i + 1
+            }
+            return "{" + StringUtils.join(parts, ",") + "}"
+        }
+        return "null"
+    }
+
+    // Instance helper: push element into array value
+    array_push(node) {
+        if me.kind == "array" {
+            me.value.push(node)
+        }
+    }
+
+    // Instance helper: array size
+    array_size() {
+        if me.kind == "array" {
+            return me.value.length()
+        }
+        return 0
+    }
+
+    // Instance helper: object get
+    object_get(key) {
+        if me.kind == "object" {
+            return me.value.get(key)
+        }
+        return null
     }
 }

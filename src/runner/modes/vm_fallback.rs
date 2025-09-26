@@ -18,95 +18,57 @@ impl NyashRunner {
         // Read source
         let code = match fs::read_to_string(filename) {
             Ok(s) => s,
-            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+            Err(e) => {
+                eprintln!("❌ Error reading file {}: {}", filename, e);
+                process::exit(1);
+            }
         };
         // Using preprocessing with AST-prelude merge (when NYASH_USING_AST=1)
         let mut code2 = code;
-        let use_ast_prelude = crate::config::env::enable_using()
-            && crate::config::env::using_ast_enabled();
+        let use_ast_prelude =
+            crate::config::env::enable_using() && crate::config::env::using_ast_enabled();
         let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
         if crate::config::env::enable_using() {
-            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code2, filename) {
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
+                self, &code2, filename,
+            ) {
                 Ok((clean, paths)) => {
                     code2 = clean;
                     if !paths.is_empty() && !use_ast_prelude {
                         eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         process::exit(1);
                     }
-                    // Normalize initial prelude paths relative to filename or $NYASH_ROOT,
-                    // then recursively process prelude files: strip their using-lines and parse cleaned ASTs
-                    let mut visited = std::collections::HashSet::<String>::new();
-                    let mut stack: Vec<String> = Vec::new();
-                    for raw in paths {
-                        let mut pb = std::path::PathBuf::from(&raw);
-                        if pb.is_relative() {
-                            if let Some(dir) = std::path::Path::new(filename).parent() {
-                                let cand = dir.join(&pb);
-                                if cand.exists() { pb = cand; }
-                            }
-                            if pb.is_relative() {
-                                if let Ok(root) = std::env::var("NYASH_ROOT") {
-                                    let cand = std::path::Path::new(&root).join(&pb);
-                                    if cand.exists() { pb = cand; }
-                                } else {
-                                    if let Ok(exe) = std::env::current_exe() {
-                                        if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                                            let cand = root.join(&pb);
-                                            if cand.exists() { pb = cand; }
+                    for prelude_path in paths {
+                        match std::fs::read_to_string(&prelude_path) {
+                            Ok(src) => {
+                                match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &src, &prelude_path) {
+                                    Ok((clean_src, nested)) => {
+                                        // Nested entries have already been expanded by DFS; ignore `nested` here.
+                                        match NyashParser::parse_from_string(&clean_src) {
+                                            Ok(ast) => prelude_asts.push(ast),
+                                            Err(e) => {
+                                                eprintln!("❌ Parse error in using prelude {}: {}", prelude_path, e);
+                                                process::exit(1);
+                                            }
                                         }
+                                    }
+                                    Err(e) => {
+                                        eprintln!("❌ {}", e);
+                                        process::exit(1);
                                     }
                                 }
                             }
-                        }
-                        stack.push(pb.to_string_lossy().to_string());
-                    }
-                    while let Some(mut p) = stack.pop() {
-                        if std::path::Path::new(&p).is_relative() {
-                            if let Ok(root) = std::env::var("NYASH_ROOT") {
-                                let cand = std::path::Path::new(&root).join(&p);
-                                p = cand.to_string_lossy().to_string();
+                            Err(e) => {
+                                eprintln!("❌ Error reading using prelude {}: {}", prelude_path, e);
+                                process::exit(1);
                             }
-                        }
-                        if !visited.insert(p.clone()) { continue; }
-                        match std::fs::read_to_string(&p) {
-                            Ok(src) => match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &src, &p) {
-                                Ok((clean_src, nested)) => {
-                                    for np in nested {
-                                        let mut npp = std::path::PathBuf::from(&np);
-                                        if npp.is_relative() {
-                                            if let Some(dir) = std::path::Path::new(&p).parent() {
-                                                let cand = dir.join(&npp);
-                                                if cand.exists() { npp = cand; }
-                                            }
-                                            if npp.is_relative() {
-                                                if let Ok(root) = std::env::var("NYASH_ROOT") {
-                                                    let cand = std::path::Path::new(&root).join(&npp);
-                                                    if cand.exists() { npp = cand; }
-                                                } else {
-                                                    if let Ok(exe) = std::env::current_exe() {
-                                                        if let Some(root) = exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
-                                                            let cand = root.join(&npp);
-                                                            if cand.exists() { npp = cand; }
-                                                        }
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        let nps = npp.to_string_lossy().to_string();
-                                        if !visited.contains(&nps) { stack.push(nps); }
-                                    }
-                                    match NyashParser::parse_from_string(&clean_src) {
-                                        Ok(ast) => prelude_asts.push(ast),
-                                        Err(e) => { eprintln!("❌ Parse error in using prelude {}: {}", p, e); process::exit(1); }
-                                    }
-                                }
-                                Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
-                            },
-                            Err(e) => { eprintln!("❌ Error reading using prelude {}: {}", p, e); process::exit(1); }
                         }
                     }
                 }
-                Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
+                Err(e) => {
+                    eprintln!("❌ {}", e);
+                    process::exit(1);
+                }
             }
         }
         // Dev sugar pre-expand: @name = expr → local name = expr
@@ -115,20 +77,30 @@ impl NyashRunner {
         // Parse main code
         let main_ast = match NyashParser::parse_from_string(&code2) {
             Ok(ast) => ast,
-            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+            Err(e) => {
+                eprintln!("❌ Parse error: {}", e);
+                process::exit(1);
+            }
         };
         // When using AST prelude mode, combine prelude ASTs + main AST into one Program before macro expansion
         let ast_combined = if use_ast_prelude && !prelude_asts.is_empty() {
             use nyash_rust::ast::ASTNode;
             let mut combined: Vec<ASTNode> = Vec::new();
             for a in prelude_asts {
-                if let ASTNode::Program { statements, .. } = a { combined.extend(statements); }
+                if let ASTNode::Program { statements, .. } = a {
+                    combined.extend(statements);
+                }
             }
             if let ASTNode::Program { statements, .. } = main_ast.clone() {
                 combined.extend(statements);
             }
-            ASTNode::Program { statements: combined, span: nyash_rust::ast::Span::unknown() }
-        } else { main_ast };
+            ASTNode::Program {
+                statements: combined,
+                span: nyash_rust::ast::Span::unknown(),
+            }
+        } else {
+            main_ast
+        };
         // Optional: dump AST statement kinds for quick diagnostics
         if std::env::var("NYASH_AST_DUMP").ok().as_deref() == Some("1") {
             use nyash_rust::ast::ASTNode;
@@ -136,15 +108,23 @@ impl NyashRunner {
             if let ASTNode::Program { statements, .. } = &ast_combined {
                 for (i, st) in statements.iter().enumerate().take(50) {
                     let kind = match st {
-                        ASTNode::BoxDeclaration { is_static, name, .. } => {
-                            if *is_static { format!("StaticBox({})", name) } else { format!("Box({})", name) }
+                        ASTNode::BoxDeclaration {
+                            is_static, name, ..
+                        } => {
+                            if *is_static {
+                                format!("StaticBox({})", name)
+                            } else {
+                                format!("Box({})", name)
+                            }
                         }
                         ASTNode::FunctionDeclaration { name, .. } => format!("FuncDecl({})", name),
                         ASTNode::FunctionCall { name, .. } => format!("FuncCall({})", name),
                         ASTNode::MethodCall { method, .. } => format!("MethodCall({})", method),
                         ASTNode::ScopeBox { .. } => "ScopeBox".to_string(),
                         ASTNode::ImportStatement { path, .. } => format!("Import({})", path),
-                        ASTNode::UsingStatement { namespace_name, .. } => format!("Using({})", namespace_name),
+                        ASTNode::UsingStatement { namespace_name, .. } => {
+                            format!("Using({})", namespace_name)
+                        }
                         _ => format!("{:?}", st),
                     };
                     eprintln!("[ast] {}: {}", i, kind);
@@ -162,8 +142,12 @@ impl NyashRunner {
             use nyash_rust::ast::ASTNode;
 
             // Collect user-defined (non-static) box declarations at program level.
-            let mut decls: std::collections::HashMap<String, CoreBoxDecl> =
+            // Additionally, record static box names so we can alias
+            // `StaticBoxName` -> `StaticBoxNameInstance` when such a
+            // concrete instance box exists (common pattern in libs).
+            let mut nonstatic_decls: std::collections::HashMap<String, CoreBoxDecl> =
                 std::collections::HashMap::new();
+            let mut static_names: Vec<String> = Vec::new();
             if let ASTNode::Program { statements, .. } = &ast {
                 for st in statements {
                     if let ASTNode::BoxDeclaration {
@@ -181,10 +165,10 @@ impl NyashRunner {
                         type_parameters,
                         is_static,
                         ..
-                    } = st
-                    {
+                    } = st {
                         if *is_static {
-                            continue; // modules/static boxes are not user-instantiable
+                            static_names.push(name.clone());
+                            continue; // modules/static boxes are not user-instantiable directly
                         }
                         let decl = CoreBoxDecl {
                             name: name.clone(),
@@ -200,8 +184,16 @@ impl NyashRunner {
                             implements: implements.clone(),
                             type_parameters: type_parameters.clone(),
                         };
-                        decls.insert(name.clone(), decl);
+                        nonstatic_decls.insert(name.clone(), decl);
                     }
+                }
+            }
+            // Build final map with optional aliases for StaticName -> StaticNameInstance
+            let mut decls = nonstatic_decls.clone();
+            for s in static_names.into_iter() {
+                let inst = format!("{}Instance", s);
+                if let Some(d) = nonstatic_decls.get(&inst) {
+                    decls.insert(s, d.clone());
                 }
             }
 
@@ -215,7 +207,8 @@ impl NyashRunner {
                         &self,
                         name: &str,
                         args: &[Box<dyn crate::box_trait::NyashBox>],
-                    ) -> Result<Box<dyn crate::box_trait::NyashBox>, RuntimeError> {
+                    ) -> Result<Box<dyn crate::box_trait::NyashBox>, RuntimeError>
+                    {
                         let opt = { self.decls.read().unwrap().get(name).cloned() };
                         let decl = match opt {
                             Some(d) => d,
@@ -234,35 +227,65 @@ impl NyashRunner {
                         Ok(Box::new(inst))
                     }
 
-                    fn box_types(&self) -> Vec<&str> { vec![] }
+                    fn box_types(&self) -> Vec<&str> {
+                        vec![]
+                    }
 
-                    fn is_available(&self) -> bool { true }
+                    fn is_available(&self) -> bool {
+                        true
+                    }
 
-                    fn factory_type(
-                        &self,
-                    ) -> crate::box_factory::FactoryType {
+                    fn factory_type(&self) -> crate::box_factory::FactoryType {
                         crate::box_factory::FactoryType::User
                     }
                 }
-                let factory = InlineUserBoxFactory { decls: Arc::new(RwLock::new(decls)) };
+                let factory = InlineUserBoxFactory {
+                    decls: Arc::new(RwLock::new(decls)),
+                };
                 crate::runtime::unified_registry::register_user_defined_factory(Arc::new(factory));
             }
         }
         let mut compiler = MirCompiler::with_options(!self.config.no_optimize);
         let compile = match compiler.compile(ast) {
             Ok(c) => c,
-            Err(e) => { eprintln!("❌ MIR compilation error: {}", e); process::exit(1); }
+            Err(e) => {
+                eprintln!("❌ MIR compilation error: {}", e);
+                process::exit(1);
+            }
         };
 
         // Optional barrier-elision for parity with VM path
         let mut module_vm = compile.module.clone();
         if std::env::var("NYASH_VM_ESCAPE_ANALYSIS").ok().as_deref() == Some("1") {
             let removed = crate::mir::passes::escape::escape_elide_barriers_vm(&mut module_vm);
-            if removed > 0 { crate::cli_v!("[VM-fallback] escape_elide_barriers: removed {} barriers", removed); }
+            if removed > 0 {
+                crate::cli_v!(
+                    "[VM-fallback] escape_elide_barriers: removed {} barriers",
+                    removed
+                );
+            }
+        }
+
+        // Optional: dump MIR for diagnostics (parity with vm path)
+        if std::env::var("NYASH_VM_DUMP_MIR").ok().as_deref() == Some("1") {
+            let p = crate::mir::MirPrinter::new();
+            eprintln!("{}", p.print_module(&module_vm));
         }
 
         // Execute via MIR interpreter
         let mut vm = MirInterpreter::new();
+        // Optional: verify MIR before execution (dev-only)
+        if std::env::var("NYASH_VM_VERIFY_MIR").ok().as_deref() == Some("1") {
+            let mut verifier = crate::mir::verification::MirVerifier::new();
+            for (name, func) in module_vm.functions.iter() {
+                if let Err(errors) = verifier.verify_function(func) {
+                    if !errors.is_empty() {
+                        eprintln!("[vm-verify] function: {}", name);
+                        for er in errors { eprintln!("  • {}", er); }
+                    }
+                }
+            }
+        }
         if std::env::var("NYASH_DUMP_FUNCS").ok().as_deref() == Some("1") {
             eprintln!("[vm] functions available:");
             for k in module_vm.functions.keys() {

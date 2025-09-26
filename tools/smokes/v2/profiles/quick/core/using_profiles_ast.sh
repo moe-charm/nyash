@@ -17,8 +17,8 @@ teardown_tmp_dir() {
   rm -rf "$TEST_DIR"
 }
 
-# Test A: dev プロファイルでは `using "file"` が許可され、AST プレリュードで解決できる
-test_dev_file_using_ok_ast() {
+# Test A: dev プロファイルでも `using "file"` は禁止（SSOT 徹底）
+test_dev_file_using_forbidden_ast() {
   setup_tmp_dir
 
   # nyash.toml（paths だけで十分）
@@ -44,15 +44,18 @@ static box Main {
 }
 EOF
 
-  local output rc
-  # dev + AST モード（環境はexportで明示）
+  local output
+  # dev + AST モード（失敗が正）
   export NYASH_USING_PROFILE=dev
   export NYASH_USING_AST=1
-  output=$(run_nyash_vm main.nyash 2>&1)
-  if echo "$output" | grep -qx "hi"; then rc=0; else rc=1; fi
-  [ $rc -eq 0 ] || { echo "$output" >&2; }
+  output=$(run_nyash_vm main.nyash 2>&1 || true)
+  if echo "$output" | grep -qi "disallowed\|nyash.toml \[using\]"; then
+    test_pass "dev_file_using_forbidden_ast"
+  else
+    test_fail "dev_file_using_forbidden_ast" "expected guidance error, got: $output"
+  fi
   teardown_tmp_dir
-  return $rc
+  return 0
 }
 
 # Test B: prod プロファイルでは `using "file"` は拒否（ガイダンス付きエラー）
@@ -128,6 +131,6 @@ EOF
   return $rc
 }
 
-run_test "using_dev_file_ok_ast" test_dev_file_using_ok_ast
+run_test "using_dev_file_forbidden_ast" test_dev_file_using_forbidden_ast
 run_test "using_prod_file_forbidden_ast" test_prod_file_using_forbidden_ast
 run_test "using_prod_alias_ok_ast" test_prod_alias_package_ok_ast

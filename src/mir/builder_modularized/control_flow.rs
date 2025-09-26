@@ -17,20 +17,11 @@ impl MirBuilder {
     
     /// Build a loop statement: loop(condition) { body }
     ///
-    /// Uses the shared LoopBuilder facade to avoid tight coupling.
+    /// Force structured Loop-Form lowering (preheader → header(φ) → body → latch → header|exit)
+    /// to ensure PHI correctness for loop-carried values.
     pub(super) fn build_loop_statement(&mut self, condition: ASTNode, body: Vec<ASTNode>) -> Result<ValueId, String> {
-        // Evaluate condition first (boolean-ish value)
-        let cond_val = self.build_expression(condition)?;
-
-        // Use loop_api helper with a closure that builds the loop body
-        let mut body_builder = |lb: &mut Self| -> Result<(), String> {
-            for stmt in &body {
-                let _ = lb.build_expression(stmt.clone())?;
-            }
-            Ok(())
-        };
-
-        crate::mir::loop_api::build_simple_loop(self, cond_val, &mut body_builder)
+        // Delegate to the unified control-flow entry which uses LoopBuilder
+        self.cf_loop(condition, body)
     }
     
     /// Build a try/catch statement

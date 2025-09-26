@@ -24,7 +24,8 @@ mod helpers;
 pub struct MirInterpreter {
     pub(super) regs: HashMap<ValueId, VMValue>,
     pub(super) mem: HashMap<ValueId, VMValue>,
-    pub(super) obj_fields: HashMap<ValueId, HashMap<String, VMValue>>,
+    // Object field storage keyed by stable object identity (Arc ptr addr fallback)
+    pub(super) obj_fields: HashMap<u64, HashMap<String, VMValue>>,
     pub(super) functions: HashMap<String, MirFunction>,
     pub(super) cur_fn: Option<String>,
     // Trace context (dev-only; enabled with NYASH_VM_TRACE=1)

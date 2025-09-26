@@ -129,8 +129,15 @@ impl<'a> LoopBuilder<'a> {
 
         // 1. ブロックの準備
         let preheader_id = self.current_block()?;
+        let trace = std::env::var("NYASH_LOOP_TRACE").ok().as_deref() == Some("1");
         let (header_id, body_id, after_loop_id) =
             crate::mir::builder::loops::create_loop_blocks(self.parent_builder);
+        if trace {
+            eprintln!(
+                "[loop] blocks preheader={:?} header={:?} body={:?} exit={:?}",
+                preheader_id, header_id, body_id, after_loop_id
+            );
+        }
         self.loop_header = Some(header_id);
         self.continue_snapshots.clear();
 
@@ -175,6 +182,12 @@ impl<'a> LoopBuilder<'a> {
         self.emit_branch(condition_value, body_id, after_loop_id)?;
         let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, body_id, header_id);
         let _ = crate::mir::builder::loops::add_predecessor(self.parent_builder, after_loop_id, header_id);
+        if trace {
+            eprintln!(
+                "[loop] header branched to body={:?} and exit={:?}",
+                body_id, after_loop_id
+            );
+        }
 
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
@@ -243,6 +256,12 @@ impl<'a> LoopBuilder<'a> {
 
         // 9. Headerブロックをシール（全predecessors確定）
         self.seal_block(header_id, latch_id)?;
+        if trace {
+            eprintln!(
+                "[loop] sealed header={:?} with latch={:?}",
+                header_id, latch_id
+            );
+        }
 
         // 10. ループ後の処理 - Exit PHI生成
         self.set_current_block(after_loop_id)?;
@@ -256,7 +275,9 @@ impl<'a> LoopBuilder<'a> {
         // void値を返す
         let void_dst = self.new_value();
         self.emit_const(void_dst, ConstValue::Void)?;
-
+        if trace {
+            eprintln!("[loop] exit={:?} return void=%{:?}", after_loop_id, void_dst);
+        }
         Ok(void_dst)
     }
 
@@ -506,17 +527,31 @@ impl<'a> LoopBuilder<'a> {
 
         // Capture pre-if variable map (used for phi normalization)
         let pre_if_var_map = self.get_current_variable_map();
+        let trace_if = std::env::var("NYASH_IF_TRACE").ok().as_deref() == Some("1");
         // (legacy) kept for earlier merge style; now unified helpers compute deltas directly.
 
         // then branch
         self.set_current_block(then_bb)?;
         // Materialize all variables at entry via single-pred Phi (correctness-first)
-        let names_then: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
+        let names_then: Vec<String> = self
+            .parent_builder
+            .variable_map
+            .keys()
+            .filter(|n| !n.starts_with("__pin$"))
+            .cloned()
+            .collect();
         for name in names_then {
-            if let Some(&pre_v) = self.parent_builder.variable_map.get(&name) {
+            if let Some(&pre_v) = pre_if_var_map.get(&name) {
                 let phi_val = self.new_value();
                 self.emit_phi_at_block_start(then_bb, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                let name_for_log = name.clone();
                 self.update_variable(name, phi_val);
+                if trace_if {
+                    eprintln!(
+                        "[if-trace] then-entry phi var={} pre={:?} -> dst={:?}",
+                        name_for_log, pre_v, phi_val
+                    );
+                }
             }
         }
         for s in then_body.iter().cloned() {
@@ -536,12 +571,25 @@ impl<'a> LoopBuilder<'a> {
         // else branch
         self.set_current_block(else_bb)?;
         // Materialize all variables at entry via single-pred Phi (correctness-first)
-        let names2: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
+        let names2: Vec<String> = self
+            .parent_builder
+            .variable_map
+            .keys()
+            .filter(|n| !n.starts_with("__pin$"))
+            .cloned()
+            .collect();
         for name in names2 {
-            if let Some(&pre_v) = self.parent_builder.variable_map.get(&name) {
+            if let Some(&pre_v) = pre_if_var_map.get(&name) {
                 let phi_val = self.new_value();
                 self.emit_phi_at_block_start(else_bb, phi_val, vec![(pre_branch_bb, pre_v)])?;
+                let name_for_log = name.clone();
                 self.update_variable(name, phi_val);
+                if trace_if {
+                    eprintln!(
+                        "[if-trace] else-entry phi var={} pre={:?} -> dst={:?}",
+                        name_for_log, pre_v, phi_val
+                    );
+                }
             }
         }
         let mut else_var_map_end_opt: Option<HashMap<String, ValueId>> = None;

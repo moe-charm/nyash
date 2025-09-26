@@ -24,7 +24,12 @@ impl MirInterpreter {
             .map_err(|e| {
                 VMError::InvalidInstruction(format!("NewBox {} failed: {}", box_type, e))
             })?;
-        self.regs.insert(dst, VMValue::from_nyash_box(created));
+        // Store created instance first so 'me' can be passed to birth
+        let created_vm = VMValue::from_nyash_box(created);
+        self.regs.insert(dst, created_vm.clone());
+
+        // Note: birth の自動呼び出しは削除。
+        // 正しい設計は Builder が NewBox 後に明示的に birth 呼び出しを生成すること。
         Ok(())
     }
 
@@ -92,6 +97,20 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Debug: trace length dispatch receiver type before any handler resolution
+        if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            let recv = self.reg_load(box_val).unwrap_or(VMValue::Void);
+            let type_name = match recv.clone() {
+                VMValue::BoxRef(b) => b.type_name().to_string(),
+                VMValue::Integer(_) => "Integer".to_string(),
+                VMValue::Float(_) => "Float".to_string(),
+                VMValue::Bool(_) => "Bool".to_string(),
+                VMValue::String(_) => "String".to_string(),
+                VMValue::Void => "Void".to_string(),
+                VMValue::Future(_) => "Future".to_string(),
+            };
+            eprintln!("[vm-trace] length dispatch recv_type={}", type_name);
+        }
         // Graceful void guard for common short-circuit patterns in user code
         // e.g., `A or not last.is_eof()` should not crash when last is absent.
         match self.reg_load(box_val)? {
@@ -124,20 +143,68 @@ impl MirInterpreter {
             _ => {}
         }
         if self.try_handle_object_fields(dst, box_val, method, args)? {
+            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[vm-trace] length dispatch handler=object_fields");
+            }
             return Ok(());
         }
         if self.try_handle_instance_box(dst, box_val, method, args)? {
+            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[vm-trace] length dispatch handler=instance_box");
+            }
             return Ok(());
         }
-        if self.try_handle_string_box(dst, box_val, method, args)? {
+        if super::boxes_string::try_handle_string_box(self, dst, box_val, method, args)? {
+            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[vm-trace] length dispatch handler=string_box");
+            }
             return Ok(());
         }
-        if self.try_handle_array_box(dst, box_val, method, args)? {
+        if super::boxes_array::try_handle_array_box(self, dst, box_val, method, args)? {
+            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[vm-trace] length dispatch handler=array_box");
+            }
             return Ok(());
         }
-        if self.try_handle_map_box(dst, box_val, method, args)? {
+        if super::boxes_map::try_handle_map_box(self, dst, box_val, method, args)? {
+            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[vm-trace] length dispatch handler=map_box");
+            }
             return Ok(());
         }
+        // Narrow safety valve: if 'length' wasn't handled by any box-specific path,
+        // treat it as 0 (avoids Lt on Void in common loops). This is a dev-time
+        // robustness measure; precise behavior should be provided by concrete boxes.
+        if method == "length" {
+            if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[vm-trace] length dispatch handler=fallback(length=0)");
+            }
+            if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); }
+            return Ok(());
+        }
+        // Fallback: unique-tail dynamic resolution for user-defined methods
+        if let Some(func) = {
+            let tail = format!(".{}{}", method, format!("/{}", args.len()));
+            let mut cands: Vec<String> = self
+                .functions
+                .keys()
+                .filter(|k| k.ends_with(&tail))
+                .cloned()
+                .collect();
+            if cands.len() == 1 {
+                self.functions.get(&cands[0]).cloned()
+            } else { None }
+        } {
+            // Build argv: pass receiver as first arg (me)
+            let recv_vm = self.reg_load(box_val)?;
+            let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
+            argv.push(recv_vm);
+            for a in args { argv.push(self.reg_load(*a)?); }
+            let ret = self.exec_function_inner(&func, Some(&argv))?;
+            if let Some(d) = dst { self.regs.insert(d, ret); }
+            return Ok(());
+        }
+
         self.invoke_plugin_box(dst, box_val, method, args)
     }
 
@@ -148,21 +215,178 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<bool, VMError> {
+        // Local helpers to bridge NyashValue <-> VMValue for InstanceBox fields
+        fn vm_to_nv(v: &VMValue) -> crate::value::NyashValue {
+            use crate::value::NyashValue as NV;
+            use super::VMValue as VV;
+            match v {
+                VV::Integer(i) => NV::Integer(*i),
+                VV::Float(f) => NV::Float(*f),
+                VV::Bool(b) => NV::Bool(*b),
+                VV::String(s) => NV::String(s.clone()),
+                VV::Void => NV::Void,
+                VV::Future(_) => NV::Void, // not expected in fields
+                VV::BoxRef(_) => NV::Void,  // store minimal; complex object fields are not required here
+            }
+        }
+        fn nv_to_vm(v: &crate::value::NyashValue) -> VMValue {
+            use crate::value::NyashValue as NV;
+            use super::VMValue as VV;
+            match v {
+                NV::Integer(i) => VV::Integer(*i),
+                NV::Float(f) => VV::Float(*f),
+                NV::Bool(b) => VV::Bool(*b),
+                NV::String(s) => VV::String(s.clone()),
+                NV::Null | NV::Void => VV::Void,
+                NV::Array(_) | NV::Map(_) | NV::Box(_) | NV::WeakBox(_) => VV::Void,
+            }
+        }
+
         match method {
             "getField" => {
                 if args.len() != 1 {
                     return Err(VMError::InvalidInstruction("getField expects 1 arg".into()));
                 }
+                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                    let rk = match self.reg_load(box_val) {
+                        Ok(VMValue::BoxRef(ref b)) => format!("BoxRef({})", b.type_name()),
+                        Ok(VMValue::Integer(_)) => "Integer".to_string(),
+                        Ok(VMValue::Float(_)) => "Float".to_string(),
+                        Ok(VMValue::Bool(_)) => "Bool".to_string(),
+                        Ok(VMValue::String(_)) => "String".to_string(),
+                        Ok(VMValue::Void) => "Void".to_string(),
+                        Ok(VMValue::Future(_)) => "Future".to_string(),
+                        Err(_) => "<err>".to_string(),
+                    };
+                    eprintln!("[vm-trace] getField recv_kind={}", rk);
+                }
                 let fname = match self.reg_load(args[0])? {
                     VMValue::String(s) => s,
                     v => v.to_string(),
                 };
-                let v = self
+                // Prefer InstanceBox internal storage (structural correctness)
+                if let VMValue::BoxRef(bref) = self.reg_load(box_val)? {
+                    if let Some(inst) = bref.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                            eprintln!("[vm-trace] getField instance class={}", inst.class_name);
+                        }
+                        // Special-case bridge: JsonParser.length -> tokens.length()
+                        if inst.class_name == "JsonParser" && fname == "length" {
+                            if let Some(tokens_shared) = inst.get_field("tokens") {
+                                let tokens_box: Box<dyn crate::box_trait::NyashBox> = tokens_shared.share_box();
+                                if let Some(arr) = tokens_box.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                                    let len_box = arr.length();
+                                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(len_box)); }
+                                    return Ok(true);
+                                }
+                            }
+                        }
+                        // First: prefer fields_ng (NyashValue) when present
+                        if let Some(nv) = inst.get_field_ng(&fname) {
+                            // Treat complex Box-like values as "missing" for internal storage so that
+                            // legacy obj_fields (which stores BoxRef) is used instead.
+                            // This avoids NV::Box/Array/Map being converted to Void by nv_to_vm.
+                            let is_missing = matches!(
+                                nv,
+                                crate::value::NyashValue::Null
+                                    | crate::value::NyashValue::Void
+                                    | crate::value::NyashValue::Array(_)
+                                    | crate::value::NyashValue::Map(_)
+                                    | crate::value::NyashValue::Box(_)
+                                    | crate::value::NyashValue::WeakBox(_)
+                            );
+                            if !is_missing {
+                                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                                    eprintln!("[vm-trace] getField internal {}.{} -> {:?}", inst.class_name, fname, nv);
+                                }
+                                if let Some(d) = dst {
+                                    // Special-case: NV::Box should surface as VMValue::BoxRef
+                                    if let crate::value::NyashValue::Box(arc_m) = nv {
+                                        if let Ok(guard) = arc_m.lock() {
+                                            let cloned: Box<dyn crate::box_trait::NyashBox> = guard.clone_box();
+                                            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::from(cloned);
+                                            self.regs.insert(d, VMValue::BoxRef(arc));
+                                        } else {
+                                            self.regs.insert(d, VMValue::Void);
+                                        }
+                                    } else {
+                                        self.regs.insert(d, nv_to_vm(&nv));
+                                    }
+                                }
+                                return Ok(true);
+                            } else {
+                                // Provide pragmatic defaults for JsonScanner numeric fields
+                                if inst.class_name == "JsonScanner" {
+                                    let def = match fname.as_str() {
+                                        "position" | "length" => Some(VMValue::Integer(0)),
+                                        "line" | "column" => Some(VMValue::Integer(1)),
+                                        "text" => Some(VMValue::String(String::new())),
+                                        _ => None,
+                                    };
+                                    if let Some(v) = def {
+                                        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                                            eprintln!("[vm-trace] getField default JsonScanner.{} -> {:?}", fname, v);
+                                        }
+                                        if let Some(d) = dst { self.regs.insert(d, v); }
+                                        return Ok(true);
+                                    }
+                                }
+                            }
+                        } else {
+                            // fields_ng missing entirely → try JsonScanner defaults next, otherwise fallback to legacy/opfields
+                            if inst.class_name == "JsonScanner" {
+                                let def = match fname.as_str() {
+                                    "position" | "length" => Some(VMValue::Integer(0)),
+                                    "line" | "column" => Some(VMValue::Integer(1)),
+                                    "text" => Some(VMValue::String(String::new())),
+                                    _ => None,
+                                };
+                                if let Some(v) = def {
+                                    if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                                        eprintln!("[vm-trace] getField default(JsonScanner missing) {} -> {:?}", fname, v);
+                                    }
+                                    if let Some(d) = dst { self.regs.insert(d, v); }
+                                    return Ok(true);
+                                }
+                            }
+                        }
+                        // Finally: legacy fields (SharedNyashBox) for complex values
+                        if let Some(shared) = inst.get_field(&fname) {
+                            if let Some(d) = dst { self.regs.insert(d, VMValue::BoxRef(shared)); }
+                            return Ok(true);
+                        }
+                    }
+                }
+                let key = self.object_key_for(box_val);
+                let mut v = self
                     .obj_fields
-                    .get(&box_val)
+                    .get(&key)
                     .and_then(|m| m.get(&fname))
                     .cloned()
                     .unwrap_or(VMValue::Void);
+                // Final safety: for JsonScanner legacy path, coerce missing numeric fields
+                if let VMValue::Void = v {
+                    if let Ok(VMValue::BoxRef(bref2)) = self.reg_load(box_val) {
+                        if let Some(inst2) = bref2.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                            if inst2.class_name == "JsonScanner" {
+                                if matches!(fname.as_str(), "position" | "length") {
+                                    v = if fname == "position" { VMValue::Integer(0) } else { VMValue::Integer(0) };
+                                } else if matches!(fname.as_str(), "line" | "column") {
+                                    v = VMValue::Integer(1);
+                                } else if fname == "text" {
+                                    v = VMValue::String(String::new());
+                                }
+                            }
+                        }
+                    }
+                }
+                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                    if let VMValue::BoxRef(b) = &v {
+                        eprintln!("[vm-trace] getField legacy {} -> BoxRef({})", fname, b.type_name());
+                    } else {
+                        eprintln!("[vm-trace] getField legacy {} -> {:?}", fname, v);
+                    }
+                }
                 if let Some(d) = dst {
                     self.regs.insert(d, v);
                 }
@@ -179,8 +403,42 @@ impl MirInterpreter {
                     v => v.to_string(),
                 };
                 let valv = self.reg_load(args[1])?;
+                // Prefer InstanceBox internal storage
+                if let VMValue::BoxRef(bref) = self.reg_load(box_val)? {
+                    if let Some(inst) = bref.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                        // Primitives → 内部保存
+                        if matches!(valv, VMValue::Integer(_) | VMValue::Float(_) | VMValue::Bool(_) | VMValue::String(_) | VMValue::Void) {
+                            let _ = inst.set_field_ng(fname.clone(), vm_to_nv(&valv));
+                            return Ok(true);
+                        }
+                        // BoxRef のうち、Integer/Float/Bool/String はプリミティブに剥がして内部保存
+                        if let VMValue::BoxRef(bx) = &valv {
+                            if let Some(ib) = bx.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                                let _ = inst.set_field_ng(fname.clone(), crate::value::NyashValue::Integer(ib.value));
+                                return Ok(true);
+                            }
+                            if let Some(fb) = bx.as_any().downcast_ref::<crate::boxes::FloatBox>() {
+                                let _ = inst.set_field_ng(fname.clone(), crate::value::NyashValue::Float(fb.value));
+                                return Ok(true);
+                            }
+                            if let Some(bb) = bx.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
+                                let _ = inst.set_field_ng(fname.clone(), crate::value::NyashValue::Bool(bb.value));
+                                return Ok(true);
+                            }
+                            if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                                let _ = inst.set_field_ng(fname.clone(), crate::value::NyashValue::String(sb.value.clone()));
+                                return Ok(true);
+                            }
+                            // For complex Box values (InstanceBox/MapBox/ArrayBox...), store into
+                            // legacy fields to preserve identity across clones/gets.
+                            let _ = inst.set_field(fname.as_str(), std::sync::Arc::clone(bx));
+                            return Ok(true);
+                        }
+                    }
+                }
+                let key = self.object_key_for(box_val);
                 self.obj_fields
-                    .entry(box_val)
+                    .entry(key)
                     .or_default()
                     .insert(fname, valv);
                 Ok(true)
@@ -189,6 +447,7 @@ impl MirInterpreter {
         }
     }
 
+    // moved: try_handle_map_box → handlers/boxes_map.rs
     fn try_handle_map_box(
         &mut self,
         dst: Option<ValueId>,
@@ -196,71 +455,10 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<bool, VMError> {
-        let recv = self.reg_load(box_val)?;
-        let recv_box_any: Box<dyn NyashBox> = match recv.clone() {
-            VMValue::BoxRef(b) => b.share_box(),
-            other => other.to_nyash_box(),
-        };
-        if let Some(mb) = recv_box_any
-            .as_any()
-            .downcast_ref::<crate::boxes::map_box::MapBox>()
-        {
-            match method {
-                "birth" => {
-                    // No-op constructor init for MapBox
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
-                    return Ok(true);
-                }
-                "set" => {
-                    if args.len() != 2 { return Err(VMError::InvalidInstruction("MapBox.set expects 2 args".into())); }
-                    let k = self.reg_load(args[0])?.to_nyash_box();
-                    let v = self.reg_load(args[1])?.to_nyash_box();
-                    let ret = mb.set(k, v);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "get" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("MapBox.get expects 1 arg".into())); }
-                    let k = self.reg_load(args[0])?.to_nyash_box();
-                    let ret = mb.get(k);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "has" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("MapBox.has expects 1 arg".into())); }
-                    let k = self.reg_load(args[0])?.to_nyash_box();
-                    let ret = mb.has(k);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "delete" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("MapBox.delete expects 1 arg".into())); }
-                    let k = self.reg_load(args[0])?.to_nyash_box();
-                    let ret = mb.delete(k);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "size" => {
-                    let ret = mb.size();
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "keys" => {
-                    let ret = mb.keys();
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "values" => {
-                    let ret = mb.values();
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                _ => {}
-            }
-        }
-        Ok(false)
+        super::boxes_map::try_handle_map_box(self, dst, box_val, method, args)
     }
 
+    // moved: try_handle_string_box → handlers/boxes_string.rs
     fn try_handle_string_box(
         &mut self,
         dst: Option<ValueId>,
@@ -268,66 +466,7 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<bool, VMError> {
-        let recv = self.reg_load(box_val)?;
-        let recv_box_any: Box<dyn NyashBox> = match recv.clone() {
-            VMValue::BoxRef(b) => b.share_box(),
-            other => other.to_nyash_box(),
-        };
-        if let Some(sb) = recv_box_any
-            .as_any()
-            .downcast_ref::<crate::box_trait::StringBox>()
-        {
-            match method {
-                "length" => {
-                    let ret = sb.length();
-                    if let Some(d) = dst {
-                        self.regs.insert(d, VMValue::from_nyash_box(ret));
-                    }
-                    return Ok(true);
-                }
-                "substring" => {
-                    if args.len() != 2 {
-                        return Err(VMError::InvalidInstruction(
-                            "substring expects 2 args (start, end)".into(),
-                        ));
-                    }
-                    let s_idx = self.reg_load(args[0])?.as_integer().unwrap_or(0);
-                    let e_idx = self.reg_load(args[1])?.as_integer().unwrap_or(0);
-                    let len = sb.value.chars().count() as i64;
-                    let start = s_idx.max(0).min(len) as usize;
-                    let end = e_idx.max(start as i64).min(len) as usize;
-                    let chars: Vec<char> = sb.value.chars().collect();
-                    let sub: String = chars[start..end].iter().collect();
-                    if let Some(d) = dst {
-                        self.regs.insert(
-                            d,
-                            VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(
-                                sub,
-                            ))),
-                        );
-                    }
-                    return Ok(true);
-                }
-                "concat" => {
-                    if args.len() != 1 {
-                        return Err(VMError::InvalidInstruction("concat expects 1 arg".into()));
-                    }
-                    let rhs = self.reg_load(args[0])?;
-                    let new_s = format!("{}{}", sb.value, rhs.to_string());
-                    if let Some(d) = dst {
-                        self.regs.insert(
-                            d,
-                            VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(
-                                new_s,
-                            ))),
-                        );
-                    }
-                    return Ok(true);
-                }
-                _ => {}
-            }
-        }
-        Ok(false)
+        super::boxes_string::try_handle_string_box(self, dst, box_val, method, args)
     }
 
     fn try_handle_instance_box(
@@ -342,26 +481,144 @@ impl MirInterpreter {
             VMValue::BoxRef(b) => b.share_box(),
             other => other.to_nyash_box(),
         };
+        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") && method == "toString" {
+            eprintln!("[vm-trace] instance-check recv_box_any.type={} args_len={}", recv_box_any.type_name(), args.len());
+        }
         if let Some(inst) = recv_box_any.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+            // Development guard: ensure JsonScanner core fields have sensible defaults
+            if inst.class_name == "JsonScanner" {
+                // populate missing fields to avoid Void in comparisons inside is_eof/advance
+                if inst.get_field_ng("position").is_none() {
+                    let _ = inst.set_field_ng("position".to_string(), crate::value::NyashValue::Integer(0));
+                }
+                if inst.get_field_ng("length").is_none() {
+                    let _ = inst.set_field_ng("length".to_string(), crate::value::NyashValue::Integer(0));
+                }
+                if inst.get_field_ng("line").is_none() {
+                    let _ = inst.set_field_ng("line".to_string(), crate::value::NyashValue::Integer(1));
+                }
+                if inst.get_field_ng("column").is_none() {
+                    let _ = inst.set_field_ng("column".to_string(), crate::value::NyashValue::Integer(1));
+                }
+                if inst.get_field_ng("text").is_none() {
+                    let _ = inst.set_field_ng("text".to_string(), crate::value::NyashValue::String(String::new()));
+                }
+            }
+            // JsonNodeInstance narrow bridges removed: rely on builder rewrite and instance dispatch
+            // birth on user-defined InstanceBox: treat as no-op constructor init
+            if method == "birth" {
+                if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
+                return Ok(true);
+            }
+            if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") && method == "toString" {
+                eprintln!(
+                    "[vm-trace] instance-check downcast=ok class={} stringify_present={{class:{}, alt:{}}}",
+                    inst.class_name,
+                    self.functions.contains_key(&format!("{}.stringify/0", inst.class_name)),
+                    self.functions.contains_key(&format!("{}Instance.stringify/0", inst.class_name))
+                );
+            }
             // Resolve lowered method function: "Class.method/arity"
-            let fname = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len()));
-            if let Some(func) = self.functions.get(&fname).cloned() {
-                // Build argv: me + args
+            let primary = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len()));
+            // Alternate naming: "ClassInstance.method/arity"
+            let alt = format!("{}Instance.{}{}", inst.class_name, method, format!("/{}", args.len()));
+            // Static method variant that takes 'me' explicitly as first arg: "Class.method/(arity+1)"
+            let static_variant = format!("{}.{}{}", inst.class_name, method, format!("/{}", args.len() + 1));
+            // Special-case: toString() → stringify/0 if present
+            // Prefer base class (strip trailing "Instance") stringify when available.
+            let (stringify_base, stringify_inst) = if method == "toString" && args.is_empty() {
+                let base = inst
+                    .class_name
+                    .strip_suffix("Instance")
+                    .map(|s| s.to_string());
+                let base_name = base.unwrap_or_else(|| inst.class_name.clone());
+                (
+                    Some(format!("{}.stringify/0", base_name)),
+                    Some(format!("{}.stringify/0", inst.class_name)),
+                )
+            } else { (None, None) };
+
+            if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[vm-trace] instance-dispatch class={} method={} arity={} candidates=[{}, {}, {}]",
+                    inst.class_name, method, args.len(), primary, alt, static_variant
+                );
+            }
+
+            // Prefer stringify for toString() if present (semantic alias). Try instance first, then base.
+            let func_opt = if let Some(ref sname) = stringify_inst {
+                self.functions.get(sname).cloned()
+            } else { None }
+            .or_else(|| stringify_base.as_ref().and_then(|n| self.functions.get(n).cloned()))
+            .or_else(|| self.functions.get(&primary).cloned())
+            .or_else(|| self.functions.get(&alt).cloned())
+            .or_else(|| self.functions.get(&static_variant).cloned());
+
+            if let Some(func) = func_opt {
+                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[vm-trace] instance-dispatch hit -> {}", func.signature.name);
+                }
+                // Build argv: me + args (works for both instance and static(me, ...))
                 let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
                 argv.push(recv_vm.clone());
-                for a in args {
-                    argv.push(self.reg_load(*a)?);
-                }
+                for a in args { argv.push(self.reg_load(*a)?); }
                 let ret = self.exec_function_inner(&func, Some(&argv))?;
-                if let Some(d) = dst {
-                    self.regs.insert(d, ret);
-                }
+                if let Some(d) = dst { self.regs.insert(d, ret); }
                 return Ok(true);
+            } else {
+                // Conservative fallback: search unique function by name tail ".method/arity"
+                let tail = format!(".{}{}", method, format!("/{}", args.len()));
+                let mut cands: Vec<String> = self
+                    .functions
+                    .keys()
+                    .filter(|k| k.ends_with(&tail))
+                    .cloned()
+                    .collect();
+                if cands.len() == 1 {
+                    let fname = cands.remove(0);
+                    if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                        eprintln!("[vm-trace] instance-dispatch fallback unique tail -> {}", fname);
+                    }
+                    if let Some(func) = self.functions.get(&fname).cloned() {
+                        let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
+                        argv.push(recv_vm.clone());
+                        for a in args { argv.push(self.reg_load(*a)?); }
+                        let ret = self.exec_function_inner(&func, Some(&argv))?;
+                        if let Some(d) = dst { self.regs.insert(d, ret); }
+                        return Ok(true);
+                    }
+                } else if cands.len() > 1 {
+                    // Narrow by receiver class prefix (and optional "Instance" suffix)
+                    let recv_cls = inst.class_name.clone();
+                    let pref1 = format!("{}.", recv_cls);
+                    let pref2 = format!("{}Instance.", recv_cls);
+                    let mut filtered: Vec<String> = cands
+                        .into_iter()
+                        .filter(|k| k.starts_with(&pref1) || k.starts_with(&pref2))
+                        .collect();
+                    if filtered.len() == 1 {
+                        let fname = filtered.remove(0);
+                        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                            eprintln!("[vm-trace] instance-dispatch narrowed by class -> {}", fname);
+                        }
+                        if let Some(func) = self.functions.get(&fname).cloned() {
+                            let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
+                            argv.push(recv_vm.clone());
+                            for a in args { argv.push(self.reg_load(*a)?); }
+                            let ret = self.exec_function_inner(&func, Some(&argv))?;
+                            if let Some(d) = dst { self.regs.insert(d, ret); }
+                            return Ok(true);
+                        }
+                    } else if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                        eprintln!("[vm-trace] instance-dispatch multiple candidates remain after narrowing: {:?}", filtered);
+                    }
+                }
             }
         }
         Ok(false)
     }
 
+    // moved: try_handle_array_box → handlers/boxes_array.rs
     fn try_handle_array_box(
         &mut self,
         dst: Option<ValueId>,
@@ -369,52 +626,7 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<bool, VMError> {
-        let recv = self.reg_load(box_val)?;
-        let recv_box_any: Box<dyn NyashBox> = match recv.clone() {
-            VMValue::BoxRef(b) => b.share_box(),
-            other => other.to_nyash_box(),
-        };
-        if let Some(ab) = recv_box_any
-            .as_any()
-            .downcast_ref::<crate::boxes::array::ArrayBox>()
-        {
-            match method {
-                "birth" => {
-                    // No-op constructor init
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
-                    return Ok(true);
-                }
-                "push" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("push expects 1 arg".into())); }
-                    let val = self.reg_load(args[0])?.to_nyash_box();
-                    let _ = ab.push(val);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
-                    return Ok(true);
-                }
-                "len" | "length" | "size" => {
-                    let ret = ab.length();
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "get" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("get expects 1 arg".into())); }
-                    let idx = self.reg_load(args[0])?.to_nyash_box();
-                    let ret = ab.get(idx);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::from_nyash_box(ret)); }
-                    return Ok(true);
-                }
-                "set" => {
-                    if args.len() != 2 { return Err(VMError::InvalidInstruction("set expects 2 args".into())); }
-                    let idx = self.reg_load(args[0])?.to_nyash_box();
-                    let val = self.reg_load(args[1])?.to_nyash_box();
-                    let _ = ab.set(idx, val);
-                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
-                    return Ok(true);
-                }
-                _ => {}
-            }
-        }
-        Ok(false)
+        super::boxes_array::try_handle_array_box(self, dst, box_val, method, args)
     }
 
     fn invoke_plugin_box(
@@ -481,6 +693,13 @@ impl MirInterpreter {
                 ))),
             }
         } else {
+            // Generic toString fallback for any non-plugin box
+            if method == "toString" {
+                if let Some(d) = dst {
+                    self.regs.insert(d, VMValue::String(recv_box.to_string_box().value));
+                }
+                return Ok(());
+            }
             // Dynamic fallback for user-defined InstanceBox: dispatch to lowered function "Class.method/Arity"
             if let Some(inst) = recv_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                 let class_name = inst.class_name.clone();

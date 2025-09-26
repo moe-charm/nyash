@@ -25,20 +25,21 @@ using json as JsonParserModule
 static box Main {
   main() {
     local samples = new ArrayBox()
+    // Order aligned with expected block below
     samples.push("null")
     samples.push("true")
     samples.push("false")
     samples.push("42")
+    samples.push("\"hello\"")
+    samples.push("[]")
+    samples.push("{}")
+    samples.push("{\"a\":1}")
     samples.push("-0")
     samples.push("0")
     samples.push("3.14")
     samples.push("-2.5")
     samples.push("6.02e23")
     samples.push("-1e-9")
-    samples.push("\"hello\"")
-    samples.push("[]")
-    samples.push("{}")
-    samples.push("{\"a\":1}")
 
     local i = 0
     loop(i < samples.length()) {

@@ -13,13 +13,13 @@ macro_rules! netlog {
 }
 
 mod abi;
+mod boxes;
 mod consts;
 mod ffi;
 mod http_helpers;
 mod sockets;
 mod state;
 mod tlv;
-mod boxes;
 
 pub use abi::NyashTypeBoxFfi;
 pub use boxes::*;

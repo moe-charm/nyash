@@ -136,10 +136,18 @@ impl MapBox {
         let key_str = key.to_string_box().value;
         match self.data.read().unwrap().get(&key_str) {
             Some(value) => {
+                // Preserve identity for plugin/user InstanceBox to keep internal fields
                 #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
                 if value
                     .as_any()
                     .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                    .is_some()
+                {
+                    return value.share_box();
+                }
+                if value
+                    .as_any()
+                    .downcast_ref::<crate::instance_v2::InstanceBox>()
                     .is_some()
                 {
                     return value.share_box();
@@ -169,9 +177,11 @@ impl MapBox {
 
     /// 全てのキーを取得
     pub fn keys(&self) -> Box<dyn NyashBox> {
-        let keys: Vec<String> = self.data.read().unwrap().keys().cloned().collect();
+        let mut keys: Vec<String> = self.data.read().unwrap().keys().cloned().collect();
+        // Deterministic ordering for stable stringify/tests
+        keys.sort();
         let array = ArrayBox::new();
-        for key in keys {
+        for key in keys.into_iter() {
             array.push(Box::new(StringBox::new(&key)));
         }
         Box::new(array)
@@ -184,7 +194,13 @@ impl MapBox {
             .read()
             .unwrap()
             .values()
-            .map(|v| v.clone_box())
+            .map(|v| {
+                if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                    v.share_box()
+                } else {
+                    v.clone_box()
+                }
+            })
             .collect();
         let array = ArrayBox::new();
         for value in values {

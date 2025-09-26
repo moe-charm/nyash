@@ -53,6 +53,8 @@ impl MirBuilder {
         // Snapshot variables before entering branches
         let pre_if_var_map = self.variable_map.clone();
 
+        let trace_if = std::env::var("NYASH_IF_TRACE").ok().as_deref() == Some("1");
+
         // then
         self.start_new_block(then_block)?;
         // Scope enter for then-branch
@@ -65,6 +67,12 @@ impl MirBuilder {
             let inputs = vec![(pre_branch_bb, pre_v)];
             self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
             self.variable_map.insert(name.clone(), phi_val);
+            if trace_if {
+                eprintln!(
+                    "[if-trace] then-entry phi var={} pre={:?} -> dst={:?}",
+                    name, pre_v, phi_val
+                );
+            }
         }
         let then_value_raw = self.build_expression(then_branch)?;
         let then_exit_block = self.current_block()?;
@@ -85,6 +93,12 @@ impl MirBuilder {
             let inputs = vec![(pre_branch_bb, pre_v)];
             self.emit_instruction(MirInstruction::Phi { dst: phi_val, inputs })?;
             self.variable_map.insert(name.clone(), phi_val);
+            if trace_if {
+                eprintln!(
+                    "[if-trace] else-entry phi var={} pre={:?} -> dst={:?}",
+                    name, pre_v, phi_val
+                );
+            }
         }
         let (else_value_raw, else_ast_for_analysis, else_var_map_end_opt) = if let Some(else_ast) = else_branch {
             self.variable_map = pre_if_var_map.clone();

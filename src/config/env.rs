@@ -358,12 +358,11 @@ pub fn using_is_ci() -> bool { using_profile().eq_ignore_ascii_case("ci") }
 pub fn using_is_dev() -> bool { using_profile().eq_ignore_ascii_case("dev") }
 /// Allow `using "path"` statements in source (dev-only by default).
 pub fn allow_using_file() -> bool {
-    if using_is_prod() { return false; }
-    // Optional explicit override
+    // SSOT 徹底: 全プロファイルで既定禁止（nyash.toml を唯一の真実に）
+    // 明示オーバーライドでのみ許可（開発用緊急時）
     match std::env::var("NYASH_ALLOW_USING_FILE").ok().as_deref() {
-        Some("0") | Some("false") | Some("off") => false,
         Some("1") | Some("true") | Some("on") => true,
-        _ => true, // dev/ci default: allowed
+        _ => false,
     }
 }
 /// Determine whether AST prelude merge for `using` is enabled.

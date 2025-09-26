@@ -2,12 +2,12 @@
 
 use crate::constants::*;
 use crate::ffi::*;
-use crate::provider::{provider_kind, NodeRep, ProviderKind, NODES, NEXT_ID};
+use crate::provider::{provider_kind, NodeRep, ProviderKind, NEXT_ID, NODES};
 use crate::tlv_helpers::*;
 use serde_json::Value;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::{atomic::Ordering, Arc};
 
 pub extern "C" fn jsonnode_resolve(name: *const c_char) -> u32 {
     if name.is_null() {

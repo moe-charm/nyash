@@ -1,4 +1,5 @@
 use super::*;
+use std::string::String as StdString;
 
 impl MirInterpreter {
     pub(super) fn reg_load(&self, id: ValueId) -> Result<VMValue, VMError> {
@@ -29,6 +30,17 @@ impl MirInterpreter {
         }
     }
 
+    /// Compute a stable key for an object receiver to store fields across functions.
+    /// Prefer Arc ptr address for BoxRef; else fall back to ValueId number cast.
+    pub(super) fn object_key_for(&self, id: crate::mir::ValueId) -> u64 {
+        if let Ok(v) = self.reg_load(id) {
+            if let crate::backend::vm::VMValue::BoxRef(arc) = v {
+                let ptr = std::sync::Arc::as_ptr(&arc) as *const ();
+                return ptr as usize as u64;
+            }
+        }
+        id.as_u32() as u64
+    }
     pub(super) fn eval_binop(
         &self,
         op: BinaryOp,
@@ -43,6 +55,13 @@ impl MirInterpreter {
             (Add, Integer(x), VMValue::Void) => Integer(x),
             (Add, VMValue::Void, Float(y)) => Float(y),
             (Add, Float(x), VMValue::Void) => Float(x),
+            // Dev-only safety valve: treat Void as empty string on string concatenation
+            // Guarded by NYASH_VM_TOLERATE_VOID=1
+            (Add, String(s), VMValue::Void) | (Add, VMValue::Void, String(s))
+                if std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1") =>
+            {
+                String(s)
+            }
             (Add, Integer(x), Integer(y)) => Integer(x + y),
             (Add, String(s), Integer(y)) => String(format!("{}{}", s, y)),
             (Add, String(s), Float(y)) => String(format!("{}{}", s, y)),
@@ -82,9 +101,26 @@ impl MirInterpreter {
     pub(super) fn eval_cmp(&self, op: CompareOp, a: VMValue, b: VMValue) -> Result<bool, VMError> {
         use CompareOp::*;
         use VMValue::*;
-        Ok(match (op, &a, &b) {
-            (Eq, _, _) => eq_vm(&a, &b),
-            (Ne, _, _) => !eq_vm(&a, &b),
+        // Dev-only safety valve: tolerate Void in comparisons when enabled
+        // NYASH_VM_TOLERATE_VOID=1 → treat Void as 0 for numeric, empty for string
+        let (a2, b2) = if std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1") {
+            match (&a, &b) {
+                (VMValue::Void, VMValue::Integer(_)) => (Integer(0), b.clone()),
+                (VMValue::Integer(_), VMValue::Void) => (a.clone(), Integer(0)),
+                (VMValue::Void, VMValue::Float(_)) => (Float(0.0), b.clone()),
+                (VMValue::Float(_), VMValue::Void) => (a.clone(), Float(0.0)),
+                (VMValue::Void, VMValue::String(_)) => (String(StdString::new()), b.clone()),
+                (VMValue::String(_), VMValue::Void) => (a.clone(), String(StdString::new())),
+                (VMValue::Void, _) => (Integer(0), b.clone()),
+                (_, VMValue::Void) => (a.clone(), Integer(0)),
+                _ => (a.clone(), b.clone()),
+            }
+        } else {
+            (a, b)
+        };
+        let result = match (op, &a2, &b2) {
+            (Eq, _, _) => eq_vm(&a2, &b2),
+            (Ne, _, _) => !eq_vm(&a2, &b2),
             (Lt, Integer(x), Integer(y)) => x < y,
             (Le, Integer(x), Integer(y)) => x <= y,
             (Gt, Integer(x), Integer(y)) => x > y,
@@ -98,11 +134,19 @@ impl MirInterpreter {
             (Gt, VMValue::String(ref s), VMValue::String(ref t)) => s > t,
             (Ge, VMValue::String(ref s), VMValue::String(ref t)) => s >= t,
             (opk, va, vb) => {
+                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[vm-trace] compare error fn={:?} op={:?} a={:?} b={:?} last_block={:?} last_inst={:?}",
+                        self.cur_fn, opk, va, vb, self.last_block, self.last_inst
+                    );
+                }
                 return Err(VMError::TypeError(format!(
                     "unsupported compare {:?} on {:?} and {:?}",
                     opk, va, vb
-                )))
+                )));
             }
-        })
+        };
+        Ok(result)
     }
+
 }

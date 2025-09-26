@@ -2,6 +2,9 @@ use super::*;
 
 mod arithmetic;
 mod boxes;
+mod boxes_array;
+mod boxes_string;
+mod boxes_map;
 mod calls;
 mod externals;
 mod memory;

@@ -5,7 +5,8 @@ use std::os::raw::{c_char, c_void};
 // External C functions for yyjson provider
 extern "C" {
     pub fn nyash_json_shim_parse(text: *const c_char, len: usize) -> i32;
-    pub fn nyjson_parse_doc(text: *const c_char, len: usize, out_err_code: *mut i32) -> *mut c_void;
+    pub fn nyjson_parse_doc(text: *const c_char, len: usize, out_err_code: *mut i32)
+        -> *mut c_void;
     pub fn nyjson_doc_free(doc: *mut c_void);
     pub fn nyjson_doc_root(doc: *mut c_void) -> *mut c_void;
     pub fn nyjson_is_null(v: *mut c_void) -> i32;

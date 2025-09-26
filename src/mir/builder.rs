@@ -10,6 +10,7 @@ use super::{
     FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, ValueIdGenerator,
 };
 use crate::ast::{ASTNode, LiteralValue};
+use crate::mir::builder::builder_calls::CallTarget;
 use std::collections::HashMap;
 use std::collections::HashSet;
 mod calls; // Call system modules (refactored from builder_calls)
@@ -85,6 +86,8 @@ pub struct MirBuilder {
 
     /// Remember class of object fields after assignments: (base_id, field) -> class_name
     pub(super) field_origin_class: HashMap<(ValueId, String), String>,
+    /// Class-level field origin (cross-function heuristic): (BaseBoxName, field) -> FieldBoxName
+    pub(super) field_origin_by_box: HashMap<(String, String), String>,
 
     /// Optional per-value type annotations (MIR-level): ValueId -> MirType
     pub(super) value_types: HashMap<ValueId, super::MirType>,
@@ -152,6 +155,7 @@ impl MirBuilder {
             weak_fields_by_box: HashMap::new(),
             property_getters_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
+            field_origin_by_box: HashMap::new(),
             value_types: HashMap::new(),
             plugin_method_sigs,
             current_static_box: None,
@@ -270,7 +274,12 @@ impl MirBuilder {
         var_name: String,
         value: ASTNode,
     ) -> Result<ValueId, String> {
-        let value_id = self.build_expression(value)?;
+        let raw_value_id = self.build_expression(value)?;
+        // Correctness-first: assignment results may be used across control-flow joins.
+        // Pin to a slot so the value has a block-local def and participates in PHI merges.
+        let value_id = self
+            .pin_to_slot(raw_value_id, "@assign")
+            .unwrap_or(raw_value_id);
 
         // In SSA form, each assignment creates a new value
         self.variable_map.insert(var_name.clone(), value_id);
@@ -430,18 +439,37 @@ impl MirBuilder {
         // Record origin for optimization: dst was created by NewBox of class
         self.value_origin_newbox.insert(dst, class.clone());
 
-        // Call birth(...) for all boxes except StringBox (special-cased in LLVM path)
-        // User-defined boxes require birth to initialize fields (scanner/tokens etc.)
+        // birth 呼び出し（Builder 正規化）
+        // 優先: 低下済みグローバル関数 `<Class>.birth/Arity`（Arity は me を含まない）
+        // 代替: 既存互換として BoxCall("birth")（プラグイン/ビルトインの初期化に対応）
         if class != "StringBox" {
-            let birt_mid = resolve_slot_by_type_name(&class, "birth");
-            self.emit_box_or_plugin_call(
-                None,
-                dst,
-                "birth".to_string(),
-                birt_mid,
-                arg_values,
-                EffectMask::READ.add(Effect::ReadHeap),
-            )?;
+            let arity = arg_values.len();
+            let lowered = crate::mir::builder::calls::function_lowering::generate_method_function_name(
+                &class,
+                "birth",
+                arity,
+            );
+            let use_lowered = if let Some(ref module) = self.current_module {
+                module.functions.contains_key(&lowered)
+            } else { false };
+            if use_lowered {
+                // Call Global("Class.birth/Arity") with argv = [me, args...]
+                let mut argv: Vec<ValueId> = Vec::with_capacity(1 + arity);
+                argv.push(dst);
+                argv.extend(arg_values.iter().copied());
+                self.emit_legacy_call(None, CallTarget::Global(lowered), argv)?;
+            } else {
+                // Fallback: instance method BoxCall("birth")
+                let birt_mid = resolve_slot_by_type_name(&class, "birth");
+                self.emit_box_or_plugin_call(
+                    None,
+                    dst,
+                    "birth".to_string(),
+                    birt_mid,
+                    arg_values,
+                    EffectMask::READ.add(Effect::ReadHeap),
+                )?;
+            }
         }
 
         Ok(dst)

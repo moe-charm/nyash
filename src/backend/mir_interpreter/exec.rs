@@ -80,7 +80,20 @@ impl MirInterpreter {
                 let dst_id = *dst;
                 if let Some(pred) = last_pred {
                     if let Some((_, val)) = inputs.iter().find(|(bb, _)| *bb == pred) {
-                        let v = self.reg_load(*val)?;
+                        let v = match self.reg_load(*val) {
+                            Ok(v) => v,
+                            Err(e) => {
+                                // Dev safety valve: tolerate undefined phi inputs by substituting Void
+                                if std::env::var("NYASH_VM_PHI_TOLERATE_UNDEFINED").ok().as_deref() == Some("1") {
+                                    if Self::trace_enabled() {
+                                        eprintln!("[vm-trace] phi tolerate undefined input {:?} -> Void (err={:?})", val, e);
+                                    }
+                                    VMValue::Void
+                                } else {
+                                    return Err(e);
+                                }
+                            }
+                        };
                         self.regs.insert(dst_id, v);
                         if Self::trace_enabled() {
                             eprintln!(
@@ -90,7 +103,19 @@ impl MirInterpreter {
                         }
                     }
                 } else if let Some((_, val)) = inputs.first() {
-                    let v = self.reg_load(*val)?;
+                    let v = match self.reg_load(*val) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            if std::env::var("NYASH_VM_PHI_TOLERATE_UNDEFINED").ok().as_deref() == Some("1") {
+                                if Self::trace_enabled() {
+                                    eprintln!("[vm-trace] phi tolerate undefined default input {:?} -> Void (err={:?})", val, e);
+                                }
+                                VMValue::Void
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    };
                     self.regs.insert(dst_id, v);
                     if Self::trace_enabled() {
                         eprintln!(

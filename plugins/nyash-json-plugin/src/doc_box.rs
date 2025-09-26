@@ -2,12 +2,14 @@
 
 use crate::constants::*;
 use crate::ffi;
-use crate::provider::{provider_kind, provider_parse, DocInst, NodeRep, ProviderKind, DOCS, NODES, NEXT_ID};
+use crate::provider::{
+    provider_kind, provider_parse, DocInst, NodeRep, ProviderKind, DOCS, NEXT_ID, NODES,
+};
 use crate::tlv_helpers::*;
 use serde_json::Value;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
-use std::sync::{Arc, atomic::Ordering};
+use std::sync::{atomic::Ordering, Arc};
 
 pub extern "C" fn jsondoc_resolve(name: *const c_char) -> u32 {
     if name.is_null() {
@@ -68,8 +70,11 @@ pub extern "C" fn jsondoc_invoke_id(
                             ProviderKind::Yyjson => {
                                 let c = CString::new(text.as_bytes()).unwrap_or_default();
                                 let mut ec: i32 = -1;
-                                let p =
-                                    ffi::nyjson_parse_doc(c.as_ptr(), text.len(), &mut ec as *mut i32);
+                                let p = ffi::nyjson_parse_doc(
+                                    c.as_ptr(),
+                                    text.len(),
+                                    &mut ec as *mut i32,
+                                );
                                 if p.is_null() {
                                     doc.root = None;
                                     doc.doc_ptr = None;

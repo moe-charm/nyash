@@ -8,8 +8,9 @@ impl MirInterpreter {
         value: ValueId,
     ) -> Result<(), VMError> {
         let v = self.reg_load(value)?;
+        let key = self.object_key_for(reference);
         self.obj_fields
-            .entry(reference)
+            .entry(key)
             .or_default()
             .insert(field.into(), v);
         Ok(())
@@ -21,9 +22,10 @@ impl MirInterpreter {
         reference: ValueId,
         field: &str,
     ) -> Result<(), VMError> {
+        let key = self.object_key_for(reference);
         let v = self
             .obj_fields
-            .get(&reference)
+            .get(&key)
             .and_then(|m| m.get(field))
             .cloned()
             .unwrap_or(VMValue::Void);

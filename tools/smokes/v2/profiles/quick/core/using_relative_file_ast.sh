@@ -17,10 +17,14 @@ teardown_tmp_dir() {
   rm -rf "$TEST_DIR"
 }
 
-test_relative_file_using_ast() {
+test_relative_alias_using_ast() {
   setup_tmp_dir
 
   cat > nyash.toml << 'EOF'
+[using.u]
+path = "lib"
+main = "u.nyash"
+
 [using]
 paths = ["lib"]
 EOF
@@ -31,7 +35,7 @@ static box Util { greet() { return "rel" } }
 EOF
 
   cat > sub/main.nyash << 'EOF'
-using "../lib/u.nyash"
+using u
 static box Main {
   main() {
     print(Util.greet())
@@ -50,4 +54,4 @@ EOF
   return $rc
 }
 
-run_test "using_relative_file_ast" test_relative_file_using_ast
+run_test "using_relative_file_ast" test_relative_alias_using_ast

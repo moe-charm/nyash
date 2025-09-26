@@ -45,13 +45,25 @@ impl super::MirBuilder {
             effects: EffectMask::READ,
         })?;
 
-        // Propagate recorded origin class for this field if any
+        // Propagate recorded origin class for this field if any (ValueId-scoped)
         if let Some(class_name) = self
             .field_origin_class
             .get(&(object_value, field.clone()))
             .cloned()
         {
             self.value_origin_newbox.insert(field_val, class_name);
+        } else if let Some(base_cls) = self.value_origin_newbox.get(&object_value).cloned() {
+            // Cross-function heuristic: use class-level field origin mapping
+            if let Some(fcls) = self
+                .field_origin_by_box
+                .get(&(base_cls.clone(), field.clone()))
+                .cloned()
+            {
+                if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                    super::utils::builder_debug_log(&format!("field-origin hit by box-level map: base={} .{} -> {}", base_cls, field, fcls));
+                }
+                self.value_origin_newbox.insert(field_val, fcls);
+            }
         }
 
         // If base is a known newbox and field is weak, emit WeakLoad (+ optional barrier)
@@ -85,7 +97,10 @@ impl super::MirBuilder {
             }
         }
 
-        Ok(field_val)
+        // Correctness-first: slotify field values so they have block-local defs
+        // and participate in PHI merges when reused across branches.
+        let pinned = self.pin_to_slot(field_val, "@field")?;
+        Ok(pinned)
     }
 
     /// Build field assignment: object.field = value
@@ -133,9 +148,14 @@ impl super::MirBuilder {
         }
 
         // Record origin class for this field value if known
-        if let Some(class_name) = self.value_origin_newbox.get(&value_result).cloned() {
+        if let Some(val_cls) = self.value_origin_newbox.get(&value_result).cloned() {
             self.field_origin_class
-                .insert((object_value, field.clone()), class_name);
+                .insert((object_value, field.clone()), val_cls.clone());
+            // Also record class-level mapping if base object class is known
+            if let Some(base_cls) = self.value_origin_newbox.get(&object_value).cloned() {
+                self.field_origin_by_box
+                    .insert((base_cls, field.clone()), val_cls);
+            }
         }
 
         Ok(value_result)

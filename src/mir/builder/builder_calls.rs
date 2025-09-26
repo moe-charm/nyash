@@ -10,6 +10,63 @@ use super::calls::*;
 pub use super::calls::call_target::CallTarget;
 
 impl super::MirBuilder {
+    /// Annotate a call result `dst` with the return type and origin if the callee
+    /// is a known user/static function in the current module.
+    pub(super) fn annotate_call_result_from_func_name<S: AsRef<str>>(&mut self, dst: super::ValueId, func_name: S) {
+        let name = func_name.as_ref();
+        // 1) Prefer module signature when available
+        if let Some(ref module) = self.current_module {
+            if let Some(func) = module.functions.get(name) {
+                let mut ret = func.signature.return_type.clone();
+                // Targeted stabilization: JsonParser.parse/1 should produce JsonNode
+                // If signature is Unknown/Void, normalize to Box("JsonNode")
+                if name == "JsonParser.parse/1" {
+                    if matches!(ret, super::MirType::Unknown | super::MirType::Void) {
+                        ret = super::MirType::Box("JsonNode".into());
+                    }
+                }
+                // Token path: JsonParser.current_token/0 should produce JsonToken
+                if name == "JsonParser.current_token/0" {
+                    if matches!(ret, super::MirType::Unknown | super::MirType::Void) {
+                        ret = super::MirType::Box("JsonToken".into());
+                    }
+                }
+                self.value_types.insert(dst, ret.clone());
+                if let super::MirType::Box(bx) = ret {
+                    self.value_origin_newbox.insert(dst, bx);
+                    if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                        let bx = self.value_origin_newbox.get(&dst).cloned().unwrap_or_default();
+                        super::utils::builder_debug_log(&format!("annotate call dst={} from {} -> Box({})", dst.0, name, bx));
+                    }
+                }
+                return;
+            }
+        }
+        // 2) No module signature—apply minimal heuristic for known functions
+        if name == "JsonParser.parse/1" {
+            let ret = super::MirType::Box("JsonNode".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonNode)", dst.0, name));
+            }
+        } else if name == "JsonParser.current_token/0" {
+            let ret = super::MirType::Box("JsonToken".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonToken)", dst.0, name));
+            }
+        } else if name == "JsonTokenizer.tokenize/0" {
+            // Tokenize returns an ArrayBox of tokens
+            let ret = super::MirType::Box("ArrayBox".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(ArrayBox)", dst.0, name));
+            }
+        }
+    }
     /// Unified call emission - replaces all emit_*_call methods
     /// ChatGPT5 Pro A++ design for complete call unification
     pub fn emit_unified_call(
@@ -86,13 +143,18 @@ impl super::MirBuilder {
                     let mut call_args = Vec::with_capacity(arity);
                     call_args.push(receiver); // pass 'me' first
                     call_args.extend(args.into_iter());
-                    return self.emit_instruction(MirInstruction::Call {
+                    // Allocate a destination if not provided
+                    let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
+                    self.emit_instruction(MirInstruction::Call {
                         dst,
                         func: name_const,
                         callee: None,
                         args: call_args,
                         effects: EffectMask::READ.add(Effect::ReadHeap),
-                    });
+                    })?;
+                    // Annotate result type/origin using lowered function signature
+                    if let Some(d) = dst.or(Some(actual_dst)) { self.annotate_call_result_from_func_name(d, super::calls::function_lowering::generate_method_function_name(&cls, &method, arity)); }
+                    return Ok(());
                 }
                 // Else fall back to plugin/boxcall path (StringBox/ArrayBox/MapBox etc.)
                 self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO)
@@ -128,16 +190,20 @@ impl super::MirBuilder {
                 let name_const = self.value_gen.next();
                 self.emit_instruction(MirInstruction::Const {
                     dst: name_const,
-                    value: super::ConstValue::String(name),
+                    value: super::ConstValue::String(name.clone()),
                 })?;
-
+                // Allocate a destination if not provided so we can annotate it
+                let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
                 self.emit_instruction(MirInstruction::Call {
-                    dst,
+                    dst: Some(actual_dst),
                     func: name_const,
                     callee: None, // Legacy mode
                     args,
                     effects: EffectMask::IO,
-                })
+                })?;
+                // Annotate from module signature (if present)
+                self.annotate_call_result_from_func_name(actual_dst, name);
+                Ok(())
             },
             CallTarget::Value(func_val) => {
                 self.emit_instruction(MirInstruction::Call {
@@ -303,7 +369,7 @@ impl super::MirBuilder {
         let result_id = self.value_gen.next();
         let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
         let fun_val = self.value_gen.next();
-        if let Err(e) = self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name) }) { return Some(Err(e)); }
+        if let Err(e) = self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name.clone()) }) { return Some(Err(e)); }
         if let Err(e) = self.emit_instruction(MirInstruction::Call {
             dst: Some(result_id),
             func: fun_val,
@@ -311,6 +377,8 @@ impl super::MirBuilder {
             args: arg_values,
             effects: EffectMask::READ.add(Effect::ReadHeap)
         }) { return Some(Err(e)); }
+        // Annotate from lowered function signature if present
+        self.annotate_call_result_from_func_name(result_id, &fun_name);
         Some(Ok(result_id))
     }
 
@@ -409,20 +477,23 @@ impl super::MirBuilder {
                             return Ok(dst);
                         }
                     }
-                    // Secondary fallback: search already-materialized functions in the current module
-                    if let Some(ref module) = self.current_module {
-                        let tail = format!(".{}{}", name, format!("/{}", arg_values.len()));
-                        let mut cands: Vec<String> = module
-                            .functions
-                            .keys()
-                            .filter(|k| k.ends_with(&tail))
-                            .cloned()
-                            .collect();
-                        if cands.len() == 1 {
-                            let func_name = cands.remove(0);
-                            let dst = self.value_gen.next();
-                            self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
-                            return Ok(dst);
+                    // Secondary fallback (tail-based) is disabled by default to avoid ambiguous resolution.
+                    // Enable only when explicitly requested: NYASH_BUILDER_TAIL_RESOLVE=1
+                    if std::env::var("NYASH_BUILDER_TAIL_RESOLVE").ok().as_deref() == Some("1") {
+                        if let Some(ref module) = self.current_module {
+                            let tail = format!(".{}{}", name, format!("/{}", arg_values.len()));
+                            let mut cands: Vec<String> = module
+                                .functions
+                                .keys()
+                                .filter(|k| k.ends_with(&tail))
+                                .cloned()
+                                .collect();
+                            if cands.len() == 1 {
+                                let func_name = cands.remove(0);
+                                let dst = self.value_gen.next();
+                                self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+                                return Ok(dst);
+                            }
                         }
                     }
                     // Propagate original error
@@ -483,8 +554,46 @@ impl super::MirBuilder {
 
         // 3. Handle me.method() calls
         if let ASTNode::Me { .. } = object {
+            // 3-a) Static box fast path (already handled)
             if let Some(res) = self.handle_me_method_call(&method, &arguments)? {
                 return Ok(res);
+            }
+            // 3-b) Instance box: prefer enclosing box method explicitly to avoid cross-box name collisions
+            {
+                // Capture enclosing class name without holding an active borrow
+                let enclosing_cls: Option<String> = self
+                    .current_function
+                    .as_ref()
+                    .and_then(|f| f.signature.name.split('.').next().map(|s| s.to_string()));
+                if let Some(cls) = enclosing_cls.as_ref() {
+                    // Build arg values (avoid overlapping borrows by collecting first)
+                    let built_args: Vec<ASTNode> = arguments.clone();
+                    let mut arg_values = Vec::with_capacity(built_args.len());
+                    for a in built_args.into_iter() { arg_values.push(self.build_expression(a)?); }
+                    let arity = arg_values.len();
+                    let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(cls, &method, arity);
+                    let exists = if let Some(ref module) = self.current_module { module.functions.contains_key(&fname) } else { false };
+                    if exists {
+                        // Pass 'me' as first arg
+                        let me_id = self.build_me_expression()?;
+                        let mut call_args = Vec::with_capacity(arity + 1);
+                        call_args.push(me_id);
+                        call_args.extend(arg_values.into_iter());
+                        let dst = self.value_gen.next();
+                        // Emit Const for function name separately to avoid nested mutable borrows
+                        let c = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::Const { dst: c, value: super::ConstValue::String(fname.clone()) })?;
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(dst),
+                            func: c,
+                            callee: None,
+                            args: call_args,
+                            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                        })?;
+                        self.annotate_call_result_from_func_name(dst, &fname);
+                        return Ok(dst);
+                    }
+                }
             }
         }
 

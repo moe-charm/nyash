@@ -13,7 +13,9 @@ box JsonTokenizer {
     errors: ArrayBox       // エラー情報配列
     
     birth(input_text) {
-        me.scanner = JsonScannerModule.create_scanner(input_text)
+        // Avoid static module wrapper to ensure constructor args are preserved on VM path
+        // (create_scanner(...) lost the argument under VM fallback in some cases)
+        me.scanner = new JsonScanner(input_text)
         me.tokens = new ArrayBox()
         me.errors = new ArrayBox()
     }

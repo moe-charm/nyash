@@ -31,8 +31,8 @@ pub enum NodeRep {
 
 // Document instance
 pub struct DocInst {
-    pub root: Option<Arc<Value>>,  // Serde provider
-    pub doc_ptr: Option<usize>,    // Yyjson provider (opaque pointer value)
+    pub root: Option<Arc<Value>>, // Serde provider
+    pub doc_ptr: Option<usize>,   // Yyjson provider (opaque pointer value)
     pub last_err: Option<String>,
 }
 

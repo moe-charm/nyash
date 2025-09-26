@@ -153,6 +153,7 @@ pub fn merge_modified_at_merge_with<O: PhiMergeOps>(
     else_map_end_opt: &Option<HashMap<String, ValueId>>,
     skip_var: Option<&str>,
 ) -> Result<(), String> {
+    let trace = std::env::var("NYASH_IF_TRACE").ok().as_deref() == Some("1");
     let changed = compute_modified_names(pre_if_snapshot, then_map_end, else_map_end_opt);
     for name in changed {
         if skip_var.map(|s| s == name).unwrap_or(false) {
@@ -168,6 +169,13 @@ pub fn merge_modified_at_merge_with<O: PhiMergeOps>(
             .and_then(|m| m.get(name.as_str()).copied())
             .unwrap_or(pre);
 
+        if trace {
+            eprintln!(
+                "[if-trace] merge var={} pre={:?} then_v={:?} else_v={:?} then_pred={:?} else_pred={:?}",
+                name, pre, then_v, else_v, then_pred_opt, else_pred_opt
+            );
+        }
+
         // Build incoming pairs from reachable predecessors only
         let mut inputs: Vec<(crate::mir::BasicBlockId, ValueId)> = Vec::new();
         if let Some(tp) = then_pred_opt { inputs.push((tp, then_v)); }
@@ -177,12 +185,24 @@ pub fn merge_modified_at_merge_with<O: PhiMergeOps>(
             0 => {}
             1 => {
                 let (_pred, v) = inputs[0];
+                if trace {
+                    eprintln!(
+                        "[if-trace] merge bind var={} v={:?} (single pred)",
+                        name, v
+                    );
+                }
                 ops.update_var(name, v);
             }
             _ => {
                 ops.debug_verify_phi_inputs(merge_bb, &inputs);
                 let dst = ops.new_value();
                 ops.emit_phi_at_block_start(merge_bb, dst, inputs)?;
+                if trace {
+                    eprintln!(
+                        "[if-trace] merge phi var={} dst={:?}",
+                        name, dst
+                    );
+                }
                 ops.update_var(name, dst);
             }
         }

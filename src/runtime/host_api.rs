@@ -387,7 +387,10 @@ pub extern "C" fn nyrt_host_call_slot(
                             crate::backend::vm::VMValue::String(s) => {
                                 Some(crate::value::NyashValue::String(s))
                             }
-                            crate::backend::vm::VMValue::BoxRef(_) => None,
+                            crate::backend::vm::VMValue::BoxRef(_b) => {
+                                // Do not store BoxRef into unified map in this minimal host path
+                                None
+                            }
                             _ => None,
                         };
                         if let Some(nv) = nv_opt {

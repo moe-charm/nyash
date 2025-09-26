@@ -21,15 +21,85 @@ impl NyashRunner {
             }
         };
 
-        // Parse to AST
-        let ast = match NyashParser::parse_from_string(&code) {
+        // Using handling (AST prelude merge like common/vm paths)
+        let use_ast = crate::config::env::using_ast_enabled();
+        let mut code_ref: &str = &code;
+        let cleaned_code_owned;
+        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        if crate::config::env::enable_using() {
+            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
+                self, &code, filename,
+            ) {
+                Ok((clean, paths)) => {
+                    cleaned_code_owned = clean;
+                    code_ref = &cleaned_code_owned;
+                    if !paths.is_empty() && !use_ast {
+                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        std::process::exit(1);
+                    }
+                    if use_ast {
+                        for prelude_path in paths {
+                            match std::fs::read_to_string(&prelude_path) {
+                                Ok(src) => {
+                                    match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &src, &prelude_path) {
+                                        Ok((clean_src, _nested)) => {
+                                            match NyashParser::parse_from_string(&clean_src) {
+                                                Ok(ast) => prelude_asts.push(ast),
+                                                Err(e) => {
+                                                    eprintln!("❌ Parse error in using prelude {}: {}", prelude_path, e);
+                                                    std::process::exit(1);
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            eprintln!("❌ {}", e);
+                                            std::process::exit(1);
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("❌ Error reading using prelude {}: {}", prelude_path, e);
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        // Pre-expand '@name[:T] = expr' sugar at line-head (same as common path)
+        let preexpanded_owned = crate::runner::modes::common_util::resolve::preexpand_at_local(code_ref);
+        code_ref = &preexpanded_owned;
+
+        // Parse to AST (main)
+        let main_ast = match NyashParser::parse_from_string(code_ref) {
             Ok(ast) => ast,
             Err(e) => {
                 eprintln!("❌ Parse error: {}", e);
                 process::exit(1);
             }
         };
-        // Macro expansion (env-gated)
+        // Merge preludes + main when enabled
+        let ast = if use_ast && !prelude_asts.is_empty() {
+            use nyash_rust::ast::ASTNode;
+            let mut combined: Vec<ASTNode> = Vec::new();
+            for a in prelude_asts {
+                if let ASTNode::Program { statements, .. } = a {
+                    combined.extend(statements);
+                }
+            }
+            if let ASTNode::Program { statements, .. } = main_ast.clone() {
+                combined.extend(statements);
+            }
+            ASTNode::Program { statements: combined, span: nyash_rust::ast::Span::unknown() }
+        } else {
+            main_ast
+        };
+        // Macro expansion (env-gated) after merge
         let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
         let ast = crate::runner::modes::macro_child::normalize_core_pass(&ast);
 
@@ -51,6 +121,14 @@ impl NyashRunner {
         let mut module = compile_result.module.clone();
         let injected = inject_method_ids(&mut module);
         if injected > 0 { crate::cli_v!("[LLVM] method_id injected: {} places", injected); }
+
+        // Dev/Test helper: allow executing via PyVM harness when requested
+        if std::env::var("SMOKES_USE_PYVM").ok().as_deref() == Some("1") {
+            match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
+                Ok(code) => { std::process::exit(code); }
+                Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
+            }
+        }
 
         // If explicit object path is requested, emit object only
         if let Ok(_out_path) = std::env::var("NYASH_LLVM_OBJ_OUT") {

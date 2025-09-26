@@ -33,8 +33,13 @@ pub fn extern_call(
 fn handle_console(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "log" => {
+            let trace = std::env::var("NYASH_CONSOLE_TRACE").ok().as_deref() == Some("1");
             for a in args {
-                println!("{}", a.to_string_box().value);
+                let s = a.to_string_box().value;
+                if trace {
+                    eprintln!("[console.trace] len={} text=<{:.64}>", s.len(), s);
+                }
+                println!("{}", s);
             }
             Ok(None)
         }
