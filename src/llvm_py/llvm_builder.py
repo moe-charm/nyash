@@ -98,12 +98,15 @@ class NyashLLVMBuilder:
         import re
         for func_data in functions:
             name = func_data.get("name", "unknown")
-            # Derive arity from name suffix '/N' if params list is empty
+            # Derive arity:
+            # - For method-like names (Class.method/N), include implicit 'me' by using len(params)
+            # - Otherwise, prefer suffix '/N' when present; fallback to params length
             m = re.search(r"/(\d+)$", name)
-            if m:
-                arity = int(m.group(1))
+            params_list = func_data.get("params", []) or []
+            if "." in name:
+                arity = len(params_list)
             else:
-                arity = len(func_data.get("params", []))
+                arity = int(m.group(1)) if m else len(params_list)
             if name == "ny_main":
                 fty = ir.FunctionType(self.i32, [])
             else:
@@ -629,8 +632,8 @@ class NyashLLVMBuilder:
         # Compile
         ir_text = str(self.module)
         # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
-        # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Default OFF.
-        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1':
+        # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Additionally, auto-enable when harness is requested.
+        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1' or os.environ.get('NYASH_LLVM_USE_HARNESS') == '1':
             try:
                 fixed_lines = []
                 for line in ir_text.splitlines():

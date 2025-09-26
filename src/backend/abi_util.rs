@@ -53,6 +53,11 @@ pub fn eq_vm(a: &VMValue, b: &VMValue) -> bool {
         (Integer(x), Float(y)) => (*x as f64) == *y,
         (Float(x), Integer(y)) => *x == (*y as f64),
         (BoxRef(ax), BoxRef(by)) => Arc::ptr_eq(ax, by),
+        // Treat BoxRef(VoidBox/MissingBox) as equal to Void (null) for backward compatibility
+        (BoxRef(bx), Void) => bx.as_any().downcast_ref::<VoidBox>().is_some()
+            || bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some(),
+        (Void, BoxRef(bx)) => bx.as_any().downcast_ref::<VoidBox>().is_some()
+            || bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some(),
         _ => false,
     }
 }

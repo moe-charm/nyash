@@ -9,7 +9,6 @@
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20高速化-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20搭載%20(実行封印)-orange.svg)](#execution-modes)
-[![ブラウザで試す](https://img.shields.io/badge/今すぐ試す-ブラウザプレイグラウンド-ff6b6b.svg)](projects/nyash-wasm/nyash_playground.html)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -19,6 +18,18 @@
 AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
+
+開発ショートカット（Operator Boxes + JSON）
+- JSON最小（Roundtrip/Nested を一発）: `./tools/opbox-json.sh`
+- quick 全体（軽量プリフライト＋timeout 180s）: `./tools/opbox-quick.sh`
+- 詳細: `docs/guides/operator-boxes.md`
+
+開発モードと既定
+- `nyash --dev script.nyash` で開発向け既定（AST using ON / Operator Boxes 観測ON / 診断の最小ON）を一括で有効化できます。`nyash script.nyash` は本番相当（静かで安定）。
+- ワンコマンドの dev ショートカットも引き続き利用できます（`tools/opbox-json.sh` / `tools/opbox-quick.sh`）。
+- using ガード: 同じファイルの重複 import（または alias の再バインド）はエラーになり、行番号付きで通知されます。
+  - 例: `using: duplicate import of '<canon_path>' at file.nyash:12 (previous alias 'X' first seen at line 5)`
+  - 重複を削除／統合して解消してください。
 
 Phase‑15（2025‑09）アップデート
 - LLVM は Python/llvmlite ハーネスを優先（`NYASH_LLVM_USE_HARNESS=1`）。Rust VM/JIT は保守・比較用途。
@@ -43,7 +54,7 @@ Phase‑15（2025‑09）アップデート
 
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)
-- [今すぐ試す（ブラウザ）](#-今すぐブラウザでnyashを試そう)
+- [🚀 速報: ネイティブEXE達成！](#-速報-ネイティブexe達成)
 
 <a id="self-hosting"></a>
 ## 🧪 Self-Hosting（自己ホスト開発）
@@ -57,14 +68,6 @@ MIR注記: Core‑13 最小カーネルは既定で有効（NYASH_MIR_CORE13=1�
 純化モード: `NYASH_MIR_CORE13_PURE=1` を有効にすると、Optimizer が Load/Store/NewBox/Unary を Core‑13 形に書き換え、残存する非Core‑13命令があればコンパイルを失敗させます。あえて実行が壊れる可能性がありますが、MIR違反を早期に発見するための設計です。
 
 変更履歴（要点）: `CHANGELOG.md`
-
-## 🎮 **今すぐブラウザでNyashを試そう！**
-
-👉 **[ブラウザプレイグラウンドを起動](projects/nyash-wasm/nyash_playground.html)** 👈
-
-インストール不要 - ウェブブラウザで即座にNyashを体験！
-
----
 
 ## 🚀 **速報: ネイティブEXE達成！**
 

@@ -24,6 +24,15 @@ box JsonScanner {
         me.line = 1
         me.column = 1
     }
+
+    // Runtime-safe initializer (bypass constructor arg loss on some VM paths)
+    reset_text(input_text) {
+        me.text = input_text
+        me.position = 0
+        me.length = input_text.length()
+        me.line = 1
+        me.column = 1
+    }
     
     // ===== 基本読み取りメソッド =====
     
@@ -233,6 +242,10 @@ box JsonScanner {
         // 整数部分
         if me.current() == "0" {
             me.advance()
+            // 先頭0の直後に数字が続くのは無効（例: 01）
+            if me.is_digit_char(me.current()) {
+                return null
+            }
         } else {
             if me.is_digit_char(me.current()) {
                 loop(not me.is_eof() and me.is_digit_char(me.current())) {
@@ -312,7 +325,10 @@ box JsonScanner {
                             i = i + 1
                         }
                     } else {
-                        // 通常のエスケープ
+                        // 通常のエスケープ（\" \\ \/ \b \f \n \r \t のみ）
+                        if not (escaped == "\"" or escaped == "\\" or escaped == "/" or escaped == "b" or escaped == "f" or escaped == "n" or escaped == "r" or escaped == "t") {
+                            return null
+                        }
                         me.advance()
                     }
                 } else {

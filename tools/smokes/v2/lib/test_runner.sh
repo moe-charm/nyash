@@ -57,6 +57,9 @@ filter_noise() {
       | grep -v "^\[using\]" \
       | grep -v "^\[using/resolve\]" \
       | grep -v "^\[builder\]" \
+      | grep -v "^\\[vm-trace\\]" \
+  | grep -v '^\{"ev":' \
+      | sed -E 's/^❌ VM fallback error: *//' \
       | grep -v "plugins/nyash-array-plugin" \
       | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
@@ -140,6 +143,10 @@ run_nyash_vm() {
     local program="$1"
     shift
     local USE_PYVM="${SMOKES_USE_PYVM:-0}"
+    local EXTRA_ARGS=()
+    if [ "${SMOKES_USE_DEV:-0}" = "1" ]; then
+        EXTRA_ARGS+=("--dev")
+    fi
     # -c オプションの場合は一時ファイル経由で実行
     if [ "$program" = "-c" ]; then
         local code="$1"
@@ -147,7 +154,7 @@ run_nyash_vm() {
         local tmpfile="/tmp/nyash_test_$$.nyash"
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$tmpfile" "$@" 2>&1 | filter_noise
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
@@ -157,7 +164,7 @@ run_nyash_vm() {
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
         fi
         # プラグイン初期化メッセージを除外
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$program" "$@" 2>&1 | filter_noise
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         return ${PIPESTATUS[0]}
     fi
 }
@@ -166,6 +173,11 @@ run_nyash_vm() {
 run_nyash_llvm() {
     local program="$1"
     shift
+    # Skip gracefully when LLVM backend is not available in this build
+    if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
+        log_warn "LLVM backend not available in this build; skipping LLVM run"
+        return 0
+    fi
     # -c オプションの場合は一時ファイル経由で実行
     if [ "$program" = "-c" ]; then
         local code="$1"
@@ -174,14 +186,16 @@ run_nyash_llvm() {
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
         NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
-            grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
+            grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
+            grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:'
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
     else
         # プラグイン初期化メッセージを除外
         NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
-            grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin"
+            grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
+            grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:'
         return ${PIPESTATUS[0]}
     fi
 }

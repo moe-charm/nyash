@@ -321,6 +321,35 @@ pub fn extern_trace() -> bool {
     std::env::var("NYASH_EXTERN_TRACE").ok().as_deref() == Some("1")
 }
 
+// ---- Operator Boxes adopt defaults ----
+/// CompareOperator.apply adopt: default ON (prod/devともに採用)
+pub fn operator_box_compare_adopt() -> bool {
+    match std::env::var("NYASH_OPERATOR_BOX_COMPARE_ADOPT").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
+        Some(ref s) if s == "0" || s == "false" || s == "off" => false,
+        Some(ref s) if s == "1" || s == "true" || s == "on" => true,
+        _ => true, // default ON
+    }
+}
+/// AddOperator.apply adopt: default OFF（順次昇格のため）
+pub fn operator_box_add_adopt() -> bool {
+    match std::env::var("NYASH_OPERATOR_BOX_ADD_ADOPT").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
+        Some(ref s) if s == "0" || s == "false" || s == "off" => false,
+        _ => true, // default ON (promoted after validation)
+    }
+}
+
+// ---- Null/Missing Boxes (dev-only observe → adopt) ----
+/// Enable NullBox/MissingBox observation path (no behavior change by default).
+/// Default: OFF. Turn ON with `NYASH_NULL_MISSING_BOX=1`. May be auto-enabled in --dev later.
+pub fn null_missing_box_enabled() -> bool {
+    std::env::var("NYASH_NULL_MISSING_BOX").ok().as_deref() == Some("1")
+}
+/// Strict null policy for operators (when enabled): null in arithmetic/compare is an error.
+/// Default: OFF (null propagates). Effective only when `null_missing_box_enabled()` is true.
+pub fn null_strict() -> bool {
+    std::env::var("NYASH_NULL_STRICT").ok().as_deref() == Some("1")
+}
+
 // ---- Phase 12: thresholds and routing policies ----
 /// PIC hotness threshold before promoting to mono cache.
 pub fn vm_pic_threshold() -> u32 {

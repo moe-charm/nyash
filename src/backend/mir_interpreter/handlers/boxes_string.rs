@@ -23,6 +23,37 @@ pub(super) fn try_handle_string_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
+                "indexOf" => {
+                    // indexOf(substr) -> first index or -1
+                    if args.len() != 1 {
+                        return Err(VMError::InvalidInstruction("indexOf expects 1 arg".into()));
+                    }
+                    let needle = this.reg_load(args[0])?.to_string();
+                    let idx = sb.value.find(&needle).map(|i| i as i64).unwrap_or(-1);
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Integer(idx)); }
+                    return Ok(true);
+                }
+                "stringify" => {
+                    // JSON-style stringify for strings: quote and escape common characters
+                    let mut quoted = String::with_capacity(sb.value.len() + 2);
+                    quoted.push('"');
+                    for ch in sb.value.chars() {
+                        match ch {
+                            '"' => quoted.push_str("\\\""),
+                            '\\' => quoted.push_str("\\\\"),
+                            '\n' => quoted.push_str("\\n"),
+                            '\r' => quoted.push_str("\\r"),
+                            '\t' => quoted.push_str("\\t"),
+                            c if c.is_control() => quoted.push(' '),
+                            c => quoted.push(c),
+                        }
+                    }
+                    quoted.push('"');
+                    if let Some(d) = dst {
+                        this.regs.insert(d, VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(quoted))));
+                    }
+                    return Ok(true);
+                }
                 "substring" => {
                     if args.len() != 2 {
                         return Err(VMError::InvalidInstruction(

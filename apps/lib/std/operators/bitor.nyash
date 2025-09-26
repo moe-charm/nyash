@@ -1,0 +1,4 @@
+static box BitOrOperator {
+  apply(a, b) { return a | b }
+}
+

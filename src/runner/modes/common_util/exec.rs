@@ -165,13 +165,19 @@ pub fn ny_llvmc_emit_exe_bin(
     Ok(())
 }
 
-/// Run an executable with arguments and a timeout. Returns (exit_code, timed_out).
+/// Run an executable with arguments and a timeout.
+/// Returns (exit_code, timed_out, stdout_text).
 #[allow(dead_code)]
-pub fn run_executable(exe_path: &str, args: &[&str], timeout_ms: u64) -> Result<(i32, bool), String> {
+pub fn run_executable(
+    exe_path: &str,
+    args: &[&str],
+    timeout_ms: u64,
+) -> Result<(i32, bool, String), String> {
     let mut cmd = std::process::Command::new(exe_path);
     for a in args { cmd.arg(a); }
     let out = super::io::spawn_with_timeout(cmd, timeout_ms)
         .map_err(|e| format!("spawn exe: {}", e))?;
     let code = out.exit_code.unwrap_or(1);
-    Ok((code, out.timed_out))
+    let stdout_text = String::from_utf8_lossy(&out.stdout).into_owned();
+    Ok((code, out.timed_out, stdout_text))
 }

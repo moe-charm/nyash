@@ -219,6 +219,10 @@ run_preflight() {
 find_test_files() {
     local profile_dir="$SCRIPT_DIR/profiles/$PROFILE"
     local test_files=()
+    local have_llvm=0
+    if [ -x "./target/release/nyash" ] && ./target/release/nyash --version 2>/dev/null | grep -q "features.*llvm"; then
+        have_llvm=1
+    fi
 
     if [ ! -d "$profile_dir" ]; then
         log_error "Profile directory not found: $profile_dir"
@@ -234,6 +238,11 @@ find_test_files() {
             if ! echo "$relative_path" | grep -q "$FILTER"; then
                 continue
             fi
+        fi
+        # LLVM未ビルド時は AST(LLVM) 系テストをスキップ
+        if [ $have_llvm -eq 0 ] && echo "$file" | grep -q "_ast\.sh$"; then
+            log_warn "Skipping (no LLVM): $file"
+            continue
         fi
         test_files+=("$file")
     done < <(find "$profile_dir" -name "*.sh" -type f -print0)
@@ -353,9 +362,9 @@ run_tests() {
         first_test=false
 
         if run_single_test "$test_file"; then
-            ((passed++))
+            passed=$((passed+1))
         else
-            ((failed++))
+            failed=$((failed+1))
             # Fast fail モード
             if [ "${SMOKES_FAST_FAIL:-0}" = "1" ]; then
                 log_warn "Fast fail enabled, stopping on first failure"

@@ -9,7 +9,6 @@
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20Faster-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20Powered%20(runtime%20disabled)-orange.svg)](#execution-modes)
-[![Try in Browser](https://img.shields.io/badge/Try%20Now-Browser%20Playground-ff6b6b.svg)](projects/nyash-wasm/nyash_playground.html)
 [![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](#license)
 
 ---
@@ -25,6 +24,18 @@ Execution Status (Feature Additions Pause)
 Quick pointers
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
 - Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
+
+Dev shortcuts (Operator Boxes & JSON smokes)
+- One‑shot JSON verification (dev, Operator Boxes ON): `./tools/opbox-json.sh`
+- Run quick profile with Operator Boxes: `./tools/opbox-quick.sh`
+- Details: `docs/guides/operator-boxes.md`
+
+Dev mode and defaults
+- `nyash --dev script.nyash` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal) while `nyash script.nyash` stays production‑like and quiet.
+- You can still use the dev shortcuts for a one‑command setup: `./tools/opbox-json.sh`, `./tools/opbox-quick.sh`.
+- Using guard: duplicate `using` of the same file (or alias rebind to a different file) now errors with a line number hint to avoid ambiguous resolution.
+  - Example error: `using: duplicate import of '<canon_path>' at file.nyash:12 (previous alias 'X' first seen at line 5)`
+  - Fix by removing the duplicate or consolidating aliases.
 
 Phase‑15 (2025‑09) update
 - Parser newline/TokenCursor 統一は env ゲート下で進行中（`NYASH_PARSER_TOKEN_CURSOR=1`）。
@@ -58,7 +69,6 @@ Specs & Constraints
 
 ## Table of Contents
 - [Self‑Hosting (Dev Focus)](#self-hosting)
-- [Try in Browser](#-try-nyash-in-your-browser-right-now)
 - [🌟 Property System Revolution](#-property-system-revolution-september-18-2025)
 - [Language Features](#-language-features)
 - [Plugin System](#-revolutionary-plugin-system-typebox-architecture)
@@ -68,6 +78,7 @@ Specs & Constraints
 - Guide: `docs/how-to/self-hosting.md`
 - Minimal E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
+- JSON (Operator Boxes, dev): `./tools/opbox-json.sh` / `./tools/opbox-quick.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
 
 MIR note: Core‑13 minimal kernel is enforced by default (NYASH_MIR_CORE13=1). Legacy ops are normalized (Array/Ref→BoxCall; TypeCheck/Cast/Barrier/WeakRef unified).
@@ -75,14 +86,6 @@ MIR note: Core‑13 minimal kernel is enforced by default (NYASH_MIR_CORE13=1). 
 Pure mode: set `NYASH_MIR_CORE13_PURE=1` to enable strict Core‑13. The optimizer rewrites a few ops (Load/Store/NewBox/Unary) to Core‑13 forms, and the compiler rejects any remaining non‑Core‑13 ops. This may break execution temporarily by design to surface MIR violations early.
 
 Note: JIT runtime execution is currently disabled to reduce debugging overhead. Use Interpreter/VM for running and AOT (Cranelift/LLVM) for distribution.
-
-## 🎮 **Try Nyash in Your Browser Right Now!**
-
-👉 **[Launch Browser Playground](projects/nyash-wasm/nyash_playground.html)** 👈
-
-No installation needed - experience Nyash instantly in your web browser!
-
----
 
 ## 🚀 **Breaking News: Self-Hosting Revolution!**
 

@@ -1,0 +1,1 @@
+static box Main { main() { print(1==1); print( ("a"=="b") ); return 0 } }

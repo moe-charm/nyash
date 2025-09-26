@@ -1,0 +1,7 @@
+[using.json_native]
+path = "apps/lib/json_native/"
+main = "parser/parser.nyash"
+
+[using.aliases]
+json = "json_native"
+

@@ -21,6 +21,10 @@ path = "apps/lib/json_native/utils/string.nyash"
 # Resolve `using json as ...` to json_native when desired
 json = "json_native"
 StringUtils = "string_utils"
+JsonNode = "json_node"
+
+[using.json_node]
+path = "apps/lib/json_native/core/node.nyash"
 
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)

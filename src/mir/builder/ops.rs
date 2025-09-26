@@ -29,12 +29,25 @@ impl super::MirBuilder {
 
         let mir_op = self.convert_binary_operator(operator)?;
 
+        let all_call = std::env::var("NYASH_BUILDER_OPERATOR_BOX_ALL_CALL").ok().as_deref() == Some("1");
+
         match mir_op {
             // Arithmetic operations
             BinaryOpType::Arithmetic(op) => {
-                self.emit_instruction(MirInstruction::BinOp { dst, op, lhs, rhs })?;
-                // '+' は文字列連結の可能性がある。オペランドが String/StringBox なら結果を String と注釈。
-                if matches!(op, crate::mir::BinaryOp::Add) {
+                // Dev: Lower '+' を演算子ボックス呼び出しに置換（既定OFF）
+                let in_add_op = self
+                    .current_function
+                    .as_ref()
+                    .map(|f| f.signature.name.starts_with("AddOperator.apply/"))
+                    .unwrap_or(false);
+                if matches!(op, crate::mir::BinaryOp::Add)
+                    && !in_add_op
+                    && (all_call || std::env::var("NYASH_BUILDER_OPERATOR_BOX_ADD_CALL").ok().as_deref() == Some("1"))
+                {
+                    // AddOperator.apply/2(lhs, rhs)
+                    let name = "AddOperator.apply/2".to_string();
+                    self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name), vec![lhs, rhs])?;
+                    // 型注釈（従来と同等）
                     let lhs_is_str = match self.value_types.get(&lhs) {
                         Some(MirType::String) => true,
                         Some(MirType::Box(bt)) if bt == "StringBox" => true,
@@ -50,54 +63,139 @@ impl super::MirBuilder {
                     } else {
                         self.value_types.insert(dst, MirType::Integer);
                     }
+                } else if all_call {
+                    // Lower other arithmetic ops to operator boxes under ALL flag
+                    let (name, guard_prefix) = match op {
+                        crate::mir::BinaryOp::Sub => ("SubOperator.apply/2", "SubOperator.apply/"),
+                        crate::mir::BinaryOp::Mul => ("MulOperator.apply/2", "MulOperator.apply/"),
+                        crate::mir::BinaryOp::Div => ("DivOperator.apply/2", "DivOperator.apply/"),
+                        crate::mir::BinaryOp::Mod => ("ModOperator.apply/2", "ModOperator.apply/"),
+                        crate::mir::BinaryOp::Shl => ("ShlOperator.apply/2", "ShlOperator.apply/"),
+                        crate::mir::BinaryOp::Shr => ("ShrOperator.apply/2", "ShrOperator.apply/"),
+                        crate::mir::BinaryOp::BitAnd => ("BitAndOperator.apply/2", "BitAndOperator.apply/"),
+                        crate::mir::BinaryOp::BitOr => ("BitOrOperator.apply/2", "BitOrOperator.apply/"),
+                        crate::mir::BinaryOp::BitXor => ("BitXorOperator.apply/2", "BitXorOperator.apply/"),
+                        _ => ("", ""),
+                    };
+                    if !name.is_empty() {
+                        let in_guard = self.current_function.as_ref().map(|f| f.signature.name.starts_with(guard_prefix)).unwrap_or(false);
+                        if !in_guard {
+                            self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name.to_string()), vec![lhs, rhs])?;
+                            // 型注釈: 算術はおおむね整数（Addは上で注釈済み）
+                            self.value_types.insert(dst, MirType::Integer);
+                        } else {
+                            // guard中は従来のBinOp
+                            self.emit_instruction(MirInstruction::BinOp { dst, op, lhs, rhs })?;
+                            self.value_types.insert(dst, MirType::Integer);
+                        }
+                    } else {
+                        // 既存の算術経路
+                        self.emit_instruction(MirInstruction::BinOp { dst, op, lhs, rhs })?;
+                        if matches!(op, crate::mir::BinaryOp::Add) {
+                            let lhs_is_str = match self.value_types.get(&lhs) {
+                                Some(MirType::String) => true,
+                                Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                _ => false,
+                            };
+                            let rhs_is_str = match self.value_types.get(&rhs) {
+                                Some(MirType::String) => true,
+                                Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                                _ => false,
+                            };
+                            if lhs_is_str || rhs_is_str {
+                                self.value_types.insert(dst, MirType::String);
+                            } else {
+                                self.value_types.insert(dst, MirType::Integer);
+                            }
+                        } else {
+                            self.value_types.insert(dst, MirType::Integer);
+                        }
+                    }
                 } else {
-                    // その他の算術は整数
-                    self.value_types.insert(dst, MirType::Integer);
+                    // 既存の算術経路
+                    self.emit_instruction(MirInstruction::BinOp { dst, op, lhs, rhs })?;
+                    if matches!(op, crate::mir::BinaryOp::Add) {
+                        let lhs_is_str = match self.value_types.get(&lhs) {
+                            Some(MirType::String) => true,
+                            Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                            _ => false,
+                        };
+                        let rhs_is_str = match self.value_types.get(&rhs) {
+                            Some(MirType::String) => true,
+                            Some(MirType::Box(bt)) if bt == "StringBox" => true,
+                            _ => false,
+                        };
+                        if lhs_is_str || rhs_is_str {
+                            self.value_types.insert(dst, MirType::String);
+                        } else {
+                            self.value_types.insert(dst, MirType::Integer);
+                        }
+                    } else {
+                        self.value_types.insert(dst, MirType::Integer);
+                    }
                 }
             }
             // Comparison operations
             BinaryOpType::Comparison(op) => {
-                // 80/20: If both operands originate from IntegerBox, cast to integer first
-                let (lhs2_raw, rhs2_raw) = if self
-                    .value_origin_newbox
-                    .get(&lhs)
-                    .map(|s| s == "IntegerBox")
-                    .unwrap_or(false)
-                    && self
+                // Dev: Lower 比較 を演算子ボックス呼び出しに置換（既定OFF）
+                let in_cmp_op = self
+                    .current_function
+                    .as_ref()
+                    .map(|f| f.signature.name.starts_with("CompareOperator.apply/"))
+                    .unwrap_or(false);
+                if !in_cmp_op
+                    && (all_call || std::env::var("NYASH_BUILDER_OPERATOR_BOX_COMPARE_CALL").ok().as_deref() == Some("1")) {
+                    // op名の文字列化
+                    let opname = match op {
+                        CompareOp::Eq => "Eq",
+                        CompareOp::Ne => "Ne",
+                        CompareOp::Lt => "Lt",
+                        CompareOp::Le => "Le",
+                        CompareOp::Gt => "Gt",
+                        CompareOp::Ge => "Ge",
+                    };
+                    let op_const = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::Const { dst: op_const, value: super::ConstValue::String(opname.into()) })?;
+                    // そのまま値を渡す（型変換/slot化は演算子内orVMで行う）
+                    let name = "CompareOperator.apply/3".to_string();
+                    self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name), vec![op_const, lhs, rhs])?;
+                    self.value_types.insert(dst, MirType::Bool);
+                } else {
+                    // 既存の比較経路（安全のための型注釈/slot化含む）
+                    let (lhs2_raw, rhs2_raw) = if self
                         .value_origin_newbox
-                        .get(&rhs)
+                        .get(&lhs)
                         .map(|s| s == "IntegerBox")
                         .unwrap_or(false)
-                {
-                    let li = self.value_gen.next();
-                    let ri = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::TypeOp {
-                        dst: li,
-                        op: TypeOpKind::Cast,
-                        value: lhs,
-                        ty: MirType::Integer,
-                    })?;
-                    self.emit_instruction(MirInstruction::TypeOp {
-                        dst: ri,
-                        op: TypeOpKind::Cast,
-                        value: rhs,
-                        ty: MirType::Integer,
-                    })?;
-                    (li, ri)
-                } else {
-                    (lhs, rhs)
-                };
-                // Ensure operands are safe across blocks: pin ephemeral values into slots
-                // This guarantees they participate in PHI merges and have block-local defs.
-                let lhs2 = self.ensure_slotified_for_use(lhs2_raw, "@cmp_lhs")?;
-                let rhs2 = self.ensure_slotified_for_use(rhs2_raw, "@cmp_rhs")?;
-                self.emit_instruction(MirInstruction::Compare {
-                    dst,
-                    op,
-                    lhs: lhs2,
-                    rhs: rhs2,
-                })?;
-                self.value_types.insert(dst, MirType::Bool);
+                        && self
+                            .value_origin_newbox
+                            .get(&rhs)
+                            .map(|s| s == "IntegerBox")
+                            .unwrap_or(false)
+                    {
+                        let li = self.value_gen.next();
+                        let ri = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::TypeOp {
+                            dst: li,
+                            op: TypeOpKind::Cast,
+                            value: lhs,
+                            ty: MirType::Integer,
+                        })?;
+                        self.emit_instruction(MirInstruction::TypeOp {
+                            dst: ri,
+                            op: TypeOpKind::Cast,
+                            value: rhs,
+                            ty: MirType::Integer,
+                        })?;
+                        (li, ri)
+                    } else {
+                        (lhs, rhs)
+                    };
+                    let lhs2 = self.ensure_slotified_for_use(lhs2_raw, "@cmp_lhs")?;
+                    let rhs2 = self.ensure_slotified_for_use(rhs2_raw, "@cmp_rhs")?;
+                    self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
+                    self.value_types.insert(dst, MirType::Bool);
+                }
             }
         }
 
@@ -290,6 +388,24 @@ impl super::MirBuilder {
         operand: ASTNode,
     ) -> Result<ValueId, String> {
         let operand_val = self.build_expression(operand)?;
+        let all_call = std::env::var("NYASH_BUILDER_OPERATOR_BOX_ALL_CALL").ok().as_deref() == Some("1");
+        if all_call {
+            let (name, guard_prefix, rett) = match operator.as_str() {
+                "-" => ("NegOperator.apply/1", "NegOperator.apply/", MirType::Integer),
+                "!" | "not" => ("NotOperator.apply/1", "NotOperator.apply/", MirType::Bool),
+                "~" => ("BitNotOperator.apply/1", "BitNotOperator.apply/", MirType::Integer),
+                _ => ("", "", MirType::Integer),
+            };
+            if !name.is_empty() {
+                let in_guard = self.current_function.as_ref().map(|f| f.signature.name.starts_with(guard_prefix)).unwrap_or(false);
+                let dst = self.value_gen.next();
+                if !in_guard {
+                    self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name.to_string()), vec![operand_val])?;
+                    self.value_types.insert(dst, rett);
+                    return Ok(dst);
+                }
+            }
+        }
         // Core-13 純化: UnaryOp を直接 展開（Neg/Not/BitNot）
         if crate::config::env::mir_core13_pure() {
             match operator.as_str() {

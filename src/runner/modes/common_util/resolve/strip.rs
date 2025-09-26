@@ -20,6 +20,10 @@ pub fn collect_using_and_strip(
 
     let mut out = String::with_capacity(code.len());
     let mut prelude_paths: Vec<String> = Vec::new();
+    // Duplicate-using detection (same target imported multiple times or alias rebound): error in all profiles
+    use std::collections::HashMap;
+    let mut seen_paths: HashMap<String, (String, usize)> = HashMap::new(); // canon_path -> (alias/label, first_line)
+    let mut seen_aliases: HashMap<String, (String, usize)> = HashMap::new(); // alias -> (canon_path, first_line)
     // Determine if this file is inside a declared package root; if so, allow
     // internal file-using within the package even when file-using is globally disallowed.
     let filename_canon = std::fs::canonicalize(filename).ok();
@@ -35,14 +39,15 @@ pub fn collect_using_and_strip(
             }
         }
     }
-    for line in code.lines() {
+    for (lineno0, line) in code.lines().enumerate() {
+        let line_no = lineno0 + 1;
         let t = line.trim_start();
         if t.starts_with("using ") {
             crate::cli_v!("[using] stripped line: {}", line);
             let rest0 = t.strip_prefix("using ").unwrap().trim();
             let rest0 = rest0.split('#').next().unwrap_or(rest0).trim();
             let rest0 = rest0.strip_suffix(';').unwrap_or(rest0).trim();
-            let (target, _alias) = if let Some(pos) = rest0.find(" as ") {
+            let (target, alias_name) = if let Some(pos) = rest0.find(" as ") {
                 (
                     rest0[..pos].trim().to_string(),
                     Some(rest0[pos + 4..].trim().to_string()),
@@ -105,7 +110,41 @@ pub fn collect_using_and_strip(
                         p.display()
                     ));
                 }
-                prelude_paths.push(p.to_string_lossy().to_string());
+                let path_str = p.to_string_lossy().to_string();
+                // Duplicate detection
+                let canon = std::fs::canonicalize(&path_str)
+                    .ok()
+                    .map(|pb| pb.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path_str.clone());
+                if let Some((prev_alias, prev_line)) = seen_paths.get(&canon) {
+                    return Err(format!(
+                        "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
+                        canon,
+                        filename,
+                        line_no,
+                        prev_alias,
+                        prev_line
+                    ));
+                } else {
+                    seen_paths.insert(canon.clone(), (alias_name.clone().unwrap_or_else(|| "<none>".into()), line_no));
+                }
+                if let Some(alias) = alias_name.clone() {
+                    if let Some((prev_path, prev_line)) = seen_aliases.get(&alias) {
+                        if prev_path != &canon {
+                            return Err(format!(
+                                "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
+                                alias,
+                                filename,
+                                line_no,
+                                prev_path,
+                                prev_line
+                            ));
+                        }
+                    } else {
+                        seen_aliases.insert(alias, (canon, line_no));
+                    }
+                }
+                prelude_paths.push(path_str);
                 continue;
             }
             // Resolve namespaces/packages
@@ -140,6 +179,35 @@ pub fn collect_using_and_strip(
                                     .to_string_lossy()
                                     .to_string()
                             };
+                            // Duplicate detection for prod package alias resolution
+                            let canon = std::fs::canonicalize(&out)
+                                .ok()
+                                .map(|pb| pb.to_string_lossy().to_string())
+                                .unwrap_or_else(|| out.clone());
+                            if let Some((prev_alias, prev_line)) = seen_paths.get(&canon) {
+                                return Err(format!(
+                                    "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
+                                    canon,
+                                    filename,
+                                    line_no,
+                                    prev_alias,
+                                    prev_line
+                                ));
+                            } else {
+                                seen_paths.insert(canon.clone(), (alias_name.clone().unwrap_or_else(|| "<none>".into()), line_no));
+                            }
+                            if let Some(alias) = alias_name.clone() {
+                                if let Some((prev_path, prev_line)) = seen_aliases.get(&alias) {
+                                    if prev_path != &canon {
+                                        return Err(format!(
+                                            "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
+                                            alias, filename, line_no, prev_path, prev_line
+                                        ));
+                                    }
+                                } else {
+                                    seen_aliases.insert(alias, (canon, line_no));
+                                }
+                            }
                             prelude_paths.push(out);
                         }
                     }
@@ -204,7 +272,36 @@ pub fn collect_using_and_strip(
                                     p.display()
                                 ));
                             }
-                            prelude_paths.push(p.to_string_lossy().to_string());
+                            let path_str = p.to_string_lossy().to_string();
+                            let canon = std::fs::canonicalize(&path_str)
+                                .ok()
+                                .map(|pb| pb.to_string_lossy().to_string())
+                                .unwrap_or_else(|| path_str.clone());
+                            if let Some((prev_alias, prev_line)) = seen_paths.get(&canon) {
+                                return Err(format!(
+                                    "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
+                                    canon,
+                                    filename,
+                                    line_no,
+                                    prev_alias,
+                                    prev_line
+                                ));
+                            } else {
+                                seen_paths.insert(canon.clone(), (alias_name.clone().unwrap_or_else(|| "<none>".into()), line_no));
+                            }
+                            if let Some(alias) = alias_name.clone() {
+                                if let Some((prev_path, prev_line)) = seen_aliases.get(&alias) {
+                                    if prev_path != &canon {
+                                        return Err(format!(
+                                            "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
+                                            alias, filename, line_no, prev_path, prev_line
+                                        ));
+                                    }
+                                } else {
+                                    seen_aliases.insert(alias, (canon, line_no));
+                                }
+                            }
+                            prelude_paths.push(path_str);
                         }
                     }
                     Err(e) => return Err(format!("using: {}", e)),
@@ -276,6 +373,56 @@ pub fn resolve_prelude_paths_profiled(
     }
     for p in direct.iter() {
         dfs(runner, p, &mut out, &mut seen)?;
+    }
+    // Operator Boxes prelude injection（観測“常時ON”のため）
+    // stringify/compare/add は常に注入（存在時）。その他（bitwise等）は ALL 指定時のみ。
+    let opbox_all = std::env::var("NYASH_OPERATOR_BOX_ALL").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_BUILDER_OPERATOR_BOX_ALL_CALL").ok().as_deref() == Some("1");
+
+    if let Ok(root) = std::env::var("NYASH_ROOT") {
+        let must_have = [
+            "apps/lib/std/operators/stringify.nyash",
+            "apps/lib/std/operators/compare.nyash",
+            "apps/lib/std/operators/add.nyash",
+        ];
+        for rel in must_have.iter() {
+            let p = std::path::Path::new(&root).join(rel);
+            if p.exists() {
+                let path = p.to_string_lossy().to_string();
+                if !out.iter().any(|x| x == &path) {
+                    out.push(path);
+                }
+            }
+        }
+    }
+    // Inject remaining arithmetic/bitwise/unary operator modules when ALL is requested
+    if opbox_all {
+        if let Ok(root) = std::env::var("NYASH_ROOT") {
+            let rels = vec![
+                "apps/lib/std/operators/sub.nyash",
+                "apps/lib/std/operators/mul.nyash",
+                "apps/lib/std/operators/div.nyash",
+                "apps/lib/std/operators/mod.nyash",
+                // Shifts / bitwise (parser tokens now supported)
+                "apps/lib/std/operators/shl.nyash",
+                "apps/lib/std/operators/shr.nyash",
+                "apps/lib/std/operators/bitand.nyash",
+                "apps/lib/std/operators/bitor.nyash",
+                "apps/lib/std/operators/bitxor.nyash",
+                "apps/lib/std/operators/neg.nyash",
+                "apps/lib/std/operators/not.nyash",
+                "apps/lib/std/operators/bitnot.nyash",
+            ];
+            for rel in rels {
+                let p = std::path::Path::new(&root).join(rel);
+                if p.exists() {
+                    let path = p.to_string_lossy().to_string();
+                    if !out.iter().any(|x| x == &path) {
+                        out.push(path);
+                    }
+                }
+            }
+        }
     }
     Ok((cleaned, out))
 }

@@ -157,6 +157,16 @@ impl ExprParserWithCursor {
                     span: Span::new(op_line, 0, op_line, 0),
                 })
             }
+            TokenType::BitNot => {
+                let op_line = cursor.current().line;
+                cursor.advance();
+                let operand = Self::parse_unary_expr(cursor)?;
+                Ok(ASTNode::UnaryOp {
+                    operator: crate::ast::UnaryOperator::BitNot,
+                    operand: Box::new(operand),
+                    span: Span::new(op_line, 0, op_line, 0),
+                })
+            }
             TokenType::AWAIT => {
                 let op_line = cursor.current().line;
                 cursor.advance();

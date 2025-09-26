@@ -1,0 +1,4 @@
+static box ShrOperator {
+  apply(a, b) { return a >> b }
+}
+

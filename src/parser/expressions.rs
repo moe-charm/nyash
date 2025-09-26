@@ -222,6 +222,17 @@ impl NyashParser {
             });
         }
 
+        // Bitwise NOT '~'
+        if self.match_token(&TokenType::BitNot) {
+            self.advance(); // consume '~'
+            let operand = self.parse_unary()?;
+            return Ok(ASTNode::UnaryOp {
+                operator: UnaryOperator::BitNot,
+                operand: Box::new(operand),
+                span: Span::unknown(),
+            });
+        }
+
         if self.match_token(&TokenType::AWAIT) {
             self.advance(); // consume 'await'
             let expression = self.parse_unary()?; // 再帰的にパース

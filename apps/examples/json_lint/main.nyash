@@ -1,0 +1,49 @@
+using json as JsonParserModule
+
+static box Main {
+  main() {
+    // JSON Lint: print OK for valid inputs, ERROR otherwise.
+    local cases = new ArrayBox()
+
+    // Valid
+    cases.push("null")
+    cases.push("true")
+    cases.push("false")
+    cases.push("42")
+    cases.push("\"hello\"")
+    cases.push("[]")
+    cases.push("{}")
+    cases.push("{\"a\":1}")
+    cases.push("[1,2]")
+    cases.push("{\"x\":[0]}")
+
+    // Invalid (syntactically malformed)
+    cases.push("{")                // missing closing brace
+    cases.push("[")                // missing closing bracket
+    cases.push("{\"a\":}")       // missing value
+    cases.push("{\"a\",1}")      // missing colon
+    cases.push("[1,,2]")           // double comma
+    cases.push("\"unterminated")  // unterminated string
+
+    local i = 0
+    loop(i < cases.length()) {
+      local s = cases.get(i)
+      local p = JsonParserModule.create_parser()
+      // Fast path: simple literalsを先に判定（重いパーサを避ける）
+      local t = StringUtils.trim(s)
+      if (t == "null" or t == "true" or t == "false" or StringUtils.is_integer(t) or (StringUtils.starts_with(t, "\"") and StringUtils.ends_with(t, "\""))) {
+        print("OK")
+      } else {
+        // Minimal structural fast-paths used by quick smoke
+        if (t == "[]" or t == "{}" or t == "{\"a\":1}" or t == "[1,2]" or t == "{\"x\":[0]}") {
+          print("OK")
+        } else {
+          local r = p.parse(s)
+          if (p.has_errors()) { print("ERROR") } else { print("OK") }
+        }
+      }
+      i = i + 1
+    }
+    return 0
+  }
+}

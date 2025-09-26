@@ -1,0 +1,23 @@
+[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+⚠️ [DEPRECATED] Using builtin ArrayBox - check nyash-array-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-array-plugin
+⚠️ [DEPRECATED] Using builtin ArrayBox - check nyash-array-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-array-plugin
+⚠️ [DEPRECATED] Using builtin ArrayBox - check nyash-array-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-array-plugin
+⚠️ [DEPRECATED] Using builtin MapBox - check nyash-map-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-map-plugin
+⚠️ [DEPRECATED] Using builtin ArrayBox - check nyash-array-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-array-plugin
+⚠️ [DEPRECATED] Using builtin MapBox - check nyash-map-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-map-plugin
+⚠️ [DEPRECATED] Using builtin ArrayBox - check nyash-array-plugin!
+📋 Phase 15.5: Everything is Plugin!
+🔧 Check: plugins/nyash-array-plugin

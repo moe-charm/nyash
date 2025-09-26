@@ -1,0 +1,4 @@
+static box ModOperator {
+  apply(a, b) { return a % b }
+}
+

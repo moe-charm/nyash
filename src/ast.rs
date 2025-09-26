@@ -258,8 +258,9 @@ impl fmt::Display for LiteralValue {
 /// 単項演算子の種類
 #[derive(Debug, Clone, PartialEq)]
 pub enum UnaryOperator {
-    Minus, // -x
-    Not,   // not x
+    Minus,  // -x
+    Not,    // not x / !x
+    BitNot, // ~x
 }
 
 /// 二項演算子の種類
@@ -290,6 +291,7 @@ impl fmt::Display for UnaryOperator {
         let symbol = match self {
             UnaryOperator::Minus => "-",
             UnaryOperator::Not => "not",
+            UnaryOperator::BitNot => "~",
         };
         write!(f, "{}", symbol)
     }

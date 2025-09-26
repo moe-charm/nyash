@@ -6,6 +6,7 @@ from trace import debug as trace_debug
 from instructions.const import lower_const
 from instructions.binop import lower_binop
 from instructions.compare import lower_compare
+from instructions.unop import lower_unop
 from instructions.controlflow.jump import lower_jump
 from instructions.controlflow.branch import lower_branch
 from instructions.ret import lower_return
@@ -81,6 +82,14 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
                       owner.resolver, builder.block, owner.preds, owner.block_end_values, owner.bb_map,
                       meta={"cmp_kind": cmp_kind} if cmp_kind else None,
                       ctx=getattr(owner, 'ctx', None))
+
+    elif op == "unop":
+        # Unary op: kind in {'neg','not','bitnot'}; src is operand
+        kind = (inst.get("kind") or inst.get("operation") or "").lower()
+        srcv = inst.get("src") or inst.get("operand")
+        dst = inst.get("dst")
+        lower_unop(builder, owner.resolver, kind, srcv, dst, vmap_ctx, builder.block,
+                   owner.preds, owner.block_end_values, owner.bb_map, ctx=getattr(owner, 'ctx', None))
 
     elif op == "mir_call":
         # Unified MIR Call handling
@@ -183,4 +192,3 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
                 owner.def_blocks.setdefault(dst_maybe, set()).add(cur_bid)
     except Exception:
         pass
-

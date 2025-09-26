@@ -30,6 +30,7 @@ impl super::MirBuilder {
                 let op_string = match operator {
                     crate::ast::UnaryOperator::Minus => "-".to_string(),
                     crate::ast::UnaryOperator::Not => "not".to_string(),
+                    crate::ast::UnaryOperator::BitNot => "~".to_string(),
                 };
                 self.build_unary_op(op_string, *operand)
             }

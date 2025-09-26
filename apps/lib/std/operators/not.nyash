@@ -1,0 +1,4 @@
+static box NotOperator {
+  apply(a) { return not a }
+}
+

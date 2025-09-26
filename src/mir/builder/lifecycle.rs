@@ -110,6 +110,8 @@ impl super::MirBuilder {
                             )?;
                             for (ctor_key, ctor_ast) in constructors.iter() {
                                 if let N::FunctionDeclaration { params, body, .. } = ctor_ast {
+                                    // Keep constructor function name as "Box.birth/N" where ctor_key already encodes arity.
+                                    // ctor_key format comes from parser as "birth/<arity>".
                                     let func_name = format!("{}.{}", name, ctor_key);
                                     self.lower_method_as_function(
                                         func_name,

@@ -258,6 +258,7 @@ fn un_to_str(op: &UnaryOperator) -> &'static str {
     match op {
         UnaryOperator::Minus => "-",
         UnaryOperator::Not => "not",
+        UnaryOperator::BitNot => "~",
     }
 }
 
@@ -265,6 +266,7 @@ fn str_to_un(s: &str) -> Option<UnaryOperator> {
     Some(match s {
         "-" => UnaryOperator::Minus,
         "not" => UnaryOperator::Not,
+        "~" => UnaryOperator::BitNot,
         _ => return None,
     })
 }

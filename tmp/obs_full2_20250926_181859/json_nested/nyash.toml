@@ -1,0 +1,6 @@
+[using.json_native]
+path = "/mnt/c/git/nyash-project/nyash_self_main/apps/lib/json_native/"
+main = "parser/parser.nyash"
+
+[using.aliases]
+json = "json_native"

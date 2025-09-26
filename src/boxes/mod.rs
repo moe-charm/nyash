@@ -146,6 +146,7 @@ pub use egui_box::EguiBox;
 pub use web::{WebCanvasBox, WebConsoleBox, WebDisplayBox};
 
 pub mod null_box;
+pub mod missing_box;
 
 // High-priority Box types
 pub mod array;
@@ -168,6 +169,7 @@ pub mod p2p_box;
 
 // null関数も再エクスポート
 pub use null_box::{null, NullBox};
+pub use missing_box::MissingBox;
 
 // High-priority Box types re-export
 pub use array::ArrayBox;

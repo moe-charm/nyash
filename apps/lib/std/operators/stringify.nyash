@@ -1,0 +1,20 @@
+// std/operators/stringify.nyash
+// StringifyOperator — 明示的な文字列化の演算子ボックス（開発用）
+// 目的: 暗黙の toString に依存せず、観測可能な文字列化を提供する
+
+static box StringifyOperator {
+  // apply(value) -> String
+  apply(value) {
+    // null 安全
+    if value == null {
+      return "null"
+    }
+    // stringify メソッドがあれば尊重（JsonNodeInstance 等）
+    if value.stringify != null {
+      return value.stringify()
+    }
+    // それ以外は連結で安全に文字列化（プリミティブ toString 依存を避ける）
+    return "" + value
+  }
+}
+

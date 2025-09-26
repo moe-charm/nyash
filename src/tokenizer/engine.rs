@@ -175,6 +175,11 @@ impl NyashTokenizer {
                 self.advance();
                 Ok(Token::new(TokenType::ShiftRight, start_line, start_column))
             }
+            Some('<') if self.peek_char() == Some('<') && !Self::strict_12_7() => {
+                self.advance();
+                self.advance();
+                Ok(Token::new(TokenType::ShiftLeft, start_line, start_column))
+            }
             Some(':') if self.peek_char() == Some(':') => {
                 self.advance();
                 self.advance();
@@ -230,6 +235,7 @@ impl NyashTokenizer {
         // '?' は上位で分岐済み、':' も同様。ここでは純粋な1文字を扱う。
         match c {
             '!' => Some(TokenType::NOT),
+            '~' => Some(TokenType::BitNot),
             '<' => Some(TokenType::LESS),
             '>' => Some(TokenType::GREATER),
             '&' => Some(TokenType::BitAnd),

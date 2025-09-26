@@ -15,7 +15,8 @@ box JsonTokenizer {
     birth(input_text) {
         // Avoid static module wrapper to ensure constructor args are preserved on VM path
         // (create_scanner(...) lost the argument under VM fallback in some cases)
-        me.scanner = new JsonScanner(input_text)
+        me.scanner = new JsonScanner("")
+        me.scanner.reset_text(input_text)
         me.tokens = new ArrayBox()
         me.errors = new ArrayBox()
     }
@@ -59,6 +60,14 @@ box JsonTokenizer {
         }
         
         return me.tokens
+    }
+
+    // Explicitly set input text (guards against constructor-arg loss)
+    set_input(input_text) {
+        if me.scanner == null {
+            me.scanner = new JsonScanner("")
+        }
+        me.scanner.reset_text(input_text)
     }
     
     // 次のトークンを1つ取得

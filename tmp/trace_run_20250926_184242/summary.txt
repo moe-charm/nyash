@@ -1,0 +1,30 @@
+=== cmp_smoke ===
+diff:
+compare calls: total=6 withVoid=0
+trace head:
+[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Integer","Integer"]}
+{"ev":"print","kind":"Bool","class":""}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Bool","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Void","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","String","String"]}
+{"ev":"print","kind":"Bool","class":""}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Bool","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Void","Void"]}
+=== bitops ===
+diff:
+compare calls: total=8 withVoid=0
+trace head:
+[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)
+{"ev":"print","kind":"Integer","class":""}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Integer","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Void","Void"]}
+{"ev":"print","kind":"Integer","class":""}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Integer","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Void","Void"]}
+{"ev":"print","kind":"Integer","class":""}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Integer","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Void","Void"]}
+{"ev":"print","kind":"Integer","class":""}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Integer","Void"]}
+{"ev":"call","class":"CompareOperator","method":"apply","argc":3,"argk":["String","Void","Void"]}

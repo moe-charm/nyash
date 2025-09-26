@@ -148,6 +148,140 @@ impl MirInterpreter {
         for a in args {
             argv.push(self.reg_load(*a)?);
         }
+        // Dev trace: emit a synthetic "call" event for global function calls
+        // so operator boxes (e.g., CompareOperator.apply/3) are observable with
+        // argument kinds. This produces a JSON line on stderr, filtered by
+        // NYASH_BOX_TRACE_FILTER like other box traces.
+        if Self::box_trace_enabled() {
+            // Render class/method from canonical fname like "Class.method/Arity"
+            let (class_name, method_name) = if let Some((cls, rest)) = fname.split_once('.') {
+                let method = rest.split('/').next().unwrap_or(rest);
+                (cls.to_string(), method.to_string())
+            } else {
+                ("<global>".to_string(), fname.split('/').next().unwrap_or(&fname).to_string())
+            };
+            // Simple filter match (local copy to avoid private helper)
+            let filt_ok = match std::env::var("NYASH_BOX_TRACE_FILTER").ok() {
+                Some(filt) => {
+                    let want = filt.trim();
+                    if want.is_empty() { true } else {
+                        want.split(|c: char| c == ',' || c.is_whitespace())
+                            .map(|t| t.trim())
+                            .filter(|t| !t.is_empty())
+                            .any(|t| class_name.contains(t))
+                    }
+                }
+                None => true,
+            };
+            if filt_ok {
+                // Optionally include argument kinds for targeted debugging.
+                let with_args = std::env::var("NYASH_OP_TRACE_ARGS").ok().as_deref() == Some("1")
+                    || class_name == "CompareOperator";
+                if with_args {
+                    // local JSON string escaper (subset)
+                    let mut esc = |s: &str| {
+                        let mut out = String::with_capacity(s.len() + 8);
+                        for ch in s.chars() {
+                            match ch {
+                                '"' => out.push_str("\\\""),
+                                '\\' => out.push_str("\\\\"),
+                                '\n' => out.push_str("\\n"),
+                                '\r' => out.push_str("\\r"),
+                                '\t' => out.push_str("\\t"),
+                                c if c.is_control() => out.push(' '),
+                                c => out.push(c),
+                            }
+                        }
+                        out
+                    };
+                    let mut kinds: Vec<String> = Vec::with_capacity(argv.len());
+                    let mut nullish: Vec<String> = Vec::with_capacity(argv.len());
+                    for v in &argv {
+                        let k = match v {
+                            VMValue::Integer(_) => "Integer".to_string(),
+                            VMValue::Float(_) => "Float".to_string(),
+                            VMValue::Bool(_) => "Bool".to_string(),
+                            VMValue::String(_) => "String".to_string(),
+                            VMValue::Void => "Void".to_string(),
+                            VMValue::Future(_) => "Future".to_string(),
+                            VMValue::BoxRef(b) => {
+                                // Prefer InstanceBox.class_name when available
+                                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                                    format!("BoxRef:{}", inst.class_name)
+                                } else {
+                                    format!("BoxRef:{}", b.type_name())
+                                }
+                            }
+                        };
+                        kinds.push(k);
+                        // nullish tag (env-gated): "null" | "missing" | "void" | ""
+                        if crate::config::env::null_missing_box_enabled() {
+                            let tag = match v {
+                                VMValue::Void => "void",
+                                VMValue::BoxRef(b) => {
+                                    if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { "null" }
+                                    else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { "missing" }
+                                    else if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() { "void" }
+                                    else { "" }
+                                }
+                                _ => "",
+                            };
+                            nullish.push(tag.to_string());
+                        }
+                    }
+                    let args_json = kinds
+                        .into_iter()
+                        .map(|s| format!("\"{}\"", esc(&s)))
+                        .collect::<Vec<_>>()
+                        .join(",");
+                    let nullish_json = if crate::config::env::null_missing_box_enabled() {
+                        let arr = nullish
+                            .into_iter()
+                            .map(|s| format!("\"{}\"", esc(&s)))
+                            .collect::<Vec<_>>()
+                            .join(",");
+                        Some(arr)
+                    } else { None };
+                    // For CompareOperator, include op string value if present in argv[0]
+                    let cur_fn = self
+                        .cur_fn
+                        .as_deref()
+                        .map(|s| esc(s))
+                        .unwrap_or_else(|| String::from("") );
+                    if class_name == "CompareOperator" && !argv.is_empty() {
+                        let op_str = match &argv[0] {
+                            VMValue::String(s) => esc(s),
+                            _ => String::from("")
+                        };
+                        if let Some(nj) = nullish_json {
+                            eprintln!(
+                                "{{\"ev\":\"call\",\"class\":\"{}\",\"method\":\"{}\",\"argc\":{},\"fn\":\"{}\",\"op\":\"{}\",\"argk\":[{}],\"nullish\":[{}]}}",
+                                esc(&class_name), esc(&method_name), argv.len(), cur_fn, op_str, args_json, nj
+                            );
+                        } else {
+                            eprintln!(
+                                "{{\"ev\":\"call\",\"class\":\"{}\",\"method\":\"{}\",\"argc\":{},\"fn\":\"{}\",\"op\":\"{}\",\"argk\":[{}]}}",
+                                esc(&class_name), esc(&method_name), argv.len(), cur_fn, op_str, args_json
+                            );
+                        }
+                    } else {
+                        if let Some(nj) = nullish_json {
+                            eprintln!(
+                                "{{\"ev\":\"call\",\"class\":\"{}\",\"method\":\"{}\",\"argc\":{},\"fn\":\"{}\",\"argk\":[{}],\"nullish\":[{}]}}",
+                                esc(&class_name), esc(&method_name), argv.len(), cur_fn, args_json, nj
+                            );
+                        } else {
+                            eprintln!(
+                                "{{\"ev\":\"call\",\"class\":\"{}\",\"method\":\"{}\",\"argc\":{},\"fn\":\"{}\",\"argk\":[{}]}}",
+                                esc(&class_name), esc(&method_name), argv.len(), cur_fn, args_json
+                            );
+                        }
+                    }
+                } else {
+                    self.box_trace_emit_call(&class_name, &method_name, argv.len());
+                }
+            }
+        }
         self.exec_function_inner(&callee, Some(&argv))
     }
 
@@ -160,7 +294,61 @@ impl MirInterpreter {
             "nyash.builtin.print" | "print" | "nyash.console.log" => {
                 if let Some(arg_id) = args.get(0) {
                     let val = self.reg_load(*arg_id)?;
-                    println!("{}", val.to_string());
+                    // Dev-only: print trace (kind/class) before actual print
+                    if Self::print_trace_enabled() { self.print_trace_emit(&val); }
+                    // Dev observe: Null/Missing boxes quick normalization (no behavior change to prod)
+                    if let VMValue::BoxRef(bx) = &val {
+                        // NullBox → always print as null (stable)
+                        if bx.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+                            println!("null");
+                            return Ok(VMValue::Void);
+                        }
+                        // MissingBox → default prints as null; when flag ON, show (missing)
+                        if bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() {
+                            if crate::config::env::null_missing_box_enabled() {
+                                println!("(missing)");
+                            } else {
+                                println!("null");
+                            }
+                            return Ok(VMValue::Void);
+                        }
+                    }
+                    // Dev: treat VM Void and BoxRef(VoidBox) as JSON null for print
+                    match &val {
+                        VMValue::Void => {
+                            println!("null");
+                            return Ok(VMValue::Void);
+                        }
+                        VMValue::BoxRef(bx) => {
+                            if bx.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
+                                println!("null");
+                                return Ok(VMValue::Void);
+                            }
+                        }
+                        _ => {}
+                    }
+                    // Print raw strings directly (avoid double quoting via StringifyOperator)
+                    match &val {
+                        VMValue::String(s) => { println!("{}", s); return Ok(VMValue::Void); }
+                        VMValue::BoxRef(bx) => {
+                            if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                                println!("{}", sb.value);
+                                return Ok(VMValue::Void);
+                            }
+                        }
+                        _ => {}
+                    }
+                    // Operator Box (Stringify) – dev flag gated
+                    if std::env::var("NYASH_OPERATOR_BOX_STRINGIFY").ok().as_deref() == Some("1") {
+                        if let Some(op) = self.functions.get("StringifyOperator.apply/1").cloned() {
+                            let out = self.exec_function_inner(&op, Some(&[val.clone()]))?;
+                            println!("{}", out.to_string());
+                        } else {
+                            println!("{}", val.to_string());
+                        }
+                    } else {
+                        println!("{}", val.to_string());
+                    }
                 }
                 Ok(VMValue::Void)
             }
@@ -195,6 +383,17 @@ impl MirInterpreter {
                     } else {
                         Err(VMError::InvalidInstruction(
                             "concat requires 1 argument".into(),
+                        ))
+                    }
+                }
+                "indexOf" => {
+                    if let Some(arg_id) = args.get(0) {
+                        let needle = self.reg_load(*arg_id)?.to_string();
+                        let idx = s.find(&needle).map(|i| i as i64).unwrap_or(-1);
+                        Ok(VMValue::Integer(idx))
+                    } else {
+                        Err(VMError::InvalidInstruction(
+                            "indexOf requires 1 argument".into(),
                         ))
                     }
                 }

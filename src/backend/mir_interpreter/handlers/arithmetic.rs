@@ -22,6 +22,25 @@ impl MirInterpreter {
     ) -> Result<(), VMError> {
         let a = self.reg_load(lhs)?;
         let b = self.reg_load(rhs)?;
+        // Operator Box (Add) — observe always; adopt gated
+        if let BinaryOp::Add = op {
+            let in_guard = self
+                .cur_fn
+                .as_deref()
+                .map(|n| n.starts_with("AddOperator.apply/"))
+                .unwrap_or(false);
+            if let Some(op_fn) = self.functions.get("AddOperator.apply/2").cloned() {
+                if !in_guard {
+                    if crate::config::env::operator_box_add_adopt() {
+                        let out = self.exec_function_inner(&op_fn, Some(&[a.clone(), b.clone()]))?;
+                        self.regs.insert(dst, out);
+                        return Ok(());
+                    } else {
+                        let _ = self.exec_function_inner(&op_fn, Some(&[a.clone(), b.clone()]));
+                    }
+                }
+            }
+        }
         let v = self.eval_binop(op, a, b)?;
         self.regs.insert(dst, v);
         Ok(())
@@ -69,6 +88,41 @@ impl MirInterpreter {
     ) -> Result<(), VMError> {
         let a = self.reg_load(lhs)?;
         let b = self.reg_load(rhs)?;
+        // Operator Box (Compare) — observe always; adopt gated
+        if let Some(op_fn) = self.functions.get("CompareOperator.apply/3").cloned() {
+            let in_guard = self
+                .cur_fn
+                .as_deref()
+                .map(|n| n.starts_with("CompareOperator.apply/"))
+                .unwrap_or(false);
+            let opname = match op {
+                CompareOp::Eq => "Eq",
+                CompareOp::Ne => "Ne",
+                CompareOp::Lt => "Lt",
+                CompareOp::Le => "Le",
+                CompareOp::Gt => "Gt",
+                CompareOp::Ge => "Ge",
+            };
+            if !in_guard {
+                if crate::config::env::operator_box_compare_adopt() {
+                    let out = self.exec_function_inner(
+                        &op_fn,
+                        Some(&[VMValue::String(opname.to_string()), a.clone(), b.clone()]),
+                    )?;
+                    let res = match out {
+                        VMValue::Bool(b) => b,
+                        _ => self.eval_cmp(op, a.clone(), b.clone())?,
+                    };
+                    self.regs.insert(dst, VMValue::Bool(res));
+                    return Ok(());
+                } else {
+                    let _ = self.exec_function_inner(
+                        &op_fn,
+                        Some(&[VMValue::String(opname.to_string()), a.clone(), b.clone()]),
+                    );
+                }
+            }
+        }
         let res = self.eval_cmp(op, a, b)?;
         self.regs.insert(dst, VMValue::Bool(res));
         Ok(())

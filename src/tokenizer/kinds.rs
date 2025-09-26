@@ -55,6 +55,8 @@ pub enum TokenType {
     BitAnd,
     BitOr,
     BitXor,
+    /// Unary bitwise not '~'
+    BitNot,
     FatArrow,
     EQUALS,
     NotEquals,

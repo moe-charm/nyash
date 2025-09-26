@@ -93,7 +93,10 @@ impl NyashParser {
         self.consume(TokenType::LBRACE)?;
         let mut statements = Vec::new();
 
-        while !self.is_at_end() && !self.match_token(&TokenType::RBRACE) {
+        // Be tolerant to blank lines within blocks: skip NEWLINE tokens between statements
+        while !self.is_at_end() {
+            while self.match_token(&TokenType::NEWLINE) { self.advance(); }
+            if self.match_token(&TokenType::RBRACE) { break; }
             statements.push(self.parse_statement()?);
         }
         if trace_blocks {
@@ -150,7 +153,20 @@ impl NyashParser {
             }
         };
 
-        while !self.is_at_end() && !self.match_token(&TokenType::RBRACE) {
+        while !self.is_at_end() {
+            // Skip blank lines at method body top-level
+            while self.match_token(&TokenType::NEWLINE) { self.advance(); }
+            // Stop at end of current method body
+            if self.match_token(&TokenType::RBRACE) { break; }
+            // Optional seam guard: if the upcoming tokens form a method head
+            // like `ident '(' ... ')' NEWLINE* '{'`, bail out so the caller
+            // (static box member parser) can handle it as a declaration, not
+            // as a function call expression inside this body.
+            if std::env::var("NYASH_PARSER_METHOD_BODY_STRICT").ok().as_deref() == Some("1") {
+                if looks_like_method_head(self) {
+                    break;
+                }
+            }
             statements.push(self.parse_statement()?);
         }
         if trace_blocks {

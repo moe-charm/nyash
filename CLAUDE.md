@@ -3,7 +3,8 @@
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
 ## 🚨 重要：スモークテストはv2構造を使う！
-詳細 → [tools/smokes/v2/README.md](tools/smokes/v2/README.md)
+- 📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
+- 📁 **v2詳細ドキュメント**: [tools/smokes/v2/README.md](tools/smokes/v2/README.md)
 
 ## Start Here (必ずここから)
 - 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)

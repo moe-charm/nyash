@@ -4,7 +4,11 @@ from llvmlite import ir
 from trace import debug as trace_debug
 from prepass.if_merge import plan_ret_phi_predeclare
 from prepass.loops import detect_simple_while
-from phi_wiring import setup_phi_placeholders as _setup_phi_placeholders, finalize_phis as _finalize_phis
+from phi_wiring import (
+    setup_phi_placeholders as _setup_phi_placeholders,
+    finalize_phis as _finalize_phis,
+    build_succs as _build_succs,
+)
 
 
 def lower_function(builder, func_data: Dict[str, Any]):
@@ -255,3 +259,70 @@ def lower_function(builder, func_data: Dict[str, Any]):
 
     # Finalize PHIs for this function
     _finalize_phis(builder)
+
+    # Safety pass: ensure every basic block ends with a terminator.
+    # This avoids llvmlite IR parse errors like "expected instruction opcode" on empty blocks.
+    try:
+        _enforce_terminators(builder, func, block_by_id)
+    except Exception:
+        # Non-fatal in bring-up; better to emit IR than crash
+        pass
+
+
+def _enforce_terminators(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, Any]]):
+    import re
+    succs = _build_succs(getattr(builder, 'preds', {}) or {})
+    for bb in func.blocks:
+        try:
+            if bb.terminator is not None:
+                continue
+        except Exception:
+            # If property access fails, try to add a branch/ret anyway
+            pass
+        # Parse block id from name like "bb123"
+        bid = None
+        try:
+            m = re.match(r"bb(\d+)$", str(bb.name))
+            bid = int(m.group(1)) if m else None
+        except Exception:
+            bid = None
+        # Choose a reasonable successor if any
+        target_bb = None
+        if bid is not None:
+            for s in (succs.get(int(bid), []) or []):
+                try:
+                    cand = builder.bb_map.get(int(s))
+                except Exception:
+                    cand = None
+                if cand is not None and cand is not bb:
+                    target_bb = cand
+                    break
+        ib = ir.IRBuilder(bb)
+        if target_bb is not None:
+            try:
+                ib.position_at_end(bb)
+            except Exception:
+                pass
+            ib.branch(target_bb)
+            try:
+                trace_debug(f"[llvm-py] enforce_terminators: br from {bb.name} -> {target_bb.name}")
+            except Exception:
+                pass
+            continue
+        # Fallback: insert a return of 0 matching function return type (i32 for ny_main, else i64)
+        try:
+            rty = func.function_type.return_type
+            if str(rty) == str(builder.i32):
+                ib.ret(ir.Constant(builder.i32, 0))
+            elif str(rty) == str(builder.i64):
+                ib.ret(ir.Constant(builder.i64, 0))
+            else:
+                # Unknown/void – synthesize a dummy br to self to keep parser happy (unreachable in practice)
+                ib.branch(bb)
+            try:
+                trace_debug(f"[llvm-py] enforce_terminators: ret/br injected in {bb.name}")
+            except Exception:
+                pass
+        except Exception:
+            # Last resort: do nothing
+            pass

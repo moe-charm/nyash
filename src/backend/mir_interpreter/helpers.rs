@@ -1,7 +1,21 @@
 use super::*;
+use crate::box_trait::VoidBox;
 use std::string::String as StdString;
 
 impl MirInterpreter {
+    #[inline]
+    fn tag_nullish(v: &VMValue) -> &'static str {
+        match v {
+            VMValue::Void => "void",
+            VMValue::BoxRef(b) => {
+                if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { "null" }
+                else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { "missing" }
+                else if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() { "void" }
+                else { "" }
+            }
+            _ => "",
+        }
+    }
     pub(super) fn reg_load(&self, id: ValueId) -> Result<VMValue, VMError> {
         match self.regs.get(&id).cloned() {
             Some(v) => Ok(v),
@@ -49,19 +63,34 @@ impl MirInterpreter {
     ) -> Result<VMValue, VMError> {
         use BinaryOp::*;
         use VMValue::*;
+        // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev mode.
+        let tolerate = std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_DEV").ok().as_deref() == Some("1");
+        let (a, b) = if tolerate {
+            let norm = |v: VMValue| -> VMValue {
+                if let VMValue::BoxRef(bx) = &v {
+                    if bx.as_any().downcast_ref::<VoidBox>().is_some() {
+                        return VMValue::Void;
+                    }
+                }
+                v
+            };
+            (norm(a), norm(b))
+        } else { (a, b) };
+        // Dev: nullish trace for binop
+        if crate::config::env::null_missing_box_enabled() && Self::box_trace_enabled() {
+            let (ak, bk) = (crate::backend::abi_util::tag_of_vm(&a), crate::backend::abi_util::tag_of_vm(&b));
+            let (an, bn) = (Self::tag_nullish(&a), Self::tag_nullish(&b));
+            let op_s = match op { BinaryOp::Add=>"Add", BinaryOp::Sub=>"Sub", BinaryOp::Mul=>"Mul", BinaryOp::Div=>"Div", BinaryOp::Mod=>"Mod", BinaryOp::BitAnd=>"BitAnd", BinaryOp::BitOr=>"BitOr", BinaryOp::BitXor=>"BitXor", BinaryOp::And=>"And", BinaryOp::Or=>"Or", BinaryOp::Shl=>"Shl", BinaryOp::Shr=>"Shr" };
+            eprintln!("{{\"ev\":\"binop\",\"op\":\"{}\",\"a_k\":\"{}\",\"b_k\":\"{}\",\"a_n\":\"{}\",\"b_n\":\"{}\"}}", op_s, ak, bk, an, bn);
+        }
         Ok(match (op, a, b) {
-            // Safety valve: treat Void as 0 for + (dev fallback for scanners)
-            (Add, VMValue::Void, Integer(y)) => Integer(y),
-            (Add, Integer(x), VMValue::Void) => Integer(x),
-            (Add, VMValue::Void, Float(y)) => Float(y),
-            (Add, Float(x), VMValue::Void) => Float(x),
-            // Dev-only safety valve: treat Void as empty string on string concatenation
-            // Guarded by NYASH_VM_TOLERATE_VOID=1
-            (Add, String(s), VMValue::Void) | (Add, VMValue::Void, String(s))
-                if std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1") =>
-            {
-                String(s)
-            }
+            // Dev-only safety valves for Add (guarded by tolerance or --dev):
+            // - Treat Void as 0 for numeric +
+            // - Treat Void as empty string for string +
+            (Add, VMValue::Void, Integer(y)) | (Add, Integer(y), VMValue::Void) if tolerate => Integer(y),
+            (Add, VMValue::Void, Float(y)) | (Add, Float(y), VMValue::Void) if tolerate => Float(y),
+            (Add, String(s), VMValue::Void) | (Add, VMValue::Void, String(s)) if tolerate => String(s),
             (Add, Integer(x), Integer(y)) => Integer(x + y),
             (Add, String(s), Integer(y)) => String(format!("{}{}", s, y)),
             (Add, String(s), Float(y)) => String(format!("{}{}", s, y)),
@@ -101,9 +130,23 @@ impl MirInterpreter {
     pub(super) fn eval_cmp(&self, op: CompareOp, a: VMValue, b: VMValue) -> Result<bool, VMError> {
         use CompareOp::*;
         use VMValue::*;
-        // Dev-only safety valve: tolerate Void in comparisons when enabled
-        // NYASH_VM_TOLERATE_VOID=1 → treat Void as 0 for numeric, empty for string
-        let (a2, b2) = if std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1") {
+        // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev.
+        let tolerate = std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_DEV").ok().as_deref() == Some("1");
+        let (a, b) = if tolerate {
+            let norm = |v: VMValue| -> VMValue {
+                if let VMValue::BoxRef(bx) = &v {
+                    if bx.as_any().downcast_ref::<VoidBox>().is_some() {
+                        return VMValue::Void;
+                    }
+                }
+                v
+            };
+            (norm(a), norm(b))
+        } else { (a, b) };
+        // Dev-only safety valve: tolerate Void in comparisons when enabled or in --dev
+        // → treat Void as 0 for numeric, empty for string
+        let (a2, b2) = if tolerate {
             match (&a, &b) {
                 (VMValue::Void, VMValue::Integer(_)) => (Integer(0), b.clone()),
                 (VMValue::Integer(_), VMValue::Void) => (a.clone(), Integer(0)),
@@ -118,7 +161,27 @@ impl MirInterpreter {
         } else {
             (a, b)
         };
-        let result = match (op, &a2, &b2) {
+        // Final safety (dev-only): if types still mismatch and any side is Void, coerce to numeric zeros
+        // Enabled only when tolerance is active (NYASH_VM_TOLERATE_VOID=1 or --dev)
+        let (a3, b3) = if tolerate {
+            match (&a2, &b2) {
+                (VMValue::Void, VMValue::Integer(_)) => (Integer(0), b2.clone()),
+                (VMValue::Integer(_), VMValue::Void) => (a2.clone(), Integer(0)),
+                (VMValue::Void, VMValue::Float(_)) => (Float(0.0), b2.clone()),
+                (VMValue::Float(_), VMValue::Void) => (a2.clone(), Float(0.0)),
+                _ => (a2.clone(), b2.clone()),
+            }
+        } else {
+            (a2.clone(), b2.clone())
+        };
+        // Dev: nullish trace for compare
+        if crate::config::env::null_missing_box_enabled() && Self::box_trace_enabled() {
+            let (ak, bk) = (crate::backend::abi_util::tag_of_vm(&a2), crate::backend::abi_util::tag_of_vm(&b2));
+            let (an, bn) = (Self::tag_nullish(&a2), Self::tag_nullish(&b2));
+            let op_s = match op { CompareOp::Eq=>"Eq", CompareOp::Ne=>"Ne", CompareOp::Lt=>"Lt", CompareOp::Le=>"Le", CompareOp::Gt=>"Gt", CompareOp::Ge=>"Ge" };
+            eprintln!("{{\"ev\":\"cmp\",\"op\":\"{}\",\"a_k\":\"{}\",\"b_k\":\"{}\",\"a_n\":\"{}\",\"b_n\":\"{}\"}}", op_s, ak, bk, an, bn);
+        }
+        let result = match (op, &a3, &b3) {
             (Eq, _, _) => eq_vm(&a2, &b2),
             (Ne, _, _) => !eq_vm(&a2, &b2),
             (Lt, Integer(x), Integer(y)) => x < y,
@@ -149,4 +212,127 @@ impl MirInterpreter {
         Ok(result)
     }
 
+}
+
+// ---- Box trace (dev-only observer) ----
+impl MirInterpreter {
+    #[inline]
+    pub(super) fn box_trace_enabled() -> bool {
+        std::env::var("NYASH_BOX_TRACE").ok().as_deref() == Some("1")
+    }
+
+    fn box_trace_filter_match(class_name: &str) -> bool {
+        if let Ok(filt) = std::env::var("NYASH_BOX_TRACE_FILTER") {
+            let want = filt.trim();
+            if want.is_empty() { return true; }
+            // comma/space separated tokens; match if any token is contained in class
+            for tok in want.split(|c: char| c == ',' || c.is_whitespace()) {
+                let t = tok.trim();
+                if !t.is_empty() && class_name.contains(t) { return true; }
+            }
+            false
+        } else {
+            true
+        }
+    }
+
+    fn json_escape(s: &str) -> String {
+        let mut out = String::with_capacity(s.len() + 8);
+        for ch in s.chars() {
+            match ch {
+                '"' => out.push_str("\\\""),
+                '\\' => out.push_str("\\\\"),
+                '\n' => out.push_str("\\n"),
+                '\r' => out.push_str("\\r"),
+                '\t' => out.push_str("\\t"),
+                c if c.is_control() => out.push(' '),
+                c => out.push(c),
+            }
+        }
+        out
+    }
+
+    pub(super) fn box_trace_emit_new(&self, class_name: &str, argc: usize) {
+        if !Self::box_trace_enabled() || !Self::box_trace_filter_match(class_name) { return; }
+        eprintln!(
+            "{{\"ev\":\"new\",\"class\":\"{}\",\"argc\":{}}}",
+            Self::json_escape(class_name), argc
+        );
+    }
+
+    pub(super) fn box_trace_emit_call(&self, class_name: &str, method: &str, argc: usize) {
+        if !Self::box_trace_enabled() || !Self::box_trace_filter_match(class_name) { return; }
+        eprintln!(
+            "{{\"ev\":\"call\",\"class\":\"{}\",\"method\":\"{}\",\"argc\":{}}}",
+            Self::json_escape(class_name), Self::json_escape(method), argc
+        );
+    }
+
+    pub(super) fn box_trace_emit_get(&self, class_name: &str, field: &str, val_kind: &str) {
+        if !Self::box_trace_enabled() || !Self::box_trace_filter_match(class_name) { return; }
+        eprintln!(
+            "{{\"ev\":\"get\",\"class\":\"{}\",\"field\":\"{}\",\"val\":\"{}\"}}",
+            Self::json_escape(class_name), Self::json_escape(field), Self::json_escape(val_kind)
+        );
+    }
+
+    pub(super) fn box_trace_emit_set(&self, class_name: &str, field: &str, val_kind: &str) {
+        if !Self::box_trace_enabled() || !Self::box_trace_filter_match(class_name) { return; }
+        eprintln!(
+            "{{\"ev\":\"set\",\"class\":\"{}\",\"field\":\"{}\",\"val\":\"{}\"}}",
+            Self::json_escape(class_name), Self::json_escape(field), Self::json_escape(val_kind)
+        );
+    }
+}
+
+// ---- Print trace (dev-only) ----
+impl MirInterpreter {
+    #[inline]
+    pub(super) fn print_trace_enabled() -> bool {
+        std::env::var("NYASH_PRINT_TRACE").ok().as_deref() == Some("1")
+    }
+
+    pub(super) fn print_trace_emit(&self, val: &VMValue) {
+        if !Self::print_trace_enabled() { return; }
+        let (kind, class, nullish) = match val {
+            VMValue::Integer(_) => ("Integer", "".to_string(), None),
+            VMValue::Float(_) => ("Float", "".to_string(), None),
+            VMValue::Bool(_) => ("Bool", "".to_string(), None),
+            VMValue::String(_) => ("String", "".to_string(), None),
+            VMValue::Void => ("Void", "".to_string(), None),
+            VMValue::Future(_) => ("Future", "".to_string(), None),
+            VMValue::BoxRef(b) => {
+                // Prefer InstanceBox.class_name when available
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let tag = if crate::config::env::null_missing_box_enabled() {
+                        if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { Some("null") }
+                        else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { Some("missing") }
+                        else { None }
+                    } else { None };
+                    ("BoxRef", inst.class_name.clone(), tag)
+                } else {
+                    let tag = if crate::config::env::null_missing_box_enabled() {
+                        if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { Some("null") }
+                        else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { Some("missing") }
+                        else { None }
+                    } else { None };
+                    ("BoxRef", b.type_name().to_string(), tag)
+                }
+            }
+        };
+        if let Some(tag) = nullish {
+            eprintln!(
+                "{{\"ev\":\"print\",\"kind\":\"{}\",\"class\":\"{}\",\"nullish\":\"{}\"}}",
+                kind,
+                Self::json_escape(&class),
+                tag
+            );
+        } else {
+            eprintln!(
+                "{{\"ev\":\"print\",\"kind\":\"{}\",\"class\":\"{}\"}}",
+                kind,
+                Self::json_escape(&class)
+            );
+        }
+    }
 }

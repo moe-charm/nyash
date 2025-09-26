@@ -222,7 +222,9 @@ impl NyashRunner {
                 ) {
                     Ok(()) => {
                         match crate::runner::modes::common_util::exec::run_executable(exe_out, &[], 20_000) {
-                            Ok((code, _timed_out)) => {
+                            Ok((code, _timed_out, stdout_text)) => {
+                                // Forward program stdout so parity tests can compare outputs
+                                if !stdout_text.is_empty() { print!("{}", stdout_text); }
                                 println!("✅ LLVM (harness) execution completed (exit={})", code);
                                 std::process::exit(code);
                             }

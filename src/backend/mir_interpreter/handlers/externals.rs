@@ -12,11 +12,35 @@ impl MirInterpreter {
             ("env.console", "log") => {
                 if let Some(a0) = args.get(0) {
                     let v = self.reg_load(*a0)?;
-                    println!("{}", v.to_string());
+                    // Dev-only: mirror print-trace for extern console.log
+                    if Self::print_trace_enabled() { self.print_trace_emit(&v); }
+                    // Treat VM Void and BoxRef(VoidBox) as JSON null for dev ergonomics
+                    match &v {
+                        VMValue::Void => { println!("null"); if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
+                        VMValue::BoxRef(bx) => {
+                            if bx.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
+                                println!("null"); if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(());
+                            }
+                            if let Some(sb) = bx.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+                                println!("{}", sb.value); if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(());
+                            }
+                        }
+                        VMValue::String(s) => { println!("{}", s); if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
+                        _ => {}
+                    }
+                    // Operator Box (Stringify) – dev flag gated
+                    if std::env::var("NYASH_OPERATOR_BOX_STRINGIFY").ok().as_deref() == Some("1") {
+                        if let Some(op) = self.functions.get("StringifyOperator.apply/1").cloned() {
+                            let out = self.exec_function_inner(&op, Some(&[v.clone()]))?;
+                            println!("{}", out.to_string());
+                        } else {
+                            println!("{}", v.to_string());
+                        }
+                    } else {
+                        println!("{}", v.to_string());
+                    }
                 }
-                if let Some(d) = dst {
-                    self.regs.insert(d, VMValue::Void);
-                }
+                if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
                 Ok(())
             }
             ("env.future", "new") => {

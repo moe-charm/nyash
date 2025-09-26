@@ -1,0 +1,11 @@
+// std/operators/add.nyash
+// AddOperator — 加算の演算子ボックス（開発用観測MVP）
+// 目的: 加算を明示呼び出しとして観測（返り値は未使用）
+
+static box AddOperator {
+  // apply(a, b) -> Any
+  apply(a, b) {
+    // 実評価（採用フラグON時にVMが結果採用。演算子内は再入ガードで安全）
+    return a + b
+  }
+}

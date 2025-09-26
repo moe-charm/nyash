@@ -2,7 +2,6 @@
 // 責務: トークン列をJsonNodeに変換、構文エラー検出、ネスト構造処理
 
 using "apps/lib/json_native/lexer/tokenizer.nyash" as JsonTokenizer
-using "apps/lib/json_native/lexer/token.nyash" as JsonToken
 using "apps/lib/json_native/lexer/token.nyash" as TokenType
 using "apps/lib/json_native/core/node.nyash" as JsonNode
 using "apps/lib/json_native/utils/string.nyash" as StringUtils
@@ -35,6 +34,8 @@ box JsonParser {
         
         // Step 1: 字句解析
         local tokenizer = new JsonTokenizer(json_text)
+        // Guard: ensure scanner has the correct input even if constructor args are dropped
+        tokenizer.set_input(json_text)
         me.tokens = tokenizer.tokenize()
         
         // 字句解析エラーをチェック
@@ -76,40 +77,33 @@ box JsonParser {
         
         local token_type = token.get_type()
         
-        // リテラル値
+        // リテラル値・構造のディスパッチ（厳密一致）
         if token_type == "NULL" {
             me.advance()
             return JsonNode.create_null()
-        } else {
-            if token_type == "TRUE" {
-                me.advance()
-                return JsonNode.create_bool(true)
-            } else {
-                if token_type == "FALSE" {
-                    me.advance()
-                    return JsonNode.create_bool(false)
-                } else {
-                    if token_type == "NUMBER" {
-                        return me.parse_number()
-                    } else {
-                        if token_type == "STRING" {
-                            return me.parse_string()
-                        } else {
-                            if token_type == "LBRACE" {
-                                return me.parse_object()
-                            } else {
-                                if token_type == "LBRACKET" {
-                                    return me.parse_array()
-                                } else {
-                                    me.add_error("Expected JSON value, got: " + token_type)
-                                    return null
-                                }
-                            }
-                        }
-                    }
-                }
-            }
         }
+        if token_type == "TRUE" {
+            me.advance()
+            return JsonNode.create_bool(true)
+        }
+        if token_type == "FALSE" {
+            me.advance()
+            return JsonNode.create_bool(false)
+        }
+        if token_type == "NUMBER" {
+            return me.parse_number()
+        }
+        if token_type == "STRING" {
+            return me.parse_string()
+        }
+        if token_type == "LBRACE" {
+            return me.parse_object()
+        }
+        if token_type == "LBRACKET" {
+            return me.parse_array()
+        }
+        me.add_error("Expected JSON value, got: " + token_type)
+        return null
     }
     
     // ===== 専用パーサーメソッド =====
@@ -117,7 +111,7 @@ box JsonParser {
     // 数値解析
     parse_number() {
         local token = me.current_token()
-        if token == null or token.get_type() != TokenType.NUMBER() {
+        if token == null or token.get_type() != "NUMBER" {
             me.add_error("Expected number token")
             return null
         }
@@ -142,7 +136,7 @@ box JsonParser {
     // 文字列解析
     parse_string() {
         local token = me.current_token()
-        if token == null or token.get_type() != TokenType.STRING() {
+        if token == null or token.get_type() != "STRING" {
             me.add_error("Expected string token")
             return null
         }
@@ -156,7 +150,7 @@ box JsonParser {
     // オブジェクト解析
     parse_object() {
         local start_token = me.current_token()
-        if start_token == null or start_token.get_type() != TokenType.LBRACE() {
+        if start_token == null or start_token.get_type() != "LBRACE" {
             me.add_error("Expected '{' to start object")
             return null
         }
@@ -173,7 +167,7 @@ box JsonParser {
         loop(true) {
             // キー解析
             local key_token = me.current_token()
-            if key_token == null or key_token.get_type() != TokenType.STRING() {
+            if key_token == null or key_token.get_type() != "STRING" {
                 me.add_error("Expected string key in object")
                 return null
             }
@@ -181,7 +175,7 @@ box JsonParser {
             me.advance()
             
             // コロン
-            if not me.match_token(TokenType.COLON()) {
+            if not me.match_token("COLON") {
                 me.add_error("Expected ':' after object key")
                 return null
             }
@@ -196,11 +190,11 @@ box JsonParser {
             object_node.object_set(key, value)
             
             // 継続判定
-            if me.match_token(TokenType.COMMA()) {
+            if me.match_token("COMMA") {
                 // 次のキー・値ペアに続く
                 continue
             } else {
-                if me.match_token(TokenType.RBRACE()) {
+                if me.match_token("RBRACE") {
                     break  // オブジェクト終了
                 } else {
                     me.add_error("Expected ',' or '}' in object")
@@ -215,7 +209,7 @@ box JsonParser {
     // 配列解析
     parse_array() {
         local start_token = me.current_token()
-        if start_token == null or start_token.get_type() != TokenType.LBRACKET() {
+        if start_token == null or start_token.get_type() != "LBRACKET" {
             me.add_error("Expected '[' to start array")
             return null
         }
@@ -224,7 +218,7 @@ box JsonParser {
         local array_node = JsonNode.create_array()
         
         // 空配列チェック
-        if me.match_token(TokenType.RBRACKET()) {
+        if me.match_token("RBRACKET") {
             return array_node
         }
         
@@ -240,11 +234,11 @@ box JsonParser {
             array_node.array_push(value)
             
             // 継続判定
-            if me.match_token(TokenType.COMMA()) {
+            if me.match_token("COMMA") {
                 // 次の要素に続く
                 continue
             } else {
-                if me.match_token(TokenType.RBRACKET()) {
+                if me.match_token("RBRACKET") {
                     break  // 配列終了
                 } else {
                     me.add_error("Expected ',' or ']' in array")
@@ -284,9 +278,8 @@ box JsonParser {
     // 指定されたトークンタイプにマッチするかチェック（マッチしたら消費）
     match_token(expected_type) {
         local token = me.current_token()
-        if token != null and token.get_type() == expected_type {
-            me.advance()
-            return true
+        if token != null {
+            if token.get_type() == expected_type { me.advance() return true }
         }
         return false
     }

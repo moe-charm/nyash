@@ -9,11 +9,62 @@ using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
 // 🌟 JSON値を表現するBox（Everything is Box原則）
 static box JsonNode {
     
+    // --- Internal normalization helper (dev-safe) ---
+    // Convert arbitrary values (MapBox/ArrayBox/primitives) into JsonNode or null.
+    // Heuristics only; keeps behavior stable without requiring the parser here.
+    normalize_any_(x) {
+        if x == null { return null }
+        // Already a JsonNode (stringify + get_kind expected)
+        if x.stringify != null and x.get_kind != null {
+            return x
+        }
+        // MapBox → object JsonNode (key-wise wrap)
+        if x.keys != null and x.get != null and x.set != null {
+            local out = this.create_object()
+            local ks = x.keys()
+            local i = 0
+            loop(i < ks.length()) {
+                local k = ks.get(i)
+                local v = x.get(k)
+                out.object_set(k, this.normalize_any_(v))
+                i = i + 1
+            }
+            return out
+        }
+        // ArrayBox → array JsonNode (index-wise wrap)
+        if x.length != null and x.get != null and x.push != null {
+            local out = this.create_array()
+            local i = 0
+            local n = x.length()
+            loop(i < n) {
+                out.array_push(this.normalize_any_(x.get(i)))
+                i = i + 1
+            }
+            return out
+        }
+        // Primitive-ish fallback: derive from textual form
+        if x.toString != null {
+            local s = x.toString()
+            // Fast common literals
+            if s == "null" { return null }
+            if s == "true" { return this.create_bool(true) }
+            if s == "false" { return this.create_bool(false) }
+            // Integer detection
+            if StringUtils.is_integer(s) {
+                return this.create_int(StringUtils.parse_integer(s))
+            }
+            // As a last resort, wrap as string
+            return this.create_string(s)
+        }
+        // Unknown – safest is null
+        return null
+    }
+    
     // ===== ファクトリーメソッド =====
     
     // null値を作成
     create_null() {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "null"
         node.value = null
         return node
@@ -21,7 +72,7 @@ static box JsonNode {
     
     // bool値を作成
     create_bool(b) {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "bool"
         node.value = b
         return node
@@ -29,7 +80,7 @@ static box JsonNode {
     
     // int値を作成
     create_int(i) {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "int"
         node.value = i
         return node
@@ -37,7 +88,7 @@ static box JsonNode {
     
     // float値を作成（値は文字列表現を保持）
     create_float(fstr) {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "float"
         node.value = fstr  // Phase 1: 文字列として保持（演算不要、stringify重視）
         return node
@@ -45,7 +96,7 @@ static box JsonNode {
     
     // string値を作成
     create_string(s) {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "string"
         node.value = s
         return node
@@ -53,7 +104,7 @@ static box JsonNode {
     
     // array値を作成
     create_array() {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "array"
         node.value = new ArrayBox()
         return node
@@ -61,7 +112,7 @@ static box JsonNode {
     
     // object値を作成
     create_object() {
-        local node = new JsonNode()
+        local node = new JsonNodeInstance()
         node.kind = "object"
         node.value = new MapBox()
         return node
@@ -73,7 +124,7 @@ static box JsonNode {
     parse(json_text) {
         // TODO: 本格的なレクサー・パーサーは後で実装
         // まずは超シンプルな実装で動作確認
-        
+
         // 空白をトリム（美しいモジュラー設計）
         local text = StringUtils.trim(json_text)
         
@@ -95,6 +146,10 @@ static box JsonNode {
             local num = StringUtils.parse_integer(text)
             return this.create_int(num)
         }
+        // 浮動小数点（簡易検出: 小数点/指数記号を含む）
+        if StringUtils.contains(text, ".") or StringUtils.contains(text, "e") or StringUtils.contains(text, "E") {
+            return this.create_float(text)
+        }
         
         // 文字列（エスケープ処理対応）
         if StringUtils.starts_with(text, "\"") and StringUtils.ends_with(text, "\"") {
@@ -111,8 +166,41 @@ static box JsonNode {
         
         // オブジェクト（超シンプル版）
         if StringUtils.starts_with(text, "{") and StringUtils.ends_with(text, "}") {
+            // 単一キーの素朴なハンドリング: {"k":<num|string|bool|null>}
             local object_node = this.create_object()
-            // TODO: キー・バリューのパース処理は後で実装
+            local inner = text.substring(1, text.length() - 1)
+            inner = StringUtils.trim(inner)
+            if inner.length() == 0 {
+                return object_node
+            }
+            // 最低限の分割（コロン一箇所想定）: indexOf があれば活用
+            local sep = -1
+            if inner.indexOf != null { sep = inner.indexOf(":") }
+            if sep == -1 {
+                return object_node
+            }
+            local kraw = StringUtils.trim(inner.substring(0, sep))
+            local vraw = StringUtils.trim(inner.substring(sep + 1, inner.length()))
+            // キーはダブルクォート必須（簡易）
+            if StringUtils.starts_with(kraw, "\"") and StringUtils.ends_with(kraw, "\"") {
+                local key = EscapeUtils.unquote_string(kraw)
+                // 値は既存の簡易規則に委譲
+                local val
+                if vraw == "null" { val = this.create_null() } else {
+                    if vraw == "true" { val = this.create_bool(true) } else {
+                        if vraw == "false" { val = this.create_bool(false) } else {
+                            if StringUtils.is_integer(vraw) { val = this.create_int(StringUtils.parse_integer(vraw)) } else {
+                                if StringUtils.contains(vraw, ".") or StringUtils.contains(vraw, "e") or StringUtils.contains(vraw, "E") { val = this.create_float(vraw) } else {
+                                    if StringUtils.starts_with(vraw, "\"") and StringUtils.ends_with(vraw, "\"") { val = this.create_string(EscapeUtils.unquote_string(vraw)) } else {
+                                        val = this.create_null()
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                object_node.object_set(key, val)
+            }
             return object_node
         }
         
@@ -159,10 +247,14 @@ static box JsonNode {
         return 0
     }
     
-    // 配列の要素を取得
+    // 配列の要素を取得（欠損時は null を返す）
     array_get(index) {
         if me.kind == "array" {
-            return me.value.get(index)
+            if index >= 0 and index < me.value.length() {
+                return this.normalize_any_(me.value.get(index))
+            } else {
+                return null
+            }
         }
         return null
     }
@@ -174,10 +266,14 @@ static box JsonNode {
         }
     }
     
-    // オブジェクトのキーを取得
+    // オブジェクトのキーを取得（欠損時は null を返す）
     object_get(key) {
         if me.kind == "object" {
-            return me.value.get(key)
+            if me.value.has(key) {
+                return this.normalize_any_(me.value.get(key))
+            } else {
+                return null
+            }
         }
         return null
     }
@@ -212,7 +308,8 @@ static box JsonNode {
                 }
             } else {
                 if me.kind == "int" {
-                    return me.value.toString()
+                    // Avoid relying on primitive method resolution; force string via concat
+                    return "" + me.value
                 } else {
                     if me.kind == "float" {
                         // 数値の文字列表現をそのまま出力（引用符なし）
@@ -221,37 +318,60 @@ static box JsonNode {
                     if me.kind == "string" {
                         return EscapeUtils.quote_string(me.value)
                         } else {
-                            if me.kind == "array" {
-                                local parts = new ArrayBox()
-                                local i = 0
-                                loop(i < me.value.length()) {
-                                    local elem = me.value.get(i)
-                                    parts.push(elem.stringify())
-                                    i = i + 1
-                                }
-                                return "[" + StringUtils.join(parts, ",") + "]"
-                            } else {
-                            if me.kind == "object" {
-                                local parts = new ArrayBox()
-                                local keys = me.value.keys()
-                                local i = 0
-                                loop(i < keys.length()) {
-                                    local key = keys.get(i)
-                                    local val = me.value.get(key)
-                                    local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
-                                    parts.push(pair)
-                                    i = i + 1
-                                }
-                                return "{" + StringUtils.join(parts, ",") + "}"
-                            } else {
-                                    return "null"
-                                }
-                            }
+            if me.kind == "array" {
+                local parts = new ArrayBox()
+                local i = 0
+                loop(i < me.value.length()) {
+                    local elem = me.value.get(i)
+                    parts.push(elem.stringify())
+                    i = i + 1
+                }
+                return "[" + StringUtils.join(parts, ",") + "]"
+            } else {
+            if me.kind == "object" {
+                // 安定出力のためキーを辞書順で整列
+                local keys = me.value.keys()
+                // 簡易バブルソート（要素数が小さい前提）
+                local n = keys.length()
+                local i = 0
+                loop(i < n) {
+                    local j = 0
+                    loop(j + 1 < n) {
+                        local a = keys.get(j)
+                        local b = keys.get(j + 1)
+                        if a > b {
+                            // swap
+                            keys.set(j, b)
+                            keys.set(j + 1, a)
                         }
+                        j = j + 1
+                    }
+                    i = i + 1
+                }
+                local parts = new ArrayBox()
+                local k = 0
+                loop(k < keys.length()) {
+                    local key = keys.get(k)
+                    local val = me.value.get(key)
+                    local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
+                    parts.push(pair)
+                    k = k + 1
+                }
+                return "{" + StringUtils.join(parts, ",") + "}"
+            } else {
+                return "null"
+            }
+            }
+        }
                     }
                 }
             }
         }
+    }
+
+    // 互換: toString は stringify と等価
+    toString() {
+        return me.stringify()
     }
     
     // ===== ヘルパーメソッド =====
@@ -304,7 +424,8 @@ box JsonNodeInstance {
             if me.value { return "true" } else { return "false" }
         }
         if me.kind == "int" {
-            return me.value.toString()
+            // Avoid relying on primitive method resolution; force string via concat
+            return "" + me.value
         }
         if me.kind == "float" {
             return me.value
@@ -323,19 +444,40 @@ box JsonNodeInstance {
             return "[" + StringUtils.join(parts, ",") + "]"
         }
         if me.kind == "object" {
-            local parts = new ArrayBox()
+            // 安定出力のためキーを辞書順で整列
             local keys = me.value.keys()
+            local n = keys.length()
             local i = 0
-            loop(i < keys.length()) {
-                local key = keys.get(i)
+            loop(i < n) {
+                local j = 0
+                loop(j + 1 < n) {
+                    local a = keys.get(j)
+                    local b = keys.get(j + 1)
+                    if a > b {
+                        keys.set(j, b)
+                        keys.set(j + 1, a)
+                    }
+                    j = j + 1
+                }
+                i = i + 1
+            }
+            local parts = new ArrayBox()
+            local k = 0
+            loop(k < keys.length()) {
+                local key = keys.get(k)
                 local val = me.value.get(key)
                 local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
                 parts.push(pair)
-                i = i + 1
+                k = k + 1
             }
             return "{" + StringUtils.join(parts, ",") + "}"
         }
         return "null"
+    }
+
+    // 互換: toString は stringify と等価
+    toString() {
+        return me.stringify()
     }
 
     // Instance helper: push element into array value
@@ -353,10 +495,26 @@ box JsonNodeInstance {
         return 0
     }
 
-    // Instance helper: object get
+    // Instance helper: array get（欠損時は null を返す）
+    array_get(index) {
+        if me.kind == "array" {
+            if index >= 0 and index < me.value.length() {
+                return JsonNode.normalize_any_(me.value.get(index))
+            } else {
+                return null
+            }
+        }
+        return null
+    }
+
+    // Instance helper: object get（欠損時は null を返す）
     object_get(key) {
         if me.kind == "object" {
-            return me.value.get(key)
+            if me.value.has(key) {
+                return JsonNode.normalize_any_(me.value.get(key))
+            } else {
+                return null
+            }
         }
         return null
     }

@@ -1,0 +1,18 @@
+// std/operators/compare.nyash
+// CompareOperator — 比較演算の演算子ボックス（開発用観測MVP）
+// 目的: 比較を明示の呼び出しとして観測可能にする（MVPでは返り値は未使用）
+
+static box CompareOperator {
+  // apply(op, a, b) -> Bool
+  apply(op, a, b) {
+    // 実評価（採用フラグON時にVMが結果採用。演算子内は再入ガードで安全）
+    if op == "Eq" { return a == b }
+    if op == "Ne" { return a != b }
+    if op == "Lt" { return a < b }
+    if op == "Le" { return a <= b }
+    if op == "Gt" { return a > b }
+    if op == "Ge" { return a >= b }
+    // 未知のopは false（安全側）
+    return false
+  }
+}

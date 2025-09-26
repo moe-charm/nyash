@@ -1,0 +1,36 @@
+using json as JsonParserModule
+// Ensure JsonNode symbol via SSOT alias (nyash.toml)
+using JsonNode as JsonNode
+
+static box Main {
+  main() {
+    // Minimal JSON pretty-printer (current: compact print via toString())
+    // TODO: add indentation-aware stringify once JsonNode exposes iterators
+    local samples = new ArrayBox()
+    samples.push("null")
+    samples.push("true")
+    samples.push("false")
+    samples.push("42")
+    samples.push("\"hello\"")
+    samples.push("[]")
+    samples.push("{}")
+    samples.push("{\"a\":1}")
+    samples.push("-0")
+    samples.push("0")
+    samples.push("3.14")
+    samples.push("-2.5")
+    samples.push("6.02e23")
+    samples.push("-1e-9")
+
+    local i = 0
+    loop(i < samples.length()) {
+      local s = samples.get(i)
+      // Use JsonNode.parse for compact pretty-printing in MVP path
+      // (JsonParserModule/full tokenizer is exercised in integration smokes)
+      local r = JsonNode.parse(s)
+      if (r == null) { print("null") } else { print(r.toString()) }
+      i = i + 1
+    }
+    return 0
+  }
+}

@@ -27,6 +27,7 @@ pub fn build_command() -> Command {
         .version("1.0")
         .author("Claude Code <claude@anthropic.com>")
         .about("🦀 Nyash Programming Language - Everything is Box in Rust! 🦀")
+        .arg(Arg::new("dev").long("dev").help("Enable development defaults (AST using ON; Operator Boxes observe; safe diagnostics)").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("file").help("Nyash file to execute").value_name("FILE").index(1))
         .arg(Arg::new("macro-expand-child").long("macro-expand-child").value_name("FILE").help("Macro sandbox child: read AST JSON v0 from stdin, expand using Nyash macro file, write AST JSON v0 to stdout (PoC)"))
         .arg(Arg::new("dump-ast").long("dump-ast").help("Dump parsed AST and exit").action(clap::ArgAction::SetTrue))
@@ -200,6 +201,35 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
             }
             _ => {}
         }
+    }
+
+    // --dev flag (or NYASH_DEV=1) enables safe development defaults
+    // - AST using ON (NYASH_USING_AST=1)
+    // - Operator Boxes observe ON (Stringify/Compare/Add) and prelude injection (NYASH_OPERATOR_BOX_ALL=1)
+    //   (Adopt is OFF by default; builder-call OFF)
+    // - Keep production behavior otherwise (no plugin/trace changes here)
+    if matches.get_flag("dev") || std::env::var("NYASH_DEV").ok().as_deref() == Some("1") {
+        // Profile hint
+        std::env::set_var("NYASH_USING_PROFILE", "dev");
+        // AST prelude merge
+        std::env::set_var("NYASH_USING_AST", "1");
+        // Ensure project root is available for prelude injection
+        if std::env::var("NYASH_ROOT").is_err() {
+            if let Ok(cwd) = std::env::current_dir() {
+                std::env::set_var("NYASH_ROOT", cwd.display().to_string());
+            }
+        }
+        // Operator Boxes: observe + prelude injection
+        std::env::set_var("NYASH_OPERATOR_BOX_ALL", "1");
+        std::env::set_var("NYASH_OPERATOR_BOX_STRINGIFY", "1");
+        std::env::set_var("NYASH_OPERATOR_BOX_COMPARE", "1");
+        std::env::set_var("NYASH_OPERATOR_BOX_ADD", "1");
+        // Adopt selected operators in dev for parity with observe path
+        std::env::set_var("NYASH_OPERATOR_BOX_COMPARE_ADOPT", "1");
+        std::env::set_var("NYASH_OPERATOR_BOX_ADD_ADOPT", "1");
+        // VM: tolerate Void/BoxRef(VoidBox) in comparisons/binops (dev-only guard)
+        std::env::set_var("NYASH_VM_TOLERATE_VOID", "1");
+        // Builder-call ALL is still OFF here to keep MIR shape stable.
     }
 
     cfg

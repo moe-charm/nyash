@@ -1,20 +1,36 @@
-# Smokes Index
+# Nyash Smoke Tests v2 — Guide
 
-Purpose
-- 軽量なローカル確認やCI向けのスモークを用途別に集約するためのインデックスだよ。
+Overview
+- Entry: `tools/smokes/v2/run.sh` — unified runner for quick/integration/full.
+- Profiles:
+  - `quick` — fast developer checks.
+  - `integration` — VM↔LLVM parity, basic stability.
+  - `full` — comprehensive matrix.
 
-Categories
-- pyvm: PyVM 参照実行の代表スモーク
-- llvm: llvmlite/ny-llvmc を使った AOT/EXE スモーク
-- selfhost: 自己ホスト（Ny→JSON v0→実行）のスモーク
+Dev Mode (defaults)
+- In v2 smokes, the `quick` profile exports `NYASH_DEV=1` by default.
+  - This enables CLI `--dev`-equivalent defaults inside Nyash:
+    - AST using ON (SSOT + AST prelude merge)
+    - Operator Boxes in observe mode (no adoption)
+    - Minimal diagnostics; output parity is preserved
+- You can also run manually with `nyash --dev script.nyash`.
 
-Entry scripts
-- `./tools/smokes/fast_local.sh`
-  - 手元確認用の最小セット（PyVM 小パック + crate EXE 3ケース + 短絡ブリッジ）
-- `./tools/smokes/selfhost_local.sh`
-  - 自己ホスト側の簡易確認（parser→JSON→PyVM 実行）
+Common commands
+- Quick suite (auto `NYASH_DEV=1`):
+  - `tools/smokes/v2/run.sh --profile quick`
+- Focus JSON smokes:
+  - `tools/opbox-json.sh` (Roundtrip/Nested, plugins disabled, generous timeout)
+- One-off program (VM):
+  - `target/release/nyash --backend vm --dev apps/APP/main.nyash`
+
+Key env knobs
+- `NYASH_DEV=1` — enable dev defaults (same effect as `--dev`).
+- `SMOKES_DEFAULT_TIMEOUT` — per test timeout seconds (default 15 for quick).
+- `SMOKES_PLUGIN_MODE=dynamic|static` — plugin mode for preflight (auto by default).
+- `SMOKES_FORCE_CONFIG=rust_vm_dynamic|llvm_static` — force backend config.
+- `SMOKES_NOTIFY_TAIL` — lines to show on failure tail (default 80).
 
 Notes
-- 既存の多数のスモークは `tools/` 直下にあるよ（歴史的事情）。
-  少しずつ `tools/smokes/` 配下の集約ランナーに寄せていく方針だよ。
+- Dev defaults are designed to be non-intrusive: tests remain behavior‑compatible.
+- To repro outside smokes, either pass `--dev` or export `NYASH_DEV=1`.
 

@@ -1,5 +1,6 @@
 use super::{BasicBlock, BasicBlockId};
 use crate::mir::{BarrierOp, TypeOpKind, WeakRefOp};
+use std::sync::atomic::{AtomicUsize, Ordering};
 // include path resolver removed (using handles modules)
 
 // Optional builder debug logging
@@ -7,8 +8,18 @@ pub(super) fn builder_debug_enabled() -> bool {
     std::env::var("NYASH_BUILDER_DEBUG").is_ok()
 }
 
+static BUILDER_DEBUG_COUNT: AtomicUsize = AtomicUsize::new(0);
+
 pub(super) fn builder_debug_log(msg: &str) {
     if builder_debug_enabled() {
+        // Optional cap: limit the number of builder debug lines to avoid flooding the terminal.
+        // Set via env: NYASH_BUILDER_DEBUG_LIMIT=<N> (default: unlimited)
+        if let Ok(cap_s) = std::env::var("NYASH_BUILDER_DEBUG_LIMIT") {
+            if let Ok(cap) = cap_s.parse::<usize>() {
+                let n = BUILDER_DEBUG_COUNT.fetch_add(1, Ordering::Relaxed);
+                if n >= cap { return; }
+            }
+        }
         eprintln!("[BUILDER] {}", msg);
     }
 }

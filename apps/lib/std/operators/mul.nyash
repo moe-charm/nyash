@@ -1,0 +1,4 @@
+static box MulOperator {
+  apply(a, b) { return a * b }
+}
+

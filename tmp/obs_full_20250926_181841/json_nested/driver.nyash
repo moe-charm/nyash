@@ -1,0 +1,20 @@
+using json as JsonParserModule
+
+static box Main {
+  main() {
+    local samples = new ArrayBox()
+    samples.push("[1,[2,3],{\"x\":[4]}]")
+    samples.push("{\"a\":{\"b\":[1,2]},\"c\":\"d\"}")
+    samples.push("{\"n\":-1e-3,\"z\":0.0}")
+
+    local i = 0
+    loop(i < samples.length()) {
+      local s = samples.get(i)
+      local p = JsonParserModule.create_parser()
+      local r = p.parse(s)
+      if (r == null) { print("null"); } else { print(r.toString()) }
+      i = i + 1
+    }
+    return 0
+  }
+}

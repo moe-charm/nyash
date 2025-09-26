@@ -30,6 +30,7 @@ pub const BUILTIN_BOXES: &[&str] = &[
     "NullBox",
     "ArrayBox",
     "MapBox",
+    "MissingBox",
     "FileBox",
     "ResultBox",
     "FutureBox",

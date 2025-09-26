@@ -1,0 +1,16 @@
+[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+[FileBox] Plugin initialized
+Net plugin: LOG_ON=false, LOG_PATH=net_plugin.log
+[harness] error: LLVM IR parsing error
+<string>:284:25: error: '@JsonScanner.is_digit_char/1' defined with type 'i64 (i64)*' but expected 'i64 (i64, i64)*'
+  %"call_15" = call i64 @"JsonScanner.is_digit_char/1"(i64 0, i64 0)
+                        ^
+
+Error: failed to compile MIR JSON via harness: tmp/nyash_cli_emit.json
+
+Caused by:
+    harness exited with status: Some(1)
+❌ ny-llvmc emit-exe error: ny-llvmc failed with status: Some(1).
+Try adding --emit-exe-libs (e.g. "-ldl -lpthread -lm") or set --emit-exe-nyrt to NyRT dir (e.g. target/release).
+   Hint: build ny-llvmc: cargo build -p nyash-llvm-compiler --release
