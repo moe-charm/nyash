@@ -10,6 +10,8 @@ local a, b, c             # 複数宣言
 local x = 10, y = 20, z   # 混合初期化
 ```
 
+注意: Nyash は `var`/`let` を採用していません。常に `local` で明示宣言してください（未宣言名への代入はエラー）。
+
 ### Box定義（クラス）
 ```nyash
 box ClassName {

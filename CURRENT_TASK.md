@@ -10,6 +10,13 @@ Status Snapshot — 2025‑09‑27
   - VM method_router: special-method table extended minimally — equals/1 now tries instance class then base class when only base provides equals (deterministic, no behavior change where both exist). toString→stringify remains.
   - MIR Callee Phase‑3: added TypeCertainty to Callee::Method (Known/Union). Builder sets Known when receiver origin is known; legacy/migration BoxCall marks Union. JSON emitter and MIR printer include certainty for diagnostics. Backends ignore it functionally for now.
   - Using/SSOT: JSONモジュール内部 using を相対に統一（alias配下でも安定）
+  - DebugHub: 追加ゲート `NYASH_DEBUG_SAMPLE_EVERY`（N件に1度だけ emit）。重いケースでのログ制御のため（既定OFF・ゼロコスト）。
+
+Decision — Variables (Option A; 2025‑09‑27)
+- 方針: var/let は導入しない。ローカルは常に `local` で明示宣言。
+- 目的: SSA/Loop‑Form と Known/Union 解析の単純さを維持し、未宣言代入の混入を防ぐ。
+- 補足: 開発用の糖衣（行頭 `@name = expr` → `local name = expr`）はランナー前処理で提供（既定OFF）。言語仕様には含めない。
+- Docs 更新: quick-reference, language reference, tutorials に「var/let 不採用」を明記。
   - Tokenizer/Parser デバッグ導線（devトレース）を追加
   - json_lint_vm: fast‑pathの誤判定を除去＋未終端ガードを追加（PASS）
   - json_query_min_vm/json_query_vm/json_pp_vm: PASS
@@ -69,6 +76,8 @@ Work Queue (Next)
 3) エラーメッセージの詳細化（expected/actual/line/column）
 4) Ny 実行器 M2 スケルトン（JSON v0 ローダ＋const/binop 等の最小実装）下書き
 5) Parity ミニセット（VM↔llvmlite↔Ny）を用意し、差分ダッシュボード化
+ 6) Router 観測ログの軽追加（dev-only, 既定OFF）: class-reroute / special-reroute を DebugHub に emit（サンプル制御対応）
+ 7) LLVM ハーネスの MIR ダンプに certainty 表示（挙動不変の診断整合）
 
 Runbook（抜粋）
 - VM quick: `tools/smokes/v2/run.sh --profile quick`
