@@ -1,4 +1,7 @@
 use std::io::Write;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static EMIT_COUNTER: AtomicU64 = AtomicU64::new(0);
 
 /// Minimal debug hub: JSONL event emitter (dev-only; default OFF).
 ///
@@ -14,6 +17,15 @@ pub fn emit(cat: &str, kind: &str, fn_name: Option<&str>, region_id: Option<&str
         if !kinds.split(',').any(|k| k.trim().eq_ignore_ascii_case(cat)) {
             return;
         }
+    }
+    // Optional sampling: emit every N events (default 1 = no sampling)
+    let sample_every = std::env::var("NYASH_DEBUG_SAMPLE_EVERY")
+        .ok()
+        .and_then(|s| s.parse::<u64>().ok())
+        .unwrap_or(1);
+    if sample_every > 1 {
+        let n = EMIT_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+        if n % sample_every != 0 { return; }
     }
     let sink = match std::env::var("NYASH_DEBUG_SINK") {
         Ok(s) if !s.is_empty() => s,
@@ -33,4 +45,3 @@ pub fn emit(cat: &str, kind: &str, fn_name: Option<&str>, region_id: Option<&str
         let _ = writeln!(f, "{}", obj.to_string());
     }
 }
-
