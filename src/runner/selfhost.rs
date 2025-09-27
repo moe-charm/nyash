@@ -38,6 +38,12 @@ impl NyashRunner {
             }
         }
 
+        // Promote dev sugar to standard: pre-expand line-head '@name[:T] = expr' to 'local name[:T] = expr'
+        {
+            let expanded = crate::runner::modes::common_util::resolve::preexpand_at_local(code_ref.as_ref());
+            code_ref = std::borrow::Cow::Owned(expanded);
+        }
+
         // Write to tmp/ny_parser_input.ny (as expected by Ny parser v0), unless forced to reuse existing tmp
         let use_tmp_only = crate::config::env::ny_compiler_use_tmp_only();
         let tmp_dir = std::path::Path::new("tmp");

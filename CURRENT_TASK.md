@@ -15,7 +15,7 @@ Status Snapshot — 2025‑09‑27
 Decision — Variables (Option A; 2025‑09‑27)
 - 方針: var/let は導入しない。ローカルは常に `local` で明示宣言。
 - 目的: SSA/Loop‑Form と Known/Union 解析の単純さを維持し、未宣言代入の混入を防ぐ。
-- 補足: 開発用の糖衣（行頭 `@name = expr` → `local name = expr`）はランナー前処理で提供（既定OFF）。言語仕様には含めない。
+- 補足: 行頭 `@name[:T] = expr` は標準ランナーで `local name[:T] = expr` へ自動展開（既定ON）。言語意味は不変。
 - Docs 更新: quick-reference, language reference, tutorials に「var/let 不採用」を明記。
   - Tokenizer/Parser デバッグ導線（devトレース）を追加
   - json_lint_vm: fast‑pathの誤判定を除去＋未終端ガードを追加（PASS）
@@ -78,6 +78,10 @@ Work Queue (Next)
 5) Parity ミニセット（VM↔llvmlite↔Ny）を用意し、差分ダッシュボード化
  6) Router 観測ログの軽追加（dev-only, 既定OFF）: class-reroute / special-reroute を DebugHub に emit（サンプル制御対応）
  7) LLVM ハーネスの MIR ダンプに certainty 表示（挙動不変の診断整合）
+
+Update — @local expansion promotion (2025‑09‑27)
+- すべてのランナーモードに `preexpand_at_local` を適用（common/llvm/pyvm に加え vm/selfhost へも導入）。
+- Docs を更新し、構文糖衣が標準で有効であることを明記。
 
 Runbook（抜粋）
 - VM quick: `tools/smokes/v2/run.sh --profile quick`

@@ -116,6 +116,9 @@ impl NyashRunner {
             }
         } else { code };
 
+        // Pre-expand '@name[:T] = expr' sugar at line-head (same as common/llvm/pyvm paths)
+        let code = crate::runner::modes::common_util::resolve::preexpand_at_local(&code);
+
         // Parse to AST
         let ast = match NyashParser::parse_from_string(&code) {
             Ok(ast) => ast,
