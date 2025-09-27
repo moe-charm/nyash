@@ -1,9 +1,10 @@
 // JsonTokenizer — 精度重視の字句解析器（yyjson相当精度）
 // 責務: 文字列をトークン列に変換、エラー検出、位置情報管理
 
-using "apps/lib/json_native/lexer/scanner.nyash" as JsonScanner
-using "apps/lib/json_native/lexer/token.nyash" as JsonToken
-using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+// NOTE: relative paths to support alias packaging (nyash.toml)
+using "./scanner.nyash" as JsonScanner
+using "./token.nyash" as JsonToken
+using "../utils/escape.nyash" as EscapeUtils
 // Removed other dependencies - using self-contained methods
 
 // 🎯 高精度JSONトークナイザー（Everything is Box）
@@ -85,28 +86,40 @@ box JsonTokenizer {
         local start_col = me.scanner.get_column()
         local ch = me.scanner.current()
         
-        // 構造文字（単一文字）
-        local structural_type = me.char_to_token_type(ch)
-        if structural_type != null {
-            me.scanner.advance()
-            return this.create_structural_token(structural_type, start_pos).set_line_column(start_line, start_col)
-        }
-        
         // 文字列リテラル
+        // print("DBG ch=" + ch)
         if ch == "\"" {
+            // print("BR string")
             return me.tokenize_string().set_line_column(start_line, start_col)
         }
         
         // 数値リテラル
         if me.is_number_start_char(ch) {
+            // print("BR number")
             return me.tokenize_number().set_line_column(start_line, start_col)
         }
         
         // キーワード（null, true, false）
         if me.is_alpha_char(ch) {
+            // print("BR alpha-t")
+            return me.tokenize_keyword().set_line_column(start_line, start_col)
+        }
+        // Fallback（堅牢化）: スキャナー側の is_alpha_char が true の場合はキーワードとして扱う
+        if me.scanner.is_alpha_char != null and me.scanner.is_alpha_char(ch) {
+            // print("BR alpha-fallback")
             return me.tokenize_keyword().set_line_column(start_line, start_col)
         }
         
+        // 構造文字（単一文字） — 最後に評価（誤検知回避）
+        local structural_type = me.char_to_token_type(ch)
+        if structural_type != null {
+            // Dev trace (default commented): uncomment to debug structural tokens
+            // print("[JsonTokenizer] structural '" + ch + "' => " + structural_type + " at pos=" + start_pos)
+            me.scanner.advance()
+            return this.create_structural_token(structural_type, start_pos).set_line_column(start_line, start_col)
+        }
+        
+        // print("BR error")
         // 不明な文字（エラー）
         me.scanner.advance()
         return new JsonToken("ERROR", "Unexpected character: '" + ch + "'", start_pos, me.scanner.get_position()).set_line_column(start_line, start_col)
@@ -119,7 +132,8 @@ box JsonTokenizer {
         local start_pos = me.scanner.get_position()
         local literal = me.scanner.read_string_literal()
         
-        if literal == null {
+        // Robust guard: require quoted literal ("…")
+        if literal == null or literal.length() < 2 or not (literal.substring(0, 1) == "\"") {
             return new JsonToken("ERROR", "Unterminated string literal", start_pos, me.scanner.get_position())
         }
         
@@ -353,17 +367,17 @@ box JsonTokenizer {
         return str.length() >= 0  // 基本的な存在チェックのみ
     }
     
-    // 文字からトークンタイプを判定
+    // 文字からトークンタイプを判定（環境依存の indexOf を使わず、直接比較）
     char_to_token_type(ch) {
-        return match ch {
-            "{" => "LBRACE",
-            "}" => "RBRACE",
-            "[" => "LBRACKET",
-            "]" => "RBRACKET",
-            "," => "COMMA",
-            ":" => "COLON",
-            _ => null
-        }
+        if ch == null { return null }
+        if ch.length() != 1 { return null }
+        if ch == "{" { return "LBRACE" }
+        if ch == "}" { return "RBRACE" }
+        if ch == "[" { return "LBRACKET" }
+        if ch == "]" { return "RBRACKET" }
+        if ch == "," { return "COMMA" }
+        if ch == ":" { return "COLON" }
+        return null
     }
     
     // 数値開始文字判定

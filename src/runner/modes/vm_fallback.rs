@@ -38,30 +38,10 @@ impl NyashRunner {
                         eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         process::exit(1);
                     }
-                    for prelude_path in paths {
-                        match std::fs::read_to_string(&prelude_path) {
-                            Ok(src) => {
-                                match crate::runner::modes::common_util::resolve::collect_using_and_strip(self, &src, &prelude_path) {
-                                    Ok((clean_src, nested)) => {
-                                        // Nested entries have already been expanded by DFS; ignore `nested` here.
-                                        match NyashParser::parse_from_string(&clean_src) {
-                                            Ok(ast) => prelude_asts.push(ast),
-                                            Err(e) => {
-                                                eprintln!("❌ Parse error in using prelude {}: {}", prelude_path, e);
-                                                process::exit(1);
-                                            }
-                                        }
-                                    }
-                                    Err(e) => {
-                                        eprintln!("❌ {}", e);
-                                        process::exit(1);
-                                    }
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("❌ Error reading using prelude {}: {}", prelude_path, e);
-                                process::exit(1);
-                            }
+                    if use_ast_prelude && !paths.is_empty() {
+                        match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
+                            Ok(v) => prelude_asts = v,
+                            Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
                         }
                     }
                 }
@@ -84,23 +64,8 @@ impl NyashRunner {
         };
         // When using AST prelude mode, combine prelude ASTs + main AST into one Program before macro expansion
         let ast_combined = if use_ast_prelude && !prelude_asts.is_empty() {
-            use nyash_rust::ast::ASTNode;
-            let mut combined: Vec<ASTNode> = Vec::new();
-            for a in prelude_asts {
-                if let ASTNode::Program { statements, .. } = a {
-                    combined.extend(statements);
-                }
-            }
-            if let ASTNode::Program { statements, .. } = main_ast.clone() {
-                combined.extend(statements);
-            }
-            ASTNode::Program {
-                statements: combined,
-                span: nyash_rust::ast::Span::unknown(),
-            }
-        } else {
-            main_ast
-        };
+            crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
+        } else { main_ast };
         // Optional: dump AST statement kinds for quick diagnostics
         if std::env::var("NYASH_AST_DUMP").ok().as_deref() == Some("1") {
             use nyash_rust::ast::ASTNode;

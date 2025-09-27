@@ -47,15 +47,15 @@ Phase 15.5でCore Box完全削除後のNyashテストシステム。すべての
 
 ## 🔧 テスト環境設定
 
-### 重要な環境変数
+### 重要な環境変数（開発時の補助）
 ```bash
-# 必須設定
-NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1  # main関数警告を抑制
+# エントリ解決（既定ON: top-level main も許可されます。無効化したい場合のみ0を設定）
+# export NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0
 
 # プラグイン設定（Phase 15.5以降は削除不可）
 # NYASH_DISABLE_PLUGINS=1  # ❌ 使用不可（すべてプラグイン化済み）
 
-# デバッグ用
+# デバッグ用（任意）
 NYASH_CLI_VERBOSE=1        # 詳細ログ出力
 ```
 

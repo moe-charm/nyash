@@ -1,16 +1,23 @@
 // JsonParser — 精度重視の構文解析器（yyjson相当精度）
 // 責務: トークン列をJsonNodeに変換、構文エラー検出、ネスト構造処理
 
-using "apps/lib/json_native/lexer/tokenizer.nyash" as JsonTokenizer
-using "apps/lib/json_native/lexer/token.nyash" as TokenType
-using "apps/lib/json_native/core/node.nyash" as JsonNode
-using "apps/lib/json_native/utils/string.nyash" as StringUtils
+// NOTE: use paths relative to this file to work under nyash.toml alias packaging
+using "../lexer/tokenizer.nyash" as JsonTokenizer
+using "../lexer/token.nyash" as TokenType
+using "../core/node.nyash" as JsonNode
+using "../utils/string.nyash" as StringUtils
 
 // 🎯 高精度JSON構文解析器（Everything is Box）
 static box JsonParserModule {
     create_parser() {
         return new JsonParser()
     }
+}
+
+// Dev-only lightweight trace helper (default OFF)
+static box JsonParserTrace {
+    // Dev logger (disabled by default; enable ad-hoc during manual probes)
+    log(msg) { /* print("[JsonParser] " + msg) */ }
 }
 
 box JsonParser {
@@ -112,7 +119,7 @@ box JsonParser {
     parse_number() {
         local token = me.current_token()
         if token == null or token.get_type() != "NUMBER" {
-            me.add_error("Expected number token")
+            me.add_error_expected("NUMBER")
             return null
         }
         
@@ -137,7 +144,7 @@ box JsonParser {
     parse_string() {
         local token = me.current_token()
         if token == null or token.get_type() != "STRING" {
-            me.add_error("Expected string token")
+            me.add_error_expected("STRING")
             return null
         }
         
@@ -154,12 +161,14 @@ box JsonParser {
             me.add_error("Expected '{' to start object")
             return null
         }
+        JsonParserTrace.log("enter object at pos=" + me.position)
         me.advance()  // '{'を消費
-        
+
         local object_node = JsonNode.create_object()
-        
+
         // 空オブジェクトチェック
         if me.match_token(TokenType.RBRACE()) {
+            JsonParserTrace.log("empty object -> {}")
             return object_node
         }
         
@@ -168,41 +177,43 @@ box JsonParser {
             // キー解析
             local key_token = me.current_token()
             if key_token == null or key_token.get_type() != "STRING" {
-                me.add_error("Expected string key in object")
+                me.add_error_expected("STRING (object key)")
                 return null
             }
             local key = key_token.get_value()
             me.advance()
-            
+
             // コロン
             if not me.match_token("COLON") {
-                me.add_error("Expected ':' after object key")
+                me.add_error_expected("COLON ':' after object key")
                 return null
             }
-            
+
             // 値解析
             local value = me.parse_value()
             if value == null {
                 return null  // エラーは既に記録済み
             }
-            
+
             // オブジェクトに追加
             object_node.object_set(key, value)
-            
+
             // 継続判定
             if me.match_token("COMMA") {
                 // 次のキー・値ペアに続く
+                JsonParserTrace.log("object comma → next pair")
                 continue
             } else {
                 if me.match_token("RBRACE") {
+                    JsonParserTrace.log("exit object at pos=" + me.position)
                     break  // オブジェクト終了
                 } else {
-                    me.add_error("Expected ',' or '}' in object")
+                    me.add_error_expected("',' or '}' in object")
                     return null
                 }
             }
         }
-        
+
         return object_node
     }
     
@@ -213,12 +224,14 @@ box JsonParser {
             me.add_error("Expected '[' to start array")
             return null
         }
+        JsonParserTrace.log("enter array at pos=" + me.position)
         me.advance()  // '['を消費
-        
+
         local array_node = JsonNode.create_array()
-        
+
         // 空配列チェック
         if me.match_token("RBRACKET") {
+            JsonParserTrace.log("empty array -> []")
             return array_node
         }
         
@@ -232,21 +245,23 @@ box JsonParser {
             
             // 配列に追加
             array_node.array_push(value)
-            
+
             // 継続判定
             if me.match_token("COMMA") {
                 // 次の要素に続く
+                JsonParserTrace.log("array comma → next element")
                 continue
             } else {
                 if me.match_token("RBRACKET") {
+                    JsonParserTrace.log("exit array at pos=" + me.position)
                     break  // 配列終了
                 } else {
-                    me.add_error("Expected ',' or ']' in array")
+                    me.add_error_expected("',' or ']' in array")
                     return null
                 }
             }
         }
-        
+
         return array_node
     }
     
@@ -292,6 +307,16 @@ box JsonParser {
     
     // ===== エラー処理メソッド =====
     
+    // 期待/実トークンを含む詳細エラーを追加
+    add_error_expected(expected) {
+        local tok = me.current_token()
+        local got = "EOF"
+        if tok != null {
+            got = tok.get_type() + "(" + tok.get_value() + ")"
+        }
+        me.add_error("Expected " + expected + ", got: " + got)
+    }
+
     // エラーを追加
     add_error(message) {
         local token = me.current_token()

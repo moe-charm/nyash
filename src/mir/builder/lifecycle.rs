@@ -215,6 +215,54 @@ impl super::MirBuilder {
                 function.signature.return_type = mt;
             }
         }
+        // Dev-only verify: NewBox → birth() invariant (warn if missing)
+        if crate::config::env::using_is_dev() {
+            let mut warn_count = 0usize;
+            for (_bid, bb) in function.blocks.iter() {
+                let insns = &bb.instructions;
+                let mut idx = 0usize;
+                while idx < insns.len() {
+                    if let MirInstruction::NewBox { dst, box_type, args } = &insns[idx] {
+                        // Skip StringBox (literal optimization path)
+                        if box_type != "StringBox" {
+                            let expect_tail = format!("{}.birth/{}", box_type, args.len());
+                            // Look ahead up to 3 instructions for either BoxCall("birth") on dst or Global(expect_tail)
+                            let mut ok = false;
+                            let mut j = idx + 1;
+                            let mut last_const_name: Option<String> = None;
+                            while j < insns.len() && j <= idx + 3 {
+                                match &insns[j] {
+                                    MirInstruction::BoxCall { box_val, method, .. } => {
+                                        if method == "birth" && box_val == dst { ok = true; break; }
+                                    }
+                                    MirInstruction::Const { value, .. } => {
+                                        if let super::ConstValue::String(s) = value { last_const_name = Some(s.clone()); }
+                                    }
+                                    MirInstruction::Call { func, .. } => {
+                                        // If immediately preceded by matching Const String, accept
+                                        if let Some(prev) = last_const_name.as_ref() {
+                                            if prev == &expect_tail { ok = true; break; }
+                                        }
+                                        // Heuristic: in some forms, builder may reuse a shared const; best-effort only
+                                    }
+                                    _ => {}
+                                }
+                                j += 1;
+                            }
+                            if !ok {
+                                eprintln!("[warn] dev verify: NewBox {} at v{} not followed by birth() call (expect {})", box_type, dst, expect_tail);
+                                warn_count += 1;
+                            }
+                        }
+                    }
+                    idx += 1;
+                }
+            }
+            if warn_count > 0 {
+                eprintln!("[warn] dev verify: NewBox→birth invariant warnings: {}", warn_count);
+            }
+        }
+
         module.add_function(function);
 
         Ok(module)

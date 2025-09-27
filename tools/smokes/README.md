@@ -7,6 +7,63 @@ Overview
   - `integration` — VM↔LLVM parity, basic stability.
   - `full` — comprehensive matrix.
 
+## 🎯 Two Baselines (Runbook)
+
+これから開発の基準となる2つのベースライン：
+
+### 📦 VM ライン（Rust VM - 既定）
+
+**用途**: 開発・デバッグ・検証用（高速・型安全）
+
+```bash
+# ビルド
+cargo build --release
+
+# 一括スモークテスト
+tools/smokes/v2/run.sh --profile quick
+
+# 個別スモークテスト
+tools/smokes/v2/run.sh --profile quick --filter "<glob>"
+# 例: --filter "core/json_query_min_vm.sh"
+
+# 単発実行（参考）
+./target/release/nyash --backend vm apps/APP/main.nyash
+```
+
+### ⚡ llvmlite ライン（LLVMハーネス）
+
+**用途**: 本番・最適化・配布用（実証済み安定性）
+
+**前提**: Python3 + llvmlite
+```bash
+pip install llvmlite  # 未導入の場合
+```
+
+**実行手順**:
+```bash
+# ビルド（LLVM_SYS_180_PREFIX不要！）
+cargo build --release --features llvm
+
+# 一括スモークテスト
+tools/smokes/v2/run.sh --profile integration
+
+# 個別スモークテスト
+tools/smokes/v2/run.sh --profile integration --filter "<glob>"
+
+# 単発実行
+NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash
+
+# 有効化確認
+./target/release/nyash --version | rg -i 'features.*llvm'
+```
+
+**💡 重要**: 両方のラインのテストが通ることで、MIR14統一アーキテクチャの品質を保証！
+
+Notes
+- Using resolution: prefer nyash.toml aliases (SSOT). Some tests may enable `NYASH_ALLOW_USING_FILE=1` internally for convenience.
+- Plugin warnings are informational; smokes are designed to pass without dynamic plugins.
+- Harness single-run may take longer due to link+exec; integration profile includes generous timeouts.
+
 Dev Mode (defaults)
 - In v2 smokes, the `quick` profile exports `NYASH_DEV=1` by default.
   - This enables CLI `--dev`-equivalent defaults inside Nyash:

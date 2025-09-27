@@ -50,10 +50,18 @@ pub fn convert_target_to_callee(
                     .unwrap_or_else(|| "UnknownBox".to_string())
             });
 
+            // Certainty is Known when origin propagation provides a concrete class name
+            let certainty = if value_origin_newbox.contains_key(&receiver) {
+                crate::mir::definitions::call_unified::TypeCertainty::Known
+            } else {
+                crate::mir::definitions::call_unified::TypeCertainty::Union
+            };
+
             Ok(Callee::Method {
                 box_name: inferred_box_type,
                 method,
                 receiver: Some(receiver),
+                certainty,
             })
         },
 

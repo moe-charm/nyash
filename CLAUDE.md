@@ -6,6 +6,50 @@
 - 📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
 - 📁 **v2詳細ドキュメント**: [tools/smokes/v2/README.md](tools/smokes/v2/README.md)
 
+### 🎯 2つのベースライン（Two Baselines）
+
+#### 📦 VM ライン（Rust VM - 既定）
+```bash
+# ビルド
+cargo build --release
+
+# 一括スモークテスト
+tools/smokes/v2/run.sh --profile quick
+
+# 個別スモークテスト
+tools/smokes/v2/run.sh --profile quick --filter "<glob>"
+# 例: --filter "core/json_query_min_vm.sh"
+
+# 単発実行（参考）
+./target/release/nyash --backend vm apps/APP/main.nyash
+```
+
+#### ⚡ llvmlite ライン（LLVMハーネス）
+```bash
+# 前提: Python3 + llvmlite
+# 未導入なら: pip install llvmlite
+
+# ビルド（LLVM_SYS_180_PREFIX不要！）
+cargo build --release --features llvm
+
+# 一括スモークテスト
+tools/smokes/v2/run.sh --profile integration
+
+# 個別スモークテスト
+tools/smokes/v2/run.sh --profile integration --filter "<glob>"
+
+# 単発実行
+NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash
+
+# 有効化確認
+./target/release/nyash --version | rg -i 'features.*llvm'
+```
+
+**💡 ポイント**:
+- **VM ライン**: 開発・デバッグ・検証用（高速・型安全）
+- **llvmlite ライン**: 本番・最適化・配布用（実証済み安定性）
+- 両方のテストが通ることで品質保証！
+
 ## Start Here (必ずここから)
 - 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
   - 📁 **Main**: [docs/development/current/main/](docs/development/current/main/)

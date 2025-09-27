@@ -20,6 +20,7 @@ pub(super) use crate::mir::{
 mod exec;
 mod handlers;
 mod helpers;
+mod method_router;
 
 pub struct MirInterpreter {
     pub(super) regs: HashMap<ValueId, VMValue>,

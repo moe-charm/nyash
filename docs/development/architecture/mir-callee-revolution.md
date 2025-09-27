@@ -136,7 +136,8 @@ pub enum Callee {
     Method {
         box_name: String,           // "StringBox", "ConsoleStd"
         method: String,             // "upper", "print"
-        receiver: Option<ValueId>   // レシーバオブジェクト（Someの場合）
+        receiver: Option<ValueId>,  // レシーバオブジェクト（Someの場合）
+        certainty: TypeCertainty,   // 追加: Known/Union（型確度）
     },
 
     /// 関数値による動的呼び出し
@@ -146,6 +147,16 @@ pub enum Callee {
     /// 外部関数（C ABI）
     /// 例: "nyash.console.log"
     Extern(String),
+}
+```
+
+補足: 型確度（TypeCertainty）
+
+```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeCertainty {
+    Known,  // 受信クラスが一意に既知（origin 伝播・静的文脈）
+    Union,  // 分岐合流などで非一意（VM などのルータに委譲）
 }
 ```
 

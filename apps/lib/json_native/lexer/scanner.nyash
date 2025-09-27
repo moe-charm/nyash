@@ -303,6 +303,10 @@ box JsonScanner {
             if ch == "\"" {
                 // 終了クォート
                 me.advance()
+                // Safety: literal must include both quotes → length >= 2
+                if me.position - start_pos < 2 {
+                    return null
+                }
                 return me.text.substring(start_pos, me.position)
             } else {
                 if ch == "\\" {

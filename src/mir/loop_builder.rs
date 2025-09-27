@@ -118,6 +118,8 @@ impl<'a> LoopBuilder<'a> {
         condition: ASTNode,
         body: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Reserve a deterministic loop id for debug region labeling
+        let loop_id = self.parent_builder.debug_next_loop_id();
         // Pre-scan body for simple carrier pattern (up to 2 assigned variables, no break/continue)
         let mut assigned_vars: Vec<String> = Vec::new();
         let mut has_ctrl = false;
@@ -147,6 +149,9 @@ impl<'a> LoopBuilder<'a> {
 
         // 3. Headerブロックの準備（unsealed状態）
         self.set_current_block(header_id)?;
+        // Debug region: loop header
+        self.parent_builder
+            .debug_push_region(format!("loop#{}", loop_id) + "/header");
         // Hint: loop header (no-op sink)
         self.parent_builder.hint_loop_header();
         let _ = self.mark_block_unsealed(header_id);
@@ -191,6 +196,9 @@ impl<'a> LoopBuilder<'a> {
 
         // 7. ループボディの構築
         self.set_current_block(body_id)?;
+        // Debug region: loop body
+        self.parent_builder
+            .debug_replace_region(format!("loop#{}", loop_id) + "/body");
         // Materialize pinned slots at entry via single-pred Phi
         let names: Vec<String> = self.parent_builder.variable_map.keys().cloned().collect();
         for name in names {
@@ -221,6 +229,9 @@ impl<'a> LoopBuilder<'a> {
         let latch_id = self.current_block()?;
         // Hint: loop latch (no-op sink)
         self.parent_builder.hint_loop_latch();
+        // Debug region: loop latch (end of body)
+        self.parent_builder
+            .debug_replace_region(format!("loop#{}", loop_id) + "/latch");
         // Scope leave for loop body
         self.parent_builder.hint_scope_leave(0);
         let latch_snapshot = self.get_current_variable_map();
@@ -265,12 +276,17 @@ impl<'a> LoopBuilder<'a> {
 
         // 10. ループ後の処理 - Exit PHI生成
         self.set_current_block(after_loop_id)?;
+        // Debug region: loop exit
+        self.parent_builder
+            .debug_replace_region(format!("loop#{}", loop_id) + "/exit");
 
         // Exit PHIの生成 - break時点での変数値を統一
         self.create_exit_phis(header_id, after_loop_id)?;
 
         // Pop loop context
         crate::mir::builder::loops::pop_loop_context(self.parent_builder);
+        // Pop debug region scope
+        self.parent_builder.debug_pop_region();
 
         // void値を返す
         let void_dst = self.new_value();
@@ -500,6 +516,8 @@ impl<'a> LoopBuilder<'a> {
         then_body: Vec<ASTNode>,
         else_body: Option<Vec<ASTNode>>,
     ) -> Result<ValueId, String> {
+        // Reserve a deterministic join id for debug region labeling (nested inside loop)
+        let join_id = self.parent_builder.debug_next_join_id();
         // Pre-pin comparison operands to slots so repeated uses across blocks are safe
         if crate::config::env::mir_pre_pin_compare_operands() {
         if let ASTNode::BinaryOp { operator, left, right, .. } = &condition {
@@ -532,6 +550,9 @@ impl<'a> LoopBuilder<'a> {
 
         // then branch
         self.set_current_block(then_bb)?;
+        // Debug region: join then-branch (inside loop)
+        self.parent_builder
+            .debug_push_region(format!("join#{}", join_id) + "/then");
         // Materialize all variables at entry via single-pred Phi (correctness-first)
         let names_then: Vec<String> = self
             .parent_builder
@@ -567,9 +588,14 @@ impl<'a> LoopBuilder<'a> {
             self.parent_builder, 
             merge_bb
         )?;
+        // Pop then-branch debug region
+        self.parent_builder.debug_pop_region();
 
         // else branch
         self.set_current_block(else_bb)?;
+        // Debug region: join else-branch (inside loop)
+        self.parent_builder
+            .debug_push_region(format!("join#{}", join_id) + "/else");
         // Materialize all variables at entry via single-pred Phi (correctness-first)
         let names2: Vec<String> = self
             .parent_builder
@@ -608,9 +634,14 @@ impl<'a> LoopBuilder<'a> {
             self.parent_builder, 
             merge_bb
         )?;
+        // Pop else-branch debug region
+        self.parent_builder.debug_pop_region();
 
         // Continue at merge
         self.set_current_block(merge_bb)?;
+        // Debug region: join merge (inside loop)
+        self.parent_builder
+            .debug_push_region(format!("join#{}", join_id) + "/join");
 
         let mut vars: std::collections::HashSet<String> = std::collections::HashSet::new();
         let then_prog = ASTNode::Program { statements: then_body.clone(), span: crate::ast::Span::unknown() };
@@ -656,6 +687,8 @@ impl<'a> LoopBuilder<'a> {
         )?;
         let void_id = self.new_value();
         self.emit_const(void_id, ConstValue::Void)?;
+        // Pop merge debug region
+        self.parent_builder.debug_pop_region();
         Ok(void_id)
     }
 }

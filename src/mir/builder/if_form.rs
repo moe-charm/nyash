@@ -11,6 +11,8 @@ impl MirBuilder {
         then_branch: ASTNode,
         else_branch: Option<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Reserve a deterministic join id for debug region labeling
+        let join_id = self.debug_next_join_id();
         // Heuristic pre-pin: if condition is a comparison, evaluate its operands now and pin them
         // so that subsequent branches can safely reuse these values across blocks.
         // This leverages existing variable_map merges (PHI) at the merge block.
@@ -57,6 +59,8 @@ impl MirBuilder {
 
         // then
         self.start_new_block(then_block)?;
+        // Debug region: join then-branch
+        self.debug_push_region(format!("join#{}", join_id) + "/then");
         // Scope enter for then-branch
         self.hint_scope_enter(0);
         let then_ast_for_analysis = then_branch.clone();
@@ -82,9 +86,13 @@ impl MirBuilder {
             self.hint_scope_leave(0);
             self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
         }
+        // Pop then-branch debug region
+        self.debug_pop_region();
 
         // else
         self.start_new_block(else_block)?;
+        // Debug region: join else-branch
+        self.debug_push_region(format!("join#{}", join_id) + "/else");
         // Scope enter for else-branch
         self.hint_scope_enter(0);
         // Materialize all variables at block entry via single-pred Phi (correctness-first)
@@ -115,11 +123,15 @@ impl MirBuilder {
             self.hint_scope_leave(0);
             self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
         }
+        // Pop else-branch debug region
+        self.debug_pop_region();
 
         // merge: primary result via helper, then delta-based variable merges
         // Ensure PHIs are first in the block by suppressing entry pin copies here
         self.suppress_next_entry_pin_copy();
         self.start_new_block(merge_block)?;
+        // Debug region: join merge
+        self.debug_push_region(format!("join#{}", join_id) + "/join");
         self.push_if_merge(merge_block);
 
         // Pre-analysis: identify then/else assigned var for skip and hints
@@ -175,6 +187,8 @@ impl MirBuilder {
         )?;
 
         self.pop_if_merge();
+        // Pop merge debug region
+        self.debug_pop_region();
         Ok(result_val)
     }
 }

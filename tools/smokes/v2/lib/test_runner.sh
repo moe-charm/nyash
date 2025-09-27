@@ -59,7 +59,10 @@ filter_noise() {
       | grep -v "^\[builder\]" \
       | grep -v "^\\[vm-trace\\]" \
   | grep -v '^\{"ev":' \
+      | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
       | sed -E 's/^❌ VM fallback error: *//' \
+      | grep -v '^\[warn\] dev verify: NewBox ' \
+      | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
       | grep -v "plugins/nyash-array-plugin" \
       | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
@@ -147,6 +150,15 @@ run_nyash_vm() {
     if [ "${SMOKES_USE_DEV:-0}" = "1" ]; then
         EXTRA_ARGS+=("--dev")
     fi
+    # Optional env sanitization between rapid invocations (default OFF)
+    # Enable with: SMOKES_CLEAN_ENV=1
+    local ENV_PREFIX=( )
+    if [ "${SMOKES_CLEAN_ENV:-0}" = "1" ]; then
+        ENV_PREFIX=(env -u NYASH_DEBUG_ENABLE -u NYASH_DEBUG_KINDS -u NYASH_DEBUG_SINK \
+                        -u NYASH_RESOLVE_FIX_BRACES -u NYASH_USING_AST \
+                        -u NYASH_VM_TRACE -u NYASH_VM_VERIFY_MIR -u NYASH_VM_TOLERATE_VOID \
+                        -u NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN)
+    fi
     # -c オプションの場合は一時ファイル経由で実行
     if [ "$program" = "-c" ]; then
         local code="$1"
@@ -154,7 +166,8 @@ run_nyash_vm() {
         local tmpfile="/tmp/nyash_test_$$.nyash"
         echo "$code" > "$tmpfile"
         # プラグイン初期化メッセージを除外
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+            "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
@@ -164,7 +177,8 @@ run_nyash_vm() {
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
         fi
         # プラグイン初期化メッセージを除外
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+            "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         return ${PIPESTATUS[0]}
     fi
 }

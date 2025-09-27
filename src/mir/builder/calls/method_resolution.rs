@@ -32,6 +32,7 @@ pub fn resolve_call_target(
                 box_name: box_name.clone(),
                 method: name.to_string(),
                 receiver: None, // Static method call
+                certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
             });
         }
     }

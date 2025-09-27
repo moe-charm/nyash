@@ -30,10 +30,21 @@ impl MirInterpreter {
                 box_name: _,
                 method,
                 receiver,
+                certainty: _,
             } => {
                 if let Some(recv_id) = receiver {
                     let recv_val = self.reg_load(*recv_id)?;
-                    self.execute_method_call(&recv_val, method, args)
+                    let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
+                    let is_kw = method == &"keyword_to_token_type";
+                    if dev_trace && is_kw {
+                        let a0 = args.get(0).and_then(|id| self.reg_load(*id).ok());
+                        eprintln!("[vm-trace] mcall {} argv0={:?}", method, a0);
+                    }
+                    let out = self.execute_method_call(&recv_val, method, args)?;
+                    if dev_trace && is_kw {
+                        eprintln!("[vm-trace] mret  {} -> {:?}", method, out);
+                    }
+                    Ok(out)
                 } else {
                     Err(VMError::InvalidInstruction(format!(
                         "Method call missing receiver for {}",
@@ -147,6 +158,19 @@ impl MirInterpreter {
         let mut argv: Vec<VMValue> = Vec::new();
         for a in args {
             argv.push(self.reg_load(*a)?);
+        }
+        let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
+        let is_kw = fname.ends_with("JsonTokenizer.keyword_to_token_type/1");
+        let is_sc_ident = fname.ends_with("JsonScanner.read_identifier/0");
+        let is_sc_current = fname.ends_with("JsonScanner.current/0");
+        let is_tok_kw = fname.ends_with("JsonTokenizer.tokenize_keyword/0");
+        let is_tok_struct = fname.ends_with("JsonTokenizer.create_structural_token/2");
+        if dev_trace && (is_kw || is_sc_ident || is_sc_current || is_tok_kw || is_tok_struct) {
+            if let Some(a0) = argv.get(0) {
+                eprintln!("[vm-trace] call {} argv0={:?}", fname, a0);
+            } else {
+                eprintln!("[vm-trace] call {}", fname);
+            }
         }
         // Dev trace: emit a synthetic "call" event for global function calls
         // so operator boxes (e.g., CompareOperator.apply/3) are observable with
@@ -282,7 +306,11 @@ impl MirInterpreter {
                 }
             }
         }
-        self.exec_function_inner(&callee, Some(&argv))
+        let out = self.exec_function_inner(&callee, Some(&argv))?;
+        if dev_trace && (is_kw || is_sc_ident || is_sc_current || is_tok_kw || is_tok_struct) {
+            eprintln!("[vm-trace] ret  {} -> {:?}", fname, out);
+        }
+        Ok(out)
     }
 
     fn execute_global_function(

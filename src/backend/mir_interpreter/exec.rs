@@ -13,6 +13,8 @@ impl MirInterpreter {
         func: &MirFunction,
         arg_vals: Option<&[VMValue]>,
     ) -> Result<VMValue, VMError> {
+        // Phase 1: delegate cross-class reroute / narrow fallbacks to method_router
+        if let Some(r) = super::method_router::pre_exec_reroute(self, func, arg_vals) { return r; }
         let saved_regs = mem::take(&mut self.regs);
         let saved_fn = self.cur_fn.clone();
         self.cur_fn = Some(func.signature.name.clone());

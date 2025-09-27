@@ -79,11 +79,24 @@ pub fn format_instruction(
                     super::Callee::Global(name) => {
                         format!("call_global {}({})", name, args_str)
                     }
-                    super::Callee::Method { box_name, method, receiver } => {
+                    super::Callee::Method { box_name, method, receiver, certainty } => {
                         if let Some(recv) = receiver {
-                            format!("call_method {}.{}({}) [recv: {}]", box_name, method, args_str, recv)
+                            format!(
+                                "call_method {}.{}({}) [recv: {}] [{}]",
+                                box_name,
+                                method,
+                                args_str,
+                                recv,
+                                match certainty { crate::mir::definitions::call_unified::TypeCertainty::Known => "Known", crate::mir::definitions::call_unified::TypeCertainty::Union => "Union" }
+                            )
                         } else {
-                            format!("call_method {}.{}({})", box_name, method, args_str)
+                            format!(
+                                "call_method {}.{}({}) [{}]",
+                                box_name,
+                                method,
+                                args_str,
+                                match certainty { crate::mir::definitions::call_unified::TypeCertainty::Known => "Known", crate::mir::definitions::call_unified::TypeCertainty::Union => "Union" }
+                            )
                         }
                     }
                     super::Callee::Constructor { box_type } => {

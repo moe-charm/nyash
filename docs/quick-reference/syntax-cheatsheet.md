@@ -24,6 +24,15 @@ box ClassName {
 }
 ```
 
+### エントリーポイント（優先順）
+
+Nyash はエントリを以下の順で解決します。
+
+1) `Main.main` があれば優先
+2) なければトップレベル `main()`
+
+両方ある場合は `Main.main` が使われます。トップレベル `main` は既定で許可されています（無効化したい場合は `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0`）。
+
 ### Static Box（エントリーポイント）
 ```nyash
 static box Main {
@@ -34,6 +43,14 @@ static box Main {
         me.console.log("Hello Nyash!")
         return 0
     }
+}
+```
+
+### トップレベル main（既定で許可）
+```nyash
+main() {
+  println("Hello Nyash!")
+  return 0
 }
 ```
 

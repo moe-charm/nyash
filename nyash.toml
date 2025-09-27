@@ -40,6 +40,7 @@ selfhost.vm.binop = "apps/selfhost/common/mini_vm_binop.nyash"
 selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.nyash"
 selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.nyash"
 selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.nyash"
+selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.nyash"
 
 # Temporary alias keys (migration aid; keys kept stable)
 selfhost.common.json = "apps/selfhost/common/json_adapter.nyash"

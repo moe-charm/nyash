@@ -2,8 +2,9 @@
 // 80/20ルール適用: まず動くもの → 後で最適化
 // 美しいモジュラー設計: Utilsを活用してDRY原則を実践
 
-using "apps/lib/json_native/utils/string.nyash" as StringUtils
-using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+// NOTE: relative paths to support alias packaging (nyash.toml)
+using "../utils/string.nyash" as StringUtils
+using "../utils/escape.nyash" as EscapeUtils
 // EscapeUtils は必要時に遅延includeする（一部構文が未対応環境でも数値系は動かすため）
 
 // 🌟 JSON値を表現するBox（Everything is Box原則）

@@ -436,6 +436,16 @@ sum = MathUtils.add(10, 20)
 ```
 
 #### **アプリケーションエントリーポイント**
+Nyash は次の順序でエントリを解決します（既定挙動）。
+
+1) `Main.main` が存在すれば、常にそれを優先します。
+2) `Main.main` が無く、トップレベルに `main()` があれば、それをエントリとして採用します。
+
+備考
+- 既定でトップレベル `main` も許可されます（2025‑09仕様）。
+- 両方ある場合は `Main.main` を優先します（従来互換）。
+- トップレベル `main` を禁止したい場合は `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0|false|off` を設定してください。
+
 ```nyash
 # 🎯 推奨: Static Box Main パターン
 static box Main {
@@ -451,6 +461,13 @@ static box Main {
         
         return "Application completed successfully"
     }
+}
+```
+
+トップレベル `main()` を用いる場合（既定で許可）:
+```nyash
+main() {
+  println("Hello")
 }
 ```
 

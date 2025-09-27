@@ -1,0 +1,45 @@
+#!/bin/bash
+# oop_instance_call_vm.sh — Instance method call should work in prod via builder rewrite
+
+source "$(dirname "$0")/../../../lib/test_runner.sh"
+export SMOKES_USE_PYVM=0
+require_env || exit 2
+preflight_plugins || exit 2
+
+# Force prod profile and disallow VM runtime fallback for user instance BoxCall
+export NYASH_USING_PROFILE=prod
+export NYASH_VM_USER_INSTANCE_BOXCALL=0
+
+TEST_DIR="/tmp/oop_instance_call_vm_$$"
+mkdir -p "$TEST_DIR"
+cd "$TEST_DIR"
+
+cat > driver.nyash << 'EOF'
+static box Main {
+  main() {
+    local o = new MyBox()
+    if o.value() == 7 { print("ok") } else { print("ng") }
+    return 0
+  }
+}
+
+box MyBox {
+  value() { return 7 }
+}
+EOF
+
+output=$(run_nyash_vm driver.nyash --dev)
+output=$(echo "$output" | tail -n 1 | tr -d '\r' | xargs)
+
+if [ "$output" = "ok" ]; then
+  log_success "oop_instance_call_vm (prod) ok"
+  cd /
+  rm -rf "$TEST_DIR"
+  exit 0
+else
+  log_error "oop_instance_call_vm expected ok, got: $output"
+  cd /
+  rm -rf "$TEST_DIR"
+  exit 1
+fi
+

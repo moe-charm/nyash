@@ -7,6 +7,15 @@
 
 use crate::mir::{Effect, EffectMask, ValueId};
 
+/// Certainty of callee type information for method calls
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TypeCertainty {
+    /// Receiver class is known (from origin propagation or static context)
+    Known,
+    /// Receiver may be a union/merged flow; class not uniquely known
+    Union,
+}
+
 /// Call target specification for type-safe function resolution
 /// Replaces runtime string-based resolution with compile-time typed targets
 #[derive(Debug, Clone, PartialEq)]
@@ -21,6 +30,7 @@ pub enum Callee {
         box_name: String,           // "StringBox", "ConsoleStd", etc.
         method: String,             // "upper", "print", etc.
         receiver: Option<ValueId>,  // Some(obj) for instance, None for static/constructor
+        certainty: TypeCertainty,   // Phase 3: known vs union
     },
 
     /// Constructor call (NewBox equivalent)
@@ -181,6 +191,7 @@ impl MirCall {
                 box_name,
                 method,
                 receiver: Some(receiver),
+                certainty: TypeCertainty::Known,
             },
             args,
         )
@@ -288,14 +299,19 @@ pub mod migration {
         effects: EffectMask,
     ) -> MirCall {
         // For BoxCall, we need to infer the box type
-        // This is a temporary solution until we have better type info
-        MirCall::method(
+        // Mark certainty as Union (unknown at this stage)
+        let mut call = MirCall::new(
             dst,
-            "UnknownBox".to_string(),  // Will be resolved later
-            method,
-            box_val,
+            Callee::Method {
+                box_name: "UnknownBox".to_string(),
+                method,
+                receiver: Some(box_val),
+                certainty: TypeCertainty::Union,
+            },
             args,
-        ).with_effects(effects)
+        );
+        call.effects = effects;
+        call
     }
 
     /// Convert NewBox to MirCall

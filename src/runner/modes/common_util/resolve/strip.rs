@@ -1,8 +1,14 @@
 use crate::runner::NyashRunner;
 
-/// Collect using targets and strip using lines, without inlining.
-/// Returns (cleaned_source, prelude_paths) where prelude_paths are resolved file paths
-/// to be parsed separately and AST-merged (when NYASH_USING_AST=1).
+/// Collect using targets and strip using lines (no inlining).
+/// Returns (cleaned_source, prelude_paths) where `prelude_paths` are resolved
+/// file paths to be parsed separately and AST-merged (when `NYASH_USING_AST=1`).
+///
+/// Notes
+/// - This function enforces profile policies (prod: disallow file-using; only
+///   packages/aliases from nyash.toml are accepted).
+/// - SSOT: Resolution sources and aliases come exclusively from nyash.toml.
+/// - All runner modes use this static path to avoid logic drift.
 pub fn collect_using_and_strip(
     runner: &NyashRunner,
     code: &str,
@@ -322,9 +328,11 @@ pub fn collect_using_and_strip(
     Ok((out, prelude_paths))
 }
 
-/// Profile-aware prelude resolution wrapper.
-/// Currently delegates to `collect_using_and_strip`, but provides a single
-/// entry point for callers (common and vm_fallback) to avoid logic drift.
+/// Profile-aware prelude resolution wrapper (single entrypoint).
+/// - Delegates to `collect_using_and_strip` for the first pass.
+/// - When AST using is enabled, resolves nested preludes via DFS and injects
+///   OperatorBox preludes when available (stringify/compare/add).
+/// - All runners call this helper; do not fork resolution logic elsewhere.
 pub fn resolve_prelude_paths_profiled(
     runner: &NyashRunner,
     code: &str,
@@ -425,6 +433,54 @@ pub fn resolve_prelude_paths_profiled(
         }
     }
     Ok((cleaned, out))
+}
+
+/// Parse prelude source files into ASTs (single helper for all runner modes).
+/// - Reads each path, strips nested `using`, and parses to AST.
+/// - Returns a Vec of Program ASTs (one per prelude file), preserving DFS order.
+pub fn parse_preludes_to_asts(
+    runner: &NyashRunner,
+    prelude_paths: &[String],
+) -> Result<Vec<nyash_rust::ast::ASTNode>, String> {
+    let mut out: Vec<nyash_rust::ast::ASTNode> = Vec::with_capacity(prelude_paths.len());
+    for prelude_path in prelude_paths {
+        let src = std::fs::read_to_string(prelude_path)
+            .map_err(|e| format!("using: error reading {}: {}", prelude_path, e))?;
+        let (clean_src, _nested) = collect_using_and_strip(runner, &src, prelude_path)?;
+        match crate::parser::NyashParser::parse_from_string(&clean_src) {
+            Ok(ast) => out.push(ast),
+            Err(e) => return Err(format!(
+                "Parse error in using prelude {}: {}",
+                prelude_path, e
+            )),
+        }
+    }
+    Ok(out)
+}
+
+/// Merge prelude ASTs with the main AST into a single Program node.
+/// - Collects statements from each prelude Program in order, then appends
+///   statements from the main Program.
+/// - If the main AST is not a Program, returns it unchanged (defensive).
+pub fn merge_prelude_asts_with_main(
+    prelude_asts: Vec<nyash_rust::ast::ASTNode>,
+    main_ast: &nyash_rust::ast::ASTNode,
+) -> nyash_rust::ast::ASTNode {
+    use nyash_rust::ast::{ASTNode, Span};
+    let mut combined: Vec<ASTNode> = Vec::new();
+    for a in prelude_asts.into_iter() {
+        if let ASTNode::Program { statements, .. } = a {
+            combined.extend(statements);
+        }
+    }
+    if let ASTNode::Program { statements, .. } = main_ast.clone() {
+        let mut all = combined;
+        all.extend(statements);
+        ASTNode::Program { statements: all, span: Span::unknown() }
+    } else {
+        // Defensive: unexpected shape; preserve main AST unchanged.
+        main_ast.clone()
+    }
 }
 
 /// Pre-expand line-head `@name[: Type] = expr` into `local name[: Type] = expr`.

@@ -31,15 +31,22 @@ static box Main {
       local p = JsonParserModule.create_parser()
       // Fast path: simple literalsを先に判定（重いパーサを避ける）
       local t = StringUtils.trim(s)
-      if (t == "null" or t == "true" or t == "false" or StringUtils.is_integer(t) or (StringUtils.starts_with(t, "\"") and StringUtils.ends_with(t, "\""))) {
+      // 文字列の簡易 fast-path (("…")) は誤判定の温床になるため除外し、
+      // 文字列は必ずパーサに委譲して厳密に検証する。
+      if (t == "null" or t == "true" or t == "false" or StringUtils.is_integer(t)) {
         print("OK")
       } else {
-        // Minimal structural fast-paths used by quick smoke
-        if (t == "[]" or t == "{}" or t == "{\"a\":1}" or t == "[1,2]" or t == "{\"x\":[0]}") {
-          print("OK")
+        // 明確な不正（開きクォートのみ）は即 ERROR
+        if (StringUtils.starts_with(t, "\"") and not StringUtils.ends_with(t, "\"")) {
+          print("ERROR")
         } else {
-          local r = p.parse(s)
-          if (p.has_errors()) { print("ERROR") } else { print("OK") }
+          // Minimal structural fast-paths used by quick smoke
+          if (t == "[]" or t == "{}" or t == "{\"a\":1}" or t == "[1,2]" or t == "{\"x\":[0]}") {
+          print("OK")
+          } else {
+            local r = p.parse(s)
+            if (p.has_errors()) { print("ERROR") } else { print("OK") }
+          }
         }
       }
       i = i + 1

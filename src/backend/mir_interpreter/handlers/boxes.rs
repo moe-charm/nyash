@@ -185,6 +185,33 @@ impl MirInterpreter {
             }
             return Ok(());
         }
+        // Policy gate: user InstanceBox BoxCall runtime fallback
+        // - Prod: disallowed (builder must have rewritten obj.m(...) to a
+        //   function call). Error here indicates a builder/using materialize
+        //   miss.
+        // - Dev/CI: allowed with WARN to aid diagnosis.
+        let mut user_instance_class: Option<String> = None;
+        if let VMValue::BoxRef(ref b) = self.reg_load(box_val)? {
+            if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                user_instance_class = Some(inst.class_name.clone());
+            }
+        }
+        if user_instance_class.is_some() && !crate::config::env::vm_allow_user_instance_boxcall() {
+            let cls = user_instance_class.unwrap();
+            return Err(VMError::InvalidInstruction(format!(
+                "User Instance BoxCall disallowed in prod: {}.{} (enable builder rewrite)",
+                cls, method
+            )));
+        }
+        if user_instance_class.is_some() && crate::config::env::vm_allow_user_instance_boxcall() {
+            if crate::config::env::cli_verbose() {
+                eprintln!(
+                    "[warn] dev fallback: user instance BoxCall {}.{} routed via VM instance-dispatch",
+                    user_instance_class.as_ref().unwrap(),
+                    method
+                );
+            }
+        }
         if self.try_handle_instance_box(dst, box_val, method, args)? {
             if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
                 eprintln!("[vm-trace] length dispatch handler=instance_box");
@@ -334,6 +361,10 @@ impl MirInterpreter {
                         }
                         // First: prefer fields_ng (NyashValue) when present
                         if let Some(nv) = inst.get_field_ng(&fname) {
+                            // Dev trace: JsonToken field get
+                            if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") && inst.class_name == "JsonToken" {
+                                eprintln!("[vm-trace] JsonToken.getField name={} nv={:?}", fname, nv);
+                            }
                             // Treat complex Box-like values as "missing" for internal storage so that
                             // legacy obj_fields (which stores BoxRef) is used instead.
                             // This avoids NV::Box/Array/Map being converted to Void by nv_to_vm.
@@ -541,6 +572,16 @@ impl MirInterpreter {
                     v => v.to_string(),
                 };
                 let valv = self.reg_load(args[1])?;
+                // Dev trace: JsonToken field set
+                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                    if let VMValue::BoxRef(bref) = self.reg_load(box_val)? {
+                        if let Some(inst) = bref.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                            if inst.class_name == "JsonToken" {
+                                eprintln!("[vm-trace] JsonToken.setField name={} vmval={:?}", fname, valv);
+                            }
+                        }
+                    }
+                }
                 if Self::box_trace_enabled() {
                     let vkind = match &valv {
                         VMValue::Integer(_) => "Integer",
@@ -714,6 +755,12 @@ impl MirInterpreter {
                 }
                 // Build argv: me + args (works for both instance and static(me, ...))
                 let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
+                // Dev assert: forbid birth(me==Void)
+                if method == "birth" && crate::config::env::using_is_dev() {
+                    if matches!(recv_vm, VMValue::Void) {
+                        return Err(VMError::InvalidInstruction("Dev assert: birth(me==Void) is forbidden".into()));
+                    }
+                }
                 argv.push(recv_vm.clone());
                 for a in args { argv.push(self.reg_load(*a)?); }
                 let ret = self.exec_function_inner(&func, Some(&argv))?;
@@ -744,6 +791,11 @@ impl MirInterpreter {
                         }
                         if let Some(func) = self.functions.get(fname).cloned() {
                             let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
+                            if method == "birth" && crate::config::env::using_is_dev() {
+                                if matches!(recv_vm, VMValue::Void) {
+                                    return Err(VMError::InvalidInstruction("Dev assert: birth(me==Void) is forbidden".into()));
+                                }
+                            }
                             argv.push(recv_vm.clone());
                             for a in args { argv.push(self.reg_load(*a)?); }
                             let ret = self.exec_function_inner(&func, Some(&argv))?;
@@ -876,6 +928,27 @@ impl MirInterpreter {
                     self.regs.insert(d, VMValue::String(s));
                 }
                 return Ok(());
+            }
+            // Minimal runtime fallback for common InstanceBox.is_eof when lowered function is not present.
+            // This avoids cross-class leaks and hard errors in union-like flows.
+            if method == "is_eof" && args.is_empty() {
+                if let Some(inst) = recv_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    if inst.class_name == "JsonToken" {
+                        let is = match inst.get_field_ng("type") {
+                            Some(crate::value::NyashValue::String(ref s)) => s == "EOF",
+                            _ => false,
+                        };
+                        if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(is)); }
+                        return Ok(());
+                    }
+                    if inst.class_name == "JsonScanner" {
+                        let pos = match inst.get_field_ng("position") { Some(crate::value::NyashValue::Integer(i)) => i, _ => 0 };
+                        let len = match inst.get_field_ng("length")   { Some(crate::value::NyashValue::Integer(i)) => i, _ => 0 };
+                        let is = pos >= len;
+                        if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(is)); }
+                        return Ok(());
+                    }
+                }
             }
             // Dynamic fallback for user-defined InstanceBox: dispatch to lowered function "Class.method/Arity"
             if let Some(inst) = recv_box.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {

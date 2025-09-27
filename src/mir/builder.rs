@@ -135,6 +135,15 @@ pub struct MirBuilder {
     temp_slot_counter: u32,
     /// If true, skip entry materialization of pinned slots on the next start_new_block call.
     suppress_pin_entry_copy_next: bool,
+
+    // ----------------------
+    // Debug scope context (dev only; zero-cost when unused)
+    // ----------------------
+    /// Stack of region identifiers like "loop#1/header" or "join#3/join".
+    debug_scope_stack: Vec<String>,
+    /// Monotonic counters for region IDs (deterministic across a run).
+    debug_loop_counter: u32,
+    debug_join_counter: u32,
 }
 
 impl MirBuilder {
@@ -175,6 +184,11 @@ impl MirBuilder {
             hint_sink: crate::mir::hints::HintSink::new(),
             temp_slot_counter: 0,
             suppress_pin_entry_copy_next: false,
+
+            // Debug scope context
+            debug_scope_stack: Vec::new(),
+            debug_loop_counter: 0,
+            debug_join_counter: 0,
         }
     }
 
@@ -199,6 +213,47 @@ impl MirBuilder {
     #[inline]
     pub(crate) fn hint_loop_carrier<S: Into<String>>(&mut self, vars: impl IntoIterator<Item = S>) {
         self.hint_sink.loop_carrier(vars.into_iter().map(|s| s.into()).collect::<Vec<_>>());
+    }
+
+    // ----------------------
+    // Debug scope helpers (region_id for DebugHub events)
+    // ----------------------
+    #[inline]
+    pub(crate) fn debug_next_loop_id(&mut self) -> u32 {
+        let id = self.debug_loop_counter;
+        self.debug_loop_counter = self.debug_loop_counter.saturating_add(1);
+        id
+    }
+
+    #[inline]
+    pub(crate) fn debug_next_join_id(&mut self) -> u32 {
+        let id = self.debug_join_counter;
+        self.debug_join_counter = self.debug_join_counter.saturating_add(1);
+        id
+    }
+
+    #[inline]
+    pub(crate) fn debug_push_region<S: Into<String>>(&mut self, region: S) {
+        self.debug_scope_stack.push(region.into());
+    }
+
+    #[inline]
+    pub(crate) fn debug_pop_region(&mut self) {
+        let _ = self.debug_scope_stack.pop();
+    }
+
+    #[inline]
+    pub(crate) fn debug_replace_region<S: Into<String>>(&mut self, region: S) {
+        if let Some(top) = self.debug_scope_stack.last_mut() {
+            *top = region.into();
+        } else {
+            self.debug_scope_stack.push(region.into());
+        }
+    }
+
+    #[inline]
+    pub(crate) fn debug_current_region_id(&self) -> Option<String> {
+        self.debug_scope_stack.last().cloned()
     }
 
 
@@ -293,7 +348,90 @@ impl MirBuilder {
     pub(super) fn emit_instruction(&mut self, instruction: MirInstruction) -> Result<(), String> {
         let block_id = self.current_block.ok_or("No current basic block")?;
 
+        // Precompute debug metadata to avoid borrow conflicts later
+        let dbg_fn_name = self
+            .current_function
+            .as_ref()
+            .map(|f| f.signature.name.clone());
+        let dbg_region_id = self.debug_current_region_id();
         if let Some(ref mut function) = self.current_function {
+            // Dev-safe meta propagation for PHI: if all incoming values agree on type/origin,
+            // propagate to the PHI destination. This helps downstream resolution (e.g.,
+            // instance method rewrite across branches) without changing semantics.
+            if let MirInstruction::Phi { dst, inputs } = &instruction {
+                // Propagate value_types when all inputs share the same known type
+                let mut common_ty: Option<super::MirType> = None;
+                let mut ty_agree = true;
+                for (_bb, v) in inputs.iter() {
+                    if let Some(t) = self.value_types.get(v).cloned() {
+                        match &common_ty {
+                            None => common_ty = Some(t),
+                            Some(ct) => {
+                                if ct != &t { ty_agree = false; break; }
+                            }
+                        }
+                    } else {
+                        ty_agree = false;
+                        break;
+                    }
+                }
+                if ty_agree {
+                    if let Some(ct) = common_ty.clone() {
+                        self.value_types.insert(*dst, ct);
+                    }
+                }
+                // Propagate value_origin_newbox when all inputs share same origin class
+                let mut common_cls: Option<String> = None;
+                let mut cls_agree = true;
+                for (_bb, v) in inputs.iter() {
+                    if let Some(c) = self.value_origin_newbox.get(v).cloned() {
+                        match &common_cls {
+                            None => common_cls = Some(c),
+                            Some(cc) => {
+                                if cc != &c { cls_agree = false; break; }
+                            }
+                        }
+                    } else {
+                        cls_agree = false;
+                        break;
+                    }
+                }
+                if cls_agree {
+                    if let Some(cc) = common_cls.clone() {
+                        self.value_origin_newbox.insert(*dst, cc);
+                    }
+                }
+                // Emit debug event (dev-only)
+                {
+                    let preds: Vec<serde_json::Value> = inputs.iter().map(|(bb,v)| {
+                        let t = self.value_types.get(v).cloned();
+                        let o = self.value_origin_newbox.get(v).cloned();
+                        serde_json::json!({
+                            "bb": bb.0,
+                            "v": v.0,
+                            "type": t.as_ref().map(|tt| format!("{:?}", tt)).unwrap_or_default(),
+                            "origin": o.unwrap_or_default(),
+                        })
+                    }).collect();
+                    let decided_t = self.value_types.get(dst).cloned().map(|tt| format!("{:?}", tt)).unwrap_or_default();
+                    let decided_o = self.value_origin_newbox.get(dst).cloned().unwrap_or_default();
+                    let meta = serde_json::json!({
+                        "dst": dst.0,
+                        "preds": preds,
+                        "decided_type": decided_t,
+                        "decided_origin": decided_o,
+                    });
+                    let fn_name = dbg_fn_name.as_deref();
+                    let region = dbg_region_id.as_deref();
+                    crate::debug::hub::emit(
+                        "ssa",
+                        "phi",
+                        fn_name,
+                        region,
+                        meta,
+                    );
+                }
+            }
             if let Some(block) = function.get_block_mut(block_id) {
                 if utils::builder_debug_enabled() {
                     eprintln!(
@@ -459,16 +597,22 @@ impl MirBuilder {
                 argv.extend(arg_values.iter().copied());
                 self.emit_legacy_call(None, CallTarget::Global(lowered), argv)?;
             } else {
-                // Fallback: instance method BoxCall("birth")
-                let birt_mid = resolve_slot_by_type_name(&class, "birth");
-                self.emit_box_or_plugin_call(
-                    None,
-                    dst,
-                    "birth".to_string(),
-                    birt_mid,
-                    arg_values,
-                    EffectMask::READ.add(Effect::ReadHeap),
-                )?;
+                // Fallback policy:
+                // - For user-defined boxes (no explicit constructor), do NOT emit BoxCall("birth").
+                //   VM will treat plain NewBox as constructed; dev verify warns if needed.
+                // - For builtins/plugins, keep BoxCall("birth") fallback to preserve legacy init.
+                let is_user_box = self.user_defined_boxes.contains(&class);
+                if !is_user_box {
+                    let birt_mid = resolve_slot_by_type_name(&class, "birth");
+                    self.emit_box_or_plugin_call(
+                        None,
+                        dst,
+                        "birth".to_string(),
+                        birt_mid,
+                        arg_values,
+                        EffectMask::READ.add(Effect::ReadHeap),
+                    )?;
+                }
             }
         }
 

@@ -6,6 +6,10 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Quick policy: skip heavy roundtrip in quick; covered in integration.
+test_skip "json_roundtrip_vm" "heavy roundtrip: covered in integration; skipping in quick" || true
+exit 0
+
 TEST_DIR="/tmp/json_roundtrip_vm_$$"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"

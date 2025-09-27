@@ -405,6 +405,17 @@ pub fn using_ast_enabled() -> bool {
         _ => !using_is_prod(), // dev/ci → true, prod → false
     }
 }
+/// Policy: allow VM to fallback-dispatch user Instance BoxCall (dev only by default).
+/// - prod: default false (disallow)
+/// - dev/ci: default true (allow, with WARN)
+/// Override with NYASH_VM_USER_INSTANCE_BOXCALL={0|1}
+pub fn vm_allow_user_instance_boxcall() -> bool {
+    match std::env::var("NYASH_VM_USER_INSTANCE_BOXCALL").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
+        Some(ref s) if s == "0" || s == "false" || s == "off" => false,
+        Some(ref s) if s == "1" || s == "true" || s == "on" => true,
+        _ => !using_is_prod(),
+    }
+}
 // Legacy resolve_fix_braces() removed (Phase 15 cleanup)
 // AST-based integration handles syntax properly without text-level brace fixing
 pub fn vm_use_py() -> bool {
@@ -476,14 +487,14 @@ pub fn method_catch() -> bool {
 }
 
 /// Entry policy: allow top-level `main` resolution in addition to `Main.main`.
-/// Default: false (prefer explicit `static box Main { main(...) }`).
+/// Default: true (prefer `Main.main` when both exist; otherwise accept `main`).
 pub fn entry_allow_toplevel_main() -> bool {
     match std::env::var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN").ok() {
         Some(v) => {
             let v = v.to_ascii_lowercase();
             v == "1" || v == "true" || v == "on"
         }
-        None => false,
+        None => true,
     }
 }
 

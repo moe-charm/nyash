@@ -89,6 +89,7 @@ pub enum Callee {
         box_name: String,
         method: String,
         receiver: Option<ValueId>,
+        certainty: TypeCertainty, // Known/Union（型確度）
     },
     Value(ValueId),         // 第一級関数
     Extern(String),         // 外部関数
@@ -124,4 +125,5 @@ pub enum Callee {
 
 ## 📝 更新履歴
 - 2025-09-23: Callee型追加（ChatGPT5 Pro設計）
+- 2025-09-27: Callee::Method に certainty（Known/Union）を追加
 - 2025-09-23: 本ドキュメント作成

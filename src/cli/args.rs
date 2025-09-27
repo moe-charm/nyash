@@ -213,6 +213,10 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         std::env::set_var("NYASH_USING_PROFILE", "dev");
         // AST prelude merge
         std::env::set_var("NYASH_USING_AST", "1");
+        // Using grammar is mainline; keep explicit enable for clarity (default is ON; this makes intent obvious in dev)
+        std::env::set_var("NYASH_ENABLE_USING", "1");
+        // Allow top-level main resolution in dev for convenience (prod default remains OFF)
+        std::env::set_var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN", "1");
         // Ensure project root is available for prelude injection
         if std::env::var("NYASH_ROOT").is_err() {
             if let Ok(cwd) = std::env::current_dir() {

@@ -54,12 +54,13 @@ fn emit_unified_mir_call(
                 "name": name
             });
         }
-        Callee::Method { box_name, method, receiver } => {
+        Callee::Method { box_name, method, receiver, certainty } => {
             call_obj["mir_call"]["callee"] = json!({
                 "type": "Method",
                 "box_name": box_name,
                 "method": method,
-                "receiver": receiver.map(|v| v.as_u32())
+                "receiver": receiver.map(|v| v.as_u32()),
+                "certainty": match certainty { crate::mir::definitions::call_unified::TypeCertainty::Known => "Known", crate::mir::definitions::call_unified::TypeCertainty::Union => "Union" }
             });
         }
         Callee::Constructor { box_type } => {
