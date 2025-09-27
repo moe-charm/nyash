@@ -190,6 +190,7 @@ run_nyash_llvm() {
     # Skip gracefully when LLVM backend is not available in this build
     if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
         log_warn "LLVM backend not available in this build; skipping LLVM run"
+        log_info "Hint: enable with 'LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm'"
         return 0
     fi
     # -c オプションの場合は一時ファイル経由で実行

@@ -59,6 +59,18 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_e
 
 **💡 重要**: 両方のラインのテストが通ることで、MIR14統一アーキテクチャの品質を保証！
 
+### 🔁 QuickでAST/LLVM系も実行したいとき
+
+通常、`quick` は LLVM未ビルド時に AST/LLVM系テストを自動で SKIP します。
+Quickでも実行したい場合は、先に LLVM 有効でビルドしてください：
+
+```bash
+LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm
+tools/smokes/v2/run.sh --profile quick
+```
+
+テストランナーは LLVM 非対応時にヒントを出力します（buildコマンドの案内）。
+
 Notes
 - Using resolution: prefer nyash.toml aliases (SSOT). Some tests may enable `NYASH_ALLOW_USING_FILE=1` internally for convenience.
 - Plugin warnings are informational; smokes are designed to pass without dynamic plugins.
