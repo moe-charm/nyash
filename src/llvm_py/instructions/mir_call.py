@@ -35,6 +35,25 @@ def lower_mir_call(owner, builder: ir.IRBuilder, mir_call: Dict[str, Any], dst_v
     # Parse callee type
     callee_type = callee.get("type")
 
+    # Optional trace: dump callee info (including certainty for Method)
+    if os.getenv('NYASH_LLVM_TRACE_CALLS') == '1':
+        try:
+            evt = { 'type': callee_type }
+            if callee_type == 'Global':
+                evt.update({'name': callee.get('name')})
+            elif callee_type == 'Method':
+                evt.update({
+                    'box_name': callee.get('box_name'),
+                    'method': callee.get('method'),
+                    'receiver': callee.get('receiver'),
+                    'certainty': callee.get('certainty'),
+                })
+            elif callee_type == 'Extern':
+                evt.update({'name': callee.get('name')})
+            print(json.dumps({'phase':'llvm','cat':'mir_call','event':evt}))
+        except Exception:
+            pass
+
     if callee_type == "Global":
         # Global function call (e.g., print, panic)
         func_name = callee.get("name")
