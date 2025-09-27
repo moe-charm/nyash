@@ -5,6 +5,7 @@
  */
 
 use super::{MirFunction, MirInterpreter};
+use serde_json::json;
 use crate::backend::vm::{VMError, VMValue};
 
 #[derive(Debug, Clone)]
@@ -41,6 +42,20 @@ fn reroute_to_correct_method(
 ) -> Option<Result<VMValue, VMError>> {
     let target = format!("{}.{}{}", recv_cls, parsed.method, format!("/{}", parsed.arity_str));
     if let Some(f) = interp.functions.get(&target).cloned() {
+        // Debug: emit class-reroute event (dev-only)
+        crate::debug::hub::emit(
+            "resolve",
+            "class-reroute",
+            interp.cur_fn.as_deref(),
+            None,
+            json!({
+                "recv_cls": recv_cls,
+                "orig_class": parsed.class,
+                "method": parsed.method,
+                "arity": parsed.arity_str,
+                "target": target,
+            }),
+        );
         return Some(interp.exec_function_inner(&f, arg_vals));
     }
     None
@@ -64,6 +79,21 @@ fn try_special_reroute(
         ];
         for name in candidates.iter() {
             if let Some(f) = interp.functions.get(name).cloned() {
+                // Debug: emit special-reroute event (dev-only)
+                crate::debug::hub::emit(
+                    "resolve",
+                    "special-reroute",
+                    interp.cur_fn.as_deref(),
+                    None,
+                    json!({
+                        "recv_cls": recv_cls,
+                        "orig_class": parsed.class,
+                        "method": parsed.method,
+                        "arity": parsed.arity_str,
+                        "target": name,
+                        "reason": "toString->stringify",
+                    }),
+                );
                 return Some(interp.exec_function_inner(&f, arg_vals));
             }
         }
@@ -80,6 +110,20 @@ fn try_special_reroute(
         ];
         for name in candidates.iter() {
             if let Some(f) = interp.functions.get(name).cloned() {
+                crate::debug::hub::emit(
+                    "resolve",
+                    "special-reroute",
+                    interp.cur_fn.as_deref(),
+                    None,
+                    json!({
+                        "recv_cls": recv_cls,
+                        "orig_class": parsed.class,
+                        "method": parsed.method,
+                        "arity": parsed.arity_str,
+                        "target": name,
+                        "reason": "equals-fallback",
+                    }),
+                );
                 return Some(interp.exec_function_inner(&f, arg_vals));
             }
         }
