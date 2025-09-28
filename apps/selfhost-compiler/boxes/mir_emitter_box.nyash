@@ -3,6 +3,141 @@
 // Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
 
 static box MirEmitterBox {
+  _index_of(hay, needle) { return hay.indexOf(needle) }
+  _index_of_from(hay, needle, pos) {
+    if pos < 0 { pos = 0 }
+    local n = hay.length()
+    if pos >= n { return -1 }
+    local m = needle.length()
+    if m <= 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop (i <= limit) {
+      local seg = hay.substring(i, i + m)
+      if seg == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+  _read_digits(text, pos) {
+    local out = ""
+    local i = pos
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch >= "0" && ch <= "9" { out = out + ch i = i + 1 } else { break }
+    }
+    return out
+  }
+  _str_to_int(s) {
+    local i = 0
+    local n = s.length()
+    local acc = 0
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "0" { acc = acc * 10 + 0  i = i + 1  continue }
+      if ch == "1" { acc = acc * 10 + 1  i = i + 1  continue }
+      if ch == "2" { acc = acc * 10 + 2  i = i + 1  continue }
+      if ch == "3" { acc = acc * 10 + 3  i = i + 1  continue }
+      if ch == "4" { acc = acc * 10 + 4  i = i + 1  continue }
+      if ch == "5" { acc = acc * 10 + 5  i = i + 1  continue }
+      if ch == "6" { acc = acc * 10 + 6  i = i + 1  continue }
+      if ch == "7" { acc = acc * 10 + 7  i = i + 1  continue }
+      if ch == "8" { acc = acc * 10 + 8  i = i + 1  continue }
+      if ch == "9" { acc = acc * 10 + 9  i = i + 1  continue }
+      break
+    }
+    return acc
+  }
+
+  _map_binop(op) {
+    if op == "Add" || op == "+" { return "Add" }
+    if op == "Sub" || op == "-" { return "Sub" }
+    if op == "Mul" || op == "*" { return "Mul" }
+    if op == "Div" || op == "/" { return "Div" }
+    if op == "Mod" || op == "%" { return "Mod" }
+    return ""
+  }
+  _map_cmp(op) {
+    if op == "Eq" || op == "==" { return "Eq" }
+    if op == "Ne" || op == "!=" { return "Ne" }
+    if op == "Lt" || op == "<" { return "Lt" }
+    if op == "Le" || op == "<=" { return "Le" }
+    if op == "Gt" || op == ">" { return "Gt" }
+    if op == "Ge" || op == ">=" { return "Ge" }
+    return ""
+  }
+
+  // Try to synthesize MIR from a tiny subset of Stage‑1 JSON patterns.
+  // Supported (best-effort): Return(BinOp(Int,Int)), Return(Compare(Int,Int))
+  _emit_from_stage1_try(ast_json) {
+    if ast_json == null { return null }
+    // Return(BinOp(...))
+    local p = me._index_of(ast_json, "\"type\":\"Return\"")
+    if p >= 0 {
+      local q = me._index_of_from(ast_json, "\"type\":\"BinOp\"", p)
+      if q >= 0 {
+        // op
+        local opk_pos = me._index_of_from(ast_json, "\"op\":\"", q)
+        if opk_pos >= 0 {
+          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 7)
+          local opk = ast_json.substring(opk_pos + 7, opk_end)
+          local kind = me._map_binop(opk)
+          if kind != "" {
+            // lhs int
+            local lhs_pos = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
+            local rhs_pos = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
+            if lhs_pos >= 0 && rhs_pos >= 0 {
+              local lhs_digits = me._read_digits(ast_json, lhs_pos + 29)
+              local rhs_digits = me._read_digits(ast_json, rhs_pos + 29)
+              if lhs_digits != "" && rhs_digits != "" {
+                local a = me._str_to_int(lhs_digits)
+                local b = me._str_to_int(rhs_digits)
+                // MIR: const a -> 1, const b -> 2, binop kind 1,2 -> 3, ret 3
+                local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
+                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + a + "},\\\"dst\\\":1},"
+                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + b + "},\\\"dst\\\":2},"
+                s = s + "{\\\"op\\\":\\\"binop\\\",\\\"op_kind\\\":\\\"" + kind + "\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
+                s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":3}"
+                s = s + "]}]}]}"
+                return s
+              }
+            }
+          }
+        }
+      }
+      // Return(Compare(...))
+      q = me._index_of_from(ast_json, "\"type\":\"Compare\"", p)
+      if q >= 0 {
+        local opk_pos = me._index_of_from(ast_json, "\"op\":\"", q)
+        if opk_pos >= 0 {
+          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 7)
+          local opk = ast_json.substring(opk_pos + 7, opk_end)
+          local kind = me._map_cmp(opk)
+          if kind != "" {
+            local lhs_pos = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
+            local rhs_pos = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
+            if lhs_pos >= 0 && rhs_pos >= 0 {
+              local lhs_digits = me._read_digits(ast_json, lhs_pos + 29)
+              local rhs_digits = me._read_digits(ast_json, rhs_pos + 29)
+              if lhs_digits != "" && rhs_digits != "" {
+                local a = me._str_to_int(lhs_digits)
+                local b = me._str_to_int(rhs_digits)
+                local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
+                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + a + "},\\\"dst\\\":1},"
+                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + b + "},\\\"dst\\\":2},"
+                s = s + "{\\\"op\\\":\\\"compare\\\",\\\"cmp\\\":\\\"" + kind + "\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
+                s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":3}"
+                s = s + "]}]}]}"
+                return s
+              }
+            }
+          }
+        }
+      }
+    }
+    return null
+  }
   // Extract first Return(Int) value from Stage-1 JSON (very small string scan)
   _extract_return_int(ast_json) {
     if ast_json == null { return 0 }
@@ -39,6 +174,9 @@ static box MirEmitterBox {
 
   // Build minimal MIR JSON v0: main with const -> ret
   emit_mir_min(ast_json) {
+    // Try richer patterns first; fallback to Return(Int)
+    local try_rich = me._emit_from_stage1_try(ast_json)
+    if try_rich != null { return try_rich }
     local retv = me._extract_return_int(ast_json)
     local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
     s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + retv + "},\\\"dst\\\":1},"

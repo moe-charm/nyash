@@ -7,10 +7,22 @@ using "apps/selfhost-compiler/boxes/debug_box.nyash" as DebugBoxMod
 using "apps/selfhost-compiler/boxes/parser_box.nyash" as ParserBoxMod
 using "apps/selfhost-compiler/boxes/emitter_box.nyash" as EmitterBoxMod
 using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterBoxMod
+using "apps/selfhost-compiler/builder/mod.nyash" as CompilerBuilderMod
 
 // (removed) Transitional duplicate using lines to avoid resolver duplicate-import error
 
 static box Main {
+  // ---- Arg helper ----
+  has_arg(args, name) {
+    if args == null { return 0 }
+    local n = args.length()
+    local i = 0
+    loop(i < n) {
+      if args.get(i) == name { return 1 }
+      i = i + 1
+    }
+    return 0
+  }
   // ---- IO helper ----
   read_all(path) {
     local fb = new FileBox()
@@ -59,6 +71,7 @@ static box Main {
     local read_tmp = 0
     local input_path = null
     local stage3_mode = 0
+    local compiler_track = 0
     if args != null {
       local alen = args.length()
       local i = 0
@@ -67,6 +80,7 @@ static box Main {
         if a == "--read-tmp" {
           read_tmp = 1
         } else {
+          if a == "--compiler-track" { compiler_track = 1 } else {
           if a == "--min-json" {
             /* handled later */
           } else {
@@ -79,6 +93,7 @@ static box Main {
                 if input_path == null { input_path = a }
               }
             }
+          }
           }
         }
         i = i + 1
@@ -97,26 +112,36 @@ static box Main {
     }
 
     // Gate: minimal JSON when requested via script arg
-    local min_mode = 0
-    local emit_mir = 0
-    if args != null {
-      local alen = args.length()
-      local i = 0
-      loop(i < alen) {
-        local arg = args.get(i)
-        if arg == "--min-json" { min_mode = 1 }
-        if arg == "--emit-mir" { emit_mir = 1 }
-        i = i + 1
-      }
-    }
+    local min_mode = me.has_arg(args, "--min-json")
+    local emit_mir = me.has_arg(args, "--emit-mir")
     local json = null
     local ast_json = null
     if min_mode == 1 {
-      ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
+      // Default minimal AST JSON (Return(Int 0)); optional samples for dev
+      // Flags: --min-json-binop, --min-json-cmp
+      local has_binop = 0
+      local has_cmp = 0
+      if me.has_arg(args, "--min-json-binop") == 1 { has_binop = 1 }
+      if me.has_arg(args, "--min-json-cmp") == 1 { has_cmp = 1 }
+      if has_binop == 1 {
+        // Return(BinOp(Int 2, Int 5) op:"Add")
+        ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"BinOp\",\"op\":\"Add\",\"lhs\":{\"type\":\"Int\",\"value\":2},\"rhs\":{\"type\":\"Int\",\"value\":5}}}]}"
+      } else {
+        if has_cmp == 1 {
+          // Return(Compare(Int 5, Int 4) op:"Gt")
+          ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Compare\",\"op\":\"Gt\",\"lhs\":{\"type\":\"Int\",\"value\":5},\"rhs\":{\"type\":\"Int\",\"value\":4}}}]}"
+        } else {
+          ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
+        }
+      }
     } else {
       ast_json = me.parse_program(src, stage3_mode)
     }
 
+    if compiler_track == 1 {
+      // Apply compiler-track builder passes (behavior-preserving; currently no-op)
+      ast_json = CompilerBuilder.apply_all(ast_json)
+    }
     if min_mode == 1 && emit_mir == 0 {
       // Safety: when --min-json is requested without --emit-mir,
       // return the minimal AST JSON as-is to avoid heavier emitter paths.

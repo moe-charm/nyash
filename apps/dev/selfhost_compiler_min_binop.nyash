@@ -1,0 +1,14 @@
+using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
+
+static box Main {
+  main(){
+    local args = new ArrayBox()
+    args.push("--compiler-track")
+    args.push("--min-json")
+    args.push("--min-json-binop")
+    args.push("--emit-mir")
+    CompilerMod.Main.main(args)
+    return 0
+  }
+}
+
