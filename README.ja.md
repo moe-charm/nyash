@@ -228,14 +228,12 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
   - LLVMバックエンドは性能と型安全性のため、method_idベースのプラグイン呼び出しのみ対応。
 
 
-### 5. **WebAssembly** （ブラウザ用）
-```bash
-cargo build --release --features wasm-backend
-./target/release/nyash --compile-wasm program.nyash
-```
-- ブラウザで実行
-- デフォルトでクロスプラットフォーム
-- Webファースト開発
+### 5. **WebAssembly（ブラウザ）** — 現状: 一時停止 / 未整備
+WASM/ブラウザ経路は現在メンテ対象外です（CI未対象）。古いプレイグラウンド/ガイドは歴史的資料として残置しています。
+
+- ソース（アーカイブ）: `projects/nyash-wasm/`（ビルド保証なし）
+- 現在の主軸: VM（Rust）と LLVM（llvmlite ハーネス）
+- ローカルで試す場合は `projects/nyash-wasm/README.md` と `projects/nyash-wasm/build.sh` を参照（wasm-pack 必須、サポート無保証）。
 
 ---
 

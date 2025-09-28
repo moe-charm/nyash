@@ -1,8 +1,8 @@
-# 🌐 Nyash WebAssembly Project
+# 🌐 Nyash WebAssembly Project (Archived / Unmaintained)
 
-Nyash programming language running in the browser via WebAssembly!
+Status: This directory contains an older WASM/browser prototype. It is not part of CI and may not build with current Nyash. Instructions below are historical and provided as-is.
 
-## 🚀 Quick Start
+## 🚀 Quick Start (experimental)
 
 ```bash
 # Install wasm-pack (if not already installed)
@@ -12,7 +12,7 @@ cargo install wasm-pack
 cd /mnt/c/git/nyash
 wasm-pack build --target web --out-dir projects/nyash-wasm/pkg
 
-# Start local server  
+# Start local server (example)
 cd projects/nyash-wasm
 python3 -m http.server 8000
 
@@ -20,7 +20,7 @@ python3 -m http.server 8000
 # Navigate to: http://localhost:8000/nyash_playground.html
 ```
 
-## 🎯 Features
+## 🎯 Features (historical)
 
 - **🐱 Full Nyash Language** - Complete interpreter running in browser
 - **📦 ConsoleBox** - Browser console integration  
@@ -41,7 +41,7 @@ projects/nyash-wasm/
     └── ...
 ```
 
-## 🎨 Example Code
+## 🎨 Example Code (historical)
 
 ```nyash
 // Browser console output
