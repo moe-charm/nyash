@@ -13,7 +13,10 @@ use super::extern_calls;
 
 /// Check if unified call system is enabled
 pub fn is_unified_call_enabled() -> bool {
-    std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1"
+    match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+        Some(s) if s == "0" || s == "false" || s == "off" => false,
+        _ => true, // default ON during development; explicit opt-out supported
+    }
 }
 
 /// Convert CallTarget to Callee

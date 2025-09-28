@@ -4,13 +4,34 @@ Focus
 - Keep VM quick green; llvmlite integration on-demand.
 - Using SSOT（nyash.toml + 相対using）で安定解決。
 - Builder/VM ガードは最小限・仕様不変（dev では診断のみ）。
+- Phase 15.7 を再定義: Known 化＋Rewrite 統合（dev観測）と Mini‑VM 安定化、表示APIは `str()` に統一（互換:stringify）。
+
+Update — 2025-09-28 (P1 Known 集約・KPI・LAYER ガード)
+- Builder: method_call_handlers の Known 経路を `rewrite::known` に集約。
+  - 新規 API: `try_known_or_unique`（Known 優先→一意候補 fallback）。
+  - equals/1 を `rewrite::special::try_special_equals` に移設（挙動不変）。
+- Observe: `resolve.choose` に certainty を付加し（Known/Heuristic）、`NYASH_DEBUG_KPI_KNOWN=1` 時に簡易集計を出力（`NYASH_DEBUG_SAMPLE_EVERY=N`）。
+- LAYER ガード（任意ツール）: `tools/dev/check_builder_layers.sh` を追加（origin→observe→rewrite の一方向チェック）。
+- Unified 経路: `emit_unified_call` に equals/1 の集約を追加（Known 優先→一意候補）（仕様不変）。
+- メソッド候補インデックス化: `MirBuilder` に tail→候補のキャッシュを追加（lazy再構築）。
+  - API: `method_candidates(method, arity)`, `method_candidates_tail(tail)`
+  - 利用箇所: method_call_handlers の resolve.try、rewrite::{special,known} の一意候補探索、unified equals/1 の一意候補。
+- 集約ポリシー（P0 完了）:
+  - 中央集約先: `emit_unified_call`（Methodターゲット時に rewrite/special/known を順に試行）
+  - `method_call_handlers` は `emit_unified_call` を呼ぶだけに簡素化（重複ロジック削減）
+  - equals/1 も同一ロジックに吸収
+- レガシー経路（P1 準備）:
+  - dev ガード追加: `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1` でレガシー側のメソッド関数化を停止（将来削除の前段階）
+  - Unified 無効時の後方互換は維持（既定OFF）
 
 Status Snapshot — 2025‑09‑27
 - Completed
-  - VM method_router: special-method table extended minimally — equals/1 now tries instance class then base class when only base provides equals (deterministic, no behavior change where both exist). toString→stringify remains.
+  - VM method_router: special-method table extended minimally — equals/1 now tries instance class then base class when only base provides equals (deterministic, no behavior change where both exist). toString→str remains（互換: stringify を許容）。
   - MIR Callee Phase‑3: added TypeCertainty to Callee::Method (Known/Union). Builder sets Known when receiver origin is known; legacy/migration BoxCall marks Union. JSON emitter and MIR printer include certainty for diagnostics. Backends ignore it functionally for now.
   - Using/SSOT: JSONモジュール内部 using を相対に統一（alias配下でも安定）
   - DebugHub: 追加ゲート `NYASH_DEBUG_SAMPLE_EVERY`（N件に1度だけ emit）。重いケースでのログ制御のため（既定OFF・ゼロコスト）。
+  - Router diagnostics: class-reroute / special-reroute を DebugHub に emit（dev-only, 既定OFF）。
+  - LLVM diagnostics: `NYASH_LLVM_TRACE_CALLS=1` で `mir_call` の callee（Method.certainty 含む）を JSON 出力（挙動不変）。
 
 Decision — Variables (Option A; 2025‑09‑27)
 - 方針: var/let は導入しない。ローカルは常に `local` で明示宣言。
@@ -26,8 +47,7 @@ Decision — Variables (Option A; 2025‑09‑27)
     - 互換: `Main.main` が存在する場合は常にそちらを優先。両方無い場合は従来通りエラー。
     - オプトアウト: `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0|false|off` で無効化可能。
 - Next
-  - Scanner.read_string_literal: 未終端で null を返すよう修正（TokenizerがERRORを積む）＋小プローブ追加
-  - Heavy JSON: quick 既定ONへ再切替（環境が安定したら）
+  - Heavy JSON: quick 既定ONへ再切替（LLVM 常備で段階復帰）
   - 解析ログの統一: parser/tokenizerのdevトレースは既定OFFのまま維持、必要時だけ有効化
 - llvmlite（integration）: 任意ジョブで確認（単発実行のハングはタイムアウト/リンク分離で回避）
 
@@ -70,18 +90,31 @@ Guards / Policy
 - 既定挙動は不変（prod 用心）。
 - dev では診断強化（ログ/メトリクス）し、ランナー側でノイズはフィルタ。
 
+Policy — AST Using (Status Quo)
+- SSOT（nyash.toml）＋AST prelude merge を維持。prod は toml 限定、dev/ci は段階的に緩和。
+- 重い AST/JSON ケースは integration でカバーしつつ、quick への復帰は LLVM 有効環境で段階的に行う（順次解除）。
+
 Work Queue (Next)
 1) Scanner: 未終端文字列で必ず null を返す（Tokenizer が ERROR へ）
 2) Heavy JSON: quick 既定ONに戻す（プローブは維持）
 3) エラーメッセージの詳細化（expected/actual/line/column）
 4) Ny 実行器 M2 スケルトン（JSON v0 ローダ＋const/binop 等の最小実装）下書き
 5) Parity ミニセット（VM↔llvmlite↔Ny）を用意し、差分ダッシュボード化
- 6) Router 観測ログの軽追加（dev-only, 既定OFF）: class-reroute / special-reroute を DebugHub に emit（サンプル制御対応）
- 7) LLVM ハーネスの MIR ダンプに certainty 表示（挙動不変の診断整合）
+ 6) Router: Known/Union 方針の磨き込み（挙動不変）
+    - Known → 既存の直接呼び出しを維持（VM 完了、LLVM は表示のみ）。
+    - Union → ルータ経路を維持しつつ、ログで可視化（表は“必要最小”で追加）。
+ 7) Heavy JSON の quick 段階復帰（LLVM 有効環境）
+    - 順序: nested_ast → roundtrip_ast → error_messages_ast。
+ 8) （診断）LLVM ダンプに certainty の補助表示（必要時、挙動不変）。
 
 Update — @local expansion promotion (2025‑09‑27)
 - すべてのランナーモードに `preexpand_at_local` を適用（common/llvm/pyvm に加え vm/selfhost へも導入）。
 - Docs を更新し、構文糖衣が標準で有効であることを明記。
+
+Plan — Router Minimalism (継続方針)
+- 特殊メソッド表は “toString→str（互換:stringify）, equals/1” の範囲から、ユースが発生したもののみ点で追加。
+- 既定の挙動・言語仕様は変更しない（フォールバックの拡大はしない）。
+- 測定: DebugHub（resolve.*）ログと LLVM の `NYASH_LLVM_TRACE_CALLS` を併用し、Union 経路を可視化。
 
 Runbook（抜粋）
 - VM quick: `tools/smokes/v2/run.sh --profile quick`
@@ -169,7 +202,59 @@ Update — 2025-09-27 (json_lint_vm guard fix)
   - File: apps/lib/json_native/lexer/scanner.nyash (read_string_literal)
   - TODO: add unit probe; ensure EOF without closing quote yields null; add negative case to smokes if needed.
 
+Update — 2025-09-28 (Scanner 未終端→null とスモーク追加)
+- Implemented: JsonScanner.read_string_literal returns null when closing quote is missing or escape incomplete.
+  - File: apps/lib/json_native/lexer/scanner.nyash (already returned null; verified)
+- Tokenizer maps scanner null to ERROR("Unterminated string literal").
+  - File: apps/lib/json_native/lexer/tokenizer.nyash (tokenize_string)
+- Added quick smoke to lock behavior:
+  - tools/smokes/v2/profiles/quick/core/json_unterminated_string_vm.sh → expects "Unterminated string literal".
+
+Work Queue — Reorganized (2025‑09‑28)
+1) Scanner 未終端→null — completed
+   - Status: Verified with new smoke; tokenizer ERROR emitted with line/column preserved.
+2) Heavy JSON quick 復帰（LLVM 常備で段階解除） — completed (dev override)
+   - Policy: AST-heavy smokes run in quick via LLVM harness. When LLVM is not detectable, they SKIP; 開発者は `SMOKES_FORCE_LLVM=1` で強制実行可。
+   - Action: run.sh に `SMOKES_FORCE_LLVM=1` を追加、ハーネス/NYRT/ENV の自動整備を強化。nested_ast → roundtrip_ast → error_messages_ast が PASS。
+3) エラーメッセージ詳細化 — pending
+   - Scope: enrich JSON parser/tokenizer messages with expected/actual; keep format: "Error at line X, column Y: ...".
+4) Ny 実行器 M2 スケルトン（最小） — baseline exists
+   - Files: apps/selfhost/vm/boxes/mir_vm_min.nyash; quick smoke present.
+   - Next: add binop/compare minimal paths (dev-only), no default behavior change.
+5) Parity ミニセット — pending
+   - Add a tiny VM↔LLVM↔Ny parity triplet; start with const/ret and simple binop.
+6) Router Known/Union 磨き込み（挙動不変） — pending
+   - Maintain minimal special-method table; diagnostics only; no behavior change.
+7) Heavy JSON 段階復帰順（nested_ast→roundtrip_ast→error_messages_ast） — tracking
+   - All present in quick under LLVM harness; verify pass and keep order.
+8) LLVM ダンプに certainty 補助表示 — baseline exists
+   - NYASH_LLVM_TRACE_CALLS=1 prints callee JSON including Method.certainty.
+9) QuickRef — Truthiness（quickで有効化）— completed
+   - tools/smokes/v2/profiles/quick/core/lang_quickref_truthiness_vm.sh → enabled; PASS（0→false, 1→true, ""→false, non‑empty→true）
+10) Language guards（planned; 既定OFF・段階導入）
+   - ASI strictness: dev‑only check to fail a line break after a binary operator; default OFF.
+   - Plus mixed: warn/fail‑fast when non‑String mixed `+` unless explicit stringify; default OFF; document String+number ⇒ concat.
+   - Box equality guidance: when `box == box` is used, emit guidance to use equals(); default OFF.
+   - Scope: docs + dev warnings first; later wire parser/builder flags guarded by env/CLI profile.
+
 Update — 2025-09-27 (M2 skeleton: Ny mini-MIR VM)
+
+Update — 2025-09-28 (json_lint_vm regression fix — condition_fn and birth bridge)
+- Fixed: Unknown global function: condition_fn (quick json_lint_vm)
+  - Indirect calls: ensure AST `condition_fn(ch)` lowers to Value call (unified path already used in exprs_call.rs)
+  - Unified Global safety: emit_unified_call now dev‑safes `condition_fn` by returning const 1 when unresolved (explicit opt‑in legacy paths intact)
+  - Dev stub: finalize_module injects minimal `condition_fn/1 -> 1` if missing (kept as guard)
+- Unified→VM bridge: birth()
+  - VM: when executing unified Method callee `*.birth`, delegate to BoxCall handler and return Void. This preserves legacy behavior for built‑ins when plugins are absent.
+  - Builder: gated birth() injection for built‑ins (Array/Map/String etc). Default OFF unless `NYASH_DEV_BIRTH_INJECT_BUILTINS=1`.
+- Next (high‑prio): local var materialization bug in main.nyash
+  - Symptom: `local cases = new ArrayBox()` followed by `cases.push(...)` used an undefined receiver ValueId.
+  - Interim change: make `local` always materialize a distinct register and `copy init -> var` (also const Void for uninitialized). This avoids SSA aliasing issues.
+  - Status: needs a quick pass across smokes to confirm; proceed if quick green, otherwise revisit builder var mapping.
+
+Dev toggles
+- NYASH_DEV_BIRTH_INJECT_BUILTINS=1: re‑enable birth() injection for builtin boxes (default OFF to stabilize unified Method path until full bridge lands).
+- NYASH_MIR_UNIFIED_CALL: default ON; opt‑out via 0|false|off.
 - Added Ny-based minimal MIR(JSON v0) executor skeleton (const→ret only), dev-only app — no default behavior change.
   - File: apps/selfhost/vm/boxes/mir_vm_min.nyash
   - Entry: apps/selfhost/vm/mir_min_entry.nyash (optional thin wrapper)
@@ -218,7 +303,7 @@ Update — 2025-09-27 (Quick profile stabilization & heavy JSON gating)
     - json_pp_vm (JsonNode.parse pretty-print) → SKIP in quick（例示アプリ、他で十分カバー）
   - Using resolver brace-fixer: quick config restored to ON for stability（NYASH_RESOLVE_FIX_BRACES=1）
   - ScopeCtx wired (loop/join) and resolve/ssa events include region_id（dev logs only）
-  - toString→stringify early mapping logs added（reason: toString-early-*）
+  - toString→str early mapping logs added（reason: toString-early-*）
 - Rationale: heavy/nested parser cases were sensitive to mixed env order in quick. Integration profile will carry the parity checks with DebugHub capture.
 - Next (focused):
   1) Run integration smokes for JSON heavy with DebugHub ON and collect /tmp logs
@@ -244,7 +329,7 @@ Acceptance (this phase):
   - userbox_branch_phi_vm.sh — SKIP (rewrite/materialize pending)
   - userbox_toString_mapping_vm.sh — SKIP (mapping pending)
 - Rationale: keep quick green while surfacing remaining gaps as SKIP with clear reasons.
-- Next: stabilize rewrite/materialize across branch/arity and toString→stringify mapping; then flip SKIPs to PASS.
+- Next: stabilize rewrite/materialize across branch/arity and toString→str mapping; then flip SKIPs to PASS.
 Update — 2025-09-27 (Loop‑Form Scope Debug & AOT PoC — Plan)
 - Added design doc: docs/design/loopform-scope-debug-and-aot.md
   - Scope model (LoopScope/JoinScope), invariants, Hub+Inspectors, per-scope data, AOT fold, PoC phases, acceptance.
@@ -264,3 +349,132 @@ Update — 2025-09-27 (Loop‑Form Scope Debug & AOT PoC — Plan)
 - Acceptance (Phase‑1)
   - Debug JSONL has resolve/ssa events with region_id and choices; PASS cases unchanged (OFF)
   - SKIP cases pinpointable by log (branch/arity) → use logs to guide fixes → flip to PASS
+
+
+Update — 2025-09-28 (Plugins 既定ON と ENV 整理)
+- Plugins: 既定ONで統一。テストランナー/開発スクリプトから `NYASH_DISABLE_PLUGINS=1` を撤去。
+  - tools/smokes/v2/lib/test_runner.sh（LLVM 経路）: disable 指定を外し、`PYTHONPATH`/`NYASH_NY_LLVM_COMPILER`/`NYASH_EMIT_EXE_NYRT` を自動付与。
+  - tools/dev_env.sh: `pyvm`/`bridge` プロファイルで plugins を無効化しない（unset のみに変更）。
+- VM/LLVM 二系統の最小ENV（ドキュメント方針）:
+  - VM: 既定でOK（追加ENV不要）
+  - LLVM(harness): `NYASH_LLVM_USE_HARNESS=1` + `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc` + `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
+  - quick強制: `SMOKES_FORCE_LLVM=1` で AST heavy を quick で実行可能
+
+
+Priority TODO — 2025-09-28 (VM/LLVM 2-Line + M2)
+- ENV minimalization (plugins=ON):
+  - VM: no extra ENV.
+  - LLVM(harness): NYASH_LLVM_USE_HARNESS=1, NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc, NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release.
+  - Docs: add a small "VM vs LLVM minimal-ENV" box to README.md and README.ja.md. [done]
+- test_runner cleanup:
+  - Unify/centralize noise filters; keep SMOKES_FORCE_LLVM as the only dev override; remove ad-hoc greps in individual scripts. [todo]
+- M2 executor (Ny):
+  - Add compare (Eq) to M2 runner; add 2 smokes (Eq true/false). [done]
+  - Externalize MirVmM2 to apps/selfhost/vm/boxes/mir_vm_m2.nyash and switch smoke to using-based variant; keep inline smoke as safety. [later]
+  - Next (optional): branch/jump minimal; phi later. [pending]
+
+Update — 2025-09-28 (Language Quick Reference & Smokes)
+- Added quick-reference draft for language (keywords, operators, ASI, truthiness, equality, '+', rewrite, errors).
+  - docs/reference/language/quick-reference.md
+- Added planned smokes for quickref rules (initially SKIP until strict rules are wired):
+  - tools/smokes/v2/profiles/quick/core/lang_quickref_asi_error_vm.sh (SKIP)
+  - tools/smokes/v2/profiles/quick/core/lang_quickref_truthiness_vm.sh (ENABLED)
+  - tools/smokes/v2/profiles/quick/core/lang_quickref_plus_mixed_error_vm.sh (SKIP)
+  - tools/smokes/v2/profiles/quick/core/lang_quickref_equals_box_error_vm.sh (SKIP)
+- Temporarily SKIP Mini‑VM M2/M3 smokes while parser/segment boundaries are being fixed:
+  - selfhost_mir_m2_eq_true_vm.sh / selfhost_mir_m2_eq_false_vm.sh / selfhost_mir_m3_branch_true_vm.sh / selfhost_mir_m3_jump_vm.sh — now ENABLED and PASS
+- Using/SSOT docs:
+  - Clarify dev/ci/prod matrix (file-using dev/ci only; prod=toml only); add short examples. [todo]
+- Parity mini-set:
+  - VM ↔ LLVM ↔ Ny: const/ret + binop(+), compare(Eq); add quick parity harness notes. [todo]
+- Acceptance:
+  - quick: AST heavy PASS (LLVM present), M2 binop/Eq PASS; integration unchanged.
+  - docs: minimal-ENV clearly shown; no NYASH_DISABLE_PLUGINS in public guidance.
+
+Update — 2025-09-28 (Interpreter gating & Phase 15.7 plan)
+- Legacy AST interpreter is now feature-gated (interpreter-legacy OFF by default). Runner/tests that depend on it are behind cfg.
+  - Files: src/runner/modes/common.rs, src/runner/modes/bench.rs, src/tests/* (vm_bitops/refcell/functionbox)
+- Added Phase 15.7 roadmap (Mini‑VM M3 + NYABI Kernel skeleton; dev-only; default OFF).
+  - docs/development/roadmap/phases/phase-15.7/README.md
+- Drafted NYABI Kernel spec (v0) and added Ny skeleton box (not wired).
+  - docs/abi/vm-kernel.md; apps/selfhost/vm/boxes/vm_kernel_box.nyash
+
+Plan — Instance→Function Rewrite Consolidation (2025‑09‑28)
+- Goal: 内部表現を関数呼び出しへ極力統一（obj.m(a) → Class.m/Arity(me,a)）。prodでの Instance BoxCall 依存を排除。
+- Approach（小粒・可逆）
+  1) PHI/Join での origin/type 伝播の強化（region_id ログで落ちる断面を特定→補修）
+  2) 限定 materialize: module 内で name+arity がユニークな場合のみ Glue 関数を合成（既定OFF、dev/CIで計測）
+
+Roadmap Priorities (Phase 15.7 revised)
+- P0: me 注入 Known 化（起源付与/維持）— リスク低・効果大。軽量PHI補強（単一/一致時）
+- P1: Known 100% 関数化（Known 経路の instance→function 正規化、special 集約）
+- P2: Policy（Ny Kernel, dev‑only）— equals/str/truthiness の観測API（バッチ、再入禁止/タイムアウト/計測）
+- P3: 表示APIの移行誘導 — toString→str（互換:stringify）の警告/ドキュメント（仕様不変）
+- P4: Union 観測・分析 — resolve.try/choose と ssa.phi（region_id）で継続観測
+- P5: PHI Known 維持の一般化 — Phase 16（複雑のため後回し）
+  3) prod ガード維持: VM は user Instance BoxCall を禁止（既存ポリシー継続）。dev/CI は WARN＋観測
+  4) スモーク/観測: quick で Instance BoxCall の dev WARN=0 を確認。resolve.try/choose と LLVM `NYASH_LLVM_TRACE_CALLS` を併用
+- Controls
+  - `NYASH_BUILDER_REWRITE_INSTANCE`（既定ON）: 強制ON/OFF
+  - `NYASH_DEV_REWRITE_USERBOX`（dev限定）: userbox rewrite 検証用
+  - materialize 新ENV（既定OFF）: `NYASH_BUILDER_MATERIALIZE_UNIQUE=1`（予定）
+- Acceptance（段階）
+  - Stage‑1: Known 経路で 100% 関数化（quick全域で dev WARN=0）
+  - Stage‑2: 限定 materialize をON時に適用し、分岐/PHI 合流の代表ケースが関数化（差分はdevのみ）
+  - 常に prod は挙動不変・安全（OFFで現状維持）
+
+Update — 2025-09-28 (Mini‑VM M2/M3 fix + smokes)
+- Fix: compare/ret segmentation made robust without heavy JSON parse.
+  - Approach: per‑block coarse passes for const/binop/compare and a precise in‑block ret search; control‑flow (branch/jump) handled with a single pass using computed regs.
+  - Files: apps/selfhost/vm/boxes/mir_vm_min.nyash
+- Smokes: enabled and PASS
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m2_eq_true_vm.sh
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m2_eq_false_vm.sh
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_branch_true_vm.sh
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_vm.sh
+- Notes: kept changes local and spec‑neutral; no default behavior changes to core VM.
+
+Update — 2025-09-28 (QuickRef Dev Guards + Docs llvmlite)
+- Dev guards (env‑gated; default OFF) implemented and validated by quick smokes:
+  - ASI strict line‑continuation: `NYASH_ASI_STRICT=1` → parse error when a binary operator ends the line.
+- Plus mixed (String×Number): `NYASH_PLUS_MIX_ERROR=1` → type error; suggest str()/明示変換。
+  - Box equality guidance: `NYASH_BOX_EQ_GUIDE_ERROR=1` → equals()誘導のエラー。
+  - Smokes enabled: `lang_quickref_asi_error_vm.sh`, `lang_quickref_plus_mixed_error_vm.sh`, `lang_quickref_equals_box_error_vm.sh`（PASS）
+- LLVM ドキュメント統一（llvmlite一本化）
+  - `LLVM_SYS_180_PREFIX` の記述を主要ドキュメントから撤去し、llvmlite/ny‑llvmc 前提に更新。
+  - Files: `AGENTS.md`, `README.md`, `README.ja.md`, `CLAUDE.md`
+
+Plan — Next (2025-09-28)
+1) Mini‑VM 単一パス化（仕様不変・安全化） — completed
+   - 各 op を JSON オブジェクト単位で厳密セグメント化し、一回走査で評価（coarse pass を除去）。
+   - 代表ケース（複数op/ret先頭/ret末尾/compare v0,v1/jump/branch）で緑維持を確認。
+2) Rewrite 統合 Stage‑1（挙動不変・dev観測） — completed (observability wired)
+   - builder_calls の unified 経路に resolve.try/resolve.choose を追加（dev‑only/既定OFF）。
+   - method_call_handlers の既存 emit と整合。Known/Union の certainty を choose に含める。
+   - 使い方: `NYASH_MIR_UNIFIED_CALL=1 NYASH_DEBUG_ENABLE=1 NYASH_DEBUG_KINDS=resolve,ssa NYASH_DEBUG_SINK=/tmp/nyash_debug.jsonl`。
+   - Known 経路の100%関数化（dev WARN=0）を DebugHub で観測。userbox スモークで検証。
+3) P0/P1 着手（構造化） — in progress
+   - origin/observe/rewrite の責務分割（モジュール新設: src/mir/builder/{origin,observe,rewrite}/）。
+   - P0: me 注入 Known 化（起源付与/維持）と軽量PHI補強（単一/一致時）。
+   - P1: Known 経路 100% 関数化（special 集約: toString→str（互換:stringify）/equals）。
+   - Docs: README を各層に追加（origin/observe/rewrite）— completed
+   - 観測呼び出しの統一: builder_calls/method_call_handlers から observe::resolve を使用 — completed
+3) CI/Profiles 整理 — ongoing
+   - quick: VM 主線（llvmlite パリティは integration に委譲）。
+   - integration: 代表パリティ（llvmlite ハーネス）継続、apps系は任意実行。
+
+Notes — Display API Unification (spec‑neutral)
+- 規範: `str()` / `x.str()`（同義）。`toString()` は Builder で `str()` に早期正規化。
+- 互換: `stringify()` は当面エイリアス（内部で `str()` 相当）。
+- VM ルータ: toString/0 → str/0（なければ stringify/0）。
+- QuickRef/ガイド更新済み。`NYASH_PLUS_MIX_ERROR` の誘導文言も `str()` に統一。
+
+追加メモ — これからやる（ユーザー合意、2025‑09‑28）
+- Mini‑VM の単一パス化を安全に実装（既定挙動不変）
+  - 各 op を厳密セグメントで1回走査に統合（coarse を段階撤去）
+  - 代表スモーク（M2/M3/compare v0,v1）で緑維持確認
+- 続いて Rewrite 統合 Stage‑1 の観測へ進む（dev のみ、挙動不変）
+- Dev Profiles
+  - tools/dev_env.sh に Unified 既定ON（明示OFFのみ無効）とレガシー関数化抑止を追加。
+    - `NYASH_MIR_UNIFIED_CALL=1`（既定ON明示）
+    - `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1`（重複回避; 段階移行）

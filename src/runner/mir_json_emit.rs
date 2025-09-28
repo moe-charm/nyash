@@ -310,7 +310,10 @@ pub fn emit_mir_json_for_harness(
                             dst, func, callee, args, effects, ..
                         } => {
                             // Phase 15.5: Unified Call support with environment variable control
-                            let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+                            let use_unified = match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                                Some(s) if s == "0" || s == "false" || s == "off" => false,
+                                _ => true,
+                            };
 
                             if use_unified && callee.is_some() {
                                 // v1: Unified mir_call format
@@ -435,7 +438,10 @@ pub fn emit_mir_json_for_harness(
 
     // Phase 15.5: JSON v1 schema with environment variable control
     let use_v1_schema = std::env::var("NYASH_JSON_SCHEMA_V1").unwrap_or_default() == "1"
-                     || std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+                     || match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                            Some(s) if s == "0" || s == "false" || s == "off" => false,
+                            _ => true,
+                        };
 
     let root = if use_v1_schema {
         create_json_v1_root(json!(funs))

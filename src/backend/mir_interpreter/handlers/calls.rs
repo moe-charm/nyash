@@ -26,15 +26,52 @@ impl MirInterpreter {
     ) -> Result<VMValue, VMError> {
         match callee {
             Callee::Global(func_name) => self.execute_global_function(func_name, args),
-            Callee::Method {
-                box_name: _,
-                method,
-                receiver,
-                certainty: _,
-            } => {
+            Callee::Method { box_name: _, method, receiver, certainty: _, } => {
                 if let Some(recv_id) = receiver {
                     let recv_val = self.reg_load(*recv_id)?;
                     let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
+                    // Fast bridge for builtin boxes (Array) and common methods.
+                    // Preserve legacy semantics when plugins are absent.
+                    if let VMValue::BoxRef(bx) = &recv_val {
+                        // ArrayBox bridge
+                        if let Some(arr) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                            match method.as_str() {
+                                "birth" => { return Ok(VMValue::Void); }
+                                "push" => {
+                                    if let Some(a0) = args.get(0) {
+                                        let v = self.reg_load(*a0)?.to_nyash_box();
+                                        let _ = arr.push(v);
+                                        return Ok(VMValue::Void);
+                                    }
+                                }
+                                "len" | "length" | "size" => {
+                                    let ret = arr.length();
+                                    return Ok(VMValue::from_nyash_box(ret));
+                                }
+                                "get" => {
+                                    if let Some(a0) = args.get(0) {
+                                        let idx = self.reg_load(*a0)?.to_nyash_box();
+                                        let ret = arr.get(idx);
+                                        return Ok(VMValue::from_nyash_box(ret));
+                                    }
+                                }
+                                "set" => {
+                                    if args.len() >= 2 {
+                                        let idx = self.reg_load(args[0])?.to_nyash_box();
+                                        let val = self.reg_load(args[1])?.to_nyash_box();
+                                        let _ = arr.set(idx, val);
+                                        return Ok(VMValue::Void);
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    // Minimal bridge for birth(): delegate to BoxCall handler and return Void
+                    if method == &"birth" {
+                        let _ = self.handle_box_call(None, *recv_id, method, args)?;
+                        return Ok(VMValue::Void);
+                    }
                     let is_kw = method == &"keyword_to_token_type";
                     if dev_trace && is_kw {
                         let a0 = args.get(0).and_then(|id| self.reg_load(*id).ok());

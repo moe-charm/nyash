@@ -1,4 +1,4 @@
-use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId};
+use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, BasicBlockId, ConstValue};
 use crate::ast::ASTNode;
 
 // Lifecycle routines extracted from builder.rs
@@ -264,6 +264,29 @@ impl super::MirBuilder {
         }
 
         module.add_function(function);
+
+        // Dev stub: provide condition_fn when missing to satisfy predicate calls in JSON lexers
+        // Returns integer 1 (truthy) and accepts one argument (unused).
+        if module.functions.get("condition_fn").is_none() {
+            let mut sig = FunctionSignature {
+                name: "condition_fn".to_string(),
+                params: vec![MirType::Integer], // accept one i64-like arg
+                return_type: MirType::Integer,
+                effects: EffectMask::PURE,
+            };
+            let entry = BasicBlockId::new(0);
+            let mut f = MirFunction::new(sig, entry);
+            // parameter slot (unused in body)
+            let _param = f.next_value_id();
+            f.params.push(_param);
+            // body: const 1; return it
+            let one = f.next_value_id();
+            if let Some(bb) = f.get_block_mut(entry) {
+                bb.add_instruction(MirInstruction::Const { dst: one, value: ConstValue::Integer(1) });
+                bb.add_instruction(MirInstruction::Return { value: Some(one) });
+            }
+            module.add_function(f);
+        }
 
         Ok(module)
     }

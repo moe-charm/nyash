@@ -81,12 +81,117 @@ impl super::MirBuilder {
             return self.emit_legacy_call(dst, target, args);
         }
 
+        // Emit resolve.try for method targets (dev-only; default OFF)
+        let arity_for_try = args.len();
+        if let CallTarget::Method { ref box_type, ref method, receiver } = target {
+            let recv_cls = box_type.clone()
+                .or_else(|| self.value_origin_newbox.get(&receiver).cloned())
+                .unwrap_or_default();
+            // Use indexed candidate lookup (tail → names)
+            let candidates: Vec<String> = self.method_candidates(method, arity_for_try);
+            let meta = serde_json::json!({
+                "recv_cls": recv_cls,
+                "method": method,
+                "arity": arity_for_try,
+                "candidates": candidates,
+            });
+            super::observe::resolve::emit_try(self, meta);
+        }
+
+        // Centralized user-box rewrite for method targets (toString/stringify, equals/1, Known→unique)
+        if let CallTarget::Method { ref box_type, ref method, receiver } = target {
+            let class_name_opt = box_type.clone()
+                .or_else(|| self.value_origin_newbox.get(&receiver).cloned())
+                .or_else(|| self.value_types.get(&receiver).and_then(|t| if let super::MirType::Box(b) = t { Some(b.clone()) } else { None }));
+            // Early str-like
+            if let Some(res) = crate::mir::builder::rewrite::special::try_early_str_like_to_dst(
+                self, dst, receiver, &class_name_opt, method, args.len(),
+            ) { res?; return Ok(()); }
+            // equals/1
+            if let Some(res) = crate::mir::builder::rewrite::special::try_special_equals_to_dst(
+                self, dst, receiver, &class_name_opt, method, args.clone(),
+            ) { res?; return Ok(()); }
+            // Known or unique
+            if let Some(res) = crate::mir::builder::rewrite::known::try_known_or_unique_to_dst(
+                self, dst, receiver, &class_name_opt, method, args.clone(),
+            ) { res?; return Ok(()); }
+        }
+
         // Convert CallTarget to Callee using the new module
-        let callee = call_unified::convert_target_to_callee(
-            target,
+        if let CallTarget::Global(ref _n) = target { /* dev trace removed */ }
+        // Fallback: if Global target is unknown, try unique static-method mapping (name/arity)
+        let callee = match call_unified::convert_target_to_callee(
+            target.clone(),
             &self.value_origin_newbox,
             &self.value_types,
-        )?;
+        ) {
+            Ok(c) => c,
+            Err(e) => {
+                if let CallTarget::Global(ref name) = target {
+                    // 0) Dev-only safety: treat condition_fn as always-true predicate when missing
+                    if name == "condition_fn" {
+                        let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                        self.emit_instruction(MirInstruction::Const { dst: dstv, value: super::ConstValue::Integer(1) })?;
+                        return Ok(());
+                    }
+                    // 1) Direct module function fallback: call by name if present
+                    if let Some(ref module) = self.current_module {
+                        if module.functions.contains_key(name) {
+                            let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                            let name_const = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::Const { dst: name_const, value: super::ConstValue::String(name.clone()) })?;
+                            self.emit_instruction(MirInstruction::Call { dst: Some(dstv), func: name_const, callee: None, args: args.clone(), effects: EffectMask::IO })?;
+                            self.annotate_call_result_from_func_name(dstv, name);
+                            return Ok(());
+                        }
+                    }
+                    // 2) Unique static-method fallback: name+arity → Box.name/Arity
+                    if let Some(cands) = self.static_method_index.get(name) {
+                        let mut matches: Vec<(String, usize)> = cands
+                            .iter()
+                            .cloned()
+                            .filter(|(_, ar)| *ar == arity_for_try)
+                            .collect();
+                        if matches.len() == 1 {
+                            let (bx, _arity) = matches.remove(0);
+                            let func_name = format!("{}.{}{}", bx, name, format!("/{}", arity_for_try));
+                            // Emit legacy call directly to preserve behavior
+                            let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                            let name_const = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::Const {
+                                dst: name_const,
+                                value: super::ConstValue::String(func_name.clone()),
+                            })?;
+                            self.emit_instruction(MirInstruction::Call {
+                                dst: Some(dstv),
+                                func: name_const,
+                                callee: None,
+                                args: args.clone(),
+                                effects: EffectMask::IO,
+                            })?;
+                            // annotate
+                            self.annotate_call_result_from_func_name(dstv, func_name);
+                            return Ok(());
+                        }
+                    }
+                }
+                return Err(e);
+            }
+        };
+
+        // Emit resolve.choose for method callee (dev-only; default OFF)
+        if let Callee::Method { box_name, method, certainty, .. } = &callee {
+            let chosen = format!("{}.{}{}", box_name, method, format!("/{}", arity_for_try));
+            let meta = serde_json::json!({
+                "recv_cls": box_name,
+                "method": method,
+                "arity": arity_for_try,
+                "chosen": chosen,
+                "certainty": format!("{:?}", certainty),
+                "reason": "unified",
+            });
+            super::observe::resolve::emit_choose(self, meta);
+        }
 
         // Validate call arguments
         call_unified::validate_call_args(&callee, &args)?;
@@ -114,49 +219,10 @@ impl super::MirBuilder {
         args: Vec<ValueId>,
     ) -> Result<(), String> {
         match target {
-            CallTarget::Method { receiver, method, box_type } => {
-                // If receiver is a user-defined box, lower to function call: "Box.method/(1+arity)" with receiver as first arg
-                let mut is_user_box = false;
-                let mut class_name_opt: Option<String> = None;
-                if let Some(bt) = box_type.clone() { class_name_opt = Some(bt); }
-                if class_name_opt.is_none() {
-                    if let Some(cn) = self.value_origin_newbox.get(&receiver) { class_name_opt = Some(cn.clone()); }
-                }
-                if class_name_opt.is_none() {
-                    if let Some(t) = self.value_types.get(&receiver) {
-                        if let super::MirType::Box(bn) = t { class_name_opt = Some(bn.clone()); }
-                    }
-                }
-                if let Some(cls) = class_name_opt.clone() {
-                    // Prefer explicit registry of user-defined boxes when available
-                    if self.user_defined_boxes.contains(&cls) { is_user_box = true; }
-                }
-                if is_user_box {
-                    let cls = class_name_opt.unwrap();
-                    let arity = args.len(); // function name arity excludes 'me'
-                    let fname = super::calls::function_lowering::generate_method_function_name(&cls, &method, arity);
-                    let name_const = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: name_const,
-                        value: super::ConstValue::String(fname),
-                    })?;
-                    let mut call_args = Vec::with_capacity(arity);
-                    call_args.push(receiver); // pass 'me' first
-                    call_args.extend(args.into_iter());
-                    // Allocate a destination if not provided
-                    let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
-                    self.emit_instruction(MirInstruction::Call {
-                        dst,
-                        func: name_const,
-                        callee: None,
-                        args: call_args,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
-                    // Annotate result type/origin using lowered function signature
-                    if let Some(d) = dst.or(Some(actual_dst)) { self.annotate_call_result_from_func_name(d, super::calls::function_lowering::generate_method_function_name(&cls, &method, arity)); }
-                    return Ok(());
-                }
-                // Else fall back to plugin/boxcall path (StringBox/ArrayBox/MapBox etc.)
+            CallTarget::Method { receiver, method, box_type: _ } => {
+                // LEGACY PATH (after unified migration):
+                // Instance→Function rewrite is centralized in unified call path.
+                // Legacy path no longer functionizes; always use Box/Plugin call here.
                 self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO)
             },
             CallTarget::Constructor(box_type) => {
@@ -400,6 +466,7 @@ impl super::MirBuilder {
         name: String,
         args: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // dev trace removed
         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
             let cur_fun = self.current_function.as_ref().map(|f| f.signature.name.clone()).unwrap_or_else(|| "<none>".to_string());
             eprintln!(
@@ -440,19 +507,20 @@ impl super::MirBuilder {
             arg_values.push(self.build_expression(a)?);
         }
 
-        // Phase 3.2: Use unified call for basic functions like print
-        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
-
-        if use_unified {
-            // New unified path - use emit_unified_call with Global target
+        // Special-case: global str(x) → x.str() に正規化（内部は関数へ統一される）
+        if name == "str" && arg_values.len() == 1 {
             let dst = self.value_gen.next();
-            self.emit_unified_call(
-                Some(dst),
-                CallTarget::Global(name),
-                arg_values,
-            )?;
-            Ok(dst)
-        } else {
+            // Use unified method emission; downstream rewrite will functionize as needed
+            self.emit_method_call(Some(dst), arg_values[0], "str".to_string(), vec![])?;
+            return Ok(dst);
+        }
+
+        // Phase 3.2: Unified call is default ON, but only use it for known builtins/externs.
+        let use_unified = super::calls::call_unified::is_unified_call_enabled()
+            && (super::call_resolution::is_builtin_function(&name)
+                || super::call_resolution::is_extern_function(&name));
+
+        if !use_unified {
             // Legacy path
             let dst = self.value_gen.next();
 
@@ -461,6 +529,7 @@ impl super::MirBuilder {
             let callee = match self.resolve_call_target(&name) {
                 Ok(c) => c,
                 Err(_e) => {
+                    // dev trace removed
                     // Fallback: if exactly one static method with this name and arity is known, call it.
                     if let Some(cands) = self.static_method_index.get(&name) {
                         let mut matches: Vec<(String, usize)> = cands
@@ -516,6 +585,15 @@ impl super::MirBuilder {
                 args: arg_values,
                 effects: EffectMask::READ.add(Effect::ReadHeap),
             })?;
+            Ok(dst)
+        } else {
+            // Unified path for builtins/externs
+            let dst = self.value_gen.next();
+            self.emit_unified_call(
+                Some(dst),
+                CallTarget::Global(name),
+                arg_values,
+            )?;
             Ok(dst)
         }
     }

@@ -1,6 +1,9 @@
 use super::super::NyashRunner;
 use crate::runner::json_v0_bridge;
+#[cfg(feature = "interpreter-legacy")]
 use nyash_rust::{interpreter::NyashInterpreter, parser::NyashParser};
+#[cfg(not(feature = "interpreter-legacy"))]
+use nyash_rust::parser::NyashParser;
 // Use the library crate's plugin init module rather than the bin crate root
 use crate::cli_v;
 use crate::runner::pipeline::{resolve_using_target, suggest_in_base};
@@ -13,6 +16,7 @@ use std::{fs, process};
 
 // (moved) suggest_in_base is now in runner/pipeline.rs
 
+#[cfg(feature = "interpreter-legacy")]
 impl NyashRunner {
     // legacy run_file_legacy removed (was commented out)
 
@@ -287,5 +291,14 @@ impl NyashRunner {
                 process::exit(1);
             }
         }
+    }
+}
+
+#[cfg(not(feature = "interpreter-legacy"))]
+impl NyashRunner {
+    /// Interpreter backend is disabled in default builds. Use `--backend vm` or `--backend llvm`.
+    pub(crate) fn execute_nyash_file(&self, _filename: &str) {
+        eprintln!("❌ Interpreter backend (AST) is disabled. Build with --features interpreter-legacy to enable, or use --backend vm/llvm.");
+        std::process::exit(1);
     }
 }

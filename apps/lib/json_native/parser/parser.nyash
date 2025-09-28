@@ -59,9 +59,14 @@ box JsonParser {
         // Step 2: 構文解析
         local result = me.parse_value()
         
-        // Step 3: 余剰トークンチェック
+        // Step 3: 余剰トークンチェック（詳細情報付き）
         if result != null and not me.is_at_end() {
-            me.add_error("Unexpected tokens after JSON value")
+            local extra = me.current_token()
+            if extra != null {
+                me.add_error("Unexpected tokens after JSON value: " + extra.get_type() + "(" + extra.get_value() + ")")
+            } else {
+                me.add_error("Unexpected tokens after JSON value")
+            }
             return null
         }
         

@@ -19,6 +19,12 @@
 5) LLVM 統合（任意・AOT/ハーネス）
    - 実行: `tools/smokes/v2/run.sh --profile integration`
 
+最小 Ny 実行器（MirVmMin）
+- 目的: Ny だけで MIR(JSON v0) のごく最小セット（const/binop/compare/ret）を実行できることを確認。
+- 実行例（VM）:
+  - `./target/release/nyash --backend vm apps/selfhost/vm/mir_min_entry.nyash`
+  - 引数で MIR(JSON) を渡すことも可能（単一文字列）。簡単な例は `apps/selfhost/vm/mir_min_entry.nyash` のコメントを参照。
+
 検証
 - 期待出力: `Result: 0`（selfhost‑minimal）
 - スモーク：全成功（非 0 は失敗）

@@ -15,7 +15,7 @@ impl super::MirBuilder {
         }
 
         // Phase 3.1: Use unified call with CallTarget::Value for indirect calls
-        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+        let use_unified = super::calls::call_unified::is_unified_call_enabled();
 
         if use_unified {
             // New unified path - use emit_unified_call with Value target

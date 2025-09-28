@@ -37,6 +37,9 @@ mod plugin_sigs; // plugin signature loader
 mod stmts;
 mod utils;
 mod vars; // variables/scope helpers // small loop helpers (header/exit context)
+mod origin; // P0: origin inference（me/Known）と PHI 伝播（軽量）
+mod observe; // P0: dev-only observability helpers（ssa/resolve）
+mod rewrite; // P1: Known rewrite & special consolidation
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -98,6 +101,11 @@ pub struct MirBuilder {
     current_static_box: Option<String>,
     /// Index of static methods seen during lowering: name -> [(BoxName, arity)]
     pub(super) static_method_index: std::collections::HashMap<String, Vec<(String, usize)>>,
+
+    /// Fast lookup: method+arity tail → candidate function names (e.g., ".str/0" → ["JsonNode.str/0", ...])
+    pub(super) method_tail_index: std::collections::HashMap<String, Vec<String>>,
+    /// Source size snapshot to detect when to rebuild the tail index
+    pub(super) method_tail_index_source_len: usize,
 
     // include guards removed
 
@@ -169,6 +177,8 @@ impl MirBuilder {
             plugin_method_sigs,
             current_static_box: None,
             static_method_index: std::collections::HashMap::new(),
+            method_tail_index: std::collections::HashMap::new(),
+            method_tail_index_source_len: 0,
             
             loop_header_stack: Vec::new(),
             loop_exit_stack: Vec::new(),
@@ -254,6 +264,56 @@ impl MirBuilder {
     #[inline]
     pub(crate) fn debug_current_region_id(&self) -> Option<String> {
         self.debug_scope_stack.last().cloned()
+    }
+
+    // ----------------------
+    // Method tail index (performance helper)
+    // ----------------------
+    fn rebuild_method_tail_index(&mut self) {
+        self.method_tail_index.clear();
+        if let Some(ref module) = self.current_module {
+            for name in module.functions.keys() {
+                if let (Some(dot), Some(slash)) = (name.rfind('.'), name.rfind('/')) {
+                    if slash > dot {
+                        let tail = &name[dot..];
+                        self.method_tail_index
+                            .entry(tail.to_string())
+                            .or_insert_with(Vec::new)
+                            .push(name.clone());
+                    }
+                }
+            }
+            self.method_tail_index_source_len = module.functions.len();
+        } else {
+            self.method_tail_index_source_len = 0;
+        }
+    }
+
+    fn ensure_method_tail_index(&mut self) {
+        let need_rebuild = match self.current_module {
+            Some(ref refmod) => self.method_tail_index_source_len != refmod.functions.len(),
+            None => self.method_tail_index_source_len != 0,
+        };
+        if need_rebuild {
+            self.rebuild_method_tail_index();
+        }
+    }
+
+    pub(super) fn method_candidates(&mut self, method: &str, arity: usize) -> Vec<String> {
+        self.ensure_method_tail_index();
+        let tail = format!(".{}{}", method, format!("/{}", arity));
+        self.method_tail_index
+            .get(&tail)
+            .cloned()
+            .unwrap_or_default()
+    }
+
+    pub(super) fn method_candidates_tail<S: AsRef<str>>(&mut self, tail: S) -> Vec<String> {
+        self.ensure_method_tail_index();
+        self.method_tail_index
+            .get(tail.as_ref())
+            .cloned()
+            .unwrap_or_default()
     }
 
 
@@ -354,84 +414,13 @@ impl MirBuilder {
             .as_ref()
             .map(|f| f.signature.name.clone());
         let dbg_region_id = self.debug_current_region_id();
+        // P0: PHI の軽量補強と観測は、関数ブロック取得前に実施して借用競合を避ける
+        if let MirInstruction::Phi { dst, inputs } = &instruction {
+            origin::phi::propagate_phi_meta(self, *dst, inputs);
+            observe::ssa::emit_phi(self, *dst, inputs);
+        }
+
         if let Some(ref mut function) = self.current_function {
-            // Dev-safe meta propagation for PHI: if all incoming values agree on type/origin,
-            // propagate to the PHI destination. This helps downstream resolution (e.g.,
-            // instance method rewrite across branches) without changing semantics.
-            if let MirInstruction::Phi { dst, inputs } = &instruction {
-                // Propagate value_types when all inputs share the same known type
-                let mut common_ty: Option<super::MirType> = None;
-                let mut ty_agree = true;
-                for (_bb, v) in inputs.iter() {
-                    if let Some(t) = self.value_types.get(v).cloned() {
-                        match &common_ty {
-                            None => common_ty = Some(t),
-                            Some(ct) => {
-                                if ct != &t { ty_agree = false; break; }
-                            }
-                        }
-                    } else {
-                        ty_agree = false;
-                        break;
-                    }
-                }
-                if ty_agree {
-                    if let Some(ct) = common_ty.clone() {
-                        self.value_types.insert(*dst, ct);
-                    }
-                }
-                // Propagate value_origin_newbox when all inputs share same origin class
-                let mut common_cls: Option<String> = None;
-                let mut cls_agree = true;
-                for (_bb, v) in inputs.iter() {
-                    if let Some(c) = self.value_origin_newbox.get(v).cloned() {
-                        match &common_cls {
-                            None => common_cls = Some(c),
-                            Some(cc) => {
-                                if cc != &c { cls_agree = false; break; }
-                            }
-                        }
-                    } else {
-                        cls_agree = false;
-                        break;
-                    }
-                }
-                if cls_agree {
-                    if let Some(cc) = common_cls.clone() {
-                        self.value_origin_newbox.insert(*dst, cc);
-                    }
-                }
-                // Emit debug event (dev-only)
-                {
-                    let preds: Vec<serde_json::Value> = inputs.iter().map(|(bb,v)| {
-                        let t = self.value_types.get(v).cloned();
-                        let o = self.value_origin_newbox.get(v).cloned();
-                        serde_json::json!({
-                            "bb": bb.0,
-                            "v": v.0,
-                            "type": t.as_ref().map(|tt| format!("{:?}", tt)).unwrap_or_default(),
-                            "origin": o.unwrap_or_default(),
-                        })
-                    }).collect();
-                    let decided_t = self.value_types.get(dst).cloned().map(|tt| format!("{:?}", tt)).unwrap_or_default();
-                    let decided_o = self.value_origin_newbox.get(dst).cloned().unwrap_or_default();
-                    let meta = serde_json::json!({
-                        "dst": dst.0,
-                        "preds": preds,
-                        "decided_type": decided_t,
-                        "decided_origin": decided_o,
-                    });
-                    let fn_name = dbg_fn_name.as_deref();
-                    let region = dbg_region_id.as_deref();
-                    crate::debug::hub::emit(
-                        "ssa",
-                        "phi",
-                        fn_name,
-                        region,
-                        meta,
-                    );
-                }
-            }
             if let Some(block) = function.get_block_mut(block_id) {
                 if utils::builder_debug_enabled() {
                     eprintln!(
@@ -602,7 +591,10 @@ impl MirBuilder {
                 //   VM will treat plain NewBox as constructed; dev verify warns if needed.
                 // - For builtins/plugins, keep BoxCall("birth") fallback to preserve legacy init.
                 let is_user_box = self.user_defined_boxes.contains(&class);
-                if !is_user_box {
+                // Dev safety: allow disabling birth() injection for builtins to avoid
+                // unified-call method dispatch issues while migrating. Off by default unless explicitly enabled.
+                let allow_builtin_birth = std::env::var("NYASH_DEV_BIRTH_INJECT_BUILTINS").ok().as_deref() == Some("1");
+                if !is_user_box && allow_builtin_birth {
                     let birt_mid = resolve_slot_by_type_name(&class, "birth");
                     self.emit_box_or_plugin_call(
                         None,

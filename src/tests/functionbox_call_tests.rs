@@ -1,3 +1,5 @@
+#![cfg(feature = "interpreter-legacy")]
+
 use crate::interpreter::NyashInterpreter;
 use crate::ast::ASTNode;
 use crate::box_trait::{NyashBox, IntegerBox};
@@ -62,4 +64,3 @@ fn functionbox_call_via_field() {
     let ib = out.as_any().downcast_ref::<IntegerBox>().expect("integer ret");
     assert_eq!(ib.value, 7);
 }
-

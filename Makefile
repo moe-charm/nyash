@@ -1,6 +1,7 @@
 # Nyash selfhosting-dev quick targets
 
-.PHONY: build build-release run-minimal smoke-core smoke-selfhost bootstrap roundtrip clean quick fmt lint dep-tree
+.PHONY: build build-release run-minimal smoke-core smoke-selfhost bootstrap roundtrip clean quick fmt lint dep-tree \
+	smoke-quick smoke-quick-filter smoke-integration
 
 build:
 	cargo build --features cranelift-jit
@@ -27,6 +28,17 @@ clean:
 	cargo clean
 
 quick: build-release smoke-selfhost
+
+# --- v2 smokes shortcuts ---
+smoke-quick:
+	bash tools/smokes/v2/run.sh --profile quick
+
+# Usage: make smoke-quick-filter FILTER="json_*"
+smoke-quick-filter:
+	bash tools/smokes/v2/run.sh --profile quick --filter "$(FILTER)"
+
+smoke-integration:
+	bash tools/smokes/v2/run.sh --profile integration
 
 fmt:
 	cargo fmt --all

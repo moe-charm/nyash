@@ -1,3 +1,5 @@
+#![cfg(feature = "interpreter-legacy")]
+
 use crate::interpreter::NyashInterpreter;
 use crate::ast::{ASTNode, LiteralValue};
 use crate::box_trait::{NyashBox, IntegerBox};

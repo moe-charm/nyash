@@ -22,7 +22,7 @@ def lower_mir_call(owner, builder: ir.IRBuilder, mir_call: Dict[str, Any], dst_v
     """
 
     # Check if unified call is enabled
-    use_unified = os.getenv("NYASH_MIR_UNIFIED_CALL", "0") != "0"
+use_unified = os.getenv("NYASH_MIR_UNIFIED_CALL", "1").lower() not in ("0", "false", "off")
     if not use_unified:
         # Fall back to legacy dispatching
         return lower_legacy_call(owner, builder, mir_call, dst_vid, vmap, resolver)

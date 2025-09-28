@@ -343,33 +343,42 @@ impl P2PBox {
                             if let Ok(mut li) = last_intent.write() {
                                 *li = Some(env.intent.get_name().to_string_box().value);
                             }
-                            // 最小インタープリタで FunctionBox を実行
-                            let mut interp = crate::interpreter::NyashInterpreter::new();
-                            // キャプチャ注入
-                            for (k, v) in func_clone.env.captures.iter() {
-                                interp.declare_local_variable(k, v.clone_or_share());
+                            // 最小インタープリタで FunctionBox を実行（legacy, feature-gated）
+                            #[cfg(feature = "interpreter-legacy")]
+                            {
+                                let mut interp = crate::interpreter::NyashInterpreter::new();
+                                // キャプチャ注入
+                                for (k, v) in func_clone.env.captures.iter() {
+                                    interp.declare_local_variable(k, v.clone_or_share());
+                                }
+                                if let Some(me_w) = &func_clone.env.me_value {
+                                    if let Some(me_arc) = me_w.upgrade() {
+                                        interp.declare_local_variable("me", (*me_arc).clone_or_share());
+                                    }
+                                }
+                                // 引数束縛: intent, from（必要数だけ）
+                                let args: Vec<Box<dyn NyashBox>> = vec![
+                                    Box::new(env.intent.clone()),
+                                    Box::new(StringBox::new(env.from.clone())),
+                                ];
+                                for (i, p) in func_clone.params.iter().enumerate() {
+                                    if let Some(av) = args.get(i) {
+                                        interp.declare_local_variable(p, av.clone_or_share());
+                                    }
+                                }
+                                // 本体実行
+                                crate::runtime::global_hooks::push_task_scope();
+                                for st in &func_clone.body {
+                                    let _ = interp.execute_statement(st);
+                                }
+                                crate::runtime::global_hooks::pop_task_scope();
                             }
-                            if let Some(me_w) = &func_clone.env.me_value {
-                                if let Some(me_arc) = me_w.upgrade() {
-                                    interp.declare_local_variable("me", (*me_arc).clone_or_share());
+                            #[cfg(not(feature = "interpreter-legacy"))]
+                            {
+                                if crate::config::env::cli_verbose() {
+                                    eprintln!("[warn] FunctionBox handler requires interpreter-legacy; skipped execution");
                                 }
                             }
-                            // 引数束縛: intent, from（必要数だけ）
-                            let args: Vec<Box<dyn NyashBox>> = vec![
-                                Box::new(env.intent.clone()),
-                                Box::new(StringBox::new(env.from.clone())),
-                            ];
-                            for (i, p) in func_clone.params.iter().enumerate() {
-                                if let Some(av) = args.get(i) {
-                                    interp.declare_local_variable(p, av.clone_or_share());
-                                }
-                            }
-                            // 本体実行
-                            crate::runtime::global_hooks::push_task_scope();
-                            for st in &func_clone.body {
-                                let _ = interp.execute_statement(st);
-                            }
-                            crate::runtime::global_hooks::pop_task_scope();
                             if once {
                                 flag.store(false, Ordering::SeqCst);
                                 if let Ok(mut flags) = flags_arc.write() {

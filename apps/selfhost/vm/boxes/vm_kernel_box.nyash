@@ -1,0 +1,32 @@
+// vm_kernel_box.nyash — NYABI Kernel (skeleton, dev-only; not wired)
+// Scope: Provide policy/decision helpers behind an explicit OFF toggle.
+// Notes: This box is not referenced by the VM by default.
+
+static box VmKernelBox {
+  // Report version and supported features.
+  caps() {
+    // v0 draft: features are informative only.
+    return "{\"version\":0,\"features\":[\"policy\"]}"
+  }
+
+  // Decide stringify strategy for a given type.
+  // Returns: "direct" | "rewrite_stringify" | "fallback"
+  stringify_policy(typeName) {
+    if typeName == "VoidBox" { return "rewrite_stringify" }
+    return "fallback"
+  }
+
+  // Decide equals strategy for two types.
+  // Returns: "object" | "value" | "fallback"
+  equals_policy(lhsType, rhsType) {
+    if lhsType == rhsType { return "value" }
+    return "fallback"
+  }
+
+  // Batch resolve method dispatch plans.
+  // Input/Output via tiny JSON strings (draft). Returns "{\"plans\":[]}" for now.
+  resolve_method_batch(reqs_json) {
+    return "{\"plans\":[]}"
+  }
+}
+

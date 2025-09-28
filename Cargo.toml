@@ -40,6 +40,8 @@ mir_refbarrier_unify_poc = []
 llvm-harness = []
 llvm-inkwell-legacy = ["dep:inkwell"]
 llvm = ["llvm-harness"]
+# Legacy AST interpreter (off by default). Gates NyashInterpreter usage in runner/tests.
+interpreter-legacy = []
 # (removed) Optional modular MIR builder feature
 # cranelift-jit = [    # ARCHIVED: Moved to archive/jit-cranelift/ during Phase 15
 #   "dep:cranelift-codegen",

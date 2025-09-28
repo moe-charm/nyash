@@ -2,6 +2,33 @@
 
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
+---
+
+## 🔄 **現在の開発状況** (2025-09-28)
+
+### 🎯 **Phase 15: セルフホスティング実行器統一化**
+- **Rust VM + LLVM 2本柱体制**で開発中
+- **Core Box統一化**: 3-tier → 2-tier 統一完了
+- **MIR Callee型革新**: 型安全な関数解決システム実装済み
+
+### 🤝 **AI協働開発体制**
+```
+Claude（私）: 戦略・分析・レビュー
+ChatGPT: 実装・検証
+
+現在の合意:
+✅ Phase 15集中（セルフホスト優先）
+✅ Builder根治は段階的（3 Phase戦略）
+✅ 息が合っている状態: 良好
+```
+
+### 📚 **重要リソース**
+- **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
+- **現在のタスク**: [CURRENT_TASK.md](CURRENT_TASK.md)
+- **Phase 15詳細**: [docs/development/roadmap/phases/phase-15/](docs/development/roadmap/phases/phase-15/)
+
+---
+
 ## 🚨 重要：スモークテストはv2構造を使う！
 - 📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
 - 📁 **v2詳細ドキュメント**: [tools/smokes/v2/README.md](tools/smokes/v2/README.md)
@@ -16,9 +43,13 @@ cargo build --release
 # 一括スモークテスト
 tools/smokes/v2/run.sh --profile quick
 
-# 個別スモークテスト
+# 個別スモークテスト（フィルタ指定）
 tools/smokes/v2/run.sh --profile quick --filter "<glob>"
-# 例: --filter "core/json_query_min_vm.sh"
+# 例: --filter "userbox_*"  # User Box関連のみ
+# 例: --filter "json_*"     # JSON関連のみ
+
+# 単発スクリプト実行
+bash tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_vm.sh
 
 # 単発実行（参考）
 ./target/release/nyash --backend vm apps/APP/main.nyash
@@ -29,14 +60,17 @@ tools/smokes/v2/run.sh --profile quick --filter "<glob>"
 # 前提: Python3 + llvmlite
 # 未導入なら: pip install llvmlite
 
-# ビルド（LLVM_SYS_180_PREFIX不要！）
-cargo build --release --features llvm
-
-# 一括スモークテスト
+# 一括スモークテスト（そのまま実行）
 tools/smokes/v2/run.sh --profile integration
 
-# 個別スモークテスト
+# 警告低減版（ビルド後に実行・推奨）
+cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm
+tools/smokes/v2/run.sh --profile integration
+
+# 個別スモークテスト（フィルタ指定）
 tools/smokes/v2/run.sh --profile integration --filter "<glob>"
+# 例: --filter "json_*"     # JSON関連のみ
+# 例: --filter "vm_llvm_*"  # VM/LLVM比較系のみ
 
 # 単発実行
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash
@@ -179,15 +213,15 @@ target/x86_64-pc-windows-msvc/release/nyash.exe
 ./target/release/nyash --backend llvm program.nyash  # 実行時最適化
 ```
 
-### 🎯 **2本柱ビルド方法** (2025-09-24更新)
+### 🎯 **2本柱ビルド方法** (2025-09-28更新)
 
 #### 🔨 **標準ビルド**（推奨）
 ```bash
 # 標準ビルド（2本柱対応）
 cargo build --release
 
-# LLVM機能付きビルド（本番用）
-env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm
+# LLVM（llvmliteハーネス）付きビルド（本番用）
+cargo build --release --features llvm
 ```
 
 #### 📝 **2本柱テスト実行**
@@ -196,9 +230,9 @@ env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm
 cargo build --release
 ./target/release/nyash program.nyash
 
-# 2. LLVM実行 ✅（本番・最適化用）
-env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm
-./target/release/nyash --backend llvm program.nyash
+# 2. LLVM実行 ✅（本番・最適化用, llvmliteハーネス）
+cargo build --release --features llvm
+NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm program.nyash
 
 # 3. プラグインテスト実証済み ✅
 # CounterBox
@@ -829,7 +863,9 @@ box MyBox {
   - Reference: [docs/reference/](docs/reference/)
 
 ### 🎯 リファレンス
-- **言語**: [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md)
+- **言語**:
+  - [Quick Reference](docs/reference/language/quick-reference.md) ⭐最優先 - 1ページ実用ガイド
+  - [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md) - 完全仕様
 - **MIR**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
 - **API**: [boxes-system/](docs/reference/boxes-system/)
 - **プラグイン**: [plugin-system/](docs/reference/plugin-system/)
@@ -847,6 +883,7 @@ box MyBox {
 ### 🎯 最重要ドキュメント（2つの核心）
 
 #### 🔤 言語仕様
+- **[クイックリファレンス](docs/reference/language/quick-reference.md)** ⭐最優先 - 1ページ実用ガイド（ASI・Truthiness・演算子・型ルール）
 - **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
 - **[完全リファレンス](docs/reference/language/LANGUAGE_REFERENCE_2025.md)** - 言語仕様詳細
 

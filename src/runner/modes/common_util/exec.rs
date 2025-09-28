@@ -103,7 +103,8 @@ pub fn ny_llvmc_emit_exe_lib(
         .arg("exe")
         .arg("--out")
         .arg(exe_out);
-    if let Some(dir) = nyrt_dir { cmd.arg("--nyrt").arg(dir); } else { cmd.arg("--nyrt").arg("target/release"); }
+    let default_nyrt = std::env::var("NYASH_EMIT_EXE_NYRT")        .ok()        .or_else(|| std::env::var("NYASH_ROOT").ok().map(|r| format!("{}/target/release", r)))        .unwrap_or_else(|| "target/release".to_string());
+    if let Some(dir) = nyrt_dir { cmd.arg("--nyrt").arg(dir); } else { cmd.arg("--nyrt").arg(default_nyrt); }
     if let Some(flags) = extra_libs { if !flags.trim().is_empty() { cmd.arg("--libs").arg(flags); } }
     let status = cmd.status().map_err(|e| {
         let prog_path = std::path::Path::new(cmd.get_program());
@@ -146,7 +147,8 @@ pub fn ny_llvmc_emit_exe_bin(
         .arg("exe")
         .arg("--out")
         .arg(exe_out);
-    if let Some(dir) = nyrt_dir { cmd.arg("--nyrt").arg(dir); } else { cmd.arg("--nyrt").arg("target/release"); }
+    let default_nyrt = std::env::var("NYASH_EMIT_EXE_NYRT")        .ok()        .or_else(|| std::env::var("NYASH_ROOT").ok().map(|r| format!("{}/target/release", r)))        .unwrap_or_else(|| "target/release".to_string());
+    if let Some(dir) = nyrt_dir { cmd.arg("--nyrt").arg(dir); } else { cmd.arg("--nyrt").arg(default_nyrt); }
     if let Some(flags) = extra_libs { if !flags.trim().is_empty() { cmd.arg("--libs").arg(flags); } }
     let status = cmd.status().map_err(|e| {
         let prog_path = std::path::Path::new(cmd.get_program());

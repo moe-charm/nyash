@@ -124,7 +124,7 @@ impl super::MirBuilder {
         super::utils::builder_debug_log(&format!("fallback print value={}", value));
 
         // Phase 3.2: Use unified call for print statements
-        let use_unified = std::env::var("NYASH_MIR_UNIFIED_CALL").unwrap_or_default() == "1";
+        let use_unified = super::calls::call_unified::is_unified_call_enabled();
 
         if use_unified {
             // New unified path - treat print as global function
@@ -185,14 +185,19 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         let mut last_value = None;
         for (i, var_name) in variables.iter().enumerate() {
-            let value_id = if i < initial_values.len() && initial_values[i].is_some() {
+            let var_id = if i < initial_values.len() && initial_values[i].is_some() {
+                // Use initializer's ValueId directly to avoid SSA aliasing/undefined use
                 let init_expr = initial_values[i].as_ref().unwrap();
-                self.build_expression(*init_expr.clone())?
+                let init_val = self.build_expression(*init_expr.clone())?;
+                init_val
             } else {
-                self.value_gen.next()
+                // Create a concrete register for uninitialized locals (Void)
+                let vid = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Const { dst: vid, value: ConstValue::Void })?;
+                vid
             };
-            self.variable_map.insert(var_name.clone(), value_id);
-            last_value = Some(value_id);
+            self.variable_map.insert(var_name.clone(), var_id);
+            last_value = Some(var_id);
         }
         Ok(last_value.unwrap_or_else(|| self.value_gen.next()))
     }
@@ -314,6 +319,8 @@ impl super::MirBuilder {
             value: ConstValue::String(me_tag),
         })?;
         self.variable_map.insert("me".to_string(), me_value);
+        // P0: Known 化 — 分かる範囲で me の起源クラスを付与（挙動不変）。
+        super::origin::infer::annotate_me_origin(self, me_value);
         Ok(me_value)
     }
 }

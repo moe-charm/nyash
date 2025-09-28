@@ -1,3 +1,5 @@
+#![cfg(feature = "interpreter-legacy")]
+
 use crate::parser::NyashParser;
 use crate::interpreter::NyashInterpreter;
 

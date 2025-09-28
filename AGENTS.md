@@ -305,8 +305,9 @@ Notes
 - VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。
 - 当面の実行・配布は LLVM ラインを最優先・全力で整備する方針だよ。開発・確認は `--features llvm` を有効にして進めてね。
 - 推奨チェック:
-  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo build --release --features llvm -j 24`
-  - `env LLVM_SYS_180_PREFIX=/usr/lib/llvm-18 cargo check --features llvm`
+  - LLVM は llvmlite ハーネス（Python）経由だよ。Rust inkwell は既定で不使用（legacy のみ）。
+  - ビルド（ハーネス）: `cargo build --release --features llvm -j 24`
+  - チェック: `cargo check --features llvm`
 
 ## Docs links（開発方針/スタイル）
 - Language statements (ASI): `docs/reference/language/statements.md`
@@ -337,7 +338,7 @@ Notes
 - Build (JIT/VM): `cargo build --release --features cranelift-jit`
 - Build (LLVM AOT / harness-first):
   - `cargo build --release -p nyash-llvm-compiler` (ny-llvmc builder)
-  - `LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm`
+  - `cargo build --release --features llvm`
   - Run via harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
 - Quick VM run: `./target/release/nyash --backend vm apps/APP/main.nyash`
 - Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
@@ -475,7 +476,8 @@ Flags
 - Rust tests: `cargo test` (add targeted unit tests near code).
 - Smoke scripts validate end‑to‑end AOT/JIT (`tools/llvm_smoke.sh`).
 - Test naming: prefer `*_test.rs` for Rust and descriptive `.nyash` files under `apps/` or `tests/`.
-- For LLVM tests, ensure LLVM 18 is installed and set `LLVM_SYS_180_PREFIX`.
+- For LLVM tests, ensure Python llvmlite is available and `ny-llvmc` is built.
+- Build (harness): `cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm`
 
 ## Commit & Pull Request Guidelines
 - Commits: concise imperative subject; scope the change (e.g., "llvm: fix argc handling in nyrt").

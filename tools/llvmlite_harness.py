@@ -17,7 +17,18 @@ import os
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+_default_root = Path(__file__).resolve().parents[1]
+_env_root = None
+try:
+    env_root_str = os.environ.get('NYASH_ROOT')
+    if env_root_str:
+        cand = Path(env_root_str).resolve()
+        if (cand / "src" / "llvm_py" / "llvm_builder.py").exists():
+            _env_root = cand
+except Exception:
+    _env_root = None
+
+ROOT = _env_root or _default_root
 PY_BUILDER = ROOT / "src" / "llvm_py" / "llvm_builder.py"
 
 def run_dummy(out_path: str) -> None:

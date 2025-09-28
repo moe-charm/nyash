@@ -62,18 +62,20 @@ fn reroute_to_correct_method(
 }
 
 /// Try mapping special methods to canonical targets (table-driven).
-/// Example: toString/0 → stringify/0 (prefer instance class, then base class without "Instance" suffix).
+/// Example: toString/0 → str/0（互換: stringify/0）(prefer instance class, then base class without "Instance" suffix).
 fn try_special_reroute(
     interp: &mut MirInterpreter,
     recv_cls: &str,
     parsed: &ParsedSig<'_>,
     arg_vals: Option<&[VMValue]>,
 ) -> Option<Result<VMValue, VMError>> {
-    // toString → stringify
+    // toString → str（互換: stringify）
     if parsed.method == "toString" && parsed.arity_str == "0" {
-        // Prefer instance class stringify first, then base (strip trailing "Instance")
+        // Prefer instance class 'str' first, then base（strip trailing "Instance"）。なければ 'stringify' を互換で探す
         let base = recv_cls.strip_suffix("Instance").unwrap_or(recv_cls);
         let candidates = [
+            format!("{}.str/0", recv_cls),
+            format!("{}.str/0", base),
             format!("{}.stringify/0", recv_cls),
             format!("{}.stringify/0", base),
         ];
@@ -91,7 +93,7 @@ fn try_special_reroute(
                         "method": parsed.method,
                         "arity": parsed.arity_str,
                         "target": name,
-                        "reason": "toString->stringify",
+                        "reason": if name.ends_with(".str/0") { "toString->str" } else { "toString->stringify" },
                     }),
                 );
                 return Some(interp.exec_function_inner(&f, arg_vals));

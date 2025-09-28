@@ -1,7 +1,7 @@
+#![cfg(feature = "interpreter-legacy")]
+
 use super::super::NyashRunner;
-use nyash_rust::{
-    backend::VM, interpreter::NyashInterpreter, mir::MirCompiler, parser::NyashParser,
-};
+use nyash_rust::{backend::VM, interpreter::NyashInterpreter, mir::MirCompiler, parser::NyashParser};
 
 impl NyashRunner {
     /// Execute benchmark mode (split)
@@ -241,4 +241,3 @@ impl NyashRunner {
         Ok(())
     }
 }
-#![cfg(feature = "vm-legacy")]

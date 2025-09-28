@@ -11,18 +11,23 @@
 set -euo pipefail
 
 activate_pyvm() {
-  export NYASH_DISABLE_PLUGINS=1
+  unset NYASH_DISABLE_PLUGINS || true
   export NYASH_VM_USE_PY=1
   export NYASH_PIPE_USE_PYVM=1
   export NYASH_NY_COMPILER_TIMEOUT_MS=${NYASH_NY_COMPILER_TIMEOUT_MS:-2000}
-  echo "[dev-env] PyVM profile activated" >&2
+  # Unified Call: default ON (explicit), and suppress legacy rewrite to avoid duplication
+  export NYASH_MIR_UNIFIED_CALL=${NYASH_MIR_UNIFIED_CALL:-1}
+  export NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1
+  echo "[dev-env] PyVM profile activated (plugins ON)" >&2
 }
 
 activate_bridge() {
-  export NYASH_DISABLE_PLUGINS=1
+  unset NYASH_DISABLE_PLUGINS || true
   unset NYASH_VM_USE_PY || true
   export NYASH_NY_COMPILER_TIMEOUT_MS=${NYASH_NY_COMPILER_TIMEOUT_MS:-2000}
-  echo "[dev-env] Bridge profile activated (interpreter for pipe)" >&2
+  export NYASH_MIR_UNIFIED_CALL=${NYASH_MIR_UNIFIED_CALL:-1}
+  export NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1
+  echo "[dev-env] Bridge profile activated (interpreter for pipe; plugins ON)" >&2
 }
 
 reset_env() {
@@ -30,6 +35,8 @@ reset_env() {
   unset NYASH_PIPE_USE_PYVM || true
   unset NYASH_DISABLE_PLUGINS || true
   unset NYASH_NY_COMPILER_TIMEOUT_MS || true
+  unset NYASH_MIR_UNIFIED_CALL || true
+  unset NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE || true
   unset NYASH_MIR_NO_PHI || true
   unset NYASH_VERIFY_ALLOW_NO_PHI || true
   unset NYASH_LLVM_USE_HARNESS || true
@@ -56,6 +63,9 @@ activate_opbox() {
   export NYASH_BUILDER_OPERATOR_BOX_COMPARE_CALL=1
   export NYASH_BUILDER_OPERATOR_BOX_ADD_CALL=1
   export NYASH_BUILDER_OPERATOR_BOX_ALL_CALL=1
+  # Unified call and legacy suppression
+  export NYASH_MIR_UNIFIED_CALL=${NYASH_MIR_UNIFIED_CALL:-1}
+  export NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1
   echo "[dev-env] Operator Boxes (stringify/compare/add) enabled (adopt+builder-call)" >&2
 }
 

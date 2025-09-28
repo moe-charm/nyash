@@ -10,6 +10,10 @@ TEST_DIR="/tmp/json_nested_ast_$$"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
+# Ensure LLVM harness script is discoverable from CWD
+mkdir -p tools
+cp -f "$NYASH_ROOT/tools/llvmlite_harness.py" tools/ 2>/dev/null || true
+
 cat > nyash.toml << EOF
 [using.json_native]
 path = "$NYASH_ROOT/apps/lib/json_native/"

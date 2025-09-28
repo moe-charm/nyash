@@ -19,6 +19,23 @@ AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
 
+### MIR 統一Call（既定ON）
+- 呼び出しは中央（`emit_unified_call`）で集約。開発段階では既定ON（`0|false|off` で明示OFF）。
+  - 早期正規化: `toString/stringify → str`
+  - `equals/1`: Known 優先 → 一意候補（ユーザーBoxのみ）
+  - Known→関数化: `obj.m(a) → Class.m(me,obj,a)` に統一
+- レガシー関数化の重複を避ける開発ガード:
+  - `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1`
+- JSON出力は unified ON で v1、OFF で v0（従来）
+
+開発計測（任意）
+- `resolve.choose` の Known 率をKPIとして出力
+  - `NYASH_DEBUG_KPI_KNOWN=1`（有効化）
+  - `NYASH_DEBUG_SAMPLE_EVERY=<N>`（N件ごとに出力）
+
+レイヤー・ガード（origin→observe→rewrite の一方向）
+- スクリプト: `tools/dev/check_builder_layers.sh`
+
 開発ショートカット（Operator Boxes + JSON）
 - JSON最小（Roundtrip/Nested を一発）: `./tools/opbox-json.sh`
 - quick 全体（軽量プリフライト＋timeout 180s）: `./tools/opbox-quick.sh`
@@ -59,7 +76,7 @@ Phase‑15（2025‑09）アップデート
 <a id="self-hosting"></a>
 ## 🧪 Self-Hosting（自己ホスト開発）
 - ガイド: `docs/how-to/self-hosting.md`
-- 最小E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- 最小E2E: `./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - スモーク: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
 
@@ -135,15 +152,14 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 
 ## 🏗️ **複数の実行モード**
 
-重要: 現在、JIT ランタイム実行は封印中です。実行は「PyVM（既定）／VM（任意でレガシー有効）」、配布は「Cranelift AOT(EXE)／LLVM AOT(EXE)」の4体制です。
+重要: 現在、JIT ランタイム実行は封印中です。実行は「Rust VM（MIR）/ PyVM（開発補助）」、配布は「LLVM AOT（ハーネス）」が主軸です。ASTインタープリタはレガシー扱いでデフォルト無効（`interpreter-legacy` feature）。
 
-Phase‑15（自己ホスト期）: VM/インタープリタはフィーチャーで切替
-- 既定ビルド: `--backend vm` は PyVM 実行（python3 + `tools/pyvm_runner.py` が必要）
-- レガシー Rust VM/インタープリターを有効化するには:
+Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで明示ON
+- 既定ビルド: `--backend vm` は PyVM 経路（python3 + `tools/pyvm_runner.py` が必要）／Rust VM（MIR）
+- レガシー AST インタープリタを有効化するには（通常は不要）:
   ```bash
-  cargo build --release --features vm-legacy,interpreter-legacy
+  cargo build --release --features interpreter-legacy
   ```
-  以降、`--backend vm`/`--backend interpreter` が従来経路で動作します。
 
 ### 1. **インタープリターモード** （開発用）
 ```bash
@@ -178,13 +194,23 @@ cargo build --release --features cranelift-jit
 - 最高性能
 - 簡単配布
 
-### 4. **ネイティブバイナリ（LLVM AOT）**
+### 4. **ネイティブバイナリ（LLVM AOT, llvmliteハーネス）**
 ```bash
-LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) \
-  cargo build --release --features llvm
-NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o \
-  ./target/release/nyash --backend llvm program.nyash
-# リンクして実行
+# ハーネス＋CLI をビルド（LLVM_SYS_180_PREFIX不要）
+cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm
+
+# ハーネス経由で EXE を生成して実行
+NYASH_LLVM_USE_HARNESS=1 \
+NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
+NYASH_EMIT_EXE_NYRT=target/release \
+  ./target/release/nyash --backend llvm --emit-exe myapp program.nyash
+./myapp
+
+# あるいは .o を出力して手動リンク
+NYASH_LLVM_USE_HARNESS=1 \
+NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
+  ./target/release/nyash --backend llvm program.nyash \
+  -D NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o
 cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
 ./myapp
 ```
@@ -195,6 +221,7 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
 ```
 
 ### LLVM バックエンドの補足
+- Python llvmlite を使用します。Python3 + llvmlite の用意と `ny-llvmc` のビルド（`cargo build -p nyash-llvm-compiler`）が必要です。`LLVM_SYS_180_PREFIX` は不要です。
 - `NYASH_LLVM_OBJ_OUT`: `--backend llvm` 実行時に `.o` を出力するパス。
   - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
 - 削除された `NYASH_LLVM_ALLOW_BY_NAME=1`: すべてのプラグイン呼び出しがmethod_idベースに統一。
@@ -238,6 +265,26 @@ smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/
 - `[env]` の値は実行前に環境へ適用されます。
 - `{root}` は現在のプロジェクトルートに展開されます。
 - 現状は最小機能（OS別/依存/並列は未対応）。
+
+### ちいさなENVまとめ（VM vs LLVM ハーネス）
+- VM 実行: 追加ENVなしでOK。
+  - 例: `./target/release/nyash --backend vm apps/tests/ternary_basic.nyash`
+- LLVM ハーネス実行: 下記3つだけ設定してね。
+  - `NYASH_LLVM_USE_HARNESS=1`
+  - `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc`
+  - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
+  - 例: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+
+### DebugHub かんたんガイド
+- 有効化: `NYASH_DEBUG_ENABLE=1`
+- 種別指定: `NYASH_DEBUG_KINDS=resolve,ssa`
+- 出力先: `NYASH_DEBUG_SINK=/tmp/nyash_debug.jsonl`
+- 例: `NYASH_DEBUG_ENABLE=1 NYASH_DEBUG_KINDS=resolve,ssa NYASH_DEBUG_SINK=/tmp/nyash.jsonl tools/smokes/v2/run.sh --profile quick --filter "userbox_*"`
+
+### 開発用セーフティ（VM）
+- stringify(Void) は "null" を返す（JSONフレンドリ／開発セーフティ。既定挙動は不変）。
+- JsonScanner のデフォルト値（`NYASH_VM_SCANNER_DEFAULTS=1` 時のみ）: `is_eof/current/advance` 内に限定し、数値/テキストの不足を安全に埋める。
+- VoidBox に対する length/size/get/push 等は、ガード下で中立なノーオペとして扱い、開発中のハードストップを回避。
 
 ---
 

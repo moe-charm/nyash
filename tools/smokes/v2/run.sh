@@ -220,8 +220,18 @@ find_test_files() {
     local profile_dir="$SCRIPT_DIR/profiles/$PROFILE"
     local test_files=()
     local have_llvm=0
-    if [ -x "./target/release/nyash" ] && ./target/release/nyash --version 2>/dev/null | grep -q "features.*llvm"; then
+    if [ "${SMOKES_FORCE_LLVM:-0}" = "1" ]; then
         have_llvm=1
+    fi
+    if [ -x "./target/release/nyash" ]; then
+        if ./target/release/nyash --version 2>/dev/null | grep -q "features.*llvm"; then
+            have_llvm=1
+        else
+            # Fallback detection: check for LLVM harness symbols in the binary
+            if strings ./target/release/nyash 2>/dev/null | grep -E -q 'ny-llvmc|NYASH_LLVM_USE_HARNESS'; then
+                have_llvm=1
+            fi
+        fi
     fi
 
     if [ ! -d "$profile_dir" ]; then

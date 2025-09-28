@@ -139,13 +139,13 @@ check_parity() {
 
     # LLVM（Pythonハーネス）実行
     if [ "$program" = "-c" ]; then
-        if llvm_output=$(timeout "$timeout" bash -c "NYASH_LLVM_USE_HARNESS=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm -c \"$code\" 2>&1"); then
+        if llvm_output=$(timeout "$timeout" bash -c "PYTHONPATH=\"${PYTHONPATH:-$NYASH_ROOT}\" NYASH_NY_LLVM_COMPILER=\"${NYASH_NY_LLVM_COMPILER:-$NYASH_ROOT/target/release/ny-llvmc}\" NYASH_EMIT_EXE_NYRT=\"${NYASH_EMIT_EXE_NYRT:-$NYASH_ROOT/target/release}\" NYASH_LLVM_USE_HARNESS=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm -c \"$code\" 2>&1"); then
             llvm_exit=0
         else
             llvm_exit=$?
         fi
     else
-        if llvm_output=$(timeout "$timeout" bash -c "NYASH_LLVM_USE_HARNESS=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm \"$program\" 2>&1"); then
+        if llvm_output=$(timeout "$timeout" bash -c "PYTHONPATH=\"${PYTHONPATH:-$NYASH_ROOT}\" NYASH_NY_LLVM_COMPILER=\"${NYASH_NY_LLVM_COMPILER:-$NYASH_ROOT/target/release/ny-llvmc}\" NYASH_EMIT_EXE_NYRT=\"${NYASH_EMIT_EXE_NYRT:-$NYASH_ROOT/target/release}\" NYASH_LLVM_USE_HARNESS=1 NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend llvm \"$program\" 2>&1"); then
             llvm_exit=0
         else
             llvm_exit=$?

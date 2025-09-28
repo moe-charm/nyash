@@ -19,7 +19,7 @@ Execution Status (Feature Additions Pause)
   - `--backend vm` (PyVM harness)
 - Inactive/Sealed
   - `--backend cranelift`, `--jit-direct` (sealed; use LLVM harness)
-  - Rust VM (legacy opt‑in via features)
+  - AST interpreter (legacy) is gated by feature `interpreter-legacy` and excluded from default builds (Rust VM + LLVM are the two main lines)
 
 Quick pointers
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
@@ -55,6 +55,46 @@ MIR mode note: Default PHI behavior
 Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
 ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
 
+### Minimal ENV (VM vs LLVM harness)
+- VM: no extra environment needed for typical runs.
+  - Example: `./target/release/nyash --backend vm apps/tests/ternary_basic.nyash`
+- LLVM harness: set three variables so the runner finds the harness and runtime.
+  - `NYASH_LLVM_USE_HARNESS=1`
+  - `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc`
+  - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
+  - Example: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+
+### DebugHub Quick Guide
+- Enable: `NYASH_DEBUG_ENABLE=1`
+- Select kinds: `NYASH_DEBUG_KINDS=resolve,ssa`
+- Output file: `NYASH_DEBUG_SINK=/tmp/nyash_debug.jsonl`
+- Use with smokes: `NYASH_DEBUG_ENABLE=1 NYASH_DEBUG_KINDS=resolve,ssa NYASH_DEBUG_SINK=/tmp/nyash.jsonl tools/smokes/v2/run.sh --profile quick --filter "userbox_*"`
+
+### MIR Unified Call（default ON）
+- Centralized call emission is enabled by default in development builds.
+  - Env toggle: `NYASH_MIR_UNIFIED_CALL` — default ON unless set to `0|false|off`.
+  - Instance method calls are normalized in one place (`emit_unified_call`):
+    - Early mapping: `toString/stringify → str`
+    - `equals/1`: Known first → unique-suffix fallback (user boxes only)
+    - Known→function rewrite: `obj.m(a) → Class.m(me,obj,a)`
+- Disable legacy rewrite path (dev-only) to avoid duplicate behavior during migration:
+  - `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1`
+- JSON emit follows unified format (v1) when unified is ON; legacy v0 otherwise.
+
+Dev metrics (opt-in)
+- Known-rate KPI for `resolve.choose`:
+  - `NYASH_DEBUG_KPI_KNOWN=1` (enable)
+  - `NYASH_DEBUG_SAMPLE_EVERY=<N>` (print every N events)
+
+Layer guard (one-way deps: origin→observe→rewrite)
+- Check script: `tools/dev/check_builder_layers.sh`
+- Ensures builder layering hygiene during refactors.
+
+### Dev Safety Guards (VM)
+- stringify(Void) → "null" for JSON-friendly printing (dev safety; prod behavior unchanged).
+- JsonScanner defaults (guarded by `NYASH_VM_SCANNER_DEFAULTS=1`) for missing numeric/text fields inside `is_eof/current/advance` contexts only.
+- VoidBox common methods (length/size/get/push) are neutral no-ops in guarded paths to avoid dev-time hard stops.
+
 Profiles (quick)
 - `--profile dev` → Macros ON (strict), PyVM dev向け設定を適用（必要に応じて環境で上書き可）
 - `--profile lite` → Macros OFF の軽量実行
@@ -76,7 +116,7 @@ Specs & Constraints
 <a id="self-hosting"></a>
 ## 🧪 Self‑Hosting (Dev Focus)
 - Guide: `docs/how-to/self-hosting.md`
-- Minimal E2E: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- Minimal E2E: `./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - JSON (Operator Boxes, dev): `./tools/opbox-json.sh` / `./tools/opbox-quick.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
@@ -200,13 +240,23 @@ cargo build --release --features cranelift-jit
 - Maximum performance
 - Easy distribution
 
-### 4. **Native Binary (LLVM AOT)**
+### 4. **Native Binary (LLVM AOT, llvmlite harness)**
 ```bash
-LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) \
-  cargo build --release --features llvm
-NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o \
-  ./target/release/nyash --backend llvm program.nyash
-# Link and run
+# Build harness + CLI (no LLVM_SYS_180_PREFIX needed)
+cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm
+
+# Emit and run native executable via harness
+NYASH_LLVM_USE_HARNESS=1 \
+NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
+NYASH_EMIT_EXE_NYRT=target/release \
+  ./target/release/nyash --backend llvm --emit-exe myapp program.nyash
+./myapp
+
+# Alternatively, emit an object file then link manually
+NYASH_LLVM_USE_HARNESS=1 \
+NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
+  ./target/release/nyash --backend llvm program.nyash \
+  -D NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o
 cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
 ./myapp
 ```
@@ -254,7 +304,7 @@ Key options (minimal)
 - `--target <triple>` (only when needed)
 
 Notes
-- LLVM AOT requires LLVM 18 (`LLVM_SYS_180_PREFIX`).
+- LLVM AOT uses Python llvmlite harness. Ensure Python3 + llvmlite and `ny-llvmc` are available (built via `cargo build -p nyash-llvm-compiler`). No `LLVM_SYS_180_PREFIX` required.
 - Apps that open a GUI may show a window during AOT emission; close it to continue.
 - On WSL if the window doesn’t show, see `docs/guides/cranelift_aot_egui_hello.md` (Wayland→X11).
 
