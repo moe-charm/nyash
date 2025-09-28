@@ -850,7 +850,7 @@ box MyBox {
 ## 📚 ドキュメント構造
 
 ### 🎯 最重要ドキュメント（開発者向け）
-- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - 80k→20k行革命
+- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - Nyashセルフホスティング実現
 - **[Phase 15 ROADMAP](docs/development/roadmap/phases/phase-15/ROADMAP.md)** - 現在の進捗チェックリスト
 - **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)** - 入口の統合
 - **[CURRENT_TASK.md](CURRENT_TASK.md)** - 現在進行状況詳細

@@ -25,6 +25,15 @@
   - 仕様は不変のまま、観測（resolve.try/choose / ssa.phi）と関数化の一貫性を高める。
 - P4: NYABI Kernel 下地の維持（未配線・既定OFF）
 
+Compiler Track（大規模変更の部分解禁 — apps/selfhost-compiler/ 限定）
+- 目的: Selfhost Compiler を段階的に実用化。Core（src/）は引き続き安定運用。
+- ガード:
+  - 既定OFFのフラグ/引数（例: `NYASH_COMPILER_TRACK=1`, `--min-json`, `--emit-mir`）。
+  - quick/integration 常緑を維持。影響は Selfhost 実行時に限定。
+- 受け入れ（dev）:
+  - `NYASH_JSON_ONLY=1 ... --min-json` で JSON ヘッダ非空。
+  - `--emit-mir` で最小 MIR(JSON v0)（const→ret）を生成可能。
+
 Unified Call（開発既定ON）
 - 呼び出しの統一判定は、環境変数 `NYASH_MIR_UNIFIED_CALL` が `0|false|off` でない限り有効（既定ON）。
 - メソッド解決/関数化を `emit_unified_call` に集約し、以下の順序で決定:

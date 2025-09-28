@@ -72,6 +72,17 @@ Rebalance — 2025-09-29（順序の明確化: Rust VM → Mini‑VM → Compile
   - 受け入れ（dev限定）: `NYASH_JSON_ONLY=1` による JSON ヘッダ（version/kind）非空
   - スモーク（任意ゲート）: `tools/selfhost_stage3_accept_smoke.sh` を最小で有効化（必要時に quick へ昇格）
 
+Policy — Compiler Track Unfreeze（apps/selfhost-compiler 限定）
+- 大規模変更は Compiler Track に限定して解禁。Core（src/）は引き続き安定運用（小粒のバグ修正/堅牢化のみ）。
+- ガード: 既定OFFのフラグ/引数（例: `NYASH_COMPILER_TRACK=1`, `--min-json`, `--emit-mir`）。
+- 受け入れ（dev）: JSON ヘッダ非空（min-json）、最小 MIR 生成（emit-mir）。quick/integration は常緑維持。
+
+Next — Compiler Track 小粒タスク
+1) dev 受け入れスモーク（min-json ヘッダ）を quick/core に追加（任意ゲート）— 完了
+2) MIR 最小生成（const→ret）を安定化（emit-mir）— 継続
+3) mir_emitter_box に binop/compare/branch/jump を段階追加（Mini‑VM と同形）— 次
+4) builder/ssa/rewrite スケルトンを追加（既定OFF/Compiler Trackフラグで有効）— 次
+
 Update — 2025-09-28 (P4 default‑on + P5 docs/annotations 完了)
 - Known 正規化（userbox限定・関数存在・一意・arity一致）を既定ON。
   - フラグ: `NYASH_REWRITE_KNOWN_DEFAULT`（0/false/off で無効化）。

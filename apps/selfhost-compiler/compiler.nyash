@@ -70,10 +70,14 @@ static box Main {
           if a == "--min-json" {
             /* handled later */
           } else {
-            if a == "--stage3" {
-              stage3_mode = 1
+            if a == "--emit-mir" {
+              /* handled later */
             } else {
-              if input_path == null { input_path = a }
+              if a == "--stage3" {
+                stage3_mode = 1
+              } else {
+                if input_path == null { input_path = a }
+              }
             }
           }
         }
@@ -113,12 +117,18 @@ static box Main {
       ast_json = me.parse_program(src, stage3_mode)
     }
 
-    if emit_mir == 1 {
-      // Lower minimal AST to MIR JSON (Return(Int) only for MVP)
-      json = MirEmitterBox.emit_mir_min(ast_json)
+    if min_mode == 1 && emit_mir == 0 {
+      // Safety: when --min-json is requested without --emit-mir,
+      // return the minimal AST JSON as-is to avoid heavier emitter paths.
+      json = ast_json
     } else {
-      // Emit Stage‑1 JSON with metadata
-      json = EmitterBox.emit_program(ast_json, me._usings)
+      if emit_mir == 1 {
+        // Lower minimal AST to MIR JSON (Return(Int) only for MVP)
+        json = MirEmitterBox.emit_mir_min(ast_json)
+      } else {
+        // Emit Stage‑1 JSON with metadata (requires parser-produced AST)
+        json = EmitterBox.emit_program(ast_json, me._usings)
+      }
     }
 
     // Output JSON (avoid ConsoleBox to prevent undefined/birth warnings)

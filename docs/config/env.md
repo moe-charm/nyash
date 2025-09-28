@@ -19,3 +19,7 @@ Tracing (dev only; default OFF)
 
 Timeout (dev scripts)
 - DEV_TIMEOUT_SEC: default 60; set 0 for no timeout.
+
+Compiler Track (dev only; default OFF)
+- NYASH_COMPILER_TRACK: 1 to enable new Selfhost Compiler pipeline pieces under apps/selfhost-compiler/.
+- NYASH_JSON_ONLY: 1 to print only JSON payloads (quiet mode) for acceptance checks.

@@ -1,19 +1,25 @@
-# Nyash Selfhost Compiler (MVP scaffold)
+Selfhost Compiler (Compiler Track)
 
-This is the Phase 15.3 work-in-progress Nyash compiler implemented in Ny.
+Scope
+- Nyash-written compiler MVP that emits Stage‑1 JSON and a minimal MIR(JSON v0).
+- Lives entirely under `apps/selfhost-compiler/` to keep Core stable.
 
-Layout
-- `compiler.nyash`: entry (CompilerBox). Reads `tmp/ny_parser_input.ny`, prints JSON v0.
-- `parser/`: lexer/parser/ast (scaffolds; to be filled as we extend Stage‑2)
-- `mir/`: builder/optimizer stubs (future; current target is JSON v0 emit)
-- `tests/`: Stage‑1/2 samples (TBD)
+Run (dev)
+- Minimal AST JSON (safe path):
+  - `NYASH_DISABLE_PLUGINS=1 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_ALLOW_USING_FILE=1 NYASH_ENABLE_USING=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.nyash -- --min-json`
+- Minimal MIR(JSON v0) (const→ret):
+  - `... -- --min-json --emit-mir`
 
-Run (behind flag)
-- `NYASH_USE_NY_COMPILER=1 target/release/nyash --backend vm <program.nyash>`
-  - The runner writes the input to `tmp/ny_parser_input.ny` and invokes this program.
-  - It captures a JSON v0 line from stdout and executes it via the JSON bridge.
-  - Stage‑3 syntax gate: set `NYASH_NY_COMPILER_STAGE3=1` to pass `--stage3` to the parser (accepts Break/Continue/Throw/Try in JSON v0).
+Flags
+- `NYASH_COMPILER_TRACK=1` — enable new builder/ssa/rewrite steps as they land (default OFF).
+- `NYASH_JSON_ONLY=1` — print only JSON bodies (quiet acceptance runs).
+- `DEV_TIMEOUT_SEC=60` — dev wrappers use timeout to avoid hangs.
+
+Acceptance (dev)
+- AST JSON: header must contain `{"version":..., "kind":...}` (non-empty).
+- MIR JSON v0: must contain a single main function with a block of `const` then `ret`.
 
 Notes
-- Early MVP emits a minimal JSON v0 (currently a placeholder: return 0). We will gradually wire lexer/parser/emitter.
-- Keep JSON v0 spec in `docs/reference/ir/json_v0.md`.
+- Core (`src/`) remains stable; compiler changes are scoped here and guarded by flags.
+- Quick/integration profiles must remain green; compiler acceptance is dev-gated initially.
+

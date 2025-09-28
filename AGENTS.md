@@ -148,7 +148,7 @@ fn check_layer_boundary() {
 
 **Fail-Fast原則**: フォールバック処理は原則禁止。過去に分岐ミスでエラー発見が遅れた経験から、エラーは早期に明示的に失敗させること。特にChatGPTが入れがちなフォールバック処理には要注意だよ！
 
-**Feature Additions Pause — until Nyash VM bootstrap (2025‑09‑19 改訂 / 2025‑09‑28 追記)**
+**Feature Additions Policy — Compiler Track Unfreeze (2025‑09‑29 追記)**
 - 状態: マクロ基盤は安定。ここからは「凍結（全面停止）」ではなく「大きな機能追加のみ一時停止」。Nyash VM の立ち上げ（bootstrap）完了まで、安定化と自己ホスト/実アプリ開発を優先するよ。
 - 原則（大規模機能追加の一時停止中）:
   - 大きな機能追加・仕様拡張は一時停止（Nyash VM 立ち上げまで保留）。
@@ -166,6 +166,17 @@ fn check_layer_boundary() {
 - 受け入れチェック（ポーズ中のガード）:
   - cargo check（全体）/ 代表スモーク（PyVM/LLVM）/ マクロ・ゴールデンが緑であること。
   - 変更は最小・局所・仕様不変。既定挙動は変えない。
+
+Compiler Track 部分解禁（Selfhost Compiler 開発向け）
+- 範囲限定のアンフリーズ:
+  - 許可（大きめ変更OK）: `apps/selfhost-compiler/` 配下（builder/ssa/rewrite/emitter 等を含む）。
+  - 維持（凍結/小粒修正のみ）: `src/`（VM/LLVM/Runner/Core）への広域リファクタや仕様変更は引き続き禁止。
+- 既定挙動は不変:
+  - Selfhost Compiler の新経路は既定OFFのフラグ/引数でガード（例: `NYASH_COMPILER_TRACK=1`, `--min-json`, `--emit-mir`）。
+  - 既存の quick/integration は緑を維持。影響は Selfhost 実行時に限定。
+- 受け入れゲート（dev）:
+  - `NYASH_JSON_ONLY=1 ... --min-json` で JSON ヘッダ（`{"version":…, "kind":…}`）が非空。
+  - （任意）`--emit-mir` で最小 MIR(JSON v0) を生成（const→ret）し、Mini‑VM/LLVM で sanity を取る。
 
 **機能追加ポリシー — 要旨**
 - ねらい: 「誤解されやすい"凍結"」ではなく、「Nyash VM 立ち上げまで大きな機能追加は一時停止」。安定化・自己ホストの進行を最優先にするよ。
