@@ -7,23 +7,38 @@ This note shows how to run the Nyash self‑host compiler MVP to emit MIR(JSON v
 - Runtime helpers (dev): `apps/selfhost-runtime/`
 - Mini‑VM samples (dev): `apps/selfhost/vm/`
 
-## Run the self‑host compiler
-Compile a minimal program (string embedded in the compiler) and print JSON:
+## Run the self‑host compiler（Official runner path）
+Use the runner’s selfhost pipeline with parent→child ENV forwarding. Defaults stay unchanged; all flags are opt‑in.
 
+Examples (safe, short, quiet):
 ```
-./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --stage3
+# Emit minimal AST JSON (header must contain {"version", "kind"})
+NYASH_USE_NY_COMPILER=1 \
+NYASH_NY_COMPILER_MIN_JSON=1 \
+NYASH_JSON_ONLY=1 \
+timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash
+
+# Emit minimal MIR(JSON v0) (const→ret)
+NYASH_USE_NY_COMPILER=1 \
+NYASH_NY_COMPILER_MIN_JSON=1 \
+NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" \
+NYASH_JSON_ONLY=1 \
+timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash
 ```
 
-ENV → child args (透過):
-- `NYASH_NY_COMPILER_MIN_JSON=1` → `-- --min-json`
-- `NYASH_SELFHOST_READ_TMP=1`    → `-- --read-tmp` (reads `tmp/ny_parser_input.ny`)
-- `NYASH_NY_COMPILER_STAGE3=1`   → `-- --stage3` (Stage‑3 surface enable)
-- `NYASH_NY_COMPILER_CHILD_ARGS="..."` → passes extra args verbatim
+Parent→child ENV mapping（official）
+- `NYASH_NY_COMPILER_MIN_JSON=1` → child gets `-- --min-json`
+- `NYASH_SELFHOST_READ_TMP=1`    → child gets `-- --read-tmp` (reads `tmp/ny_parser_input.ny`)
+- `NYASH_NY_COMPILER_STAGE3=1`   → child gets `-- --stage3`
+- `NYASH_NY_COMPILER_CHILD_ARGS="..."` → child gets extra args verbatim
+- Timeouts / quiet pipe:
+  - `NYASH_NY_COMPILER_TIMEOUT_MS=2000`（default）
+  - `NYASH_JSON_ONLY=1`（suppress logs, print JSON only）
 
-Examples:
+Direct run (dev only; requires allowing file using):
 ```
-NYASH_NY_COMPILER_MIN_JSON=1 ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --stage3 > /tmp/out.json
-NYASH_SELFHOST_READ_TMP=1 ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --min-json --stage3
+NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+  ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --min-json
 ```
 
 ## Execute MIR(JSON v0)

@@ -1,9 +1,16 @@
-include "apps/selfhost-compiler/boxes/parser_box.nyash"
-include "apps/selfhost-compiler/boxes/emitter_box.nyash"
+include "apps/selfhost/compiler/boxes/parser_box.nyash"
+include "apps/selfhost/compiler/boxes/emitter_box.nyash"
 static box Main {
   main(args) {
-    local s = "// M2 minimal: Return(Int)
-return 42
+    local s = "// string_p0 – minimal example for JIT smoke
+static box Main {
+  init { }
+  main(args) {
+    // Placeholder: do nothing, return 0
+    return 0
+  }
+}
+
 "
     local p = new ParserBox()
     p.stage3_enable(1)

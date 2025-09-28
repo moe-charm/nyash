@@ -23,3 +23,14 @@ Timeout (dev scripts)
 Compiler Track (dev only; default OFF)
 - NYASH_COMPILER_TRACK: 1 to enable new Selfhost Compiler pipeline pieces under apps/selfhost-compiler/.
 - NYASH_JSON_ONLY: 1 to print only JSON payloads (quiet mode) for acceptance checks.
+
+Selfhost Compiler (parent→child; official, default OFF)
+- NYASH_USE_NY_COMPILER=1: enable selfhost pipeline in runner (parent executes child Ny compiler program).
+- NYASH_NY_COMPILER_MIN_JSON=1: child receives `-- --min-json` (emit minimal AST JSON).
+- NYASH_SELFHOST_READ_TMP=1: child receives `-- --read-tmp` (read `tmp/ny_parser_input.ny`).
+- NYASH_NY_COMPILER_STAGE3=1: child receives `-- --stage3` (enable Stage‑3 surface).
+- NYASH_NY_COMPILER_CHILD_ARGS="...": extra args passed verbatim to child after `--` (e.g., `--emit-mir --compiler-track`).
+- NYASH_NY_COMPILER_TIMEOUT_MS: child timeout in milliseconds (default 2000).
+- NYASH_NY_COMPILER_EMIT_ONLY: default 1 (emit‑only); when 1, runner prints child JSON and returns handled.
+- NYASH_USE_NY_COMPILER_EXE=1: prefer external compiler EXE (optional; respects `NYASH_NY_COMPILER_EXE_PATH`).
+- NYASH_NY_COMPILER_SKIP_PY=1: skip Python MVP harness fallback.

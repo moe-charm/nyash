@@ -19,6 +19,20 @@
 5) LLVM 統合（任意・AOT/ハーネス）
    - 実行: `tools/smokes/v2/run.sh --profile integration`
 
+Selfhost（公式ランナー経由）
+- 親→子の ENV 透過で Ny コンパイラを起動し、最小 JSON を取得します。
+- 例（AST ヘッダ非空）:
+```
+NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_JSON_ONLY=1 \
+  timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash
+```
+- 例（最小 MIR: const→ret）:
+```
+NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 \
+  NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 \
+  timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash
+```
+
 最小 Ny 実行器（MirVmMin）
 - 目的: Ny だけで MIR(JSON v0) のごく最小セット（const/binop/compare/ret）を実行できることを確認。
 - 実行例（VM）:
