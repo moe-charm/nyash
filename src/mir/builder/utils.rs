@@ -76,6 +76,10 @@ impl super::MirBuilder {
         args: Vec<super::ValueId>,
         effects: super::EffectMask,
     ) -> Result<(), String> {
+        // Ensure receiver has a definition in the current block to avoid undefined use across
+        // block boundaries (LoopForm/header, if-joins, etc.).
+        // Pinning creates a local Copy that participates in PHI when needed.
+        let box_val = self.pin_to_slot(box_val, "@recv").unwrap_or(box_val);
         // Check environment variable for unified call usage, with safe overrides for core/user boxes
         let use_unified_env = super::calls::call_unified::is_unified_call_enabled();
         // First, try to determine the box type
