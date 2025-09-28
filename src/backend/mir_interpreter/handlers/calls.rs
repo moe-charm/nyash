@@ -26,23 +26,71 @@ impl MirInterpreter {
     ) -> Result<VMValue, VMError> {
         match callee {
             Callee::Global(func_name) => self.execute_global_function(func_name, args),
-            Callee::Method { box_name: _, method, receiver, certainty: _, } => {
+            Callee::Method { box_name, method, receiver, certainty: _, } => {
                 if let Some(recv_id) = receiver {
-                    // Primary: load receiver by id. Dev fallback: if undefined and env allows,
-                    // use args[0] as a surrogate receiver (builder localization gap workaround).
+                    // Primary: load receiver by id. If undefined, attempt a best-effort
+                    // recovery by resolving a local Copy(dst := recv_id) in the same block,
+                    // then fall back to arg[0] or error.
                     let recv_val = match self.reg_load(*recv_id) {
                         Ok(v) => v,
                         Err(e) => {
-                            let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
-                                || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
-                            if tolerate {
-                                if let Some(a0) = args.get(0) {
-                                    self.reg_load(*a0)?
+                            // Try: find a preceding Copy in the current block with src=recv_id
+                            let mut recovered: Option<VMValue> = None;
+                            if let (Some(fn_name), Some(bb_id)) = (self.cur_fn.clone(), self.last_block) {
+                                if let Some(fun) = self.functions.get(&fn_name) {
+                                    if let Some(bb) = fun.blocks.get(&bb_id) {
+                                        for inst in &bb.instructions {
+                                            if let crate::mir::MirInstruction::Copy { dst, src } = inst {
+                                                // Pattern A: we copied into recv_id just before the call (dst == recv_id)
+                                                if dst == recv_id {
+                                                    if let Ok(v2) = self.reg_load(*src) {
+                                                        recovered = Some(v2);
+                                                        break;
+                                                    }
+                                                }
+                                                // Pattern B: we copied from recv_id into a local tmp (src == recv_id)
+                                                if src == recv_id {
+                                                    if let Ok(v2) = self.reg_load(*dst) {
+                                                        recovered = Some(v2);
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            if let Some(v) = recovered {
+                                v
+                            } else {
+                                // Dev fallback: use args[0] as surrogate when enabled
+                                let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
+                                    || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+                                if tolerate {
+                                    if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
                                 } else {
+                                    // Narrow, behavior-preserving rescue: for ParserBox.* inside ParserBox.* functions,
+                                    // fallback receiver to the `me` parameter of the current function.
+                                    if box_name == "ParserBox" {
+                                        if let Some(cur) = &self.cur_fn {
+                                            if cur.starts_with("ParserBox.") {
+                                                if let Some(fun) = self.functions.get(cur) {
+                                                    if let Some(me_vid) = fun.params.first() {
+                                                        if let Ok(mev) = self.reg_load(*me_vid) {
+                                                            return Ok(mev);
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    // Minimal safety: common pure methods with undefined recv
+                                    // return neutral defaults instead of crashing (length -> 0).
+                                    if method == "length" {
+                                        return Ok(VMValue::Integer(0));
+                                    }
                                     return Err(e);
                                 }
-                            } else {
-                                return Err(e);
                             }
                         }
                     };

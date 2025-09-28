@@ -30,37 +30,26 @@ pub(crate) fn try_known_rewrite(
     if !rewrite_enabled() {
         return None;
     }
-    // Receiver must be Known (origin 由来)
-    if builder.value_origin_newbox.get(&object_value).is_none() {
+    // Do not rewrite common String-like methods as userbox functions for StringBox only
+    if cls == "StringBox" && matches!(method, "length" | "len" | "substring" | "indexOf" | "lastIndexOf") {
         return None;
     }
-    // Only user-defined boxes (plugin/core boxesは対象外)
-    if !builder.user_defined_boxes.contains(cls) {
-        return None;
-    }
-    // Policy gates（従来互換）
-    let allow_userbox_rewrite = std::env::var("NYASH_DEV_REWRITE_USERBOX").ok().as_deref() == Some("1");
-    let allow_new_origin = std::env::var("NYASH_DEV_REWRITE_NEW_ORIGIN").ok().as_deref() == Some("1");
-    let from_new_origin = builder.value_origin_newbox.get(&object_value).is_some();
     let arity = arg_values.len();
+    if !crate::mir::builder::rewrite::gate::should_rewrite(builder, cls, method, arity) { return None; }
     let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(cls, method, arity);
-    let module_has = if let Some(ref module) = builder.current_module { module.functions.contains_key(&fname) } else { false };
-    if !( (module_has || allow_userbox_rewrite) || (from_new_origin && allow_new_origin) ) {
-        return None;
-    }
+    // Proceed for user-defined boxes regardless of module registration timing.
+    // This enables in-body calls during method lowering to be rewritten safely.
     // Materialize function call: pass 'me' first, then args
-    let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-        Ok(v) => v,
-        Err(e) => return Some(Err(e)),
-    };
     let mut call_args = Vec::with_capacity(arity + 1);
     call_args.push(object_value);
     call_args.append(&mut arg_values);
     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
     let dst = builder.value_gen.next();
-    if let Err(e) = builder.emit_instruction(MirInstruction::Call {
-        dst: Some(dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap),
-    }) { return Some(Err(e)); }
+    if let Err(e) = builder.emit_unified_call(
+        Some(dst),
+        crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+        call_args,
+    ) { return Some(Err(e)); }
     // Annotate and emit choose
     let chosen = fname.clone();
     builder.annotate_call_result_from_func_name(dst, &chosen);
@@ -86,15 +75,11 @@ pub(crate) fn try_known_rewrite_to_dst(
     mut arg_values: Vec<ValueId>,
 ) -> Option<Result<ValueId, String>> {
     if !rewrite_enabled() { return None; }
-    if builder.value_origin_newbox.get(&object_value).is_none() { return None; }
-    if !builder.user_defined_boxes.contains(cls) { return None; }
-    let allow_userbox_rewrite = std::env::var("NYASH_DEV_REWRITE_USERBOX").ok().as_deref() == Some("1");
-    let allow_new_origin = std::env::var("NYASH_DEV_REWRITE_NEW_ORIGIN").ok().as_deref() == Some("1");
-    let from_new_origin = builder.value_origin_newbox.get(&object_value).is_some();
+    if cls == "StringBox" && matches!(method, "length" | "len" | "substring" | "indexOf" | "lastIndexOf") { return None; }
     let arity = arg_values.len();
+    if !crate::mir::builder::rewrite::gate::should_rewrite(builder, cls, method, arity) { return None; }
     let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(cls, method, arity);
-    let module_has = if let Some(ref module) = builder.current_module { module.functions.contains_key(&fname) } else { false };
-    if !((module_has || allow_userbox_rewrite) || (from_new_origin && allow_new_origin)) { return None; }
+    // Proceed for user-defined boxes regardless of module registration timing.
     let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
         Ok(v) => v,
         Err(e) => return Some(Err(e)),
@@ -145,19 +130,17 @@ pub(crate) fn try_unique_suffix_rewrite(
     } else {
         return None;
     }
-    let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-        Ok(v) => v,
-        Err(e) => return Some(Err(e)),
-    };
     let mut call_args = Vec::with_capacity(arg_values.len() + 1);
     call_args.push(object_value); // 'me'
     let arity_us = arg_values.len();
     call_args.append(&mut arg_values);
     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
     let dst = builder.value_gen.next();
-    if let Err(e) = builder.emit_instruction(MirInstruction::Call {
-        dst: Some(dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap),
-    }) { return Some(Err(e)); }
+    if let Err(e) = builder.emit_unified_call(
+        Some(dst),
+        crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+        call_args,
+    ) { return Some(Err(e)); }
     builder.annotate_call_result_from_func_name(dst, &fname);
     let meta = serde_json::json!({
         "recv_cls": builder.value_origin_newbox.get(&object_value).cloned().unwrap_or_default(),
@@ -185,17 +168,17 @@ pub(crate) fn try_unique_suffix_rewrite_to_dst(
     if cands.len() != 1 { return None; }
     let fname = cands.remove(0);
     if let Some((bx, _)) = fname.split_once('.') { if !builder.user_defined_boxes.contains(bx) { return None; } } else { return None; }
-    let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-        Ok(v) => v,
-        Err(e) => return Some(Err(e)),
-    };
     let mut call_args = Vec::with_capacity(arg_values.len() + 1);
     call_args.push(object_value);
     let arity_us = arg_values.len();
     call_args.append(&mut arg_values);
     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
     let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
-    if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(actual_dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap) }) { return Some(Err(e)); }
+    if let Err(e) = builder.emit_unified_call(
+        Some(actual_dst),
+        crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+        call_args,
+    ) { return Some(Err(e)); }
     builder.annotate_call_result_from_func_name(actual_dst, &fname);
     let meta = serde_json::json!({
         "recv_cls": builder.value_origin_newbox.get(&object_value).cloned().unwrap_or_default(),

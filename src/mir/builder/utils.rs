@@ -25,6 +25,50 @@ pub(super) fn builder_debug_log(msg: &str) {
 }
 
 impl super::MirBuilder {
+    #[inline]
+    fn coerce_string_like_receiver_if_ambiguous(
+        &mut self,
+        recv: super::ValueId,
+        method: &str,
+        inferred_cls: &str,
+    ) -> (super::ValueId, String) {
+        let is_string_like = matches!(
+            method,
+            "length" | "len" | "substring" | "indexOf" | "lastIndexOf"
+        );
+        if !is_string_like {
+            return (recv, inferred_cls.to_string());
+        }
+        let is_string_ty = self
+            .value_types
+            .get(&recv)
+            .map(|t| matches!(t, super::MirType::String))
+            .unwrap_or(false);
+        let is_string_origin = self
+            .value_origin_newbox
+            .get(&recv)
+            .map(|s| s == "StringBox")
+            .unwrap_or(false);
+        // Only coerce for ambiguous/non-string non-core receivers (Instance/Parser/Debug/File/Unknown)
+        let is_ambiguous = matches!(
+            inferred_cls,
+            "UnknownBox" | "InstanceBox" | "ParserBox" | "DebugBox" | "FileBox"
+        );
+        if is_ambiguous && !(is_string_ty || is_string_origin) {
+            // Emit: tmp = "" + recv  (stringify via concat; VM fast-path guarantees string result)
+            let empty = crate::mir::builder::emission::constant::emit_string(self, "");
+            let tmp = self.value_gen.next();
+            let _ = self.emit_instruction(super::MirInstruction::BinOp {
+                dst: tmp,
+                op: crate::mir::BinaryOp::Add,
+                lhs: empty,
+                rhs: recv,
+            });
+            self.value_types.insert(tmp, super::MirType::String);
+            return (tmp, "StringBox".to_string());
+        }
+        (recv, inferred_cls.to_string())
+    }
     // ---- LocalSSA convenience (readability helpers) ----
     #[allow(dead_code)]
     #[inline]
@@ -68,7 +112,6 @@ impl super::MirBuilder {
             if !self.suppress_pin_entry_copy_next {
                 // First pass: copy all pin slots and remember old->new mapping
                 let names: Vec<String> = self.variable_map.keys().cloned().collect();
-                let mut pin_renames: Vec<(super::ValueId, super::ValueId)> = Vec::new();
                 for name in names.iter() {
                     if !name.starts_with("__pin$") { continue; }
                     if let Some(&src) = self.variable_map.get(name) {
@@ -76,21 +119,6 @@ impl super::MirBuilder {
                         self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
                         crate::mir::builder::metadata::propagate::propagate(self, src, dst);
                         self.variable_map.insert(name.clone(), dst);
-                        pin_renames.push((src, dst));
-                    }
-                }
-                // Second pass: update any user variables that pointed to old pin ids to the new ones
-                if !pin_renames.is_empty() {
-                    let snapshot: Vec<(String, super::ValueId)> = self
-                        .variable_map
-                        .iter()
-                        .filter(|(k, _)| !k.starts_with("__pin$"))
-                        .map(|(k, &v)| (k.clone(), v))
-                        .collect();
-                    for (k, v) in snapshot.into_iter() {
-                        if let Some((_, newv)) = pin_renames.iter().find(|(oldv, _)| *oldv == v) {
-                            self.variable_map.insert(k, *newv);
-                        }
                     }
                 }
             }
@@ -113,6 +141,10 @@ impl super::MirBuilder {
         method_id: Option<u16>,
         args: Vec<super::ValueId>,
         effects: super::EffectMask,
+        // When true, do not bounce back into unified-call route from here.
+        // This is used by unified-call's router-guard fallback to avoid infinite recursion
+        // (unified -> boxcall -> unified -> ...).
+        force_legacy: bool,
     ) -> Result<(), String> {
         // Ensure receiver has a definition in the current block to avoid undefined use across
         // block boundaries (LoopForm/header, if-joins, etc.).
@@ -122,17 +154,16 @@ impl super::MirBuilder {
         let args: Vec<super::ValueId> = args.into_iter().map(|a| self.local_arg(a)).collect();
         // Check environment variable for unified call usage, with safe overrides for core/user boxes
         let use_unified_env = super::calls::call_unified::is_unified_call_enabled();
-        // First, try to determine the box type
-        let mut box_type: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
-        if box_type.is_none() {
-            if let Some(t) = self.value_types.get(&box_val) {
-                match t {
-                    super::MirType::String => box_type = Some("StringBox".to_string()),
-                    super::MirType::Box(name) => box_type = Some(name.clone()),
-                    _ => {}
-                }
-            }
-        }
+        // First, infer the receiver class consistently with unified path
+        let (mut inferred_cls, _certainty) = crate::mir::builder::infer::receiver::infer_receiver(
+            None, &method, box_val, &self.value_origin_newbox, &self.value_types,
+        );
+        let mut box_val = box_val;
+        // Coerce ambiguous receiver for string-like APIs (Instance/Parser/Debug/File/Unknown)
+        let (coerced, coerced_cls) = self.coerce_string_like_receiver_if_ambiguous(box_val, &method, &inferred_cls);
+        box_val = coerced;
+        inferred_cls = coerced_cls;
+        let box_type: Option<String> = Some(inferred_cls.clone());
         // Route decision is centralized in RouterPolicyBox（仕様不変）。
         let bx_name = box_type.clone().unwrap_or_else(|| "UnknownBox".to_string());
         let route = crate::mir::builder::router::policy::choose_route(
@@ -153,7 +184,7 @@ impl super::MirBuilder {
                 );
             }
         }
-        if use_unified_env && matches!(route, crate::mir::builder::router::policy::Route::Unified) {
+        if !force_legacy && use_unified_env && matches!(route, crate::mir::builder::router::policy::Route::Unified) {
             let target = super::builder_calls::CallTarget::Method {
                 box_type,
                 method: method.clone(),

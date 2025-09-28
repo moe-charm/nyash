@@ -1,0 +1,19 @@
+// program2_str_edges.nyash — String API boundary checks (dev-only)
+
+static box Main {
+  main(){
+    local s = "hello"
+    // substring bounds
+    print(s.substring(0, 0))          // ""
+    print(s.substring(-5, 2))         // "he" (neg start treated as 0 by builder/vm policy)
+    print(s.substring(0, 99))         // "hello" (end clamped to len)
+    // indexOf / lastIndexOf boundaries
+    print(str(indexOf(s, "")))       // 0
+    print(str(indexOf(s, "x")))      // -1
+    print(str(lastIndexOf(s, "l")))  // 3
+    print(str(lastIndexOf(s, "l", -5))) // 3 (from<0 clamped)
+    print(str(lastIndexOf(s, "l", 99))) // 3 (from>len clamped)
+    return 0
+  }
+}
+

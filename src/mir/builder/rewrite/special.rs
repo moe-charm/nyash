@@ -31,17 +31,15 @@ pub(crate) fn try_early_str_like(
                 "certainty": "Known",
             });
             super::super::observe::resolve::emit_choose(builder, meta);
-        let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &chosen) {
-            Ok(v) => v,
-            Err(e) => return Some(Err(e)),
-        };
             let mut call_args = Vec::with_capacity(1);
             call_args.push(object_value);
             crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
             let dst = builder.value_gen.next();
-            if let Err(e) = builder.emit_instruction(MirInstruction::Call {
-                dst: Some(dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap),
-            }) { return Some(Err(e)); }
+            if let Err(e) = builder.emit_unified_call(
+                Some(dst),
+                crate::mir::builder::builder_calls::CallTarget::Global(chosen.clone()),
+                call_args,
+            ) { return Some(Err(e)); }
             builder.annotate_call_result_from_func_name(dst, &chosen);
             return Some(Ok(dst));
         }
@@ -62,15 +60,15 @@ pub(crate) fn try_early_str_like(
             "certainty": "Heuristic",
         });
         super::super::observe::resolve::emit_choose(builder, meta);
-        let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-            Ok(v) => v,
-            Err(e) => return Some(Err(e)),
-        };
         let mut call_args = Vec::with_capacity(1);
         call_args.push(object_value);
         crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
         let dst = builder.value_gen.next();
-        if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap), }) { return Some(Err(e)); }
+        if let Err(e) = builder.emit_unified_call(
+            Some(dst),
+            crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+            call_args,
+        ) { return Some(Err(e)); }
         builder.annotate_call_result_from_func_name(dst, &fname);
         return Some(Ok(dst));
     } else if cands.len() > 1 {
@@ -85,15 +83,15 @@ pub(crate) fn try_early_str_like(
                 "certainty": "Heuristic",
             });
             super::super::observe::resolve::emit_choose(builder, meta);
-            let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-                Ok(v) => v,
-                Err(e) => return Some(Err(e)),
-            };
             let mut call_args = Vec::with_capacity(1);
             call_args.push(object_value);
             crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
             let dst = builder.value_gen.next();
-            if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap), }) { return Some(Err(e)); }
+            if let Err(e) = builder.emit_unified_call(
+                Some(dst),
+                crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+                call_args,
+            ) { return Some(Err(e)); }
             builder.annotate_call_result_from_func_name(dst, &fname);
             return Some(Ok(dst));
         }
@@ -150,15 +148,15 @@ pub(crate) fn try_early_str_like_to_dst(
                 "certainty": "Known",
             });
             super::super::observe::resolve::emit_choose(builder, meta);
-            let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &chosen) {
-                Ok(v) => v,
-                Err(e) => return Some(Err(e)),
-            };
             let mut call_args = Vec::with_capacity(1);
             call_args.push(object_value);
             crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
             let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
-            if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(actual_dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap), }) { return Some(Err(e)); }
+            if let Err(e) = builder.emit_unified_call(
+                Some(actual_dst),
+                crate::mir::builder::builder_calls::CallTarget::Global(chosen.clone()),
+                call_args,
+            ) { return Some(Err(e)); }
             builder.annotate_call_result_from_func_name(actual_dst, &chosen);
             return Some(Ok(actual_dst));
         }
@@ -177,15 +175,15 @@ pub(crate) fn try_early_str_like_to_dst(
             "certainty": "Heuristic",
         });
         super::super::observe::resolve::emit_choose(builder, meta);
-        let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-            Ok(v) => v,
-            Err(e) => return Some(Err(e)),
-        };
         let mut call_args = Vec::with_capacity(1);
         call_args.push(object_value);
         crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
         let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
-        if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(actual_dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap), }) { return Some(Err(e)); }
+        if let Err(e) = builder.emit_unified_call(
+            Some(actual_dst),
+            crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+            call_args,
+        ) { return Some(Err(e)); }
         builder.annotate_call_result_from_func_name(actual_dst, &fname);
         return Some(Ok(actual_dst));
     } else if cands.len() > 1 {
@@ -200,15 +198,15 @@ pub(crate) fn try_early_str_like_to_dst(
                 "certainty": "Heuristic",
             });
             super::super::observe::resolve::emit_choose(builder, meta);
-            let name_const = match crate::mir::builder::name_const::make_name_const_result(builder, &fname) {
-                Ok(v) => v,
-                Err(e) => return Some(Err(e)),
-            };
         let mut call_args = Vec::with_capacity(1);
         call_args.push(object_value);
         crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
             let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
-            if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(actual_dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap), }) { return Some(Err(e)); }
+            if let Err(e) = builder.emit_unified_call(
+                Some(actual_dst),
+                crate::mir::builder::builder_calls::CallTarget::Global(fname.clone()),
+                call_args,
+            ) { return Some(Err(e)); }
             builder.annotate_call_result_from_func_name(actual_dst, &fname);
             return Some(Ok(actual_dst));
         }

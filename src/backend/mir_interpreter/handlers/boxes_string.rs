@@ -24,12 +24,26 @@ pub(super) fn try_handle_string_box(
                     return Ok(true);
                 }
                 "indexOf" => {
-                    // indexOf(substr) -> first index or -1
-                    if args.len() != 1 {
-                        return Err(VMError::InvalidInstruction("indexOf expects 1 arg".into()));
+                    // indexOf(substr[, from]) -> first index or -1 (byte index basis)
+                    if args.is_empty() {
+                        return Err(VMError::InvalidInstruction("indexOf expects at least 1 arg".into()));
                     }
                     let needle = this.reg_load(args[0])?.to_string();
+                    let hay = if args.len() >= 2 {
+                        let from = this.reg_load(args[1])?.as_integer().unwrap_or(0).max(0) as usize;
+                        if from >= sb.value.len() { "" } else { &sb.value[from..] }
+                    } else { &sb.value[..] };
                     let idx = sb.value.find(&needle).map(|i| i as i64).unwrap_or(-1);
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Integer(idx)); }
+                    return Ok(true);
+                }
+                "lastIndexOf" => {
+                    // lastIndexOf(substr) -> last index or -1 (byte index basis)
+                    if args.is_empty() {
+                        return Err(VMError::InvalidInstruction("lastIndexOf expects at least 1 arg".into()));
+                    }
+                    let needle = this.reg_load(args[0])?.to_string();
+                    let idx = sb.value.rfind(&needle).map(|i| i as i64).unwrap_or(-1);
                     if let Some(d) = dst { this.regs.insert(d, VMValue::Integer(idx)); }
                     return Ok(true);
                 }

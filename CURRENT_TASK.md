@@ -6,6 +6,72 @@ Focus
 - Builder/VM ガードは最小限・仕様不変（dev では診断のみ）。
 - Phase 15.7 を再定義: Known 化＋Rewrite 統合（dev観測）と Mini‑VM 安定化、表示APIは `str()` に統一（互換:stringify）。
 
+Update — 2025-09-28 (Router policy: Instance×string‑like → Unified / Rescue OFF 試験)
+- RouterPolicy を明文化・実装反映:
+  - `InstanceBox × {length,len,substring,indexOf,lastIndexOf}` は Unified へ固定（Builder 側で `StringBox` 正規化）。
+  - Unknown/core/user‑instance の一般規則は従来通り保守（安定性優先）。
+- ReceiverInference を補強:
+  - 起源が `InstanceBox` でも string‑like の場合は `StringBox` に正規化（挙動不変・救済不要化）。
+- docs を更新: builder/unified‑method‑resolution.md, quick‑reference.md, config/env.md に内部規範とフラグ整理を追記。
+
+Plan — Next（テスト実行と点補修・構造優先）
+1) VM dev ドライバ（救済OFF）で nested‑if / concat を無制限タイムアウトで再試行
+   - `DEV_TIMEOUT_SEC=0 NYASH_VM_PARSERBOX_BOOL=0 NYASH_VM_STRLIKE_INSTANCE_COERCE=0 ./tools/dev/debug_program2_vm.sh`
+   - 赤が出た箇所のみ点で補修（LocalSSA: PHI→Copy→Call、Known/型注釈の最小追加）。
+2) LLVM パリティのスポット比較（同入力）
+   - `./tools/dev/debug_program2_llvm.sh`（JSON ヘッドを目視比較）
+3) dev救済は既定OFFのまま維持（依存が消えた時点で段階撤去）
+   - 対象: `NYASH_VM_STRLIKE_INSTANCE_COERCE`, `NYASH_VM_PARSERBOX_BOOL`, `NYASH_VM_TOLERATE_VOID`
+4) プロセス衛生（暴走監視）
+   - 長時間実行は `timeout` 付きに戻す（dev ドライバで `DEV_TIMEOUT_SEC` を 60 へ）。必要時のみ 0 を明示使用。
+
+Update — 2025-09-28 (Mini‑VM 仕上げ — M2/M3 実運転)
+- MirVmMin `_run_min` の1パス化・厳密セグメントを再点検（braceバランスでopオブジェクトを厳密抽出）。
+- 代表スモークのSKIP撤去（M2/M3）：以下を有効化し quick 緑を維持。
+  - `tools/smokes/v2/profiles/quick/core/selfhost_mir_m2_eq_true_vm.sh`
+  - `tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_branch_true_vm.sh`
+  - `tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_vm.sh`
+- Devスモーク（任意・既定SKIP）追加：Program2（VM）JSONヘッドの非空チェック
+  - `tools/smokes/v2/profiles/quick/core/dev_program2_vm_json_head.sh`（`SMOKES_ENABLE_DEV_PROGRAM2=1` で有効）
+
+Plan — Mini‑VM Finishing
+1) エッジ強化テスト（Mini‑VM / quick か dev に配置）
+   - 同ブロック内に複数 compare → 最後に ret（v0/v1 表記混在）
+   - ret がブロック先頭/末尾の両極端
+2) O(n) 走査の検証（大きめブロックの計測）
+   - braceバランス/配列終端 `_seek_*` が二重/重複走査しないことを目視確認（必要なら簡易計測ログを一時ON）
+3) ドキュメント追記（apps/selfhost/vm/README）
+   - セグメント抽出の方針（braceバランス）と、想定するJSON v0の最小プロファイルを短記述
+4) 緑の維持判定
+   - quick 全緑（65/65）/ integration 全緑（17/17）を維持
+
+Update — 2025-09-29 (Mini‑VM edge smokes added; quick green)
+- Added new Mini‑VM edge tests (quick/core), all PASS locally:
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m2_multi_compare_gt_last_ret_vm.sh
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_branch_undef_cond_vm.sh
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_chain_vm.sh
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m2_div_mod_zero_vm.sh (two-line check: 0 and 0)
+  - tools/smokes/v2/profiles/quick/core/selfhost_mir_m2_no_ret_fallback_vm.sh
+- Result: make smoke-quick → PASS 72/72. No changes to MirVmMin behavior were required.
+- Dev utility added for string API boundaries:
+  - apps/dev/program2_str_edges.nyash
+  - tools/dev/dev_program2_vm_str_edges.sh (runs VM; dev-only)
+
+Next (short)
+1) Router thin checks (unknown→BoxCall, instance×string-like→Unified) — add minimal smokes or SKIP if purely diagnostic
+2) Keep Program2 string-edge dev script; expand cases only if a regression is observed
+3) Documentation: note added smokes in apps/selfhost/vm/README.md and mention Div/Mod-by-zero + no-ret fallback policies
+
+Rebalance — 2025-09-29（順序の明確化: Rust VM → Mini‑VM → Compiler）
+- P0: Rust VM 安定化（点修正の仕上げ・回帰防止／quick+integration 常緑）
+  - ReceiverInference/RouterPolicy/LocalSSA/VarMapGuard の確認と最小補修
+- P1: Mini‑VM 追加エッジ（完了）
+  - 新規5件スモークでエッジ押さえ（compare混在/undef cond/jump chain/0除算/no‑ret）
+- P2: Selfhost コンパイラ MVP 前進（次フェーズの主作業）
+  - Entry: `apps/selfhost-compiler/compiler.nyash` を用い、`--stage3`/`--min-json` 経路で JSON v0 を安定排出
+  - 受け入れ（dev限定）: `NYASH_JSON_ONLY=1` による JSON ヘッダ（version/kind）非空
+  - スモーク（任意ゲート）: `tools/selfhost_stage3_accept_smoke.sh` を最小で有効化（必要時に quick へ昇格）
+
 Update — 2025-09-28 (P4 default‑on + P5 docs/annotations 完了)
 - Known 正規化（userbox限定・関数存在・一意・arity一致）を既定ON。
   - フラグ: `NYASH_REWRITE_KNOWN_DEFAULT`（0/false/off で無効化）。
@@ -66,6 +132,18 @@ Update — 2025-09-28 (FunctionEmissionBox adoption + Router trace + Type annota
 - TypeAnnotationBox のホワイトリストを最小拡張（観測ベース）
   - 追加: `*.len/0 → Integer`, `*.substring/2 → String`, `*.esc_json/0 → String`。
   - 既存の `*.str/0`/`*.length/0`/`*.size/0` に加えて注釈精度を微増（挙動不変）。
+
+Update — 2025-09-28 (P6 — Selfhost JSON emit PASS)
+- 目的: selfhost コンパイラの JSON emit を安定化し、スモークで bytes>0 を必須に昇格。
+- 変更点（挙動不変・最小差分）
+  - apps/selfhost-compiler/compiler.nyash: 出力を `ConsoleBox.println(json)` から `print(json)` に変更し、`json==null` 時は `{}` を出力（未定義の使用を回避）。
+  - tools/selfhost_smoke.sh: Step1 を LLVM ハーネス優先（`--backend llvm` + `NYASH_LLVM_USE_HARNESS=1`）。
+    - 成功基準を `-s /tmp/nyash_selfhost_out.json`（bytes>0）に強化。未満ならエラーで終了。
+- 結果
+  - selfhost_smoke: PASS（Step1: 253 bytes / Step2: VM 出力 ON/OFF 一致）。
+- 備考
+  - VM 経路では稀に dev 検証（NewBox→birth WARN）や early 未定義で停止するため、emit だけは LLVM ハーネスに委譲（仕様不変）。
+  - 後続で VM 経路の未定義起因（argv/ArrayBox birth 近傍）を別タスクで潰す。
 
 Update — 2025-09-28 (quick/integration smoke status — 総括)
 - quick: PASS 64/64（暫定 SKIP を明示）
@@ -149,8 +227,8 @@ Self‑Hosting — Return Plan（P6）
      - `apps/selfhost-compiler/compiler.nyash` で最小サンプルを emit（`--min-json` / `--stage3`）。
      - VM（Rust/PyVM どちらでも）で JSON v0 を実行し、既存の JSON アプリと期待出力一致。
   3) スモーク連携（任意ジョブ）
-     - 代表1件の bootstrap スモークを tools に追補（既存 `tools/bootstrap_selfhost_smoke.sh` の利用/更新を検討）。
-- 受け入れ基準
+    - 代表1件の bootstrap スモークを tools に追補（既存 `tools/bootstrap_selfhost_smoke.sh` の利用/更新を検討）。
+    - 受け入れ基準
   - quick/integration 緑を維持。
   - Selfhost emit→実行の最小系が安定して PASS（dev 任意ジョブで十分）。
 
@@ -177,6 +255,15 @@ Plan — Next (LocalSSA 仕上げ・観測)
 3) json_lint_vm を再実行（quick 緑化）。
 4) ドキュメント追記: LocalSSA の責務と適用範囲（builder/README or observe/README 近傍）。
 
+Update — 2025-09-28 (Dev Parser VM 深掘り + 受け手ゼロ防護)
+- dev ドライバに parse_program2 経路を追加（apps/dev/debug_parser_vm.nyash）。
+- Unified Call: 受け手が ValueId(0) になる経路を防護（recv-guard）。
+  - emit_unified_call 内で Method の receiver==%0 を検知し、元の受け手 ValueId に巻き戻す（診断ログ: [recv-guard]）。
+- 実行結果
+  - 先行していた reg_load undefined (recv=%0) は解消。
+  - 深い経路で ParserBox.to_int 内の比較で TypeError(Lt on InstanceBox) を観測（仕様は不変）。
+    - 次手: to_int 周辺の受け手/局所の型注釈（String.length→Integer の帰結と i/n の整数性）を点で補強、もしくは推論誤束縛の再追跡。
+
 Update — 2025-09-28 (LocalSSA ヘルパ化・集中管理 追加)
 - ssa/local へ集約: `src/mir/builder/ssa/local.rs` を新設し、LocalKind と ensure()/recv/arg/cond/field_base/cmp_operand を実装。
 - 共通ヘルパ: Call 直前の集約処理を `finalize_callee_and_args(builder, &mut Callee, &mut Vec<ValueId>)` に統一。Legacy 用に `finalize_args(...)` も追加。
@@ -188,8 +275,86 @@ Update — 2025-09-28 (LocalSSA ヘルパ化・集中管理 追加)
 
 Plan — Next (短期・最小差分)
 - 最終関所の共通化を拡張: ssa/local に Branch/Compare/Field 用の finalize ヘルパを追加し、emit 直前に一律適用（ズレ検知を含む）。
-- 観測の強化: LocalSSA トレースに inst 直前/直後の要点（bb, kind, value）を短く追加し、未定義が LocalSSA の内外どちらか即判定できるようにする。
-- json_lint_vm を緑化（仕様不変・最適化後回し）。
+    - 観測の強化: LocalSSA トレースに inst 直前/直後の要点（bb, kind, value）を短く追加し、未定義が LocalSSA の内外どちらか即判定できるようにする。
+    - json_lint_vm を緑化（仕様不変・最適化後回し）。
+
+Update — 2025-09-28 (Loop VarMapGuard 観測＋適用漏れ修正)
+- 目的: ループ合流（header/exit/continue）およびループ内 if-merge で VarMapGuard の適用漏れを検出・解消する。
+- 実装:
+  - loop_builder.update_variable に dev 観測を追加（`NYASH_VARMAP_TRACE=1` 時に guard 適用を1行表示、names簡易一覧も出力）。
+  - ループ内 if-merge の統合ヘルパ `phi_core::if_phi::merge_modified_at_merge_with` 呼び出しで、
+    従来は `variable_map.insert` に直書きしていた rebinding を LoopBuilder.update_variable 経由に変更（VarMapGuard を適用）。
+- 現状:
+  - dev ドライバ（apps/dev/debug_parser_vm.nyash）をトレース最小で再実行したが、`BoxRef(InstanceBox) → bool` の型エラーは残存（再現性あり）。
+  - `NYASH_VARMAP_TRACE=1` では guard 適用ログは現時点で未出力（= `me` 直束縛由来ではない可能性大）。
+- 次アクション（短期）:
+  1) VM トレース最小＋条件部のみ短観測（branch 直前の cond ValueId と tag）を追加して発生点を特定（仕様不変・devのみ）。
+  2) 発生箇所が InstanceBox 受け手の条件式なら、builder 側で cond 正規化（Eq/Ne/長さ比較に還元）を点適用。
+  3) 一時的に `NYASH_VM_PARSERBOX_BOOL=1` を dev ドライバでだけ許可→深部の次の不具合を観測（段階弱体化の準備）。
+
+Note — ParserBox Stage‑1 and/or
+- ParserBox の Stage‑1 JSON 生成器では `&&`/`||` の字句/構文をまだ未実装。dev ドライバの and/or 最小ケースは一旦停止。
+- 選択肢（後続フェーズで実施）:
+  - A) ParserBox.parse_expr2 に and/or の字句/構文＆短絡を最小実装（Block/If/PHI 相当のJSON生成）。
+  - B) Builder 側で `if (a && b)` パターンを nested if に正規化（Stage‑1 JSONに and/or不要）。
+- 現方針: フェーズ内は機能追加は最小に保つため、A/B は後続で検討。現状は and/or ミニケースを dev 側で停止し、比較/加算の枝から段階復帰を進める。
+
+Update — 2025-09-28 (program2 minimal harness enable)
+- dev 用に LLVM ハーネスの program2 ミニテストを追加し有効化。
+  - 入口: `tools/dev/debug_program2_llvm.sh`（内部で `apps/dev/debug_program2_llvm.nyash` を実行）
+  - using/file は dev 限定で `NYASH_ENABLE_USING=1`, `NYASH_ALLOW_USING_FILE=1`, `NYASH_USING_AST=1` を設定。
+  - VM 側の program2 は bring-up 中（短い入力でもスピン再現のため一旦停止、観測→点補強後に順次再開）。
+
+Update — 2025-09-28 (Program2 VM/LLVM step-up + timeouts)
+- 追加（dev/VM）: program2 最小/if/loop の分割テストを用意。
+  - 最小: `apps/dev/debug_program2_vm.nyash`（runner: `tools/dev/debug_program2_vm.sh`）
+  - if:   `apps/dev/debug_program2_vm_if.nyash`（runner: `tools/dev/debug_program2_vm_if.sh`）
+  - loop: `apps/dev/debug_program2_vm_loop.nyash`（runner: `tools/dev/debug_program2_vm_loop.sh`）
+  - 既定タイムアウトを 60s に延長。`DEV_TIMEOUT_SEC=0` で無制限実行可能。
+- 追加（dev/LLVM）: program2 最小/if/loop を llvmlite ハーネスで実行。
+  - 入口: `tools/dev/debug_program2_llvm.sh`（`NYASH_LLVM_USE_HARNESS=1`）。
+  - こちらもタイムアウト 60s（`DEV_TIMEOUT_SEC` で可変）。
+- 結果（現状）:
+  - VM: 最小/if は EXIT 0。loop は短い制限では timeout することがあるが、無制限（`DEV_TIMEOUT_SEC=0`）で約 3.4s で PASS。
+  - LLVM: 環境が許せば短時間で PASS。制限が厳しい場合は `DEV_TIMEOUT_SEC` を上げる。
+- 局所補強（仕様不変・VM限定）:
+  - ParserBox.* 内で `indexOf/lastIndexOf` が InstanceBox に誤解決するケースに対し、文字列化の安全フォールバックを追加（`src/backend/mir_interpreter/handlers/boxes.rs`）。
+- 既知の課題（dev救済 OFF 時）:
+  - `NYASH_VM_PARSERBOX_BOOL=0` で稀に `cannot coerce BoxRef(InstanceBox) to bool`（条件部に InstanceBox が流入）。dev では救済 ON のまま bring-up を継続し、OFF での赤は点補強（LocalSSA 材化/型注釈）で解消予定。
+
+Plan — Next (2025-09-28)
+1) VM loop の常時 PASS 化（60s/無制限で安定確認）
+   - 必要時のみ最小観測をON（`NYASH_VM_TRACE=1` 等は短時間）。
+2) dev救済OFFの段階移行（最小→if→loop）
+   - OFF で落ちた箇所は局所に点補強（LocalSSA: PHI→Copy→Call、または Known/型注釈）
+   - 緑維持後は救済をOFF既定化（撤去容易な差分を維持）
+3) LLVM パリティのスポット確認（同一入力の JSON ヘッド構造を目視）
+4) and/or は後続（ParserBox Stage‑1 実装 or Builder 正規化 B案）
+
+Update — 2025-09-28 (Lifecycle & Expr Flow 状態 + Boxes カバレッジ)
+- ライフサイクル不変（同期の要点）
+  - 関数スコープ: `value_gen` は関数ごとに reset、`value_types`/`value_origin_newbox` は take/restore（交差汚染防止）。
+  - ブロックスコープ: 物理順序は「PHI群 → Copy(Materialize)群 → 本体(Call/Compare/Branch)」。
+  - Call サイト: `finalize_callee_and_args` により receiver/args を in‑block 材化。RouterPolicy で Unknown/String/Array/Map/ユーザー箱は BoxCall へ保守側フォールバック。
+  - 受け手ゼロ防護: `emit_unified_call` 内で `receiver==%0` を検知→元受け手に復元（[recv-guard]）。
+  - ParserBox.* 限定の救済（dev): 比較で BoxRef(ParserBox)↔数値が交差時は gpos を数値化（VM 側; 既定OFF運用想定）。
+- 式の流れ（pipeline 概観）
+  - AST → builder.dispatch →（method は）emit_unified_call → RouterPolicy → EmitGuard(finalize) → Materialize → MIR.Emit → VM 実行。
+  - Compare/Branch/BinOp は emission::*/LocalSSA で材化・注釈・一貫した発行に統一。
+- Boxes カバレッジ（現状）
+  - S-tier: ConstantEmissionBox / CompareEmissionBox / BranchEmissionBox / FunctionEmissionBox（採用済）
+  - Inference/Route: ReceiverInferenceBox / RewriteGateBox / InstanceMethodIndexBox / RouterPolicyBox（採用済）
+  - 生成/材化: MaterializeBox / MetadataPropagationBox / NameConstBox（採用済）
+  - 観測: ResolveTraceBox / VarMapTrace（dev-only）
+  - 追加提案（最小）: VarMapGuardBox（dev-only）— PHI/合流/代入時に `me` の ValueId を他名へ直接束縛しないブレーキ（現在は `build_assignment` に局所適用。次で PHI 合流にも展開）。
+- 現状の課題（dev で観測）
+  - ParserBox 深部でまれに j/i 等が `me` に誤束縛 → `j+1` が BoxRef+Int で型エラー。recv=%0 は解消済み。根は varmap 合流時の `me` 伝播。
+
+Plan — Next（Lifecycle/Expr Flow 仕上げ）
+1) VarMapGuard（PHI/合流）: if/loop 合流で name≠"me" に `me` の ValueId が入る場合、1 Copy を介して別 ValueId にして束縛（ParserBox.* 限定で開始）。
+2) dev 追跡: BinOp/Compare の varmap/型トレースで再確認 → type error 消失を確認。
+3) dev 救済の狭域化: ParserBox 比較の gpos 整合・代入時の `me` 回避を段階的に弱め（根治後に撤去可能に）。
+4) Selfhost VM スモーク: 生成 JSON bytes>0 を強制（tools/selfhost_smoke.sh）→ quick 任意ジョブ化。
 
 Update — 2025-09-28 (P1 Known 集約・KPI・LAYER ガード)
 - Builder: method_call_handlers の Known 経路を `rewrite::known` に集約。
@@ -739,3 +904,55 @@ Notes — Display API Unification (spec‑neutral)
   - tools/dev_env.sh に Unified 既定ON（明示OFFのみ無効）とレガシー関数化抑止を追加。
     - `NYASH_MIR_UNIFIED_CALL=1`（既定ON明示）
     - `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1`（重複回避; 段階移行）
+Update — 2025-09-28 (Boxification P1: inference/gate/materialize)
+
+- Added small, focused boxes to make call pipeline observable and deterministic.
+  - ReceiverInferenceBox: unify receiver class/certainty inference.
+    - Files: `src/mir/builder/infer/{mod.rs,receiver.rs}`
+    - Integrated into: `calls/call_unified.rs::convert_target_to_callee`, `builder_calls.rs` try trace and rewrite hints, `utils.rs` BoxCall route.
+  - RewriteGateBox: centralize Known rewrite gating (user-box only, StringBox string-APIs excluded, (Box,method,arity) exists).
+    - Files: `src/mir/builder/rewrite/gate.rs` (exported in rewrite/mod.rs)
+    - Integrated into: `rewrite/known.rs` gating（従来の散在チェックを集約）。
+  - InstanceMethodIndexBox: register/query instance method signatures for gating.
+    - Files: `src/mir/builder/indexes/{mod.rs,instance.rs}`
+    - Integrated into: `builder/lifecycle.rs`（登録）、`RewriteGateBox`（照会）。
+  - MaterializeBox: unify finalization at call site（LocalSSA + after-PHI + tail copy）。
+    - Files: `src/mir/builder/materialize/{mod.rs,call_site.rs}`
+    - Integrated into: `builder_calls.rs`（emit直前の材化を一か所に）。
+  - ResolveTraceBox: dev-only emit helpers for resolve.try/choose。
+    - Files: `src/mir/builder/observe/resolve_trace.rs`（`observe/mod.rs` から公開）
+    - Integrated into: `builder_calls.rs`（trace 出力を統一）。
+  - Verify wrapper: CallOrderVerifyBox (dev-only).
+    - Files: `src/mir/builder/verify/{mod.rs,call_order.rs}`
+    - Integrated into: `emit_guard::verify_after_call()` の中継。
+
+- Functional impact (spec unchanged):
+  - Unified inference now used consistently across Unified/BoxCall paths.
+  - Known rewrite fires only when `(Box, method, arity)` exists in index; StringBox の length/substring 等は除外。
+  - Router fallback recursion broken via `force_legacy` flag to stop Unified→BoxCall→Unified loops.
+
+- Next (short)
+  1) [done] RewriteGate に dev-trace 追加（NYASH_RESOLVE_TRACE=1）
+  2) selfhost VM を再実行（traces有効）して Known 化/材化の残存点を抽出
+  3) [done] MaterializeBox の短ダンプ（call直前±5命令）を dev 追加（NYASH_MAT_TRACE=1）
+     - 受け手/引数の ValueId + type/origin を1行で出力（[mat-trace]）。
+  4) 型注釈の最小追補（substring→String, length/indexOf/lastIndexOf→Integer）— 仕様不変
+  5) 代表箇所（ParserBox.extract_usings）で substring 未材化の点当て（観測→型注釈 or gate 見直し）
+  6) selfhost VM の JSON 出力を bytes>0 で PASS に格上げ
+
+Docs — Unified Method Resolution & VM policy (accepted)
+- 明文化: ユーザーBoxの Instance 呼び出しは Builder が関数化（Instance→Function）。
+- VM 方針: Instance BoxCall は開発のみ許容（prod 既定 = 不許可）。env `NYASH_VM_USER_INSTANCE_BOXCALL` で上書き可。
+- 反映:
+  - docs/development/builder/unified-method-resolution.md — VM policy を追加
+  - docs/reference/language/quick-reference.md — Calls/ASI/+混在/Box== のフラグ注記を追記
+  - README.md / README.ja.md — Unified Call 節に VM policy を追記
+  - docs/development/builder/DIAGNOSTICS.md — dev 追跡フラグのまとめを新設
+
+Updates — 2025-09-28 (P6 incremental)
+- emission::constant に原始型の型注釈を追加（仕様不変・観測用）
+  - `emit_string` → MirType::String, `emit_integer` → Integer, `emit_bool` → Bool, `emit_float` → Float
+  - null/void は従来通り注釈なし
+- materialize::call_site に [mat-trace] を追加（NYASH_MAT_TRACE=1）
+  - 受け手 %id / 推定型 / NewBox 起源, および各引数 %id:型 の短行を出力
+  - Block tail の直前 5 命令ダンプ（既存）と対で診断可能

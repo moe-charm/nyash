@@ -1,0 +1,12 @@
+using "../selfhost-compiler/boxes/parser_box.nyash" as ParserBox
+
+static box Main {
+  main() {
+    local p = new ParserBox()
+    local prog = "local x = 0\nif x <= 1 { x = x + 1 }\nreturn x\n"
+    local json = p.parse_program2(prog)
+    print("p2 vm(if) json head = " + json.substring(0, 32))
+    return 0
+  }
+}
+

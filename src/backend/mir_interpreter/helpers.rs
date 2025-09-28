@@ -184,7 +184,50 @@ impl MirInterpreter {
             let op_s = match op { CompareOp::Eq=>"Eq", CompareOp::Ne=>"Ne", CompareOp::Lt=>"Lt", CompareOp::Le=>"Le", CompareOp::Gt=>"Gt", CompareOp::Ge=>"Ge" };
             eprintln!("{{\"ev\":\"cmp\",\"op\":\"{}\",\"a_k\":\"{}\",\"b_k\":\"{}\",\"a_n\":\"{}\",\"b_n\":\"{}\"}}", op_s, ak, bk, an, bn);
         }
-        let result = match (op, &a3, &b3) {
+        // ParserBox-specific safety: if one side is ParserBox instance and the other numeric,
+        // compare using ParserBox.gpos as integer. This mirrors common parser patterns where
+        // position variables may be accidentally bound to `me`. Scope: only inside ParserBox.* functions.
+        let (a4, b4) = if let Some(cur) = &self.cur_fn {
+            if cur.starts_with("ParserBox.") {
+                let coerce_pb = |v: &VMValue| -> VMValue {
+                    if let VMValue::BoxRef(bx) = v {
+                        if let Some(inst) = bx.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                            if inst.class_name == "ParserBox" {
+                                if let Some(ny) = inst.get_field_ng("gpos") {
+                                    match ny {
+                                        crate::value::NyashValue::Integer(i) => VMValue::Integer(i as i64),
+                                        crate::value::NyashValue::Float(f) => VMValue::Float(f),
+                                        crate::value::NyashValue::String(ref s) => {
+                                            if let Ok(i) = s.parse::<i64>() { VMValue::Integer(i) } else { VMValue::Integer(0) }
+                                        }
+                                        _ => VMValue::Integer(0),
+                                    }
+                                } else { VMValue::Integer(0) }
+                            } else { v.clone() }
+                        } else { v.clone() }
+                    } else { v.clone() }
+                };
+                (coerce_pb(&a3), coerce_pb(&b3))
+            } else { (a3.clone(), b3.clone()) }
+        } else { (a3.clone(), b3.clone()) };
+
+        // ParserBox-specific: numeric-string bridging for ordered compares (dev-safe,仕様不変の範囲で局所適用)
+        let (a5, b5) = if let Some(cur) = &self.cur_fn {
+            if cur.starts_with("ParserBox.") {
+                let is_numstr = |s: &str| s.chars().all(|c| c.is_ascii_digit());
+                let to_int = |s: &str| s.parse::<i64>().unwrap_or(0);
+                use VMValue::*;
+                match (&a4, &b4) {
+                    (String(ref s), Integer(_)) if is_numstr(s) => (Integer(to_int(s)), b4.clone()),
+                    (Integer(_), String(ref s)) if is_numstr(s) => (a4.clone(), Integer(to_int(s))),
+                    (String(ref s), Float(_)) if is_numstr(s) => (Integer(to_int(s)), b4.clone()),
+                    (Float(_), String(ref s)) if is_numstr(s) => (a4.clone(), Integer(to_int(s))),
+                    _ => (a4.clone(), b4.clone()),
+                }
+            } else { (a4.clone(), b4.clone()) }
+        } else { (a4.clone(), b4.clone()) };
+
+        let result = match (op, &a5, &b5) {
             (Eq, _, _) => eq_vm(&a2, &b2),
             (Ne, _, _) => !eq_vm(&a2, &b2),
             (Lt, Integer(x), Integer(y)) => x < y,

@@ -125,6 +125,8 @@ impl super::MirBuilder {
                                 if let N::FunctionDeclaration { params, body, is_static, .. } = mast {
                                     if !*is_static {
                                         let func_name = format!("{}.{}{}", name, mname, format!("/{}", params.len()));
+                                        // Index instance method for rewrite gating
+                                        self.instance_method_index.insert((name.clone(), mname.clone(), params.len()));
                                         self.lower_method_as_function(
                                             func_name,
                                             name.clone(),

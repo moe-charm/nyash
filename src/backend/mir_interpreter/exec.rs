@@ -163,6 +163,22 @@ impl MirInterpreter {
                 else_bb,
             }) => {
                 let cond = self.reg_load(*condition)?;
+                if std::env::var("NYASH_VM_BRANCH_TRACE").ok().as_deref() == Some("1") {
+                    // Lightweight condition trace: tag and class name for BoxRef
+                    let tag = crate::backend::abi_util::tag_of_vm(&cond);
+                    let class = match &cond {
+                        VMValue::BoxRef(bx) => bx.type_name(),
+                        _ => "-",
+                    };
+                    eprintln!(
+                        "[vm-branch] fn={} bb={:?} cond=%{:?} tag={} class={}",
+                        self.cur_fn.as_deref().unwrap_or(""),
+                        block.id,
+                        condition,
+                        tag,
+                        class
+                    );
+                }
                 let branch = to_bool_vm(&cond).map_err(VMError::TypeError)?;
                 let target = if branch { *then_bb } else { *else_bb };
                 Ok(BlockOutcome::Next {

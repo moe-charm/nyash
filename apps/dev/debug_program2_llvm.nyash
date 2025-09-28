@@ -1,0 +1,35 @@
+// Dev-only: program2 minimal harness run (LLVM llvmlite)
+// Run via: NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/dev/debug_program2_llvm.nyash
+
+using "../selfhost-compiler/boxes/parser_box.nyash" as ParserBox
+
+static box Main {
+  main() {
+    local p = new ParserBox()
+    // 1) minimal
+    local prog = "local x = 1\nreturn x\n"
+    local json = p.parse_program2(prog)
+    print("p2 llvm json head = " + json.substring(0, 32))
+
+    // 2) with if (<=)
+    local prog2 = "local x = 0\nif x <= 1 { x = x + 1 }\nreturn x\n"
+    local json2 = p.parse_program2(prog2)
+    print("p2 llvm if head = " + json2.substring(0, 32))
+
+    // 3) with loop (x < 3)
+    local prog3 = "local x = 0\nloop (x < 3) { x = x + 1 }\nreturn x\n"
+    local json3 = p.parse_program2(prog3)
+    print("p2 llvm loop head = " + json3.substring(0, 32))
+
+    // 4) nested if
+    local prog4 = "local x = 0\nif x <= 1 { if x == 0 { x = x + 2 } }\nreturn x\n"
+    local json4 = p.parse_program2(prog4)
+    print("p2 llvm nested-if head = " + json4.substring(0, 32))
+
+    // 5) string concat
+    local prog5 = "local s = \"a\"\ns = s + \"b\"\nreturn s\n"
+    local json5 = p.parse_program2(prog5)
+    print("p2 llvm concat head = " + json5.substring(0, 32))
+    return 0
+  }
+}

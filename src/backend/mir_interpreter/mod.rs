@@ -9,6 +9,7 @@
 use std::collections::HashMap;
 
 use crate::box_trait::NyashBox;
+use crate::boxes::array::ArrayBox;
 
 pub(super) use crate::backend::abi_util::{eq_vm, to_bool_vm};
 pub(super) use crate::backend::vm::{VMError, VMValue};
@@ -51,11 +52,29 @@ impl MirInterpreter {
     pub fn execute_module(&mut self, module: &MirModule) -> Result<Box<dyn NyashBox>, VMError> {
         // Snapshot functions for call resolution
         self.functions = module.functions.clone();
+
+        // Prefer static Main.main when present; otherwise fall back to top-level main
+        let (entry_name, pass_argv) = if module.functions.contains_key("Main.main") {
+            ("Main.main", true)
+        } else if module.functions.contains_key("main") {
+            ("main", true) // if main has params, provide empty argv; harmless if zero params
+        } else {
+            return Err(VMError::InvalidInstruction("missing main".into()));
+        };
+
         let func = module
             .functions
-            .get("main")
-            .ok_or_else(|| VMError::InvalidInstruction("missing main".into()))?;
-        let ret = self.execute_function(func)?;
+            .get(entry_name)
+            .ok_or_else(|| VMError::InvalidInstruction(format!("entry not found: {}", entry_name)))?;
+
+        // If the entry expects at least one parameter, pass an empty ArrayBox as argv
+        let ret = if pass_argv && !func.params.is_empty() {
+            let argv = VMValue::from_nyash_box(Box::new(ArrayBox::new()));
+            let args: [VMValue; 1] = [argv];
+            self.exec_function_inner(func, Some(&args))?
+        } else {
+            self.execute_function(func)?
+        };
         Ok(ret.to_nyash_box())
     }
 

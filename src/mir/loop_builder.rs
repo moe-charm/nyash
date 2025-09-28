@@ -465,7 +465,58 @@ impl<'a> LoopBuilder<'a> {
     }
 
     fn update_variable(&mut self, name: String, value: ValueId) {
-        self.parent_builder.variable_map.insert(name, value);
+        // VarMapGuard (loop): ParserBox.* 内では `me` の ValueId を他名にそのまま束縛しない。
+        // 片側が単一入力のPHIであっても、me直結だと後続の BinOp/Compare/Branch が BoxRef を踏む可能性があるため、
+        // Copy を噛ませて識別性を保つ（仕様不変）。
+        let mut guarded = false;
+        let bind_val = if let Some(fun) = self.parent_builder.current_function.as_ref() {
+            if fun.signature.name.starts_with("ParserBox.") && name != "me" {
+                if let Some(&me_vid) = self.parent_builder.variable_map.get("me") {
+                    if value == me_vid {
+                        let loc = self.parent_builder.value_gen.next();
+                        // Copy を現在ブロックに挿入（PHI後でも可）。型/起源は伝播。
+                        let _ = self.parent_builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: value });
+                        guarded = true;
+                        loc
+                    } else { value }
+                } else { value }
+            } else { value }
+        } else { value };
+        self.parent_builder.variable_map.insert(name.clone(), bind_val);
+        // 追加観測（devオンリー）: VarMapGuard の適用を1行で記録
+        if guarded {
+            if let Ok(val) = std::env::var("NYASH_VARMAP_TRACE") {
+                if matches!(val.as_str(), "1" | "true" | "on" | "yes" | "TRUE" | "ON" | "YES") {
+                    let fun_name = self
+                        .parent_builder
+                        .current_function
+                        .as_ref()
+                        .map(|f| f.signature.name.clone())
+                        .unwrap_or_else(|| "<no-func>".to_string());
+                    let cur_bb = self.parent_builder.current_block;
+                    eprintln!(
+                        "[varmap] guard applied func={} bb={:?} name={} src_me=%{} new=%{}",
+                        fun_name,
+                        cur_bb,
+                        name,
+                        value.0,
+                        bind_val.0
+                    );
+                    // 受け手名の簡易一覧も出す（簡易版）
+                    let mut names: Vec<String> = Vec::new();
+                    for (k, v) in self.parent_builder.variable_map.iter() {
+                        if *v == bind_val { names.push(k.clone()); }
+                    }
+                    names.sort();
+                    eprintln!(
+                        "[varmap] tag=loop.update_variable recv=%{} names={:?} map_size={}",
+                        bind_val.0,
+                        names,
+                        self.parent_builder.variable_map.len()
+                    );
+                }
+            }
+        }
     }
 
     fn get_variable_at_block(&self, name: &str, block_id: BasicBlockId) -> Option<ValueId> {
@@ -665,7 +716,10 @@ impl<'a> LoopBuilder<'a> {
                 dst: ValueId,
                 inputs: Vec<(BasicBlockId, ValueId)>,
             ) -> Result<(), String> { self.0.emit_phi_at_block_start(block, dst, inputs) }
-            fn update_var(&mut self, name: String, value: ValueId) { self.0.parent_builder.variable_map.insert(name, value); }
+            fn update_var(&mut self, name: String, value: ValueId) {
+                // Ensure VarMapGuard is applied for loop-internal if-merge as well
+                self.0.update_variable(name, value);
+            }
             fn debug_verify_phi_inputs(&mut self, merge_bb: BasicBlockId, inputs: &[(BasicBlockId, ValueId)]) {
                 if let Some(ref func) = self.0.parent_builder.current_function {
                     crate::mir::phi_core::common::debug_verify_phi_inputs(func, merge_bb, inputs);

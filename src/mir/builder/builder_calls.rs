@@ -102,39 +102,40 @@ impl super::MirBuilder {
         // that bypass legacy BoxCall emission. Do this before any observation/rewrite.
         let mut target = target;
         let bb_before = self.current_block; // snapshot for later re-check
-        if let CallTarget::Method { box_type, method, receiver } = target {
-            if super::utils::builder_debug_enabled() && method == "advance" {
-                super::utils::builder_debug_log(&format!("unified-entry Method.advance recv=%{} (pre-pin)", receiver.0));
-            }
-            let receiver_pinned = match self.pin_to_slot(receiver, "@recv") {
-                Ok(v) => v,
-                Err(_) => receiver,
-            };
-            target = CallTarget::Method { box_type, method, receiver: receiver_pinned };
-        }
+        // Do not pin at entry; rely on LocalSSA/materialize at emission site to avoid
+        // variable_map interference. Keep target as-is.
+        if let CallTarget::Method { .. } = target { /* noop */ }
 
         // Emit resolve.try for method targets (dev-only; default OFF)
         let arity_for_try = args.len();
         if let CallTarget::Method { ref box_type, ref method, receiver } = target {
-            let recv_cls = box_type.clone()
-                .or_else(|| self.value_origin_newbox.get(&receiver).cloned())
-                .unwrap_or_default();
+            let (recv_cls_infer, _c) = crate::mir::builder::infer::receiver::infer_receiver(
+                box_type.as_deref(), method, receiver, &self.value_origin_newbox, &self.value_types,
+            );
+            let recv_cls = recv_cls_infer;
+            // Dev trace: help diagnose receiver identity/name binding issues
+            if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                let mut names: Vec<String> = Vec::new();
+                for (k, v) in self.variable_map.iter() {
+                    if *v == receiver { names.push(k.clone()); }
+                }
+                let ty = self.value_types.get(&receiver).cloned();
+                eprintln!(
+                    "[resolve.try] method={} recv=%{} recv_cls_hint={} recv_names={:?} recv_ty={:?}",
+                    method, receiver.0, recv_cls, names, ty
+                );
+            }
             // Use indexed candidate lookup (tail → names)
             let candidates: Vec<String> = self.method_candidates(method, arity_for_try);
-            let meta = serde_json::json!({
-                "recv_cls": recv_cls,
-                "method": method,
-                "arity": arity_for_try,
-                "candidates": candidates,
-            });
-            super::observe::resolve::emit_try(self, meta);
+            crate::mir::builder::observe::resolve_trace::emit_try_method(self, &recv_cls, method, arity_for_try, &candidates);
         }
 
         // Centralized user-box rewrite for method targets (toString/stringify, equals/1, Known→unique)
         if let CallTarget::Method { ref box_type, ref method, receiver } = target {
-            let class_name_opt = box_type.clone()
-                .or_else(|| self.value_origin_newbox.get(&receiver).cloned())
-                .or_else(|| self.value_types.get(&receiver).and_then(|t| if let super::MirType::Box(b) = t { Some(b.clone()) } else { None }));
+            let (recv_cls, _c) = crate::mir::builder::infer::receiver::infer_receiver(
+                box_type.as_deref(), method, receiver, &self.value_origin_newbox, &self.value_types,
+            );
+            let class_name_opt = Some(recv_cls.clone());
             // Early str-like
             if let Some(res) = crate::mir::builder::rewrite::special::try_early_str_like_to_dst(
                 self, dst, receiver, &class_name_opt, method, args.len(),
@@ -152,6 +153,12 @@ impl super::MirBuilder {
         // Convert CallTarget to Callee using the new module
         if let CallTarget::Global(ref _n) = target { /* dev trace removed */ }
         // Fallback: if Global target is unknown, try unique static-method mapping (name/arity)
+        // Preserve original receiver (for Method) to guard against accidental zero-id binding
+        let orig_recv = match &target {
+            CallTarget::Method { receiver, .. } => Some(*receiver),
+            _ => None,
+        };
+
         let mut callee = match call_unified::convert_target_to_callee(
             target.clone(),
             &self.value_origin_newbox,
@@ -222,32 +229,20 @@ impl super::MirBuilder {
             }
         };
 
-        // Safety: ensure receiver is materialized even after callee conversion
-        // (covers rare paths where earlier pin did not take effect)
-        callee = match callee {
-            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
-                // Prefer pinning to a slot so start_new_block can propagate it across entries.
-                let r_pinned = self.pin_to_slot(r, "@recv").unwrap_or(r);
-                Callee::Method { box_name, method, receiver: Some(r_pinned), certainty }
-            }
-            other => other,
-        };
-
-        // Final guard: if current block changed since entry, ensure receiver is copied again
-        if let (Some(bb0), Some(bb1)) = (bb_before, self.current_block) {
-            if bb0 != bb1 {
-                if let Callee::Method { box_name, method, receiver: Some(r), certainty } = callee {
-                    if super::utils::builder_debug_enabled() {
-                        super::utils::builder_debug_log(&format!(
-                            "unified-call bb changed: {:?} -> {:?}; re-materialize recv=%{}",
-                            bb0, bb1, r.0
-                        ));
-                    }
-                    let r2 = self.pin_to_slot(r, "@recv").unwrap_or(r);
-                    callee = Callee::Method { box_name, method, receiver: Some(r2), certainty };
+        // Guard: ValueId(0) must never be used as a receiver (reserved dummy in legacy Call.func)
+        // If it appears here due to an upstream mix, restore the original receiver id.
+        if let (Some(orig), Callee::Method { receiver: Some(r0), box_name, method, certainty }) = (orig_recv, &callee) {
+            if r0.0 == 0 {
+                if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[recv-guard] fixup receiver=%%0 -> %{} for {}.{}", orig.0, box_name, method);
                 }
+                callee = Callee::Method { box_name: box_name.clone(), method: method.clone(), receiver: Some(orig), certainty: *certainty };
             }
         }
+
+        // Entry pin is disabled; materialization is handled uniformly later.
+
+        // Block change guard removed; rely on LocalSSA/materialize
 
         // Debug: trace unified method emission with pinned receiver (dev only)
         if super::utils::builder_debug_enabled() {
@@ -259,15 +254,7 @@ impl super::MirBuilder {
         // Emit resolve.choose for method callee (dev-only; default OFF)
         if let Callee::Method { box_name, method, certainty, .. } = &callee {
             let chosen = format!("{}.{}{}", box_name, method, format!("/{}", arity_for_try));
-            let meta = serde_json::json!({
-                "recv_cls": box_name,
-                "method": method,
-                "arity": arity_for_try,
-                "chosen": chosen,
-                "certainty": format!("{:?}", certainty),
-                "reason": "unified",
-            });
-            super::observe::resolve::emit_choose(self, meta);
+            crate::mir::builder::observe::resolve_trace::emit_choose_unified(self, box_name, method, arity_for_try, &chosen, certainty);
         }
 
         // Validate call arguments
@@ -281,7 +268,8 @@ impl super::MirBuilder {
                     eprintln!("[router-guard] {}.{} → BoxCall fallback (recv=%{})", box_name, method, r.0);
                 }
                 let effects = EffectMask::READ.add(Effect::ReadHeap);
-                return self.emit_box_or_plugin_call(dst, *r, method.clone(), None, args, effects);
+                // Force legacy once to avoid unified→boxcall→unified recursion
+                return self.emit_box_or_plugin_call(dst, *r, method.clone(), None, args, effects, true);
             }
         }
 
@@ -305,46 +293,24 @@ impl super::MirBuilder {
         // Create MirCall instruction using the new module (pure data composition)
         let mir_call = call_unified::create_mir_call(dst, callee.clone(), args_local.clone());
 
-        // Final last-chance LocalSSA just before emission in case any block switch happened
+        // Final materialization unified
         let mut callee2 = callee.clone();
         let mut args2 = args_local.clone();
-        crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee2, &mut args2);
-
+        crate::mir::builder::materialize::call_site::finalize_call_site(self, &mut callee2, &mut args2);
         // Dev trace: show final callee/recv right before emission (guarded)
         if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") || super::utils::builder_debug_enabled() {
             if let Callee::Method { method, receiver, box_name, .. } = &callee2 {
                 if let Some(r) = receiver {
-                    eprintln!("[vm-call-final] bb={:?} method={} recv=%{} class={}",
-                        self.current_block, method, r.0, box_name);
+                    let rty = self.value_types.get(r).cloned();
+                    let rorig = self.value_origin_newbox.get(r).cloned();
+                    eprintln!("[vm-call-final] bb={:?} method={} recv=%{} class={} ty={:?} orig={}",
+                        self.current_block, method, r.0, box_name, rty, rorig.as_deref().unwrap_or("-"));
+                    // Emit a compact varmap line for the receiver (dev-only)
+                    crate::mir::builder::observe::varmap::emit_recv_names(self, *r, "vm-call-final");
                 }
             }
         }
 
-        // Final forced in-block materialization for receiver just-before emission
-        // Rationale: ensure a Copy(def) immediately precedes the Call in the same block
-        let callee2 = match callee2 {
-            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
-                if super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[call-forced-copy] bb={:?} recv=%{} -> (copy)", self.current_block, r.0);
-                }
-                // Insert immediately after PHIs to guarantee position and dominance
-                let r_forced = crate::mir::builder::schedule::block::BlockScheduleBox::ensure_after_phis_copy(self, r)?;
-                if super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
-                    eprintln!("[call-forced-copy] bb={:?} inserted Copy %{} := %{} (after PHIs)", self.current_block, r_forced.0, r.0);
-                }
-                Callee::Method { box_name, method, receiver: Some(r_forced), certainty }
-            }
-            other => other,
-        };
-
-        // Optional last-chance: emit a tail copy right before we emit Call (keeps order stable)
-        let callee2 = match callee2 {
-            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
-                let r_tail = crate::mir::builder::schedule::block::BlockScheduleBox::emit_before_call_copy(self, r)?;
-                Callee::Method { box_name, method, receiver: Some(r_tail), certainty }
-            }
-            other => other,
-        };
 
         // For Phase 2: Convert to legacy Call instruction with new callee field (use finalized operands)
         let legacy_call = MirInstruction::Call {
@@ -373,7 +339,7 @@ impl super::MirBuilder {
                 // LEGACY PATH (after unified migration):
                 // Instance→Function rewrite is centralized in unified call path.
                 // Legacy path no longer functionizes; always use Box/Plugin call here.
-                self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO)
+                self.emit_box_or_plugin_call(dst, receiver, method, None, args, EffectMask::IO, false)
             },
             CallTarget::Constructor(box_type) => {
                 // Use existing NewBox
@@ -869,6 +835,7 @@ impl super::MirBuilder {
             None,
             arg_values,
             EffectMask::READ.add(Effect::ReadHeap),
+            false,
         )?;
         Ok(result_id)
     }
@@ -893,6 +860,10 @@ impl super::MirBuilder {
         let saved_function = self.current_function.take();
         let saved_block = self.current_block.take();
         let saved_var_map = std::mem::take(&mut self.variable_map);
+        // Per-function metadata scope: ValueId は関数ごとにリセットされるため、
+        // value_types / value_origin_newbox は関数単位で分離する（交差汚染防止）。
+        let saved_types = std::mem::take(&mut self.value_types);
+        let saved_origin = std::mem::take(&mut self.value_origin_newbox);
         let saved_value_gen = self.value_gen.clone();
         self.value_gen.reset();
         self.current_function = Some(function);
@@ -950,6 +921,9 @@ impl super::MirBuilder {
         self.current_function = saved_function;
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
+        // Drop per-function metadata and restore outer scope
+        self.value_types = saved_types;
+        self.value_origin_newbox = saved_origin;
         self.value_gen = saved_value_gen;
         Ok(())
     }
@@ -980,6 +954,8 @@ impl super::MirBuilder {
         let saved_function = self.current_function.take();
         let saved_block = self.current_block.take();
         let saved_var_map = std::mem::take(&mut self.variable_map);
+        let saved_types = std::mem::take(&mut self.value_types);
+        let saved_origin = std::mem::take(&mut self.value_origin_newbox);
         let saved_value_gen = self.value_gen.clone();
         self.value_gen.reset();
         self.current_function = Some(function);
@@ -1039,6 +1015,8 @@ impl super::MirBuilder {
         self.current_function = saved_function;
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
+        self.value_types = saved_types;
+        self.value_origin_newbox = saved_origin;
         self.value_gen = saved_value_gen;
         // Restore static box context
         self.current_static_box = saved_static_ctx;

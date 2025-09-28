@@ -20,6 +20,7 @@ Execution Status (Feature Additions Pause)
 - Inactive/Sealed
   - `--backend cranelift`, `--jit-direct` (sealed; use LLVM harness)
   - AST interpreter (legacy) is gated by feature `interpreter-legacy` and excluded from default builds (Rust VM + LLVM are the two main lines)
+ - Policy (clarification): No major feature additions during this phase. Bug fixes and correctness/Fail‑Fast improvements are allowed and encouraged (bringing behavior in line with documented semantics). Any experimental additions must be guarded behind flags default‑OFF and be reversible.
 
 Quick pointers
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
@@ -70,6 +71,9 @@ ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall
 - Output file: `NYASH_DEBUG_SINK=/tmp/nyash_debug.jsonl`
 - Use with smokes: `NYASH_DEBUG_ENABLE=1 NYASH_DEBUG_KINDS=resolve,ssa NYASH_DEBUG_SINK=/tmp/nyash.jsonl tools/smokes/v2/run.sh --profile quick --filter "userbox_*"`
 
+Diagnostics (builder; dev-only)
+- See `docs/development/builder/DIAGNOSTICS.md` for a compact list of flags like `NYASH_VARMAP_TRACE`, `NYASH_MAT_TRACE`, and routing/SSA traces.
+
 ### MIR Unified Call（default ON）
 - Centralized call emission is enabled by default in development builds.
   - Env toggle: `NYASH_MIR_UNIFIED_CALL` — default ON unless set to `0|false|off`.
@@ -80,6 +84,9 @@ ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall
 - Disable legacy rewrite path (dev-only) to avoid duplicate behavior during migration:
   - `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1`
 - JSON emit follows unified format (v1) when unified is ON; legacy v0 otherwise.
+ - VM policy (Instance BoxCall): user instance dispatch is a development fallback only.
+   - Env: `NYASH_VM_USER_INSTANCE_BOXCALL={0|1}` (default: dev/ci=true, prod=false)
+   - Builder is responsible for Instance→Function rewrite on user boxes; production disallows instance BoxCall so rewrite leaks are detected early.
 
 Dev metrics (opt-in)
 - Known-rate KPI for `resolve.choose`:

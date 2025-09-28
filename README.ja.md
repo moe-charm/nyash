@@ -13,6 +13,10 @@
 
 ---
 
+実行状況・ポリシー（機能追加ポーズ）
+- このフェーズでは「大きな機能追加」は一時停止しますが、バグ修正・正しさ/Fail‑Fastの向上は積極的に行います。
+- 公開仕様の意味論は変えません。必要な追加は既定OFFのフラグで段階導入します（可逆・局所）。
+
 開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
 ユーザーマクロ（Phase 2）: `docs/guides/user-macros.md`
 AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
@@ -27,6 +31,9 @@ ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.m
 - レガシー関数化の重複を避ける開発ガード:
   - `NYASH_DEV_DISABLE_LEGACY_METHOD_REWRITE=1`
 - JSON出力は unified ON で v1、OFF で v0（従来）
+ - VMポリシー（Instance BoxCall）: ユーザーBoxのインスタンス呼び出しは開発時のみフォールバック許可。
+   - 環境変数: `NYASH_VM_USER_INSTANCE_BOXCALL={0|1}`（既定: dev/ci=true, prod=false）
+   - 規範: ビルダーが Instance→Function 関数化を行い、実行時の Instance BoxCall に依存しない設計（prod は禁止で漏れを早期検知）。
 
 開発計測（任意）
 - `resolve.choose` の Known 率をKPIとして出力

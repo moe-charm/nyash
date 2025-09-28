@@ -1,0 +1,101 @@
+// Dev-only: ParserBox minimal debug driver for VM path
+// Note: enable using: NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1
+
+using "../selfhost-compiler/boxes/parser_box.nyash" as ParserBox
+
+// Dev-only: AddOperator to stabilize String + BoxRef concatenation during bring-up.
+// Converts RHS to string via toString() to avoid type errors in VM path.
+static box AddOperator {
+  apply(a, b) {
+    // Prefer string concatenation; coerce RHS to string via toString.
+    // This covers cases like "{\"type\":\"Expr\",\"expr\":" + <ParserBox-misbound>.
+    return a + b.toString()
+  }
+}
+
+static box Main {
+  main() {
+    local p = new ParserBox()
+
+    // Minimal source exercising substring/length/skip_ws paths
+    local src = "  using foo as F\n  using \"./path/file.nyash\" as P\n"
+
+    // 1) substring sanity
+    local s0 = src.substring(0, 5)
+    print("substring(0,5) = " + s0)
+
+    // 2) skip_ws from 0
+    local i = 0
+    i = p.skip_ws(src, i)
+    print("skip_ws(0) -> i = " + i)
+
+    // 3) extract_usings → get_usings_json
+    p.extract_usings(src)
+    local j = p.get_usings_json()
+    print("usings_json = " + j)
+
+    // 4) second line head skip_ws
+    local nl = src.indexOf("\n")
+    if nl >= 0 {
+      local k = p.skip_ws(src, nl + 1)
+      print("skip_ws(nl+1) -> k = " + k)
+    }
+
+    // 5) drive deeper path (safe subset: sum only)
+    //    比較演算子を含まない簡単なプログラムで parse_sum2 ルートのみを通す
+    if 1 == 1 {
+      local prog2 = "local x = 1\nx = x + 2\nreturn x\n"
+      local json2 = p.parse_program2(prog2)
+      print("sum json head = " + json2.substring(0, 32))
+    }
+
+    // 6) previously-paused program2 path: re-enable with a minimal program
+    if 1 == 1 {
+      local prog = "local x = 1\nreturn x\n"
+      local json = p.parse_program2(prog)
+      // keep output short but ensure the path executed
+      print("program2 json head = " + json.substring(0, 32))
+    }
+
+    // 7) minimal compare path (safe): no using, simple if with <=
+    //    仕様: 比較子は <= のみ、本文は x = x + 1、最後に return x
+    if 1 == 1 {
+      local prog3 = "local x = 0\nif x <= 1 { x = x + 1 }\nreturn x\n"
+      local json3 = p.parse_program2(prog3)
+      print("cmp json head = " + json3.substring(0, 32))
+    }
+
+    // 8) minimal compare (>=)
+    if 1 == 1 {
+      local prog4 = "local y = 2\nif y >= 2 { y = y - 1 }\nreturn y\n"
+      local json4 = p.parse_program2(prog4)
+      print("ge json head = " + json4.substring(0, 32))
+    }
+
+    // 9) minimal equals/not-equals
+    if 1 == 1 {
+      local prog5 = "local z = 0\nif z == 0 { z = 3 }\nreturn z\n"
+      local json5 = p.parse_program2(prog5)
+      print("eq json head = " + json5.substring(0, 32))
+
+      local prog6 = "local w = 1\nif w != 0 { w = w + 4 }\nreturn w\n"
+      local json6 = p.parse_program2(prog6)
+      print("ne json head = " + json6.substring(0, 32))
+    }
+
+    // 10) minimal logical and (&&) and or (||) — paused: ParserBox Stage-1 未対応のため
+    if 0 == 1 {
+      // and-case: both sides true to enter
+      local proga = "local a = 0\nlocal b = 1\nif a <= b && b != 0 { a = a + 1 }\nreturn a\n"
+      local jsona = p.parse_program2(proga)
+      print("and json head = " + jsona.substring(0, 32))
+
+      // or-case: RHS short-circuiting; LHS false, RHS true
+      local progor = "local c = 0\nlocal d = 0\nif c < d || d == 0 { c = c + 2 }\nreturn c\n"
+      local jsono = p.parse_program2(progor)
+      print("or json head = " + jsono.substring(0, 32))
+    }
+
+    return 0
+  }
+}

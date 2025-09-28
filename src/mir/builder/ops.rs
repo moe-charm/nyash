@@ -25,6 +25,9 @@ impl super::MirBuilder {
 
         let lhs = self.build_expression(left)?;
         let rhs = self.build_expression(right)?;
+        // Dev-only: dump varmap bindings for BinOp operands to chase sporadic mis-binding
+        crate::mir::builder::observe::varmap::emit_recv_names(self, lhs, "binop-lhs");
+        crate::mir::builder::observe::varmap::emit_recv_names(self, rhs, "binop-rhs");
         let dst = self.value_gen.next();
 
         let mir_op = self.convert_binary_operator(operator)?;

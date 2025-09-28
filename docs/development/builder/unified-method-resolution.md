@@ -9,14 +9,31 @@ Goals
 - Behavior-preserving by default: Unknown/core/user‑instance receivers route to BoxCall.
 - Known receivers may be rewritten to function calls (obj.m → Class.m(me,…)) under strict conditions.
 - Keep invariants around SSA and instruction order to prevent sporadic undefined uses.
+ - VM policy is explicit: user Instance BoxCall is a development fallback only; production defaults to disallow and expects builder rewrite.
+
+String‑like APIs (ownership rule)
+- Methods `length | len | substring | indexOf | lastIndexOf` belong to `StringBox`.
+- Builder normalization:
+  - If receiver hint/origin/type is `InstanceBox`/`ParserBox`/`DebugBox`/`FileBox` but method is string‑like, normalize receiver class to `StringBox` for resolution.
+  - This prevents accidental dispatch to instance methods that do not exist and removes the need for VM fallbacks.
+- Router policy (structural guard):
+  - For `InstanceBox × string‑like` calls, prefer `Unified` route (not `BoxCall`). This lets inference land on `StringBox.*` reliably and keeps behavior stable across backends.
 
 Pipeline (concept)
 1) Entry: `emit_unified_call(dst, CallTarget::Method { box_type, method, receiver }, args)`
 2) Special rewrites (early): toString/stringify → str, equals/1 consolidation.
 3) Known/unique rewrite (user boxes only): if class is Known and a unique function exists, rewrite to `Call(Class.m/arity)`.
-4) Routing: `RouterPolicy.choose_route` decides Unified vs BoxCall (Unknown/core/user‑instance → BoxCall; else Unified).
+4) Routing: `RouterPolicy.choose_route` decides Unified vs BoxCall
+   - Unknown/core/user‑instance → BoxCall（conservative）
+   - Exception (string‑like): `InstanceBox × {length,len,substring,indexOf,lastIndexOf}` → Unified（normalize to `StringBox`）
 5) Emit guard: LocalSSA finalize (recv/args in current block) + BlockSchedule order contract (PHI → Copy → Call).
 6) MIR emit: `Call { callee=Method/Extern/Global }` or `BoxCall` as routed.
+
+VM policy (Instance BoxCall)
+- Rule: user Instance BoxCall is for development diagnostics only; production must not rely on it.
+- Env: `NYASH_VM_USER_INSTANCE_BOXCALL={0|1}` (default: dev/ci=true, prod=false)
+- Builder responsibility: perform Instance→Function rewrite for user boxes whenever `(Box,method,arity)` exists uniquely. When rewrite is not possible, RouterPolicy safely falls back to BoxCall and the VM may allow it only in dev.
+ - Temporary dev valve (default OFF): `NYASH_VM_STRLIKE_INSTANCE_COERCE=1` may coerce instance receivers to string for string‑like calls during bring‑up. Remove when normalization is robust.
 
 Invariants (dev-verified)
 - SSA locality: All operands are materialized within the current basic block before use.
@@ -57,3 +74,4 @@ Acceptance for P4
 Notes
 - This design keeps Unknown/core/user‑instance on BoxCall for stability and parity with legacy behavior.
 - Known rewrite is structurally safe because user box methods are lowered to standalone MIR functions during build.
+ - VM enforcement (prod): instance-dispatch on user boxes is disabled by default so rewrite leaks are caught early in non‑dev runs.

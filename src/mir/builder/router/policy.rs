@@ -18,6 +18,26 @@ pub fn choose_route(box_name: &str, method: &str, certainty: TypeCertainty, arit
     let route = if box_name == "UnknownBox" {
         reason = "unknown_recv";
         Route::BoxCall
+    } else if box_name == "InstanceBox" && matches!(method,
+        "length" | "len" | "substring" | "indexOf" | "lastIndexOf"
+    ) {
+        // User instance should not receive string-APIs via BoxCall; prefer unified so
+        // downstream inference can normalize to StringBox safely.
+        reason = "instance-string-like-to-unified";
+        Route::Unified
+    } else if box_name == "ParserBox" && matches!(method,
+        "length" | "len" | "substring" | "indexOf" | "lastIndexOf"
+    ) {
+        // Defensive: string-like methods on ParserBox should route to BoxCall;
+        // infer on BoxCall side will normalize to StringBox and hit string bridge.
+        reason = "parserbox-string-like";
+        Route::BoxCall
+    } else if matches!(box_name, "DebugBox" | "FileBox") && matches!(method,
+        "length" | "len" | "substring" | "indexOf" | "lastIndexOf"
+    ) {
+        // Extra defensive: debug/file boxes shouldn't own string APIs; prefer BoxCall bridge.
+        reason = "nonstring-box-string-like";
+        Route::BoxCall
     } else if matches!(box_name, "StringBox" | "ArrayBox" | "MapBox") {
         reason = "core_box";
         Route::BoxCall

@@ -13,21 +13,28 @@ if [[ ! -x "${NY_BIN}" ]]; then
   exit 1
 fi
 
-echo "[selfhost-smoke] Step 1: Emit JSON via selfhost compiler (min-json, stage3)"
+echo "[selfhost-smoke] Step 1: Emit JSON via selfhost compiler (min-json first, then mir if needed)"
 OUT_JSON="/tmp/nyash_selfhost_out.json"
 set -x
-if NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
-   "${NY_BIN}" apps/selfhost-compiler/compiler.nyash -- --min-json --emit-mir --stage3 > "${OUT_JSON}"; then
+if NYASH_LLVM_USE_HARNESS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+   "${NY_BIN}" --backend llvm apps/selfhost-compiler/compiler.nyash -- --min-json --stage3 > "${OUT_JSON}"; then
   :
 else
-  echo "[selfhost-smoke] WARN: selfhost compiler emission failed (policy/duplicates?). Continuing." >&2
+  echo "[selfhost-smoke] WARN: min-json emission failed; trying mir-emitter path..." >&2
+  if NYASH_LLVM_USE_HARNESS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+     "${NY_BIN}" --backend llvm apps/selfhost-compiler/compiler.nyash -- --min-json --emit-mir --stage3 > "${OUT_JSON}"; then
+    :
+  else
+    echo "[selfhost-smoke] WARN: selfhost compiler emission failed (policy/runtime). Continuing." >&2
+  fi
 fi
 set +x
 
 if [[ -s "${OUT_JSON}" ]]; then
   echo "[selfhost-smoke] Emitted JSON: ${OUT_JSON} ($(wc -c < "${OUT_JSON}") bytes)"
 else
-  echo "[selfhost-smoke] NOTE: no JSON emitted (skipped). This is optional for the minimal smoke." >&2
+  echo "[selfhost-smoke] ERROR: no JSON emitted (expected non-empty)." >&2
+  exit 1
 fi
 
 echo "[selfhost-smoke] Step 2: Run representative VM example (rewrite=ON/OFF)"

@@ -5,4 +5,6 @@
 
 pub mod ssa;
 pub mod resolve;
-
+pub mod resolve_trace;
+pub mod common;
+pub mod varmap;

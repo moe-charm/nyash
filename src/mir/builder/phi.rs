@@ -50,7 +50,22 @@ impl MirBuilder {
                 crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
             }
             self.emit_instruction(MirInstruction::Phi { dst: merged, inputs })?;
-            self.variable_map.insert(name, merged);
+            // VarMapGuard (dev-only concept; 挙動不変): ParserBox.* 内では `me` の ValueId を
+            // 他名へそのまま束縛しない。Copy を一枚噛ませた別IDに束縛して識別性を保つ。
+            let bind_val = if let Some(fun) = self.current_function.as_ref() {
+                if fun.signature.name.starts_with("ParserBox.") && name != "me" {
+                    if let Some(&me_vid) = self.variable_map.get("me") {
+                        // if either incoming was `me`,または merged==me と見做せる状況は Copy を噛ませる
+                        if then_v == me_vid || else_v == me_vid {
+                            let loc = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::Copy { dst: loc, src: merged })?;
+                            crate::mir::builder::metadata::propagate::propagate(self, merged, loc);
+                            loc
+                        } else { merged }
+                    } else { merged }
+                } else { merged }
+            } else { merged };
+            self.variable_map.insert(name, bind_val);
         }
 
         // Ensure pinned synthetic slots ("__pin$...") have a block-local definition at the merge,
@@ -133,7 +148,19 @@ impl MirBuilder {
             }
             self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
             self.variable_map = pre_if_var_map.clone();
-            self.variable_map.insert(var_name, result_val);
+            let bind_val = if let Some(fun) = self.current_function.as_ref() {
+                if fun.signature.name.starts_with("ParserBox.") && var_name != "me" {
+                    if let Some(&me_vid) = self.variable_map.get("me") {
+                        if then_value_for_var == me_vid || else_value_for_var == me_vid {
+                            let loc = self.value_gen.next();
+                            self.emit_instruction(MirInstruction::Copy { dst: loc, src: result_val })?;
+                            crate::mir::builder::metadata::propagate::propagate(self, result_val, loc);
+                            loc
+                        } else { result_val }
+                    } else { result_val }
+                } else { result_val }
+            } else { result_val };
+            self.variable_map.insert(var_name, bind_val);
         } else {
             // No variable assignment pattern detected – just emit Phi for expression result
             let then_pred = then_exit_block_opt.unwrap_or(then_block);

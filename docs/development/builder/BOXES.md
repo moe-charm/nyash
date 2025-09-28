@@ -62,3 +62,24 @@ Diagnostics
 Guardrails
 - Behavior must remain unchanged; only refactors/centralizations allowed.
 - Keep diffs small; validate `make smoke-quick` and `make smoke-integration` stay green at each step.
+
+New Boxes (this pass)
+- infer::receiver — ReceiverInferenceBox
+  - Unifies receiver class/certainty inference across Unified and BoxCall routes.
+  - Primitive normalization: String → StringBox; safe heuristics for common string methods.
+  - API: `infer_receiver(hint, method, recv, &origin, &types) -> (String, TypeCertainty)`
+- rewrite::gate — RewriteGateBox
+  - Centralizes Known rewrite gating: userbox限定、StringBoxのstring系は除外、(Box,method,arity) が存在。
+  - API: `should_rewrite(builder, cls, method, arity) -> bool`
+- indexes::instance — InstanceMethodIndexBox
+  - Register/query instance methods for gating and diagnostics.
+  - API: `register(builder, cls, method, arity)`, `exists(builder, cls, method, arity)`
+- materialize::call_site — MaterializeBox
+  - Call-site finalization: LocalSSA finalize + after‑PHI materialize + tail copy.
+  - API: `finalize_call_site(builder, &mut Callee, &mut Vec<ValueId>)`
+- observe::resolve_trace — ResolveTraceBox
+  - Dev tracing helpers for resolve.try/choose with consistent fields.
+  - API: `emit_try_method(...)`, `emit_choose_unified(...)`
+- verify::call_order — CallOrderVerifyBox
+  - Dev-only wrapper to run BlockSchedule order checks after call emission.
+  - API: `verify_after_call(builder)`

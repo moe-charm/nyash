@@ -9,6 +9,5 @@ pub fn finalize_call_operands(builder: &mut MirBuilder, callee: &mut Callee, arg
 
 /// Verify block schedule invariants after emitting a call (dev-only WARNs inside).
 pub fn verify_after_call(builder: &mut MirBuilder) {
-    crate::mir::builder::schedule::block::BlockScheduleBox::verify_order(builder);
+    crate::mir::builder::verify::call_order::verify_after_call(builder);
 }
-

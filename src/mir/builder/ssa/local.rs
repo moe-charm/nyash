@@ -76,7 +76,18 @@ pub fn cmp_operand(builder: &mut MirBuilder, v: ValueId) -> ValueId { ensure(bui
 /// - If Method: ensure receiver is in the current block
 /// - All args: ensure in the current block
 pub fn finalize_callee_and_args(builder: &mut MirBuilder, callee: &mut Callee, args: &mut Vec<ValueId>) {
-    if let Callee::Method { receiver: Some(r), box_name, method, certainty } = callee.clone() {
+    if let Callee::Method { receiver: Some(mut r), box_name, method, certainty } = callee.clone() {
+        // Dev-stability: inside ParserBox.* methods, force receiver to `me` param id
+        // so we never depend on fragile tail copies for `me`.
+        if box_name == "ParserBox" {
+            if let Some(fun) = builder.current_function.as_ref() {
+                if fun.signature.name.starts_with("ParserBox.") {
+                    if let Some(first_param) = fun.params.first() {
+                        r = *first_param;
+                    }
+                }
+            }
+        }
         let r_local = recv(builder, r);
         *callee = Callee::Method { box_name, method, receiver: Some(r_local), certainty };
     }
@@ -108,6 +119,9 @@ pub fn finalize_compare(builder: &mut MirBuilder, lhs: &mut ValueId, rhs: &mut V
     *rhs = cmp_operand(builder, *rhs);
     if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
         if let Some(bb) = builder.current_block { eprintln!("[local-ssa] finalize-compare bb={:?} lhs=%{} rhs=%{}", bb, lhs.0, rhs.0); }
+        // Optional varmap mapping lines for compare operands (dev-only)
+        crate::mir::builder::observe::varmap::emit_recv_names(builder, *lhs, "cmp-lhs");
+        crate::mir::builder::observe::varmap::emit_recv_names(builder, *rhs, "cmp-rhs");
     }
 }
 

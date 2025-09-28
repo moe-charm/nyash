@@ -12,6 +12,19 @@
 - Mini‑VM は M2/M3 の代表ケースを安定化（パス/境界厳密化）。
 - VM Kernel の Ny 化は後段（観測・ポリシーから段階導入、既定OFF）。
 
+優先順（2025‑09‑29 リバランス）
+- P0: Rust VM 層の安定化（既存バグの点修正・回帰防止）
+  - 受け手推定・RouterPolicy・LocalSSA/材化・VarMapGuard 等の補強を優先（quick/integration 常緑）。
+- P1: Mini‑VM 仕上げ（完了）
+  - M2/M3 の代表＋エッジスモークを quick に追加し、単一パス＋厳密セグメントで緑維持。
+- P2: Nyash コンパイラ MVP（Phase 15.6）の前進（次の主作業）
+  - 既存 `apps/selfhost-compiler/compiler.nyash` を軸に、Stage‑2/3 入力から JSON v0 を安定排出。
+  - 受け入れ（dev限定）: `NYASH_JSON_ONLY=1` で `version/kind` を含む JSON ヘッダが非空であること。
+  - 既定挙動は不変。コンパイラは別アプリ（apps/）として進め、VM/LLVM 本線は影響最小。
+- P3: Known/Rewrite 統合 Stage‑1 の仕上げ（dev観測）
+  - 仕様は不変のまま、観測（resolve.try/choose / ssa.phi）と関数化の一貫性を高める。
+- P4: NYABI Kernel 下地の維持（未配線・既定OFF）
+
 Unified Call（開発既定ON）
 - 呼び出しの統一判定は、環境変数 `NYASH_MIR_UNIFIED_CALL` が `0|false|off` でない限り有効（既定ON）。
 - メソッド解決/関数化を `emit_unified_call` に集約し、以下の順序で決定:
@@ -56,6 +69,8 @@ Unified Call（開発既定ON）
 - Builder: resolve.try/choose と ssa.phi が dev‑only で取得可能（NYASH_DEBUG_*）
 - 表示API: QuickRef/ガイドが `str()` に統一（実行挙動は従前と同じ）
 - Unified Call は開発既定ONだが、`NYASH_MIR_UNIFIED_CALL=0|false|off` で即時オプトアウト可能（段階移行）。
+- Selfhost Compiler（dev限定・任意ゲート）:
+  - `NYASH_JSON_ONLY=1 ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --stage3` が JSON ヘッダ（`{"version":…, "kind":…}`）を出力（非空）。
 
 実装タスク（小粒）
 1. origin/observe/rewrite の分割方針を CURRENT_TASK に反映（ガイド/README付き）
@@ -94,6 +109,7 @@ Unified Call（開発既定ON）
 - 統合スモーク: integration プロファイル（LLVM/llvmlite）は PASS 17/17（全緑）。
 - ルータ／順序ガード（仕様不変）:
   - Router: 受信者クラスが Unknown のメソッド呼び出しは常にレガシー BoxCall にフォールバック（安定性優先・常時ON）。
+  - Router（補足）: `InstanceBox × {length,len,substring,indexOf,lastIndexOf}` は Unified に固定し、`StringBox` 正規化へ導く（VM救済に依存しない）。
   - BlockSchedule: φ→Copy(materialize)→本体(Call) の順序を dev‑only で検証（`NYASH_BLOCK_SCHEDULE_VERIFY=1`）。
   - LocalSSA: 受信者・引数・条件・フィールド基底を emit 直前で「現在のブロック内」に必ず定義。
 - VM 寛容フラグの方針:
@@ -101,9 +117,12 @@ Unified Call（開発既定ON）
   - Router の Unknown→BoxCall は常時ON（仕様不変・安定化目的）。
 
 ## 次のTODO（短期）
-- json_query_vm（VM）: LocalSSA/順序の取りこぼしを補強し、SKIP を解除。
-- ループ PHI 搬送: ループ header/合流での搬送を最小補強し、break/continue/loop_statement の SKIP を解除。
-- Mini‑VM M2/M3: 単一パス化の仕上げ（境界厳密化の再確認）後、代表4件（m2_eq_true/false, m3_branch_true, m3_jump）を PASS → SKIP 解除。
+- Rust VM 安定化（点補修の仕上げ）
+  - 既知箇所の観測を最小ONで確認（必要時のみ）。
+- json_query_vm（VM）: LocalSSA/順序の取りこぼし補強（救済OFFで緑）。
+- ループ PHI 搬送: header/合流の VarMapGuard 観測（break/continue を安定）。
+- Mini‑VM M2/M3: 追加エッジ（複数compare/ret先頭/ゼロ除算/no‑retフォールバック）を quick で常緑（完了済）。
+- Selfhost Compiler（dev）: JSONヘッダ非空スモーク（任意ゲート）を準備。
 
 ## Builder 小箱（Box 化）方針（仕様不変・段階導入）
 - S-tier（導入）:

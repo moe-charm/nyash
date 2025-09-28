@@ -6,9 +6,6 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-# TEMP SKIP: Mini‑VM M3(jump) is being polished; VM/LLVM main paths are green.
-test_skip "selfhost_mir_m3_jump_vm" "Temporarily skipped (Mini‑VM jump polish)" && exit 0
-
 # Enabled: Mini‑VM branch/jump basic
 
 # Dev-time guards

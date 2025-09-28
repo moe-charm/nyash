@@ -333,8 +333,8 @@ pub fn operator_box_compare_adopt() -> bool {
 /// AddOperator.apply adopt: default OFF（順次昇格のため）
 pub fn operator_box_add_adopt() -> bool {
     match std::env::var("NYASH_OPERATOR_BOX_ADD_ADOPT").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
-        Some(ref s) if s == "0" || s == "false" || s == "off" => false,
-        _ => true, // default ON (promoted after validation)
+        Some(ref s) if s == "1" || s == "true" || s == "on" => true,
+        _ => false, // default OFF
     }
 }
 

@@ -39,33 +39,14 @@ pub fn convert_target_to_callee(
         },
 
         CallTarget::Method { box_type, method, receiver } => {
-            let inferred_box_type = box_type.unwrap_or_else(|| {
-                // Try to infer box type from value origin or type annotation
-                value_origin_newbox.get(&receiver)
-                    .cloned()
-                    .or_else(|| {
-                        value_types.get(&receiver)
-                            .and_then(|t| match t {
-                                crate::mir::MirType::Box(box_name) => Some(box_name.clone()),
-                                _ => None,
-                            })
-                    })
-                    .unwrap_or_else(|| "UnknownBox".to_string())
-            });
-
-            // Certainty is Known when origin propagation provides a concrete class name
-            let certainty = if value_origin_newbox.contains_key(&receiver) {
-                crate::mir::definitions::call_unified::TypeCertainty::Known
-            } else {
-                crate::mir::definitions::call_unified::TypeCertainty::Union
-            };
-
-            Ok(Callee::Method {
-                box_name: inferred_box_type,
-                method,
-                receiver: Some(receiver),
-                certainty,
-            })
+            let (box_name, certainty) = crate::mir::builder::infer::receiver::infer_receiver(
+                box_type.as_deref(),
+                method.as_str(),
+                receiver,
+                value_origin_newbox,
+                value_types,
+            );
+            Ok(Callee::Method { box_name, method, receiver: Some(receiver), certainty })
         },
 
         CallTarget::Constructor(box_type) => {

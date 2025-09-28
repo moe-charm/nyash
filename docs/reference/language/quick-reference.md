@@ -16,6 +16,11 @@ Expressions and Calls
   - それ以外（Unknown/core/user‑instance）は安全に BoxCall へフォールバック（挙動不変）。
   - 環境で無効化: `NYASH_REWRITE_KNOWN_DEFAULT=0`（開発時の切替用）。
   - バックエンド（VM/LLVM/Ny）は統一形状の呼び出しを受け取る。
+ - VM 実行ポリシー: ユーザーBoxの Instance BoxCall は開発のみ許容（prod 既定 = 不許可）。
+    - env: `NYASH_VM_USER_INSTANCE_BOXCALL={0|1}`（既定: dev/ci=true, prod=false）
+    - 規範: ビルダーが関数化（Instance→Function）し、ランタイム Instance BoxCall に依存しない。
+  - 内部規範（String‑like 所属）: `length/len/substring/indexOf/lastIndexOf` は `StringBox` に所属。
+    - Unknown/Instance/ParserBox/DebugBox/FileBox でこれらが現れた場合は、ビルダーが `StringBox` に正規化して解決する。
 - Member: `obj.field` or `obj.m`
 
 Display & Conversion
@@ -38,23 +43,26 @@ Semicolons and ASI (Automatic Semicolon Insertion)
 - Not allowed:
   - Line break immediately after a binary operator (e.g., `1 +\n2`)
   - Ambiguous continuations; parser must Fail‑Fast with a clear message.
+ - Enforce (dev flag): `NYASH_ASI_STRICT=1`（既定は互換・OFF）
 
 Truthiness (boolean context)
 - `Bool` → itself
 - `Integer` → `0` is false; non‑zero is true
 - `String` → empty string is false; otherwise true
-- `Array`/`Map` → non‑null is true (size is not consulted)
+- `Array`/`Map`/`Box` → non‑null is true（コンテナ/オブジェクトは truthy。サイズやフィールドは見ない）
 - `null`/`void` → false
 
 Equality and Comparison
 - `==` and `!=` compare primitive values (Integer/Bool/String). No implicit cross‑type coercion.
 - Box/Instance comparisons should use explicit methods (`equals`), or be normalized by the builder.
 - Compare operators `< <= > >=` are defined on integers (MVP).
+ - Enforce Box== guidance (dev flag): `NYASH_BOX_EQ_GUIDE_ERROR=1`
 
 String and Numeric `+`
 - If either side is `String`, `+` is string concatenation.
 - If both sides are numeric, `+` is addition.
 - Other mixes are errors (dev: warn; prod: error) — keep it explicit（必要なら `str(x)` を使う）。
+ - Enforce (dev flag): `NYASH_PLUS_MIX_ERROR=1`（既定は互換・OFF）
 
 Blocks and Control
 - `if (cond) { ... } [else { ... }]`

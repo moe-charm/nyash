@@ -121,9 +121,8 @@ static box Main {
       json = EmitterBox.emit_program(ast_json, me._usings)
     }
 
-    // Output JSON
-    local console = new ConsoleBox()
-    console.println(json)
+    // Output JSON (avoid ConsoleBox to prevent undefined/birth warnings)
+    if json != null { print(json) } else { print("{}") }
     return 0
   }
 }

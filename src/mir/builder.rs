@@ -48,6 +48,11 @@ mod types;     // types::annotation / inference（型注釈/推論の箱: 推論
 mod router;    // RouterPolicyBox（Unified vs BoxCall）
 mod emit_guard; // EmitGuardBox（emit直前の最終関所）
 mod name_const; // NameConstBox（関数名Const生成）
+mod infer; // ReceiverInferenceBox（受け手推定の一元化）
+// rewrite は既存モジュールを使用（gate サブモジュールを追加）
+mod indexes; // InstanceMethodIndexBox（(Box,method,arity)登録/照会）
+mod materialize; // MaterializeBox（Call直前の材化を一元化）
+mod verify; // CallOrderVerifyBox（dev-only 検証ラッパ）
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -109,6 +114,8 @@ pub struct MirBuilder {
     current_static_box: Option<String>,
     /// Index of static methods seen during lowering: name -> [(BoxName, arity)]
     pub(super) static_method_index: std::collections::HashMap<String, Vec<(String, usize)>>,
+    /// Index of instance methods seen during lowering: (BoxName, method, arity)
+    pub(super) instance_method_index: std::collections::HashSet<(String, String, usize)>,
 
     /// Fast lookup: method+arity tail → candidate function names (e.g., ".str/0" → ["JsonNode.str/0", ...])
     pub(super) method_tail_index: std::collections::HashMap<String, Vec<String>>,
@@ -192,6 +199,7 @@ impl MirBuilder {
             plugin_method_sigs,
             current_static_box: None,
             static_method_index: std::collections::HashMap::new(),
+            instance_method_index: std::collections::HashSet::new(),
             method_tail_index: std::collections::HashMap::new(),
             method_tail_index_source_len: 0,
             
@@ -410,6 +418,22 @@ impl MirBuilder {
             .unwrap_or(raw_value_id);
 
         // In SSA form, each assignment creates a new value
+        // Dev-stability: inside ParserBox.* methods, avoid binding `me`'s ValueId to other variable names
+        // (rare mis-binding can cause downstream ops like `j+1` to see BoxRef(ParserBox)).
+        let value_id = if let Some(fun) = self.current_function.as_ref() {
+            if fun.signature.name.starts_with("ParserBox.") {
+                if let Some(&me_vid) = self.variable_map.get("me") {
+                    if me_vid == value_id {
+                        // materialize a local copy and bind that instead of `me`
+                        if let Ok(loc) = self.materialize_local(value_id) {
+                            loc
+                        } else {
+                            value_id
+                        }
+                    } else { value_id }
+                } else { value_id }
+            } else { value_id }
+        } else { value_id };
         self.variable_map.insert(var_name.clone(), value_id);
 
         Ok(value_id)
@@ -612,6 +636,7 @@ impl MirBuilder {
                         birt_mid,
                         arg_values,
                         EffectMask::READ.add(Effect::ReadHeap),
+                        false,
                     )?;
                 }
             }

@@ -929,6 +929,77 @@ impl MirInterpreter {
                 }
                 return Ok(());
             }
+            // String-like fallbacks for InstanceBox when inside ParserBox.* functions (dev bring-up)
+            if let Some(cur) = &self.cur_fn {
+                if cur.starts_with("ParserBox.") {
+                    let coerce_on = std::env::var("NYASH_VM_STRLIKE_INSTANCE_COERCE").ok().as_deref() == Some("1");
+                    if coerce_on {
+                    match method {
+                        "indexOf" | "lastIndexOf" => {
+                            // Coerce receiver to string via to_string_box
+                            let s = recv_box.to_string_box().value;
+                            // Arg0: substring, Arg1 (optional): from index
+                            let sub = if let Some(a0) = args.get(0) {
+                                match self.reg_load(*a0)? {
+                                    VMValue::String(t) => t,
+                                    VMValue::Integer(i) => i.to_string(),
+                                    VMValue::Float(f) => format!("{}", f),
+                                    VMValue::Bool(b) => b.to_string(),
+                                    VMValue::Void => String::new(),
+                                    VMValue::BoxRef(bx) => bx.to_string_box().value,
+                                    VMValue::Future(_) => String::new(),
+                                }
+                            } else { String::new() };
+                            let from = if let Some(a1) = args.get(1) {
+                                match self.reg_load(*a1)? { VMValue::Integer(i) => i as isize, VMValue::Float(f) => f as isize, _ => 0 }
+                            } else { if method == "lastIndexOf" { (s.len() as isize) - 1 } else { 0 } };
+                            let idx = if method == "indexOf" {
+                                if sub.is_empty() { 0 } else { s.find(&sub).map(|i| i as isize).unwrap_or(-1) }
+                            } else { // lastIndexOf
+                                if sub.is_empty() { (s.len() as isize).min(from.max(0)) } else {
+                                    // Bound search up to 'from'
+                                    let bound = if from < 0 { 0 } else { (from as usize + 1).min(s.len()) };
+                                    let slice = &s[..bound];
+                                    slice.rfind(&sub).map(|i| i as isize).unwrap_or(-1)
+                                }
+                            };
+                            if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(idx as i64)); }
+                            return Ok(());
+                        }
+                        "substring" => {
+                            // Receiver to string
+                            let s = recv_box.to_string_box().value;
+                            let (start, end) = {
+                                let mut st: isize = 0;
+                                let mut en: isize = s.len() as isize;
+                                if let Some(a0) = args.get(0) {
+                                    st = match self.reg_load(*a0)? {
+                                        VMValue::Integer(i) => i as isize,
+                                        VMValue::Float(f) => f as isize,
+                                        _ => 0,
+                                    };
+                                }
+                                if let Some(a1) = args.get(1) {
+                                    en = match self.reg_load(*a1)? {
+                                        VMValue::Integer(i) => i as isize,
+                                        VMValue::Float(f) => f as isize,
+                                        _ => en,
+                                    };
+                                }
+                                (st, en)
+                            };
+                            let n = s.len() as isize;
+                            let i = start.clamp(0, n) as usize;
+                            let j = end.clamp(i as isize, n) as usize;
+                            let out = if i <= j { s[i..j].to_string() } else { String::new() };
+                            if let Some(d) = dst { self.regs.insert(d, VMValue::String(out)); }
+                            return Ok(());
+                        }
+                        _ => {}
+                    }
+                    }
+                }
+            }
             // Minimal runtime fallback for common InstanceBox.is_eof when lowered function is not present.
             // This avoids cross-class leaks and hard errors in union-like flows.
             if method == "is_eof" && args.is_empty() {
