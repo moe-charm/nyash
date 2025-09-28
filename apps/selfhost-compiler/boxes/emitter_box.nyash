@@ -1,5 +1,5 @@
 // EmitterBox — thin wrapper to emit JSON v0 (extracted)
-box EmitterBox {
+static box EmitterBox {
   emit_program(json, usings_json) {
     if json == null { return json }
     // Normalize usings payload to at least an empty array so meta.usings is always present
@@ -19,8 +19,4 @@ box EmitterBox {
     if needs_comma == 1 { head = head + "," }
     return head + "\"meta\":{\"usings\":" + payload + "}" + tail
   }
-}
-
-static box EmitterStub {
-  main(args) { return 0 }
 }

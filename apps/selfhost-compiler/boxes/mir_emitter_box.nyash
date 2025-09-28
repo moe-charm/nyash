@@ -2,7 +2,7 @@
 // Scope: Return(Int) only (const + ret). Safe default to 0 when not found.
 // Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
 
-box MirEmitterBox {
+static box MirEmitterBox {
   // Extract first Return(Int) value from Stage-1 JSON (very small string scan)
   _extract_return_int(ast_json) {
     if ast_json == null { return 0 }
@@ -47,6 +47,3 @@ box MirEmitterBox {
     return s
   }
 }
-
-static box MirEmitterStub { main(args) { return 0 } }
-

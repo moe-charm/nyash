@@ -16,8 +16,8 @@ fi
 echo "[selfhost-smoke] Step 1: Emit JSON via selfhost compiler (min-json, stage3)"
 OUT_JSON="/tmp/nyash_selfhost_out.json"
 set -x
-if NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_NY_COMPILER_MIN_JSON=1 \
-   "${NY_BIN}" apps/selfhost-compiler/compiler.nyash -- --stage3 > "${OUT_JSON}"; then
+if NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+   "${NY_BIN}" apps/selfhost-compiler/compiler.nyash -- --min-json --emit-mir --stage3 > "${OUT_JSON}"; then
   :
 else
   echo "[selfhost-smoke] WARN: selfhost compiler emission failed (policy/duplicates?). Continuing." >&2
