@@ -13,7 +13,7 @@ exit 0
 
 APP_DIR="$NYASH_ROOT/apps/examples/json_pp"
 # Tolerate Void in comparisons during dev hardening (must be set before run)
-export NYASH_VM_TOLERATE_VOID=1
+# Strict mode: do not tolerate Void in VM (policy)
 output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev)
 
 expected=$(cat << 'TXT'

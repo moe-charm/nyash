@@ -40,6 +40,14 @@ mod vars; // variables/scope helpers // small loop helpers (header/exit context)
 mod origin; // P0: origin inference（me/Known）と PHI 伝播（軽量）
 mod observe; // P0: dev-only observability helpers（ssa/resolve）
 mod rewrite; // P1: Known rewrite & special consolidation
+mod ssa; // LocalSSA helpers (in-block materialization)
+mod schedule; // BlockScheduleBox（物理順序: PHI→materialize→body）
+mod metadata; // MetadataPropagationBox（type/originの伝播）
+mod emission;  // emission::*（Const/Compare/Branch の薄い発行箱）
+mod types;     // types::annotation / inference（型注釈/推論の箱: 推論は後段）
+mod router;    // RouterPolicyBox（Unified vs BoxCall）
+mod emit_guard; // EmitGuardBox（emit直前の最終関所）
+mod name_const; // NameConstBox（関数名Const生成）
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -152,6 +160,13 @@ pub struct MirBuilder {
     /// Monotonic counters for region IDs (deterministic across a run).
     debug_loop_counter: u32,
     debug_join_counter: u32,
+
+    /// Local SSA cache: ensure per-block materialization for critical operands (e.g., recv)
+    /// Key: (bb, original ValueId, kind) -> local ValueId
+    /// kind: 0=recv, 1+ reserved for future (args etc.)
+    pub(super) local_ssa_map: HashMap<(BasicBlockId, ValueId, u8), ValueId>,
+    /// BlockSchedule cache: deduplicate materialize copies per (bb, src)
+    pub(super) schedule_mat_map: HashMap<(BasicBlockId, ValueId), ValueId>,
 }
 
 impl MirBuilder {
@@ -199,6 +214,9 @@ impl MirBuilder {
             debug_scope_stack: Vec::new(),
             debug_loop_counter: 0,
             debug_join_counter: 0,
+
+            local_ssa_map: HashMap::new(),
+            schedule_mat_map: HashMap::new(),
         }
     }
 
@@ -343,20 +361,15 @@ impl MirBuilder {
             _ => None,
         };
 
-        let const_value = match literal {
-            LiteralValue::Integer(n) => ConstValue::Integer(n),
-            LiteralValue::Float(f) => ConstValue::Float(f),
-            LiteralValue::String(s) => ConstValue::String(s),
-            LiteralValue::Bool(b) => ConstValue::Bool(b),
-            LiteralValue::Null => ConstValue::Null,
-            LiteralValue::Void => ConstValue::Void,
+        // Emit via ConstantEmissionBox（仕様不変の統一ルート）
+        let dst = match literal {
+            LiteralValue::Integer(n) => crate::mir::builder::emission::constant::emit_integer(self, n),
+            LiteralValue::Float(f) => crate::mir::builder::emission::constant::emit_float(self, f),
+            LiteralValue::String(s) => crate::mir::builder::emission::constant::emit_string(self, s),
+            LiteralValue::Bool(b) => crate::mir::builder::emission::constant::emit_bool(self, b),
+            LiteralValue::Null => crate::mir::builder::emission::constant::emit_null(self),
+            LiteralValue::Void => crate::mir::builder::emission::constant::emit_void(self),
         };
-
-        let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst,
-            value: const_value,
-        })?;
         // Annotate type
         if let Some(ty) = ty_for_dst {
             self.value_types.insert(dst, ty);
@@ -494,12 +507,8 @@ impl MirBuilder {
         // Phase 9.78a: Unified Box creation using NewBox instruction
         // Core-13 pure mode: emit ExternCall(env.box.new) with type name const only
         if crate::config::env::mir_core13_pure() {
-            // Emit Const String for type name
-            let ty_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: ty_id,
-                value: ConstValue::String(class.clone()),
-            })?;
+            // Emit Const String for type name（ConstantEmissionBox）
+            let ty_id = crate::mir::builder::emission::constant::emit_string(self, class.clone());
             // Evaluate arguments (pass through to env.box.new shim)
             let mut arg_vals: Vec<ValueId> = Vec::with_capacity(arguments.len());
             for a in arguments {

@@ -25,6 +25,22 @@ pub(super) fn builder_debug_log(msg: &str) {
 }
 
 impl super::MirBuilder {
+    // ---- LocalSSA convenience (readability helpers) ----
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn local_recv(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::recv(self, v) }
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn local_arg(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::arg(self, v) }
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn local_cmp_operand(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::cmp_operand(self, v) }
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn local_field_base(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::field_base(self, v) }
+    #[allow(dead_code)]
+    #[inline]
+    pub(crate) fn local_cond(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::cond(self, v) }
     /// Ensure a basic block exists in the current function
     pub(crate) fn ensure_block_exists(&mut self, block_id: BasicBlockId) -> Result<(), String> {
         if let Some(ref mut function) = self.current_function {
@@ -43,6 +59,10 @@ impl super::MirBuilder {
         if let Some(ref mut function) = self.current_function {
             function.add_block(BasicBlock::new(block_id));
             self.current_block = Some(block_id);
+            // Local SSA cache is per-block; clear on block switch
+            self.local_ssa_map.clear();
+            // BlockSchedule materialize cache is per-block as well
+            self.schedule_mat_map.clear();
             // Entry materialization for pinned slots only when not suppressed.
             // This provides block-local defs in single-predecessor flows without touching user vars.
             if !self.suppress_pin_entry_copy_next {
@@ -54,6 +74,7 @@ impl super::MirBuilder {
                     if let Some(&src) = self.variable_map.get(name) {
                         let dst = self.value_gen.next();
                         self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
+                        crate::mir::builder::metadata::propagate::propagate(self, src, dst);
                         self.variable_map.insert(name.clone(), dst);
                         pin_renames.push((src, dst));
                     }
@@ -95,8 +116,10 @@ impl super::MirBuilder {
     ) -> Result<(), String> {
         // Ensure receiver has a definition in the current block to avoid undefined use across
         // block boundaries (LoopForm/header, if-joins, etc.).
-        // Pinning creates a local Copy that participates in PHI when needed.
-        let box_val = self.pin_to_slot(box_val, "@recv").unwrap_or(box_val);
+        // LocalSSA: ensure receiver has an in-block definition (kind=0 = recv)
+        let box_val = self.local_recv(box_val);
+        // LocalSSA: ensure args are materialized in current block
+        let args: Vec<super::ValueId> = args.into_iter().map(|a| self.local_arg(a)).collect();
         // Check environment variable for unified call usage, with safe overrides for core/user boxes
         let use_unified_env = super::calls::call_unified::is_unified_call_enabled();
         // First, try to determine the box type
@@ -110,13 +133,27 @@ impl super::MirBuilder {
                 }
             }
         }
-        // Prefer legacy BoxCall for core collection boxes and user instance boxes (stability first)
-        let prefer_legacy = match box_type.as_deref() {
-            Some("ArrayBox") | Some("MapBox") | Some("StringBox") => true,
-            Some(bt) => !bt.ends_with("Box"), // user instance class name (e.g., JsonTokenizer)
-            None => false,
-        };
-        if use_unified_env && !prefer_legacy {
+        // Route decision is centralized in RouterPolicyBox（仕様不変）。
+        let bx_name = box_type.clone().unwrap_or_else(|| "UnknownBox".to_string());
+        let route = crate::mir::builder::router::policy::choose_route(
+            &bx_name,
+            &method,
+            crate::mir::definitions::call_unified::TypeCertainty::Union,
+            args.len(),
+        );
+        if super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+            if matches!(method.as_str(), "parse" | "substring" | "has_errors" | "length") {
+                eprintln!(
+                    "[boxcall-decision] method={} bb={:?} recv=%{} class_hint={:?} prefer_legacy={}",
+                    method,
+                    self.current_block,
+                    box_val.0,
+                    box_type,
+                    matches!(route, crate::mir::builder::router::policy::Route::BoxCall)
+                );
+            }
+        }
+        if use_unified_env && matches!(route, crate::mir::builder::router::policy::Route::Unified) {
             let target = super::builder_calls::CallTarget::Method {
                 box_type,
                 method: method.clone(),
@@ -251,12 +288,7 @@ impl super::MirBuilder {
             super::utils::builder_debug_log(&format!("pin slot={} src={} dst={}", slot_name, v.0, dst.0));
         }
         // Propagate lightweight metadata so downstream resolution/type inference remains stable
-        if let Some(t) = self.value_types.get(&v).cloned() {
-            self.value_types.insert(dst, t);
-        }
-        if let Some(cls) = self.value_origin_newbox.get(&v).cloned() {
-            self.value_origin_newbox.insert(dst, cls);
-        }
+        crate::mir::builder::metadata::propagate::propagate(self, v, dst);
         self.variable_map.insert(slot_name, dst);
         Ok(dst)
     }
@@ -265,12 +297,42 @@ impl super::MirBuilder {
     pub(crate) fn materialize_local(&mut self, v: super::ValueId) -> Result<super::ValueId, String> {
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::Copy { dst, src: v })?;
+        // Propagate metadata (type/origin) from source to the new local copy
+        crate::mir::builder::metadata::propagate::propagate(self, v, dst);
         Ok(dst)
+    }
+
+    /// Insert a Copy immediately after PHI nodes in the current block (position-stable).
+    pub(crate) fn insert_copy_after_phis(&mut self, dst: super::ValueId, src: super::ValueId) -> Result<(), String> {
+        if let (Some(ref mut function), Some(bb)) = (&mut self.current_function, self.current_block) {
+            if let Some(block) = function.get_block_mut(bb) {
+                // Propagate effects on the block
+                block.insert_instruction_after_phis(super::MirInstruction::Copy { dst, src });
+                // Lightweight metadata propagation (unified)
+                crate::mir::builder::metadata::propagate::propagate(self, src, dst);
+                return Ok(());
+            }
+        }
+        Err("No current function/block to insert copy".to_string())
     }
 
     /// Ensure a value is safe to use in the current block by slotifying (pinning) it.
     /// Currently correctness-first: always pin to get a block-local def and PHI participation.
     pub(crate) fn ensure_slotified_for_use(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
         self.pin_to_slot(v, hint)
+    }
+
+    /// Local SSA: ensure a value has a definition in the current block and cache it per-block.
+    /// kind: 0 = recv (reserved for args in future)
+    pub(crate) fn local_ssa_ensure(&mut self, v: super::ValueId, kind: u8) -> super::ValueId {
+        use super::ssa::local::{ensure, LocalKind};
+        let lk = match kind {
+            0 => LocalKind::Recv,
+            1 => LocalKind::Arg,
+            2 => LocalKind::CompareOperand,
+            4 => LocalKind::Cond,
+            x => LocalKind::Other(x),
+        };
+        ensure(self, v, lk)
     }
 }

@@ -279,12 +279,9 @@ impl super::MirBuilder {
             // parameter slot (unused in body)
             let _param = f.next_value_id();
             f.params.push(_param);
-            // body: const 1; return it
-            let one = f.next_value_id();
-            if let Some(bb) = f.get_block_mut(entry) {
-                bb.add_instruction(MirInstruction::Const { dst: one, value: ConstValue::Integer(1) });
-                bb.add_instruction(MirInstruction::Return { value: Some(one) });
-            }
+            // body: const 1; return it（FunctionEmissionBox を使用）
+            let one = crate::mir::function_emission::emit_const_integer(&mut f, entry, 1);
+            crate::mir::function_emission::emit_return_value(&mut f, entry, one);
             module.add_function(f);
         }
 

@@ -11,8 +11,11 @@ Keywords (reserved)
 
 Expressions and Calls
 - Function call: `f(a, b)`
-- Method call: `obj.m(a, b)` — internally rewritten to function form: `Class.m(me: obj, a, b)`
-  - Rewrite is default‑ON; backends (VM/LLVM/Ny) receive the unified call shape.
+- Method call: `obj.m(a, b)` — internally normalized to function form: `Class.m(me: obj, a, b)`
+  - Default‑ON（P4）: Known 受信者かつ関数が一意に存在する場合に正規化（userbox 限定）。
+  - それ以外（Unknown/core/user‑instance）は安全に BoxCall へフォールバック（挙動不変）。
+  - 環境で無効化: `NYASH_REWRITE_KNOWN_DEFAULT=0`（開発時の切替用）。
+  - バックエンド（VM/LLVM/Ny）は統一形状の呼び出しを受け取る。
 - Member: `obj.field` or `obj.m`
 
 Display & Conversion

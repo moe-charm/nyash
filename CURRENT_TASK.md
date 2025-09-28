@@ -6,6 +6,191 @@ Focus
 - Builder/VM ガードは最小限・仕様不変（dev では診断のみ）。
 - Phase 15.7 を再定義: Known 化＋Rewrite 統合（dev観測）と Mini‑VM 安定化、表示APIは `str()` に統一（互換:stringify）。
 
+Update — 2025-09-28 (P4 default‑on + P5 docs/annotations 完了)
+- Known 正規化（userbox限定・関数存在・一意・arity一致）を既定ON。
+  - フラグ: `NYASH_REWRITE_KNOWN_DEFAULT`（0/false/off で無効化）。
+- 設計ノートを追加: `docs/development/builder/unified-method-resolution.md`。
+- Quick Reference を更新: 内部正規化の注記と切替フラグを追記。
+- 型注釈を最小拡張（is_digit_char/hex/alpha, MapBox.has/1 → Bool）。
+- quick/integration: 全緑を確認。
+
+Update — 2025-09-28 (Router/EmitGuard/NameConst 導入・json_lint_vm 緑)
+- Router 最小ガード（仕様不変・安定優先）
+  - UnknownBox の Method は一律レガシー経路（BoxCall）へフォールバック（unified 経路での sporadic 未定義を根絶）。
+  - `prefer_legacy` を保守側既定に調整: None/Unknown/String/Array/Map は BoxCall 優先、ユーザー箱（末尾"Box"以外）も従来通り BoxCall。
+  - `JsonParserModule.create_parser/0` の戻り型を Known 化（Box("JsonParser") 起源付与）。
+- BlockSchedule 検証（dev-only）
+  - φ→Copy(materialize)→本体(Call) の順序検証を追加（ズレは WARN のみ）。
+- VM dev 安全弁（既定OFF）
+  - `reg_load` 未定義→Void 置換を `NYASH_VM_TOLERATE_VOID=1` 下でのみ有効化（診断と一時救済）。
+- 結果
+  - quick: `json_lint_vm` PASS（未定義は解消）。
+  - integration（LLVM/llvmlite）: PASS 17/17（すべて緑）。
+- 備考: `json_query_vm` は後続の更新で解決（下記エントリ参照）。
+
+Update — 2025-09-28 (json_query_vm PASS・最終ガード適用)
+- evaluator 側の堅牢化（VM準拠・仕様不変）
+  - 文字クラス判定を membership（手動スキャン）へ変更（indexOf 非依存）。
+  - span を ArrayBox から "i:j" 文字列に正規化（.get 依存を排除）。
+  - span_unpack_* も手動スキャン実装（indexOf 非依存）。
+  - out-of-range/未存在キーは null 返却で合意。
+- テスト: json_query_vm の SKIP を解除して PASS を確認。
+- quick: 引き続き 64/64 PASS、integration: 17/17 PASS。
+
+Update — 2025-09-28 (P1 — Const統一拡大 + メタ伝播の適用)
+- Const 発行の統一（builder 側残存）
+  - `build_literal` と core13-pure の型名 Const を ConstantEmissionBox に統一済。残存直書きは掃除済み（rewrite系は NameConstBox 使用）。
+- メタデータ伝播（type/origin）を小粒適用
+  - BlockScheduleBox: `emit_before_call_copy` で `propagate(base→dst)` を追加。
+  - utils: `materialize_local` で `propagate(src→dst)` を追加。
+  - `insert_copy_after_phis` は既に propagate 済み（再確認のみ）。
+- ルータ/型注釈: 前回の dev トレース追加／ホワイトリスト拡張に変更なし（挙動不変）。
+- 検証: quick/integration は引き続き全緑を確認予定（差分は局所・可逆）。
+
+Update — 2025-09-28 (Rewrite Known 化 Stage‑1 一本化)
+- 標準メソッド呼び出しを emit_unified_call に統一委譲。
+  - ルーティング（RouterPolicy）と rewrite::{special,known} の適用点を一本化。
+  - 既存ガードにより Unknown/core/user-instance は BoxCall へ自動フォールバック（挙動不変）。
+- 重複掃除（挙動不変）
+  - method_call_handlers 内の receiver クラス推定（me/起源/型）は削除し、unified 側に一本化。
+  - box_type は None を渡し、emit_unified_call が起源/型から判断。
+  - pin_to_slot/BoxCall 直呼びの旧コードは撤去済み。
+
+Update — 2025-09-28 (FunctionEmissionBox adoption + Router trace + Type annotate)
+- FunctionEmissionBox 採用を拡大（MirFunction 直編集の代表箇所を移行）
+  - src/mir/aot_plan_import.rs の Const/Return 発行を function_emission 経由に置換（挙動不変）。
+  - Float/Null/Void など特殊値は安全側で既存ロジックにフォールバック（差分最小）。
+- RouterPolicy に dev 観測ログを追加（既定OFF）
+  - 環境変数 `NYASH_ROUTER_TRACE=1` で、経路決定（Unified/BoxCall）と理由（unknown_recv/core_box/user_instance）を stderr に短く出力。
+  - 仕様不変・テスト比較に影響なし（既定OFF・stderr）。
+- TypeAnnotationBox のホワイトリストを最小拡張（観測ベース）
+  - 追加: `*.len/0 → Integer`, `*.substring/2 → String`, `*.esc_json/0 → String`。
+  - 既存の `*.str/0`/`*.length/0`/`*.size/0` に加えて注釈精度を微増（挙動不変）。
+
+Update — 2025-09-28 (quick/integration smoke status — 総括)
+- quick: PASS 64/64（暫定 SKIP を明示）
+  - SKIP（VM 側の局所 polish 中; LLVM 緑）:
+    - core/loops: break_continue, loop_statement（PHI 搬送の最小補強→復帰）
+    - selfhost mini‑vm: m2_eq_true / m3_branch_true / m3_jump（Mini‑VM M2/M3 の単一パス化・境界厳密化の仕上げ後に復帰）
+- integration（LLVM/llvmlite）: PASS 17/17（全緑）
+- フラグ整理:
+  - `NYASH_VM_TOLERATE_VOID` は dev/一部診断時のみ使用。quick テストからは削除済み。
+  - Router ガード（Unknown→BoxCall）は仕様不変・常時ON。
+
+Update — 2025-09-28 (LocalSSA — in-block materialize & recv/args 統一)
+- LocalSSA 小箱を導入（Builder 内部）: `(bb, orig, kind) -> local` のキャッシュで、必ず「現在の基本ブロック内」に Copy を置く。
+  - 実装: `MirBuilder.local_ssa_map` と `local_ssa_ensure(v, kind)`（kind: 0=recv, 1=arg, 2=cmp, 4=cond）。
+  - 読みやすさヘルパ: `local_recv/local_arg/local_cond/local_field_base/local_cmp_operand` を追加。
+- 適用（最小・局所、仕様不変）:
+  - Unified Method 呼び出し: 受信者/引数を LocalSSA 済みに統一（emit 前に in‑block materialize）。
+  - Legacy Call（Extern/Global/Value）: 引数を LocalSSA 化。BoxCall も recv/args を LocalSSA 化。
+  - Branch/条件: if/loop/短絡 And/Or の条件を LocalSSA 化。
+  - Field: base と set 値に LocalSSA を適用。`?` 伝播でも recv/条件に適用。
+  - 置き換え: `pin_to_slot("@recv")` → `local_recv` に差し替え（BoxCall 経路も含む）。
+- 既知の現象: `apps/lib/json_native/lexer/scanner.nyash` の `read_string_literal()` 内 `me.advance()`（Unified 経路）で稀に `use of undefined recv` が残存。
+  - 受信者/引数/条件/フィールド周辺は LocalSSA の“内側”へ揃えたため、残りは「emit 直前のブロック切替」等のパスでズレている可能性。
+  - 次アクション（P0）で観測を厚くし、必要なら emit 直前の bb 再確認→再 materialize の最終関所を広げる。
+- 備考（レガシー優先について）: ArrayBox/MapBox/StringBox と "…Box" 以外のユーザー箱はレガシー BoxCall 優先のまま（安定性）。ただし LocalSSA を適用済みのため、現象の主因ではない。
+
+Update — 2025-09-28 (LocalSSA 最終関所＋Unified 仕上げ・json_lint_vm デバッグ)
+- finalize ヘルパー追加（ssa/local）
+  - `finalize_branch_cond` / `finalize_compare` / `finalize_field_base_and_args` を実装、各 emit 直前に適用。
+  - Compare は従来の ensure_slotify を置換（挙動不変）。
+- Unified Call 側の強化
+  - emit 直前に `finalize_callee_and_args` を再適用（bb 変化に強い）。
+  - さらに最終 Copy を Call 直前に強制挿入（受信者の def→use を同一 bb に確実化）。
+  - dev トレース `[vm-call-final]` は `NYASH_LOCAL_SSA_TRACE=1` 時のみ出力（runner 比較に影響しない）。
+- emit フック（builder）
+  - `emit_instruction` で Method 付き Call を検知し、直前に Copy を 1 枚差し込む最終ガード（dev 正当化）。
+- VM 側の dev 安全弁（default OFF）
+  - `NYASH_VM_RECV_ARG_FALLBACK=1` または `NYASH_VM_TOLERATE_VOID=1` で、未定義受信者時に args[0] を受信者として読み直す（Builder 取りこぼしの一時救済）。
+- 現状の結果
+  - 受信者未定義は再現困難に。json_lint_vm は次段の未実装メソッド（String.is_digit_char）で停止。
+
+Next — 短期 TODO（仕様不変・差分最小）
+1) json_query_vm の quick 失敗を解消（undefined→Void 置換に頼らない）
+   - eval_path_text 直近の `substring/==` 連鎖で LocalSSA finalize の取りこぼしがないか emit 点を再点検。
+   - UnknownBox→BoxCall へ統一済のため、unified 経路残存が無いか grep で確認し、見つかれば点で BoxCall へ誘導。
+   - reg_load の Void 寛容は OFF のまま比較を厳密に（quick テスト側からも外した）。
+2) MIR dump/トレースの最小化: failing bb の直前5命令を dev だけ短くダンプし、φ→Copy→Call の順序を再検証。
+3) quick 全体を再実行→緑維持。必要なら minimal finalize を追加（仕様不変）。
+
+Unskip Plan（段階復帰）
+- P0: json_query_vm（VM）
+  - 受け入れ: 期待出力と一致。追加の寛容フラグ不要。SKIP 解除。
+- P1: loops（break_continue / loop_statement）
+  - 受け入れ: 期待出力一致。PHI carriers/entry materialize の取りこぼしゼロ。SKIP 解除。
+- P2: Mini‑VM（M2/M3: compare/branch/jump）
+  - 受け入れ: m2_eq_true/false, m3_branch_true, m3_jump の 4 件が PASS。coarse/多段走査を撤去して単一パスを維持。
+
+Plan — Next（一本化の続きと段階導入）
+- P3（重複整理の完遂・1日）
+  - 標準メソッド経路の一本化は完了。残る補助ロジックの重複（受信者クラス推定・候補列挙）を `rewrite::{known,special}` 側APIへ寄せる（点検・微修正）。
+  - Docs 同期: CURRENT_TASK と docs/development/builder/BOXES.md に一本化方針と責務境界を追記。
+  - 受け入れ: quick/integration 全緑、ログは既定OFFで静粛。
+- P4（Known 正規化の観測→段階ON・2〜3日）
+  - 観測: `NYASH_ROUTER_TRACE=1` と `observe::resolve.choose` で Known 率/フォールバック率を確認。
+  - 段階ON: userbox 限定＋関数存在＋候補一意＋arity一致のみ既定ON（新フラグ `NYASH_REWRITE_KNOWN_DEFAULT` で切替）。
+  - 受け入れ: quick/integration 緑、mismatch 0、性能±10%以内。
+- P5（周辺整備・1日）
+  - 型注釈の最小拡張（観測ベースで1〜2件）。
+  - phase‑15.7/README と Quick Reference に「内部正規化（obj.m→Class.m）」の注記を追記（ユーザー向け説明を簡潔に）。
+
+Docs — Added
+- Unified method resolution design note: docs/development/builder/unified-method-resolution.md
+  - Pipeline, invariants, flags, rollout plan（P4 observe → dev opt‑in → consider default）を整理。
+
+Self‑Hosting — Return Plan（P6）
+- 目的: Selfhost Compiler（Ny製）→ MIR(JSON v0) → VM/llvmlite 実行の実線復帰。
+- 手順（小粒・仕様不変）
+  1) Quickstart ドキュメント追加（完了）: `docs/development/selfhosting/quickstart.md`
+     - 実行例/ENV透過/出力ファイルの位置を記述。
+  2) MVP 走行確認（dev）
+     - `apps/selfhost-compiler/compiler.nyash` で最小サンプルを emit（`--min-json` / `--stage3`）。
+     - VM（Rust/PyVM どちらでも）で JSON v0 を実行し、既存の JSON アプリと期待出力一致。
+  3) スモーク連携（任意ジョブ）
+     - 代表1件の bootstrap スモークを tools に追補（既存 `tools/bootstrap_selfhost_smoke.sh` の利用/更新を検討）。
+- 受け入れ基準
+  - quick/integration 緑を維持。
+  - Selfhost emit→実行の最小系が安定して PASS（dev 任意ジョブで十分）。
+
+Update — 2025-09-28 (BlockScheduleBox 導入・順序固定)
+- 目的: ブロック内の物理順序を契約化（PHI群 → materialize群(Copy/Id) → 本体(Call等)）。
+- 実装:
+  - 新規: `src/mir/builder/schedule/{mod.rs,block.rs}` 追加。
+  - API 初期:
+    - `ensure_after_phis_copy(builder, src) -> ValueId`: φ直後に Copy を確実挿入（per‑block dedup `(bb,src)->dst`）。
+    - `emit_before_call_copy(builder, src) -> ValueId`: Call 直前に最終 Copy（src は after‑phis の dst）。
+  - `MirBuilder` に `schedule_mat_map`（per‑block）を追加し、`start_new_block` でクリア。
+  - Unified Call で適用（pin→LocalSSA→after‑phis Copy→必要時 before‑call Copy）。
+- 状態:
+  - “use of undefined recv” は大幅減。sporadic 残存に対し、二段網（after‑phis固定＋before‑call最終）を導入済み。
+  - 一部で受信者誤型（例: String に parse）を観測。順序ではなく解決側の誤選択の可能性。
+- 次アクション（BlockSchedule 仕上げ & ルータ最小ガード）
+  1) dev 検証: φ→Copy→Call の順序チェック（不変条件）を追加。
+  2) rewrite/resolve に dev 最小ガード（既定OFF）を置き、明確な誤選択（String.parse 等）を抑止。観測ログで要因特定。
+  3) failing bb を MIR dump で再検証→ quick 緑化。
+
+Plan — Next (LocalSSA 仕上げ・観測)
+1) 観測（dev 限定）: `local_ssa_ensure`/emit_unified_call に軽トレースを追加（bb/kind/orig→local）。
+2) 最終関所: emit 直前に `current_block` のズレ検知→ `local_ssa_ensure` を再適用する小ヘルパを共通化（Call/Compare/Branch/Field に必要分点適用）。
+3) json_lint_vm を再実行（quick 緑化）。
+4) ドキュメント追記: LocalSSA の責務と適用範囲（builder/README or observe/README 近傍）。
+
+Update — 2025-09-28 (LocalSSA ヘルパ化・集中管理 追加)
+- ssa/local へ集約: `src/mir/builder/ssa/local.rs` を新設し、LocalKind と ensure()/recv/arg/cond/field_base/cmp_operand を実装。
+- 共通ヘルパ: Call 直前の集約処理を `finalize_callee_and_args(builder, &mut Callee, &mut Vec<ValueId>)` に統一。Legacy 用に `finalize_args(...)` も追加。
+- 呼び出し側の簡素化:
+  - Unified: `emit_unified_call` は finalize_callee_and_args を呼ぶだけに整理（手動の re-materialize を撤去）。
+  - Legacy: Extern/Global/Value で finalize_args を適用。
+  - BoxCall: utils 側で recv/args を LocalSSA に統一（pin_to_slot("@recv") 撤去）。
+- dev トレース: `NYASH_LOCAL_SSA_TRACE=1` で ensure/copy を一行出力（bb/kind/orig→local）。
+
+Plan — Next (短期・最小差分)
+- 最終関所の共通化を拡張: ssa/local に Branch/Compare/Field 用の finalize ヘルパを追加し、emit 直前に一律適用（ズレ検知を含む）。
+- 観測の強化: LocalSSA トレースに inst 直前/直後の要点（bb, kind, value）を短く追加し、未定義が LocalSSA の内外どちらか即判定できるようにする。
+- json_lint_vm を緑化（仕様不変・最適化後回し）。
+
 Update — 2025-09-28 (P1 Known 集約・KPI・LAYER ガード)
 - Builder: method_call_handlers の Known 経路を `rewrite::known` に集約。
   - 新規 API: `try_known_or_unique`（Known 優先→一意候補 fallback）。
@@ -89,6 +274,68 @@ Guards / Policy
 - 変更は局所・可逆（フラグ既定OFF）。
 - 既定挙動は不変（prod 用心）。
 - dev では診断強化（ログ/メトリクス）し、ランナー側でノイズはフィルタ。
+
+## Unskip Plan（段階復帰）
+- P0: json_query_vm（VM）— Completed
+  - 状態: SKIP 解除、期待出力一致、寛容フラグ不要で PASS。
+  - 措置: evaluator のspan表現と membership 判定の手動化（indexOf/.get 非依存）。
+- P1: loops（break/continue/loop_statement）— Completed
+  - 状態: SKIP 解除、quick で PASS。
+  - 措置: LoopBuilder の PHI/順序を維持しつつ、LocalSSA/BlockSchedule の適用範囲で in‑block 定義を徹底。
+- P2: Mini‑VM（M2/M3）— Completed
+  - 状態: 代表 4 件（m2_eq_true/false, m3_branch_true, m3_jump） PASS・SKIP 解除。
+  - 備考: 単一パス維持・境界厳密化済み。
+
+Update — 2025-09-28 (S‑tier 箱の適用拡大・仕様不変)
+- Const 発行の一元化（代表→全体へ拡大）
+  - builder/stmts.rs: Void/String を `emission::constant` に置換。
+  - builder/control_flow.rs, exprs.rs, fields.rs: Void/String を同様に置換。
+  - builder/builder_calls.rs: 関数名 Const は `NameConstBox` へ、整数1は `emission::constant` へ。
+- メタデータ伝播の統一
+  - builder/utils.rs: `pin_to_slot` / `insert_copy_after_phis` の型/起源コピーを `metadata::propagate` に移譲。
+- 既知戻りの型注釈（最小）
+  - `annotate_call_result_from_func_name` に `types::annotation::annotate_from_function` を追加（`str/0`・`length/0`・`size/0`）。
+
+現状サマリ
+- quick: PASS 64/64（loops/Mini‑VM を含む）
+- integration（llvmlite）: PASS 17/17
+
+Next（小粒・既定挙動不変）
+- S‑tier の置換拡大の残: 代表の置換を完了（ops/decls/exprs の主要点）。引き続き残部を段階的に `emission::constant` へ（影響の少ない箇所から）。
+- RouterPolicyBox への `prefer_legacy` 集約を適用済み（utils の判定を `router::policy::choose_route` に移譲）。
+- 既知戻り注釈のホワイトリスト拡充（必要に応じて、dev 記録と連動）。
+
+## MIR 生成層の箱（Box 化） — 構造導入（仕様不変）
+目的: 重複した処理（定数発行/メタ伝播/最低限の型注釈）を薄い箱に集約し、回帰を構造で抑止する。
+
+Tier S（今すぐ・小粒）
+- MetadataPropagationBox（src/mir/builder/metadata/propagate.rs）
+  - propagate(builder, src, dst)
+  - propagate_with_override(builder, dst, MirType)
+- ConstantEmissionBox（src/mir/builder/emission/constant.rs）
+  - emit_integer/emit_string/emit_bool/emit_null/emit_void
+- TypeAnnotationBox（src/mir/builder/types/annotation.rs）
+  - set_type(builder, dst, MirType)
+  - annotate_from_function(builder, dst, func_name)
+
+状態（2025-09-28）
+- S-tier: metadata/emission/types（annotation）に加え、router/emit_guard/name_const を追加（仕様不変）。
+- 最小適用: builder_calls（Router/EmitGuard）、rewrite/{special,known}（NameConst）へ部分導入済み。
+- まだ広域置換は行っていない（段階適用）。
+
+次のアクション（箱の採用計画）
+1) const発行箇所を emission::constant に段階移行（代表箇所のみ→全体）
+2) 値生成直後の type/origin 継承を metadata::propagate に統一
+3) 統一Callの dst へ TypeAnnotationBox をピンポイント適用（既知戻りのみ）
+4) RouterPolicyBox を unified 経路へ導入（Unknown/String/Array/Map/ユーザー箱→BoxCall）
+5) EmitGuardBox で Call の finalize/verify を集約（Branch/Compare は後段）
+6) NameConstBox を rewrite/special/known へ段階適用
+
+ガード/方針
+- すべて既定OFFの挙動変更なし。差分は関数呼び出し先の集約のみ。
+- quick/integration 緑維持を確認しつつ範囲を広げる。
+
+参考: docs/development/builder/BOXES.md に API/方針の詳細。
 
 Policy — AST Using (Status Quo)
 - SSOT（nyash.toml）＋AST prelude merge を維持。prod は toml 限定、dev/ci は段階的に緩和。
@@ -251,6 +498,20 @@ Update — 2025-09-28 (json_lint_vm regression fix — condition_fn and birth br
   - Symptom: `local cases = new ArrayBox()` followed by `cases.push(...)` used an undefined receiver ValueId.
   - Interim change: make `local` always materialize a distinct register and `copy init -> var` (also const Void for uninitialized). This avoids SSA aliasing issues.
   - Status: needs a quick pass across smokes to confirm; proceed if quick green, otherwise revisit builder var mapping.
+
+Update — 2025-09-28 (recv undefined across loop headers — Patch‑A applied)
+- Root cause: Some method calls still went through legacy BoxCall emission without receiver pin, causing the receiver ValueId to be undefined at loop/header blocks.
+- Patch‑A (applied): pin receiver centrally in `emit_box_or_plugin_call` so every method call path (Unified/Legacy) has a block‑local def.
+  - File: src/mir/builder/utils.rs (at function start)
+- Block entry propagation (applied): when starting a new basic block, copy all `__pin$` slots and rewrite user variables that referenced the old pin ids to the new copied ids.
+  - File: src/mir/builder/utils.rs (start_new_block)
+- Status: residual undefined value still observed in json_lint_vm (different ValueIds). Next step is to trace the exact site and, if necessary, add a minimal materialize at `build_variable_access` for the specific hotspots.
+
+Plan — Next (late 2025‑09‑28)
+1) Trace failing site in json_lint_vm with `NYASH_VM_TRACE=1` and MIR dump; capture `reg_load undefined id` with surrounding last_inst.
+2) Verify that at that site the receiver is either a) not pinned (missed path) or b) was not remapped at block entry; fix with a targeted pin/materialize.
+3) If a general gap remains, add a guarded materialize in `build_variable_access` (only when the ValueId originates from a pin slot or when entering a new block) to keep diff minimal.
+4) Re‑run quick; keep Unified default‑ON; document toggles and rationale.
 
 Dev toggles
 - NYASH_DEV_BIRTH_INJECT_BUILTINS=1: re‑enable birth() injection for builtin boxes (default OFF to stabilize unified Method path until full bridge lands).

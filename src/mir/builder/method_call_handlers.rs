@@ -91,49 +91,20 @@ impl MirBuilder {
         method: String,
         arguments: &[ASTNode],
     ) -> Result<ValueId, String> {
-        // 安全策: レシーバをピン留めしてブロック境界での未定義参照を防ぐ
-        let object_value = self
-            .pin_to_slot(object_value, "@recv")
-            .unwrap_or(object_value);
         // Build argument values
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.build_expression(arg.clone())?);
         }
 
-        // If receiver is a user-defined box, lower to function call: "Box.method/(1+arity)"
-        let mut class_name_opt: Option<String> = None;
-        // Heuristic guard: if this receiver equals the current function's 'me',
-        // prefer the enclosing box name parsed from the function signature.
-        if class_name_opt.is_none() {
-            if let Some(&me_vid) = self.variable_map.get("me") {
-                if me_vid == object_value {
-                    if let Some(ref fun) = self.current_function {
-                        if let Some(dot) = fun.signature.name.find('.') {
-                            class_name_opt = Some(fun.signature.name[..dot].to_string());
-                        }
-                    }
-                }
-            }
-        }
-        if class_name_opt.is_none() {
-            if let Some(cn) = self.value_origin_newbox.get(&object_value) { class_name_opt = Some(cn.clone()); }
-        }
-        if class_name_opt.is_none() {
-            if let Some(t) = self.value_types.get(&object_value) {
-                if let MirType::Box(bn) = t { class_name_opt = Some(bn.clone()); }
-            }
-        }
-        // レガシー経路（BoxCall/Plugin）へ送る（安定優先・挙動不変）。
-        let result_id = self.value_gen.next();
-        self.emit_box_or_plugin_call(
-            Some(result_id),
-            object_value,
-            method.clone(),
-            None,
+        // Receiver class hintは emit_unified_call 側で起源/型から判断する（重複回避）
+        // 統一経路: emit_unified_call に委譲（RouterPolicy と rewrite::* で安定化）
+        let dst = self.value_gen.next();
+        self.emit_unified_call(
+            Some(dst),
+            CallTarget::Method { box_type: None, method, receiver: object_value },
             arg_values,
-            super::EffectMask::READ.add(super::Effect::ReadHeap),
         )?;
-        Ok(result_id)
+        Ok(dst)
     }
 }

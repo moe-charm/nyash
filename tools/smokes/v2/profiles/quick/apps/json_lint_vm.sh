@@ -7,7 +7,7 @@ require_env || exit 2
 preflight_plugins || exit 2
 
 APP_DIR="$NYASH_ROOT/apps/examples/json_lint"
-export NYASH_VM_TOLERATE_VOID=1
+# Strict mode: do not tolerate Void in VM (policy: tests must not rely on NYASH_VM_TOLERATE_VOID)
 output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev)
 
 expected=$(cat << 'TXT'

@@ -38,6 +38,7 @@ impl MirBuilder {
         }
 
         let condition_val = self.build_expression(condition)?;
+        let condition_val = self.local_cond(condition_val);
 
         // Create blocks
         let then_block = self.block_gen.next();
@@ -46,11 +47,9 @@ impl MirBuilder {
 
         // Branch
         let pre_branch_bb = self.current_block()?;
-        self.emit_instruction(MirInstruction::Branch {
-            condition: condition_val,
-            then_bb: then_block,
-            else_bb: else_block,
-        })?;
+        let mut condition_val = condition_val;
+        crate::mir::builder::ssa::local::finalize_branch_cond(self, &mut condition_val);
+        crate::mir::builder::emission::branch::emit_conditional(self, condition_val, then_block, else_block)?;
 
         // Snapshot variables before entering branches
         let pre_if_var_map = self.variable_map.clone();
@@ -84,7 +83,7 @@ impl MirBuilder {
         if !self.is_current_block_terminated() {
             // Scope leave for then-branch
             self.hint_scope_leave(0);
-            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+            crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
         }
         // Pop then-branch debug region
         self.debug_pop_region();
@@ -113,8 +112,7 @@ impl MirBuilder {
             let val = self.build_expression(else_ast.clone())?;
             (val, Some(else_ast), Some(self.variable_map.clone()))
         } else {
-            let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: void_val, value: ConstValue::Void })?;
+            let void_val = crate::mir::builder::emission::constant::emit_void(self);
             (void_val, None, None)
         };
         let else_exit_block = self.current_block()?;

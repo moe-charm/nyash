@@ -154,8 +154,7 @@ impl super::MirBuilder {
                         CompareOp::Gt => "Gt",
                         CompareOp::Ge => "Ge",
                     };
-                    let op_const = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: op_const, value: super::ConstValue::String(opname.into()) })?;
+                    let op_const = crate::mir::builder::emission::constant::emit_string(self, opname);
                     // そのまま値を渡す（型変換/slot化は演算子内orVMで行う）
                     let name = "CompareOperator.apply/3".to_string();
                     self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name), vec![op_const, lhs, rhs])?;
@@ -191,10 +190,11 @@ impl super::MirBuilder {
                     } else {
                         (lhs, rhs)
                     };
-                    let lhs2 = self.ensure_slotified_for_use(lhs2_raw, "@cmp_lhs")?;
-                    let rhs2 = self.ensure_slotified_for_use(rhs2_raw, "@cmp_rhs")?;
-                    self.emit_instruction(MirInstruction::Compare { dst, op, lhs: lhs2, rhs: rhs2 })?;
-                    self.value_types.insert(dst, MirType::Bool);
+                    // Finalize compare operands in current block via LocalSSA
+                    let mut lhs2 = lhs2_raw;
+                    let mut rhs2 = rhs2_raw;
+                    crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs2, &mut rhs2);
+                    crate::mir::builder::emission::compare::emit_to(self, dst, op, lhs2, rhs2)?;
                 }
             }
         }
@@ -222,11 +222,9 @@ impl super::MirBuilder {
         let merge_block = self.block_gen.next();
 
         // Branch on LHS truthiness (runtime to_bool semantics in interpreter/LLVM)
-        self.emit_instruction(MirInstruction::Branch {
-            condition: lhs_val,
-            then_bb: then_block,
-            else_bb: else_block,
-        })?;
+        let mut lhs_cond = self.local_cond(lhs_val);
+        crate::mir::builder::ssa::local::finalize_branch_cond(self, &mut lhs_cond);
+        crate::mir::builder::emission::branch::emit_conditional(self, lhs_cond, then_block, else_block)?;
         // Record predecessor block for branch (for single-pred PHI materialization)
         let pre_branch_bb = self.current_block()?;
 
@@ -254,22 +252,18 @@ impl super::MirBuilder {
             let rhs_false = self.block_gen.next();
             let rhs_join = self.block_gen.next();
             let rhs_val = self.build_expression(right.clone())?;
-            self.emit_instruction(MirInstruction::Branch {
-                condition: rhs_val,
-                then_bb: rhs_true,
-                else_bb: rhs_false,
-            })?;
+            let mut rhs_cond = self.local_cond(rhs_val);
+            crate::mir::builder::ssa::local::finalize_branch_cond(self, &mut rhs_cond);
+            crate::mir::builder::emission::branch::emit_conditional(self, rhs_cond, rhs_true, rhs_false)?;
             // true path
             self.start_new_block(rhs_true)?;
-            let t_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
-            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let t_id = crate::mir::builder::emission::constant::emit_bool(self, true);
+            crate::mir::builder::emission::branch::emit_jump(self, rhs_join)?;
             let rhs_true_exit = self.current_block()?;
             // false path
             self.start_new_block(rhs_false)?;
-            let f_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
-            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let f_id = crate::mir::builder::emission::constant::emit_bool(self, false);
+            crate::mir::builder::emission::branch::emit_jump(self, rhs_join)?;
             let rhs_false_exit = self.current_block()?;
             // join rhs result into a single bool
             self.start_new_block(rhs_join)?;
@@ -282,15 +276,14 @@ impl super::MirBuilder {
             self.value_types.insert(rhs_bool, MirType::Bool);
             rhs_bool
         } else {
-            let t_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
+            let t_id = crate::mir::builder::emission::constant::emit_bool(self, true);
             t_id
         };
         let then_exit_block = self.current_block()?;
         let then_var_map_end = self.variable_map.clone();
         if !self.is_current_block_terminated() {
             self.hint_scope_leave(0);
-            self.emit_instruction(MirInstruction::Jump { target: merge_block })?;
+            crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
         }
 
         // ---- ELSE branch ----
@@ -307,30 +300,25 @@ impl super::MirBuilder {
         // AND: else → false
         //  OR: else → evaluate RHS and reduce to bool
         let else_value_raw = if is_and {
-            let f_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
+            let f_id = crate::mir::builder::emission::constant::emit_bool(self, false);
             f_id
         } else {
             let rhs_true = self.block_gen.next();
             let rhs_false = self.block_gen.next();
             let rhs_join = self.block_gen.next();
             let rhs_val = self.build_expression(right)?;
-            self.emit_instruction(MirInstruction::Branch {
-                condition: rhs_val,
-                then_bb: rhs_true,
-                else_bb: rhs_false,
-            })?;
+            let mut rhs_cond = self.local_cond(rhs_val);
+            crate::mir::builder::ssa::local::finalize_branch_cond(self, &mut rhs_cond);
+            crate::mir::builder::emission::branch::emit_conditional(self, rhs_cond, rhs_true, rhs_false)?;
             // true path
             self.start_new_block(rhs_true)?;
-            let t_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: t_id, value: crate::mir::ConstValue::Bool(true) })?;
-            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let t_id = crate::mir::builder::emission::constant::emit_bool(self, true);
+            crate::mir::builder::emission::branch::emit_jump(self, rhs_join)?;
             let rhs_true_exit = self.current_block()?;
             // false path
             self.start_new_block(rhs_false)?;
-            let f_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: f_id, value: crate::mir::ConstValue::Bool(false) })?;
-            self.emit_instruction(MirInstruction::Jump { target: rhs_join })?;
+            let f_id = crate::mir::builder::emission::constant::emit_bool(self, false);
+            crate::mir::builder::emission::branch::emit_jump(self, rhs_join)?;
             let rhs_false_exit = self.current_block()?;
             // join rhs result into a single bool
             self.start_new_block(rhs_join)?;
@@ -410,11 +398,7 @@ impl super::MirBuilder {
         if crate::config::env::mir_core13_pure() {
             match operator.as_str() {
                 "-" => {
-                    let zero = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: zero,
-                        value: crate::mir::ConstValue::Integer(0),
-                    })?;
+                    let zero = crate::mir::builder::emission::constant::emit_integer(self, 0);
                     let dst = self.value_gen.next();
                     self.emit_instruction(MirInstruction::BinOp {
                         dst,
@@ -425,26 +409,19 @@ impl super::MirBuilder {
                     return Ok(dst);
                 }
                 "!" | "not" => {
-                    let f = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: f,
-                        value: crate::mir::ConstValue::Bool(false),
-                    })?;
+                    let f = crate::mir::builder::emission::constant::emit_bool(self, false);
                     let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Compare {
+                    crate::mir::builder::emission::compare::emit_to(
+                        self,
                         dst,
-                        op: crate::mir::CompareOp::Eq,
-                        lhs: operand_val,
-                        rhs: f,
-                    })?;
+                        crate::mir::CompareOp::Eq,
+                        operand_val,
+                        f,
+                    )?;
                     return Ok(dst);
                 }
                 "~" => {
-                    let all1 = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: all1,
-                        value: crate::mir::ConstValue::Integer(-1),
-                    })?;
+                    let all1 = crate::mir::builder::emission::constant::emit_integer(self, -1);
                     let dst = self.value_gen.next();
                     self.emit_instruction(MirInstruction::BinOp {
                         dst,

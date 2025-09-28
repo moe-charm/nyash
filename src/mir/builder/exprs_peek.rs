@@ -33,22 +33,18 @@ impl super::MirBuilder {
             }
         };
         if need_jump {
-            self.emit_instruction(super::MirInstruction::Jump {
-                target: dispatch_block,
-            })?;
+            crate::mir::builder::emission::branch::emit_jump(self, dispatch_block)?;
         }
         self.start_new_block(dispatch_block)?;
 
         // If there are no arms, fall through to else directly
         if arms.is_empty() {
             let else_block = self.block_gen.next();
-            self.emit_instruction(super::MirInstruction::Jump { target: else_block })?;
+            crate::mir::builder::emission::branch::emit_jump(self, else_block)?;
             self.start_new_block(else_block)?;
             let else_val = self.build_expression_impl(else_expr)?;
             phi_inputs.push((else_block, else_val));
-            self.emit_instruction(super::MirInstruction::Jump {
-                target: merge_block,
-            })?;
+            crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
             self.start_new_block(merge_block)?;
             // フェーズM: 常にPHI命令を使用（no_phi_mode撤廃）
             self.emit_instruction(super::MirInstruction::Phi {
@@ -75,39 +71,23 @@ impl super::MirBuilder {
 
             // In current dispatch block, compare and branch
             self.start_new_block(cur_dispatch)?;
-            let lit_id = self.value_gen.next();
-            let const_value = match label {
-                LiteralValue::String(s) => super::ConstValue::String(s),
-                LiteralValue::Integer(i) => super::ConstValue::Integer(i),
-                LiteralValue::Bool(b) => super::ConstValue::Bool(b),
-                LiteralValue::Float(f) => super::ConstValue::Float(f),
-                LiteralValue::Null => super::ConstValue::Null,
-                LiteralValue::Void => super::ConstValue::Void,
+            let lit_id = match label {
+                LiteralValue::String(s) => crate::mir::builder::emission::constant::emit_string(self, s),
+                LiteralValue::Integer(i) => crate::mir::builder::emission::constant::emit_integer(self, i),
+                LiteralValue::Bool(b) => crate::mir::builder::emission::constant::emit_bool(self, b),
+                LiteralValue::Float(f) => crate::mir::builder::emission::constant::emit_float(self, f),
+                LiteralValue::Null => crate::mir::builder::emission::constant::emit_null(self),
+                LiteralValue::Void => crate::mir::builder::emission::constant::emit_void(self),
             };
-            self.emit_instruction(super::MirInstruction::Const {
-                dst: lit_id,
-                value: const_value,
-            })?;
             let cond_id = self.value_gen.next();
-            self.emit_instruction(super::MirInstruction::Compare {
-                dst: cond_id,
-                op: super::CompareOp::Eq,
-                lhs: scr_val,
-                rhs: lit_id,
-            })?;
-            self.emit_instruction(super::MirInstruction::Branch {
-                condition: cond_id,
-                then_bb: then_block,
-                else_bb: else_target,
-            })?;
+            crate::mir::builder::emission::compare::emit_to(self, cond_id, super::CompareOp::Eq, scr_val, lit_id)?;
+            crate::mir::builder::emission::branch::emit_conditional(self, cond_id, then_block, else_target)?;
 
             // then arm
             self.start_new_block(then_block)?;
             let then_val = self.build_expression_impl(arm_expr)?;
             phi_inputs.push((then_block, then_val));
-            self.emit_instruction(super::MirInstruction::Jump {
-                target: merge_block,
-            })?;
+            crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
 
             // Move to next dispatch or else block
             cur_dispatch = else_target;
@@ -117,9 +97,7 @@ impl super::MirBuilder {
         self.start_new_block(else_block)?;
         let else_val = self.build_expression_impl(else_expr)?;
         phi_inputs.push((else_block, else_val));
-        self.emit_instruction(super::MirInstruction::Jump {
-            target: merge_block,
-        })?;
+        crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
 
         // Merge and yield result
         self.start_new_block(merge_block)?;

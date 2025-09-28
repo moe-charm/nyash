@@ -12,6 +12,7 @@ impl super::MirBuilder {
     ) -> Result<ValueId, String> {
         let object_clone = object.clone();
         let object_value = self.build_expression(object.clone())?;
+        let object_value = self.local_field_base(object_value);
 
         // Unified members: if object class is known and has a synthetic getter for `field`,
         // rewrite to method call `__get_<field>()`.
@@ -28,20 +29,20 @@ impl super::MirBuilder {
             }
         }
 
-        // Emit: field name const
-        let field_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: field_name_id,
-            value: ConstValue::String(field.clone()),
-        })?;
+        // Emit: field name const (boxed)
+        let field_name_id = crate::mir::builder::emission::constant::emit_string(self, field.clone());
+        // Finalize operands (base + args) in current block
+        let mut base = object_value;
+        let mut args_vec = vec![field_name_id];
+        crate::mir::builder::ssa::local::finalize_field_base_and_args(self, &mut base, &mut args_vec);
         // BoxCall: getField(name)
         let field_val = self.value_gen.next();
         self.emit_instruction(MirInstruction::BoxCall {
             dst: Some(field_val),
-            box_val: object_value,
+            box_val: base,
             method: "getField".to_string(),
             method_id: slot_registry::resolve_slot_by_type_name("InstanceBox", "getField"),
-            args: vec![field_name_id],
+            args: args_vec,
             effects: EffectMask::READ,
         })?;
 
@@ -111,7 +112,10 @@ impl super::MirBuilder {
         value: ASTNode,
     ) -> Result<ValueId, String> {
         let object_value = self.build_expression(object)?;
+        let object_value = self.local_field_base(object_value);
         let mut value_result = self.build_expression(value)?;
+        // LocalSSA: argument in-block (optional safety)
+        value_result = self.local_arg(value_result);
 
         // If base is known and field is weak, create WeakRef before store
         if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
@@ -123,18 +127,18 @@ impl super::MirBuilder {
         }
 
         // Emit: field name const
-        let field_name_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: field_name_id,
-            value: ConstValue::String(field.clone()),
-        })?;
+        let field_name_id = crate::mir::builder::emission::constant::emit_string(self, field.clone());
+        // Finalize operands (base + args) in current block
+        let mut base = object_value;
+        let mut args_vec = vec![field_name_id, value_result];
+        crate::mir::builder::ssa::local::finalize_field_base_and_args(self, &mut base, &mut args_vec);
         // Set the field via BoxCall: setField(name, value)
         self.emit_instruction(MirInstruction::BoxCall {
             dst: None,
-            box_val: object_value,
+            box_val: base,
             method: "setField".to_string(),
             method_id: slot_registry::resolve_slot_by_type_name("InstanceBox", "setField"),
-            args: vec![field_name_id, value_result],
+            args: args_vec,
             effects: EffectMask::WRITE,
         })?;
 

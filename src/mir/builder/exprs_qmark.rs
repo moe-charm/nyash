@@ -8,10 +8,11 @@ impl super::MirBuilder {
         expression: ASTNode,
     ) -> Result<ValueId, String> {
         let res_val = self.build_expression_impl(expression)?;
+        let res_local = self.local_ssa_ensure(res_val, 0);
         let ok_id = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::BoxCall {
             dst: Some(ok_id),
-            box_val: res_val,
+            box_val: res_local,
             method: "isOk".to_string(),
             args: vec![],
             method_id: None,
@@ -19,20 +20,17 @@ impl super::MirBuilder {
         })?;
         let then_block = self.block_gen.next();
         let else_block = self.block_gen.next();
-        self.emit_instruction(super::MirInstruction::Branch {
-            condition: ok_id,
-            then_bb: then_block,
-            else_bb: else_block,
-        })?;
+        let ok_local = self.local_ssa_ensure(ok_id, 4);
+        crate::mir::builder::emission::branch::emit_conditional(self, ok_local, then_block, else_block)?;
         self.start_new_block(then_block)?;
         self.emit_instruction(super::MirInstruction::Return {
-            value: Some(res_val),
+            value: Some(res_local),
         })?;
         self.start_new_block(else_block)?;
         let val_id = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::BoxCall {
             dst: Some(val_id),
-            box_val: res_val,
+            box_val: res_local,
             method: "getValue".to_string(),
             args: vec![],
             method_id: None,

@@ -48,10 +48,10 @@ impl super::MirBuilder {
                             args: vec![],
                         })?;
                     } else {
-                        self.emit_instruction(MirInstruction::Const {
-                            dst: pid,
-                            value: ConstValue::Void,
-                        })?;
+                        let v = crate::mir::builder::emission::constant::emit_void(self);
+                        // ensure pid holds the emitted const id
+                        self.emit_instruction(MirInstruction::Copy { dst: pid, src: v })?;
+                        crate::mir::builder::metadata::propagate::propagate(self, v, pid);
                     }
                     self.variable_map.insert(p.clone(), pid);
                 }
@@ -78,19 +78,11 @@ impl super::MirBuilder {
         weak_fields: Vec<String>,
     ) -> Result<(), String> {
         // Create a type registration constant (marker)
-        let type_id = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: type_id,
-            value: ConstValue::String(format!("__box_type_{}", name)),
-        })?;
+        let type_id = crate::mir::builder::emission::constant::emit_string(self, format!("__box_type_{}", name));
 
         // Emit field metadata markers
         for field in fields {
-            let field_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: field_id,
-                value: ConstValue::String(format!("__field_{}_{}", name, field)),
-            })?;
+            let _field_id = crate::mir::builder::emission::constant::emit_string(self, format!("__field_{}_{}", name, field));
         }
 
         // Record weak fields for this box
@@ -120,11 +112,7 @@ impl super::MirBuilder {
         // Emit markers for declared methods (kept as metadata hints)
         for (method_name, method_ast) in methods {
             if let ASTNode::FunctionDeclaration { .. } = method_ast {
-                let method_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst: method_id,
-                    value: ConstValue::String(format!("__method_{}_{}", name, method_name)),
-                })?;
+                let _method_id = crate::mir::builder::emission::constant::emit_string(self, format!("__method_{}_{}", name, method_name));
                 // Track unified member getters: __get_<prop> | __get_once_<prop> | __get_birth_<prop>
                 let kind_and_prop: Option<(super::PropertyKind, String)> = if let Some(rest) = method_name.strip_prefix("__get_once_") {
                     Some((super::PropertyKind::Once, rest.to_string()))

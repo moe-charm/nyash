@@ -17,7 +17,7 @@ export NYASH_ALLOW_USING_FILE=1
 # Enable instance→function rewrite (ensures user-box methods are lowered to calls)
 export NYASH_BUILDER_REWRITE_INSTANCE=1
 # Keep tolerate-void as-is (harmless)
-export NYASH_VM_TOLERATE_VOID=1
+# Strict mode: do not tolerate Void in VM (policy)
 
 # Quick profile: enable json_query_min by default (heavy parser path)
 

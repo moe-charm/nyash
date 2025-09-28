@@ -38,7 +38,7 @@ Unified Call（開発既定ON）
 4) NYABI（VM Kernel Bridge）下地（未配線・既定OFF）
    - docs/abi/vm-kernel.md（関数: caps()/policy.*()/resolve_method_batch()）
    - スケルトン: apps/selfhost/vm/boxes/vm_kernel_box.nyash（policy スタブ）
-   - 既定OFFトグル予約: NYASH_VM_NY_KERNEL, *_TIMEOUT_MS, *_TRACE
+ - 既定OFFトグル予約: NYASH_VM_NY_KERNEL, *_TIMEOUT_MS, *_TRACE
 
 非スコープ（やらない）
 - 既定挙動の変更（Rust VM/LLVMが主軸のまま）
@@ -88,3 +88,44 @@ Unified Call（開発既定ON）
 更新履歴
 - 2025‑09‑28 v2（本書）: Known 化＋Rewrite 統合（dev観測）、表示API `str()` 統一、Mini‑VM 安定化へ焦点を再定義
 - 2025‑09‑28 初版: Mini‑VM M3 + NYABI下地の計画
+
+## ステータス（2025‑09‑28 仕上げメモ）
+- M3（compare/branch/jump）: Mini‑VM（MirVmMin）が厳密セグメントの単一パスで動作。代表 JSON 断片で compare(Eq)→ret、branch、jump を評価。
+- 統合スモーク: integration プロファイル（LLVM/llvmlite）は PASS 17/17（全緑）。
+- ルータ／順序ガード（仕様不変）:
+  - Router: 受信者クラスが Unknown のメソッド呼び出しは常にレガシー BoxCall にフォールバック（安定性優先・常時ON）。
+  - BlockSchedule: φ→Copy(materialize)→本体(Call) の順序を dev‑only で検証（`NYASH_BLOCK_SCHEDULE_VERIFY=1`）。
+  - LocalSSA: 受信者・引数・条件・フィールド基底を emit 直前で「現在のブロック内」に必ず定義。
+- VM 寛容フラグの方針:
+  - `NYASH_VM_TOLERATE_VOID`: dev 時の救済専用（quick テストからは除去）。
+  - Router の Unknown→BoxCall は常時ON（仕様不変・安定化目的）。
+
+## 次のTODO（短期）
+- json_query_vm（VM）: LocalSSA/順序の取りこぼしを補強し、SKIP を解除。
+- ループ PHI 搬送: ループ header/合流での搬送を最小補強し、break/continue/loop_statement の SKIP を解除。
+- Mini‑VM M2/M3: 単一パス化の仕上げ（境界厳密化の再確認）後、代表4件（m2_eq_true/false, m3_branch_true, m3_jump）を PASS → SKIP 解除。
+
+## Builder 小箱（Box 化）方針（仕様不変・段階導入）
+- S-tier（導入）:
+  - MetadataPropagationBox（型/起源伝播）: `metadata/propagate.rs`
+  - ConstantEmissionBox（Const発行）: `emission/constant.rs`
+  - TypeAnnotationBox（最小型注釈）: `types/annotation.rs`
+  - RouterPolicyBox（Unified vs BoxCall ルート）: `router/policy.rs`
+  - EmitGuardBox（emit直前の最終関所）: `emit_guard/mod.rs`
+  - NameConstBox（関数名Const生成）: `name_const.rs`
+- A/B-tier（計画）:
+  - Compare/BranchEmissionBox、PhiWiringBox、EffectMask/TypeInferenceBox（Phase16以降）
+
+採用順（小さく安全に）
+1) Const → metadata → 最小注釈の順に薄く差し替え（代表箇所→全体）
+2) RouterPolicyBox を統一Call経路に導入（utils側は後段で移行）
+3) EmitGuardBox で Call 周辺の finalize/verify を集約（Branch/Compare は後段）
+4) NameConstBox を rewrite/special/known に段階適用
+
+ドキュメント
+- 詳細は `docs/development/builder/BOXES.md` を参照。
+
+## Unskip Plan（段階復帰）
+- P0: json_query_vm → 期待出力一致、寛容フラグ不要。
+- P1: loops（break/continue/loop_statement）→ PHI 搬送安定。
+- P2: Mini‑VM（M2/M3）→ 代表4件 PASS、coarse 撤去・単一パス維持。

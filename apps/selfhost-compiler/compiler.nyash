@@ -8,11 +8,7 @@ using "apps/selfhost-compiler/boxes/parser_box.nyash" as ParserBoxMod
 using "apps/selfhost-compiler/boxes/emitter_box.nyash" as EmitterBoxMod
 using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterBoxMod
 
-// Transitional: keep include for Phase-15 compatibility
-using "apps/selfhost-compiler/boxes/debug_box.nyash"
-using "apps/selfhost-compiler/boxes/parser_box.nyash"
-using "apps/selfhost-compiler/boxes/emitter_box.nyash"
-using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+// (removed) Transitional duplicate using lines to avoid resolver duplicate-import error
 
 static box Main {
   // ---- IO helper ----

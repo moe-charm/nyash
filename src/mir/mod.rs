@@ -25,6 +25,7 @@ pub mod optimizer_passes; // optimizer passes (normalize/diagnostics)
 pub mod optimizer_stats; // extracted stats struct
 pub mod passes;
 pub mod printer;
+pub mod function_emission; // FunctionEmissionBox（MirFunction直編集の発行ヘルパ）
 mod printer_helpers; // internal helpers extracted from printer.rs
 pub mod hints; // scaffold: zero-cost guidance (no-op)
 pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)

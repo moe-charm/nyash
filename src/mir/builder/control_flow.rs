@@ -91,7 +91,7 @@ impl super::MirBuilder {
         }
 
         // Enter try block
-        self.emit_instruction(MirInstruction::Jump { target: try_block })?;
+        crate::mir::builder::emission::branch::emit_jump(self, try_block)?;
         self.start_new_block(try_block)?;
         let try_ast = ASTNode::Program {
             statements: try_body,
@@ -100,7 +100,7 @@ impl super::MirBuilder {
         let _try_result = self.build_expression(try_ast)?;
         if !self.is_current_block_terminated() {
             let next_target = finally_block.unwrap_or(exit_block);
-            self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+            crate::mir::builder::emission::branch::emit_jump(self, next_target)?;
         }
 
         // Catch block
@@ -117,7 +117,7 @@ impl super::MirBuilder {
         }
         if !self.is_current_block_terminated() {
             let next_target = finally_block.unwrap_or(exit_block);
-            self.emit_instruction(MirInstruction::Jump { target: next_target })?;
+            crate::mir::builder::emission::branch::emit_jump(self, next_target)?;
         }
 
         // Finally
@@ -136,7 +136,7 @@ impl super::MirBuilder {
             self.build_expression(finally_ast)?;
             cleanup_terminated = self.is_current_block_terminated();
             if !cleanup_terminated {
-                self.emit_instruction(MirInstruction::Jump { target: exit_block })?;
+                crate::mir::builder::emission::branch::emit_jump(self, exit_block)?;
             }
             self.in_cleanup_block = false;
         }
@@ -145,13 +145,9 @@ impl super::MirBuilder {
         self.start_new_block(exit_block)?;
         let result = if self.return_deferred_emitted && !cleanup_terminated {
             self.emit_instruction(MirInstruction::Return { value: Some(ret_slot) })?;
-            let r = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: r, value: ConstValue::Void })?;
-            r
+            crate::mir::builder::emission::constant::emit_void(self)
         } else {
-            let r = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: r, value: ConstValue::Void })?;
-            r
+            crate::mir::builder::emission::constant::emit_void(self)
         };
 
         // Restore context

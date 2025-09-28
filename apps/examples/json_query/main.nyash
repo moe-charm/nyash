@@ -2,6 +2,8 @@
 
 static box Main {
   main() {
+    // DEBUG toggle (manual runs only). Keep 0 for tests.
+    local DEBUG = 0
     // Simple JSON query runner: evaluate a few (json, path) pairs and print results
     // Path grammar (subset):
     //   <path> := ('.' <ident> | '[' <digits> ']')*
@@ -41,6 +43,7 @@ static box Main {
     loop(i < cases.length()) {
       local json_text = cases.get(i)
       local path = cases.get(i + 1)
+      if DEBUG == 1 { print("[dbg] path=" + path) }
       // Parser-less path: slice JSON text directly for quick profile stability
       local out_text = this.eval_path_text(json_text, path)
       if out_text == null { print("null") } else { print(out_text) }
@@ -49,38 +52,62 @@ static box Main {
     return 0
   }
 
+  _int_to_str(n) {
+    if n == 0 { return "0" }
+    local v = n
+    local out = ""
+    local digits = "0123456789"
+    loop (v > 0) {
+      local d = v % 10
+      local ch = digits.substring(d, d+1)
+      out = ch + out
+      v = v / 10
+    }
+    return out
+  }
+
   // Evaluate a simple JSON path by slicing JSON text directly (no full parse)
   // Returns a JSON substring for the value or null if not found
   eval_path_text(json_text, path) {
+    local DEBUG = 0  // set to 1 for ad-hoc debug
     local cur_text = json_text
     local i = 0
     loop(i < path.length()) {
       local ch = path.substring(i, i + 1)
+      if DEBUG == 1 { print("[dbg] step ch=" + ch) }
       if ch == "." {
         // parse identifier
         i = i + 1
+        if DEBUG == 1 { print("[dbg] after dot i=" + i + ", ch1=" + path.substring(i, i + 1)) }
         local start = i
         loop(i < path.length()) {
           local c = path.substring(i, i + 1)
-          if this.is_alnum(c) or c == "_" { i = i + 1 } else { break }
+          if DEBUG == 1 { print("[dbg] c=" + c) }
+          if this.is_alnum(c) || c == "_" { i = i + 1 } else { break }
         }
         local key = path.substring(start, i)
+        if DEBUG == 1 { print("[dbg] key=" + key) }
         if key.length() == 0 { return null }
         // Get value text directly; then reset window to that text
         local next_text = this.object_get_text(cur_text, 0, cur_text.length(), key)
+        if DEBUG == 1 { if next_text == null { print("[dbg] obj miss") } else { print("[dbg] obj hit len=" + next_text.length()) } }
         if next_text == null { return null }
         cur_text = next_text
       } else {
         if ch == "[" {
           // parse index
           i = i + 1
+          if DEBUG == 1 { print("[dbg] after [ i=" + i + ", ch1=" + path.substring(i, i + 1)) }
           local start = i
-          loop(i < path.length() and this.is_digit(path.substring(i, i + 1))) { i = i + 1 }
+          loop(i < path.length() && this.is_digit(path.substring(i, i + 1))) { i = i + 1 }
           local idx_str = path.substring(start, i)
-          if i >= path.length() or path.substring(i, i + 1) != "]" { return null }
+          if DEBUG == 1 { print("[dbg] idx_str=" + idx_str + ", next=" + path.substring(i, i + 1)) }
+          if i >= path.length() || path.substring(i, i + 1) != "]" { return null }
           i = i + 1 // skip ']'
           local idx = this.parse_int(idx_str)
+          if DEBUG == 1 { print("[dbg] idx=" + idx) }
           local next_text = this.array_get_text(cur_text, 0, cur_text.length(), idx)
+          if DEBUG == 1 { if next_text == null { print("[dbg] arr miss idx=" + idx_str) } else { print("[dbg] arr hit len=" + next_text.length()) } }
           if next_text == null { return null }
           cur_text = next_text
         } else {
@@ -93,25 +120,32 @@ static box Main {
 
   // Local helpers (avoid external using in app)
   is_digit(ch) {
-    return ch == "0" or ch == "1" or ch == "2" or ch == "3" or ch == "4" or ch == "5" or ch == "6" or ch == "7" or ch == "8" or ch == "9"
+    return ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9"
   }
   is_alpha(ch) {
-    return (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z")
+    // membership without using indexOf (avoid VoidBox.* risks)
+    local letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    local i = 0
+    loop(i < letters.length()) {
+      if letters.substring(i, i+1) == ch { return true }
+      i = i + 1
+    }
+    return false
   }
   is_alnum(ch) {
-    return this.is_alpha(ch) or this.is_digit(ch)
+    return this.is_alpha(ch) || this.is_digit(ch)
   }
   parse_int(s) {
     local i = 0
     local neg = false
-    if s.length() > 0 and s.substring(0,1) == "-" {
+    if s.length() > 0 && s.substring(0,1) == "-" {
       neg = true
       i = 1
     }
     local acc = 0
     loop(i < s.length()) {
       local ch = s.substring(i, i + 1)
-      if not this.is_digit(ch) { break }
+      if ! this.is_digit(ch) { break }
       // ch to digit
       // 0..9
       if ch == "0" { acc = acc * 10 + 0 }
@@ -129,10 +163,33 @@ static box Main {
     if neg { return 0 - acc } else { return acc }
   }
   // --- Minimal JSON slicing helpers (object/array) ---
+  // Span utilities: represent [i,j) as "i:j" string to avoid method calls
+  span_pack(i, j) { return this._int_to_str(i) + ":" + this._int_to_str(j) }
+  span_unpack_i(sp) {
+    // find ':' without using indexOf
+    local i = 0
+    local n = sp.length()
+    loop(i < n) {
+      if sp.substring(i, i+1) == ":" { break }
+      i = i + 1
+    }
+    if i >= n { return 0 }
+    return this.parse_int(sp.substring(0, i))
+  }
+  span_unpack_j(sp) {
+    local i = 0
+    local n = sp.length()
+    loop(i < n) {
+      if sp.substring(i, i+1) == ":" { break }
+      i = i + 1
+    }
+    if i >= n { return 0 }
+    return this.parse_int(sp.substring(i + 1, n))
+  }
   // Find a key's value span within an object JSON slice [start,end)
   object_get_span(s, start, end, key) {
     local i = start
-    if i < end and s.substring(i, i+1) == "{" { i = i + 1 } else { return null }
+    if i < end && s.substring(i, i+1) == "{" { i = i + 1 } else { return null }
     loop(i < end) {
       i = this.skip_ws(s, i, end)
       if i >= end { return null }
@@ -143,15 +200,15 @@ static box Main {
       local key_text = s.substring(i+1, key_end-1)
       i = key_end
       i = this.skip_ws(s, i, end)
-      if i >= end or s.substring(i, i+1) != ":" { return null }
+      if i >= end || s.substring(i, i+1) != ":" { return null }
       i = i + 1
       i = this.skip_ws(s, i, end)
       local vspan = this.read_value_span(s, i, end)
       if vspan == null { return null }
       if key_text == key { return vspan }
-      i = vspan.get(1)
+      i = this.span_unpack_j(vspan)
       i = this.skip_ws(s, i, end)
-      if i < end and s.substring(i, i+1) == "," {
+      if i < end && s.substring(i, i+1) == "," {
         i = i + 1
         continue
       } else {
@@ -165,55 +222,34 @@ static box Main {
   object_get_text(s, start, end, key) {
     local sp = this.object_get_span(s, start, end, key)
     if sp == null { return null }
-    // sp is ArrayBox [i, j]; re-scan without using .get to avoid VM instance calls
-    // Instead, rebuild by scanning again (small overhead, safer on current VM path)
-    // We locate the key again and then extract value via read_value_span
-    // Directly extracting indices from sp would require .get; so re-use scanner
-    // Start from beginning for simplicity
-    local i = start
-    if i < end and s.substring(i, i+1) == "{" { i = i + 1 } else { return null }
-    loop(i < end) {
-      i = this.skip_ws(s, i, end)
-      if i >= end { return null }
-      if s.substring(i, i+1) == "}" { return null }
-      if s.substring(i, i+1) != "\"" { return null }
-      local key_end = this.read_string_end(s, i, end)
-      if key_end == -1 { return null }
-      local key_text = s.substring(i+1, key_end-1)
-      i = key_end
-      i = this.skip_ws(s, i, end)
-      if i >= end or s.substring(i, i+1) != ":" { return null }
-      i = i + 1
-      i = this.skip_ws(s, i, end)
-      local vspan = this.read_value_span(s, i, end)
-      if vspan == null { return null }
-      if key_text == key { return s.substring(i, vspan.get(1)) }
-      i = vspan.get(1)
-      i = this.skip_ws(s, i, end)
-      if i < end and s.substring(i, i+1) == "," { i = i + 1 continue } else { return null }
-    }
-    return null
+    // Use the computed span directly (start,end) to avoid rescan drift
+    local i0 = this.span_unpack_i(sp)
+    local j0 = this.span_unpack_j(sp)
+    return s.substring(i0, j0)
   }
 
   // Get the span of the idx-th element at top-level of an array slice [start,end)
   array_get_span(s, start, end, idx) {
     local i = start
-    if i < end and s.substring(i, i+1) == "[" {
+    if i < end && s.substring(i, i+1) == "[" {
       i = i + 1
     } else {
       return null
     }
     local cur = 0
+    local DEBUG = 0
     loop(i < end) {
       i = this.skip_ws(s, i, end)
       if i >= end { return null }
       if s.substring(i, i+1) == "]" { return null }
       local vspan = this.read_value_span(s, i, end)
+      if DEBUG == 1 { print("[dbg] arr cur=" + cur + ", i=" + i + ", ch=" + s.substring(i, i+1)) }
       if vspan == null { return null }
+      if DEBUG == 1 { print("[dbg] arr vspan=[" + this.span_unpack_i(vspan) + "," + this.span_unpack_j(vspan) + "]") }
       if cur == idx { return vspan }
-      i = vspan.get(1)
+      i = this.span_unpack_j(vspan)
       i = this.skip_ws(s, i, end)
-      if i < end and s.substring(i, i+1) == "," {
+      if i < end && s.substring(i, i+1) == "," {
         i = i + 1
         cur = cur + 1
         continue
@@ -226,24 +262,13 @@ static box Main {
 
   // Return the text of idx-th element within an array slice, or null
   array_get_text(s, start, end, idx) {
+    // DEBUG
+    // print("[dbg] arr_text head=" + s.substring(start, start+1) + ", len=" + (end - start))
     local sp = this.array_get_span(s, start, end, idx)
     if sp == null { return null }
-    // Re-scan to compute exact [i,j) and return substring without ArrayBox.get
-    local i = start
-    if i < end and s.substring(i, i+1) == "[" { i = i + 1 } else { return null }
-    local cur = 0
-    loop(i < end) {
-      i = this.skip_ws(s, i, end)
-      if i >= end { return null }
-      if s.substring(i, i+1) == "]" { return null }
-      local vspan = this.read_value_span(s, i, end)
-      if vspan == null { return null }
-      if cur == idx { return s.substring(i, vspan.get(1)) }
-      i = vspan.get(1)
-      i = this.skip_ws(s, i, end)
-      if i < end and s.substring(i, i+1) == "," { i = i + 1 cur = cur + 1 continue } else { return null }
-    }
-    return null
+    local i0 = this.span_unpack_i(sp)
+    local j0 = this.span_unpack_j(sp)
+    return s.substring(i0, j0)
   }
 
   // Read a JSON value span starting at i; returns [start,end)
@@ -252,42 +277,24 @@ static box Main {
     local ch = s.substring(i, i+1)
     if ch == "\"" {
       local j = this.read_string_end(s, i, end)
-      if j == -1 { return null } else {
-        local out = new ArrayBox()
-        out.push(i)
-        out.push(j)
-        return out
-      }
+      if j == -1 { return null } else { return this.span_pack(i, j) }
     }
     if ch == "{" {
       local j = this.matching_brace(s, i, end, "{", "}")
-      if j == -1 { return null } else {
-        local out = new ArrayBox()
-        out.push(i)
-        out.push(j)
-        return out
-      }
+      if j == -1 { return null } else { return this.span_pack(i, j) }
     }
     if ch == "[" {
       local j = this.matching_brace(s, i, end, "[", "]")
-      if j == -1 { return null } else {
-        local out = new ArrayBox()
-        out.push(i)
-        out.push(j)
-        return out
-      }
+      if j == -1 { return null } else { return this.span_pack(i, j) }
     }
     // number/bool/null: read until comma or closing
     local j = i
     loop(j < end) {
       local c = s.substring(j, j+1)
-      if c == "," or c == "}" or c == "]" or this.is_ws_char(c) { break }
+      if c == "," || c == "}" || c == "]" || this.is_ws_char(c) { break }
       j = j + 1
     }
-    local out = new ArrayBox()
-    out.push(i)
-    out.push(j)
-    return out
+    return this.span_pack(i, j)
   }
 
   // Find end index (exclusive) of a JSON string literal starting at i ('"')
@@ -332,9 +339,9 @@ static box Main {
   // Whitespace utilities
   skip_ws(s, i, end) {
     local j = i
-    loop(j < end and this.is_ws_char(s.substring(j, j+1))) { j = j + 1 }
+    loop(j < end && this.is_ws_char(s.substring(j, j+1))) { j = j + 1 }
     return j
   }
-  is_ws_char(ch) { return ch == " " or ch == "\t" or ch == "\n" or ch == "\r" }
+  is_ws_char(ch) { return ch == " " || ch == "\t" || ch == "\n" || ch == "\r" }
   // Note: normalization now lives in JsonNode (object_get/array_get)
 }

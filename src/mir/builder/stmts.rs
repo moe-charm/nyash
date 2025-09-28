@@ -161,13 +161,8 @@ impl super::MirBuilder {
             }
         }
         let out = last_value.unwrap_or_else(|| {
-            let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: void_val,
-                value: ConstValue::Void,
-            })
-            .unwrap();
-            void_val
+            // Use ConstantEmissionBox for Void
+            crate::mir::builder::emission::constant::emit_void(self)
         });
         // Scope leave only if block not already terminated
         if !self.is_current_block_terminated() {
@@ -192,9 +187,7 @@ impl super::MirBuilder {
                 init_val
             } else {
                 // Create a concrete register for uninitialized locals (Void)
-                let vid = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const { dst: vid, value: ConstValue::Void })?;
-                vid
+                crate::mir::builder::emission::constant::emit_void(self)
             };
             self.variable_map.insert(var_name.clone(), var_id);
             last_value = Some(var_id);
@@ -215,9 +208,7 @@ impl super::MirBuilder {
         let return_value = if let Some(expr) = value {
             self.build_expression(*expr)?
         } else {
-            let void_dst = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const { dst: void_dst, value: ConstValue::Void })?;
-            void_dst
+            crate::mir::builder::emission::constant::emit_void(self)
         };
 
         if self.return_defer_active {
@@ -225,8 +216,9 @@ impl super::MirBuilder {
             if let (Some(slot), Some(target)) = (self.return_defer_slot, self.return_defer_target) {
                 self.return_deferred_emitted = true;
                 self.emit_instruction(MirInstruction::Copy { dst: slot, src: return_value })?;
+                crate::mir::builder::metadata::propagate::propagate(self, return_value, slot);
                 if !self.is_current_block_terminated() {
-                    self.emit_instruction(MirInstruction::Jump { target })?;
+                    crate::mir::builder::emission::branch::emit_jump(self, target)?;
                 }
                 Ok(return_value)
             } else {
@@ -255,11 +247,7 @@ impl super::MirBuilder {
         } = expression.clone()
         {
             let recv_val = self.build_expression(*object)?;
-            let mname_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: mname_id,
-                value: super::ConstValue::String(method.clone()),
-            })?;
+            let mname_id = crate::mir::builder::emission::constant::emit_string(self, method.clone());
             let mut arg_vals: Vec<ValueId> = Vec::with_capacity(2 + arguments.len());
             arg_vals.push(recv_val);
             arg_vals.push(mname_id);
@@ -308,16 +296,12 @@ impl super::MirBuilder {
         if let Some(id) = self.variable_map.get("me").cloned() {
             return Ok(id);
         }
-        let me_value = self.value_gen.next();
         let me_tag = if let Some(ref cls) = self.current_static_box {
             cls.clone()
         } else {
             "__me__".to_string()
         };
-        self.emit_instruction(MirInstruction::Const {
-            dst: me_value,
-            value: ConstValue::String(me_tag),
-        })?;
+        let me_value = crate::mir::builder::emission::constant::emit_string(self, me_tag);
         self.variable_map.insert("me".to_string(), me_value);
         // P0: Known 化 — 分かる範囲で me の起源クラスを付与（挙動不変）。
         super::origin::infer::annotate_me_origin(self, me_value);

@@ -250,8 +250,9 @@ cargo build --release --features wasm-backend
 RUST_BACKTRACE = "1"
 
 [tasks]
-build_llvm = "LLVM_SYS_180_PREFIX=$(llvm-config-18 --prefix) cargo build --release --features llvm"
-smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash"
+# llvmlite ハーネス＋CLI をビルド（LLVM_SYS_180_PREFIX不要）
+build_llvm = "cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm"
+smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target/release/ny-llvmc NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash"
 ```
 
 実行:
@@ -308,7 +309,7 @@ smoke_obj_array = "NYASH_LLVM_OBJ_OUT={root}/nyash_llvm_temp.o ./target/release/
 - `--target <triple>`（必要時のみ）
 
 注意
-- LLVM AOT には LLVM 18 が必要（`LLVM_SYS_180_PREFIX` を設定）。
+- LLVM AOT は Python の llvmlite ハーネスを使用します。Python3 + llvmlite と `ny-llvmc` のビルド（`cargo build -p nyash-llvm-compiler`）が必要です。`LLVM_SYS_180_PREFIX` は不要です。
 - GUIを含む場合、AOTのオブジェクト出力時にウィンドウが一度開きます（閉じて続行）。
 - WSL で表示されない場合は `docs/guides/cranelift_aot_egui_hello.md` のWSL Tips（Wayland→X11切替）を参照。
 

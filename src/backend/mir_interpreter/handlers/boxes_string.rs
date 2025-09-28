@@ -79,6 +79,33 @@ pub(super) fn try_handle_string_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(new_s)))) ; }
                     return Ok(true);
                 }
+                "is_digit_char" => {
+                    // Accept either 0-arg (use first char of receiver) or 1-arg (string/char to test)
+                    let ch_opt = if args.is_empty() {
+                        sb.value.chars().next()
+                    } else if args.len() == 1 {
+                        let s = this.reg_load(args[0])?.to_string();
+                        s.chars().next()
+                    } else {
+                        return Err(VMError::InvalidInstruction("is_digit_char expects 0 or 1 arg".into()));
+                    };
+                    let is_digit = ch_opt.map(|c| c.is_ascii_digit()).unwrap_or(false);
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Bool(is_digit)); }
+                    return Ok(true);
+                }
+                "is_hex_digit_char" => {
+                    let ch_opt = if args.is_empty() {
+                        sb.value.chars().next()
+                    } else if args.len() == 1 {
+                        let s = this.reg_load(args[0])?.to_string();
+                        s.chars().next()
+                    } else {
+                        return Err(VMError::InvalidInstruction("is_hex_digit_char expects 0 or 1 arg".into()));
+                    };
+                    let is_hex = ch_opt.map(|c| c.is_ascii_hexdigit()).unwrap_or(false);
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Bool(is_hex)); }
+                    return Ok(true);
+                }
                 _ => {}
             }
         }

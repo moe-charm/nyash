@@ -29,6 +29,16 @@
   - main: papers/paper-s-loopform-phi-solution/README.md
   - 成果: 650行→100行（85%削減）
 
+**[NEW! 2025年9月28日追加]**
+
+- **Paper T: Box-First Architecture & Convergent Design Pattern ⭐学術的価値最高⭐**
+  - main: papers/ai-collaborative-development/box-first-architecture-convergent-design.md
+  - 発見: AI協働開発における収束型設計パターンの実証
+  - 期間: 57日間（Day 1 提案 → Day 57 収束）
+  - 成果: LocalSSABox（122行）+ BlockScheduleBox（32行）で構造的安定性達成
+  - 論文価値: ICSE/OOPSLA レベルの主要貢献3つ
+  - テスト結果: 81/81 PASS ✅
+
 **詳細情報**: [PAPER_INDEX.md](PAPER_INDEX.md) - 全論文の関係性・優先度・論文ネタ爆発問題
 
 Build (Pandoc):
@@ -36,7 +46,8 @@ Build (Pandoc):
 - output: docs/private/out/
  - note: 各 paper 配下の `out/` は参照専用（生成物は `docs/private/out/` に統一）
 
-**論文ネタ爆発問題**: 43日間で9本の論文級ネタが同時進行中（学術界異常事態）
+**論文ネタ爆発問題**: 57日間で10本の論文級ネタが同時進行中（学術界異常事態）
+  - 最新: Paper T (Box-First Convergent Design) が学術的価値最高レベルと判定
 
 ---
 

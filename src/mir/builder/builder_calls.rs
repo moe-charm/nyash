@@ -31,6 +31,11 @@ impl super::MirBuilder {
                         ret = super::MirType::Box("JsonToken".into());
                     }
                 }
+                // Parser factory: JsonParserModule.create_parser/0 returns JsonParser
+                if name == "JsonParserModule.create_parser/0" {
+                    // Normalize to Known Box(JsonParser)
+                    ret = super::MirType::Box("JsonParser".into());
+                }
                 self.value_types.insert(dst, ret.clone());
                 if let super::MirType::Box(bx) = ret {
                     self.value_origin_newbox.insert(dst, bx);
@@ -65,6 +70,17 @@ impl super::MirBuilder {
             if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
                 super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(ArrayBox)", dst.0, name));
             }
+        } else if name == "JsonParserModule.create_parser/0" {
+            // Fallback path for parser factory
+            let ret = super::MirType::Box("JsonParser".into());
+            self.value_types.insert(dst, ret.clone());
+            if let super::MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonParser)", dst.0, name));
+            }
+        } else {
+            // Generic tiny whitelist for known primitive-like utilities (spec unchanged)
+            crate::mir::builder::types::annotation::annotate_from_function(self, dst, name);
         }
     }
     /// Unified call emission - replaces all emit_*_call methods
@@ -79,6 +95,22 @@ impl super::MirBuilder {
         if !call_unified::is_unified_call_enabled() {
             // Fall back to legacy implementation
             return self.emit_legacy_call(dst, target, args);
+        }
+
+        // Ensure method receiver is materialized in the current block.
+        // This avoids "use of undefined recv" across block boundaries for direct Method calls
+        // that bypass legacy BoxCall emission. Do this before any observation/rewrite.
+        let mut target = target;
+        let bb_before = self.current_block; // snapshot for later re-check
+        if let CallTarget::Method { box_type, method, receiver } = target {
+            if super::utils::builder_debug_enabled() && method == "advance" {
+                super::utils::builder_debug_log(&format!("unified-entry Method.advance recv=%{} (pre-pin)", receiver.0));
+            }
+            let receiver_pinned = match self.pin_to_slot(receiver, "@recv") {
+                Ok(v) => v,
+                Err(_) => receiver,
+            };
+            target = CallTarget::Method { box_type, method, receiver: receiver_pinned };
         }
 
         // Emit resolve.try for method targets (dev-only; default OFF)
@@ -120,7 +152,7 @@ impl super::MirBuilder {
         // Convert CallTarget to Callee using the new module
         if let CallTarget::Global(ref _n) = target { /* dev trace removed */ }
         // Fallback: if Global target is unknown, try unique static-method mapping (name/arity)
-        let callee = match call_unified::convert_target_to_callee(
+        let mut callee = match call_unified::convert_target_to_callee(
             target.clone(),
             &self.value_origin_newbox,
             &self.value_types,
@@ -131,15 +163,27 @@ impl super::MirBuilder {
                     // 0) Dev-only safety: treat condition_fn as always-true predicate when missing
                     if name == "condition_fn" {
                         let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                        self.emit_instruction(MirInstruction::Const { dst: dstv, value: super::ConstValue::Integer(1) })?;
+                        // Emit integer constant via ConstantEmissionBox
+                        let one = crate::mir::builder::emission::constant::emit_integer(self, 1);
+                        if dst.is_none() {
+                            // If a destination was not provided, copy into the allocated dstv
+                            self.emit_instruction(MirInstruction::Copy { dst: dstv, src: one })?;
+                            crate::mir::builder::metadata::propagate::propagate(self, one, dstv);
+                        } else {
+                            // If caller provided dst, ensure the computed value lands there
+                            self.emit_instruction(MirInstruction::Copy { dst: dstv, src: one })?;
+                            crate::mir::builder::metadata::propagate::propagate(self, one, dstv);
+                        }
                         return Ok(());
                     }
                     // 1) Direct module function fallback: call by name if present
                     if let Some(ref module) = self.current_module {
                         if module.functions.contains_key(name) {
                             let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                            let name_const = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const { dst: name_const, value: super::ConstValue::String(name.clone()) })?;
+                            let name_const = match crate::mir::builder::name_const::make_name_const_result(self, name) {
+                                Ok(v) => v,
+                                Err(e) => return Err(e),
+                            };
                             self.emit_instruction(MirInstruction::Call { dst: Some(dstv), func: name_const, callee: None, args: args.clone(), effects: EffectMask::IO })?;
                             self.annotate_call_result_from_func_name(dstv, name);
                             return Ok(());
@@ -157,11 +201,10 @@ impl super::MirBuilder {
                             let func_name = format!("{}.{}{}", bx, name, format!("/{}", arity_for_try));
                             // Emit legacy call directly to preserve behavior
                             let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                            let name_const = self.value_gen.next();
-                            self.emit_instruction(MirInstruction::Const {
-                                dst: name_const,
-                                value: super::ConstValue::String(func_name.clone()),
-                            })?;
+                            let name_const = match crate::mir::builder::name_const::make_name_const_result(self, &func_name) {
+                                Ok(v) => v,
+                                Err(e) => return Err(e),
+                            };
                             self.emit_instruction(MirInstruction::Call {
                                 dst: Some(dstv),
                                 func: name_const,
@@ -178,6 +221,40 @@ impl super::MirBuilder {
                 return Err(e);
             }
         };
+
+        // Safety: ensure receiver is materialized even after callee conversion
+        // (covers rare paths where earlier pin did not take effect)
+        callee = match callee {
+            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
+                // Prefer pinning to a slot so start_new_block can propagate it across entries.
+                let r_pinned = self.pin_to_slot(r, "@recv").unwrap_or(r);
+                Callee::Method { box_name, method, receiver: Some(r_pinned), certainty }
+            }
+            other => other,
+        };
+
+        // Final guard: if current block changed since entry, ensure receiver is copied again
+        if let (Some(bb0), Some(bb1)) = (bb_before, self.current_block) {
+            if bb0 != bb1 {
+                if let Callee::Method { box_name, method, receiver: Some(r), certainty } = callee {
+                    if super::utils::builder_debug_enabled() {
+                        super::utils::builder_debug_log(&format!(
+                            "unified-call bb changed: {:?} -> {:?}; re-materialize recv=%{}",
+                            bb0, bb1, r.0
+                        ));
+                    }
+                    let r2 = self.pin_to_slot(r, "@recv").unwrap_or(r);
+                    callee = Callee::Method { box_name, method, receiver: Some(r2), certainty };
+                }
+            }
+        }
+
+        // Debug: trace unified method emission with pinned receiver (dev only)
+        if super::utils::builder_debug_enabled() {
+            if let Callee::Method { method, receiver: Some(r), .. } = &callee {
+                super::utils::builder_debug_log(&format!("unified-call method={} recv=%{} (pinned)", method, r.0));
+            }
+        }
 
         // Emit resolve.choose for method callee (dev-only; default OFF)
         if let Callee::Method { box_name, method, certainty, .. } = &callee {
@@ -196,19 +273,92 @@ impl super::MirBuilder {
         // Validate call arguments
         call_unified::validate_call_args(&callee, &args)?;
 
-        // Create MirCall instruction using the new module
-        let mir_call = call_unified::create_mir_call(dst, callee.clone(), args.clone());
+        // Stability guard: decide route via RouterPolicyBox (behavior-preserving rules)
+        if let Callee::Method { box_name, method, receiver: Some(r), certainty } = &callee {
+            let route = crate::mir::builder::router::policy::choose_route(box_name, method, *certainty, arity_for_try);
+            if let crate::mir::builder::router::policy::Route::BoxCall = route {
+                if super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[router-guard] {}.{} → BoxCall fallback (recv=%{})", box_name, method, r.0);
+                }
+                let effects = EffectMask::READ.add(Effect::ReadHeap);
+                return self.emit_box_or_plugin_call(dst, *r, method.clone(), None, args, effects);
+            }
+        }
 
-        // For Phase 2: Convert to legacy Call instruction with new callee field
+        // Before creating the call, enforce slot (pin) + LocalSSA for Method receiver in the current block
+        let callee = match callee {
+            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
+                // Pin to a named slot so start_new_block can propagate across entries
+                let r_pinned = self.pin_to_slot(r, "@recv").unwrap_or(r);
+                // And ensure in-block materialization for this emission site
+                let r_local = self.local_recv(r_pinned);
+                Callee::Method { box_name, method, receiver: Some(r_local), certainty }
+            }
+            other => other,
+        };
+
+        // Finalize operands in current block (EmitGuardBox wrapper)
+        let mut callee = callee;
+        let mut args_local: Vec<ValueId> = args.clone();
+        crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee, &mut args_local);
+
+        // Create MirCall instruction using the new module (pure data composition)
+        let mir_call = call_unified::create_mir_call(dst, callee.clone(), args_local.clone());
+
+        // Final last-chance LocalSSA just before emission in case any block switch happened
+        let mut callee2 = callee.clone();
+        let mut args2 = args_local.clone();
+        crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee2, &mut args2);
+
+        // Dev trace: show final callee/recv right before emission (guarded)
+        if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") || super::utils::builder_debug_enabled() {
+            if let Callee::Method { method, receiver, box_name, .. } = &callee2 {
+                if let Some(r) = receiver {
+                    eprintln!("[vm-call-final] bb={:?} method={} recv=%{} class={}",
+                        self.current_block, method, r.0, box_name);
+                }
+            }
+        }
+
+        // Final forced in-block materialization for receiver just-before emission
+        // Rationale: ensure a Copy(def) immediately precedes the Call in the same block
+        let callee2 = match callee2 {
+            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
+                if super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[call-forced-copy] bb={:?} recv=%{} -> (copy)", self.current_block, r.0);
+                }
+                // Insert immediately after PHIs to guarantee position and dominance
+                let r_forced = crate::mir::builder::schedule::block::BlockScheduleBox::ensure_after_phis_copy(self, r)?;
+                if super::utils::builder_debug_enabled() || std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+                    eprintln!("[call-forced-copy] bb={:?} inserted Copy %{} := %{} (after PHIs)", self.current_block, r_forced.0, r.0);
+                }
+                Callee::Method { box_name, method, receiver: Some(r_forced), certainty }
+            }
+            other => other,
+        };
+
+        // Optional last-chance: emit a tail copy right before we emit Call (keeps order stable)
+        let callee2 = match callee2 {
+            Callee::Method { box_name, method, receiver: Some(r), certainty } => {
+                let r_tail = crate::mir::builder::schedule::block::BlockScheduleBox::emit_before_call_copy(self, r)?;
+                Callee::Method { box_name, method, receiver: Some(r_tail), certainty }
+            }
+            other => other,
+        };
+
+        // For Phase 2: Convert to legacy Call instruction with new callee field (use finalized operands)
         let legacy_call = MirInstruction::Call {
             dst: mir_call.dst,
             func: ValueId::new(0), // Dummy value for legacy compatibility
-            callee: Some(mir_call.callee),
-            args: mir_call.args,
+            callee: Some(callee2),
+            args: args2,
             effects: mir_call.effects,
         };
 
-        self.emit_instruction(legacy_call)
+        let res = self.emit_instruction(legacy_call);
+        // Dev-only: verify block schedule invariants after emitting call
+        crate::mir::builder::emit_guard::verify_after_call(self);
+        res
     }
 
     /// Legacy call fallback - preserves existing behavior
@@ -236,6 +386,8 @@ impl super::MirBuilder {
             },
             CallTarget::Extern(name) => {
                 // Use existing ExternCall
+                let mut args = args;
+                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
                 let parts: Vec<&str> = name.splitn(2, '.').collect();
                 let (iface, method) = if parts.len() == 2 {
                     (parts[0].to_string(), parts[1].to_string())
@@ -252,14 +404,12 @@ impl super::MirBuilder {
                 })
             },
             CallTarget::Global(name) => {
-                // Create a string constant for the function name
-                let name_const = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Const {
-                    dst: name_const,
-                    value: super::ConstValue::String(name.clone()),
-                })?;
+                // Create a string constant for the function name via NameConstBox
+                let name_const = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
                 // Allocate a destination if not provided so we can annotate it
                 let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
+                let mut args = args;
+                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
                 self.emit_instruction(MirInstruction::Call {
                     dst: Some(actual_dst),
                     func: name_const,
@@ -272,6 +422,8 @@ impl super::MirBuilder {
                 Ok(())
             },
             CallTarget::Value(func_val) => {
+                let mut args = args;
+                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
                 self.emit_instruction(MirInstruction::Call {
                     dst,
                     func: func_val,
@@ -404,8 +556,7 @@ impl super::MirBuilder {
                 if returns {
                     Ok(result_id)
                 } else {
-                    let void_id = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const { dst: void_id, value: super::ConstValue::Void })?;
+                    let void_id = crate::mir::builder::emission::constant::emit_void(self);
                     Ok(void_id)
                 }
             };
@@ -434,8 +585,10 @@ impl super::MirBuilder {
         }
         let result_id = self.value_gen.next();
         let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
-        let fun_val = self.value_gen.next();
-        if let Err(e) = self.emit_instruction(MirInstruction::Const { dst: fun_val, value: super::ConstValue::String(fun_name.clone()) }) { return Some(Err(e)); }
+        let fun_val = match crate::mir::builder::name_const::make_name_const_result(self, &fun_name) {
+            Ok(v) => v,
+            Err(e) => return Some(Err(e)),
+        };
         if let Err(e) = self.emit_instruction(MirInstruction::Call {
             dst: Some(result_id),
             func: fun_val,
@@ -571,11 +724,7 @@ impl super::MirBuilder {
             };
 
             // Legacy compatibility: Create dummy func value for old systems
-            let fun_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: fun_val,
-                value: super::ConstValue::String(name.clone()),
-            })?;
+            let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
 
             // Emit new-style Call with type-safe callee
             self.emit_instruction(MirInstruction::Call {
@@ -658,9 +807,11 @@ impl super::MirBuilder {
                         call_args.push(me_id);
                         call_args.extend(arg_values.into_iter());
                         let dst = self.value_gen.next();
-                        // Emit Const for function name separately to avoid nested mutable borrows
-                        let c = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const { dst: c, value: super::ConstValue::String(fname.clone()) })?;
+                        // Emit function name via NameConstBox
+                        let c = match crate::mir::builder::name_const::make_name_const_result(self, &fname) {
+                            Ok(v) => v,
+                            Err(e) => return Err(e),
+                        };
                         self.emit_instruction(MirInstruction::Call {
                             dst: Some(dst),
                             func: c,
@@ -709,11 +860,7 @@ impl super::MirBuilder {
         for arg in arguments {
             arg_values.push(self.build_expression(arg)?);
         }
-        let parent_value = self.value_gen.next();
-        self.emit_instruction(MirInstruction::Const {
-            dst: parent_value,
-            value: super::ConstValue::String(parent),
-        })?;
+        let parent_value = crate::mir::builder::emission::constant::emit_string(self, parent);
         let result_id = self.value_gen.next();
         self.emit_box_or_plugin_call(
             Some(result_id),
@@ -765,11 +912,7 @@ impl super::MirBuilder {
         let program_ast = function_lowering::wrap_in_program(body);
         let _last = self.build_expression(program_ast)?;
         if !returns_value && !self.is_current_block_terminated() {
-            let void_val = self.value_gen.next();
-            self.emit_instruction(MirInstruction::Const {
-                dst: void_val,
-                value: super::ConstValue::Void,
-            })?;
+            let void_val = crate::mir::builder::emission::constant::emit_void(self);
             self.emit_instruction(MirInstruction::Return {
                 value: Some(void_val),
             })?;
@@ -855,11 +998,7 @@ impl super::MirBuilder {
             if let Some(ref mut f) = self.current_function {
                 if let Some(block) = f.get_block(self.current_block.unwrap()) {
                     if !block.is_terminated() {
-                        let void_val = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::Const {
-                            dst: void_val,
-                            value: super::ConstValue::Void,
-                        })?;
+                        let void_val = crate::mir::builder::emission::constant::emit_void(self);
                         self.emit_instruction(MirInstruction::Return {
                             value: Some(void_val),
                         })?;

@@ -28,7 +28,24 @@ impl MirInterpreter {
             Callee::Global(func_name) => self.execute_global_function(func_name, args),
             Callee::Method { box_name: _, method, receiver, certainty: _, } => {
                 if let Some(recv_id) = receiver {
-                    let recv_val = self.reg_load(*recv_id)?;
+                    // Primary: load receiver by id. Dev fallback: if undefined and env allows,
+                    // use args[0] as a surrogate receiver (builder localization gap workaround).
+                    let recv_val = match self.reg_load(*recv_id) {
+                        Ok(v) => v,
+                        Err(e) => {
+                            let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
+                                || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+                            if tolerate {
+                                if let Some(a0) = args.get(0) {
+                                    self.reg_load(*a0)?
+                                } else {
+                                    return Err(e);
+                                }
+                            } else {
+                                return Err(e);
+                            }
+                        }
+                    };
                     let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
                     // Fast bridge for builtin boxes (Array) and common methods.
                     // Preserve legacy semantics when plugins are absent.

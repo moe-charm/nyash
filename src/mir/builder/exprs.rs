@@ -146,11 +146,7 @@ impl super::MirBuilder {
                         }
                     }
                     // Return void for declaration context
-                    let void_val = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: void_val,
-                        value: ConstValue::Void,
-                    })?;
+                    let void_val = crate::mir::builder::emission::constant::emit_void(self);
                     Ok(void_val)
                 } else {
                     // Instance box: register type and lower instance methods/ctors as functions
@@ -196,11 +192,7 @@ impl super::MirBuilder {
                             }
                         }
                     }
-                    let void_val = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: void_val,
-                        value: ConstValue::Void,
-                    })?;
+                    let void_val = crate::mir::builder::emission::constant::emit_void(self);
                     Ok(void_val)
                 }
             }
@@ -243,11 +235,7 @@ impl super::MirBuilder {
                 })?;
                 for (k, expr) in entries {
                     // const string key
-                    let k_id = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::Const {
-                        dst: k_id,
-                        value: ConstValue::String(k),
-                    })?;
+                    let k_id = crate::mir::builder::emission::constant::emit_string(self, k);
                     let v_id = self.build_expression_impl(expr)?;
                     self.emit_instruction(MirInstruction::BoxCall {
                         dst: None,

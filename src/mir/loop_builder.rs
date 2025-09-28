@@ -382,9 +382,11 @@ impl<'a> LoopBuilder<'a> {
         then_bb: BasicBlockId,
         else_bb: BasicBlockId,
     ) -> Result<(), String> {
+        // LocalSSA: ensure condition is materialized in the current block
+        let condition_local = self.parent_builder.local_ssa_ensure(condition, 4);
         self.parent_builder
             .emit_instruction(MirInstruction::Branch {
-                condition,
+                condition: condition_local,
                 then_bb,
                 else_bb,
             })

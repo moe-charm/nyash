@@ -6,10 +6,11 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+## Enabled: final guard applied
+
 APP_DIR="$NYASH_ROOT/apps/examples/json_query"
 # Use default dev behavior (rewrite enabled) for stable resolution
-# Dev-time guard: tolerate compare on Void while VM fallback is being hardened
-export NYASH_VM_TOLERATE_VOID=1
+# NOTE: Do not enable NYASH_VM_TOLERATE_VOID here; path parser relies on strict compare semantics
 output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev)
 
 expected=$(cat << 'TXT'
