@@ -46,13 +46,30 @@ impl super::MirBuilder {
             // Entry materialization for pinned slots only when not suppressed.
             // This provides block-local defs in single-predecessor flows without touching user vars.
             if !self.suppress_pin_entry_copy_next {
+                // First pass: copy all pin slots and remember old->new mapping
                 let names: Vec<String> = self.variable_map.keys().cloned().collect();
-                for name in names {
+                let mut pin_renames: Vec<(super::ValueId, super::ValueId)> = Vec::new();
+                for name in names.iter() {
                     if !name.starts_with("__pin$") { continue; }
-                    if let Some(&src) = self.variable_map.get(&name) {
+                    if let Some(&src) = self.variable_map.get(name) {
                         let dst = self.value_gen.next();
                         self.emit_instruction(super::MirInstruction::Copy { dst, src })?;
                         self.variable_map.insert(name.clone(), dst);
+                        pin_renames.push((src, dst));
+                    }
+                }
+                // Second pass: update any user variables that pointed to old pin ids to the new ones
+                if !pin_renames.is_empty() {
+                    let snapshot: Vec<(String, super::ValueId)> = self
+                        .variable_map
+                        .iter()
+                        .filter(|(k, _)| !k.starts_with("__pin$"))
+                        .map(|(k, &v)| (k.clone(), v))
+                        .collect();
+                    for (k, v) in snapshot.into_iter() {
+                        if let Some((_, newv)) = pin_renames.iter().find(|(oldv, _)| *oldv == v) {
+                            self.variable_map.insert(k, *newv);
+                        }
                     }
                 }
             }
