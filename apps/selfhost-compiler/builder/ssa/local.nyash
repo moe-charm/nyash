@@ -1,0 +1,16 @@
+// builder/ssa/local.nyash — LocalSSA scaffold (no-op)
+
+static box LocalSSA {
+  // Ensure receiver is materialized in the current basic block.
+  ensure_recv(stage1_json) { return stage1_json }
+
+  // Ensure call arguments are materialized in the current basic block.
+  ensure_args(stage1_json) { return stage1_json }
+
+  // Ensure branch conditions are materialized (truthiness-ready) in the block.
+  ensure_cond(stage1_json) { return stage1_json }
+
+  // Ensure compare operands are materialized in the block.
+  ensure_cmp(stage1_json) { return stage1_json }
+}
+

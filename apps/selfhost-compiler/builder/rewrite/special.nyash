@@ -1,0 +1,8 @@
+// builder/rewrite/special.nyash — Early normalization (no-op scaffold)
+
+static box RewriteSpecial {
+  // Normalize to str()/equals() forms where applicable (behavior-preserving).
+  // Scaffold returns input unchanged; actual rewrite to be added under guard.
+  apply(stage1_json) { return stage1_json }
+}
+

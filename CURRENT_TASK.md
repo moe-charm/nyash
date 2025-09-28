@@ -81,7 +81,8 @@ Next — Compiler Track 小粒タスク
 1) dev 受け入れスモーク（min-json ヘッダ）を quick/core に追加（任意ゲート）— 完了
 2) MIR 最小生成（const→ret）を安定化（emit-mir）— 継続
 3) mir_emitter_box に binop/compare/branch/jump を段階追加（Mini‑VM と同形）— 次
-4) builder/ssa/rewrite スケルトンを追加（既定OFF/Compiler Trackフラグで有効）— 次
+4) builder/ssa/rewrite スケルトンを追加（apps/selfhost-compiler/builder/*）— 完了（未配線）
+5) CompilerBuilder.apply_all を NYASH_COMPILER_TRACK=1 の時だけ呼ぶ配線 — 未着手（既定OFFで挙動不変）
 
 Update — 2025-09-28 (P4 default‑on + P5 docs/annotations 完了)
 - Known 正規化（userbox限定・関数存在・一意・arity一致）を既定ON。
