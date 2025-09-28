@@ -38,7 +38,7 @@ static box Main {
 
   // Parser delegation
   parse_program(src, stage3_flag) {
-    local parser = new ParserBoxMod.ParserBox()
+    local parser = new ParserBox()
     if stage3_flag == 1 { parser.stage3_enable(1) }
     // Collect using metadata (no-op acceptance in Stage‑15)
     parser.extract_usings(src)
@@ -48,7 +48,7 @@ static box Main {
 
   main(args) {
     // Debug setup
-    me.dbg = new DebugBoxMod.DebugBox()
+    me.dbg = new DebugBox()
     me.dbg.set_enabled(0)
 
     // Source selection (EXE-first friendly)
@@ -115,11 +115,11 @@ static box Main {
 
     if emit_mir == 1 {
       // Lower minimal AST to MIR JSON (Return(Int) only for MVP)
-      local mir = new MirEmitterBoxMod.MirEmitterBox()
+      local mir = new MirEmitterBox()
       json = mir.emit_mir_min(ast_json)
     } else {
       // Emit Stage‑1 JSON with metadata
-      local emitter = new EmitterBoxMod.EmitterBox()
+      local emitter = new EmitterBox()
       json = emitter.emit_program(ast_json, me._usings)
     }
 
