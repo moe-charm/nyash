@@ -73,6 +73,8 @@ impl NyashParser {
 
                             if self.match_token(&TokenType::COMMA) {
                                 self.advance();
+                                // allow trailing comma
+                                if self.match_token(&TokenType::RPAREN) { break; }
                             }
                         }
 
@@ -133,9 +135,7 @@ impl NyashParser {
                     while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
                         must_advance!(self, _unused, "safe method call arg parsing");
                         arguments.push(self.parse_expression()?);
-                        if self.match_token(&TokenType::COMMA) {
-                            self.advance();
-                        }
+                        if self.match_token(&TokenType::COMMA) { self.advance(); if self.match_token(&TokenType::RPAREN) { break; } }
                     }
                     self.consume(TokenType::RPAREN)?;
                     ASTNode::MethodCall {

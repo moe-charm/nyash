@@ -11,6 +11,6 @@
 
 ### Selfhosting‑dev Gate（このブランチ向け）
 - [ ] `bash tools/selfhost_vm_smoke.sh` が PASS（plugins 無効）
-- [ ] `docs/CONTRIBUTING-MERGE.md` の境界方針を満たす（Cranelift実装差分は専用ブランチ）
+- [ ] `docs/development/engineering/merge-strategy.md` の境界方針を満たす（Cranelift実装差分は専用ブランチ）
 - 影響範囲: runner / interpreter / vm / tools / docs
 - Feature gates（該当時）: `cranelift-jit`, その他（記述）

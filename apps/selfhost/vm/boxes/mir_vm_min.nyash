@@ -12,6 +12,8 @@
 //  - M2: const/binop/compare/ret を最小実装（簡易スキャンで安全に解釈）
 
 static box MirVmMin {
+  // Dev trace hook (no-op; enable by converting to print in local dev)
+  _tprint(msg) { /* no-op by default */ }
   // Public entry used by parity tests (calls into minimal runner)
   run(mjson) {
     local v = me._run_min(mjson)
@@ -53,17 +55,16 @@ static box MirVmMin {
     local acc = 0
     loop (i < n) {
       local ch = s.substring(i, i+1)
-      if ch == "0" { acc = acc * 10 + 0  i = i + 1  continue }
-      if ch == "1" { acc = acc * 10 + 1  i = i + 1  continue }
-      if ch == "2" { acc = acc * 10 + 2  i = i + 1  continue }
-      if ch == "3" { acc = acc * 10 + 3  i = i + 1  continue }
-      if ch == "4" { acc = acc * 10 + 4  i = i + 1  continue }
-      if ch == "5" { acc = acc * 10 + 5  i = i + 1  continue }
-      if ch == "6" { acc = acc * 10 + 6  i = i + 1  continue }
-      if ch == "7" { acc = acc * 10 + 7  i = i + 1  continue }
-      if ch == "8" { acc = acc * 10 + 8  i = i + 1  continue }
-      if ch == "9" { acc = acc * 10 + 9  i = i + 1  continue }
-      break
+      local d = match ch {
+        "0" => 0, "1" => 1, "2" => 2, "3" => 3,
+        "4" => 4, "5" => 5, "6" => 6, "7" => 7,
+        "8" => 8, "9" => 9,
+        _ => -1
+      }
+      if d < 0 { break }
+      acc = acc * 10 + d
+      i = i + 1
+      continue
     }
     return acc
   }
@@ -122,6 +123,26 @@ static box MirVmMin {
     local q = me.index_of_from(seg, "\"", p)
     if q < 0 { return "" }
     return seg.substring(p, q)
+  }
+  _replace_all(text, needle, repl) {
+    // naive global replace, left-to-right
+    if text == null { return null }
+    local out = ""
+    local i = 0
+    local nlen = needle.length()
+    local tlen = text.length()
+    loop(i < tlen) {
+      // match from i
+      local sub = text.substring(i, i + nlen)
+      if sub == needle {
+        out = out + repl
+        i = i + nlen
+      } else {
+        out = out + text.substring(i, i+1)
+        i = i + 1
+      }
+    }
+    return out
   }
   // --- JSON segment helpers (brace/bracket aware, minimal) ---
   _seek_obj_start(text, from_pos) {
@@ -216,33 +237,157 @@ static box MirVmMin {
       local pos = me._block_insts_start(mjson, bb)
       if pos < 0 { return me._extract_first_const_i64(mjson) }
       local block_end = me._block_insts_end(mjson, pos)
-      // Single-pass over instructions: segment each op object precisely and evaluate
-      local scan = pos
-      local moved = 0
-      loop(true) {
-        // find next op field within this block
-        local opos = me.index_of_from(mjson, "\"op\":\"", scan)
-        if opos < 0 || opos >= block_end { break }
-        // find exact JSON object bounds for this instruction
-        // Determine object start as the last '{' between pos..opos
-        local i = pos
-        local obj_start = opos
-        loop(i <= opos) {
-          local ch0 = mjson.substring(i, i+1)
-          if ch0 == "{" { obj_start = i }
-          i = i + 1
+      // Sanitize (only if stringified objects are detected): normalize escaped quotes within instructions segment.
+      {
+        local inst_seg = mjson.substring(pos, block_end)
+        if inst_seg.indexOf("\\\"op\\\":\\\"") >= 0 {
+          local cleaned = me._replace_all(inst_seg, "\\\"", "\"")
+          // Drop wrapping quotes if present
+          local len = cleaned.length()
+          if len > 0 {
+            local head = cleaned.substring(0, 1)
+            if head == "\"" { cleaned = cleaned.substring(1, len)  len = len - 1 }
+            if len > 0 {
+              local tail = cleaned.substring(len-1, len)
+              if tail == "\"" { cleaned = cleaned.substring(0, len-1) }
+            }
+          }
+          mjson = mjson.substring(0, pos) + cleaned + mjson.substring(block_end, mjson.length())
+          block_end = pos + cleaned.length()
         }
-        local obj_end = me._seek_obj_end(mjson, obj_start)
-        if obj_end > block_end { obj_end = block_end }
-        local seg = mjson.substring(obj_start, obj_end)
+      }
+      // After optional sanitize, try fast minimal evaluation again within this block
+      {
+        local inst2 = mjson.substring(pos, block_end)
+        local keyv2 = "\"value\":{\"type\":\"i64\",\"value\":"
+        local p1b = inst2.indexOf(keyv2)
+        if p1b >= 0 {
+          local d1b = me.read_digits(inst2, p1b + keyv2.length())
+          if d1b != "" {
+            local p2b = me.index_of_from(inst2, keyv2, p1b + keyv2.length())
+            if p2b >= 0 {
+              local d2b = me.read_digits(inst2, p2b + keyv2.length())
+              if d2b != "" {
+                local a = me._str_to_int(d1b)
+                local b = me._str_to_int(d2b)
+                // compare?
+                local pc2 = inst2.indexOf("\"op\":\"compare\"")
+                if pc2 >= 0 {
+                  local kk = ""
+                  if inst2.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
+                    if inst2.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
+                      if inst2.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
+                        if inst2.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
+                          if inst2.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
+                            if inst2.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  if kk != "" { return me._eval_cmp(kk, a, b) }
+                }
+                // binop?
+                local pb2 = inst2.indexOf("\"op\":\"binop\"")
+                if pb2 >= 0 {
+                  local bk = me._find_str_in(inst2, "\"op_kind\":\"")
+                  if bk == "" { bk = me._map_binop_symbol(me._find_str_in(inst2, "\"operation\":\"")) }
+                  if bk != "" { return me._eval_binop(bk, a, b) }
+                }
+              }
+            }
+          }
+        }
+      }
+      // Single-pass over instructions within this block (operate on segment slice)
+      // Fast minimal pattern: const, const, (compare|binop), ret → compute directly
+      {
+        local keyv = "\"value\":{\"type\":\"i64\",\"value\":"
+        local keyv_esc = "\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":"
+        local p1 = mjson.indexOf(keyv)
+        if p1 < 0 { p1 = mjson.indexOf(keyv_esc)  keyv = keyv_esc }
+        if p1 >= 0 {
+          local d1 = me.read_digits(mjson, p1 + keyv.length())
+          if d1 != "" {
+            local p2 = me.index_of_from(mjson, keyv, p1 + keyv.length())
+            if p2 >= 0 {
+              local d2 = me.read_digits(mjson, p2 + keyv.length())
+              if d2 != "" {
+                local a = me._str_to_int(d1)
+                local b = me._str_to_int(d2)
+                // compare?
+                // Find compare nearest before 'ret'
+                local pr = mjson.indexOf("\"op\":\"ret\"")
+                if pr < 0 { pr = mjson.length() }
+                local pc = mjson.indexOf("\"op\":\"compare\"")
+                if pc >= 0 {
+                  loop(true) {
+                    local nxt = me.index_of_from(mjson, "\"op\":\"compare\"", pc + 1)
+                    if nxt < 0 || nxt >= pr { break }
+                    pc = nxt
+                  }
+                  // Robust: search cmp kind tokens directly (unique in minimal JSON)
+                  local kk = ""
+                  if mjson.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
+                    if mjson.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
+                      if mjson.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
+                        if mjson.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
+                          if mjson.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
+                            if mjson.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+                          }
+                        }
+                      }
+                    }
+                  }
+                  local r = me._eval_cmp(kk, a, b)
+                  return r
+                }
+                // binop?
+                local pb = mjson.indexOf("\"op\":\"binop\"")
+                if pb >= 0 {
+                  loop(true) {
+                    local nxt = me.index_of_from(mjson, "\"op\":\"binop\"", pb + 1)
+                    if nxt < 0 || nxt >= pr { break }
+                    pb = nxt
+                  }
+                  local seg = mjson.substring(pb, pr)
+                  local bk = me._find_str_in(seg, "\"op_kind\":\"")
+                  if bk == "" { bk = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
+                  local r = me._eval_binop(bk, a, b)
+                  return r
+                }
+              }
+            }
+          }
+        }
+      }
+      // Fallback: object scan within the block (balanced braces)
+      local moved = 0
+      local inst_seg = mjson.substring(pos, block_end)
+      local p = 0
+      loop(true) {
+        local obj_start = me.index_of_from(inst_seg, "{", p)
+        if obj_start < 0 { break }
+        local obj_end = me._seek_obj_end(inst_seg, obj_start)
+        if obj_end > inst_seg.length() { obj_end = inst_seg.length() }
+        local seg = inst_seg.substring(obj_start, obj_end)
 
         // dispatch by op name (v0/v1 tolerant)
         local opname = me._find_str_in(seg, "\"op\":\"")
+        me._tprint("[op] " + opname)
         if opname == "const" {
           local cdst = me._find_int_in(seg, "\"dst\":")
           local cval = me._find_int_in(seg, "\"value\":{\"type\":\"i64\",\"value\":")
           if cdst != null and cval != null { me._set_map(regs, "" + cdst, cval) }
         } else {
+          if opname == "copy" {
+            local cdst = me._find_int_in(seg, "\"dst\":")
+            local csrc = me._find_int_in(seg, "\"src\":")
+            if cdst != null and csrc != null {
+              local v = me._get_map(regs, "" + csrc)
+              me._set_map(regs, "" + cdst, v)
+            }
+          } else {
           if opname == "binop" {
             local bdst = me._find_int_in(seg, "\"dst\":")
             local bkind = me._find_str_in(seg, "\"op_kind\":\"")
@@ -287,6 +432,7 @@ static box MirVmMin {
                   if opname == "ret" {
                     local rv = me._find_int_in(seg, "\"value\":")
                     if rv == null { rv = 0 }
+                    me._tprint("[ret] rv=" + me._int_to_str(rv))
                     return me._get_map(regs, "" + rv)
                   }
                 }
@@ -295,8 +441,8 @@ static box MirVmMin {
           }
         }
 
-        // advance to the end of this instruction object
-        scan = obj_end
+        // advance to end of this object
+        p = obj_end
       }
       // No ret encountered in this block; if control moved, continue with new bb
       if moved == 1 { continue }

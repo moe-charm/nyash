@@ -9,8 +9,23 @@
 #   reset    - Unset variables set by this script
 
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+ensure_app_bin_dir() {
+  # Default artifacts location for app_* outputs (can be overridden by caller)
+  export APP_BIN_DIR=${APP_BIN_DIR:-artifacts/apps}
+  mkdir -p "${APP_BIN_DIR}"
+  # Enable tight navigation mode by default (can disable with DEV_TIGHT=0)
+  if [[ "${DEV_TIGHT:-1}" == "1" ]]; then
+    if [[ -f "${SCRIPT_DIR}/dev/tight_mode.sh" ]]; then
+      # shellcheck source=/dev/null
+      source "${SCRIPT_DIR}/dev/tight_mode.sh"
+    fi
+  fi
+}
 
 activate_pyvm() {
+  ensure_app_bin_dir
   unset NYASH_DISABLE_PLUGINS || true
   export NYASH_VM_USE_PY=1
   export NYASH_PIPE_USE_PYVM=1
@@ -22,6 +37,7 @@ activate_pyvm() {
 }
 
 activate_bridge() {
+  ensure_app_bin_dir
   unset NYASH_DISABLE_PLUGINS || true
   unset NYASH_VM_USE_PY || true
   export NYASH_NY_COMPILER_TIMEOUT_MS=${NYASH_NY_COMPILER_TIMEOUT_MS:-2000}
@@ -31,6 +47,7 @@ activate_bridge() {
 }
 
 reset_env() {
+  unset APP_BIN_DIR || true
   unset NYASH_VM_USE_PY || true
   unset NYASH_PIPE_USE_PYVM || true
   unset NYASH_DISABLE_PLUGINS || true
@@ -44,6 +61,7 @@ reset_env() {
 }
 
 activate_phi_off() {
+  ensure_app_bin_dir
   export NYASH_MIR_NO_PHI=1
   export NYASH_VERIFY_ALLOW_NO_PHI=1
   export NYASH_LLVM_USE_HARNESS=1
@@ -51,6 +69,7 @@ activate_phi_off() {
 }
 
 activate_opbox() {
+  ensure_app_bin_dir
   export NYASH_USING_AST=1
   # Runtime operator boxes
   export NYASH_OPERATOR_BOX_STRINGIFY=1
@@ -70,6 +89,14 @@ activate_opbox() {
 }
 
 case "${1:-pyvm}" in
+  selfhost)
+    ensure_app_bin_dir
+    # Focus on self-hosting workflows; keep toggles minimal and reversible
+    export NYASH_COMPILER_TRACK=1
+    export DEV_TIGHT=${DEV_TIGHT:-1}
+    echo "[dev-env] Selfhost profile activated (APP_BIN_DIR=${APP_BIN_DIR}, COMPILER_TRACK=1, tight=${DEV_TIGHT})" >&2
+    echo "[hint] Run selfhost smokes: APP_BIN_DIR=${APP_BIN_DIR} tools/selfhost_smokes.sh quick|integration" >&2
+    ;;
   pyvm) activate_pyvm ;;
   bridge) activate_bridge ;;
   phi_off) activate_phi_off ;;

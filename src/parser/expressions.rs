@@ -42,7 +42,7 @@ impl NyashParser {
     fn parse_pipeline(&mut self) -> Result<ASTNode, ParseError> {
         let mut expr = self.parse_ternary()?;
 
-        while self.match_token(&TokenType::PipeForward) {
+        while self.match_token(&TokenType::PipeForward) || self.match_token(&TokenType::PipeTap) {
             if !is_sugar_enabled() {
                 let line = self.current_token().line;
                 return Err(ParseError::UnexpectedToken {
@@ -51,26 +51,63 @@ impl NyashParser {
                     line,
                 });
             }
-            // consume '|>'
+            // consume '|>' or '|?>' (tap is currently same desugar as '|>' – future: true tap semantics)
             self.advance();
+            // DOT先頭（`.m(...)`）を特別扱い: lhs.m(args)
+            if self.match_token(&TokenType::DOT) {
+                self.advance(); // consume '.'
+                let method = match &self.current_token().token_type {
+                    TokenType::IDENTIFIER(name) => { let n = name.clone(); self.advance(); n }
+                    _ => {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "method name after '.': identifier".to_string(), line });
+                    }
+                };
+                // optional argument list
+                let mut arguments: Vec<ASTNode> = Vec::new();
+                if self.match_token(&TokenType::LPAREN) {
+                    self.advance();
+                    while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
+                        crate::must_advance!(self, _unused, "pipeline dot-call arg");
+                        arguments.push(self.parse_expression()?);
+                        if self.match_token(&TokenType::COMMA) { self.advance(); if self.match_token(&TokenType::RPAREN) { break; } }
+                    }
+                    self.consume(TokenType::RPAREN)?;
+                }
+                // プレースホルダは `.m` では不可（受け手が lhs のため）。将来拡張時に検討。
+                expr = ASTNode::MethodCall { object: Box::new(expr), method, arguments, span: Span::unknown() };
+                continue;
+            }
 
             // 右辺は「呼び出し系」の式を期待
             let rhs = self.parse_call()?;
 
-            // 変換: rhs の形に応じて lhs を先頭引数として追加
+            // 変換: rhs の形に応じて lhs を先頭引数として追加（プレースホルダ'_'があれば置換）
             expr = match rhs {
                 ASTNode::FunctionCall {
                     name,
                     mut arguments,
                     span,
                 } => {
-                    let mut new_args = Vec::with_capacity(arguments.len() + 1);
-                    new_args.push(expr);
-                    new_args.append(&mut arguments);
-                    ASTNode::FunctionCall {
-                        name,
-                        arguments: new_args,
-                        span,
+                    // placeholder logic
+                    let mut underscore_pos: Option<usize> = None;
+                    for i in 0..arguments.len() {
+                        if let ASTNode::Variable { name, .. } = &arguments[i] {
+                            if name == "_" {
+                                if underscore_pos.is_some() { underscore_pos = Some(std::usize::MAX); break; }
+                                underscore_pos = Some(i);
+                            }
+                        }
+                    }
+                    if underscore_pos == Some(std::usize::MAX) {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken { found: TokenType::PipeForward, expected: "single '_' placeholder after '|>'".to_string(), line });
+                    }
+                    if let Some(pos) = underscore_pos { arguments[pos] = expr; ASTNode::FunctionCall { name, arguments, span } } else {
+                        let mut new_args = Vec::with_capacity(arguments.len() + 1);
+                        new_args.push(expr);
+                        new_args.append(&mut arguments);
+                        ASTNode::FunctionCall { name, arguments: new_args, span }
                     }
                 }
                 ASTNode::MethodCall {
@@ -79,14 +116,25 @@ impl NyashParser {
                     mut arguments,
                     span,
                 } => {
-                    let mut new_args = Vec::with_capacity(arguments.len() + 1);
-                    new_args.push(expr);
-                    new_args.append(&mut arguments);
-                    ASTNode::MethodCall {
-                        object,
-                        method,
-                        arguments: new_args,
-                        span,
+                    // placeholder logic for method call target: underscores refer to arguments only
+                    let mut underscore_pos: Option<usize> = None;
+                    for i in 0..arguments.len() {
+                        if let ASTNode::Variable { name, .. } = &arguments[i] {
+                            if name == "_" {
+                                if underscore_pos.is_some() { underscore_pos = Some(std::usize::MAX); break; }
+                                underscore_pos = Some(i);
+                            }
+                        }
+                    }
+                    if underscore_pos == Some(std::usize::MAX) {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken { found: TokenType::PipeForward, expected: "single '_' placeholder after '|>'".to_string(), line });
+                    }
+                    if let Some(pos) = underscore_pos { arguments[pos] = expr; ASTNode::MethodCall { object, method, arguments, span } } else {
+                        let mut new_args = Vec::with_capacity(arguments.len() + 1);
+                        new_args.push(expr);
+                        new_args.append(&mut arguments);
+                        ASTNode::MethodCall { object, method, arguments: new_args, span }
                     }
                 }
                 ASTNode::Variable { name, .. } => ASTNode::FunctionCall {
@@ -370,10 +418,7 @@ impl NyashParser {
 
             arguments.push(self.parse_expression()?);
 
-            if self.match_token(&TokenType::COMMA) {
-                self.advance();
-                // カンマの後の trailing comma をチェック
-            }
+            if self.match_token(&TokenType::COMMA) { self.advance(); if self.match_token(&TokenType::RPAREN) { break; } }
         }
 
         self.consume(TokenType::RPAREN)?;

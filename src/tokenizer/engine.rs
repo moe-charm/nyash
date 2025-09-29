@@ -105,6 +105,13 @@ impl NyashTokenizer {
                 self.advance();
                 return Ok(Token::new(TokenType::PipeForward, start_line, start_column));
             }
+            Some('|') if self.peek_char() == Some('?') && self.peek_char_n(2) == Some('>') => {
+                // '|?>' tap operator (L2 sugar)
+                self.advance(); // |
+                self.advance(); // ?
+                self.advance(); // >
+                return Ok(Token::new(TokenType::PipeTap, start_line, start_column));
+            }
             Some('?') if self.peek_char() == Some('.') => {
                 self.advance();
                 self.advance();
@@ -151,6 +158,11 @@ impl NyashTokenizer {
                     start_line,
                     start_column,
                 ))
+            }
+            // Raw strings: r"..." or r#"..."# or r##"..."##
+            Some('r') if self.peek_char() == Some('"') || self.peek_char() == Some('#') => {
+                let s = self.read_raw_string()?;
+                Ok(Token::new(TokenType::STRING(s), start_line, start_column))
             }
             Some(c) if c.is_ascii_digit() => {
                 let token_type = self.read_numeric_literal()?;

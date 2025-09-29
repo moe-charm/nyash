@@ -101,31 +101,65 @@ impl NyashRunner {
             }
         };
 
-        // Using handling: AST-prelude collection (legacy inlining removed)
-        let code = if crate::config::env::enable_using() {
+        // Using handling: collect and optionally merge AST preludes (dev profiles default ON)
+        let mut code_ref: String = code.clone();
+        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        let mut alias_names: std::collections::HashSet<String> = std::collections::HashSet::new();
+        let use_ast = crate::config::env::using_ast_enabled();
+        if crate::config::env::enable_using() {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
-                Ok((clean, paths)) => {
-                    if !paths.is_empty() && !crate::config::env::using_ast_enabled() {
+                Ok((clean, paths, alias_pairs)) => {
+                    code_ref = clean;
+                    if !paths.is_empty() && !use_ast {
                         eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         process::exit(1);
                     }
-                    // VM path currently does not merge prelude ASTs; rely on compile pipeline path for that.
-                    clean
+                    if use_ast && !paths.is_empty() {
+                        match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
+                            Ok(v) => {
+                                // Build alias map: canon_path -> alias
+                                use std::collections::HashMap;
+                                let mut alias_map: HashMap<String,String> = HashMap::new();
+                                for (a,p) in alias_pairs { alias_map.insert(p.clone(), a.clone()); alias_names.insert(a); }
+                                // Rename top symbols for preludes that were imported with alias
+                                for (path, ast) in v.into_iter() {
+                                    let canon = std::fs::canonicalize(&path).ok().map(|pb| pb.to_string_lossy().to_string()).unwrap_or(path.clone());
+                                    if let Some(alias) = alias_map.get(&canon) {
+                                        let renamed = crate::runner::modes::common_util::resolve::alias_tools::rename_prelude_top_symbols(&ast, alias);
+                                        prelude_asts.push(renamed);
+                                    } else {
+                                        prelude_asts.push(ast);
+                                    }
+                                }
+                            }
+                            Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
+                        }
+                    }
                 }
                 Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
             }
-        } else { code };
+        }
 
         // Pre-expand '@name[:T] = expr' sugar at line-head (same as common/llvm/pyvm paths)
-        let code = crate::runner::modes::common_util::resolve::preexpand_at_local(&code);
+        let code = crate::runner::modes::common_util::resolve::preexpand_at_local(&code_ref);
+        // Common pre-lexical normalization (raw strings, numeric separators)
+        let code = crate::runner::modes::common_util::prelex::prelex_normalize(&code);
 
         // Parse to AST
-        let ast = match NyashParser::parse_from_string(&code) {
+        let main_ast = match NyashParser::parse_from_string(&code) {
             Ok(ast) => ast,
             Err(e) => {
                 eprintln!("❌ Parse error: {}", e);
                 process::exit(1);
             }
+        };
+        // Merge preludes + main when enabled
+        let ast = if use_ast && !prelude_asts.is_empty() {
+            crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
+        } else { main_ast };
+        // Alias desugar: transform `Alias.X` to `Alias_X` to match renamed preludes
+        let ast = {
+            crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &alias_names, true)
         };
         let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 

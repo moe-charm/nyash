@@ -12,6 +12,9 @@ impl NyashTokenizer {
             if c.is_ascii_digit() {
                 number_str.push(c);
                 self.advance();
+            } else if c == '_' {
+                // numeric separator (ignored)
+                self.advance();
             } else if c == '.'
                 && !has_dot
                 && self.peek_char().map_or(false, |ch| ch.is_ascii_digit())
@@ -27,17 +30,18 @@ impl NyashTokenizer {
 
         if has_dot {
             // 浮動小数点数として解析
-            number_str
+            let filtered: String = number_str.chars().filter(|c| *c != '_').collect();
+            filtered
                 .parse::<f64>()
                 .map(TokenType::FLOAT)
                 .map_err(|_| TokenizeError::InvalidNumber { line: start_line })
         } else {
             // 整数として解析
-            number_str
+            let filtered: String = number_str.chars().filter(|c| *c != '_').collect();
+            filtered
                 .parse::<i64>()
                 .map(TokenType::NUMBER)
                 .map_err(|_| TokenizeError::InvalidNumber { line: start_line })
         }
     }
 }
-

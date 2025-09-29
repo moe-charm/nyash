@@ -13,9 +13,9 @@ pub fn collect_using_and_strip(
     runner: &NyashRunner,
     code: &str,
     filename: &str,
-) -> Result<(String, Vec<String>), String> {
+) -> Result<(String, Vec<String>, Vec<(String, String)>), String> {
     if !crate::config::env::enable_using() {
-        return Ok((code.to_string(), Vec::new()));
+        return Ok((code.to_string(), Vec::new(), Vec::new()));
     }
     let using_ctx = runner.init_using_context();
     let prod = crate::config::env::using_is_prod();
@@ -26,6 +26,7 @@ pub fn collect_using_and_strip(
 
     let mut out = String::with_capacity(code.len());
     let mut prelude_paths: Vec<String> = Vec::new();
+    let mut alias_pairs: Vec<(String, String)> = Vec::new(); // (alias, canon_path)
     // Duplicate-using detection (same target imported multiple times or alias rebound): error in all profiles
     use std::collections::HashMap;
     let mut seen_paths: HashMap<String, (String, usize)> = HashMap::new(); // canon_path -> (alias/label, first_line)
@@ -147,7 +148,8 @@ pub fn collect_using_and_strip(
                             ));
                         }
                     } else {
-                        seen_aliases.insert(alias, (canon, line_no));
+                        seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
+                        alias_pairs.push((alias, canon));
                     }
                 }
                 prelude_paths.push(path_str);
@@ -304,7 +306,8 @@ pub fn collect_using_and_strip(
                                         ));
                                     }
                                 } else {
-                                    seen_aliases.insert(alias, (canon, line_no));
+                                    seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
+                                    alias_pairs.push((alias, canon));
                                 }
                             }
                             prelude_paths.push(path_str);
@@ -325,7 +328,7 @@ pub fn collect_using_and_strip(
         with_marker.push_str(&out);
         out = with_marker;
     }
-    Ok((out, prelude_paths))
+    Ok((out, prelude_paths, alias_pairs))
 }
 
 /// Profile-aware prelude resolution wrapper (single entrypoint).
@@ -337,13 +340,13 @@ pub fn resolve_prelude_paths_profiled(
     runner: &NyashRunner,
     code: &str,
     filename: &str,
-) -> Result<(String, Vec<String>), String> {
+) -> Result<(String, Vec<String>, Vec<(String, String)>), String> {
     // First pass: strip using from the main source and collect direct prelude paths
-    let (cleaned, direct) = collect_using_and_strip(runner, code, filename)?;
+    let (cleaned, direct, alias_pairs) = collect_using_and_strip(runner, code, filename)?;
     // When AST using is enabled、recursively collect nested preludes in DFS order
     let ast_on = std::env::var("NYASH_USING_AST").ok().as_deref() == Some("1");
     if !ast_on {
-        return Ok((cleaned, direct));
+        return Ok((cleaned, direct, alias_pairs));
     }
     let mut out: Vec<String> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
@@ -372,7 +375,7 @@ pub fn resolve_prelude_paths_profiled(
         }
         let src = std::fs::read_to_string(&real_path)
             .map_err(|e| format!("using: failed to read '{}': {}", real_path, e))?;
-        let (_cleaned, nested) = collect_using_and_strip(runner, &src, &real_path)?;
+        let (_cleaned, nested, _aliases) = collect_using_and_strip(runner, &src, &real_path)?;
         for n in nested.iter() {
             dfs(runner, n, out, seen)?;
         }
@@ -432,7 +435,7 @@ pub fn resolve_prelude_paths_profiled(
             }
         }
     }
-    Ok((cleaned, out))
+    Ok((cleaned, out, alias_pairs))
 }
 
 /// Parse prelude source files into ASTs (single helper for all runner modes).
@@ -441,14 +444,14 @@ pub fn resolve_prelude_paths_profiled(
 pub fn parse_preludes_to_asts(
     runner: &NyashRunner,
     prelude_paths: &[String],
-) -> Result<Vec<nyash_rust::ast::ASTNode>, String> {
-    let mut out: Vec<nyash_rust::ast::ASTNode> = Vec::with_capacity(prelude_paths.len());
+) -> Result<Vec<(String, nyash_rust::ast::ASTNode)>, String> {
+    let mut out: Vec<(String, nyash_rust::ast::ASTNode)> = Vec::with_capacity(prelude_paths.len());
     for prelude_path in prelude_paths {
         let src = std::fs::read_to_string(prelude_path)
             .map_err(|e| format!("using: error reading {}: {}", prelude_path, e))?;
-        let (clean_src, _nested) = collect_using_and_strip(runner, &src, prelude_path)?;
+        let (clean_src, _nested, _aliases) = collect_using_and_strip(runner, &src, prelude_path)?;
         match crate::parser::NyashParser::parse_from_string(&clean_src) {
-            Ok(ast) => out.push(ast),
+            Ok(ast) => out.push((prelude_path.clone(), ast)),
             Err(e) => return Err(format!(
                 "Parse error in using prelude {}: {}",
                 prelude_path, e

@@ -50,6 +50,7 @@
 ### すぐ始める
 - guides/getting-started.md
 - guides/language-guide.md
+- guides/syntax-sugar.md
 - guides/p2p-guide.md
 
 ### 技術リファレンス

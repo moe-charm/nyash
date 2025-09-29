@@ -30,7 +30,7 @@ impl NyashRunner {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
                 self, &code, filename,
             ) {
-                Ok((clean, paths)) => {
+                Ok((clean, paths, alias_pairs)) => {
                     cleaned_code_owned = clean;
                     code_ref = &cleaned_code_owned;
                     if !paths.is_empty() && !use_ast {
@@ -39,7 +39,20 @@ impl NyashRunner {
                     }
                     if use_ast && !paths.is_empty() {
                         match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => prelude_asts = v,
+                            Ok(v) => {
+                                use std::collections::HashMap;
+                                let mut alias_map: HashMap<String,String> = HashMap::new();
+                                for (a,p) in alias_pairs { alias_map.insert(p, a); }
+                                for (path, ast) in v.into_iter() {
+                                    let canon = std::fs::canonicalize(&path).ok().map(|pb| pb.to_string_lossy().to_string()).unwrap_or(path.clone());
+                                    if let Some(alias) = alias_map.get(&canon) {
+                                        let renamed = crate::runner::modes::common_util::resolve::alias_tools::rename_prelude_top_symbols(&ast, alias);
+                                        prelude_asts.push(renamed);
+                                    } else {
+                                        prelude_asts.push(ast);
+                                    }
+                                }
+                            }
                             Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
                         }
                     }
@@ -52,7 +65,9 @@ impl NyashRunner {
         }
         // Pre-expand '@name[:T] = expr' sugar at line-head (same as common path)
         let preexpanded_owned = crate::runner::modes::common_util::resolve::preexpand_at_local(code_ref);
-        code_ref = &preexpanded_owned;
+        // Pre-lexical normalization (raw strings, numeric separators) shared with VM/PyVM
+        let prelex_owned = crate::runner::modes::common_util::prelex::prelex_normalize(&preexpanded_owned);
+        code_ref = &prelex_owned;
 
         // Parse to AST (main)
         let main_ast = match NyashParser::parse_from_string(code_ref) {
@@ -66,6 +81,12 @@ impl NyashRunner {
         let ast = if use_ast && !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
+        // Alias desugar (to prefixed form); llvm path ignores alias set for now
+        let ast = {
+            use std::collections::HashSet;
+            let aliases: HashSet<String> = HashSet::new();
+            crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &aliases, true)
+        };
         // Macro expansion (env-gated) after merge
         let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
         let ast = crate::runner::modes::macro_child::normalize_core_pass(&ast);

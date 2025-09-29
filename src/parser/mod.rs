@@ -192,15 +192,43 @@ impl NyashParser {
                 }
                 match c {
                     '"' => { in_str = true; out.push(c); }
+                    // raw string r"..." → normalize to normal string "..." (minimal)
+                    'r' => {
+                        if matches!(it.peek(), Some('"')) {
+                            // consume opening quote
+                            it.next();
+                            out.push('"');
+                            // copy until next '"' (no escape semantics inside raw), escape quotes/backslashes minimally
+                            while let Some(rc) = it.next() {
+                                if rc == '"' { out.push('"'); break; }
+                                if rc == '"' || rc == '\\' { out.push('\\'); out.push(rc); } else { out.push(rc); }
+                            }
+                            continue;
+                        }
+                        out.push('r');
+                    }
+                    // comments
                     '/' => {
                         match it.peek() { Some('/') => { out.push('/'); out.push('/'); it.next(); in_line = true; }, Some('*') => { out.push('/'); out.push('*'); it.next(); in_block = true; }, _ => out.push('/') }
                     }
                     '#' => { in_line = true; out.push('#'); }
+                    // pipeline / logical ops
                     '|' => {
                         if matches!(it.peek(), Some('|')) { out.push_str(" or "); it.next(); } else if matches!(it.peek(), Some('>')) { out.push('|'); out.push('>'); it.next(); } else { out.push('|'); }
                     }
                     '&' => {
                         if matches!(it.peek(), Some('&')) { out.push_str(" and "); it.next(); } else { out.push('&'); }
+                    }
+                    // numeric separators: collapse underscores between digits for integers
+                    d if d.is_ascii_digit() => {
+                        out.push(d);
+                        loop {
+                            match it.peek() {
+                                Some('_') => { it.next(); /* skip underscore */ }
+                                Some(nd) if nd.is_ascii_digit() => { out.push(*nd); it.next(); }
+                                _ => break,
+                            }
+                        }
                     }
                     _ => out.push(c),
                 }

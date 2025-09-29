@@ -145,7 +145,7 @@ TLV（Type-Length-Value）概要（簡易）
 - 読み出しサイズが0: 書き込み後に `close`→`open(r)` してから `read` を実行しているか確認
 
 関連ドキュメント
-- `docs/CURRENT_TASK.md`（現在の進捗）
+- `CURRENT_TASK.md`（現在の進捗 - リポジトリルート）
 - `docs/予定/native-plan/issues/phase_9_75g_bid_integration_architecture.md`（設計計画）
 
 備考

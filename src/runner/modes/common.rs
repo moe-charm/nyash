@@ -73,7 +73,7 @@ impl NyashRunner {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
                 self, &code, filename,
             ) {
-                Ok((clean, paths)) => {
+                Ok((clean, paths, _alias_pairs)) => {
                     cleaned_code_owned = clean;
                     code_ref = &cleaned_code_owned;
                     if !paths.is_empty() && !use_ast {
@@ -82,7 +82,10 @@ impl NyashRunner {
                     }
                     if use_ast && !paths.is_empty() {
                         match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => prelude_asts = v,
+                            Ok(v) => {
+                                // Drop paths; legacy interpreter path uses prelude ASTs as-is
+                                prelude_asts = v.into_iter().map(|(_p,a)| a).collect();
+                            }
                             Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
                         }
                     }

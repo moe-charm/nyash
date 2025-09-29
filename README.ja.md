@@ -17,7 +17,7 @@
 - このフェーズでは「大きな機能追加」は一時停止しますが、バグ修正・正しさ/Fail‑Fastの向上は積極的に行います。
 - 公開仕様の意味論は変えません。必要な追加は既定OFFのフラグで段階導入します（可逆・局所）。
 
-開発者向けクイックスタート: `docs/DEV_QUICKSTART.md`
+開発者向けクイックスタート: `docs/guides/build/dev-quickstart.md`
 ユーザーマクロ（Phase 2）: `docs/guides/user-macros.md`
 AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/how-to/self-hosting.md`

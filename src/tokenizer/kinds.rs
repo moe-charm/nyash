@@ -66,6 +66,8 @@ pub enum TokenType {
     OR,
     // 2文字演算子（最長一致）
     PipeForward,
+    /// Debug tap pipeline operator: |?> (L2 sugar)
+    PipeTap,
     QmarkDot,
     QmarkQmark,
     PlusAssign,

@@ -24,6 +24,10 @@ TEST_FILES=(
 PASSED=0
 FAILED=0
 
+# Output directory for native executable (opt-in); default current dir
+APP_BIN_DIR=${APP_BIN_DIR:-.}
+mkdir -p "$APP_BIN_DIR"
+
 # Function to run test
 run_test() {
     local test_file=$1
@@ -32,7 +36,7 @@ run_test() {
     echo "Testing: $test_name"
     
     # Clean up previous artifacts
-    rm -f app /tmp/${test_name}_vm.out /tmp/${test_name}_aot.out
+    rm -f "$APP_BIN_DIR/app" /tmp/${test_name}_vm.out /tmp/${test_name}_aot.out
     
     # Run with VM backend
     echo -n "  VM execution... "
@@ -48,7 +52,7 @@ run_test() {
     
     # Compile to native
     echo -n "  AOT compilation... "
-    if NYASH_USE_PLUGIN_BUILTINS=1 ./target/release/nyash --compile-native "$test_file" -o app > /tmp/${test_name}_aot_compile.out 2>&1; then
+    if NYASH_USE_PLUGIN_BUILTINS=1 ./target/release/nyash --compile-native "$test_file" -o "$APP_BIN_DIR/app" > /tmp/${test_name}_aot_compile.out 2>&1; then
         echo "OK"
     else
         echo -e "${RED}FAILED${NC}"
@@ -59,7 +63,7 @@ run_test() {
     
     # Run native executable
     echo -n "  Native execution... "
-    if ./app > /tmp/${test_name}_aot.out 2>&1; then
+    if "$APP_BIN_DIR/app" > /tmp/${test_name}_aot.out 2>&1; then
         AOT_RESULT=$(grep -oP '^Result: \K.*' /tmp/${test_name}_aot.out || echo "NO_RESULT")
         echo "OK (Result: $AOT_RESULT)"
     else
@@ -100,7 +104,7 @@ echo -e "Passed: ${GREEN}$PASSED${NC}"
 echo -e "Failed: ${RED}$FAILED${NC}"
 
 # Clean up
-rm -f app
+rm -f "$APP_BIN_DIR/app"
 
 # Exit with appropriate code
 if [[ $FAILED -eq 0 ]]; then

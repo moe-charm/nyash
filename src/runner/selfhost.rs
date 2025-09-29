@@ -26,7 +26,7 @@ impl NyashRunner {
         let mut code_ref: std::borrow::Cow<'_, str> = std::borrow::Cow::Borrowed(&code);
         if crate::config::env::enable_using() {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
-                Ok((clean, paths)) => {
+                Ok((clean, paths, _aliases)) => {
                     if !paths.is_empty() && !crate::config::env::using_ast_enabled() {
                         eprintln!("[ny-compiler] using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         return false;

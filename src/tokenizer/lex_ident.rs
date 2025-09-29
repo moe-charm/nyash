@@ -15,6 +15,56 @@ impl NyashTokenizer {
             }
         }
 
+        // Raw string immediate form: identifier 'r' immediately followed by '"' or '#'
+        if identifier == "r" {
+            // Case r"..."
+            if self.current_char() == Some('"') {
+                self.advance(); // consume opening '"'
+                let mut out = String::new();
+                loop {
+                    match self.current_char() {
+                        None => break,
+                        Some('"') => { self.advance(); break; }
+                        Some(c) => { out.push(c); self.advance(); }
+                    }
+                }
+                return TokenType::STRING(out);
+            }
+            // Case r#"..."# / r##"..."##
+            if self.current_char() == Some('#') {
+                // count hashes
+                let mut hashes = 0usize;
+                while self.current_char() == Some('#') { self.advance(); hashes += 1; }
+                if self.current_char() == Some('"') { self.advance(); } else {
+                    // fall back to identifier token
+                    return TokenType::IDENTIFIER(identifier);
+                }
+                let mut out = String::new();
+                loop {
+                    match self.current_char() {
+                        None => break,
+                        Some('"') => {
+                            // check for matching number of '#'
+                            let mut ok = true;
+                            for i in 1..=hashes {
+                                if self.peek_char_n(i) != Some('#') { ok = false; break; }
+                            }
+                            if ok {
+                                self.advance();
+                                for _ in 0..hashes { self.advance(); }
+                                break;
+                            } else {
+                                out.push('"');
+                                self.advance();
+                            }
+                        }
+                        Some(c) => { out.push(c); self.advance(); }
+                    }
+                }
+                return TokenType::STRING(out);
+            }
+        }
+
         // キーワードチェック
         let mut tok = match identifier.as_str() {
             "box" => TokenType::BOX,

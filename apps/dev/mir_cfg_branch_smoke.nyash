@@ -1,0 +1,13 @@
+using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterMod
+using "apps/selfhost/vm/boxes/mir_vm_min.nyash" as MirVmMinMod
+
+static box Main {
+  main() {
+    // Stage-1 JSON: Return(Compare(Int 5, Int 4) op:"Gt")
+    local ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Compare\",\"op\":\"Gt\",\"lhs\":{\"type\":\"Int\",\"value\":5},\"rhs\":{\"type\":\"Int\",\"value\":4}}}]}"
+    local mir = MirEmitterBox.emit_mir_min(ast_json)
+    // Run minimal MIR VM; expected output: 1
+    return MirVmMin.run(mir)
+  }
+}
+

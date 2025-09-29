@@ -17,7 +17,7 @@ pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
     // Using handling: AST-prelude collection (legacy inlining removed)
     let mut code = if crate::config::env::enable_using() {
         match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(runner, &code, filename) {
-            Ok((clean, paths)) => {
+            Ok((clean, paths, _alias_pairs)) => {
                 if !paths.is_empty() && !crate::config::env::using_ast_enabled() {
                     eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                     process::exit(1);
@@ -31,6 +31,8 @@ pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
 
     // Dev sugar pre-expand: line-head @name[:T] = expr → local name[:T] = expr
     code = crate::runner::modes::common_util::resolve::preexpand_at_local(&code);
+    // Shared pre-lexical normalization (raw strings, numeric separators)
+    code = crate::runner::modes::common_util::prelex::prelex_normalize(&code);
 
     // Normalize logical operators for Stage-2 parser: translate '||'/'&&' to 'or'/'and' outside strings/comments
     fn normalize_logical_ops(src: &str) -> String {

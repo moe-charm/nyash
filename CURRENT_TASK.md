@@ -6,6 +6,25 @@ Focus
 - Builder/VM ガードは最小限・仕様不変（dev では診断のみ）。
 - Phase 15.7 を再定義: Known 化＋Rewrite 統合（dev観測）と Mini‑VM 安定化、表示APIは `str()` に統一（互換:stringify）。
 
+Update — 2025-09-29 (Syntax Sugar v1 scaffolding + Box‑First)
+- Syntax sugar（既定ON; ENVで切替）を段階導入。仕様は parser‑level のみで意味論は不変。
+  - L1/basic: pipeline `|>`（優先順位: 関数/ドット > パイプ）, 末尾カンマ, 数値区切り（`1_000_000`）, raw 文字列（r"…"/r#…#; 実装中）
+  - L2/full: 受け手糖 `x |> .m(a)`/`x |> obj.m(a)`、プレースホルダ `_`（1回限定; 実装中）
+- スモークを追加（quick/core）し緑/赤を切り分け：
+  - PASS: sugar_pipeline_basic_vm, sugar_pipeline_receiver_vm, sugar_trailing_comma_vm, sugar_off_mode_vm
+  - FAIL: sugar_raw_basic_vm（`r` が未定義扱い）, sugar_numeric_sep_vm（`_000_000` が識別子化）, sugar_pipeline_placeholder_vm（`_` 置換未適用）
+- Box‑First 原則を AGENTS.md に追記（5.1）: 交差境界/副作用/高頻度変更は薄い箱で分離（後で解くのは容易、後から足すのは手間）。
+
+Plan — Next (sugar 緑化・可逆小差分)
+1) PreLexBox（前正規化）を runner 共通入口（VM/LLVM/PyVM）に導入（sugar=ON のみ）
+   - r"…" → 通常文字列へ最小エスケープ、数値中の `_` 除去（OFF時は無効）
+2) TokenizerBox の保険強化
+   - `r` 優先分岐の確定（alphabetic より前／lex_ident 即時 raw 化）、numeric 読取の継続条件（`_` 後も継続）を再点検
+3) ParserSugarBox の `_` 置換を確定（関数/メソッド RHS の単回置換、複数 `_` は Fail‑Fast）
+4) スモーク再実行 → sugar_raw_basic / sugar_numeric_sep / sugar_pipeline_placeholder を緑化
+5) （任意）デシュガー観測 `NYASH_PRINT_DESUGARED=1` を追加検討（dev限定）
+
+
 Update — 2025-09-28 (Router policy: Instance×string‑like → Unified / Rescue OFF 試験)
 - RouterPolicy を明文化・実装反映:
   - `InstanceBox × {length,len,substring,indexOf,lastIndexOf}` は Unified へ固定（Builder 側で `StringBox` 正規化）。

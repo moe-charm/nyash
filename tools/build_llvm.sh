@@ -13,7 +13,7 @@ Compiles a Nyash program with the LLVM backend to an object (.o),
 links it with the NyRT static runtime, and produces a native executable.
 
 Options:
-  -o <output>   Output executable path (default: tmp/app)
+  -o <output>   Output executable path (default: ${APP_BIN_DIR:-tmp}/app)
 
 Requirements:
   - LLVM 18 development (llvm-config-18)
@@ -24,7 +24,7 @@ USAGE
 if [[ $# -lt 1 ]]; then usage; exit 1; fi
 
 INPUT=""
-OUT="tmp/app"
+OUT="${APP_BIN_DIR:-tmp}/app"
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;

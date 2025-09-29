@@ -7,7 +7,7 @@ Scope
 Run (official runner path)
 - Minimal AST JSON (header):
   - `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_JSON_ONLY=1 timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash`
-- Minimal MIR(JSON v0) (const→ret):
+- Minimal MIR(JSON v0) (const→ret / cmp→branch+jump→ret):
   - `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash`
 
 Direct run (dev only)
@@ -21,8 +21,20 @@ Flags
 
 Acceptance (dev)
 - AST JSON: header must contain `{"version":..., "kind":...}` (non-empty).
-- MIR JSON v0: must contain a single main function with a block of `const` then `ret`.
+- MIR JSON v0: contains a single main function.
+  - Return(Int): single block `const`→`ret`.
+  - Return(Compare(Int,Int)): 4 blocks CFG: entry(`const`×2→`compare`→`branch`), then(`const 1`→`jump`), else(`const 0`→`jump`), merge(`ret`).
 
 Notes
 - Core (`src/`) remains stable; compiler changes are scoped here and guarded by flags.
 - Quick/integration profiles must remain green; compiler acceptance is dev-gated initially.
+ - LocalSSA (builder/ssa/local.nyash): for MIR input, ensures `branch(cond)` has an in-block materialized value by injecting a `copy` at the block head when needed (behavior-preserving).
+
+LocalSSA Trace (dev only)
+- Default OFF. Enable from Ny code:
+  - `using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA`
+  - `LocalSSA.trace_enable(1)`; then call `LocalSSA.ensure_cond(mir_json)`
+  - Read stats via `LocalSSA.trace_get_map()` or `LocalSSA.trace_summary()`
+- Selfhost CLI toggle (emit MIR path only): add `--ssa-trace` together with `--compiler-track --emit-mir`.
+  - Trace values are not printed automatically (avoid polluting JSON output).
+  - For ad-hoc checks, write a small Ny driver and print `LocalSSA.trace_summary()`.

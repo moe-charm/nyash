@@ -55,11 +55,34 @@ pub enum QualifiedCallee {
 - **エイリアス**: `using long.path as Alias`
 - **プラグイン修飾**: `network.HttpClient`
 
-### 🚧 **Phase 15.5後実装予定**
+### 🚧 **Phase 15.5 後実装予定 / 一部実装済み**
 - **built-in namespace**: `builtin.StringBox` vs `plugin.StringBox`
 - **完全修飾名**: `nyash.builtin.print`、`std.console.log`
 - **スコープ演算子**: `::global_func`、`Type::static_method`
 - **厳密解決**: コンパイル時名前空間検証
+
+Alias desugar（MVP, Runner実装）
+- 概要: `using "path" as Alias` で読み込んだプレリュードのトップレベル記号を `Alias_<Name>` にリネームし、コード側の `Alias.Name` を `Alias_Name` にデシュガーする。
+- 狙い: 衝突なき名前空間の導入（ASTマージ前提）と、`Main` などの汎用名の競合回避。
+- ルール（MVP）:
+  - 対象: 静的Box名、関数名（トップレベル）。
+  - 置換: `FieldAccess(Variable(Alias), field)` → `Variable("Alias_"+field)`（入れ子も再帰処理）。
+  - 競合: 既存の `Alias_` 接頭辞の記号とぶつかる場合は Fail‑Fast（将来の詳細化で解決）。
+  - スコープ: ファイル先頭の using 行に限る。ネストした using の alias は作用しない（将来拡張）。
+  - 既定: dev/ci プロファイルで有効（`NYASH_USING_AST=1`）。prod は toml のみ。
+
+例
+```nyash
+using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
+
+static box Main {
+  main() {
+    # before: CompilerMod.Main.main(args)
+    # after : CompilerMod_Main.main(args)
+    CompilerMod.Main.main(["--min-json", "--emit-mir"]) 
+  }
+}
+```
 
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.

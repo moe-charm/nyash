@@ -25,6 +25,7 @@ Execution Status (Feature Additions Pause)
 Quick pointers
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
 - Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
+- Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
 
 Dev shortcuts (Operator Boxes & JSON smokes)
 - One‑shot JSON verification (dev, Operator Boxes ON): `./tools/opbox-json.sh`
@@ -44,7 +45,7 @@ Phase‑15 (2025‑09) update
 - 自己ホスト準備として Nyash 製 JSON ライブラリと Ny Executor（最小命令）を既定OFFのトグルで追加予定。
 - 推奨トグル: `NYASH_LLVM_USE_HARNESS=1`, `NYASH_PARSER_TOKEN_CURSOR=1`, `NYASH_JSON_PROVIDER=ny`, `NYASH_SELFHOST_EXEC=1`。
 
-Developer quickstart: see `docs/DEV_QUICKSTART.md`. Changelog highlights: `CHANGELOG.md`.
+Developer quickstart: see `docs/guides/build/dev-quickstart.md`. Changelog highlights: `CHANGELOG.md`.
 User Macros (Phase 2): `docs/guides/user-macros.md`
 Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
 ScopeBox & MIR hints: `docs/guides/scopebox.md`

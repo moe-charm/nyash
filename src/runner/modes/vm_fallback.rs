@@ -32,7 +32,7 @@ impl NyashRunner {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
                 self, &code2, filename,
             ) {
-                Ok((clean, paths)) => {
+                Ok((clean, paths, _alias_pairs)) => {
                     code2 = clean;
                     if !paths.is_empty() && !use_ast_prelude {
                         eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
@@ -40,7 +40,7 @@ impl NyashRunner {
                     }
                     if use_ast_prelude && !paths.is_empty() {
                         match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => prelude_asts = v,
+                            Ok(v) => prelude_asts = v.into_iter().map(|(_p,a)| a).collect(),
                             Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
                         }
                     }

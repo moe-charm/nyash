@@ -652,7 +652,7 @@ Call { func: ValueId, callee: Option<Callee> }  // 段階移行で破壊的変�
 - 🚀 **Phase 15.3開始！** NyashコンパイラMVP実装が`apps/selfhost-compiler/`でスタート！
 - ✅ JSON v0 Bridge完成 - If/Loop PHI生成実装済み（ChatGPT実装）
 - 🔧 Python MVPパーサーStage-2完成 - local/if/loop/call/method/new対応
-- 📚 peek式の再発見 - when→peekに名前変更、ブロック/値/文すべて対応済み
+- 📚 match式の確立 - when→peek→match に変遷、パターンマッチング完全対応済み
 - 🧠 箱理論でSSA構築を簡略化（650行→100行）- 論文執筆完了
 - 🤝 AI協働の知見を論文化 - 実装駆動型学習の重要性を実証
 - 🎉 **面白事件ログ収集完了！** 41個の世界記録級事件を記録 → [CURRENT_TASK.md#面白事件ログ](CURRENT_TASK.md#🎉-面白事件ログ---ai協働開発45日間の奇跡41事例収集済み)

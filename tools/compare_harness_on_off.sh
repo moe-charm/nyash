@@ -6,8 +6,11 @@ APP=${1:-apps/selfhost/tools/dep_tree_min_string.nyash}
 OUTDIR=${OUTDIR:-$ROOT_DIR/tmp}
 mkdir -p "$OUTDIR"
 
-ON_EXE=${ON_EXE:-$ROOT_DIR/app_dep_tree_py}
-OFF_EXE=${OFF_EXE:-$ROOT_DIR/app_dep_tree_rust}
+# Optional output dir for produced binaries
+APP_BIN_DIR=${APP_BIN_DIR:-$ROOT_DIR}
+mkdir -p "$APP_BIN_DIR"
+ON_EXE=${ON_EXE:-$APP_BIN_DIR/app_dep_tree_py}
+OFF_EXE=${OFF_EXE:-$APP_BIN_DIR/app_dep_tree_rust}
 
 echo "[compare] target app: $APP"
 

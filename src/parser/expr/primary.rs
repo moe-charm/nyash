@@ -6,6 +6,24 @@ use crate::tokenizer::TokenType;
 impl NyashParser {
     pub(crate) fn expr_parse_primary(&mut self) -> Result<ASTNode, ParseError> {
         match &self.current_token().token_type {
+            // Raw string fallback: IDENT("r") followed by STRING("...") → Literal(String)
+            TokenType::IDENTIFIER(id) if id == "r" => {
+                match self.peek_token() {
+                    TokenType::STRING(s) => {
+                        let v = s.clone();
+                        // consume 'r' and the following string
+                        self.advance();
+                        self.advance();
+                        Ok(ASTNode::Literal { value: LiteralValue::String(v), span: Span::unknown() })
+                    }
+                    _ => {
+                        // treat as normal identifier
+                        let name = id.clone();
+                        self.advance();
+                        Ok(ASTNode::Variable { name, span: Span::unknown() })
+                    }
+                }
+            }
             TokenType::LBRACK => {
                 let sugar_on = crate::parser::sugar_gate::is_enabled()
                     || std::env::var("NYASH_ENABLE_ARRAY_LITERAL").ok().as_deref() == Some("1");
@@ -23,9 +41,7 @@ impl NyashParser {
                     crate::must_advance!(self, _unused, "array literal element parsing");
                     let el = self.parse_expression()?;
                     elems.push(el);
-                    if self.match_token(&TokenType::COMMA) {
-                        self.advance();
-                    }
+                    if self.match_token(&TokenType::COMMA) { self.advance(); if self.match_token(&TokenType::RBRACK) { break; } }
                 }
                 self.consume(TokenType::RBRACK)?;
                 Ok(ASTNode::ArrayLiteral {
@@ -80,10 +96,7 @@ impl NyashParser {
                     let value_expr = self.parse_expression()?;
                     entries.push((key, value_expr));
                     // skip_newlines削除: brace_depth > 0なので自動スキップされる
-                    if self.match_token(&TokenType::COMMA) {
-                        self.advance();
-                        // skip_newlines削除: brace_depth > 0なので自動スキップされる
-                    }
+                    if self.match_token(&TokenType::COMMA) { self.advance(); if self.match_token(&TokenType::RBRACE) { break; } }
                 }
                 // skip_newlines削除: brace_depth > 0なので自動スキップされる
                 self.consume(TokenType::RBRACE)?;
@@ -101,12 +114,30 @@ impl NyashParser {
                 })
             }
             TokenType::NUMBER(n) => {
-                let value = *n;
+                // Numeric separator fallback: allow IDENT("_...") chunks to follow a NUMBER
+                let mut buf = n.to_string();
                 self.advance();
-                Ok(ASTNode::Literal {
-                    value: LiteralValue::Integer(value),
-                    span: Span::unknown(),
-                })
+                loop {
+                    match self.current_token().token_type.clone() {
+                        TokenType::IDENTIFIER(ref tail) if tail.starts_with('_') && tail.chars().all(|c| c == '_' || c.is_ascii_digit()) => {
+                            buf.push_str(tail);
+                            self.advance();
+                            continue;
+                        }
+                        _ => break,
+                    }
+                }
+                let merged: String = buf.chars().filter(|c| *c != '_').collect();
+                // try integer first, fall back to float parse if contains '.'
+                if merged.contains('.') {
+                    if let Ok(fv) = merged.parse::<f64>() {
+                        return Ok(ASTNode::Literal { value: LiteralValue::Float(fv), span: Span::unknown() });
+                    }
+                } else if let Ok(iv) = merged.parse::<i64>() {
+                    return Ok(ASTNode::Literal { value: LiteralValue::Integer(iv), span: Span::unknown() });
+                }
+                let line = self.current_token().line;
+                Err(ParseError::UnexpectedToken { found: self.current_token().token_type.clone(), expected: "valid numeric literal".to_string(), line })
             }
             TokenType::FLOAT(f) => {
                 let value = *f;
@@ -188,9 +219,7 @@ impl NyashParser {
                     while !self.match_token(&TokenType::RPAREN) && !self.is_at_end() {
                         crate::must_advance!(self, _unused, "new expression argument parsing");
                         arguments.push(self.parse_expression()?);
-                        if self.match_token(&TokenType::COMMA) {
-                            self.advance();
-                        }
+                        if self.match_token(&TokenType::COMMA) { self.advance(); if self.match_token(&TokenType::RPAREN) { break; } }
                     }
                     self.consume(TokenType::RPAREN)?;
                     Ok(ASTNode::New {

@@ -22,7 +22,7 @@
 
 ### 📋 Copilot作業管理
 - **[copilot_issues.txt](copilot_issues.txt)** - Copilot様への依頼・課題整理
-- **協調戦略**: [docs/CURRENT_TASK.md](../CURRENT_TASK.md)内に詳細記載
+- **協調戦略**: [CURRENT_TASK.md](../../../CURRENT_TASK.md)内に詳細記載
 
 ### 🎯 フェーズ別課題
 - **Phase 8課題**: [native-plan/issues/](native-plan/issues/)

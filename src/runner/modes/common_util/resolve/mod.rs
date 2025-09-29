@@ -18,6 +18,7 @@
 
 pub mod strip;
 pub mod seam;
+pub mod alias_tools;
 
 // Public re-exports to preserve existing call sites
 pub use strip::{

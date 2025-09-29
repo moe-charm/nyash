@@ -18,6 +18,12 @@ Box、メソッド、名前空間を構造化データとして扱い、リフ�
 - Box、メソッド、依存関係を正規化されたテーブルで表現
 - SQLクエリでリファクタリング・検索・分析を高速化
 
+### Nyashの決定的優位性（2025-09-30追加）
+- **グローバル変数なし** → 状態が完全に追跡可能、並列リファクタリング安全
+- **Everything is Box** → 統一的なテーブル設計、1対1マッピング
+- **Static box** → グローバル状態も管理可能、副作用が局所的
+- **スコープ明確** → 依存関係が単純、循環参照の検出容易
+
 ## 🏗️ データベーススキーマ
 
 ### 基本テーブル構造
@@ -81,6 +87,24 @@ CREATE TABLE namespaces (
     parent_id INTEGER,
     metadata JSON,
     FOREIGN KEY (parent_id) REFERENCES namespaces(id)
+);
+
+-- ファイルマッピング（2025-09-30追加）
+CREATE TABLE files (
+    id INTEGER PRIMARY KEY,
+    path TEXT UNIQUE NOT NULL,  -- 'src/user/auth.nyash'
+    last_modified TIMESTAMP,
+    is_generated BOOLEAN DEFAULT FALSE  -- DBから生成されたファイルか
+);
+
+CREATE TABLE file_boxes (
+    file_id INTEGER NOT NULL,
+    box_id INTEGER NOT NULL,
+    line_start INTEGER,  -- 何行目から
+    line_end INTEGER,    -- 何行目まで
+    PRIMARY KEY (file_id, box_id),
+    FOREIGN KEY (file_id) REFERENCES files(id),
+    FOREIGN KEY (box_id) REFERENCES boxes(id)
 );
 
 -- コンパイルキャッシュ
@@ -159,7 +183,35 @@ JOIN boxes b2 ON m2.box_id = b2.id
 WHERE similarity_score(m1.body, m2.body) > 0.8;
 ```
 
-### 3. インテリジェントなキャッシング
+### 3. ファイル操作とリファクタリング（2025-09-30追加）
+
+```sql
+-- Box抽出して新ファイルへ移動
+UPDATE file_boxes
+SET file_id = (SELECT id FROM files WHERE path = 'auth/user.nyash')
+WHERE box_id = (SELECT id FROM boxes WHERE name = 'UserBox');
+
+-- 関連Boxをまとめて移動（依存関係ベース）
+WITH related_boxes AS (
+    SELECT DISTINCT to_id as box_id
+    FROM dependencies
+    WHERE from_id = ? AND dep_type IN ('uses', 'extends')
+)
+UPDATE file_boxes
+SET file_id = (SELECT id FROM files WHERE path = 'auth/related.nyash')
+WHERE box_id IN (SELECT box_id FROM related_boxes);
+
+-- 肥大化ファイルの自動分割提案
+SELECT f.path, COUNT(*) as box_count,
+       GROUP_CONCAT(b.name) as boxes_to_extract
+FROM files f
+JOIN file_boxes fb ON f.id = fb.file_id
+JOIN boxes b ON fb.box_id = b.id
+GROUP BY f.path
+HAVING COUNT(*) > 10;
+```
+
+### 4. インテリジェントなキャッシング
 
 ```sql
 -- 変更影響分析
@@ -297,9 +349,23 @@ nyash db clean --remove-unused --dry-run
 - **DBエクスプローラー**：Box/メソッドをツリー表示
 - **リアルタイム検索**：SQLクエリで即座に検索
 - **依存関係ビュー**：グラフィカルに表示
-- **リファクタリングパレット**：右クリックで瞬間実行
 
-### 3. Web UI
+### 3. Box単位インクリメンタルチェック（2025-09-30追加）
+
+```bash
+# Box単位でのチェック（Rust cargo checkに相当）
+nyash check --box UserBox  # 特定Boxのみ
+nyash check --changed      # 変更されたBoxのみ
+nyash check --affected     # 影響を受けるBoxも含む
+
+# DB内でのMIRキャッシュ活用
+SELECT b.name, cc.mir_version, cc.created_at
+FROM boxes b
+LEFT JOIN compile_cache cc ON b.id = cc.entity_id
+WHERE cc.mir_version < (SELECT MAX(mir_version) FROM compile_cache);
+```
+
+### 4. Web UI
 
 ```nyash
 box CodeDBWebUI {
@@ -327,6 +393,33 @@ box CodeDBWebUI {
     }
 }
 ```
+
+## 💡 実装の容易性（2025-09-30追加）
+
+### なぜNyashでは簡単なのか
+
+```nyash
+# すべてが箱 → テーブル設計が自然
+box UserBox { ... }  →  INSERT INTO boxes VALUES (...)
+
+# グローバル変数なし → 依存関係が明確
+static box Config { } →  完全に追跡可能
+
+# local変数もBoxスコープ内 → 状態管理がシンプル
+local temp = new Box() →  scope_id で管理
+```
+
+### 実装見積もり
+- **基本DB化**: 1-2週間（スキーマ作成とインポート/エクスポート）
+- **リファクタリング機能**: 1-2週間（SQL操作のラッパー）
+- **IDE統合**: 2-3週間（VSCode拡張）
+- **合計**: 1-2ヶ月で実用レベル（当初予想の9ヶ月より大幅短縮！）
+
+### 他言語では困難な理由
+- **JavaScript**: グローバル汚染、prototype chain、動的すぎる
+- **Python**: `__builtins__`、モジュールの副作用、メタクラス
+- **Java**: 静的フィールド、クラスローダー、リフレクション
+- **Nyash**: **これらの問題がすべて存在しない！**
 
 ## 📊 移行戦略
 

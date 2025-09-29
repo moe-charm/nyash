@@ -6,7 +6,10 @@ if [[ "${NYASH_CLI_VERBOSE:-0}" == "1" ]]; then
 fi
 
 APP="${1:-apps/tests/esc_dirname_smoke.nyash}"
-OUT="app_pyvm_cmp"
+# Optional output dir for produced binary (default current dir)
+APP_BIN_DIR=${APP_BIN_DIR:-.}
+mkdir -p "$APP_BIN_DIR"
+OUT="$APP_BIN_DIR/app_pyvm_cmp"
 
 if [[ ! -f "$APP" ]]; then
   echo "error: app not found: $APP" >&2
@@ -20,7 +23,7 @@ echo "[cmp] building AOT via llvmlite harness ..." >&2
 # 2) Run AOT executable and capture stdout + exit code
 echo "[cmp] running AOT (llvmlite) ..." >&2
 set +e
-OUT_LL=$("./$OUT" 2>&1)
+OUT_LL=$("$OUT" 2>&1)
 CODE_LL=$?
 set -e
 

@@ -1,0 +1,31 @@
+# ripgrep navigation noise filter (non-destructive)
+# This file affects ripgrep/rg only. Git tracking is unchanged.
+
+# VCS / build cache
+.git/
+target/
+**/target/
+
+# Editor/IDE caches
+.vscode/
+.idea/
+
+# Root-level compiled artifacts (keep apps/ intact)
+/app
+/app_*
+/app*
+!/apps/
+
+# Logs and dumps
+*.log
+*.jsonl
+*.dot
+*.ll
+*.bc
+*.o
+
+# Local scratch
+/development/
+/private/
+/private_test/
+
