@@ -105,7 +105,7 @@ Following the strategy in `builtin-box-removal-strategy.md`:
 1. **LLVM Harness Enhancement**: Modify to capture and display executable output
 2. **Test Suite Cleanup**: Remove or update tests for archived features
 3. **Documentation Update**: Update README to reflect NyKernel naming
-4. **CI Configuration**: Ensure NYASH_DISABLE_PLUGINS=1 for core path stability
+4. **CI Configuration**: Ensure NYASH_PLUGIN_POLICY=off for core path stability (compat: `NYASH_DISABLE_PLUGINS=1`)
 
 ## 📈 Performance Impact
 

@@ -11,8 +11,20 @@ VM Runtime (dev‑only toggles; default OFF)
 - NYASH_VM_TOLERATE_VOID: substitute Void for undefined registers (dev safety). Default 0.
 - NYASH_VM_USER_INSTANCE_BOXCALL: allow user Instance BoxCall at runtime (dev/ci only). Default 1 in dev scripts, 0 in prod.
 
-Using/AST (dev only)
-- NYASH_ENABLE_USING, NYASH_ALLOW_USING_FILE, NYASH_USING_AST: default 0. Dev scripts may set to 1.
+Using / AST merge
+- NYASH_USING=0|1 (default 1): enable/disable using system (alias: NYASH_ENABLE_USING)
+- NYASH_USING_STRATEGY={resolver|prelude} (alias: NYASH_USING_IMPL; fallback: NYASH_USING_AST)
+  - resolver: name resolution only (no AST merge)
+  - prelude: AST prelude merge (dev/ci default ON; prod default OFF)
+- NYASH_ALLOW_USING_FILE=0|1 (default 0): allow file‑based using in dev convenience scenarios
+
+Plugins
+- NYASH_PLUGIN_POLICY={auto|off|force} (default auto)
+  - off: disable external plugins (compat: NYASH_DISABLE_PLUGINS=1)
+  - force: plugin‑only execution (compat: NYASH_PLUGIN_ONLY=1)
+
+Alias/Using (runner)
+- NYASH_ALIAS_INTERNAL_REWRITE=1 (default 1): after renaming prelude tops to `Alias_<Top>`, also rewrite internal references inside the prelude to the new names. Set to 0/false to disable (emergency toggle).
 
 Tracing (dev only; default OFF)
 - NYASH_VM_TRACE, NYASH_LOCAL_SSA_TRACE, NYASH_ROUTER_TRACE, NYASH_VARMAP_TRACE, NYASH_VM_BRANCH_TRACE

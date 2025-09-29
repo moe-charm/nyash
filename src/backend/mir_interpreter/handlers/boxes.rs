@@ -222,7 +222,7 @@ impl MirInterpreter {
             }
             _ => {}
         }
-        if self.try_handle_object_fields(dst, box_val, method, args)? {
+        if super::boxes_fields::try_handle_object_fields(self, dst, box_val, method, args)? {
             if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
                 eprintln!("[vm-trace] length dispatch handler=object_fields");
             }
@@ -255,7 +255,7 @@ impl MirInterpreter {
                 );
             }
         }
-        if self.try_handle_instance_box(dst, box_val, method, args)? {
+        if super::boxes_instance::try_handle_instance_box(self, dst, box_val, method, args)? {
             if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
                 eprintln!("[vm-trace] length dispatch handler=instance_box");
             }
@@ -329,6 +329,7 @@ impl MirInterpreter {
         self.invoke_plugin_box(dst, box_val, method, args)
     }
 
+    #[cfg(any())]
     fn try_handle_object_fields(
         &mut self,
         dst: Option<ValueId>,
@@ -689,28 +690,9 @@ impl MirInterpreter {
         }
     }
 
-    // moved: try_handle_map_box → handlers/boxes_map.rs
-    fn try_handle_map_box(
-        &mut self,
-        dst: Option<ValueId>,
-        box_val: ValueId,
-        method: &str,
-        args: &[ValueId],
-    ) -> Result<bool, VMError> {
-        super::boxes_map::try_handle_map_box(self, dst, box_val, method, args)
-    }
+    
 
-    // moved: try_handle_string_box → handlers/boxes_string.rs
-    fn try_handle_string_box(
-        &mut self,
-        dst: Option<ValueId>,
-        box_val: ValueId,
-        method: &str,
-        args: &[ValueId],
-    ) -> Result<bool, VMError> {
-        super::boxes_string::try_handle_string_box(self, dst, box_val, method, args)
-    }
-
+    #[cfg(any())]
     fn try_handle_instance_box(
         &mut self,
         dst: Option<ValueId>,
@@ -862,16 +844,7 @@ impl MirInterpreter {
         Ok(false)
     }
 
-    // moved: try_handle_array_box → handlers/boxes_array.rs
-    fn try_handle_array_box(
-        &mut self,
-        dst: Option<ValueId>,
-        box_val: ValueId,
-        method: &str,
-        args: &[ValueId],
-    ) -> Result<bool, VMError> {
-        super::boxes_array::try_handle_array_box(self, dst, box_val, method, args)
-    }
+    
 
     fn invoke_plugin_box(
         &mut self,

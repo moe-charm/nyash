@@ -11,7 +11,7 @@
 1) ビルド
    - 実行: `cargo build --release`
 2) 最小 E2E（VM、plugins 無効）
-   - 実行: `NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+   - 実行: `NYASH_PLUGIN_POLICY=off ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`（compat: `NYASH_DISABLE_PLUGINS=1`）
 3) クイックスモーク（VM軸）
    - 実行: `tools/smokes/v2/run.sh --profile quick`
 4) プラグイン（任意・動的）
@@ -44,13 +44,13 @@ NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 \
 - スモーク：全成功（非 0 は失敗）
 
 便利フラグ
-- `NYASH_DISABLE_PLUGINS=1` 外部プラグイン無効化
+- `NYASH_PLUGIN_POLICY=off` 外部プラグイン無効化（compat: `NYASH_DISABLE_PLUGINS=1`）
 - `NYASH_CLI_VERBOSE=1` 実行ログ詳細
 - `NYASH_USING_DYLIB_AUTOLOAD=1` using.dylib 自動ロード（開発用）
 
 トラブルシュート
 - ハング: `timeout 15s ...` を付与、`NYASH_CLI_VERBOSE=1` で詳細
-- プラグインエラー: まず `NYASH_DISABLE_PLUGINS=1`
+- プラグインエラー: まず `NYASH_PLUGIN_POLICY=off`（compat: `NYASH_DISABLE_PLUGINS=1`）
 - ルート相対パスで実行／`cargo clean -p nyash` で個別クリーン
 
 関連

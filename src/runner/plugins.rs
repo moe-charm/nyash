@@ -22,7 +22,8 @@ impl NyashRunner {
         // Unified registry
         runtime::init_global_unified_registry();
         // Plugins (guarded)
-        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
+        let disable_by_policy = std::env::var("NYASH_PLUGIN_POLICY").ok().map(|v| v.eq_ignore_ascii_case("off")).unwrap_or(false);
+        if !disable_by_policy && std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
             runner_plugin_init::init_bid_plugins();
             crate::runner::box_index::refresh_box_index();
         }

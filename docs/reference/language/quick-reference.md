@@ -79,7 +79,7 @@ Errors (format)
 
 Dev/Prod toggles (indicative)
 - `NYASH_DEV=1` — developer defaults (diagnostics, tracing; behavior unchanged)
-- `NYASH_ENABLE_USING=1` — enable using resolver
+- `NYASH_USING=1` — enable using resolver (`NYASH_USING_STRATEGY={resolver|prelude}` for merge mode)
 - `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1` — allow `main` as top‑level entry
 
 Notes

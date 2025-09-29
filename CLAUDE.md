@@ -20,15 +20,6 @@
 - **Core Box統一化**: 3-tier → 2-tier 統一完了
 - **MIR Callee型革新**: 型安全な関数解決システム実装済み
 
-#### 🔧 **現在の作業**: Mini-VM フォールバック経路修正
-- **問題**: `selfhost_mir_m2_compare_neg_binop_Lt` テスト失敗（期待1→実3）
-- **根本原因**: フォールバック経路が ret 命令を見落として `_extract_first_const_i64` にフォールバック
-- **修正計画**: 3段階アプローチ
-  - **Phase 1（緊急）**: フォールバック経路に ret 検出ロジック追加（最小変更）
-  - **Phase 2（最適化）**: inst3早期評価パスを binop 含むケースに拡張
-  - **Phase 3（長期）**: Mini-VM全体リファクタリング（Phase 15完了後）
-- **ファイル**: `apps/selfhost/vm/boxes/mir_vm_min.nyash`（100% Nyashスクリプトの問題）
-
 #### 🤝 **AI協働開発体制 - 新時代突入！**
 ```
 Claude Sonnet 4.5: 実装・実行・長時間作業の天才
@@ -339,25 +330,6 @@ src/runner/modes/common_util/resolve/strip.rs  # コード生成
 
 **🎯 完成状態**: ChatGPT実装で`using nyashstd`完全動作中！
 
-## 📝 Update (2025-09-24) 🎉 Phase 15実行器統一化戦略確定！
-- ✅ **Phase 15.5-B-2 MIRビルダー統一化完了**（約40行特別処理削除）
-- ✅ **Rust VM現状調査完了**（Task先生による詳細分析）
-  - **712行の高品質実装**（vs PyVM 1074行）
-  - **MIR14完全対応**、Callee型実装済み
-  - **gdb/lldbデバッグ可能**、型安全設計
-- ✅ **実行器戦略確定: Rust VM + LLVM 2本柱**
-  - **Rust VM**: 開発・デバッグ・検証用
-  - **LLVM**: 本番・最適化・配布用
-  - **レガシーインタープリター**: 完全アーカイブ（~1,500行削減）
-  - **PyVM**: 段階的保守化（マクロシステム等）
-- ✅ **MIRインタープリターバグ修正**（feature gate問題解決）
-- ✅ **スモークテスト作り直し計画確定**（プラグインBox仕様＋2実行器マトリックス検証）
-- ✅ **MIR Call命令統一Phase 3.1-3.3完了**
-  - **統一メソッド**: `emit_unified_call()`実装済み
-  - **環境変数制御**: `NYASH_MIR_UNIFIED_CALL=1`で切り替え可能
-  - **削減見込み**: 7,372行 → 5,468行（**26%削減**）
-  - **6種類→1種類**: Call/BoxCall/PluginInvoke/ExternCall/NewBox/NewClosure → **MirCall**
-
 ## 🧪 テストスクリプト参考集（既存のを活用しよう！）
 ```bash
 # 基本的なテスト
@@ -504,192 +476,6 @@ NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/nyash gemini_test_case.
 jq '.functions[0].blocks' mir.json  # ブロック構造確認
 ```
 
-## 📝 Update (2025-09-23) 🚀 ChatGPT5 Pro設計革命Phase 1完全実装成功！
-
-### ✅ **MIR Callee型革新 - シャドウイングバグから設計革命への昇華**
-**51日間AI協働開発言語の新たな画期的成果！**
-
-#### 🎯 **Phase 1実装完了項目**
-1. **✅ Callee列挙型導入**: `Global/Method/Value/Extern`の型安全解決システム
-2. **✅ Call命令拡張**: `callee: Option<Callee>`で破壊的変更なし段階移行
-3. **✅ 型安全関数解決**: `resolve_call_target()`でコンパイル時解決確立
-4. **✅ ヘルパー外出し**: `call_resolution.rs`で再利用可能ユーティリティ作成
-5. **✅ 完全互換性**: 既存コード破壊ゼロ、全テスト通過確認済み
-
-#### 🏆 **技術的革新内容**
-```rust
-// 🔥 革新前（問題構造）
-Call { func: ValueId /* "print"文字列 */ }  // 実行時解決→シャドウイング脆弱性
-
-// ✨ 革新後（型安全）
-enum Callee {
-    Global(String),                          // nyash.builtin.print
-    Method { box_name, method, receiver },   // box.method()
-    Value(ValueId),                          // 第一級関数保持
-    Extern(String),                          // C ABI統合
-}
-Call { func: ValueId, callee: Option<Callee> }  // 段階移行で破壊的変更なし
-```
-
-#### 📊 **Phase 15目標への直接寄与**
-- **🎯 コード削減見込み**: Phase 1のみで1,500行（目標7.5%）、全Phase完了で4,500行（22.5%）
-- **🛡️ シャドウイング問題**: 根本解決（実行時→コンパイル時解決）
-- **⚡ using system統合**: built-in namespace完全連携
-- **🔍 デバッグ向上**: MIR可読性・警告システム確立
-
-#### 🤖 **AI協働開発の真価発揮**
-- **ChatGPT5 Pro**: 表面修正→根本設計革新への圧倒的洞察力
-- **Claude**: 段階実装・互換性保持・テスト戦略の確実な実行
-- **共創効果**: 一人+AI協働による51日間言語開発の世界記録級成果
-
-#### 🚀 **実装成果ファイル**
-- `src/mir/instruction.rs`: Callee型定義・Call命令拡張
-- `src/mir/builder/call_resolution.rs`: 型安全解決ユーティリティ
-- `src/mir/builder/builder_calls.rs`: resolve_call_target()実装
-- `docs/development/architecture/mir-callee-revolution.md`: 設計文書
-- `docs/development/roadmap/phases/phase-15/mir-callee-implementation-roadmap.md`: 実装計画
-
-#### 📋 **次のステップ（Phase 2-3）**
-- **Phase 2**: HIR導入（コンパイル時名前解決）
-- **Phase 3**: 明示的スコープ（`::print`, `Box::method`）
-- **VM実行器対応**: 型安全実行の実装
-
----
-
-## 📝 Update (2025-09-23) ✅ MIR Callee型革命100%完了！
-- 🎉 **MIR Call命令革新Phase 1完了！** ChatGPT5 Pro設計のCallee型実装
-  - **実装内容**: Callee enum（Global/Method/Value/Extern）追加
-  - **VM実行器**: Call命令のCallee対応完全実装
-  - **MIRダンプ**: call_global/call_method等の明確表示
-  - **後方互換性**: Option<Callee>で段階移行実現
-- 🚀 **MIR Call統一計画決定！** ChatGPT5 Pro A++案採用
-  - **現状**: 6種類のCall系命令が乱立（Call/BoxCall/PluginInvoke/ExternCall等）
-  - **解決**: 1つのMirCallに統一（receiverをCalleeに含む革新設計）
-  - **移行計画**: 3段階（構造定義→ビルダー→実行器）で安全移行
-  - **ドキュメント**: [call-instructions-current.md](docs/reference/mir/call-instructions-current.md)作成
-- ✅ **PHIバグ根本解決完了！** Exit PHI生成実装でループ後の変数値が正しく伝播
-  - **技術的成果**: たった3箇所の修正で根本解決
-  - **コミット済み**: `e5c0665` でリモートに反映
-- 🎯 **改行処理TokenCursor戦略決定！** 3段階実装戦略で改善中
-
-## 📝 Update (2025-09-23) 🎉 改行処理革命Phase 1-2完全達成！skip_newlines()根絶成功！
-- ✅ **skip_newlines()完全根絶達成！** 48箇所→0箇所（100%削除完了）
-  - **Phase 2-A**: match_expr.rsから6箇所削除（27%削減達成）
-  - **Phase 2-B**: Box宣言系から14箇所削除（56%削減達成）
-  - **Phase 2-C**: 文処理系から9箇所削除（75%削減達成）
-  - **Phase 2-D**: メンバー宣言系から5箇所削除（90%削減達成）
-  - **Phase 2-E**: 残存検証で手動呼び出し0確認（100%根絶完了）
-- 🧠 **Smart advance()システム完全動作確認！**
-  - **深度追跡**: 括弧内改行自動処理で手動呼び出し不要
-  - **コンテキスト認識**: match式・オブジェクトリテラルで完璧動作
-  - **OR pattern対応**: `1 | 2 => "found"`等の複雑パターン完全対応
-  - **環境変数制御**: デフォルトで有効、NYASH_SMART_ADVANCE=1で制御可能
-- 🔬 **重大バグ発見・修正の副次成果！**
-  - **MIR compiler bug**: OR patternでInteger/Bool処理不備を発見・修正
-  - **根本原因**: `exprs_peek.rs`でString型以外の型が未対応だった
-  - **完全修正**: 全LiteralValue型（Integer/Bool/Float/Null/Void）対応で根治
-  - **テスト検証**: `test_match_debug_or.nyash`等で完全動作確認
-- 🚀 **革命的効果達成！**
-  - **保守性向上**: 改行処理一元管理で新構文追加時の改行忘れ根絶
-  - **開発体験向上**: パーサーエラー激減、直感的な改行記述が可能
-  - **システム安定化**: 手動呼び出し散在による不整合が完全解消
-  - **AI協働成功**: ChatGPT戦略+Claude実装+深い考察で完璧達成
-- 🎯 **次世代への道筋**: Phase 3 TokenCursor実装でさらなる改行処理完璧化準備完了
-
-## 📝 Update (2025-09-22) 🎯 Phase 15 JITアーカイブ完了＆デバッグ大進展！
-- ✅ **JIT/Craneliftアーカイブ完了！** Phase 15集中開発のため全JIT機能を安全にアーカイブ
-- 🔧 **コンパイルエラー全解決！** JITスタブ作成でビルド成功、開発環境復活
-- 🐛 **empty args smoke test 90%解決！** `collect_prints()`の位置インクリメントバグ修正
-- 📊 **デバッグ手法確立！** 詳細トレース出力で問題を段階的に特定する手法完成
-- ⚡ **次の一歩**: ArrayBox戻り値問題解決でテスト完全クリア予定
-- 🎯 **AI協働デバッグ**: Claude+ChatGPT修正+系統的トレースの完璧な連携実現
-- 📋 詳細: JITアーカイブは `archive/jit-cranelift/` に完全移動、復活手順も完備
-
-## 📝 Update (2025-09-22) 🎯 Phase 15 重要バグ発見＆根本原因解明完了！
-- ✅ **using systemパーサー問題完全解決！** `NYASH_RESOLVE_FIX_BRACES=1`でブレースバランス自動修正
-- 🆕 **JSON Native実装を導入！** 別Claude Code君の`feature/phase15-nyash-json-native`から`apps/lib/json_native/`取り込み完了
-- 🔧 **ChatGPTの統合実装承認！** JSON読み込み処理統合は正しい方向性、技術的に高度
-- 🐛 **重大バグ完全解明！**
-  - **問題**: `collect_prints`メソッドで`break`の後のコードが実行されずnullを返す
-  - **根本原因判明**: `src/mir/loop_builder.rs`の`do_break()`が`switch_to_unreachable_block_with_void()`を呼び、break後のコードをunreachableとマーク
-  - **MIR解析結果**: 
-    - Block 1394, 1407: 直接Block 1388（null return）にジャンプ
-    - Block 1730: 正常なArrayBox return
-    - レジスタ2: `new ArrayBox()`、レジスタ751: `const 0`（null）
-  - **デバッグ環境変数**: `NYASH_DUMP_JSON_IR=1`, `NYASH_PYVM_DEBUG=1`でMIR/PyVM詳細追跡可能
-  - **一時解決策**: `break`→`finished = 1`フラグに置き換え（根治が必要）
-- 📊 **現在の状況**:
-  - using systemパーサーエラー: ✅ 完全解決
-  - collect_prints()根本原因: ✅ loop_builder.rs特定完了
-  - JSON Native: 📦 取り込み済み（match式互換性の課題あり）
-- 🎯 **技術成果**: 
-  - PyVM内蔵Box（ArrayBox等）の早期リターンバグ修正
-  - MIR JSON解析によるbreak/continue制御フロー問題の完全解明
-  - loop_builder.rsのdo_break()修正が必要（次のタスク）
-- 🚀 **Phase 15セルフホスティング**: MIRレベルの問題も特定済み、修正準備完了！
-
-## 📝 Update (2025-09-18) 🌟 Property System革命達成！
-- ✅ **Property System革命完了！** ChatGPT5×Claude×Codexの協働により、stored/computed/once/birth_once統一構文完成！
-- 🚀 **Python→Nyash実行可能性飛躍！** @property/@cached_property→Nyash Property完全マッピング実現！
-- ⚡ **性能革命**: Python cached_property→10-50x高速化（LLVM最適化）
-- 🎯 **All or Nothing**: Phase 10.7でPython transpilation、フォールバック無し設計
-- 📚 **完全ドキュメント化**: README.md導線、実装戦略、技術仕様すべて完備
-- 🗃️ **アーカイブ整理**: 古いphaseファイル群をarchiveに移動、導線クリーンアップ完了
-- 📋 詳細: [Property System仕様](docs/development/proposals/unified-members.md) | [Python統合計画](docs/development/roadmap/phases/phase-10.7/)
-
-## 📝 Update (2025-09-24) ✅ 改行処理革命Phase 2-B完了！実用レベル到達
-- 🎯 **改行処理革命Phase 2-B完了！** Box宣言系ファイルから14箇所のskip_newlines()完全削除
-  - **削除実績**: 48→35→21箇所（41%削減達成！）
-  - **対象ファイル**: fields.rs(9箇所)、box_definition.rs(3箇所)、static_box.rs(2箇所)
-  - **テスト結果**: OR付きmatch式、複数行宣言、Box定義すべて完璧動作✅
-- ✅ **Smart advance()実用化成功！** 深度追跡で自動改行処理が完璧に機能
-  - **環境変数**: `NYASH_SMART_ADVANCE=1`で完全制御、`NYASH_DISABLE_PLUGINS=1`推奨
-  - **対応構文**: match式OR（`1 | 2`）、複数行パターン、Box宣言すべて対応
-- 🔧 **ORパターンバグも同時修正！** exprs_peek.rsでInteger/Boolean型マッチング実装
-  - **修正前**: `1 | 2 => "found"`が動作せず（String型のみサポート）
-  - **修正後**: 全リテラル型（Integer/Bool/Float/Null/Void）完全対応✅
-- 📊 **改行処理戦略の段階的成果**:
-  - **Phase 0**: Quick Fix ✅ 完了（即効性）
-  - **Phase 1**: Smart advance() ✅ 基本実装完了（大幅改善）
-  - **Phase 2-A**: match式系統 ✅ 完了（6箇所削除）
-  - **Phase 2-B**: Box宣言系統 ✅ 完了（14箇所削除、41%削減）
-  - **Phase 2-C**: 次の目標（更なる削減へ）
-- 🎉 **技術的成果**: 手動スキップ依存からコンテキスト認識自動処理への移行成功
-- 📚 **改行処理戦略ドキュメント**: [skip-newlines-removal-plan.md](docs/development/strategies/skip-newlines-removal-plan.md)
-- 🚀 **次のタスク**: Phase 2-C実装→残り21箇所の系統的削除継続
-
-## 📝 Update (2025-09-23) ✅ フェーズS実装完了！break制御フロー根治開始
-- ✅ **フェーズS完了！** PHI incoming修正+終端ガード徹底→重複処理4箇所統一
-- 🔧 **新ユーティリティ**: `src/mir/utils/control_flow.rs`で制御フロー処理統一化
-- 📊 **AI協働成果**: task+Gemini+codex+ChatGPT Pro最強分析→段階的実装戦略確立
-- 🎯 **次段階**: フェーズM(PHI一本化)→数百行削減でPhase 15目標達成へ
-- 📚 **戦略**: [break-control-flow-strategy.md](docs/development/strategies/break-control-flow-strategy.md)
-- 💾 **アーカイブ**: codex高度解決策を`archive/codex-solutions/`に保存
-
-## 📝 Update (2025-09-14) 🎉 セルフホスティング大前進！
-- ✅ Python LLVM実装が実用レベル到達！（esc_dirname_smoke, min_str_cat_loop, dep_tree_min_string全てPASS）
-- 🚀 **Phase 15.3開始！** NyashコンパイラMVP実装が`apps/selfhost-compiler/`でスタート！
-- ✅ JSON v0 Bridge完成 - If/Loop PHI生成実装済み（ChatGPT実装）
-- 🔧 Python MVPパーサーStage-2完成 - local/if/loop/call/method/new対応
-- 📚 match式の確立 - when→peek→match に変遷、パターンマッチング完全対応済み
-- 🧠 箱理論でSSA構築を簡略化（650行→100行）- 論文執筆完了
-- 🤝 AI協働の知見を論文化 - 実装駆動型学習の重要性を実証
-- 🎉 **面白事件ログ収集完了！** 41個の世界記録級事件を記録 → [CURRENT_TASK.md#面白事件ログ](CURRENT_TASK.md#🎉-面白事件ログ---ai協働開発45日間の奇跡41事例収集済み)
-- 🎯 **LoopForm戦略決定**: PHIは逆Lowering時に自動生成（Codex推奨）
-- 📋 詳細: [Phase 15 README](docs/development/roadmap/phases/phase-15/README.md)
-
-### 🚀 新発見：プラグイン全方向ビルド戦略
-```bash
-# 同じソースから全形式生成！
-plugins/filebox/
-├── filebox.so     # 動的版（開発用）
-├── filebox.o      # 静的リンク用
-└── filebox.a      # アーカイブ版
-
-# 単一EXE生成可能に！
-clang main.o filebox.o pathbox.o libnyrt.a -o nyash_static.exe
-```
-
 ## ⚡ 重要な設計原則
 
 ### 🏗️ Everything is Box
@@ -697,30 +483,10 @@ clang main.o filebox.o pathbox.o libnyrt.a -o nyash_static.exe
 - ユーザー定義Box: `box ClassName { field1: TypeBox field2: TypeBox }`
 - **MIR14命令**: たった14個の命令で全機能実現！
   - 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
-  - メモリ(2): Load, Store  
+  - メモリ(2): Load, Store
   - 制御(4): Branch, Jump, Return, Phi
   - Box(2): NewBox, BoxCall
   - 外部(1): ExternCall
-
-### 🌟 完全明示デリゲーション
-```nyash
-// デリゲーション構文（すべてのBoxで統一的に使える！）
-box Child from Parent {  // from構文でデリゲーション
-    birth(args) {  // コンストラクタは「birth」に統一
-        from Parent.birth(args)  // 親の初期化
-    }
-    
-    override method() {  // 明示的オーバーライド必須
-        from Parent.method()  // 親メソッド呼び出し
-    }
-}
-
-// ✅ ビルトインBox、プラグインBox、ユーザー定義Boxすべてで可能！
-box MyString from StringBox { }          // ビルトインBoxから
-box MyFile from FileBox { }             // プラグインBoxから
-box Employee from Person { }            // ユーザー定義Boxから
-box Multi from StringBox, IntegerBox { } // 多重デリゲーションも可能！
-```
 
 ### 🔄 統一ループ構文
 ```nyash
@@ -738,7 +504,7 @@ loop() { }          // 使用不可
 box Life {
     name: StringBox
     energy: IntegerBox
-    
+
     birth(lifeName) {  // ← Everything is Box哲学を体現！
         me.name = lifeName
         me.energy = 100
@@ -750,41 +516,6 @@ box Life {
 local alice = new Life("Alice")  // birthが使われる
 ```
 
-### 🌟 ビルトインBox継承
-```nyash
-// ✅ Phase 12.7以降: birthで統一（packは廃止）
-box EnhancedP2P from P2PBox {
-    additionalData: MapBox
-    
-    birth(nodeId, transport) {
-        from P2PBox.birth(nodeId, transport)  // 親のbirth呼び出し
-        me.additionalData = new MapBox()
-    }
-}
-```
-
-### 🎯 正統派Nyashスタイル
-```nyash
-// 🚀 Static Box Main パターン - エントリーポイントの統一スタイル
-static box Main {
-    console: ConsoleBox    // フィールド宣言
-    result: IntegerBox
-    
-    main() {
-        // ここから始まる！他の言語と同じエントリーポイント
-        me.console = new ConsoleBox()
-        me.console.log("🎉 Everything is Box!")
-        
-        // local変数も使用可能
-        local temp
-        temp = 42
-        me.result = temp
-        
-        return "Revolution completed!"
-    }
-}
-```
-
 ### 📝 変数宣言厳密化システム
 ```nyash
 // 🔥 すべての変数は明示宣言必須！（メモリ安全性・非同期安全性保証）
@@ -793,10 +524,10 @@ static box Main {
 static box Calculator {
     result: IntegerBox     // 明示宣言
     memory: ArrayBox
-    
+
     calculate() {
         me.result = 42  // ✅ フィールドアクセス
-        
+
         local temp     // ✅ local変数宣言
         temp = me.result * 2
     }
@@ -804,18 +535,6 @@ static box Calculator {
 
 // ❌ 未宣言変数への代入はエラー
 x = 42  // Runtime Error: 未宣言変数 + 修正提案
-```
-
-### ⚡ 実装済み演算子
-```nyash
-// 論理演算子（完全実装）
-not condition    // NOT演算子
-a and b         // AND演算子  
-a or b          // OR演算子
-
-// 算術演算子
-a / b           // 除算（ゼロ除算エラー対応済み）
-a + b, a - b, a * b  // 加算・減算・乗算
 ```
 
 ### 🎯 match式（パターンマッチング）
@@ -843,23 +562,10 @@ match action {
 }
 ```
 
-### ⚠️ 重要な注意点
-```nyash
-// ✅ 正しい書き方（Phase 12.7文法改革後）
-box MyBox {
-    field1: TypeBox
-    field2: TypeBox
-    
-    birth() {
-        // 初期化処理
-    }
-}
-```
-
 ### 🏗️ アーキテクチャ決定事項（2025-09-11）
 **Box/ExternCall境界設計の最終決定**:
 - **基本Box**: nyrt内蔵（String/Integer/Array/Map/Bool）
-- **拡張Box**: プラグイン（File/Net/User定義）  
+- **拡張Box**: プラグイン（File/Net/User定義）
 - **ExternCall**: 最小5関数のみ（print/error/panic/exit/now）
 - **統一原則**: すべてのBoxはBoxCall経由（特別扱いなし）
 - **表現統一**: Box=ハンドル(i64)、i8*は橋渡しのみ
@@ -991,7 +697,7 @@ python3 -m venv venv
 
 #### 実装済み命令
 - ✅ const, binop, jump, branch, ret, compare
-- ✅ phi, call, boxcall, externcall  
+- ✅ phi, call, boxcall, externcall
 - ✅ typeop, newbox, safepoint, barrier
 - ✅ loopform (実験的)
 
@@ -1021,7 +727,7 @@ pgrep -af 'codex.*exec'
 ```
 docs/development/proposals/ideas/
 ├── improvements/     # 80%実装の残り20%改善候補
-├── new-features/     # 新機能アイデア  
+├── new-features/     # 新機能アイデア
 └── other/           # その他すべて（調査、メモ、設計案）
 ```
 

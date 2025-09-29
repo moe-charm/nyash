@@ -44,8 +44,26 @@ Entry (single place)
 
 ## Env knobs
 - `NYASH_VM_ENGINE={fallback|full}`: select engine (default=fallback)
-- `NYASH_ENABLE_USING=1`, `NYASH_USING_AST=1`: Using/AST prelude merge
+- `NYASH_USING=0|1` (default=1): enable/disable using system
+- `NYASH_USING_STRATEGY={resolver|prelude}` (alias: `NYASH_USING_IMPL`) (default=resolver)
+  - resolver: name resolution only（AST 統合なし）
+  - prelude: AST prelude merge（dev/ci で既定ON、prod では明示）
+- `NYASH_PLUGIN_POLICY={auto|off|force}` (default=auto)
+  - auto: 現行のプラグイン自動ポリシー（プロファイル依存）
+  - off: プラグイン読み込みを抑止（`NYASH_DISABLE_PLUGINS=1` 相当）
+  - force: プラグイン経路を強制（`NYASH_PLUGIN_ONLY=1` 相当）
 - `NYASH_SYNTAX_SUGAR_LEVEL={off|basic|full}`: parser sugar; PreLex runs for ON
+
+Compatibility mapping
+- `NYASH_ENABLE_USING` → `NYASH_USING`
+- `NYASH_USING_AST` → `NYASH_USING_STRATEGY=prelude`
+- `NYASH_DISABLE_PLUGINS`/`NYASH_PLUGIN_ONLY` → `NYASH_PLUGIN_POLICY=off|force`
+
+Defaults (unset)
+- NYASH_USING=1
+- NYASH_USING_STRATEGY=resolver（dev/ci では prelude が既定で有効）
+- NYASH_PLUGIN_POLICY=auto
+- NYASH_DEV_FALLBACK=0（dev/quick ではプロファイルでON）
 
 ## Dev-only safety: unqualified helper normalization
 

@@ -76,8 +76,8 @@ NYASH_VM_USE_PY=1 ./target/release/nyash new_feature.nyash
 # 詳細診断
 NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
 
-# プラグインエラー対策
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+# プラグインエラー対策（最小隔離時のみ）
+NYASH_PLUGIN_POLICY=off ./target/release/nyash program.nyash
 ```
 
 ### **本番・最適化・配布用途**

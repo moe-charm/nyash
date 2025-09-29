@@ -167,12 +167,12 @@ Call { callee: Callee, args }
   - `tools/parity.sh --lhs pyvm --rhs llvmlite <test.nyash>`（常時）
 
 Imports/Namespace plan（15.3‑late）
-- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_ENABLE_USING=1`.
+- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_USING=1` (compat: `NYASH_ENABLE_USING=1`).
 
 - Operational switches
   - `NYASH_USE_NY_COMPILER=1`（selfhost compiler 経路ON）
   - `NYASH_JSON_ONLY=1`（子プロセスの余計な出力抑止）
-  - `NYASH_DISABLE_PLUGINS=1`（必要に応じて子のみ最小化）
+- `NYASH_PLUGIN_POLICY=off`（必要に応じて子のみ最小化; compat: `NYASH_DISABLE_PLUGINS=1`）
   - 文分離: 最小ASIルール（深さ0・直前が継続子でない改行のみ終端）
 
 - Risks / Rollback

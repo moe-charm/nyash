@@ -8,10 +8,12 @@ impl MirInterpreter {
         callee: Option<&Callee>,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // LocalSSA at call-site: prefer a materialized in-block SSA id for each arg
+        let args2: Vec<ValueId> = self.materialize_args_in_current_block(args);
         let call_result = if let Some(callee_type) = callee {
-            self.execute_callee_call(callee_type, args)?
+            self.execute_callee_call(callee_type, &args2)?
         } else {
-            self.execute_legacy_call(func, args)?
+            self.execute_legacy_call(func, &args2)?
         };
         if let Some(d) = dst {
             self.regs.insert(d, call_result);
@@ -84,10 +86,12 @@ impl MirInterpreter {
             Callee::Global(func_name) => self.execute_global_function(func_name, args),
             Callee::Method { box_name, method, receiver, certainty: _, } => {
                 if let Some(recv_id) = receiver {
+                    // LocalSSA for receiver: prefer materialized id within current block
+                    let recv_id = self.materialize_recv_in_current_block(*recv_id);
                     // Primary: load receiver by id. If undefined, attempt a best-effort
                     // recovery by resolving a local Copy(dst := recv_id) in the same block,
                     // then fall back to arg[0] or error.
-                    let recv_val = match self.reg_load(*recv_id) {
+                    let recv_val = match self.reg_load(recv_id) {
                         Ok(v) => v,
                         Err(e) => {
                             // Try: find a preceding Copy in the current block with src=recv_id
@@ -98,14 +102,14 @@ impl MirInterpreter {
                                         for inst in &bb.instructions {
                                             if let crate::mir::MirInstruction::Copy { dst, src } = inst {
                                                 // Pattern A: we copied into recv_id just before the call (dst == recv_id)
-                                                if dst == recv_id {
+                                                if *dst == recv_id {
                                                     if let Ok(v2) = self.reg_load(*src) {
                                                         recovered = Some(v2);
                                                         break;
                                                     }
                                                 }
                                                 // Pattern B: we copied from recv_id into a local tmp (src == recv_id)
-                                                if src == recv_id {
+                                                if *src == recv_id {
                                                     if let Ok(v2) = self.reg_load(*dst) {
                                                         recovered = Some(v2);
                                                         break;
@@ -190,7 +194,7 @@ impl MirInterpreter {
                     }
                     // Minimal bridge for birth(): delegate to BoxCall handler and return Void
                     if method == &"birth" {
-                        let _ = self.handle_box_call(None, *recv_id, method, args)?;
+                        let _ = self.handle_box_call(None, recv_id, method, args)?;
                         return Ok(VMValue::Void);
                     }
                     let is_kw = method == &"keyword_to_token_type";

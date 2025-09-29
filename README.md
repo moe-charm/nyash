@@ -27,6 +27,9 @@ Quick pointers
 - Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
  - VM engine toggle: `NYASH_VM_ENGINE={fallback|full}` (default: fallback). See `docs/guides/runtime-architecture.md`.
+ - Using/Plugins (ENV quick):
+   - Using: `NYASH_USING=0|1` (default=1), `NYASH_USING_STRATEGY={resolver|prelude}` (alias: `NYASH_USING_IMPL`)
+   - Plugins: `NYASH_PLUGIN_POLICY={auto|off|force}` (default=auto)
 
 Dev shortcuts (Operator Boxes & JSON smokes)
 - One‑shot JSON verification (dev, Operator Boxes ON): `./tools/opbox-json.sh`

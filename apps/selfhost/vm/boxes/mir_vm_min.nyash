@@ -356,6 +356,13 @@ static box MirVmMin {
               if d2 != "" {
                 local a = me._str_to_int(d1)
                 local b = me._str_to_int(d2)
+                // Track corresponding dst ids of these consts (nearest dst before each value)
+                local pdst2 = me._last_index_of_before(inst3, "\"dst\":", p2)
+                local dst2 = null
+                if pdst2 >= 0 { dst2 = me._find_int_in(inst3.substring(pdst2, inst3.length()), "\"dst\":") }
+                local pdst1 = me._last_index_of_before(inst3, "\"dst\":", p1)
+                local dst1 = null
+                if pdst1 >= 0 { dst1 = me._find_int_in(inst3.substring(pdst1, inst3.length()), "\"dst\":") }
                 // compare?
                 // Find compare nearest before 'ret' within this block
                 local pc = inst3.indexOf("\"op\":\"compare\"")
@@ -365,21 +372,19 @@ static box MirVmMin {
                     if nxt < 0 || nxt >= pr { break }
                     pc = nxt
                   }
-                  // Robust: search cmp kind tokens directly (unique in minimal JSON)
-                  local kk = ""
-                  if inst3.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
-                    if inst3.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
-                      if inst3.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
-                        if inst3.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
-                          if inst3.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
-                            if inst3.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
-                          }
-                        }
-                      }
+                  // Determine compare kind from the last compare segment
+                  local segc = inst3.substring(pc, pr)
+                  local kk = me._find_str_in(segc, "\"cmp\":\"")
+                  if kk == "" { kk = me._map_cmp_symbol(me._find_str_in(segc, "\"operation\":\"")) }
+                  // Ensure last compare uses these two consts (lhs=dst1, rhs=dst2). Otherwise, fall back.
+                  local clhs = me._find_int_in(segc, "\"lhs\":")
+                  local crhs = me._find_int_in(segc, "\"rhs\":")
+                  if dst1 != null && dst2 != null && clhs != null && crhs != null {
+                    if clhs == dst1 && crhs == dst2 {
+                      local r = me._eval_cmp(kk, a, b)
+                      return r
                     }
                   }
-                  local r = me._eval_cmp(kk, a, b)
-                  return r
                 }
                 // binop?
                 local pb = inst3.indexOf("\"op\":\"binop\"")
@@ -392,8 +397,15 @@ static box MirVmMin {
                   local seg = inst3.substring(pb, pr)
                   local bk = me._find_str_in(seg, "\"op_kind\":\"")
                   if bk == "" { bk = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
-                  local r = me._eval_binop(bk, a, b)
-                  return r
+                  // Likewise for binop: verify operands come from these consts
+                  local blhs = me._find_int_in(seg, "\"lhs\":")
+                  local brhs = me._find_int_in(seg, "\"rhs\":")
+                  if dst1 != null && dst2 != null && blhs != null && brhs != null {
+                    if blhs == dst1 && brhs == dst2 {
+                      local r = me._eval_binop(bk, a, b)
+                      return r
+                    }
+                  }
                 }
               }
             }

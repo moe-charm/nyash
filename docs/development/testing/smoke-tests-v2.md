@@ -52,8 +52,8 @@ Phase 15.5でCore Box完全削除後のNyashテストシステム。すべての
 # エントリ解決（既定ON: top-level main も許可されます。無効化したい場合のみ0を設定）
 # export NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0
 
-# プラグイン設定（Phase 15.5以降は削除不可）
-# NYASH_DISABLE_PLUGINS=1  # ❌ 使用不可（すべてプラグイン化済み）
+# プラグイン設定（Phase 15.5以降は基本OFF非推奨）
+# NYASH_PLUGIN_POLICY=off   # ⚠️ 原則非推奨。最小コア検証など一部の隔離ケースでのみ使用。
 
 # デバッグ用（任意）
 NYASH_CLI_VERBOSE=1        # 詳細ログ出力
@@ -153,3 +153,18 @@ Phase 15.5でCore Box削除後、プラグイン実装が不完全。現在調�
 - [Phase 15.5 Core Box Unification](../roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
 - [Plugin System Reference](../../reference/plugin-system/)
 - [PyVM Usage Guidelines](../../reference/pyvm-usage-guidelines.md)
+### ENV オーバレイ（プロファイル毎の既定ENV）
+`tools/smokes/v2/configs/env/<profile>.env` が存在する場合、`run.sh --profile <profile>` 実行時に自動で source されます。
+- quick: using=prelude、plugins=auto（軽量）
+- integration: using=resolver、plugins=off（再現性優先）
+
+### コールトレース（VM↔LLVM パリティの目視支援）
+VM 実行順と LLVM 静的コールサイトの差分を簡易比較するヘルパーを用意しています。
+
+```
+./tools/dev/call_trace_diff.sh <file.nyash>
+```
+
+- VM 実行：`NYASH_CALL_TRACE=1`（ランタイム順のJSON行をstderrに出力）
+- LLVM 静的：`NYASH_CALL_TRACE=1 NYASH_LLVM_USE_HARNESS=1`（静的サイトのJSON行）
+- 判定方針：VMで実行されたcallee/arityがLLVM静的一覧に含まれていればOK（順序差/未実行サイトの列挙は許容）

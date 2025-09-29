@@ -37,7 +37,7 @@ Parent→child ENV mapping（official）
 
 Direct run (dev only; requires allowing file using):
 ```
-NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude \
   ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --min-json
 ```
 

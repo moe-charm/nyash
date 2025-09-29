@@ -543,6 +543,28 @@ Flags
 - Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
 - LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
 
+## ENV Consolidation — Using & Plugins（Phase‑15）
+
+Purpose: 過剰な環境変数を避け、意味の分かる少数へ集約する。
+
+- Using（機能のON/OFFと統合戦略）
+  - `NYASH_USING=0|1`（既定=1）: using を有効/無効
+  - `NYASH_USING_STRATEGY={resolver|prelude}`（別名: `NYASH_USING_IMPL`、既定=resolver）
+    - resolver: 名前解決のみ（AST 統合なし）
+    - prelude: AST プレリュード統合
+  - 互換: `NYASH_ENABLE_USING` → `NYASH_USING`、`NYASH_USING_AST` → `NYASH_USING_STRATEGY=prelude`
+- Plugins（読み込み/強制/無効）
+  - `NYASH_PLUGIN_POLICY={auto|off|force}`（既定=auto）
+    - off → `NYASH_DISABLE_PLUGINS=1` 相当
+    - force → `NYASH_PLUGIN_ONLY=1` 相当
+  - 互換: 既存の `NYASH_DISABLE_PLUGINS` / `NYASH_PLUGIN_ONLY` は継続サポート
+
+Recommended defaults（未設定時の挙動）
+- NYASH_USING=1
+- NYASH_USING_STRATEGY=resolver（dev/ci は prelude が既定ON）
+- NYASH_PLUGIN_POLICY=auto
+- 本番では `NYASH_DEV_FALLBACK=0`、quick ではプロファイル側で `NYASH_DEV_FALLBACK=1`
+
 ### LLVM Python Builder Layout (after split)
 - Files (under `src/llvm_py/`):
   - `llvm_builder.py`: top-level orchestration; delegates to builders.

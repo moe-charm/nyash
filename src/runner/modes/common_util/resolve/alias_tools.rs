@@ -155,6 +155,83 @@ pub fn collect_prelude_top_names(ast: &ASTNode) -> Vec<String> {
     out
 }
 
+/// Rewrite internal references inside a prelude after top-level rename.
+/// Maps any reference to original top symbols to their alias-prefixed names.
+///
+/// Rules (MVP):
+/// - Variable: `Top`                → `Alias_Top`
+/// - FieldAccess: `Top.x`           → `Alias_Top.x`（object 部分が Variable の場合）
+/// - FunctionCall: `Top.fn`         → `Alias_Top.fn`
+///                 `Top`            → `Alias_Top`
+///                 `Alias_Top.fn/N` → そのまま
+/// - MethodCall は object 変換（Top→Alias_Top）のみに留める（関数化は既存経路に委ねる）。
+fn rewrite_internal_refs_after_top_rename(
+    ast: &ASTNode,
+    alias: &str,
+    original_tops: &[String],
+) -> ASTNode {
+    use nyash_rust::ast::ASTNode as N;
+    use std::collections::HashMap;
+
+    let mut map: HashMap<String, String> = HashMap::new();
+    for t in original_tops.iter() {
+        map.insert(t.clone(), format!("{}_{}", alias, t));
+    }
+
+    fn rewrite_name(name: &str, map: &HashMap<String, String>) -> String {
+        // Exact match
+        if let Some(n) = map.get(name) {
+            return n.clone();
+        }
+        // Qualified form: Top.suffix → Alias_Top.suffix
+        if let Some(pos) = name.find('.') {
+            let head = &name[..pos];
+            if let Some(pref) = map.get(head) {
+                return format!("{}.{}", pref, &name[pos + 1..]);
+            }
+        }
+        name.to_string()
+    }
+
+    fn visit(n: &N, map: &HashMap<String, String>) -> N {
+        match n {
+            N::Variable { name, .. } => N::Variable { name: rewrite_name(name, map), span: Span::unknown() },
+            N::FieldAccess { object, field, .. } => {
+                let o2 = visit(object, map);
+                N::FieldAccess { object: Box::new(o2), field: field.clone(), span: Span::unknown() }
+            }
+            N::MethodCall { object, method, arguments, .. } => {
+                let o2 = visit(object, map);
+                let a2: Vec<N> = arguments.iter().map(|a| visit(a, map)).collect();
+                N::MethodCall { object: Box::new(o2), method: method.clone(), arguments: a2, span: Span::unknown() }
+            }
+            N::FunctionCall { name, arguments, .. } => {
+                let new_name = rewrite_name(name, map);
+                let a2: Vec<N> = arguments.iter().map(|a| visit(a, map)).collect();
+                N::FunctionCall { name: new_name, arguments: a2, span: Span::unknown() }
+            }
+            N::Assignment { target, value, .. } => {
+                let t2 = visit(target, map);
+                let v2 = visit(value, map);
+                N::Assignment { target: Box::new(t2), value: Box::new(v2), span: Span::unknown() }
+            }
+            N::ArrayLiteral { elements, .. } => {
+                N::ArrayLiteral { elements: elements.iter().map(|e| visit(e, map)).collect(), span: Span::unknown() }
+            }
+            N::MapLiteral { entries, .. } => {
+                // Keys are Strings; rewrite only values
+                N::MapLiteral { entries: entries.iter().map(|(k, v)| (k.clone(), visit(v, map))).collect(), span: Span::unknown() }
+            }
+            N::Program { statements, .. } => {
+                N::Program { statements: statements.iter().map(|s| visit(s, map)).collect(), span: Span::unknown() }
+            }
+            _ => n.clone(),
+        }
+    }
+
+    visit(ast, &map)
+}
+
 /// Rename with collision guard: fail if any `Alias_<Top>` collides with previously used names.
 pub fn rename_with_collision_guard(
     ast: &ASTNode,
@@ -172,7 +249,18 @@ pub fn rename_with_collision_guard(
             ));
         }
     }
-    Ok(rename_prelude_top_symbols(ast, alias))
+    let renamed = rename_prelude_top_symbols(ast, alias);
+    // Optional gate: allow disabling internal reference rewrite via env (default ON)
+    let do_internal = std::env::var("NYASH_ALIAS_INTERNAL_REWRITE")
+        .ok()
+        .map(|v| v == "1" || v.eq_ignore_ascii_case("true"))
+        .unwrap_or(true);
+    if do_internal {
+        let rewritten = rewrite_internal_refs_after_top_rename(&renamed, alias, &tops);
+        Ok(rewritten)
+    } else {
+        Ok(renamed)
+    }
 }
 
 #[cfg(test)]
@@ -236,6 +324,94 @@ mod tests {
                 assert!(arguments.is_empty());
             }
             _ => panic!("unexpected AST after desugar"),
+        }
+    }
+
+    #[test]
+    fn internal_ref_variable_is_rewritten() {
+        // Program: static box X {}; local y = X;  → after alias A: y = A_X
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::BoxDeclaration { name: "X".into(), is_static: true, body: vec![], span: Span::unknown() },
+                ASTNode::Assignment {
+                    target: Box::new(ASTNode::Variable { name: "y".into(), span: Span::unknown() }),
+                    value: Box::new(ASTNode::Variable { name: "X".into(), span: Span::unknown() }),
+                    span: Span::unknown(),
+                },
+            ],
+            span: Span::unknown(),
+        };
+        let mut used = std::collections::HashSet::new();
+        let out = rename_with_collision_guard(&ast, "A", &mut used, "<test>").unwrap();
+        let s = format!("{:?}", out);
+        assert!(s.contains("A_X"));
+    }
+
+    #[test]
+    fn internal_ref_function_qualified_is_rewritten() {
+        // Program: fn call: Helper.run() → after alias P: P_Helper.run()
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::FunctionDeclaration { name: "Helper".into(), params: vec![], body: vec![], span: Span::unknown() },
+                ASTNode::FunctionCall { name: "Helper.run".into(), arguments: vec![], span: Span::unknown() },
+            ],
+            span: Span::unknown(),
+        };
+        let mut used = std::collections::HashSet::new();
+        let out = rename_with_collision_guard(&ast, "P", &mut used, "<test>").unwrap();
+        let s = format!("{:?}", out);
+        assert!(s.contains("P_Helper.run"));
+    }
+
+    #[test]
+    fn alias_collision_is_guarded() {
+        // Pre-existing prefixed name collides with upcoming alias rename
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::BoxDeclaration { name: "X".into(), is_static: true, body: vec![], span: Span::unknown() },
+            ],
+            span: Span::unknown(),
+        };
+        let mut used = std::collections::HashSet::new();
+        // Simulate that A_X is already taken
+        used.insert("A_X".to_string());
+        let out = rename_with_collision_guard(&ast, "A", &mut used, "<test>");
+        assert!(out.is_err());
+    }
+
+    #[test]
+    fn internal_nested_qualified_head_is_rewritten() {
+        // Qualified with two dots: Top.Sub.fn() → Alias_Top.Sub.fn()
+        let ast = ASTNode::Program {
+            statements: vec![
+                ASTNode::FunctionDeclaration { name: "Top".into(), params: vec![], body: vec![], span: Span::unknown() },
+                ASTNode::FunctionCall { name: "Top.Sub.run".into(), arguments: vec![], span: Span::unknown() },
+            ],
+            span: Span::unknown(),
+        };
+        let mut used = std::collections::HashSet::new();
+        let out = rename_with_collision_guard(&ast, "Alias", &mut used, "<test>").unwrap();
+        let s = format!("{:?}", out);
+        assert!(s.contains("Alias_Top.Sub.run"));
+    }
+
+    #[test]
+    fn method_call_on_prefixed_static_box_is_functioncall() {
+        // P_My.greet() → FunctionCall "P_My.greet/0"
+        let aliases = hs(&["P"]);
+        let ast = ASTNode::MethodCall {
+            object: Box::new(ASTNode::Variable { name: "P_My".into(), span: Span::unknown() }),
+            method: "greet".into(),
+            arguments: vec![],
+            span: Span::unknown(),
+        };
+        let out = desugar_alias_field_access(&ast, &aliases, true);
+        match out {
+            ASTNode::FunctionCall { name, arguments, .. } => {
+                assert_eq!(name, "P_My.greet/0");
+                assert!(arguments.is_empty());
+            }
+            other => panic!("unexpected AST: {:?}", other),
         }
     }
 }

@@ -1,5 +1,15 @@
 # Nyash Environment Variables (管理棟ガイド)
 
+> Compatibility note (Phase‑15 ENV consolidation):
+> Primary knobs are documented in `docs/config/env.md`.
+> Historical variables like `NYASH_ENABLE_USING`, `NYASH_USING_AST`, `NYASH_DISABLE_PLUGINS`, `NYASH_PLUGIN_ONLY` remain as compatibility aliases.
+> Mappings:
+> - `NYASH_ENABLE_USING` → `NYASH_USING=1`
+> - `NYASH_USING_AST=1`  → `NYASH_USING_STRATEGY=prelude`
+> - `NYASH_DISABLE_PLUGINS=1` → `NYASH_PLUGIN_POLICY=off`
+> - `NYASH_PLUGIN_ONLY=1` → `NYASH_PLUGIN_POLICY=force`
+> Prefer the new variables in new docs/scripts; legacy mentions below are kept for reference.
+
 本ドキュメントは Nyash の環境変数を用途別に整理し、最小限の運用セットを提示します。`nyash.toml` の `[env]` で上書き可能（起動時に適用）。
 
 - 例: `nyash.toml`
@@ -7,14 +17,15 @@
 [env]
 NYASH_JIT_THRESHOLD = "1"
 NYASH_CLI_VERBOSE = "1"
-NYASH_DISABLE_PLUGINS = "1"
+NYASH_PLUGIN_POLICY = "off"   # compat: NYASH_DISABLE_PLUGINS = "1"
 ```
 
-起動時に `nyash` は `[env]` の値を `std::env` に適用します（src/config/env.rs）。
+起動時に `nyash` は `[env]` の値を `std::env` に適用します（src/config/env.rs）。最新の推奨セットは `docs/config/env.md` を参照してください。
 
 ## コア運用セット（最小）
 - NYASH_CLI_VERBOSE: CLI の詳細ログ（"1" で有効）
-- NYASH_DISABLE_PLUGINS: 外部プラグインを無効化（CI/再現性向上）
+- NYASH_PLUGIN_POLICY: プラグインロード方針（`auto|off|force`）
+  - 互換: `NYASH_DISABLE_PLUGINS=1`（off 相当）
 
 ## JIT（共通）
 - NYASH_JIT_THRESHOLD: JIT 降下開始の閾値（整数）

@@ -163,6 +163,9 @@ pub fn mir_plugin_invoke() -> bool {
     std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1")
 }
 pub fn plugin_only() -> bool {
+    if let Some(pol) = std::env::var("NYASH_PLUGIN_POLICY").ok() {
+        if pol.eq_ignore_ascii_case("force") { return true; }
+    }
     std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1")
 }
 
@@ -370,8 +373,8 @@ pub fn cli_verbose() -> bool {
 }
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
-    // NYASH_ENABLE_USING=0 で明示的に無効化可能
-    match std::env::var("NYASH_ENABLE_USING").ok().as_deref() {
+    // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
+    match std::env::var("NYASH_USING").ok().or_else(|| std::env::var("NYASH_ENABLE_USING").ok()).as_deref() {
         Some("0") | Some("false") | Some("off") => false,
         _ => true, // デフォルト: ON
     }
@@ -399,6 +402,17 @@ pub fn allow_using_file() -> bool {
 /// 1) Explicit env `NYASH_USING_AST` = 1/true/on → enabled, = 0/false/off → disabled
 /// 2) Default by profile: dev/ci → ON, prod → OFF
 pub fn using_ast_enabled() -> bool {
+    // 優先順: NYASH_USING_STRATEGY / NYASH_USING_IMPL → NYASH_USING_AST（後方互換）。
+    if let Some(mode) = std::env::var("NYASH_USING_STRATEGY").ok()
+        .or_else(|| std::env::var("NYASH_USING_IMPL").ok())
+    {
+        let m = mode.to_ascii_lowercase();
+        return match m.as_str() {
+            "prelude" => true,
+            "resolver" => false,
+            _ => !using_is_prod(),
+        };
+    }
     match std::env::var("NYASH_USING_AST").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
         Some(ref s) if s == "1" || s == "true" || s == "on" => true,
         Some(ref s) if s == "0" || s == "false" || s == "off" => false,

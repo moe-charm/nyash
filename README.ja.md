@@ -23,6 +23,9 @@ AST JSON v0（マクロ/ブリッジ）: `docs/reference/ir/ast-json-v0.md`
 セルフホスト1枚ガイド: `docs/guides/how-to/self-hosting.md`
 ExternCall（env.*）と println 正規化: `docs/reference/runtime/externcall.md`
 VM エンジン切替: `NYASH_VM_ENGINE={fallback|full}`（既定は fallback）。設計は `docs/guides/runtime-architecture.md` を参照してください。
+Using/プラグイン（ENV要約）:
+- Using: `NYASH_USING=0|1`（既定=1）、`NYASH_USING_STRATEGY={resolver|prelude}`（別名: `NYASH_USING_IMPL`）
+- Plugins: `NYASH_PLUGIN_POLICY={auto|off|force}`（既定=auto）
 
 ### MIR 統一Call（既定ON）
 - 呼び出しは中央（`emit_unified_call`）で集約。開発段階では既定ON（`0|false|off` で明示OFF）。

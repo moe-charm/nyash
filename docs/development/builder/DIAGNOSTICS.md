@@ -21,7 +21,7 @@ Flags (env)
 Tips
 - Minimal selfhost VM chase:
   ```bash
-  NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+  NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude \
   NYASH_RESOLVE_TRACE=1 NYASH_LOCAL_SSA_TRACE=1 NYASH_MAT_TRACE=1 NYASH_VARMAP_TRACE=1 \
   ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.nyash -- --min-json --stage3
   ```

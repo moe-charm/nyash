@@ -1,5 +1,106 @@
 # Current Task — Phase 15 (Concise)
 
+## ✅ Update — 2025-10-01（quick 完全緑 + Alias 内部参照 + Mini‑VM 強化）
+
+- quick: 96/96 PASS（selfhost LocalSSA/compare/binop/multi-compare 系も緑）
+- 反映（仕様不変の小差分）
+  - PreLex 共通前処理は VM/LLVM/PyVM/dispatch 全経路で有効
+  - Using/Alias: プレリュード改名後の内部参照も安全に書換（MVP）
+    - 実装: `src/runner/modes/common_util/resolve/alias_tools.rs`
+    - rename → internal rewrite（Variable/FieldAccess/FunctionCall を対象）
+    - ユニット追加（内部参照 Variable/qualified function）
+  - Mini‑VM: fast‑path（const×2 + compare/binop + ret）を安全化
+    - 最後の compare/binop の lhs/rhs が当該 const の dst と一致する場合のみ採用
+    - それ以外はオブジェクト走査へフォールバック
+
+### 次アクション（小粒・順番）
+1) Alias ユニットの追加（衝突/ネスト）と trace 静音の確認（env ガード維持）
+2) Wrapper を CompilerMod 経路に戻す（dev→quick の順）
+3) VM: Call 直前で LocalSSA 材化を一律適用（emit_call 前に ensure_in_block を挿入）
+4) 代表 integration の再実行（VM↔LLVM parity）
+
+## ✅ Update — 2025-10-02（Phase A 実施・仕様不変の堅牢化）
+
+- VM LocalSSA 材化の検証強化（デバッグ時のみ）
+  - 追加: `debug_assert_materialized_in_block()`（現在ブロック内の Copy 定義に限定されていることを確認）
+  - 適用: `handlers/calls.rs` で args/recv の材化後にデバッグアサート（cfg(debug_assertions)）
+  - 仕様不変: リリースビルドでは無効（実行・性能影響なし）
+- 単体テスト（helpers.rs）
+  - `materialize_picks_latest_copy_before_current_inst`: 直前の Copy を選択
+  - `materialize_stops_at_current_inst`: 現在命令の手前までで選択
+- ドキュメント（ENV）
+  - `docs/development/runtime/ENV_VARS.md` 冒頭に統合ノブへの誘導とマッピングを追記（`docs/config/env.md` を正とする）
+  - 非アーカイブの旧ENV表記を整理（最小置換・互換注記付き）
+    - `docs/development/strategies/break-control-flow-strategy.md`（plugins→policy=off）
+    - `docs/development/builder/DIAGNOSTICS.md`（USING/AST→USING/STRATEGY）
+    - `docs/guides/operator-boxes.md`（USING_STRATEGY=prelude 表記）
+    - `docs/development/testing/aot_smoke_cranelift.md`（plugins→policy=off）
+    - Phase‑15 系（README / planning / imports-namespace-plan）を NYASH_USING=1 ベースに
+- Alias 内部参照書換の緊急停止ゲートを追加（既定ON）
+  - `NYASH_ALIAS_INTERNAL_REWRITE=0` で prelude 内部参照の書換を一時停止可能
+  - docs/config/env.md に追記
+
+次アクション（継続）
+- Alias ユニットは既に衝突/ネスト/静的 Box 化のケースをカバー済み（追加があれば拡充）
+- Selfhost wrapper は CompilerMod 経路で緑維持済み（固定JSONバイパス残骸なしを確認）
+- （任意）Plugin 強制ONスモークは後続で追加（存在時のみ PASS / 無ければ SKIP）
+
+## ✅ Update — 2025-10-02（Docs 追加掃除 + Integration スポット緑 + 小リファクタ）
+
+- Docs 追加掃除（非アーカイブ）
+  - break-control-flow-strategy.md, DIAGNOSTICS.md, operator-boxes.md, aot_smoke_cranelift.md
+  - Phase‑15 の using 記載を `NYASH_USING=1` 基準に整理（compat注記付）
+- Integration スポットテスト（代表）
+  - parity/vm_llvm_hello.sh → PASS
+  - parity/selfhost_mir_m2_compare_ops_vm_llvm.sh → PASS
+- 小リファクタ（仕様不変・≤50行）
+  - helpers.rs: `materialize_args_in_current_block` / `materialize_recv_in_current_block` を追加
+  - calls.rs: 受け手/引数の材化処理をヘルパーに集約（重複削減・検証流用）
+
+## ✅ Refactor — 2025-10-02（VM Boxes ハンドラの分割・責務分離）
+
+- 目的: 巨大な boxes.rs の責務を分割し、読みやすさと変更容易性を向上（挙動不変）
+- 変更（実装は handlers/ 直下に新規モジュールを追加）
+  - 新規: `src/backend/mir_interpreter/handlers/boxes_fields.rs`
+    - `try_handle_object_fields(...)`（InstanceBox の getField/setField とレガシー field 橋渡し）
+  - 新規: `src/backend/mir_interpreter/handlers/boxes_instance.rs`
+    - `try_handle_instance_box(...)`（InstanceBox のメソッド解決/候補列挙/文字列化）
+  - 既存: `boxes.rs` 側の呼び出しを新モジュールへリダイレクト
+    - `handle_box_call()` 内の分岐（object_fields / instance）を新モジュール関数に置換
+  - `handlers/mod.rs` に `mod boxes_fields; mod boxes_instance;` を追加
+- 備考: 旧メソッド定義は一時的に残置（未参照）。後続の掃除パッチで安全に削除予定。
+
+---
+
+## 🧩 Rust リファクタリング計画（段階・仕様不変）
+
+目的: 入口前処理の一元化と VM 呼出経路の一本化で安定性を上げる。差分は小さく、既定挙動は変えない。
+
+### Phase A（入口統一・安全化）
+- PreLex を全モードから `prelex::prelex_normalize()` に統一（済）
+- Using/Alias:
+  - プレリュード改名（`Alias_<Top>`）＋内部参照書換（MVP、済）
+  - 追加ユニットで衝突/ネストを固定
+
+### Phase B（VMコアの一本化・材化責務）
+- `backend/mir_interpreter/handlers/calls.rs` の emit_call 直前で LocalSSA 材化を一律適用（recv/args）
+- User instance の BoxCall を本番 Fail‑Fast、dev は観測のみ
+- NewBox→birth は原則 Builder 明示、dev は `NYASH_DEV_FALLBACK=1` で暫定容認
+- Optimizer flag: `NYASH_OPT_FORCE_PLUGIN_INVOKE=1`（既定OFF）で PluginInvoke 優先の検証（parity 確認後に段階導入）
+
+### Phase C（ログ/検証の静音と整備）
+- call‑trace（VM runtime / LLVM 静的）を env ガード（`NYASH_CALL_TRACE=1`）に統一
+- dev 警告は `NYASH_CLI_VERBOSE=1` のみ出力（smokes は静音）
+
+受け入れ基準
+- quick/integration 緑、VM/LLVM 代表の call‑trace 名称整合
+- `ssa.verify`/`resolve.unique=false`/`use of undefined` が dev で 0
+
+ロールバック指針
+- 入口統一は `prelex` 呼び出し差分のみ戻す
+- Alias 内部参照書換は env で一時停止可能（必要時）
+- VM call 材化挿入は単点差分で revert 容易
+
 ## 🔧 **現在の緊急タスク** (2025-09-30) - Mini-VM フォールバック経路修正
 
 ### 📊 **問題概要**

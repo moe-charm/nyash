@@ -77,7 +77,7 @@ Alias desugar（MVP, Runner実装）
 - 方針: ランナーが脱糖直後に検出・停止。将来は回避候補の提示（リネーム案）を追加予定。
   - 競合: 既存の `Alias_` 接頭辞の記号とぶつかる場合は Fail‑Fast（将来の詳細化で解決）。
   - スコープ: ファイル先頭の using 行に限る。ネストした using の alias は作用しない（将来拡張）。
-  - 既定: dev/ci プロファイルで有効（`NYASH_USING_AST=1`）。prod は toml のみ。
+  - 既定: dev/ci プロファイルで有効（`NYASH_USING_STRATEGY=prelude`）。prod は toml のみ。
 
 例
 ```nyash
@@ -100,7 +100,8 @@ static box Main {
 
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.
-- Resolution is performed by the Rust Runner when `NYASH_ENABLE_USING=1`.
+- Resolution is performed by the Rust Runner when `NYASH_USING=1`（alias: `NYASH_ENABLE_USING=1`）.
+- Strategy: `NYASH_USING_STRATEGY={resolver|prelude}`（alias: `NYASH_USING_IMPL`, fallback: `NYASH_USING_AST=1` → prelude）
 - 実体の結合は AST マージのみ。テキストの前置き/連結は行わない（レガシー経路は呼び出し側から削除済み）。
 - Runner は `nyash.toml` の `[using]` を唯一の真実として参照（prod）。dev/ci は段階的に緩和可能。
 - Selfhost compiler (Ny→JSON v0) collects using lines and emits `meta.usings` when present. The bridge currently ignores this meta field.
@@ -227,7 +228,7 @@ static box Main {
 ```
 
 Runner Configuration
-- Enable using pre‑processing: `NYASH_ENABLE_USING=1`
+- Enable using system: `NYASH_USING=1`（compat: `NYASH_ENABLE_USING=1`）
 - CLI from-the-top registration: `--using "ns as Alias"` or `--using '"apps/foo.nyash" as Foo'` (repeatable)
 - Using profiles (phase‑in): `NYASH_USING_PROFILE={dev|ci|prod}`
   - dev: AST マージ 既定ON、legacy前置きは既定で無効（必要時は `NYASH_LEGACY_USING_ALLOW=1` で一時許可）
