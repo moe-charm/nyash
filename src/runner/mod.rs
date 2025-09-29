@@ -30,6 +30,7 @@ mod selfhost;
 mod tasks;
 mod trace;
 mod plugins;
+pub mod vm_iface;
 
 // v2 plugin system imports
 use nyash_rust::runner_plugin_init;

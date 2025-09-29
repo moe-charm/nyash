@@ -48,7 +48,7 @@ box JsonTokenizer {
                 }
             } else {
                 // トークン生成失敗（内部エラー）
-                local error_token = new JsonToken("ERROR", "Internal tokenizer error", me.scanner.get_position(), me.scanner.get_position() + 1)
+                local error_token = me.make_token("ERROR", "Internal tokenizer error", me.scanner.get_position(), me.scanner.get_position() + 1)
                 me.tokens.push(error_token)
                 me.errors.push(error_token)
                 break
@@ -57,7 +57,7 @@ box JsonTokenizer {
         
         // 最終的にEOFトークンを追加（まだ追加されていない場合）
         if me.tokens.length() == 0 or not me.tokens.get(me.tokens.length() - 1).is_eof() {
-            me.tokens.push(new JsonToken("EOF", "", me.scanner.get_position(), me.scanner.get_position()))
+            me.tokens.push(me.make_token("EOF", "", me.scanner.get_position(), me.scanner.get_position()))
         }
         
         return me.tokens
@@ -78,7 +78,7 @@ box JsonTokenizer {
         
         // EOF チェック
         if me.scanner.is_eof() {
-            return new JsonToken("EOF", "", me.scanner.get_position(), me.scanner.get_position()).set_line_column(me.scanner.get_line(), me.scanner.get_column())
+            return me.make_token("EOF", "", me.scanner.get_position(), me.scanner.get_position()).set_line_column(me.scanner.get_line(), me.scanner.get_column())
         }
         
         local start_pos = me.scanner.get_position()
@@ -122,7 +122,7 @@ box JsonTokenizer {
         // print("BR error")
         // 不明な文字（エラー）
         me.scanner.advance()
-        return new JsonToken("ERROR", "Unexpected character: '" + ch + "'", start_pos, me.scanner.get_position()).set_line_column(start_line, start_col)
+        return me.make_token("ERROR", "Unexpected character: '" + ch + "'", start_pos, me.scanner.get_position()).set_line_column(start_line, start_col)
     }
     
     // ===== 専用トークナイザーメソッド =====
@@ -134,18 +134,19 @@ box JsonTokenizer {
         
         // Robust guard: require quoted literal ("…")
         if literal == null or literal.length() < 2 or not (literal.substring(0, 1) == "\"") {
-            return new JsonToken("ERROR", "Unterminated string literal", start_pos, me.scanner.get_position())
+            return me.make_token("ERROR", "Unterminated string literal", start_pos, me.scanner.get_position())
         }
         
-        // エスケープ解除して値を取得（厳密版）
-        local unescaped = EscapeUtils.unquote_string(literal)
+        // クォート除去 → エスケープ解除
+        local unquoted = this.unquote_string(literal)
+        local unescaped = EscapeUtils.unescape_string(unquoted)
         
         // 文字列妥当性検証
         if not me.validate_string(unescaped) {
-            return new JsonToken("ERROR", "Invalid string content", start_pos, me.scanner.get_position())
+            return me.make_token("ERROR", "Invalid string content", start_pos, me.scanner.get_position())
         }
         
-        return new JsonToken("STRING", unescaped, start_pos, me.scanner.get_position())
+        return me.make_token("STRING", unescaped, start_pos, me.scanner.get_position())
     }
     
     // 数値トークン化
@@ -154,15 +155,15 @@ box JsonTokenizer {
         local number_str = me.scanner.read_number()
         
         if number_str == null {
-            return new JsonToken("ERROR", "Invalid number format", start_pos, me.scanner.get_position())
+            return me.make_token("ERROR", "Invalid number format", start_pos, me.scanner.get_position())
         }
         
         // 数値の妥当性を再チェック
         if not me.validate_number_format(number_str) {
-            return new JsonToken("ERROR", "Malformed number: " + number_str, start_pos, me.scanner.get_position())
+            return me.make_token("ERROR", "Malformed number: " + number_str, start_pos, me.scanner.get_position())
         }
         
-        return new JsonToken("NUMBER", number_str, start_pos, me.scanner.get_position())
+        return me.make_token("NUMBER", number_str, start_pos, me.scanner.get_position())
     }
     
     // キーワードトークン化
@@ -175,18 +176,18 @@ box JsonTokenizer {
         // キーワード判定
         local token_type = me.keyword_to_token_type(keyword)
         if token_type != null {
-            return new JsonToken(token_type, keyword, start_pos, me.scanner.get_position())
+            return me.make_token(token_type, keyword, start_pos, me.scanner.get_position())
         }
         
         // 不明なキーワード（エラー）
-        return new JsonToken("ERROR", "Unknown keyword: " + keyword, start_pos, me.scanner.get_position())
+        return me.make_token("ERROR", "Unknown keyword: " + keyword, start_pos, me.scanner.get_position())
     }
     
     // ===== ヘルパーメソッド =====
     
     // 構造トークン作成
     create_structural_token(token_type, start_pos) {
-        return new JsonToken(token_type, this.token_type_to_char(token_type), start_pos, start_pos + 1)
+        return me.make_token(token_type, this.token_type_to_char(token_type), start_pos, start_pos + 1)
     }
     
     // トークンタイプから文字を取得
@@ -393,6 +394,14 @@ box JsonTokenizer {
             "false" => "FALSE",
             _ => null
         }
+    }
+
+    // ===== 安全トークン生成（birthに依存しない） =====
+    make_token(t, v, s, e) {
+        // 明示初期化で birth 依存を回避
+        local tok = new JsonToken()
+        tok.setup(t, v, s, e)
+        return tok
     }
 }
 

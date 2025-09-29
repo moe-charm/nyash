@@ -26,10 +26,11 @@ static box Main {
     j = j + "{\"id\":1,\"instructions\":[{\"op\":\"branch\",\"cond\":1,\"then\":2,\"else\":3}]},"
     j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":1}]},"
     j = j + "{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":0}]}]}]}"
-    local out = LocalSSA.ensure_cond(j)
+    local out = LocalSSAMod.ensure_cond(j)
     // simple contains check
     local has = 0
-    if out.indexOf("\"op\":\"copy\"") >= 0 { has = 1 }
+    // JSON is stringified with escaped quotes (\"), so search for the escaped pattern
+    if out.indexOf("\\\"op\\\":\\\"copy\\\"") >= 0 { has = 1 }
     if has == 1 { print("copy:1") } else { print("copy:0") }
     return 0
   }
@@ -42,4 +43,3 @@ compare_outputs "$expected" "$out" "selfhost_localssa_cond_copy_vm" || { cd /; r
 
 rm -rf "$TMP_DIR"
 exit 0
-

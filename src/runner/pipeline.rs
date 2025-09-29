@@ -187,6 +187,7 @@ pub(super) fn resolve_using_target(
         }
         // Recurse to resolve the alias target into a concrete path/token
         let rec = resolve_using_target(v, false, modules, using_paths, aliases, packages, context_dir, strict, verbose)?;
+        crate::runner::trace::log_json_using(tgt, Some(&rec), &[], "alias");
         crate::runner::box_index::cache_put(&key, rec.clone());
         return Ok(rec);
     }
@@ -199,6 +200,7 @@ pub(super) fn resolve_using_target(
                 if trace {
                     crate::runner::trace::log(format!("[using/resolve] dylib '{}' -> '{}'", tgt, out));
                 }
+                crate::runner::trace::log_json_using(tgt, Some(&out), &[], "dylib");
                 crate::runner::box_index::cache_put(&key, out.clone());
                 return Ok(out);
             }
@@ -223,6 +225,7 @@ pub(super) fn resolve_using_target(
                 if trace {
                     crate::runner::trace::log(format!("[using/resolve] package '{}' -> '{}'", tgt, out));
                 }
+                crate::runner::trace::log_json_using(tgt, Some(&out), &[], "package");
                 crate::runner::box_index::cache_put(&key, out.clone());
                 return Ok(out);
             }
@@ -240,6 +243,7 @@ pub(super) fn resolve_using_target(
                             tgt, out
                         ));
                     }
+                    crate::runner::trace::log_json_using(tgt, Some(&out), &[], "env-alias");
                     crate::runner::box_index::cache_put(&key, out.clone());
                     return Ok(out);
                 }
@@ -252,6 +256,7 @@ pub(super) fn resolve_using_target(
         if trace {
             crate::runner::trace::log(format!("[using/resolve] modules '{}' -> '{}'", tgt, out));
         }
+        crate::runner::trace::log_json_using(tgt, Some(&out), &[], "modules");
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
@@ -261,6 +266,7 @@ pub(super) fn resolve_using_target(
         if trace {
             crate::runner::trace::log(format!("[using/resolve] builtin '{}' -> '{}'", tgt, out));
         }
+        crate::runner::trace::log_json_using(tgt, Some(&out), &[], "builtin");
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
@@ -295,6 +301,7 @@ pub(super) fn resolve_using_target(
         } else {
             eprintln!("[using] not found: '{}'", tgt);
         }
+        crate::runner::trace::log_json_using(tgt, None, &cands, "unresolved");
         return Ok(tgt.to_string());
     }
     if cand.len() > 1 && strict {
@@ -304,6 +311,7 @@ pub(super) fn resolve_using_target(
     if trace {
         crate::runner::trace::log(format!("[using/resolve] '{}' -> '{}'", tgt, out));
     }
+    crate::runner::trace::log_json_using(tgt, Some(&out), &[], "fs");
     crate::runner::box_index::cache_put(&key, out.clone());
     Ok(out)
 }

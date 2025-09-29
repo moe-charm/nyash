@@ -69,7 +69,9 @@ impl MirInterpreter {
         use BinaryOp::*;
         use VMValue::*;
         // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev mode.
-        let tolerate = std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+        let tolerate =
+            std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1") ||
+            std::env::var("NYASH_DEV_FALLBACK").ok().as_deref() == Some("1");
         let (a, b) = if tolerate {
             let norm = |v: VMValue| -> VMValue {
                 if let VMValue::BoxRef(bx) = &v {

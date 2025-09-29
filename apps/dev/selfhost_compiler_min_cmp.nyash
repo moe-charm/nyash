@@ -1,13 +1,19 @@
-using selfhost.compiler.main as CompilerMod
+// Selfhost compiler wrapper（dev）: 自己ホストコンパイラを呼び出して Compare→MIR(JSON v0) を出力
+// 依存：usingのASTプレリュード統合（dev/ciで既定ON）、ファイルusing許可（NYASH_ALLOW_USING_FILE=1）
+
+// Selfhost wrapper via compiler path: produce MIR(JSON v0) for Return(Compare(5,4) Gt)
+using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
 
 static box Main {
   main(){
-    local args = new ArrayBox()
-    args.push("--compiler-track")
-    args.push("--min-json")
-    args.push("--min-json-cmp")
-    args.push("--emit-mir")
-    CompilerMod.Main.main(args)
+    // Build argv for compiler: --min-json --min-json-cmp --emit-mir
+    local argv = new ArrayBox()
+    argv.push("--min-json")
+    argv.push("--min-json-cmp")
+    argv.push("--emit-mir")
+    // Call selfhost compiler main (prefixed alias name; avoids alias FieldAccess at call-site)
+    CompilerMod_Main.main(argv)
+    // The compiler prints MIR(JSON) to stdout; return 0 to keep CLI exit stable
     return 0
   }
 }

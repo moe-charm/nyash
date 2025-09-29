@@ -25,12 +25,12 @@ static box Main {
   main() {
     // r1=3, r2=7, r3=r1-r2=-4; r4=0; compare(${op}) r3 vs r4
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
-    j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":1,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":3}},"
-    j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":2,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":7}},"
-    j = j + "{\\\"op\\\":\\\"binop\\\",\\\"op_kind\\\":\\\"Sub\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
-    j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":4,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":0}},"
-    j = j + "{\\\"op\\\":\\\"compare\\\",\\\"cmp\\\":\\\"${op}\\\",\\\"lhs\\\":3,\\\"rhs\\\":4,\\\"dst\\\":5},"
-    j = j + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":5}] }]}]}"
+    j = j + "{\\"op\\":\\"const\\",\\"dst\\":1,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":3}},"
+    j = j + "{\\"op\\":\\"const\\",\\"dst\\":2,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":7}},"
+    j = j + "{\\"op\\":\\"binop\\",\\"op_kind\\":\\"Sub\\",\\"lhs\\":1,\\"rhs\\":2,\\"dst\\":3},"
+    j = j + "{\\"op\\":\\"const\\",\\"dst\\":4,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":0}},"
+    j = j + "{\\"op\\":\\"compare\\",\\"cmp\\":\\"${op}\\",\\"lhs\\":3,\\"rhs\\":4,\\"dst\\":5},"
+    j = j + "{\\"op\\":\\"ret\\",\\"value\\":5}] }]}]}"
     local v = MirVmMin._run_min(j)
     print(MirVmMin._int_to_str(v))
     return 0
@@ -44,4 +44,3 @@ done
 
 rm -rf "$TMP_DIR"
 exit 0
-

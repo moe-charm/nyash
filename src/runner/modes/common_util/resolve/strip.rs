@@ -307,6 +307,9 @@ pub fn collect_using_and_strip(
                                     }
                                 } else {
                                     seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
+                                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                                        crate::runner::trace::log(format!("[using/alias] push pair alias='{}' canon='{}'", alias, canon));
+                                    }
                                     alias_pairs.push((alias, canon));
                                 }
                             }
@@ -350,6 +353,10 @@ pub fn resolve_prelude_paths_profiled(
     }
     let mut out: Vec<String> = Vec::new();
     let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
+    let mut out_alias_pairs: Vec<(String, String)> = alias_pairs.clone();
+    let mut alias_seen: std::collections::HashSet<(String, String)> =
+        alias_pairs.iter().cloned().collect();
+    // Aliasはトップレベル using のみに適用（ネストは元名を維持）
     fn normalize_path(path: &str) -> (String, String) {
         use std::path::PathBuf;
         match PathBuf::from(path).canonicalize() {
@@ -368,6 +375,8 @@ pub fn resolve_prelude_paths_profiled(
         path: &str,
         out: &mut Vec<String>,
         seen: &mut std::collections::HashSet<String>,
+        out_alias_pairs: &mut Vec<(String, String)>,
+        alias_seen: &mut std::collections::HashSet<(String, String)>,
     ) -> Result<(), String> {
         let (key, real_path) = normalize_path(path);
         if !seen.insert(key.clone()) {
@@ -375,15 +384,29 @@ pub fn resolve_prelude_paths_profiled(
         }
         let src = std::fs::read_to_string(&real_path)
             .map_err(|e| format!("using: failed to read '{}': {}", real_path, e))?;
-        let (_cleaned, nested, _aliases) = collect_using_and_strip(runner, &src, &real_path)?;
-        for n in nested.iter() {
-            dfs(runner, n, out, seen)?;
+        let (_cleaned, nested, local_aliases) = collect_using_and_strip(runner, &src, &real_path)?;
+        // Accumulate nested alias pairs as well (so we can rename/desugar inside prelude code)
+        for (a, c) in local_aliases.into_iter() {
+            if alias_seen.insert((a.clone(), c.clone())) {
+                out_alias_pairs.push((a, c));
+            }
         }
-        out.push(real_path);
+        // Exclude legacy selfhost path to avoid conflicts with new selfhost-compiler tree
+        let is_legacy = real_path.contains("/apps/selfhost/compiler/");
+        if !is_legacy {
+            // Guard: avoid duplicate insertion into `out` even if canonicalization
+            // varied across DFS entry points.
+            if !out.iter().any(|p| p == &real_path) {
+                out.push(real_path.clone());
+            }
+        }
+        for n in nested.iter() {
+            dfs(runner, n, out, seen, out_alias_pairs, alias_seen)?;
+        }
         Ok(())
     }
     for p in direct.iter() {
-        dfs(runner, p, &mut out, &mut seen)?;
+        dfs(runner, p, &mut out, &mut seen, &mut out_alias_pairs, &mut alias_seen)?;
     }
     // Operator Boxes prelude injection（観測“常時ON”のため）
     // stringify/compare/add は常に注入（存在時）。その他（bitwise等）は ALL 指定時のみ。
@@ -435,7 +458,7 @@ pub fn resolve_prelude_paths_profiled(
             }
         }
     }
-    Ok((cleaned, out, alias_pairs))
+    Ok((cleaned, out, out_alias_pairs))
 }
 
 /// Parse prelude source files into ASTs (single helper for all runner modes).

@@ -13,7 +13,7 @@
 
 static box MirVmMin {
   // Dev trace hook (no-op; enable by converting to print in local dev)
-  _tprint(msg) { /* no-op by default */ }
+  _tprint(msg) { print(msg) }
   // Public entry used by parity tests (calls into minimal runner)
   run(mjson) {
     local v = me._run_min(mjson)
@@ -144,6 +144,19 @@ static box MirVmMin {
     }
     return out
   }
+  _count_occurs(hay, needle) {
+    if hay == null { return 0 }
+    if needle == null { return 0 }
+    local n = 0
+    local rest = hay
+    loop(true) {
+      local p = rest.indexOf(needle)
+      if p < 0 { break }
+      n = n + 1
+      rest = rest.substring(p + needle.length(), rest.length())
+    }
+    return n
+  }
   // --- JSON segment helpers (brace/bracket aware, minimal) ---
   _seek_obj_start(text, from_pos) {
     // scan backward to the nearest '{'
@@ -183,6 +196,21 @@ static box MirVmMin {
       i = i + 1
     }
     return i
+  }
+  _last_index_of_before(text, needle, limit_end) {
+    if text == null { return -1 }
+    if needle == null { return -1 }
+    local last = -1
+    local pos = 0
+    local nlen = needle.length()
+    if limit_end < 0 { limit_end = 0 }
+    loop(true) {
+      local p = me.index_of_from(text, needle, pos)
+      if p < 0 || p + nlen > limit_end { break }
+      last = p
+      pos = p + 1
+    }
+    return last
   }
   _map_binop_symbol(sym) {
     if sym == "+" { return "Add" }
@@ -258,41 +286,47 @@ static box MirVmMin {
       }
       // After optional sanitize, try fast minimal evaluation again within this block
       {
+        // Fast eval only when this block clearly matches const,const,(compare|binop),ret
         local inst2 = mjson.substring(pos, block_end)
-        local keyv2 = "\"value\":{\"type\":\"i64\",\"value\":"
-        local p1b = inst2.indexOf(keyv2)
-        if p1b >= 0 {
-          local d1b = me.read_digits(inst2, p1b + keyv2.length())
-          if d1b != "" {
-            local p2b = me.index_of_from(inst2, keyv2, p1b + keyv2.length())
-            if p2b >= 0 {
-              local d2b = me.read_digits(inst2, p2b + keyv2.length())
-              if d2b != "" {
-                local a = me._str_to_int(d1b)
-                local b = me._str_to_int(d2b)
-                // compare?
-                local pc2 = inst2.indexOf("\"op\":\"compare\"")
-                if pc2 >= 0 {
-                  local kk = ""
-                  if inst2.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
-                    if inst2.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
-                      if inst2.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
-                        if inst2.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
-                          if inst2.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
-                            if inst2.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+        local cnt_val = me._count_occurs(inst2, "\"value\":{\"type\":\"i64\",\"value\":")
+        local cnt_cmp = me._count_occurs(inst2, "\"op\":\"compare\"")
+        local cnt_bin = me._count_occurs(inst2, "\"op\":\"binop\"")
+        if cnt_val == 2 && ((cnt_cmp == 1 && cnt_bin == 0) || (cnt_cmp == 0 && cnt_bin == 1)) {
+          local keyv2 = "\"value\":{\"type\":\"i64\",\"value\":"
+          local p1b = inst2.indexOf(keyv2)
+          if p1b >= 0 {
+            local d1b = me.read_digits(inst2, p1b + keyv2.length())
+            if d1b != "" {
+              local p2b = me.index_of_from(inst2, keyv2, p1b + keyv2.length())
+              if p2b >= 0 {
+                local d2b = me.read_digits(inst2, p2b + keyv2.length())
+                if d2b != "" {
+                  local a = me._str_to_int(d1b)
+                  local b = me._str_to_int(d2b)
+                  // compare?
+                  local pc2 = inst2.indexOf("\"op\":\"compare\"")
+                  if pc2 >= 0 {
+                    local kk = ""
+                    if inst2.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
+                      if inst2.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
+                        if inst2.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
+                          if inst2.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
+                            if inst2.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
+                              if inst2.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+                            }
                           }
                         }
                       }
                     }
+                    if kk != "" { return me._eval_cmp(kk, a, b) }
                   }
-                  if kk != "" { return me._eval_cmp(kk, a, b) }
-                }
-                // binop?
-                local pb2 = inst2.indexOf("\"op\":\"binop\"")
-                if pb2 >= 0 {
-                  local bk = me._find_str_in(inst2, "\"op_kind\":\"")
-                  if bk == "" { bk = me._map_binop_symbol(me._find_str_in(inst2, "\"operation\":\"")) }
-                  if bk != "" { return me._eval_binop(bk, a, b) }
+                  // binop?
+                  local pb2 = inst2.indexOf("\"op\":\"binop\"")
+                  if pb2 >= 0 {
+                    local bk = me._find_str_in(inst2, "\"op_kind\":\"")
+                    if bk == "" { bk = me._map_binop_symbol(me._find_str_in(inst2, "\"operation\":\"")) }
+                    if bk != "" { return me._eval_binop(bk, a, b) }
+                  }
                 }
               }
             }
@@ -304,36 +338,41 @@ static box MirVmMin {
       {
         local keyv = "\"value\":{\"type\":\"i64\",\"value\":"
         local keyv_esc = "\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":"
-        local p1 = mjson.indexOf(keyv)
-        if p1 < 0 { p1 = mjson.indexOf(keyv_esc)  keyv = keyv_esc }
-        if p1 >= 0 {
-          local d1 = me.read_digits(mjson, p1 + keyv.length())
-          if d1 != "" {
-            local p2 = me.index_of_from(mjson, keyv, p1 + keyv.length())
-            if p2 >= 0 {
-              local d2 = me.read_digits(mjson, p2 + keyv.length())
+        local inst3 = mjson.substring(pos, block_end)
+        // Only apply when exactly two const values present; pick them before ret
+        if me._count_occurs(inst3, keyv) + me._count_occurs(inst3, keyv_esc) == 2 {
+          // normalize key to the one actually present
+          if inst3.indexOf(keyv) < 0 { keyv = keyv_esc }
+          // Find ret boundary within this block
+          local pr = inst3.indexOf("\"op\":\"ret\"")
+          if pr < 0 { pr = inst3.length() }
+          // Find last two const values before ret
+          local p2 = me._last_index_of_before(inst3, keyv, pr)
+          if p2 >= 0 {
+            local p1 = me._last_index_of_before(inst3, keyv, p2)
+            if p1 >= 0 {
+              local d1 = me.read_digits(inst3, p1 + keyv.length())
+              local d2 = me.read_digits(inst3, p2 + keyv.length())
               if d2 != "" {
                 local a = me._str_to_int(d1)
                 local b = me._str_to_int(d2)
                 // compare?
-                // Find compare nearest before 'ret'
-                local pr = mjson.indexOf("\"op\":\"ret\"")
-                if pr < 0 { pr = mjson.length() }
-                local pc = mjson.indexOf("\"op\":\"compare\"")
+                // Find compare nearest before 'ret' within this block
+                local pc = inst3.indexOf("\"op\":\"compare\"")
                 if pc >= 0 {
                   loop(true) {
-                    local nxt = me.index_of_from(mjson, "\"op\":\"compare\"", pc + 1)
+                    local nxt = me.index_of_from(inst3, "\"op\":\"compare\"", pc + 1)
                     if nxt < 0 || nxt >= pr { break }
                     pc = nxt
                   }
                   // Robust: search cmp kind tokens directly (unique in minimal JSON)
                   local kk = ""
-                  if mjson.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
-                    if mjson.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
-                      if mjson.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
-                        if mjson.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
-                          if mjson.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
-                            if mjson.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+                  if inst3.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
+                    if inst3.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
+                      if inst3.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
+                        if inst3.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
+                          if inst3.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
+                            if inst3.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
                           }
                         }
                       }
@@ -343,14 +382,14 @@ static box MirVmMin {
                   return r
                 }
                 // binop?
-                local pb = mjson.indexOf("\"op\":\"binop\"")
+                local pb = inst3.indexOf("\"op\":\"binop\"")
                 if pb >= 0 {
                   loop(true) {
-                    local nxt = me.index_of_from(mjson, "\"op\":\"binop\"", pb + 1)
+                    local nxt = me.index_of_from(inst3, "\"op\":\"binop\"", pb + 1)
                     if nxt < 0 || nxt >= pr { break }
                     pb = nxt
                   }
-                  local seg = mjson.substring(pb, pr)
+                  local seg = inst3.substring(pb, pr)
                   local bk = me._find_str_in(seg, "\"op_kind\":\"")
                   if bk == "" { bk = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
                   local r = me._eval_binop(bk, a, b)
@@ -452,4 +491,5 @@ static box MirVmMin {
     return me._extract_first_const_i64(mjson)
   }
   
+}
 }

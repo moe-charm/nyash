@@ -392,7 +392,7 @@ impl NyashRunner {
             }
             let inline_path = std::path::Path::new("tmp").join("inline_selfhost_emit.nyash");
             let inline_code = format!(
-                "include \"apps/selfhost/compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost/compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
+                "include \"apps/selfhost-compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
                 esc
             );
             if let Err(e) = std::fs::write(&inline_path, inline_code) {

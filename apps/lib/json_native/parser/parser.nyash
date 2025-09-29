@@ -166,14 +166,14 @@ box JsonParser {
             me.add_error("Expected '{' to start object")
             return null
         }
-        JsonParserTrace.log("enter object at pos=" + me.position)
+        // JsonParserTrace.log("enter object at pos=" + me.position)
         me.advance()  // '{'を消費
 
         local object_node = JsonNode.create_object()
 
         // 空オブジェクトチェック
-        if me.match_token(TokenType.RBRACE()) {
-            JsonParserTrace.log("empty object -> {}")
+        if me.match_token("RBRACE") {
+            // JsonParserTrace.log("empty object -> {}")
             return object_node
         }
         
@@ -206,11 +206,11 @@ box JsonParser {
             // 継続判定
             if me.match_token("COMMA") {
                 // 次のキー・値ペアに続く
-                JsonParserTrace.log("object comma → next pair")
+                // JsonParserTrace.log("object comma → next pair")
                 continue
             } else {
                 if me.match_token("RBRACE") {
-                    JsonParserTrace.log("exit object at pos=" + me.position)
+                    // JsonParserTrace.log("exit object at pos=" + me.position)
                     break  // オブジェクト終了
                 } else {
                     me.add_error_expected("',' or '}' in object")
@@ -229,14 +229,14 @@ box JsonParser {
             me.add_error("Expected '[' to start array")
             return null
         }
-        JsonParserTrace.log("enter array at pos=" + me.position)
+        // JsonParserTrace.log("enter array at pos=" + me.position)
         me.advance()  // '['を消費
 
         local array_node = JsonNode.create_array()
 
         // 空配列チェック
         if me.match_token("RBRACKET") {
-            JsonParserTrace.log("empty array -> []")
+            // JsonParserTrace.log("empty array -> []")
             return array_node
         }
         
@@ -254,11 +254,11 @@ box JsonParser {
             // 継続判定
             if me.match_token("COMMA") {
                 // 次の要素に続く
-                JsonParserTrace.log("array comma → next element")
+                // JsonParserTrace.log("array comma → next element")
                 continue
             } else {
                 if me.match_token("RBRACKET") {
-                    JsonParserTrace.log("exit array at pos=" + me.position)
+                    // JsonParserTrace.log("exit array at pos=" + me.position)
                     break  // 配列終了
                 } else {
                     me.add_error_expected("',' or ']' in array")

@@ -194,14 +194,19 @@ run_nyash_llvm() {
     # Allow developer to force LLVM run (env guarantees availability)
     if [ "${SMOKES_FORCE_LLVM:-0}" != "1" ]; then
         # Skip gracefully when LLVM backend is not available in this build
-        # Primary check: version string advertises features
+        # Primary check: version string advertises features (Rust/inkwell)
         if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-        # Fallback check: binary contains LLVM harness symbols (ny-llvmc / NYASH_LLVM_USE_HARNESS)
-        if ! strings "$NYASH_BIN" 2>/dev/null | grep -E -q 'ny-llvmc|NYASH_LLVM_USE_HARNESS'; then
-            log_warn "LLVM backend not available in this build; skipping LLVM run"
-            log_info "Hint: build ny-llvmc + enable harness: cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm"
-            return 0
-        fi
+            # Accept Python harness (llvmlite) as availability
+            if [ -f "src/llvm_py/llvm_builder.py" ] && command -v python3 >/dev/null 2>&1 && python3 -c "import llvmlite" 2>/dev/null; then
+                : # available via harness
+            else
+                # Fallback heuristic: binary contains LLVM harness symbols
+                if ! strings "$NYASH_BIN" 2>/dev/null | grep -E -q 'ny-llvmc|NYASH_LLVM_USE_HARNESS'; then
+                    log_warn "LLVM backend not available in this build; skipping LLVM run"
+                    log_info "Hint: Python harness path is recommended. Ensure llvmlite is installed or build with --features llvm."
+                    return 0
+                fi
+            fi
         fi
     fi
     # -c オプションの場合は一時ファイル経由で実行

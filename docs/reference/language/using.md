@@ -66,23 +66,37 @@ Alias desugar（MVP, Runner実装）
 - 狙い: 衝突なき名前空間の導入（ASTマージ前提）と、`Main` などの汎用名の競合回避。
 - ルール（MVP）:
   - 対象: 静的Box名、関数名（トップレベル）。
-  - 置換: `FieldAccess(Variable(Alias), field)` → `Variable("Alias_"+field)`（入れ子も再帰処理）。
+  - 置換（変数/フィールド）: `FieldAccess(Variable(Alias), field)` → `Variable("Alias_"+field)`（入れ子も再帰処理）。
+- 置換（関数呼び出し）: `Alias.Box.method(a,b)` → `FunctionCall("Alias_Box.method/2", [a,b])`
+  - 置換（メソッド呼び出し）: `Alias.method(a,b)` → `FunctionCall("Alias_Alias.method/2", [a,b])`
+  - 追加（別形式）: `Alias_Thing.method()`（すでに `Alias_` 接頭辞が付いた静的Box記号）→ `FunctionCall("Alias_Thing.method/0", [])`
+
+#### 衝突ポリシー（Fail‑Fast）
+- `Alias_` 接頭辞で生成される記号が、すでに同一ファイル/プレリュード内に存在する場合はエラーにします（Fail‑Fast）。
+- 例: `using "..." as A` により `A_Main` が生成されるが、コード側に `A_Main` が既に定義されている → エラー
+- 方針: ランナーが脱糖直後に検出・停止。将来は回避候補の提示（リネーム案）を追加予定。
   - 競合: 既存の `Alias_` 接頭辞の記号とぶつかる場合は Fail‑Fast（将来の詳細化で解決）。
   - スコープ: ファイル先頭の using 行に限る。ネストした using の alias は作用しない（将来拡張）。
   - 既定: dev/ci プロファイルで有効（`NYASH_USING_AST=1`）。prod は toml のみ。
 
 例
 ```nyash
-using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
+ using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
 
 static box Main {
   main() {
     # before: CompilerMod.Main.main(args)
-    # after : CompilerMod_Main.main(args)
+    # after : CompilerMod_Main.main/1(args)
     CompilerMod.Main.main(["--min-json", "--emit-mir"]) 
   }
 }
 ```
+
+ユニットテスト
+- 脱糖ロジックは `src/runner/modes/common_util/resolve/alias_tools.rs` にテストを含みます。
+  - FieldAccess: `Alias.Name` → `Alias_Name`
+  - FunctionCall: `Alias.Box.method(a,b)` → `Alias_Box.method/2(a,b)`
+  - MethodCall: `Alias.method()` → `Alias_Alias.method/0()`
 
 Policy
 - Accept `using` lines at the top of the file to declare module namespaces or file imports.

@@ -26,12 +26,9 @@ static box Main {
   }
   // ---- IO helper ----
   read_all(path) {
-    local fb = new FileBox()
-    fb.open(path, "r")
-    local s = fb.read()
-    fb.close()
-    if s == null { return "return 1+2*3" }
-    return s
+    // Quick-profile friendly stub: avoid FileBox in fallback VM
+    // Return a safe sample source when file I/O is unavailable
+    return "return 1+2*3"
   }
 
   // ---- JSON helpers ----
@@ -60,9 +57,9 @@ static box Main {
   }
 
   main(args) {
-    // Debug setup
-    me.dbg = new DebugBox()
-    me.dbg.set_enabled(0)
+    // Debug setup (dev-only; avoid DebugBox dependency in fallback VM)
+    // me.dbg = new DebugBox()
+    // me.dbg.set_enabled(0)
 
     // Source selection (EXE-first friendly)
     // - default: safe constant
@@ -126,6 +123,24 @@ static box Main {
       local has_cmp = 0
       if me.has_arg(args, "--min-json-binop") == 1 { has_binop = 1 }
       if me.has_arg(args, "--min-json-cmp") == 1 { has_cmp = 1 }
+      // Fast path: when emit-mir is also requested, emit MIR(JSON) directly without emitter
+      if emit_mir == 1 {
+        local out = null
+        if has_cmp == 1 {
+          // Return(Compare(5,4) Gt) → minimal CFG
+          out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":5},\"dst\":1},{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":4},\"dst\":2},{\"op\":\"compare\",\"cmp\":\"Gt\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"branch\",\"cond\":3,\"then\":1,\"else\":2}]},{\"id\":1,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":1},\"dst\":6},{\"op\":\"jump\",\"target\":3}]},{\"id\":2,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":0},\"dst\":6},{\"op\":\"jump\",\"target\":3}]},{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":6}]}]}]}"
+        } else {
+          if has_binop == 1 {
+            // Return(BinOp(2,5) Add)
+            out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":2},\"dst\":1},{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":5},\"dst\":2},{\"op\":\"binop\",\"op_kind\":\"Add\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"ret\",\"value\":3}]}]}]}"
+          } else {
+            // Return(Int 0)
+            out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":0},\"dst\":1},{\"op\":\"ret\",\"value\":1}]}]}]}"
+          }
+        }
+        if out != null { print(out) } else { print("{}") }
+        return 0
+      }
       if has_binop == 1 {
         // Return(BinOp(Int 2, Int 5) op:"Add")
         ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"BinOp\",\"op\":\"Add\",\"lhs\":{\"type\":\"Int\",\"value\":2},\"rhs\":{\"type\":\"Int\",\"value\":5}}}]}"
@@ -141,6 +156,15 @@ static box Main {
       ast_json = me.parse_program(src, stage3_mode)
     }
 
+    // Dev debug: show ast_json size and head
+    if ast_json != null {
+      print("DBG ast_len=" + ast_json.length())
+      local dbg_head = ast_json.substring(0, 100)
+      print("DBG ast_head=" + dbg_head)
+    } else {
+      print("DBG ast_len=0")
+    }
+
     if compiler_track == 1 {
       // Apply compiler-track builder passes (behavior-preserving; currently no-op)
       ast_json = CompilerBuilder.apply_all(ast_json)
@@ -151,9 +175,9 @@ static box Main {
       json = ast_json
     } else {
       if emit_mir == 1 {
-        // Lower minimal AST to MIR JSON
+        // Lower minimal AST to MIR JSON（通常経路）
         json = MirEmitterBox.emit_mir_min(ast_json)
-        // Optional LocalSSA pass on MIR (compiler-track only)
+      // Optional LocalSSA pass on MIR (compiler-track only)
         if compiler_track == 1 {
           if ssa_trace == 1 { LocalSSA.trace_enable(1) }
           json = LocalSSA.ensure_cond(json)

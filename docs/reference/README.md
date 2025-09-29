@@ -23,5 +23,9 @@
 - BID-FFI（Box Interface Definition - Foreign Function Interface）
 - プラグイン開発ガイド
 
-## 📝 注意事項
+## 📋 クイックリファレンス
+- [構文早見表](quick/syntax-cheatsheet.md) - 基本構文・よくある間違い
+- [コードマップ](quick/code-map.md) - バックエンドVMのクイックガイド
+
+## � 注意事項
 このディレクトリのドキュメントは安定版です。開発中の仕様は`development/`を参照してください。

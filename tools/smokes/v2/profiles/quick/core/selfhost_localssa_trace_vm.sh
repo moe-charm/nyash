@@ -24,8 +24,8 @@ static box Main {
     j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":1}]},"
     j = j + "{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":0}]}]}]}"
     LocalSSA.trace_enable(1)
-    local _ = LocalSSA.ensure_cond(j)
-    print(LocalSSA.trace_summary())
+    local out = LocalSSA.ensure_cond(j)
+    print(LocalSSA.trace_summary_after(out))
     return 0
   }
 }
@@ -40,4 +40,3 @@ test "${val:-0}" -ge 1 || { echo "expected copies>=1, got: $val" >&2; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0
-

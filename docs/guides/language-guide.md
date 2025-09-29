@@ -2,7 +2,7 @@
 
 Start here to learn Nyash language basics and find deeper references.
 
-- Syntax Cheat Sheet: quick-reference/syntax-cheatsheet.md
+- Syntax Cheat Sheet: ../reference/quick/syntax-cheatsheet.md
 - Full Language Reference (2025): reference/language/LANGUAGE_REFERENCE_2025.md
 - Phase 12.7 Grammar (match / ternary / sugar):
   - Overview: development/roadmap/phases/phase-12.7/grammar-specs/README.md

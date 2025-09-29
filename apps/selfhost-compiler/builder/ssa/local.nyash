@@ -34,6 +34,19 @@ static box LocalSSA {
     }
     return out
   }
+  _count_occurs(hay, needle) {
+    if hay == null { return 0 }
+    if needle == null { return 0 }
+    local n = 0
+    local i = 0
+    loop(true) {
+      local p = hay.indexOf(needle)
+      if p < 0 { break }
+      n = n + 1
+      hay = hay.substring(p + needle.length(), hay.length())
+    }
+    return n
+  }
   _to_int(digits) {
     if digits == null { return 0 }
     local n = digits.length()
@@ -126,9 +139,11 @@ static box LocalSSA {
     // Trace locals (per-call)
     local t_branches = 0
     local t_copies = 0
+    // Block-id trace accumulator (per-call, persisted back at end)
+    local bid_csv = me._trace_copy_blocks_csv
+    if bid_csv == null { bid_csv = "" }
     // LocalSSA: ensure branch(cond) is materialized in the same block by inserting a copy
     if text == null { return text }
-    if me._trace_copy_blocks_csv == null { me._trace_copy_blocks_csv = "" }
     local cur = 0
     local out = text
     loop(true) {
@@ -163,8 +178,6 @@ static box LocalSSA {
       }
       // Insert copy at the start of the block
       // Trace: capture block id of this branch's block
-      local bid_csv = me._trace_copy_blocks_csv
-      if bid_csv == null { bid_csv = "" }
       local bid = 0
       // Find nearest '"id":<n>' before this block's instructions
       local id_pos = me._last_index_of(out.substring(0, insts_start), "\"id\":")
@@ -264,5 +277,14 @@ static box LocalSSA {
     local c = me._trace_last_copies
     local blk = me._trace_copy_blocks_csv
     return "branches=" + b + ", copies=" + c + ", blocks=[" + blk + "]"
+  }
+
+  // Post-hoc summary computed from a given JSON text (stateless helper)
+  trace_summary_after(text) {
+    if text == null { return "branches=0, copies=0, blocks=[]" }
+    local b = me._count_occurs(text, "\"op\":\"branch\"")
+    // handle both properly-quoted and over-escaped variants for copy op
+    local c = me._count_occurs(text, "\"op\":\"copy\"") + me._count_occurs(text, "\\\"op\\\":\\\"copy\\\"")
+    return "branches=" + b + ", copies=" + c + ", blocks=[]"
   }
 }

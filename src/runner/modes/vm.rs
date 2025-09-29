@@ -2,9 +2,7 @@ use super::super::NyashRunner;
 use nyash_rust::{
     ast::ASTNode,
     backend::VM,
-    box_factory::user_defined::UserDefinedBoxFactory,
     core::model::BoxDeclaration as CoreBoxDecl,
-    box_factory::SharedState,
     mir::MirCompiler,
     parser::NyashParser,
     runtime::{NyashRuntime, NyashRuntimeBuilder},
@@ -104,12 +102,20 @@ impl NyashRunner {
         // Using handling: collect and optionally merge AST preludes (dev profiles default ON)
         let mut code_ref: String = code.clone();
         let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        // Alias symbols collected from `using ... as Alias` (always collected regardless of AST merge)
         let mut alias_names: std::collections::HashSet<String> = std::collections::HashSet::new();
         let use_ast = crate::config::env::using_ast_enabled();
         if crate::config::env::enable_using() {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
                 Ok((clean, paths, alias_pairs)) => {
                     code_ref = clean;
+                    // Always record alias names for later desugaring of `Alias.X` in main AST.
+                    for (alias, _canon) in alias_pairs.iter() { alias_names.insert(alias.clone()); }
+                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                        if !alias_pairs.is_empty() {
+                            eprintln!("[using/alias] collected: {:?}", alias_pairs.iter().map(|(a, _)| a.clone()).collect::<Vec<_>>());
+                        }
+                    }
                     if !paths.is_empty() && !use_ast {
                         eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         process::exit(1);
@@ -120,13 +126,16 @@ impl NyashRunner {
                                 // Build alias map: canon_path -> alias
                                 use std::collections::HashMap;
                                 let mut alias_map: HashMap<String,String> = HashMap::new();
-                                for (a,p) in alias_pairs { alias_map.insert(p.clone(), a.clone()); alias_names.insert(a); }
-                                // Rename top symbols for preludes that were imported with alias
+                                for (a,p) in alias_pairs { alias_map.insert(p.clone(), a.clone()); }
+                                // Rename top symbols for preludes that were imported with alias (collision-guarded)
+                                let mut used_prefixed: std::collections::HashSet<String> = std::collections::HashSet::new();
                                 for (path, ast) in v.into_iter() {
                                     let canon = std::fs::canonicalize(&path).ok().map(|pb| pb.to_string_lossy().to_string()).unwrap_or(path.clone());
                                     if let Some(alias) = alias_map.get(&canon) {
-                                        let renamed = crate::runner::modes::common_util::resolve::alias_tools::rename_prelude_top_symbols(&ast, alias);
-                                        prelude_asts.push(renamed);
+                                        match crate::runner::modes::common_util::resolve::alias_tools::rename_with_collision_guard(&ast, alias, &mut used_prefixed, &canon) {
+                                            Ok(renamed) => prelude_asts.push(renamed),
+                                            Err(e) => { eprintln!("❌ using: {}", e); process::exit(1); }
+                                        }
                                     } else {
                                         prelude_asts.push(ast);
                                     }
@@ -157,10 +166,45 @@ impl NyashRunner {
         let ast = if use_ast && !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
+        // Optional trace: check presence of raw alias variables before desugar
+        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
+            fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
+                match n {
+                    nyash_rust::ast::ASTNode::Variable { name, .. } => aliases.contains(name),
+                    nyash_rust::ast::ASTNode::FieldAccess { object, .. } => contains_alias_var(object, aliases),
+                    nyash_rust::ast::ASTNode::MethodCall { object, arguments, .. } => {
+                        contains_alias_var(object, aliases) || arguments.iter().any(|a| contains_alias_var(a, aliases))
+                    }
+                    nyash_rust::ast::ASTNode::FunctionCall { arguments, .. } => arguments.iter().any(|a| contains_alias_var(a, aliases)),
+                    nyash_rust::ast::ASTNode::Program { statements, .. } => statements.iter().any(|s| contains_alias_var(s, aliases)),
+                    nyash_rust::ast::ASTNode::Assignment { target, value, .. } => contains_alias_var(target, aliases) || contains_alias_var(value, aliases),
+                    _ => false,
+                }
+            }
+            let has_alias_var = contains_alias_var(&ast, &alias_names);
+            if has_alias_var { eprintln!("[using/alias] pre-desugar: alias variable present in AST"); }
+        }
         // Alias desugar: transform `Alias.X` to `Alias_X` to match renamed preludes
         let ast = {
             crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &alias_names, true)
         };
+        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
+            fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
+                match n {
+                    nyash_rust::ast::ASTNode::Variable { name, .. } => aliases.contains(name),
+                    nyash_rust::ast::ASTNode::FieldAccess { object, .. } => contains_alias_var(object, aliases),
+                    nyash_rust::ast::ASTNode::MethodCall { object, arguments, .. } => {
+                        contains_alias_var(object, aliases) || arguments.iter().any(|a| contains_alias_var(a, aliases))
+                    }
+                    nyash_rust::ast::ASTNode::FunctionCall { arguments, .. } => arguments.iter().any(|a| contains_alias_var(a, aliases)),
+                    nyash_rust::ast::ASTNode::Program { statements, .. } => statements.iter().any(|s| contains_alias_var(s, aliases)),
+                    nyash_rust::ast::ASTNode::Assignment { target, value, .. } => contains_alias_var(target, aliases) || contains_alias_var(value, aliases),
+                    _ => false,
+                }
+            }
+            let has_alias_var = contains_alias_var(&ast, &alias_names);
+            if has_alias_var { eprintln!("[using/alias] post-desugar: alias variable still present in AST"); }
+        }
         let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
 
         // Prepare runtime and collect Box declarations for VM user-defined types
@@ -171,12 +215,17 @@ impl NyashRunner {
             }
             let rt = builder.build();
             self.collect_box_declarations(&ast, &rt);
-            // Register UserDefinedBoxFactory backed by the same declarations
-            let mut shared = SharedState::new();
-            shared.box_declarations = rt.box_declarations.clone();
-            let udf = Arc::new(UserDefinedBoxFactory::new(shared));
-            if let Ok(mut reg) = rt.box_registry.lock() {
-                reg.register(udf);
+            // Register UserDefinedBoxFactory backed by the same declarations (when available)
+            #[cfg(feature = "interpreter-legacy")]
+            {
+                use nyash_rust::box_factory::SharedState;
+                use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
+                let mut shared = SharedState::new();
+                shared.box_declarations = rt.box_declarations.clone();
+                let udf = Arc::new(UserDefinedBoxFactory::new(shared));
+                if let Ok(mut reg) = rt.box_registry.lock() {
+                    reg.register(udf);
+                }
             }
             rt
         };

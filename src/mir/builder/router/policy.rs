@@ -14,6 +14,16 @@ pub enum Route {
 /// - User boxes: names not ending with "Box" → BoxCall
 /// - Otherwise Unified
 pub fn choose_route(box_name: &str, method: &str, certainty: TypeCertainty, arity: usize) -> Route {
+    // Global override for experiments: force Unified route (env only; default OFF)
+    if std::env::var("NYASH_ROUTER_FORCE_UNIFIED").ok().as_deref() == Some("1") {
+        if router_trace_enabled() {
+            eprintln!(
+                "[router] route={:?} reason={} recv={} method={} arity={} certainty={:?}",
+                Route::Unified, "force_env", box_name, method, arity, certainty
+            );
+        }
+        return Route::Unified;
+    }
     let mut reason = "unified";
     let route = if box_name == "UnknownBox" {
         reason = "unknown_recv";

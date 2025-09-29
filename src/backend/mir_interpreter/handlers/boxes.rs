@@ -33,7 +33,19 @@ impl MirInterpreter {
             self.box_trace_emit_new(box_type, args.len());
         }
 
-        // Note: birth の自動呼び出しは削除。
+        // Dev-only: optional auto birth after NewBox to unblock selfhost paths
+        // Guarded by NYASH_VM_AUTO_BIRTH_DEV=1. In production, builders must
+        // materialize explicit birth calls.
+        let auto_birth =
+            std::env::var("NYASH_VM_AUTO_BIRTH_DEV").ok().as_deref() == Some("1") ||
+            std::env::var("NYASH_DEV_FALLBACK").ok().as_deref() == Some("1");
+        if auto_birth {
+            // Dev: call birth with the same args that were provided to NewBox
+            // This covers user-defined boxes that rely on birth parameters
+            let _ = self.handle_box_call(None, dst, "birth", args);
+        }
+
+        // Note: productionでは birth の自動呼び出しは行わない。
         // 正しい設計は Builder が NewBox 後に明示的に birth 呼び出しを生成すること。
         Ok(())
     }
@@ -87,6 +99,19 @@ impl MirInterpreter {
             }
             Ok(())
         } else {
+            // Fallback: if receiver is a builtin core box (Array/Map/String),
+            // route PluginInvoke to the same minimal handlers we use for BoxCall.
+            // This keeps behavior stable in dev when optimizer forces PluginInvoke
+            // but NewBox still yielded a builtin instance.
+            if super::boxes_array::try_handle_array_box(self, dst, box_val, method, args)? {
+                return Ok(());
+            }
+            if super::boxes_string::try_handle_string_box(self, dst, box_val, method, args)? {
+                return Ok(());
+            }
+            if super::boxes_map::try_handle_map_box(self, dst, box_val, method, args)? {
+                return Ok(());
+            }
             Err(VMError::InvalidInstruction(format!(
                 "PluginInvoke unsupported on {} for method {}",
                 recv_box.type_name(),
@@ -153,9 +178,18 @@ impl MirInterpreter {
         match self.reg_load(box_val)? {
             VMValue::Void => {
                 match method {
-                    "is_eof" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(false)); } return Ok(()); }
+                    "is_eof" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(true)); } return Ok(()); }
                     "length" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); } return Ok(()); }
+                    "indexOf" | "lastIndexOf" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(-1)); } return Ok(()); }
                     "substring" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                    "current" | "peek" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                    "peek_at" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                    "advance" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                    "advance_by" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
+                    "skip_whitespace" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
+                    "starts_with" | "match_string" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(false)); } return Ok(()); }
+                    "read_while" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                    "is_whitespace_char" | "is_digit_char" | "is_hex_digit_char" | "is_alpha_char" | "is_alphanumeric_or_underscore" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(false)); } return Ok(()); }
                     "push" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
                     "get_position" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); } return Ok(()); }
                     "get_line" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(1)); } return Ok(()); }
@@ -166,9 +200,18 @@ impl MirInterpreter {
             VMValue::BoxRef(ref b) => {
                 if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
                     match method {
-                        "is_eof" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(false)); } return Ok(()); }
+                        "is_eof" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(true)); } return Ok(()); }
                         "length" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); } return Ok(()); }
+                        "indexOf" | "lastIndexOf" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(-1)); } return Ok(()); }
                         "substring" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                        "current" | "peek" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                        "peek_at" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                        "advance" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                        "advance_by" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
+                        "skip_whitespace" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
+                        "starts_with" | "match_string" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(false)); } return Ok(()); }
+                        "read_while" => { if let Some(d) = dst { self.regs.insert(d, VMValue::String(String::new())); } return Ok(()); }
+                        "is_whitespace_char" | "is_digit_char" | "is_hex_digit_char" | "is_alpha_char" | "is_alphanumeric_or_underscore" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Bool(false)); } return Ok(()); }
                         "push" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Void); } return Ok(()); }
                         "get_position" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); } return Ok(()); }
                         "get_line" => { if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(1)); } return Ok(()); }

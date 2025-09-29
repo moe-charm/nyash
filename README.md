@@ -26,6 +26,7 @@ Quick pointers
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
 - Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
+ - VM engine toggle: `NYASH_VM_ENGINE={fallback|full}` (default: fallback). See `docs/guides/runtime-architecture.md`.
 
 Dev shortcuts (Operator Boxes & JSON smokes)
 - One‑shot JSON verification (dev, Operator Boxes ON): `./tools/opbox-json.sh`
@@ -54,7 +55,7 @@ MIR mode note: Default PHI behavior
 - Phase‑15 ships PHI‑ON by default. Builders emit SSA `Phi` nodes at merges for loops, break/continue, and structured control flow.
 - Legacy PHI‑off fallback: set `NYASH_MIR_NO_PHI=1` (pair with `NYASH_VERIFY_ALLOW_NO_PHI=1` if you need relaxed verification).
 - See `docs/reference/mir/phi_policy.md` for rationale and troubleshooting.
-Self‑hosting one‑pager: `docs/how-to/self-hosting.md`.
+Self‑hosting one‑pager: `docs/guides/how-to/self-hosting.md`.
 ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall.md`.
 
 ### Minimal ENV (VM vs LLVM harness)
@@ -123,7 +124,7 @@ Specs & Constraints
 
 <a id="self-hosting"></a>
 ## 🧪 Self‑Hosting (Dev Focus)
-- Guide: `docs/how-to/self-hosting.md`
+- Guide: `docs/guides/how-to/self-hosting.md`
 - Minimal E2E: `./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - JSON (Operator Boxes, dev): `./tools/opbox-json.sh` / `./tools/opbox-quick.sh`

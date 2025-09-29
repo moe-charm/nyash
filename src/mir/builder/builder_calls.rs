@@ -334,6 +334,10 @@ impl super::MirBuilder {
         target: CallTarget,
         args: Vec<ValueId>,
     ) -> Result<(), String> {
+        // DEPRECATION (Phase‑in): prefer `emit_unified_call` for new code paths.
+        // This legacy path remains for compatibility while we converge all
+        // call emission (Global/Extern/Method/Constructor) through the unified
+        // callee model and RouterPolicy. Behavior is unchanged.
         match target {
             CallTarget::Method { receiver, method, box_type: _ } => {
                 // LEGACY PATH (after unified migration):
@@ -624,6 +628,28 @@ impl super::MirBuilder {
         let mut arg_values = Vec::new();
         for a in args {
             arg_values.push(self.build_expression(a)?);
+        }
+
+        // Dev-only safety: inside a static box context, allow unqualified helper calls
+        // like `_foo(x)` to be resolved as `Class._foo/arity(x)`.
+        // This guards against accidental desugaring that strips `me.` or alias prefixes.
+        if std::env::var("NYASH_DEV").ok().as_deref() == Some("1") {
+            if let Some(cls_name) = self.current_static_box.clone() {
+                if name.starts_with('_') && !name.contains('.') {
+                    let result_id = self.value_gen.next();
+                    let fun_name = format!("{}.{}{}", cls_name, name, format!("/{}", arg_values.len()));
+                    let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fun_name)?;
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(result_id),
+                        func: fun_val,
+                        callee: None,
+                        args: arg_values,
+                        effects: EffectMask::READ.add(Effect::ReadHeap),
+                    })?;
+                    self.annotate_call_result_from_func_name(result_id, &fun_name);
+                    return Ok(result_id);
+                }
+            }
         }
 
         // Special-case: global str(x) → x.str() に正規化（内部は関数へ統一される）

@@ -37,6 +37,14 @@ impl NyashRunner {
         for t in ["FileBox", "TOMLBox"] { if !override_types.iter().any(|x| x == t) { override_types.push(t.into()); } }
         std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
 
+        // Rebuild unified box registry cache to reflect env-driven overrides
+        // (ArrayBox/MapBox/FileBox/TOMLBox move to plugin providers when available)
+        {
+            let reg_arc = runtime::unified_registry::get_global_unified_registry();
+            let mut guard = reg_arc.lock().expect("unified registry lock");
+            guard.rebuild_cache();
+        }
+
         // Optional Ny script plugins loader (best-effort)
         if groups.load_ny_plugins || std::env::var("NYASH_LOAD_NY_PLUGINS").ok().as_deref() == Some("1") {
             if let Ok(text) = std::fs::read_to_string("nyash.toml") {

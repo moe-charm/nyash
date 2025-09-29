@@ -3,7 +3,7 @@
 This is the entry point for Nyash language documentation.
 
 - Full Language Reference (2025): reference/language/LANGUAGE_REFERENCE_2025.md
-- Syntax Cheat Sheet: quick-reference/syntax-cheatsheet.md
+- Syntax Cheat Sheet: ../quick/syntax-cheatsheet.md
 - Phase 12.7 Grammar Specs (ternary, sugar; peek → match に統合):
   - Overview: development/roadmap/phases/phase-12.7/grammar-specs/README.md
   - Token/Grammar: development/roadmap/phases/phase-12.7/ancp-specs/ANCP-Token-Specification-v1.md

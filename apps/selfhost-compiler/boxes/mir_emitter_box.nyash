@@ -80,16 +80,19 @@ static box MirEmitterBox {
         // op
         local opk_pos = me._index_of_from(ast_json, "\"op\":\"", q)
         if opk_pos >= 0 {
-          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 7)
-          local opk = ast_json.substring(opk_pos + 7, opk_end)
+          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 6)
+          local opk = ast_json.substring(opk_pos + 6, opk_end)
           local kind = me._map_binop(opk)
           if kind != "" {
-            // lhs int
-            local lhs_pos = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
-            local rhs_pos = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
-            if lhs_pos >= 0 && rhs_pos >= 0 {
-              local lhs_digits = me._read_digits(ast_json, lhs_pos + 29)
-              local rhs_digits = me._read_digits(ast_json, rhs_pos + 29)
+            // lhs/rhs int (seek dynamic start after '"value":')
+            local lhsp = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
+            local rhsp = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
+            if lhsp >= 0 && rhsp >= 0 {
+              local lval = me._index_of_from(ast_json, "\"value\":", lhsp)
+              local rval = me._index_of_from(ast_json, "\"value\":", rhsp)
+              if lval >= 0 && rval >= 0 {
+                local lhs_digits = me._read_digits(ast_json, lval + 8)
+                local rhs_digits = me._read_digits(ast_json, rval + 8)
               if lhs_digits != "" && rhs_digits != "" {
                 local a = me._str_to_int(lhs_digits)
                 local b = me._str_to_int(rhs_digits)
@@ -111,15 +114,18 @@ static box MirEmitterBox {
       if q >= 0 {
         local opk_pos = me._index_of_from(ast_json, "\"op\":\"", q)
         if opk_pos >= 0 {
-          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 7)
-          local opk = ast_json.substring(opk_pos + 7, opk_end)
+          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 6)
+          local opk = ast_json.substring(opk_pos + 6, opk_end)
           local kind = me._map_cmp(opk)
           if kind != "" {
-            local lhs_pos = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
-            local rhs_pos = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
-            if lhs_pos >= 0 && rhs_pos >= 0 {
-              local lhs_digits = me._read_digits(ast_json, lhs_pos + 29)
-              local rhs_digits = me._read_digits(ast_json, rhs_pos + 29)
+            local lhsp = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
+            local rhsp = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
+            if lhsp >= 0 && rhsp >= 0 {
+              local lval = me._index_of_from(ast_json, "\"value\":", lhsp)
+              local rval = me._index_of_from(ast_json, "\"value\":", rhsp)
+              if lval >= 0 && rval >= 0 {
+                local lhs_digits = me._read_digits(ast_json, lval + 8)
+                local rhs_digits = me._read_digits(ast_json, rval + 8)
               if lhs_digits != "" && rhs_digits != "" {
                 local a = me._str_to_int(lhs_digits)
                 local b = me._str_to_int(rhs_digits)
@@ -150,7 +156,8 @@ static box MirEmitterBox {
                 s = s + "}]}]}"
                 return s
               }
-          }
+              }
+            }
         }
       }
       }
@@ -201,7 +208,26 @@ static box MirEmitterBox {
     // Try richer patterns first; fallback to Return(Int)
     local try_rich = me._emit_from_stage1_try(ast_json)
     if try_rich != null { return try_rich }
-    local retv = me._extract_return_int(ast_json)
+    // Inline minimal Return(Int) extraction to avoid nested call issues in some parsers
+    local retv = 0
+    if ast_json != null {
+      local p = ast_json.lastIndexOf("\"type\":\"Return\"")
+      if p < 0 { p = ast_json.indexOf("\"type\":\"Return\"") }
+      if p >= 0 {
+        local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
+        if q >= 0 {
+          q = q + 23
+          local n = ast_json.length()
+          local i = q
+          local s = ""
+          loop(i < n) {
+            local ch = ast_json.substring(i, i+1)
+            if ch >= "0" && ch <= "9" { s = s + ch i = i + 1 } else { break }
+          }
+          if s.length() > 0 { retv = me._str_to_int(s) }
+        }
+      }
+    }
     local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
     s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + retv + "},\\\"dst\\\":1},"
     s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":1}"

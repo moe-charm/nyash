@@ -30,10 +30,10 @@ using selfhost.vm.mir_min as MirVmMin
 static box Main {
   main() {
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
-    j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":1,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":${a}}},"
-    j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":2,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":${b}}},"
-    j = j + "{\\\"op\\\":\\\"binop\\\",\\\"op_kind\\\":\\\"${kind}\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
-    j = j + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":3}] }]}]}"
+    j = j + "{\\"op\\":\\"const\\",\\"dst\\":1,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":${a}}},"
+    j = j + "{\\"op\\":\\"const\\",\\"dst\\":2,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":${b}}},"
+    j = j + "{\\"op\\":\\"binop\\",\\"op_kind\\":\\"${kind}\\",\\"lhs\\":1,\\"rhs\\":2,\\"dst\\":3},"
+    j = j + "{\\"op\\":\\"ret\\",\\"value\\":3}] }]}]}"
     local v = MirVmMin._run_min(j)
     print(MirVmMin._int_to_str(v))
     return 0
@@ -47,4 +47,3 @@ done
 
 rm -rf "$TMP_DIR"
 exit 0
-

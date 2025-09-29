@@ -156,7 +156,13 @@ impl UnifiedBoxRegistry {
     }
 
     /// Rebuild type cache based on current policy
-    fn rebuild_cache(&mut self) {
+    /// Rebuild type cache based on current policy and environment
+    ///
+    /// Public because runner may update environment toggles
+    /// (e.g., NYASH_USE_PLUGIN_BUILTINS / NYASH_PLUGIN_OVERRIDE_TYPES)
+    /// after the registry has been initialized. Rebuilding ensures newly
+    /// allowed plugin-backed core boxes (ArrayBox/MapBox/...) are picked up.
+    pub fn rebuild_cache(&mut self) {
         // Clear existing cache
         let mut cache = self.type_cache.write().unwrap();
         cache.clear();

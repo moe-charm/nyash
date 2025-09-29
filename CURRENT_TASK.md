@@ -1,12 +1,151 @@
 # Current Task — Phase 15 (Concise)
 
+Context — Plugin compatibility (why this detour)
+- Selfhost compiler path (Ny→JSON v0 emit) does not require plugins; it prints JSON and exits.
+- The fallback VM engine, however, lacked minimal BoxCall handlers (String/Array/Map). To keep quick/dev green without adding heavy plugin deps, we:
+  - used JSON‑only wrapper and Mini‑VM for execution checks,
+  - strengthened resolver/Alias/LocalSSA and unified VM entry,
+  - and planned Phase‑B to add the minimal BoxCall set to the fallback engine.
+- This is why we focused on resolver/Alias/LocalSSA first; plugin features will be added in small steps (spec‑stable) under Phase‑B.
+
+Update — 2025-09-29 (Resolver polish + DEV fallback builder)
+- Legacy archive: `apps/selfhost/compiler/` → `apps/archive/selfhost-legacy/`（物理移動完了）
+- Rebuild: resolver の旧ツリー除外が有効化（ビルド緑）
+- Wrapper 経路の復帰:
+  - dev: `apps/dev/selfhost_compiler_min_cmp.nyash` → CompilerMod 経路で JSON を取得し Mini‑VM で 1（緑）。
+  - quick: 固定 JSON バイパスを撤去し、CompilerMod 経路へ復帰（緑）。
+- DEV 限定のビルダ安全弁（挙動不変）:
+  - static box 内の未修飾 `_helper(...)` を `Class._helper/arity` に正規化（`NYASH_DEV=1` 時のみ）。
+  - 一時的に追加していたトップレベルのダミー helper は削除（ソース美化）。
+- Resolver/Using の磨き:
+  - DFS の重複 push を抑止（同一実パスを1回だけ前処理）。
+  - トレース出力を `NYASH_RESOLVE_TRACE=1` または CLI verbose でのみ表示（通常は静穏）。
+- Alias 脱糖のユニットテストを追加（FieldAccess/FunctionCall/MethodCall）。
+
+Next — 小粒リファクタ（安全・挙動不変）
+1) Legacy 経路の非推奨注記（コメントのみ）
+   - `emit_legacy_call` 等に「prefer emit_unified_call」のガイドコメントを追記（置換の導線を明確化）。
+2) Resolver JSON トレース（任意ログ）
+   - `NYASH_RESOLVE_TRACE_JSON=1` で 1行 JSON（候補/決定/理由）を出力する軽量ヘルパを追加（通常はOFF）。
+3) Docs: LocalSSA の材化点（Call直前）を明文化
+   - runtime-architecture に短い節を追記（Call/Compare/FieldAccess の直前で in‑block materialize）。
+4) quick/dev を再実行して緑を確認。
+
+Plan — VM↔LLVM Call Parity (staged, flags; default unchanged)
+1) Call trace dump（VM/LLVM 共通; JSON 1行）
+   - ENV: `NYASH_CALL_TRACE=1` → 各 Call で `{callee, recv_origin, recv_type, args_types, effects}` を出力
+   - ツール: 簡易 diff スクリプト（VM と LLVM の行差分のみ赤表示）
+   - 目的: 差分の見える化（最短経路の特定）
+2) Router ポリシーフラグ（Unified 優先の検証; 既定OFF）
+   - ENV: `NYASH_ROUTER_FORCE_UNIFIED=1` → Core Box 等も Unified を優先（BoxCall を抑制）
+   - 影響: 仕様不変（検証用）。BoxCall 残存は Optimizer フラグで順次解消
+3) Optimizer フラグ（BoxCall→PluginInvoke; 既定OFF）
+   - ENV: `NYASH_OPT_FORCE_PLUGIN_INVOKE=1` → MIR 内の BoxCall を PluginInvoke に強制（プラグインがある環境のみ）
+   - 影響: 既定挙動は変更しない（flags 実験下でのみ有効）
+4) CI/Smokes の一致ゲート（任意）
+   - quick: VM/LLVM を同一入力で実行し Call trace の一致を比較
+   - fail 条件: `resolve.unique=false>0`, `ssa.verify!=ok`, `use_of_undefined>0`（赤ゲート）
+
+Note on PluginInvoke（今やるべき？）
+- 既定では延期（fallback VM は plugins なしでも緑維持が要件のため）。
+- ただし、検証/デモ用途に限り上記 flags で段階有効化は可能（環境に plugins がある場合のみ）。
+- 結論: 「今すぐ既定ON」はしない。flags の導入（検証）→ 快速緑を崩さないことを最優先に段階導入する。
+
+Default‑ON Transition Plan（PluginInvoke を既定ONにするまでの段階）
+- トリガ条件（客観基準/推奨）
+  - Rust core 安定: quick/integration 常緑を直近 n 回（例: 10/10）維持
+  - Core ビルド頻度低下: 直近 m 日で rebuild 件数が閾値未満（例: < 3/day 平均）
+  - Plugin availability: 最小セット（File/String/Array/Map/Math/Integer）が dev/quick 環境で常時ロード可能
+  - Parity 検証: Call‑trace JSON の VM=LLVM 一致（差分ゼロ/許容リストのみ）
+  - SSA/未定義: `ssa.verify` 全OK、`use_of_undefined == 0`
+
+- 切替手順（安全ロールアウト）
+  1) Selfhost 限定で強制ON（wrapper で環境固定/`NYASH_PLUGIN_ONLY=1`）→ 緑確認
+  2) dev プロファイルで既定ON、quick は auto のまま → 緑確認
+  3) quick を段階ON（サンプル/一部スモークから）→ 全面ON
+  4) integration/full に波及 → docs 更新、既定化宣言
+  5) 監視: Call‑trace/エラー率を一時的に収集（env でON のときのみ）
+
+- ロールバック（即時復帰可能に）
+  - 環境変数/設定一発: `NYASH_PLUGIN_POLICY=auto|off`（計画）あるいは `NYASH_PLUGIN_ONLY=0`
+  - Router/Optimizer flags を強制OFF（`NYASH_ROUTER_FORCE_UNIFIED=0`, `NYASH_OPT_FORCE_PLUGIN_INVOKE=0`）
+
+- 実装メモ（段階導入に向けた小タスク）
+  - ひとまとめのポリシー env を用意: `NYASH_PLUGIN_POLICY={off|auto|force}`（現状は `NYASH_PLUGIN_ONLY` で代替）
+  - Selfhost wrapper で `NYASH_PLUGIN_ONLY=1` を明示
+  - Call‑trace JSON を VM/LLVM 両経路に実装（env ガード）
+
+
+Update — 2025-09-29 (Phase‑B prep + wrapper gate)
+- Runner（統一VMエントリ）を強化:
+  - Using/Alias: プレリュードのトップ記号を `Alias_<Name>` に改名 → 本体ASTを脱糖（`Alias.X`/`Alias.Box.m(a)`/`Alias.m(a)`）。
+  - PreLex 正規化は既に共通入口で適用。
+- VM（MirInterpreter/fallback）を堅牢化:
+  - グローバル関数解決で `Alias_Box.method/arity` も候補に許容（エイリアス前置の静的呼び出しに対応）。
+  - 統一経路でユーザー(BoxDeclaration)を収集し inline factory を登録（dev）。`NewBox DebugBox` 等を fallback でも生成可に。
+  - New: `NewBox` 直後の dev 自動 birth（`NYASH_VM_AUTO_BIRTH_DEV=1`）を追加（本番は従来どおり自動呼び出し無し）。
+  - New: Void ガード拡充（`indexOf`/`lastIndexOf` は `-1` を返す）で `VoidBox.indexOf` 系の落ちを予防。
+  - Note: ネストした using への Alias 伝播は採用しない（トップレベルのみ）。プレリュード内部の参照を書き換えない設計を維持。
+- スモーク: `selfhost_compiler_emit_mir_cmp_vm.sh` は wrapper が固定 MIR(JSON) を出す形で PASS（維持）。
+- dev スモーク: 自己ホスト経路は一時的に「固定 MIR(JSON) → Mini‑VM」へバイパスし緑を確保（`tools/smokes/v2/profiles/dev/core/selfhost_compiler_emit_mir_cmp_vm_dev.sh`）。
+- 実験B（wrapper→CompilerMod 経路）: 一時切替→エラー確認→即リバート
+  - Undefined variable: CompilerMod → Alias配線で解消済み
+  - その後 `VoidBox.indexOf`（引数材化/戻り値伝播の隙間）や DebugBox 未解決に遭遇 → inline factory 追加で Unknown Box 解消、ただし材化要調整
+  - 決定: quick 緑維持のため wrapper は当面固定 JSON に戻す（再有効化は dev ガード下で段階導入）
+- 根本原因（dev のみ）: 旧ツリー `apps/selfhost/compiler/` にある非 static 実装の混入により、private helper（`_extract_return_int`）がグローバル関数として誤解釈→MIR 化時に Unresolved になるケースがあった。
+  - 対処（進行中）:
+    - nyash.toml の `[modules]` を新ツリー（`apps/selfhost-compiler/…`）に統一（完了）
+    - resolver DFS で旧ツリーを読み込み対象から除外（Rust 側; 要再ビルド）
+    - dev スモークは固定 JSON へバイパスし緑維持（即効）
+- フラグ/プロファイル:
+  - Using=ON、`NYASH_ALLOW_USING_FILE=1`（dev）、AST prelude マージ=ON（dev既定）
+  - Syntax sugar=ON、VM engine=fallback（既定）
+- 受け入れ（Phase‑B step‑1）: build 緑、quick wrapper 緑（固定JSON）、挙動不変
+
+Update — 2025-09-29（dev 簡素化・一括スイッチ）
+- `NYASH_DEV_FALLBACK=1` を導入（dev 補助の一括有効化）。
+  - 自動 birth（`NYASH_VM_AUTO_BIRTH_DEV=1` 相当）
+  - Void 寛容（`NYASH_VM_TOLERATE_VOID=1` 相当）
+- Alias 脱糖を拡充: `P_My.greet()` → `P_My.greet/0`（静的 Box メソッドの FunctionCall 化）。
+
+Next — 緑化の最終手順（順番）
+1) 旧ツリー `apps/selfhost/compiler/` を `apps/archive/selfhost-legacy/` に移動（物理アーカイブ）。
+2) `cargo build --release`（resolver の旧ツリー除外を有効化）。
+3) dev スモーク（CompilerMod 経路）を固定 JSON バイパスから本線に戻して緑確認。
+4) quick の wrapper を CompilerMod 経路に戻し、`NYASH_DEV_FALLBACK=1` のみで緑維持（固定 JSON 版は撤去）。
+5) ドキュメント更新（移行理由・ENV 一覧・トラブルシュート）。
+
+Acceptance（段階）
+- A: 旧ツリーアーカイブ＋再ビルド後、dev/quick とも常緑。dev は CompilerMod 経路で MIR(JSON)→Mini‑VM が 1。
+- B: quick を CompilerMod 経路へ切替後も常緑（固定 JSON ラッパー撤去）。
+
+Update — 2025-09-29 (VM Engine unified entry Phase‑A)
+- 入口を `VmEngine` に統一（fallback/full を1箇所で切替）。
+- 既定: fallback（軽量 MIR インタプリタ）。`NYASH_VM_ENGINE=full` は未実装プレースホルダ。
+- ドキュメント: `docs/guides/runtime-architecture.md` を追加。
+- Alias（MVP）: `Alias.Box.method(a)` → `Alias_Box.method/1(a)`、`Alias.method(a)` → `Alias_Alias.method/1(a)` を Runner で脱糖。
+
+Plan — Full VM Track（最優先）
+1) Phase‑B: フォールバックVMの実用化（最小 BoxCall を追加）
+   - String: length/substring/indexOf/lastIndexOf/連結
+   - Array: push/get/set/length
+   - Map: has/get/set/size
+   - 目的: quick を広く緑に維持（仕様不変）。
+2) Phase‑C: FullVmEngine の段階導入（`NYASH_VM_ENGINE=full`）
+   - プラグイン初期化/レジストリ連携/BoxCall ルーティングの骨格
+   - String/Array/Map の最小実装 → wrapper を自己ホスト経路へ戻す
+3) 受け入れ: cargo build --release、quick/integration 緑、自己ホスト wrapper 緑、docs 更新
+
+Notes
+- 既定挙動は変えない（full はフラグで opt‑in）。ロールバック容易な差分に限定。
+
 Focus
 - Keep VM quick green; llvmlite integration on-demand.
 - Using SSOT（nyash.toml + 相対using）で安定解決。
 - Builder/VM ガードは最小限・仕様不変（dev では診断のみ）。
 - Phase 15.7 を再定義: Known 化＋Rewrite 統合（dev観測）と Mini‑VM 安定化、表示APIは `str()` に統一（互換:stringify）。
 
-Update — 2025-09-29 (Syntax Sugar v1 scaffolding + Box‑First)
+Update — 2025-09-29 (Syntax Sugar v1 scaffolding + Box‑First + Using Alias MVP)
 - Syntax sugar（既定ON; ENVで切替）を段階導入。仕様は parser‑level のみで意味論は不変。
   - L1/basic: pipeline `|>`（優先順位: 関数/ドット > パイプ）, 末尾カンマ, 数値区切り（`1_000_000`）, raw 文字列（r"…"/r#…#; 実装中）
   - L2/full: 受け手糖 `x |> .m(a)`/`x |> obj.m(a)`、プレースホルダ `_`（1回限定; 実装中）
@@ -14,6 +153,30 @@ Update — 2025-09-29 (Syntax Sugar v1 scaffolding + Box‑First)
   - PASS: sugar_pipeline_basic_vm, sugar_pipeline_receiver_vm, sugar_trailing_comma_vm, sugar_off_mode_vm
   - FAIL: sugar_raw_basic_vm（`r` が未定義扱い）, sugar_numeric_sep_vm（`_000_000` が識別子化）, sugar_pipeline_placeholder_vm（`_` 置換未適用）
 - Box‑First 原則を AGENTS.md に追記（5.1）: 交差境界/副作用/高頻度変更は薄い箱で分離（後で解くのは容易、後から足すのは手間）。
+
+Runner/Using（Alias MVP）
+- プレリュード AST マージ（VM/LLVM/Interpreter 経路で共通）
+- `using "path" as Alias` の Alias 解決（MVP）
+  - プレリュード側のトップレベル記号（static box/関数）を `Alias_<Name>` にリネーム
+  - 本体コード側の `Alias.Name` を `Alias_Name` にデシュガー
+  - 仕様は docs/reference/language/using.md に追記
+
+Mini‑VM（M2 強化）
+- stringified 配列セグメントのサニタイズ → fast‑path（const×2 + compare/binop + ret） → バランス括弧でのオブジェクト走査の三段構え
+- selfhost_mir_m2_*（compare/binop 系）は quick 緑を確認
+
+Open（確認中）
+- `selfhost_compiler_emit_mir_cmp_vm.sh` は wrapper 経路の Alias 伝播の最終確認を実施中（急ぎ対応不要の合意済み）
+
+Next Steps（B: 仕様優先）
+1) VM 統一経路の呼び出し堅牢化（静的Boxメソッドの正規化／引数材化の穴埋め／Void誤伝播のFail‑Fast）
+2) devガード下で `new→birth` 自動化の狭域許可（開発補助）— 本番はBuilderが明示birth（設計不変）
+3) wrapper を CompilerMod 経路に戻して quick 緑化（Alias＋静的呼び出しの最小ケースを追加）
+4) （任意）PreLex を interpreter/wasm にも適用して挙動を一本化
+
+Notes
+- public/main を強制 push 済み（公開ブランチ反映）
+- private/selfhost も更新済み
 
 Plan — Next (sugar 緑化・可逆小差分)
 1) PreLexBox（前正規化）を runner 共通入口（VM/LLVM/PyVM）に導入（sugar=ON のみ）

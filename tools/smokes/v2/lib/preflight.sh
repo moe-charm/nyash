@@ -100,9 +100,14 @@ preflight_nyash_build() {
     version_output=$("$nyash_exe" --version 2>&1)
 
     if echo "$version_output" | grep -q "features.*llvm"; then
-        echo "[INFO] LLVM backend: Available" >&2
+        echo "[INFO] LLVM backend (Rust/inkwell): Available" >&2
     else
-        echo "[WARN] LLVM backend: Not available in this build" >&2
+        # If Python harness (llvmlite) is present, treat LLVM as available via harness
+        if [ -f "src/llvm_py/llvm_builder.py" ] && command -v python3 >/dev/null 2>&1 && python3 -c "import llvmlite" 2>/dev/null; then
+            echo "[INFO] LLVM backend: Available via Python llvmlite harness" >&2
+        else
+            echo "[WARN] LLVM backend: Not available in this build" >&2
+        fi
     fi
 
     if echo "$version_output" | grep -q "features.*cranelift"; then

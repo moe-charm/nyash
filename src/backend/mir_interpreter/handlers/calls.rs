@@ -24,6 +24,62 @@ impl MirInterpreter {
         callee: &Callee,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+        // Optional: emit one-line JSON call trace for parity checks
+        if std::env::var("NYASH_CALL_TRACE").ok().as_deref() == Some("1") {
+            fn esc(s: &str) -> String { s.replace('"', "\\\"") }
+            let bb = self.last_block.map(|b| b.as_u32()).unwrap_or(0);
+            match callee {
+                Callee::Global(name) => {
+                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Global:");
+                    out.push_str(&esc(name));
+                    out.push_str("\",\"argc\":" ); out.push_str(&args.len().to_string());
+                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
+                    out.push('}');
+                    eprintln!("{}", out);
+                }
+                Callee::Method { box_name, method, receiver, .. } => {
+                    let recv_id = receiver.map(|v| v.as_u32()).unwrap_or(0);
+                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Method:");
+                    out.push_str(&esc(box_name)); out.push('.'); out.push_str(&esc(method));
+                    out.push_str("/" ); out.push_str(&args.len().to_string());
+                    out.push_str("\",\"recv\":" ); out.push_str(&recv_id.to_string());
+                    out.push_str(",\"argc\":" ); out.push_str(&args.len().to_string());
+                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
+                    out.push('}');
+                    eprintln!("{}", out);
+                }
+                Callee::Constructor { box_type } => {
+                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Ctor:");
+                    out.push_str(&esc(box_type));
+                    out.push_str("\",\"argc\":" ); out.push_str(&args.len().to_string());
+                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
+                    out.push('}');
+                    eprintln!("{}", out);
+                }
+                Callee::Closure { .. } => {
+                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Closure\",\"argc\":");
+                    out.push_str(&args.len().to_string());
+                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
+                    out.push('}');
+                    eprintln!("{}", out);
+                }
+                Callee::Value(_fid) => {
+                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Value\",\"argc\":");
+                    out.push_str(&args.len().to_string());
+                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
+                    out.push('}');
+                    eprintln!("{}", out);
+                }
+                Callee::Extern(name) => {
+                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Extern:");
+                    out.push_str(&esc(name));
+                    out.push_str("\",\"argc\":" ); out.push_str(&args.len().to_string());
+                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
+                    out.push('}');
+                    eprintln!("{}", out);
+                }
+            }
+        }
         match callee {
             Callee::Global(func_name) => self.execute_global_function(func_name, args),
             Callee::Method { box_name, method, receiver, certainty: _, } => {
@@ -212,7 +268,10 @@ impl MirInterpreter {
                 for k in self.functions.keys() {
                     if k.ends_with(&tail) {
                         if let Some(ref bx) = maybe_box {
-                            if k.starts_with(&format!("{}.", bx)) { cands.push(k.clone()); }
+                            // Accept either exact box prefix "Box." or alias-prefixed form "Alias_Box."
+                            if k.starts_with(&format!("{}.", bx)) || k.starts_with(&format!("{}_", bx)) {
+                                cands.push(k.clone());
+                            }
                         } else {
                             cands.push(k.clone());
                         }
