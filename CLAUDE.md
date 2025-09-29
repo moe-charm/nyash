@@ -20,6 +20,15 @@
 - **Core Box統一化**: 3-tier → 2-tier 統一完了
 - **MIR Callee型革新**: 型安全な関数解決システム実装済み
 
+#### 🔧 **現在の作業**: Mini-VM フォールバック経路修正
+- **問題**: `selfhost_mir_m2_compare_neg_binop_Lt` テスト失敗（期待1→実3）
+- **根本原因**: フォールバック経路が ret 命令を見落として `_extract_first_const_i64` にフォールバック
+- **修正計画**: 3段階アプローチ
+  - **Phase 1（緊急）**: フォールバック経路に ret 検出ロジック追加（最小変更）
+  - **Phase 2（最適化）**: inst3早期評価パスを binop 含むケースに拡張
+  - **Phase 3（長期）**: Mini-VM全体リファクタリング（Phase 15完了後）
+- **ファイル**: `apps/selfhost/vm/boxes/mir_vm_min.nyash`（100% Nyashスクリプトの問題）
+
 #### 🤝 **AI協働開発体制 - 新時代突入！**
 ```
 Claude Sonnet 4.5: 実装・実行・長時間作業の天才

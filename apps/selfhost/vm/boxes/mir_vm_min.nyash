@@ -13,7 +13,7 @@
 
 static box MirVmMin {
   // Dev trace hook (no-op; enable by converting to print in local dev)
-  _tprint(msg) { print(msg) }
+  _tprint(msg) { }
   // Public entry used by parity tests (calls into minimal runner)
   run(mjson) {
     local v = me._run_min(mjson)
@@ -402,6 +402,7 @@ static box MirVmMin {
       }
       // Fallback: object scan within the block (balanced braces)
       local moved = 0
+      local found_ret = 0
       local inst_seg = mjson.substring(pos, block_end)
       local p = 0
       loop(true) {
@@ -413,71 +414,65 @@ static box MirVmMin {
 
         // dispatch by op name (v0/v1 tolerant)
         local opname = me._find_str_in(seg, "\"op\":\"")
-        me._tprint("[op] " + opname)
         if opname == "const" {
           local cdst = me._find_int_in(seg, "\"dst\":")
           local cval = me._find_int_in(seg, "\"value\":{\"type\":\"i64\",\"value\":")
           if cdst != null and cval != null { me._set_map(regs, "" + cdst, cval) }
-        } else {
-          if opname == "copy" {
-            local cdst = me._find_int_in(seg, "\"dst\":")
-            local csrc = me._find_int_in(seg, "\"src\":")
-            if cdst != null and csrc != null {
-              local v = me._get_map(regs, "" + csrc)
-              me._set_map(regs, "" + cdst, v)
-            }
-          } else {
-          if opname == "binop" {
-            local bdst = me._find_int_in(seg, "\"dst\":")
-            local bkind = me._find_str_in(seg, "\"op_kind\":\"")
-            if bkind == "" { bkind = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
-            local blhs = me._find_int_in(seg, "\"lhs\":")
-            local brhs = me._find_int_in(seg, "\"rhs\":")
-            if bdst != null and blhs != null and brhs != null {
-              local a = me._get_map(regs, "" + blhs)
-              local b = me._get_map(regs, "" + brhs)
-              local r = me._eval_binop(bkind, a, b)
-              me._set_map(regs, "" + bdst, r)
-            }
-          } else {
-            if opname == "compare" {
-              local kdst = me._find_int_in(seg, "\"dst\":")
-              local kkind = me._find_str_in(seg, "\"cmp\":\"")
-              if kkind == "" { kkind = me._map_cmp_symbol(me._find_str_in(seg, "\"operation\":\"")) }
-              local klhs = me._find_int_in(seg, "\"lhs\":")
-              local krhs = me._find_int_in(seg, "\"rhs\":")
-              if kdst != null and klhs != null and krhs != null {
-                local a = me._get_map(regs, "" + klhs)
-                local b = me._get_map(regs, "" + krhs)
-                local r = me._eval_cmp(kkind, a, b)
-                me._set_map(regs, "" + kdst, r)
-              }
-            } else {
-              if opname == "jump" {
-                local tgt = me._find_int_in(seg, "\"target\":")
-                if tgt != null { bb = tgt  scan = block_end  moved = 1  break }
-              } else {
-                if opname == "branch" {
-                  local cond = me._find_int_in(seg, "\"cond\":")
-                  local then_id = me._find_int_in(seg, "\"then\":")
-                  local else_id = me._find_int_in(seg, "\"else\":")
-                  local cval = 0
-                  if cond != null { cval = me._get_map(regs, "" + cond) }
-                  if cval != 0 { bb = then_id } else { bb = else_id }
-                  scan = block_end
-                  moved = 1
-                  break
-                } else {
-                  if opname == "ret" {
-                    local rv = me._find_int_in(seg, "\"value\":")
-                    if rv == null { rv = 0 }
-                    me._tprint("[ret] rv=" + me._int_to_str(rv))
-                    return me._get_map(regs, "" + rv)
-                  }
-                }
-              }
-            }
+        }
+        if opname == "copy" {
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local csrc = me._find_int_in(seg, "\"src\":")
+          if cdst != null and csrc != null {
+            local v = me._get_map(regs, "" + csrc)
+            me._set_map(regs, "" + cdst, v)
           }
+        }
+        if opname == "binop" {
+          local bdst = me._find_int_in(seg, "\"dst\":")
+          local bkind = me._find_str_in(seg, "\"op_kind\":\"")
+          if bkind == "" { bkind = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
+          local blhs = me._find_int_in(seg, "\"lhs\":")
+          local brhs = me._find_int_in(seg, "\"rhs\":")
+          if bdst != null and blhs != null and brhs != null {
+            local a = me._get_map(regs, "" + blhs)
+            local b = me._get_map(regs, "" + brhs)
+            local r = me._eval_binop(bkind, a, b)
+            me._set_map(regs, "" + bdst, r)
+          }
+        }
+        if opname == "compare" {
+          local kdst = me._find_int_in(seg, "\"dst\":")
+          local kkind = me._find_str_in(seg, "\"cmp\":\"")
+          if kkind == "" { kkind = me._map_cmp_symbol(me._find_str_in(seg, "\"operation\":\"")) }
+          local klhs = me._find_int_in(seg, "\"lhs\":")
+          local krhs = me._find_int_in(seg, "\"rhs\":")
+          if kdst != null and klhs != null and krhs != null {
+            local a = me._get_map(regs, "" + klhs)
+            local b = me._get_map(regs, "" + krhs)
+            local r = me._eval_cmp(kkind, a, b)
+            me._set_map(regs, "" + kdst, r)
+          }
+        }
+        if opname == "jump" {
+          local tgt = me._find_int_in(seg, "\"target\":")
+          if tgt != null { bb = tgt  scan = block_end  moved = 1  break }
+        }
+        if opname == "branch" {
+          local cond = me._find_int_in(seg, "\"cond\":")
+          local then_id = me._find_int_in(seg, "\"then\":")
+          local else_id = me._find_int_in(seg, "\"else\":")
+          local cval = 0
+          if cond != null { cval = me._get_map(regs, "" + cond) }
+          if cval != 0 { bb = then_id } else { bb = else_id }
+          scan = block_end
+          moved = 1
+          break
+        }
+        if opname == "ret" {
+          found_ret = 1
+          local rv = me._find_int_in(seg, "\"value\":")
+          if rv == null { rv = 0 }
+          return me._get_map(regs, "" + rv)
         }
 
         // advance to end of this object
@@ -490,6 +485,5 @@ static box MirVmMin {
     }
     return me._extract_first_const_i64(mjson)
   }
-  
-}
+
 }

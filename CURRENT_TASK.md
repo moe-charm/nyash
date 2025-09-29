@@ -1,5 +1,40 @@
 # Current Task — Phase 15 (Concise)
 
+## 🔧 **現在の緊急タスク** (2025-09-30) - Mini-VM フォールバック経路修正
+
+### 📊 **問題概要**
+- **症状**: `selfhost_mir_m2_compare_neg_binop_Lt` テスト失敗（期待1→実3）
+- **根本原因**: Mini-VM のフォールバック経路が ret 命令を見落として `_extract_first_const_i64` にフォールバック
+- **ファイル**: `apps/selfhost/vm/boxes/mir_vm_min.nyash` (Line 389-492)
+- **詳細**: 100% Nyashスクリプトの問題（Rust VM無関係）
+
+### 🎯 **修正計画: 3段階アプローチ**
+
+#### **Phase 1（緊急・実施中）**: フォールバック経路に ret 検出ロジック追加
+- **目的**: テスト通過を最速実現
+- **方針**: 最小変更（5-10行追加）
+- **実装**:
+  1. `found_ret` フラグ追加
+  2. ret 命令検出時に確実に return
+  3. デバッグトレース追加
+- **影響**: 既存ロジックを壊さない、即座にテスト通過
+
+#### **Phase 2（最適化・次ラウンド）**: inst3早期評価パスを binop 含むケースに拡張
+- **目的**: パフォーマンス向上（フォールバック回避）
+- **方針**: const×2 + binop + const + compare + ret パターンの高速処理
+- **実装**: inst3早期評価条件を `const>=2` に拡張、binop中間計算対応
+
+#### **Phase 3（長期・Phase 15完了後）**: Mini-VM全体リファクタリング
+- **目的**: 保守性向上
+- **方針**: 命令処理の統一インターフェース化
+- **実装**: 200-300行規模の大規模変更
+
+### 📋 **関連コミット**
+- `51d4c454`: PreLex alias desugar MVP + Mini-VM improvements + docs reorganization
+  - 既知の問題として記録済み
+
+---
+
 Context — Plugin compatibility (why this detour)
 - Selfhost compiler path (Ny→JSON v0 emit) does not require plugins; it prints JSON and exits.
 - The fallback VM engine, however, lacked minimal BoxCall handlers (String/Array/Map). To keep quick/dev green without adding heavy plugin deps, we:
