@@ -42,6 +42,7 @@
   - modulefn_tail_unique_vm.sh（dev-gated: SMOKES_ENABLE_MODULEFN=1）
   - modulefn_tail_ambiguous_vm.sh（STRICT=1 で Fail‑Fast 動作を確認）
   - modulefn_llvm_trace.sh（LLVM call trace に ModuleFunction を出すことを確認）
+  - json_v1_mir_call_vm.sh（PyVMブリッジJSONで unified mir_call を検知）
 
 ## ✅ Update — 2025-10-04（MIR: ModuleFunction Phase‑2 着地）
 - Callee に `ModuleFunction(String)` を追加（型安全なモジュール関数呼び出し）
@@ -71,6 +72,17 @@
   - JSON bin 側 v1 ゲート
     - NYASH_JSON_SCHEMA_V0=1 → v0（既定） / NYASH_JSON_SCHEMA_V1=1 → v1 ラッパー
     - src/runner/mir_json_emit.rs
+
+## ✅ Update — 2025-10-05（Builder/JSON 小粒仕上げ）
+- Builder: 曖昧 tail 解決時に `prefer_current_box` を適用（STRICT=0 時）
+  - src/mir/builder/builder_calls/build.rs:162 付近
+- JSON bin v1: 実体として `{"op":"mir_call"}` を出力（envガード）
+  - 対応: Call(callee有り)/ExternCall/BoxCall/NewBox → unified Callee にマップ
+  - フラグ: `NYASH_JSON_SCHEMA_V1=1`
+  - 実装: src/runner/mir_json_emit.rs:bin 変種
+- スモーク追加（quick/core）
+  - json_v1_mir_call_vm.sh — PyVM 経由の JSON に unified mir_call が含まれることを確認
+
 
 ## Flags（ModuleFunction 周り・運用メモ）
 - NYASH_MIR_CALL_MODULE_FN=1: ModuleFunction を優先して emit（tail-unique を含む）

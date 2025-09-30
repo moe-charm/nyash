@@ -55,3 +55,23 @@ Phases (recommended)
 - Phase 3 (cleanup)
   - Remove PluginInvoke (fully represented by Method with policy) and shrink legacy branches.
   - Keep Copy/Nop/Safepoint as meta/structural ops; no behavior change.
+
+Flags and staged rollout
+
+- Builder/Printer
+  - `NYASH_MIR_UNIFIED_CALL=1`: Prefer unified MirCall for builtins/externs.
+  - `NYASH_MIR_CALL_MODULE_FN=1`: Emit `Callee::ModuleFunction` for resolvable module/user functions.
+  - `NYASH_MIR_CALL_MODULE_FN_CANON=1`: Only accept dotted-with-arity canonical names in Phase‑2 dry‑run.
+  - `NYASH_MIR_CALL_MODULE_FN_STRICT=1`: Fail fast on ambiguous tail matches. When 0, apply `prefer_current_box` heuristic.
+
+- VM backend
+  - `NYASH_VM_CALL_ADAPTER=1`: Route legacy BoxCall/ExternCall/NewBox via adapter that materializes a `Callee` and dispatches on it.
+  - `NYASH_WARN_LEGACY_CALL=1`: Emit a dev‑warn JSON line when legacy path is taken.
+
+- JSON schema
+  - `NYASH_JSON_SCHEMA_V1=1`: Emit unified `mir_call` entries in harness/bin JSON; otherwise v0 legacy op names.
+  - `NYASH_JSON_SCHEMA_V0=1`: Force legacy JSON even when unified call is enabled (debug fallback).
+
+Notes
+- All flags default to OFF to keep behavior stable during migration.
+- Flags are additive and safe to enable locally; CI should keep defaults unless explicitly testing migration.

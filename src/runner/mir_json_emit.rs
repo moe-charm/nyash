@@ -470,6 +470,10 @@ pub fn emit_mir_json_for_harness_bin(
     path: &std::path::Path,
 ) -> Result<(), String> {
     use crate::mir::{BinaryOp as B, CompareOp as C, MirInstruction as I, MirType};
+    use crate::mir::definitions::call_unified::TypeCertainty;
+    // Decide schema once for this emission
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1");
+    let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
     let mut funs = Vec::new();
     for (name, f) in &module.functions {
         let mut blocks = Vec::new();
@@ -608,64 +612,108 @@ pub fn emit_mir_json_for_harness_bin(
                             insts.push(json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
                             emitted_defs.insert(dst.as_u32());
                         }
+                        I::Call { dst, func, callee, args, effects } => {
+                            if use_v1_schema {
+                                if let Some(c) = callee.as_ref() {
+                                    let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                    let eff_names = effects.effect_names();
+                                    let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
+                                    let obj = emit_unified_mir_call(
+                                        dst.map(|v| v.as_u32()),
+                                        c,
+                                        &args_u32,
+                                        &eff_slices,
+                                    );
+                                    insts.push(obj);
+                                    if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                                    break;
+                                }
+                            }
+                            // v0 or no callee → legacy call payload (func is a NameConst value id)
+                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                            insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
+                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                        }
                         I::ExternCall {
                             dst,
                             iface_name,
                             method_name,
                             args,
-                            ..
+                            effects,
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            let mut obj = json!({
-                                "op":"externcall","func": format!("{}.{}", iface_name, method_name), "args": args_a,
-                                "dst": dst.map(|d| d.as_u32()),
-                            });
-                            if iface_name == "env.console" {
-                                if dst.is_some() {
-                                    obj["dst_type"] = json!("i64");
-                                }
+                            if use_v1_schema {
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let eff_names = effects.effect_names();
+                                let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
+                                let callee = Callee::Extern(format!("{}.{}", iface_name, method_name));
+                                let obj = emit_unified_mir_call(dst.map(|v| v.as_u32()), &callee, &args_u32, &eff_slices);
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                            } else {
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                let mut obj = json!({
+                                    "op":"externcall","func": format!("{}.{}", iface_name, method_name), "args": args_a,
+                                    "dst": dst.map(|d| d.as_u32()),
+                                });
+                                if iface_name == "env.console" { if dst.is_some() { obj["dst_type"] = json!("i64"); } }
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             }
-                            insts.push(obj);
-                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::BoxCall {
                             dst,
                             box_val,
                             method,
                             args,
-                            ..
+                            effects, method_id: _
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            let mut obj = json!({
-                                "op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())
-                            });
-                            let m = method.as_str();
-                            let dst_ty = if m == "substring"
-                                || m == "dirname"
-                                || m == "join"
-                                || m == "read_all"
-                                || m == "read"
-                            {
-                                Some(json!({"kind":"handle","box_type":"StringBox"}))
-                            } else if m == "length" || m == "lastIndexOf" {
-                                Some(json!("i64"))
+                            if use_v1_schema {
+                                // Try to infer box name from metadata; fall back gracefully
+                                let box_name = match f.metadata.value_types.get(&box_val) {
+                                    Some(MirType::Box(bt)) => bt.clone(),
+                                    Some(MirType::String) => "StringBox".to_string(),
+                                    _ => "UnknownBox".to_string(),
+                                };
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let mut all_args = Vec::with_capacity(args_u32.len() + 1);
+                                all_args.push(box_val.as_u32());
+                                all_args.extend(args_u32.into_iter());
+                                let eff_names = effects.effect_names();
+                                let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
+                                let callee = Callee::Method { box_name, method: method.clone(), receiver: Some(*box_val), certainty: TypeCertainty::Known };
+                                let obj = emit_unified_mir_call(dst.map(|v| v.as_u32()), &callee, &all_args, &eff_slices);
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             } else {
-                                None
-                            };
-                            if let Some(t) = dst_ty {
-                                obj["dst_type"] = t;
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                let mut obj = json!({
+                                    "op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())
+                                });
+                                let m = method.as_str();
+                                let dst_ty = if m == "substring" || m == "dirname" || m == "join" || m == "read_all" || m == "read" {
+                                    Some(json!({"kind":"handle","box_type":"StringBox"}))
+                                } else if m == "length" || m == "lastIndexOf" { Some(json!("i64")) } else { None };
+                                if let Some(t) = dst_ty { obj["dst_type"] = t; }
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             }
-                            insts.push(obj);
-                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::NewBox {
                             dst,
                             box_type,
                             args,
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
-                            emitted_defs.insert(dst.as_u32());
+                            if use_v1_schema {
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let callee = Callee::Constructor { box_type: box_type.clone() };
+                                let obj = emit_unified_mir_call(Some(dst.as_u32()), &callee, &args_u32, &["alloc"]);
+                                insts.push(obj);
+                                emitted_defs.insert(dst.as_u32());
+                            } else {
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                                emitted_defs.insert(dst.as_u32());
+                            }
                         }
                         I::Branch {
                             condition,

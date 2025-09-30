@@ -139,6 +139,14 @@ impl MirBuilder {
                                 if ambig_list.len() > shown { msg.push_str(&format!("  ... and {} more\n", ambig_list.len() - shown)); }
                                 msg.push_str("Hint: qualify with Class.method/Arity, or set NYASH_MIR_CALL_MODULE_FN_STRICT=0 to fallback.");
                                 return Err(msg);
+                            } else {
+                                // Apply common heuristic: prefer current box when it yields a single candidate
+                                if let Some(cur_fn_name) = self.current_function.as_ref().map(|f| f.signature.name.clone()) {
+                                    let filtered = crate::mir::indexes::functions::prefer_current_box(&cur_fn_name, &ambig_list);
+                                    if filtered.len() == 1 {
+                                        chosen = Some(filtered[0].clone());
+                                    }
+                                }
                             }
                         }
                         TailQueryResult::None => {}

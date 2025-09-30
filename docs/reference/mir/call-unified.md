@@ -63,3 +63,19 @@ VM adapter (sketch)
 - ExternCall → Callee::Extern("iface.method")
 - NewClosure → Callee::Closure { .. }
 - Call(func=NameConst("Class.method/N")) → Callee::ModuleFunction("Class.method/N")
+
+Flags
+- `NYASH_MIR_UNIFIED_CALL=1`
+  - Enable unified call emission for known builtins/externs in builder and printer.
+- `NYASH_MIR_CALL_MODULE_FN=1`
+  - Builder emits `Callee::ModuleFunction` for module/user functions when resolvable.
+- `NYASH_MIR_CALL_MODULE_FN_STRICT=1`
+  - Ambiguous tail matches are fail-fast with a detailed candidate list. When 0, a heuristic may prefer current box.
+- `NYASH_MIR_CALL_MODULE_FN_CANON=1`
+  - Only accept canonical dotted-with-arity names as module functions (exact match), for phased rollout.
+- `NYASH_VM_CALL_ADAPTER=1`
+  - VM routes legacy BoxCall/ExternCall/NewBox through a thin adapter that constructs `Callee` then dispatches.
+- `NYASH_WARN_LEGACY_CALL=1`
+  - Print a dev-only warn/JSON line whenever a legacy call-like instruction is executed/emitted.
+- `NYASH_JSON_SCHEMA_V1=1` / `NYASH_JSON_SCHEMA_V0=1`
+  - Select MIR JSON schema. v1 emits unified `{"op":"mir_call", ...}` entries with Callee payloads; v0 uses legacy separate ops.
