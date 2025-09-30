@@ -10,7 +10,11 @@ flow PipelineV2 {
       local iq = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
       if iq >= 0 {
         local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
-        if ic != null { return EmitMirFlow.emit_compare_cfg(ic.get("lhs"), ic.get("rhs"), ic.get("cmp")) }
+        if ic != null {
+          local mat = 0
+          if prefer_cfg >= 2 { mat = 1 }
+          return EmitMirFlow.emit_compare_cfg2(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat)
+        }
       }
     }
     // Try Compare first (avoid mis-detection by 'op' field inside Compare)
@@ -19,12 +23,14 @@ flow PipelineV2 {
       local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
       if cq >= 0 {
         local c = Stage1ExtractFlow.extract_return_compare(ast_json)
-        if prefer_cfg == 1 {
+        if prefer_cfg >= 1 {
           // MapBox access via get("key") for portability
           local lhs = c.get("lhs")
           local rhs = c.get("rhs")
           local cmp = c.get("cmp")
-          return EmitMirFlow.emit_compare_cfg(lhs, rhs, cmp)
+          local mat = 0
+          if prefer_cfg >= 2 { mat = 1 }
+          return EmitMirFlow.emit_compare_cfg2(lhs, rhs, cmp, mat)
         }
       }
     }

@@ -15,11 +15,11 @@ box MirBuilderBox {
     // If(cond=Compare) → CFG (branch/jump/ret)
     if ast_json.indexOf("\"type\":\"If\"") >= 0 {
       local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
-      if ic != null { return EmitMirFlow.emit_compare_cfg(ic.get("lhs"), ic.get("rhs"), ic.get("cmp")) }
+      if ic != null { return EmitMirFlow.emit_compare_cfg2(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), 0) }
     }
     // Return(Compare)
     local c = Stage1ExtractFlow.extract_return_compare(ast_json)
-    if c != null { return EmitMirFlow.emit_compare_cfg(c.get("lhs"), c.get("rhs"), c.get("cmp")) }
+    if c != null { return EmitMirFlow.emit_compare_cfg2(c.get("lhs"), c.get("rhs"), c.get("cmp"), 0) }
     // Return(BinOp)
     local b = Stage1ExtractFlow.extract_return_binop(ast_json)
     if b != null { return EmitMirFlow.emit_binop(b.get("lhs"), b.get("rhs"), b.get("kind")) }

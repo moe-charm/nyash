@@ -1,0 +1,19 @@
+// LocalSSABox — 材化（materialize）/Copy 挿入の最小ポリシーを集約
+// Phase 15.7: 最小実装。将来 PHI/Call 前の規約をここに集約して拡張する。
+
+box LocalSSABox {
+  // 汎用: copy 命令を insts（ArrayBox of Map）末尾に追加
+  add_copy(insts, dst, src) {
+    if insts == null { return 1 }
+    insts.push({ op:"copy", dst: dst, src: src })
+    return 0
+  }
+
+  // PHI直後の材化（最小）: いまは add_copy と同じ。将来 PHI 群スキップを実装
+  ensure_after_phis_copy(insts, src, dst) {
+    return me.add_copy(insts, dst, src)
+  }
+}
+
+static box LocalSSAStub { main(args) { return 0 } }
+

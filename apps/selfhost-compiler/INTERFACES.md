@@ -24,6 +24,9 @@ Boxes and Roles
     - execute(mir_json: String) -> i64   // reserved; returns 0 in Phase 15.7
   - MirBuilderBox (stub)
     - build(ast_json: String) -> String  // pass-through
+  - LocalSSABox（new, minimal）
+    - ensure_after_phis_copy(insts: ArrayBox, src: i64, dst: i64) -> i64  // append copy(dst,src); returns 0 on success
+    - add_copy(insts: ArrayBox, dst: i64, src: i64) -> i64
 
 Contracts
 - ParserBox.parse_program2 returns a single-line JSON when `NYASH_JSON_ONLY=1`.
@@ -54,6 +57,8 @@ LocalSSA.ensure_cond（最小）
   - ブロック先頭の PHI 群の直後に Copy を挿入（PHIの後、最初の通常命令の前）。
   - 呼び出し（call/boxcall）直前にレシーバ/引数に対しても材化を許容（P2では代表ケースのみ）。
   - 戻り値: ローカルに材化された ValueId。
+ - 実装（Phase 15.7の範囲）:
+   - LocalSSABox.ensure_after_phis_copy を使用。PHIスキップは今後の拡張で実装。
 
 Environment (Runners use these)
 - NYASH_USE_NY_COMPILER=1   // enable Ny child compiler path
