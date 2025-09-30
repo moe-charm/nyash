@@ -239,9 +239,9 @@ pub fn collect_using_and_strip(
                     verbose,
                 ) {
                     Ok(value) => {
-                        // Only file paths are candidates for AST prelude merge
-                        if value.ends_with(".nyash") || value.contains('/') || value.contains('\\')
-                        {
+                        // Only file paths are candidates for AST prelude merge.
+                        // Ignore special marker tokens like "dylib:<path>" (loader handles them).
+                        if !value.starts_with("dylib:") && (value.ends_with(".nyash") || value.contains('/') || value.contains('\\')) {
                             // Resolve relative
                             let mut p = std::path::PathBuf::from(&value);
                             if p.is_relative() {

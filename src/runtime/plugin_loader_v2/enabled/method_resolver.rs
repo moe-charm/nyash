@@ -10,7 +10,25 @@ use std::collections::HashMap;
 impl PluginLoaderV2 {
     /// Resolve a method ID for a given box type and method name
     pub(crate) fn resolve_method_id(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
-        // First try config mapping
+        // Prefer specs (ingested from nyash_box.toml or TypeBox FFI)
+        if let Ok(map) = self.box_specs.read() {
+            // Direct spec lookup for this box
+            for ((_lib, bt), spec) in map.iter() {
+                if bt == box_type {
+                    if let Some(ms) = spec.methods.get(method_name) {
+                        return Ok(ms.method_id);
+                    }
+                    if let Some(res_fn) = spec.resolve_fn {
+                        if let Ok(cstr) = std::ffi::CString::new(method_name) {
+                            let mid = unsafe { res_fn(cstr.as_ptr()) };
+                            if mid != 0 { return Ok(mid); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Then try config mapping (nested under libraries.<lib>.<Box>)
         if let Some(cfg) = self.config.as_ref() {
             let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
 
@@ -28,30 +46,7 @@ impl PluginLoaderV2 {
             }
         }
 
-        // Fallback to TypeBox FFI spec
-        if let Ok(map) = self.box_specs.read() {
-            // Try direct lookup first
-            for ((lib, bt), spec) in map.iter() {
-                if bt == box_type {
-                    // Check methods map
-                    if let Some(ms) = spec.methods.get(method_name) {
-                        return Ok(ms.method_id);
-                    }
-
-                    // Try resolve function
-                    if let Some(res_fn) = spec.resolve_fn {
-                        if let Ok(cstr) = std::ffi::CString::new(method_name) {
-                            let mid = unsafe { res_fn(cstr.as_ptr()) };
-                            if mid != 0 {
-                                return Ok(mid);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        // Try file-based resolution as last resort
+        // Last resort: file-based legacy mapping (dev-only)
         self.resolve_method_id_from_file(box_type, method_name)
     }
 

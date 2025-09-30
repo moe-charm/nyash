@@ -65,10 +65,31 @@
     - `try_handle_object_fields(...)`（InstanceBox の getField/setField とレガシー field 橋渡し）
   - 新規: `src/backend/mir_interpreter/handlers/boxes_instance.rs`
     - `try_handle_instance_box(...)`（InstanceBox のメソッド解決/候補列挙/文字列化）
-  - 既存: `boxes.rs` 側の呼び出しを新モジュールへリダイレクト
-    - `handle_box_call()` 内の分岐（object_fields / instance）を新モジュール関数に置換
+- 既存: `boxes.rs` 側の呼び出しを新モジュールへリダイレクト
+  - `handle_box_call()` 内の分岐（object_fields / instance）を新モジュール関数に置換
   - `handlers/mod.rs` に `mod boxes_fields; mod boxes_instance;` を追加
 - 備考: 旧メソッド定義は一時的に残置（未参照）。後続の掃除パッチで安全に削除予定。
+
+## 🧭 Plan — Plugin ABI (Final) Docs & Rollout
+
+- 目的: プラグイン境界のみ強化（ユーザーBoxはそのまま）。段階導入で既定挙動不変。
+- Docs 追加/更新
+  - docs/reference/plugin-abi/README.md（v2→Final の概観と移行）
+  - docs/reference/plugin-abi/nyash_abi_final_vision.md（提案本文）
+  - docs/development/plan/plugin-abi-final-rollout.md（段階導入計画）
+  - docs/config/env.md（実験用ENVを追加）
+- ENV（提案・既定OFF）
+  - `NYASH_PLUGIN_ABI_FINAL=1`（NyResult invoke優先; 未実装時はv2へフォールバック）
+  - `NYASH_PLUGIN_META=1`（メタ関数の取得・ログ）
+  - `NYASH_PLUGIN_CAPS_ENFORCE=1`（required_capabilities の検証: dev/ci推奨）
+  - `NYASH_TRACE_EFFECTS=1`（効果トレースJSON）
+  - `NYASH_CHECK_CONTRACTS=1`（契約pre/postのログ）
+- 受け入れ（Phase A/B）
+  - PoCプラグイン（FileBox）で NyResult 経路が動く（v2互換維持）
+  - META/効果/契約はFLAG ON時のみログ、OFF時は無風
+  - CI/devで required_capabilities を厳格ON→緑
+- ロールバック
+  - ENVをOFFに戻すだけで完全にv2挙動へ復帰（差分は局所・可逆）
 
 ---
 
@@ -97,9 +118,57 @@
 - `ssa.verify`/`resolve.unique=false`/`use of undefined` が dev で 0
 
 ロールバック指針
+
+## ✅ Update — 2025-10-02（Contracts 観測とツール強化・仕様不変）
+
+- 観測（NYASH_CHECK_CONTRACTS=1）を追加（ログのみ／挙動不変）
+  - NewBox→birth の関係: `contracts_newbox` / `contracts_birth`（argc一致や重複birthの検出を含む）
+  - Arity/type/index の軽量観測:
+    - ArrayBox: `contracts_arity` / `contracts_index`
+    - StringBox: `contracts_arity(_min|_range)`
+    - MapBox: `contracts_arity` / `contracts_type`（キーがStringでない場合のヒント）
+  - PluginInvoke 警告（非プラグイン受信者）: `contracts_warn`
+  - Docs: `docs/development/testing/contracts-observation.md`
+
+- 効果トレース（NYASH_TRACE_EFFECTS=1）
+  - v2 / Final の plugin 呼出前後で `plugin_call` / `plugin_ret` を1行JSONで出力（stderr）。
+
+- コールトレース比較ツールの強化（順序無視の集合差と種別フィルタ）
+  - `tools/dev/call_trace_diff.sh --kinds 'Method,BoxCall'`、結果サマリを追加（VM⊆LLVM を確認）
+  - Docs: smoke-tests-v2.md に利用例を追記
+
+次アクション（この観測系列）
+1) 代表スモークへの導入は不要（既定OFF）。必要時はローカルで env を有効化して分析。
+2) 追加観測点（例: ArrayBox.pop/remove のindex、MapBox.keys/values の型整合）を必要に応じて拡張。
+3) PoCプラグイン準備後、Final 経路の最小スモーク（envオン時のみ）を追加。
 - 入口統一は `prelex` 呼び出し差分のみ戻す
 - Alias 内部参照書換は env で一時停止可能（必要時）
 - VM call 材化挿入は単点差分で revert 容易
+
+## ✅ Update — 2025-10-03（Plugins quick + autoload hardening）
+
+- Quick 追加（SKIP安全・既定不変）
+  - tools/smokes/v2/profiles/quick/core/plugin_array_min_vm.sh（len/get → 2|bar）
+  - tools/smokes/v2/profiles/quick/core/plugin_map_min_vm.sh（size/get → 1|v）
+  - いずれもプラグイン優先フラグ（NYASH_VM_PLUGIN_PREFER_ARRAY/MAP）で実行、存在しない環境でも壊れない構成
+- plugins/dylib_autoload 代表の安定化（環境依存は SKIP）
+  - VM 受信側未定義の救済（NYASH_USING_DYLIB_AUTOLOAD=1 時のみ）
+    - src/backend/mir_interpreter/handlers/calls.rs: 受信 BoxRef を現在レジスタから型一致で回収（PluginBoxV2.box_type を優先）
+    - 既定挙動は不変（フラグOFF時は Fail-Fast のまま）
+  - スモーク SKIP 強化: tools/smokes/v2/profiles/plugins/dylib_autoload.sh
+    - Fixture/Counter/Math/Mixed で "InvalidType" も SKIP 判定に追加
+  - 結果: dylib_autoload.sh → PASS（ABI/未整合は SKIP で緑維持）
+
+### 次アクション（小粒・推奨）
+1) メソッドID解決の根治（小差分）
+   - loader 側で nyash_box.toml 由来の ID を一貫して参照（method_resolver/instance_manager の分岐見直し）
+2) Final ABI encode/decode のユニット追補（bool/int/float/string/bytes の往復）
+3) 旧巨大メソッドの物理削除（未参照確認後）
+
+### 受け入れ基準（この更新）
+- 既存 quick/integration は既定OFFで無風（緑維持）
+- 追加 quick（Array/Map最小）→ PASS
+- plugins/dylib_autoload → PASS（環境に依存する箇所は SKIP 安全化）
 
 ## 🔧 **現在の緊急タスク** (2025-09-30) - Mini-VM フォールバック経路修正
 

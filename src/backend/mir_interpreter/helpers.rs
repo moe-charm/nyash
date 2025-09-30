@@ -3,6 +3,28 @@ use crate::box_trait::VoidBox;
 use std::string::String as StdString;
 
 impl MirInterpreter {
+    /// Emit a one-line JSON call trace when NYASH_CALL_TRACE=1.
+    /// Label examples: "Global:print", "Method:ConsoleBox.println/1", "BoxCall:push".
+    pub(super) fn emit_call_trace_label(&self, label: &str, argc: usize, recv: Option<u32>) {
+        if std::env::var("NYASH_CALL_TRACE").ok().as_deref() != Some("1") {
+            return;
+        }
+        let bb = self.last_block.map(|b| b.as_u32()).unwrap_or(0);
+        let mut out = String::from("{\"kind\":\"call\",\"callee\":\"");
+        let esc = |s: &str| s.replace('"', "\\\"");
+        out.push_str(&esc(label));
+        out.push('"');
+        if let Some(r) = recv {
+            out.push_str(",\"recv\":");
+            out.push_str(&r.to_string());
+        }
+        out.push_str(",\"argc\":");
+        out.push_str(&argc.to_string());
+        out.push_str(",\"bb\":");
+        out.push_str(&bb.to_string());
+        out.push('}');
+        eprintln!("{}", out);
+    }
     #[inline]
     fn tag_nullish(v: &VMValue) -> &'static str {
         match v {

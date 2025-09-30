@@ -143,3 +143,65 @@ docs/research/notes/
 docs/research/papers-under-review/
 
 # 完成・公開済み論文は docs/research/papers-published/ に配置（Git追跡対象）.pyenv/
+
+# Backup files (archived)
+*_backup.md
+*_restored.md
+*_ARCHIVE_*.md
+
+# Root symlinks (removed - use artifacts/apps/ directly)
+/app
+/app_*
+
+# ========================================
+# 🛡️ ルート保護強化（2025-09-30）
+# ========================================
+
+# ビルド成果物・一時ファイル（ルート禁止）
+/*.o
+/*.a
+/*.so
+/*.dll
+/*.exe
+/*.tar.gz
+/*.zip
+/*_temp.*
+/*_tmp.*
+
+# ビルドエラーログ（完全除外）
+/build*.err
+/build*.log
+/llvm.err
+/vm.err
+/*.err
+
+# コミットメッセージ一時ファイル
+/commit_message*.txt
+
+# 設定ファイルバックアップ
+/*.toml.backup*
+/*.toml.bak
+
+# テストファイル（ルート禁止・local_tests/使用）
+/*test*.nyash
+/*debug*.nyash
+/gemini_test_case.nyash
+/basic_test.nyash
+
+# MIRダンプ（ルート禁止）
+/mir_dump*.txt
+/mir_output*.txt
+
+# Backup files (archived)
+*_backup.md
+*_restored.md
+*_ARCHIVE_*.md
+
+# Root symlinks (removed - use artifacts/apps/ directly)
+/app
+/app_*
+
+# Windows開発用ファイル
+/*.c
+/hello_windows
+/test_simple_windows.c

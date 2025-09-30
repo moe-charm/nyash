@@ -26,60 +26,30 @@ impl MirInterpreter {
         callee: &Callee,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
-        // Optional: emit one-line JSON call trace for parity checks
-        if std::env::var("NYASH_CALL_TRACE").ok().as_deref() == Some("1") {
-            fn esc(s: &str) -> String { s.replace('"', "\\\"") }
-            let bb = self.last_block.map(|b| b.as_u32()).unwrap_or(0);
-            match callee {
-                Callee::Global(name) => {
-                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Global:");
-                    out.push_str(&esc(name));
-                    out.push_str("\",\"argc\":" ); out.push_str(&args.len().to_string());
-                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
-                    out.push('}');
-                    eprintln!("{}", out);
-                }
-                Callee::Method { box_name, method, receiver, .. } => {
-                    let recv_id = receiver.map(|v| v.as_u32()).unwrap_or(0);
-                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Method:");
-                    out.push_str(&esc(box_name)); out.push('.'); out.push_str(&esc(method));
-                    out.push_str("/" ); out.push_str(&args.len().to_string());
-                    out.push_str("\",\"recv\":" ); out.push_str(&recv_id.to_string());
-                    out.push_str(",\"argc\":" ); out.push_str(&args.len().to_string());
-                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
-                    out.push('}');
-                    eprintln!("{}", out);
-                }
-                Callee::Constructor { box_type } => {
-                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Ctor:");
-                    out.push_str(&esc(box_type));
-                    out.push_str("\",\"argc\":" ); out.push_str(&args.len().to_string());
-                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
-                    out.push('}');
-                    eprintln!("{}", out);
-                }
-                Callee::Closure { .. } => {
-                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Closure\",\"argc\":");
-                    out.push_str(&args.len().to_string());
-                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
-                    out.push('}');
-                    eprintln!("{}", out);
-                }
-                Callee::Value(_fid) => {
-                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Value\",\"argc\":");
-                    out.push_str(&args.len().to_string());
-                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
-                    out.push('}');
-                    eprintln!("{}", out);
-                }
-                Callee::Extern(name) => {
-                    let mut out = String::from("{\"kind\":\"call\",\"callee\":\"Extern:");
-                    out.push_str(&esc(name));
-                    out.push_str("\",\"argc\":" ); out.push_str(&args.len().to_string());
-                    out.push_str(",\"bb\":" ); out.push_str(&bb.to_string());
-                    out.push('}');
-                    eprintln!("{}", out);
-                }
+        // Optional: emit one-line JSON call trace for parity checks (refactored helper)
+        match callee {
+            Callee::Global(name) => {
+                let label = format!("Global:{}", name);
+                self.emit_call_trace_label(&label, args.len(), None);
+            }
+            Callee::Method { box_name, method, receiver, .. } => {
+                let label = format!("Method:{}.{}{}", box_name, method, format!("/{}", args.len()));
+                let recv_id = receiver.map(|v| v.as_u32());
+                self.emit_call_trace_label(&label, args.len(), recv_id);
+            }
+            Callee::Constructor { box_type } => {
+                let label = format!("Ctor:{}", box_type);
+                self.emit_call_trace_label(&label, args.len(), None);
+            }
+            Callee::Closure { .. } => {
+                self.emit_call_trace_label("Closure", args.len(), None);
+            }
+            Callee::Value(_fid) => {
+                self.emit_call_trace_label("Value", args.len(), None);
+            }
+            Callee::Extern(name) => {
+                let label = format!("Extern:{}", name);
+                self.emit_call_trace_label(&label, args.len(), None);
             }
         }
         match callee {
@@ -123,33 +93,72 @@ impl MirInterpreter {
                             if let Some(v) = recovered {
                                 v
                             } else {
-                                // Dev fallback: use args[0] as surrogate when enabled
-                                let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
-                                    || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
-                                if tolerate {
-                                    if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
+                                // Autoload guard (plugins profile): when using kind="dylib" autoload is active,
+                                // try a best-effort recovery by scanning current registers for a BoxRef whose
+                                // type matches the expected receiver box (e.g., CounterBox/FixtureBox).
+                                if std::env::var("NYASH_USING_DYLIB_AUTOLOAD").ok().as_deref() == Some("1") {
+                                    let mut found: Option<VMValue> = None;
+                                    for (_id, val) in self.regs.iter() {
+                                        if let VMValue::BoxRef(bx) = val {
+                                            // Match plugin-backed boxes by inner box_type when available
+                                            if let Some(pb) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                                if pb.box_type == *box_name { found = Some(val.clone()); break; }
+                                            } else if bx.type_name() == box_name {
+                                                // Builtin boxes expose their concrete type name
+                                                found = Some(val.clone()); break;
+                                            }
+                                        }
+                                    }
+                                    if let Some(v) = found { v } else {
+                                        // Fallbacks (dev-only/tolerant modes)
+                                        let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
+                                            || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+                                        if tolerate {
+                                            if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
+                                        } else {
+                                            // Narrow, behavior-preserving rescue: for ParserBox.* inside ParserBox.* functions,
+                                            // fallback receiver to the `me` parameter of the current function.
+                                            if box_name == "ParserBox" {
+                                                if let Some(cur) = &self.cur_fn {
+                                                    if cur.starts_with("ParserBox.") {
+                                                        if let Some(fun) = self.functions.get(cur) {
+                                                            if let Some(me_vid) = fun.params.first() {
+                                                                if let Ok(mev) = self.reg_load(*me_vid) { return Ok(mev); }
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                            // Minimal safety: common pure methods with undefined recv return neutral defaults
+                                            if method == "length" { return Ok(VMValue::Integer(0)); }
+                                            return Err(e);
+                                        }
+                                    }
                                 } else {
-                                    // Narrow, behavior-preserving rescue: for ParserBox.* inside ParserBox.* functions,
-                                    // fallback receiver to the `me` parameter of the current function.
-                                    if box_name == "ParserBox" {
-                                        if let Some(cur) = &self.cur_fn {
-                                            if cur.starts_with("ParserBox.") {
-                                                if let Some(fun) = self.functions.get(cur) {
-                                                    if let Some(me_vid) = fun.params.first() {
-                                                        if let Ok(mev) = self.reg_load(*me_vid) {
-                                                            return Ok(mev);
+                                    // Dev fallback: use args[0] as surrogate when enabled
+                                    let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
+                                        || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+                                    if tolerate {
+                                        if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
+                                    } else {
+                                        // Narrow, behavior-preserving rescue: for ParserBox.* inside ParserBox.* functions,
+                                        // fallback receiver to the `me` parameter of the current function.
+                                        if box_name == "ParserBox" {
+                                            if let Some(cur) = &self.cur_fn {
+                                                if cur.starts_with("ParserBox.") {
+                                                    if let Some(fun) = self.functions.get(cur) {
+                                                        if let Some(me_vid) = fun.params.first() {
+                                                            if let Ok(mev) = self.reg_load(*me_vid) { return Ok(mev); }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
+                                        // Minimal safety: common pure methods with undefined recv
+                                        // return neutral defaults instead of crashing (length -> 0).
+                                        if method == "length" { return Ok(VMValue::Integer(0)); }
+                                        return Err(e);
                                     }
-                                    // Minimal safety: common pure methods with undefined recv
-                                    // return neutral defaults instead of crashing (length -> 0).
-                                    if method == "length" {
-                                        return Ok(VMValue::Integer(0));
-                                    }
-                                    return Err(e);
                                 }
                             }
                         }

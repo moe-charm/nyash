@@ -119,6 +119,11 @@ birth = { method_id = 0 }
 now = { method_id = 4 }
 fini = { method_id = 4294967295 }
 
+# String plugin (TypeBox v2) — prefer via env when needed
+[libraries."libnyash_string_plugin.so"]
+boxes = ["StringBox"]
+path = "plugins/nyash-string-plugin/libnyash_string_plugin.so"
+
 [libraries."libnyash_regex_plugin.so"]
 boxes = ["RegexBox"]
 path = "plugins/nyash-regex-plugin/libnyash_regex_plugin.so"

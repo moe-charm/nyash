@@ -959,12 +959,23 @@ impl PluginInvoker {
 
 ---
 
-## 🎯 ユーザーBoxは完全に変更なし
+## 🎯 ユーザーBoxも拡張可能（オプション）
 
-### ユーザーコード（影響ゼロ）
+### 🆕 Meta構文でユーザーBoxも強化可能
+
+**ChatGPT Pro「三層分離」提案**により、ユーザーBoxも**オプションで**能力・効果・契約を宣言できます。
+
+**核心**:
+- ✅ **Box本体は極小のまま**（Core）
+- ✅ **Meta宣言はオプション**（書かなくても動く）
+- ✅ **同じファイル内に記述可能**（Box名で紐付け）
+
+---
+
+### 基本例：Metaなし（従来通り）
 
 ```nyash
-// ユーザー定義Box - 何も変わらない！
+// ユーザー定義Box - Meta省略OK！
 box Dog {
     init { name, breed }
 
@@ -974,43 +985,247 @@ box Dog {
     }
 
     bark() {
-        print(me.name + " says woof!")  // ← print()はプラグイン境界でチェック
-    }
-}
-
-// プラグインBoxからのデリゲート - 何も変わらない！
-box EnhancedP2P from P2PBox {
-    init { extraFeatures }
-
-    birth(nodeId, transport) {
-        from P2PBox.birth(nodeId, transport)  // ← プラグイン境界でチェック
-        me.extraFeatures = new ArrayBox()
-    }
-
-    sendMessage(msg) {
-        // P2PBox.send()を呼ぶ際にプラグイン境界でチェックされる
-        me.send(msg)
+        print(me.name + " says woof!")
     }
 }
 
 // 使用例 - 何も変わらない！
 local dog = new Dog("Buddy", "Labrador")
 dog.bark()
-
-local node = new EnhancedP2P("node1", "tcp")
-node.sendMessage("Hello")
 ```
 
-### 信頼境界の図解
+**ポイント**:
+- ❌ Meta宣言なし = 制約なし、デフォルト動作
+- ✅ 既存コード完全互換
+
+---
+
+### 拡張例：Meta追加（同じファイル内）
+
+```nyash
+// Box本体（Core）- 極小のまま
+box KVStore {
+    field map: MapBox<StringBox, StringBox>
+
+    fn init() {
+        me.map = new MapBox()
+    }
+
+    fn put(key: StringBox, value: StringBox) -> ResultBox {
+        me.map.set(key, value)
+        return new OkBox()
+    }
+
+    fn get(key: StringBox) -> OptionBox<StringBox> {
+        return me.map.get(key)
+    }
+}
+
+// Meta宣言（オプション）- 同じBox名で紐付け
+meta KVStore {
+    // 効果宣言（このBoxが使う副作用）
+    effects {
+        put: ["mem.alloc"]      // put()はメモリ確保
+        get: ["mem.read"]       // get()はメモリ読み取りのみ
+    }
+
+    // 契約（引数・戻り値の制約）
+    contracts {
+        put {
+            pre: ["arg0.len > 0", "arg1.len <= 1048576"]  // 空キー拒否、1MB制限
+            post: ["result.is_ok"]                        // 必ず成功
+        }
+        get {
+            pre: ["arg0.len > 0"]  // 空キー拒否
+        }
+    }
+
+    // 能力（必要な権限、オプション）
+    capabilities {
+        required: ["mem.alloc"]
+    }
+}
+
+// 使用例 - Boxは普通に使える
+local store = new KVStore()
+store.put("name", "Alice")    // ← 契約チェック: キー空でないか？値1MB以下か？
+local name = store.get("name")
+```
+
+**ポイント**:
+- ✅ Box本体（Core）は極小のまま
+- ✅ Meta宣言で安全性・最適化ヒント追加
+- ✅ 同じファイル内、Box名で自動紐付け
+- ✅ Metaは**完全オプション**（書かなくても動く）
+
+---
+
+### プラグインBoxからのデリゲート（Meta活用）
+
+```nyash
+// ユーザー定義Box（プラグインBoxから拡張）
+box EnhancedP2P from P2PBox {
+    init { extraFeatures }
+
+    birth(nodeId, transport) {
+        from P2PBox.birth(nodeId, transport)
+        me.extraFeatures = new ArrayBox()
+    }
+
+    sendMessage(msg) {
+        me.send(msg)  // ← P2PBox.send()はプラグイン境界でチェック
+    }
+
+    broadcastToAll(msg) {
+        // 独自メソッド
+        me.peers.forEach(fn(peer) {
+            me.send(peer, msg)
+        })
+    }
+}
+
+// Meta宣言（オプション）
+meta EnhancedP2P {
+    // 独自メソッドの効果宣言
+    effects {
+        broadcastToAll: ["net.out", "mem.alloc"]
+    }
+
+    // 契約
+    contracts {
+        broadcastToAll {
+            pre: ["arg0.len > 0", "me.peers.len > 0"]  // 空メッセージ拒否、ピア存在確認
+        }
+    }
+}
+
+// 使用例
+local node = new EnhancedP2P("node1", "tcp")
+node.sendMessage("Hello")        // ← プラグイン境界でチェック
+node.broadcastToAll("Broadcast") // ← ユーザーMeta契約でチェック
+```
+
+**ポイント**:
+- ✅ プラグインBox継承でも同じMeta記法
+- ✅ 独自メソッドにもMeta適用可能
+- ✅ デリゲート元（P2PBox）はプラグイン境界チェック
+- ✅ 独自メソッドはユーザーMeta契約チェック
+
+---
+
+### Meta記法の詳細仕様
+
+#### 基本構文
+
+```nyash
+meta BoxName {
+    // 効果宣言（副作用）
+    effects {
+        method_name: ["effect1", "effect2", ...]
+    }
+
+    // 契約（事前/事後条件）
+    contracts {
+        method_name {
+            pre: ["condition1", "condition2", ...]   // 事前条件
+            post: ["condition1", "condition2", ...] // 事後条件
+        }
+    }
+
+    // 能力（必要な権限）
+    capabilities {
+        required: ["capability1", "capability2", ...]
+    }
+
+    // 所有権タグ（将来拡張）
+    ownership: shared  // unique | shared | affine | linear
+    sendable: false
+    syncable: true
+}
+```
+
+#### 効果の種類（標準）
+
+```
+io.read      - ファイル/ストリーム読み取り
+io.write     - ファイル/ストリーム書き込み
+io.stdout    - 標準出力
+io.stderr    - 標準エラー出力
+fs.read      - ファイルシステム読み取り
+fs.write     - ファイルシステム書き込み
+fs.open      - ファイルオープン
+fs.close     - ファイルクローズ
+net.in       - ネットワーク受信
+net.out      - ネットワーク送信
+mem.alloc    - メモリ確保
+mem.free     - メモリ解放
+mem.read     - メモリ読み取り
+mem.write    - メモリ書き込み
+```
+
+#### 契約式の記法
+
+```nyash
+// 引数参照
+arg0, arg1, arg2, ...           // 位置引数
+arg0.len                        // 長さ取得
+arg0.is_empty                   // 空チェック
+
+// 自己参照
+me.field_name                   // フィールドアクセス
+
+// 戻り値参照（事後条件のみ）
+result.is_ok                    // Result型成功判定
+result.is_err                   // Result型失敗判定
+
+// 比較・論理演算
+> < >= <= == !=                 // 比較
+and or not                      // 論理演算
+
+// 関数（組み込み）
+len(x)                          // 長さ
+is_valid_path(x)                // パス検証
+is_valid_handle(x)              // ハンドル検証
+```
+
+#### 段階導入（Policy）
+
+```toml
+# nyash.toml
+[profiles]
+active = "dev"
+
+# 開発環境：警告のみ
+[policy.dev]
+effects_mode = "warn"
+contracts_mode = "warn"
+capabilities_mode = "warn"
+
+# 本番環境：厳格チェック
+[policy.prod]
+effects_mode = "enforce"
+contracts_mode = "enforce"
+capabilities_mode = "enforce"
+
+# テスト環境：契約のみ厳格
+[policy.test]
+effects_mode = "warn"
+contracts_mode = "enforce"
+capabilities_mode = "warn"
+```
+
+---
+
+### 信頼境界の図解（Meta統合版）
 
 ```
 ┌─────────────────────────────────────┐
-│  Nyashユーザーコード（信頼済み）      │
+│  Nyashユーザーコード                 │
 │                                     │
 │  box Dog { ... }                   │
-│  box EnhancedP2P from P2PBox { ... }│
+│  meta Dog { effects {...} }        │ ← Meta（オプション）
 │                                     │
-│  ❌ チェックなし（信頼済みコード）    │
+│  ✅ Meta契約チェック（dev=warn）     │
 └─────────────────────────────────────┘
               │
               │ call method
@@ -1018,9 +1233,9 @@ node.sendMessage("Hello")
 ┌═════════════════════════════════════┐
 │  🛡️ プラグイン境界（信頼境界）       │
 │                                     │
-│  ✅ 能力チェック                     │
-│  ✅ 効果トレース                     │
-│  ✅ 契約検証                         │
+│  ✅ 能力チェック（enforce）          │
+│  ✅ 効果トレース（enforce）          │
+│  ✅ 契約検証（enforce）              │
 └═════════════════════════════════════┘
               │
               ↓
@@ -1028,10 +1243,15 @@ node.sendMessage("Hello")
 │  プラグインBox（外部バイナリ）        │
 │                                     │
 │  FileBox / P2PBox / ConsoleBox etc. │
+│  （TypeBox + nyash.toml Meta）      │
 │                                     │
 │  ⚠️ 信頼できない（要検証）            │
 └─────────────────────────────────────┘
 ```
+
+**チェック強度の違い**:
+- **ユーザーBox**: Meta契約は`warn`（開発支援）
+- **プラグイン境界**: Meta契約は`enforce`（安全性強制）
 
 ---
 
@@ -1105,6 +1325,7 @@ description = "ファイルから読み込みます"
 - **エラー明確**: ステータスコード + メッセージ
 - **メタデータ充実**: メソッド情報・JSON型情報
 - **プラグイン/ユーザーBoxの垣根なし**: 同じhandle型で統一 ⭐
+- **Box本体は極小**: Meta記法で本体を汚さない ⭐⭐
 
 ### ✅ 綺麗さ
 
@@ -1112,6 +1333,8 @@ description = "ファイルから読み込みます"
 - **シンプルな呼び出しパス**: 1つの明確な経路
 - **ゼロコスト抽象化**: オーバーヘッドなし
 - **ユーザーコード変更なし**: 構文・API完全互換 ⭐
+- **Meta記法はオプション**: 書かなくても動く ⭐⭐
+- **同じファイル内で完結**: Box + Meta一箇所で管理 ⭐⭐
 
 ### ✅ 機能性
 
@@ -1121,8 +1344,10 @@ description = "ファイルから読み込みます"
 - **契約検証**: 事前/事後条件で境界安全性 ⭐
 - **Component Model**: WIT互換でエコシステム統合 ⭐
 - **ツール統合**: IDE・デバッガー・CLI完全対応
+- **ユーザーBoxも強化可能**: 同じMeta記法で段階拡張 ⭐⭐
 
 ⭐ = ChatGPT Pro提案による強化
+⭐⭐ = ChatGPT Pro「三層分離」による革新
 
 ---
 
@@ -1134,11 +1359,154 @@ description = "ファイルから読み込みます"
 
 ---
 
-**この設計は「とにかくシンプルによせていきたい」哲学 + ChatGPT Pro「プラグイン境界強化」戦略を完全統合します** 🎯
+## 🎯 段階導入計画（完全版）
 
-**段階導入計画**:
-- **Phase A（3-6ヶ月）**: Effect & Capability + 契約 + Component Model（高ROI）
-- **Phase B（6-12ヶ月）**: Deterministic + Metaobject（追加機能）
-- **Phase C（12ヶ月以降）**: Differentiable（別ABI拡張）
+### Phase A（3-6ヶ月）: 基盤構築
+
+**1. TypeBox ABI拡張**
+- ✅ `required_capabilities` / `method_effects` / `contracts` フィールド追加
+- ✅ プラグイン開発者がTypeBoxで埋め込み宣言
+- ✅ 後方互換性100%（既存プラグイン無変更）
+
+**2. Meta構文パーサー実装**
+```nyash
+// 新規構文: meta ブロック
+meta BoxName {
+    effects { ... }
+    contracts { ... }
+    capabilities { ... }
+}
+```
+- ✅ Box名で自動紐付け
+- ✅ 同じファイル内記述可能
+- ✅ オプション（省略時はデフォルト動作）
+
+**3. VM側Meta処理**
+```rust
+// MetaResolver実装
+- Meta読み込み（TypeBox埋め込み + ファイル宣言）
+- 能力チェック（ロード時）
+- 効果トレース（環境変数 NYASH_TRACE_EFFECTS=1）
+- 契約検証（環境変数 NYASH_CHECK_CONTRACTS=1）
+```
+
+**4. Policy制御（nyash.toml）**
+```toml
+[policy.dev]
+effects_mode = "warn"      # 開発: 警告のみ
+contracts_mode = "warn"
+
+[policy.prod]
+effects_mode = "enforce"   # 本番: 厳格
+contracts_mode = "enforce"
+```
+
+**成果物**:
+- ✅ プラグインBoxに能力・効果・契約宣言可能
+- ✅ ユーザーBoxにMeta記法適用可能（オプション）
+- ✅ dev/prod環境で段階制御
+
+---
+
+### Phase B（6-12ヶ月）: 高度機能
+
+**5. Deterministic Mode（Nyash/D）**
+- ✅ `ChannelBox` + セッション型
+- ✅ `--deterministic` フラグ
+- ✅ 決定的スケジューラ（再現性保証）
+
+**6. Metaobject Protocols（Nyash/M）**
+- ✅ ディスパッチ規則の宣言化
+- ✅ `nyash.toml` で解決順序制御
+- ✅ トレース・デバッグ支援
+
+**7. ツール整備**
+```bash
+nyash check-meta      # Meta宣言の静的検証
+nyash trace           # 効果・能力トレース
+nyash inspect Box     # Meta情報表示
+```
+
+---
+
+### Phase C（12ヶ月以降）: 専門領域拡張
+
+**8. Differentiable（Nyash/Δ）**
+- ✅ 別ABI拡張: `NyashTypeBoxTensor`
+- ✅ `TensorBox` プラグイン
+- ✅ GPU/SIMD加速
+
+**9. Component Model完全統合（Nyash/C）**
+- ✅ WIT → TLV-Schema 自動変換
+- ✅ WASM Component Model互換
+- ✅ クロス言語エコシステム統合
+
+---
+
+## ✨ 最終形態の革新的特徴
+
+### 🆕 ユーザーBox拡張（三層分離）
+
+**Core（本体）**: 極小のまま
+```nyash
+box KVStore {
+    field map: MapBox
+    fn put(k, v) { ... }
+    fn get(k) { ... }
+}
+```
+
+**Meta（外付け）**: オプションで安全性強化
+```nyash
+meta KVStore {
+    effects { put: ["mem.alloc"] }
+    contracts {
+        put { pre: ["arg0.len > 0"] }
+    }
+}
+```
+
+**Policy（環境制御）**: nyash.tomlで切替
+```toml
+[policy.dev]
+effects_mode = "warn"    # 開発支援
+
+[policy.prod]
+effects_mode = "enforce" # 本番安全
+```
+
+---
+
+## 🎯 完全性指標（最終更新）
+
+| 機能 | v2 | Phase 12 | 最終形態 |
+|------|----|---------:|--------:|
+| 型安全性 | 60% | 90% | **95%** |
+| エラー情報 | 30% | 70% | **95%** |
+| メタデータ | 0% | 50% | **100%** |
+| 能力判定 | 0% | 70% | **100%** ⭐ |
+| 効果トレース | 0% | 0% | **100%** ⭐ |
+| 契約検証 | 0% | 0% | **100%** ⭐ |
+| **ユーザーBox拡張** | 0% | 0% | **100%** ⭐⭐ |
+| リフレクション | 0% | 30% | **100%** |
+| ツール統合 | 20% | 60% | **100%** |
+| Component Model | 0% | 0% | **100%** ⭐ |
+| 最適化ヒント | 10% | 50% | **100%** |
+| 後方互換性 | 100% | 80% | **100%** ⭐ |
+| **Box本体シンプルさ** | 100% | 60% | **100%** ⭐⭐ |
+
+⭐ = ChatGPT Pro提案による強化
+⭐⭐ = ChatGPT Pro「三層分離」による革新
+
+---
+
+**この設計は「とにかくシンプルによせていきたい」哲学を完璧に実現します** 🎯
+
+**核心原則**:
+1. ✅ **Box本体は極小**（Meta記法で汚さない）
+2. ✅ **Metaはオプション**（書かなくても動く）
+3. ✅ **同じファイル内で完結**（分散しない）
+4. ✅ **段階導入可能**（warn→enforce）
+5. ✅ **プラグイン/ユーザーBox統一**（同じMeta記法）
 
 すべて**後方互換**で段階導入可能！ 🚀

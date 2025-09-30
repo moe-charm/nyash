@@ -28,6 +28,19 @@ impl MirInterpreter {
         let created_vm = VMValue::from_nyash_box(created);
         self.regs.insert(dst, created_vm.clone());
 
+        // Contracts observation: record NewBox event (dev-only)
+        if crate::config::env::check_contracts() {
+            let key = self.object_key_for(dst);
+            self.contracts_new.insert(key);
+            self.contracts_new_argv.insert(key, args.len());
+            eprintln!(
+                r#"{{"kind":"contracts_newbox","class":"{}","argc":{},"key":{}}}"#,
+                box_type,
+                args.len(),
+                key
+            );
+        }
+
         // Trace: new box event (dev-only)
         if Self::box_trace_enabled() {
             self.box_trace_emit_new(box_type, args.len());
@@ -57,6 +70,13 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Dev-only call trace for PluginInvoke (parity aid)
+        let cls = match self.reg_load(box_val).unwrap_or(VMValue::Void) {
+            VMValue::BoxRef(b) => b.type_name().to_string(),
+            _ => "<unknown>".to_string(),
+        };
+        let label = format!("PluginInvoke:{}.{}", cls, method);
+        self.emit_call_trace_label(&label, args.len(), None);
         let recv = self.reg_load(box_val)?;
         let recv_box: Box<dyn NyashBox> = match recv.clone() {
             VMValue::BoxRef(b) => b.share_box(),
@@ -99,6 +119,12 @@ impl MirInterpreter {
             }
             Ok(())
         } else {
+            if crate::config::env::check_contracts() {
+                eprintln!(
+                    r#"{{"kind":"contracts_warn","what":"plugin_invoke_non_plugin","method":"{}"}}"#,
+                    method
+                );
+            }
             // Fallback: if receiver is a builtin core box (Array/Map/String),
             // route PluginInvoke to the same minimal handlers we use for BoxCall.
             // This keeps behavior stable in dev when optimizer forces PluginInvoke
@@ -127,6 +153,28 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Dev-only call trace for BoxCall (parity aid)
+        let label = format!("BoxCall:{}", method);
+        self.emit_call_trace_label(&label, args.len(), None);
+
+        // Phase B: Optional routing — prefer PluginInvoke for plugin-backed receivers.
+        // Guarded by NYASH_VM_BOXCALL_PLUGIN_FIRST=1. Default OFF (behavior unchanged).
+        // Global flag or per-box flags (Array/String/Map) can trigger PluginInvoke routing
+        if let VMValue::BoxRef(bx) = self.reg_load(box_val)? {
+            if let Some(pb) = bx
+                .as_any()
+                .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+            {
+                let global_on = crate::config::env::vm_boxcall_plugin_first();
+                let per_box_on =
+                    (pb.box_type == "ArrayBox" && crate::config::env::vm_plugin_prefer_array()) ||
+                    (pb.box_type == "StringBox" && crate::config::env::vm_plugin_prefer_string()) ||
+                    (pb.box_type == "MapBox" && crate::config::env::vm_plugin_prefer_map());
+                if global_on || per_box_on {
+                    return self.handle_plugin_invoke(dst, box_val, method, args);
+                }
+            }
+        }
         // Dev-safe: stringify(Void) → "null" (最小安全弁)
         if method == "stringify" {
             if let VMValue::Void = self.reg_load(box_val)? {
@@ -324,6 +372,24 @@ impl MirInterpreter {
             let ret = self.exec_function_inner(&func, Some(&argv))?;
             if let Some(d) = dst { self.regs.insert(d, ret); }
             return Ok(());
+        }
+
+        // Birth contracts observation (dev-only)
+        if crate::config::env::check_contracts() && method == "birth" {
+            let key = self.object_key_for(box_val);
+            let seen_new = self.contracts_new.contains(&key);
+            let duplicate = !self.contracts_born.insert(key);
+            let argc_new = self.contracts_new_argv.get(&key).cloned().unwrap_or(0);
+            let argc_birth = args.len();
+            eprintln!(
+                r#"{{"kind":"contracts_birth","seen_new":{},"duplicate":{},"argc_new":{},"argc_birth":{},"argc_match":{},"key":{}}}"#,
+                if seen_new { 1 } else { 0 },
+                if duplicate { 1 } else { 0 },
+                argc_new,
+                argc_birth,
+                if argc_new == argc_birth { 1 } else { 0 },
+                key
+            );
         }
 
         self.invoke_plugin_box(dst, box_val, method, args)

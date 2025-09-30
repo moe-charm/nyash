@@ -21,6 +21,18 @@ pub type BoxInvokeFn = extern "C" fn(
     *mut usize,
 ) -> i32;
 
+// Optional Final ABI per-Box signature (Phase A skeleton)
+// Note: actual plugins may use richer NyValue/NyResult structures; this alias
+// is a minimal placeholder and only used for probing/log messages in Phase A.
+pub type FinalInvokeFn = extern "C" fn(
+    u32, /* type_id */
+    u32, /* method_id */
+    u32, /* instance_id */
+    *const super::types::NyValueFfi,
+    usize,
+    *mut super::types::NyResultFfi,
+) -> i32;
+
 // Call library-level shim with a temporary output buffer
 pub fn invoke_alloc(
     invoke: InvokeFn,

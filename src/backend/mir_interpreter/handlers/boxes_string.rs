@@ -26,6 +26,9 @@ pub(super) fn try_handle_string_box(
                 "indexOf" => {
                     // indexOf(substr[, from]) -> first index or -1 (byte index basis)
                     if args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity_min","box":"StringBox","method":"indexOf","min_expected":1,"got":0}}"#);
+                        }
                         return Err(VMError::InvalidInstruction("indexOf expects at least 1 arg".into()));
                     }
                     let needle = this.reg_load(args[0])?.to_string();
@@ -40,6 +43,9 @@ pub(super) fn try_handle_string_box(
                 "lastIndexOf" => {
                     // lastIndexOf(substr) -> last index or -1 (byte index basis)
                     if args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity_min","box":"StringBox","method":"lastIndexOf","min_expected":1,"got":0}}"#);
+                        }
                         return Err(VMError::InvalidInstruction("lastIndexOf expects at least 1 arg".into()));
                     }
                     let needle = this.reg_load(args[0])?.to_string();
@@ -70,6 +76,9 @@ pub(super) fn try_handle_string_box(
                 }
                 "substring" => {
                     if args.len() != 2 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"StringBox","method":"substring","expected":2,"got":{}}}"#, args.len());
+                        }
                         return Err(VMError::InvalidInstruction(
                             "substring expects 2 args (start, end)".into(),
                         ));
@@ -86,6 +95,9 @@ pub(super) fn try_handle_string_box(
                 }
                 "concat" => {
                     if args.len() != 1 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"StringBox","method":"concat","expected":1,"got":{}}}"#, args.len());
+                        }
                         return Err(VMError::InvalidInstruction("concat expects 1 arg".into()));
                     }
                     let rhs = this.reg_load(args[0])?;
@@ -101,6 +113,9 @@ pub(super) fn try_handle_string_box(
                         let s = this.reg_load(args[0])?.to_string();
                         s.chars().next()
                     } else {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity_range","box":"StringBox","method":"is_digit_char","min":0,"max":1,"got":{}}}"#, args.len());
+                        }
                         return Err(VMError::InvalidInstruction("is_digit_char expects 0 or 1 arg".into()));
                     };
                     let is_digit = ch_opt.map(|c| c.is_ascii_digit()).unwrap_or(false);
@@ -114,6 +129,9 @@ pub(super) fn try_handle_string_box(
                         let s = this.reg_load(args[0])?.to_string();
                         s.chars().next()
                     } else {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity_range","box":"StringBox","method":"is_hex_digit_char","min":0,"max":1,"got":{}}}"#, args.len());
+                        }
                         return Err(VMError::InvalidInstruction("is_hex_digit_char expects 0 or 1 arg".into()));
                     };
                     let is_hex = ch_opt.map(|c| c.is_ascii_hexdigit()).unwrap_or(false);

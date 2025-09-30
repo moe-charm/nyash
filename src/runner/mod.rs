@@ -147,6 +147,31 @@ impl NyashRunner {
             let sb = crate::box_trait::StringBox::new(path.clone());
             crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
         }
+        // Phase: plugins – proactively load dylib packages from nyash.toml [using.*]
+        // Behavior: best-effort, quiet on failure; keeps default behavior unchanged.
+        // Rationale: v2 plugins profile expects `using <name> { kind="dylib", path=..., bid=... }`
+        // to autoload libraries without additional CLI flags.
+        if !using_ctx.packages.is_empty() {
+            for (pkg_name, pkg) in using_ctx.packages.iter() {
+                if matches!(pkg.kind, crate::using::spec::PackageKind::Dylib) {
+                    let path = pkg.path.as_str();
+                    // Boxes list: prefer declared `bid`, else empty (TypeBox FFI may populate later)
+                    let boxes: Vec<String> = pkg
+                        .bid
+                        .as_ref()
+                        .map(|b| vec![b.clone()])
+                        .unwrap_or_else(|| Vec::new());
+                    // Use package name as library handle (stable within this process)
+                    let host = nyash_rust::runtime::get_global_plugin_host();
+                    if let Ok(ro) = host.read() {
+                        let _ = ro.load_library_direct(pkg_name, path, &boxes);
+                    }
+                    // Also record marker token so suggesters/diagnostics can see it
+                    let sb = nyash_rust::box_trait::StringBox::new(format!("dylib:{}", path));
+                    nyash_rust::runtime::modules_registry::set(pkg_name.clone(), Box::new(sb));
+                }
+            }
+        }
         // Optional dependency tree bridge (log-only)
         if let Ok(dep_path) = std::env::var("NYASH_DEPS_JSON") {
             match std::fs::read_to_string(&dep_path) {

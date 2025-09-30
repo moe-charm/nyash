@@ -1,5 +1,6 @@
 use super::super::host_bridge::BoxInvokeFn;
-use super::super::types::NyashTypeBoxFfi;
+use super::super::types::{NyashTypeBoxFfi, NyashTypeBoxFinalFfi};
+use super::super::host_bridge::FinalInvokeFn;
 use super::util::dbg_on;
 use super::PluginLoaderV2;
 use crate::bid::{BidError, BidResult};
@@ -13,6 +14,8 @@ pub(crate) struct LoadedBoxSpec {
     pub(crate) fini_method_id: Option<u32>,
     pub(crate) invoke_id: Option<BoxInvokeFn>,
     pub(crate) resolve_fn: Option<extern "C" fn(*const std::os::raw::c_char) -> u32>,
+    // Optional Final ABI per-Box invoke (Phase A)
+    pub(crate) final_invoke: Option<FinalInvokeFn>,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -58,6 +61,30 @@ pub(super) fn record_typebox_spec(
             "[PluginLoaderV2] WARN: TypeBox present but no invoke_id for {}.{} — plugin should export per-Box invoke",
             lib_name, box_type
         );
+    }
+    Ok(())
+}
+
+/// Record optional Final ABI spec if present (env-gated in loader)
+pub(super) fn record_typebox_final_spec(
+    loader: &PluginLoaderV2,
+    lib_name: &str,
+    box_type: &str,
+    final_box: &NyashTypeBoxFinalFfi,
+) -> BidResult<()> {
+    // Basic sanity: struct size must be at least our header
+    let ok = final_box.struct_size as usize >= std::mem::size_of::<NyashTypeBoxFinalFfi>();
+    if !ok {
+        return Ok(());
+    }
+    if let Some(final_invoke) = final_box.invoke_final {
+        let key = (lib_name.to_string(), box_type.to_string());
+        let mut map = loader
+            .box_specs
+            .write()
+            .map_err(|_| BidError::PluginError)?;
+        let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
+        entry.final_invoke = Some(final_invoke);
     }
     Ok(())
 }
@@ -151,4 +178,54 @@ pub(super) fn get_spec<'a>(
         map.get(&(lib_name.to_string(), box_type.to_string()))
             .cloned()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    extern "C" fn dummy_final_invoke(
+        _type_id: u32,
+        _method_id: u32,
+        _instance_id: u32,
+        _args: *const super::super::types::NyValueFfi,
+        _argc: usize,
+        _out: *mut super::super::types::NyResultFfi,
+    ) -> i32 {
+        0
+    }
+
+    #[test]
+    fn record_final_spec_registers_invoke() {
+        let loader = PluginLoaderV2::new();
+        let ffi = NyashTypeBoxFinalFfi {
+            abi_tag: 0x5446494E, // 'TFIN' (arbitrary)
+            version: 1,
+            struct_size: std::mem::size_of::<NyashTypeBoxFinalFfi>() as u16,
+            invoke_final: Some(dummy_final_invoke),
+            get_method_meta: None,
+            get_all_methods: None,
+            get_type_info: None,
+        };
+        let _ = record_typebox_final_spec(&loader, "libX", "MyBox", &ffi);
+        let spec = get_spec(&loader, "libX", "MyBox").expect("spec missing");
+        assert!(spec.final_invoke.is_some());
+    }
+
+    #[test]
+    fn record_final_spec_ignores_when_struct_too_small() {
+        let loader = PluginLoaderV2::new();
+        let ffi = NyashTypeBoxFinalFfi {
+            abi_tag: 0,
+            version: 0,
+            struct_size: 4, // too small
+            invoke_final: Some(dummy_final_invoke),
+            get_method_meta: None,
+            get_all_methods: None,
+            get_type_info: None,
+        };
+        let _ = record_typebox_final_spec(&loader, "libY", "OtherBox", &ffi);
+        let spec = get_spec(&loader, "libY", "OtherBox");
+        assert!(spec.is_none() || spec.unwrap().final_invoke.is_none());
+    }
 }

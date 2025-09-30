@@ -35,6 +35,16 @@ impl NyashRunner {
         let mut override_types: Vec<String> = if let Ok(list) = std::env::var("NYASH_PLUGIN_OVERRIDE_TYPES") {
             list.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
         } else { vec!["ArrayBox".into(), "MapBox".into()] };
+        // Phase C: optional prefer switches (default OFF)
+        if crate::config::env::vm_plugin_prefer_string() && !override_types.iter().any(|t| t == "StringBox") {
+            override_types.push("StringBox".into());
+        }
+        if crate::config::env::vm_plugin_prefer_array() && !override_types.iter().any(|t| t == "ArrayBox") {
+            override_types.push("ArrayBox".into());
+        }
+        if crate::config::env::vm_plugin_prefer_map() && !override_types.iter().any(|t| t == "MapBox") {
+            override_types.push("MapBox".into());
+        }
         for t in ["FileBox", "TOMLBox"] { if !override_types.iter().any(|x| x == t) { override_types.push(t.into()); } }
         std::env::set_var("NYASH_PLUGIN_OVERRIDE_TYPES", override_types.join(","));
 

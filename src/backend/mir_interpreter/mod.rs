@@ -6,7 +6,7 @@
  * Print/Debug (best-effort), Barrier/Safepoint (no-op).
  */
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use crate::box_trait::NyashBox;
 use crate::boxes::array::ArrayBox;
@@ -33,6 +33,10 @@ pub struct MirInterpreter {
     // Trace context (dev-only; enabled with NYASH_VM_TRACE=1)
     pub(super) last_block: Option<BasicBlockId>,
     pub(super) last_inst: Option<MirInstruction>,
+    // Contracts observation (dev-only; enabled with NYASH_CHECK_CONTRACTS=1)
+    pub(super) contracts_new: HashSet<u64>,
+    pub(super) contracts_new_argv: HashMap<u64, usize>,
+    pub(super) contracts_born: HashSet<u64>,
 }
 
 impl MirInterpreter {
@@ -45,6 +49,9 @@ impl MirInterpreter {
             cur_fn: None,
             last_block: None,
             last_inst: None,
+            contracts_new: HashSet::new(),
+            contracts_born: HashSet::new(),
+            contracts_new_argv: HashMap::new(),
         }
     }
 

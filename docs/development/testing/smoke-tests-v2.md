@@ -163,8 +163,16 @@ VM 実行順と LLVM 静的コールサイトの差分を簡易比較するヘ�
 
 ```
 ./tools/dev/call_trace_diff.sh <file.nyash>
+# 種別を絞る場合（Method/Global/BoxCall/PluginInvoke をカンマ区切り）
+./tools/dev/call_trace_diff.sh <file.nyash> --kinds 'Method,BoxCall'
 ```
 
 - VM 実行：`NYASH_CALL_TRACE=1`（ランタイム順のJSON行をstderrに出力）
 - LLVM 静的：`NYASH_CALL_TRACE=1 NYASH_LLVM_USE_HARNESS=1`（静的サイトのJSON行）
 - 判定方針：VMで実行されたcallee/arityがLLVM静的一覧に含まれていればOK（順序差/未実行サイトの列挙は許容）
+- セットサマリ：順序を無視した集合差も表示されます（VM unique=0 なら OK）。
+
+### 契約観測（Contracts Observation）
+開発時に `NYASH_CHECK_CONTRACTS=1` を有効にすると、NewBox/birth の対応やメソッド arity/type/index のヒントを1行JSONで観測できます（挙動は不変）。
+
+詳しくは: `docs/development/testing/contracts-observation.md`

@@ -169,6 +169,33 @@ pub fn plugin_only() -> bool {
     std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1")
 }
 
+// ---- Plugin ABI Final (Phase A minimal) ----
+/// Prefer probing Final ABI (NyValue/NyResult) in loader.
+/// Default: OFF. Enable with NYASH_PLUGIN_ABI_FINAL=1
+pub fn plugin_abi_final() -> bool {
+    std::env::var("NYASH_PLUGIN_ABI_FINAL").ok().as_deref() == Some("1")
+}
+/// Enable optional metadata probing/logging for plugins (quiet when absent).
+/// Default: OFF. Enable with NYASH_PLUGIN_META=1
+pub fn plugin_meta() -> bool {
+    std::env::var("NYASH_PLUGIN_META").ok().as_deref() == Some("1")
+}
+/// Development-only: trace side effects from plugin calls (no behavior change).
+/// Default: OFF. Enable with NYASH_TRACE_EFFECTS=1
+pub fn trace_effects() -> bool {
+    std::env::var("NYASH_TRACE_EFFECTS").ok().as_deref() == Some("1")
+}
+/// Development-only: check plugin contracts and log violations.
+/// Default: OFF. Enable with NYASH_CHECK_CONTRACTS=1
+pub fn check_contracts() -> bool {
+    std::env::var("NYASH_CHECK_CONTRACTS").ok().as_deref() == Some("1")
+}
+/// Enforce capability declarations for plugin methods (dev/ci only).
+/// Default: OFF. Enable with NYASH_PLUGIN_CAPS_ENFORCE=1
+pub fn plugin_caps_enforce() -> bool {
+    std::env::var("NYASH_PLUGIN_CAPS_ENFORCE").ok().as_deref() == Some("1")
+}
+
 /// Core-13 "pure" mode: after normalization, only the 13 canonical ops are allowed.
 /// If enabled, the optimizer will try lightweight rewrites for Load/Store/NewBox/Unary,
 /// and the final verifier will reject any remaining non-Core-13 ops.
@@ -440,6 +467,37 @@ pub fn pipe_use_pyvm() -> bool {
 }
 pub fn vm_use_dispatch() -> bool {
     std::env::var("NYASH_VM_USE_DISPATCH").ok().as_deref() == Some("1")
+}
+
+/// Policy: prefer routing BoxCall to PluginInvoke when receiver is a plugin box.
+/// Default: OFF. Enable with NYASH_VM_BOXCALL_PLUGIN_FIRST=1 (dev/experiments only).
+pub fn vm_boxcall_plugin_first() -> bool {
+    match std::env::var("NYASH_VM_BOXCALL_PLUGIN_FIRST").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+
+/// Phase C scaffold: prefer plugin path for ArrayBox (default OFF)
+pub fn vm_plugin_prefer_array() -> bool {
+    match std::env::var("NYASH_VM_PLUGIN_PREFER_ARRAY").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+/// Phase C scaffold: prefer plugin path for StringBox (default OFF)
+pub fn vm_plugin_prefer_string() -> bool {
+    match std::env::var("NYASH_VM_PLUGIN_PREFER_STRING").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+/// Phase C scaffold: prefer plugin path for MapBox (default OFF)
+pub fn vm_plugin_prefer_map() -> bool {
+    match std::env::var("NYASH_VM_PLUGIN_PREFER_MAP").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
 }
 
 // Self-host compiler knobs

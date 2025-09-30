@@ -21,7 +21,28 @@ Using / AST merge
 Plugins
 - NYASH_PLUGIN_POLICY={auto|off|force} (default auto)
   - off: disable external plugins (compat: NYASH_DISABLE_PLUGINS=1)
-  - force: plugin‑only execution (compat: NYASH_PLUGIN_ONLY=1)
+  - force: plugin-only execution (compat: NYASH_PLUGIN_ONLY=1)
+
+Plugin ABI (Final; experimental, default OFF)
+- NYASH_PLUGIN_ABI_FINAL=1: prefer NyValue/NyResult Final ABI when available (fallback to v2)
+- NYASH_PLUGIN_META=1: log presence of Final ABI/meta (quiet when absent)
+- NYASH_PLUGIN_CAPS_ENFORCE=1: enforce required_capabilities at load (dev/ci recommended)
+- NYASH_TRACE_EFFECTS=1: emit JSON lines for method effects (dev only)
+- NYASH_CHECK_CONTRACTS=1: trace pre/post contracts (log only)
+
+VM plugin routing (Phase C — default OFF)
+- NYASH_VM_BOXCALL_PLUGIN_FIRST=1: route BoxCall to PluginInvoke when receiver is plugin-backed
+- NYASH_VM_PLUGIN_PREFER_STRING=1: prefer plugin provider for StringBox
+- NYASH_VM_PLUGIN_PREFER_ARRAY=1: prefer plugin provider for ArrayBox
+- NYASH_VM_PLUGIN_PREFER_MAP=1: prefer plugin provider for MapBox
+  Notes: runner merges these into NYASH_PLUGIN_OVERRIDE_TYPES and rebuilds the unified registry.
+
+Plugin ABI (Final Vision; dev/experimental)
+- NYASH_PLUGIN_ABI_FINAL=1: prefer NyResult-based invoke and enable Final ABI probes (fallback to v2 when unavailable)
+- NYASH_PLUGIN_META=1: query and log plugin meta (get_method_meta/get_all_methods/get_type_info) when present
+- NYASH_PLUGIN_CAPS_ENFORCE=1: enforce required_capabilities at load time (dev/ci only recommended)
+- NYASH_TRACE_EFFECTS=1: emit JSON lines for declared method effects at call time
+- NYASH_CHECK_CONTRACTS=1: trace pre/post contracts (log-only; no hard enforcement yet)
 
 Alias/Using (runner)
 - NYASH_ALIAS_INTERNAL_REWRITE=1 (default 1): after renaming prelude tops to `Alias_<Top>`, also rewrite internal references inside the prelude to the new names. Set to 0/false to disable (emergency toggle).
