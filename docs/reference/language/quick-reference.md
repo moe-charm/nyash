@@ -6,7 +6,7 @@ Purpose
 
 Keywords (reserved)
 - control: `if`, `else`, `loop`, `match`, `case`, `break`, `continue`, `return`
-- decl: `static`, `box`, `local`, `using`, `as`
+- decl: `flow`, `static`, `box`, `local`, `using`, `as`
 - lit: `true`, `false`, `null`, `void`
 
 Expressions and Calls
@@ -85,3 +85,10 @@ Dev/Prod toggles (indicative)
 Notes
 - Keep the language small. Prefer explicit conversions (`int(x)`, `str(x)`, `bool(x)`) in standard helpers over implicit coercions.
 - Builder rewrites method calls to keep runtime dispatch simple and consistent across backends.
+
+Flow (stateless namespace)
+- `flow Name { ... }` defines a stateless container of methods.
+- Allowed: methods, local variables inside methods.
+- Forbidden: fields, `birth`/`fini`, `new Name()`, `me` inside methods.
+- Lowering intent: `Name.method(a, b)` → global `Name.method/2` (no BoxCall).
+- Use for entry modules (Main.main) and utility groups.

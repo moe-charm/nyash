@@ -16,6 +16,9 @@ Statement separation and semicolons
 Imports and namespaces
 - See: reference/language/using.md — `using` syntax, runner resolution, and style guidance.
 
+Stateless namespaces (flow)
+- See: reference/language/flow.md — `flow` is a fieldless, stateless method container suitable for entry modules and utilities.
+
 Grammar (EBNF)
 - See: reference/language/EBNF.md — Stage‑2 grammar specification used by parser implementations.
  - Unified Members (stored/computed/once/birth_once): see reference/language/EBNF.md “Box Members (Phase 15)” and the Language Reference section. Default ON (disable with `NYASH_ENABLE_UNIFIED_MEMBERS=0`).
