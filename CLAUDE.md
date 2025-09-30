@@ -123,6 +123,42 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - ✅ **プラグインチェッカー**: ChatGPT5 Pro設計の安全性機能実装
 - ✅ **StringBox問題根本解決**: slot_registry統一による完全修正
 
+### 🚀 **Phase 15.8開始！LLVM→WASM実装** (2025-10-01 ~)
+- 🌿 **専用ブランチ**: `wasm-development` (← `selfhost`からfork)
+- 🎯 **目標**: MIR18命令 → WASM変換、ブラウザ/エッジ環境対応
+- 📋 **戦略**: llvm_py拡張（既存800行活用）+ WASI runtime連携
+- 📚 **計画書**: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
+
+#### **進捗管理方針（Phase 15.8専用）**
+```
+📊 進捗追跡に使用する3つのドキュメント:
+
+1. CLAUDE.md（このファイル）
+   - Phase 15.8の進捗サマリー
+   - Week単位の完了状況
+   - 重要なマイルストーン記録
+
+2. CURRENT_TASK.md
+   - 現在進行中のタスク詳細
+   - 次のアクション項目
+   - 問題・課題の記録
+
+3. docs/development/roadmap/phases/phase-15.8/README.md
+   - 全体計画・タイムライン
+   - 技術詳細・設計方針
+   - 成功条件・成果物
+
+🔄 更新頻度:
+- CLAUDE.md: Week完了時（週1回）
+- CURRENT_TASK.md: タスク切り替え時（日次）
+- Phase 15.8 README.md: 計画変更時のみ（不定期）
+```
+
+#### **Week 1進捗** (2025-10-01 ~ 10-07)
+- 🔧 **Phase 1.1**: llvmlite WASM初期化 [🔄 進行中]
+- ⏸️ **Phase 1.2**: WASM calling convention [未着手]
+- ⏸️ **Phase 1.3**: ビルドスクリプト作成 [未着手]
+
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/nyash_kernel` 完全移行
 - ✅ **42%削減達成**: `with_legacy_vm_args` 11箇所系統的削除完了

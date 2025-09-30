@@ -1,4 +1,39 @@
-# Current Task — Phase 15 (Concise)
+# Current Task — Phase 15.8: LLVM→WASM実装 (2025-10-01 ~)
+
+## 🎯 **今日のタスク** (2025-10-01)
+### Phase 1.1: llvmlite WASM初期化 [🔄 進行中]
+```python
+# 作業ファイル: src/llvm_py/llvm_builder.py
+# 目標: WASMターゲット対応の基盤実装
+
+タスク:
+1. ✅ 既存実装確認（wasm/wasm_v2/llvm_py）
+2. ✅ Ultrathink戦略立案
+3. 🔄 llvm_builder.py修正: __init__にtargetパラメータ追加
+4. ⏸️ WASM triple設定: "wasm32-unknown-wasi"
+5. ⏸️ 動作確認: Hello World MIR → LLVM IR生成
+```
+
+### 次のアクション
+- [ ] src/llvm_py/llvm_builder.py編集開始
+- [ ] target="wasm32"分岐実装
+- [ ] llvmlite WASM target初期化確認
+
+---
+
+## 📋 **Week 1計画** (2025-10-01 ~ 10-07)
+- **Phase 1.1**: llvmlite WASM初期化（50行追加）
+- **Phase 1.2**: WASM calling convention調整
+- **Phase 1.3**: tools/build_wasm.sh作成
+
+## 📊 **進捗管理**
+- **CLAUDE.md**: Week完了時に更新
+- **CURRENT_TASK.md**: このファイル（日次更新）
+- **Phase 15.8 README**: 計画変更時のみ
+
+---
+
+# Past Tasks — Phase 15 (Archive)
 
 Focus
 - Keep VM quick green; llvmlite integration on-demand.
