@@ -5,6 +5,14 @@ using "apps/selfhost-compiler/pipeline_v2/regex_flow.nyash" as RegexFlow
 flow PipelineV2 {
   lower_stage1_to_mir(ast_json, prefer_cfg) {
     if ast_json == null { return EmitMirFlow.emit_return_int(0) }
+    // If(...) pattern (prefer CFG form)
+    {
+      local iq = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
+      if iq >= 0 {
+        local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
+        if ic != null { return EmitMirFlow.emit_compare_cfg(ic.get("lhs"), ic.get("rhs"), ic.get("cmp")) }
+      }
+    }
     // Try Compare first (avoid mis-detection by 'op' field inside Compare)
     // Guard by raw scan to avoid calling methods on null-like values
     {

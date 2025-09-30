@@ -17,10 +17,19 @@
 - Self‑Hosting 小粒強化（LocalSSA ensure_cond の代表ケース）
 
 ## Next Actions（小粒・優先順）
-1) Alias 重複/衝突 Fail‑Fast のスモークを1件追加
-2) JSON.stringify の深いネスト/特殊文字/大規模Mapの検証を1〜2件（quick）
-3) PreLex raw/numeric の LLVM/PyVM 各1本（quick）
-4) Self‑Host: compare→branch→compare→ret の parity スモーク（VM/LLVM）
+P2（Selfhost Compiler / Pipeline v2 — 制御フローの最小対応）
+1) if/else → branch/jump/ret の最小 Lowering（PHIなし・両枝ret限定）
+   - Docs: INTERFACES.md に仕様追記（済）
+   - Smoke: selfhost_if_else_ret_vm.sh（枠追加・現状SKIP）
+   - Impl: MirBuilderBox.hako に最小実装（次）
+2) LocalSSA.ensure_cond の最小実装（分岐直前/Call直前の材化）
+   - Docs: INTERFACES.md 追記（済）
+   - Impl: MirBuilderBox.hako に ensure_after_phis_copy 相当を実装（次）
+
+P1（周辺の安定化・非破壊）
+3) pipeline_v2 子タイムアウト/環境伝搬の再点検（8000ms継続、必要時拡張）
+4) .hako ドキュメントの表記更新（両受理注記は残す）
+5) VSCode: TextMate grammar の最小追加（シンタックス色付け）
 
 ## Docs — Selfhost Compiler (done)
 - apps/selfhost-compiler/README.md を更新（Rust VM 既定・ENV一覧・Fail‑Fast・予定スモーク）
@@ -43,6 +52,7 @@
   - modulefn_tail_ambiguous_vm.sh（STRICT=1 で Fail‑Fast 動作を確認）
   - modulefn_llvm_trace.sh（LLVM call trace に ModuleFunction を出すことを確認）
   - json_v1_mir_call_vm.sh（PyVMブリッジJSONで unified mir_call を検知）
+  - selfhost_if_else_ret_vm.sh（設計先行のSKIPテスト: if/else→ret の受け皿）
 
 ## ✅ Update — 2025-10-04（MIR: ModuleFunction Phase‑2 着地）
 - Callee に `ModuleFunction(String)` を追加（型安全なモジュール関数呼び出し）
@@ -82,6 +92,7 @@
   - 実装: src/runner/mir_json_emit.rs:bin 変種
 - スモーク追加（quick/core）
   - json_v1_mir_call_vm.sh — PyVM 経由の JSON に unified mir_call が含まれることを確認
+  - selfhost_if_else_ret_vm.sh — if/else→branch/jump/ret の最小 Lowering の受け入れ枠（現状 SKIP）
 
 
 ## Flags（ModuleFunction 周り・運用メモ）

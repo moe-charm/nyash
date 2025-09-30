@@ -30,6 +30,31 @@ Contracts
 - EmitterBox.emit_program returns a single-line JSON v0 with non-empty header, and `meta.usings` present (possibly empty array).
 - Pipeline v2 prints exactly one JSON line to stdout and returns 0 on success.
 
+Control Flow Lowering (Phase 15.7 — P2)
+- Goal: Lower simple `if (cond) { then; return X; } else { return Y; }` to MIR with `branch/jump/ret` only, no PHI.
+- Invariants (minimal):
+  - Condition value is materialized in the current block before `branch`.
+  - `then`/`else` blocks both end with `ret` (Phase 15.7 scope)。
+  - No fallthrough. Merge block is not required for this minimal form.
+  - No SSA PHI needed as both sides terminate.
+- Pseudocode
+  - Input (AST-like JSON): `If { cond: vC, then: [.. ret vT], else: [.. ret vE] }`
+  - Output (MIR):
+    - `%c = (cond)`
+    - `branch %c -> %bb_then, %bb_else`
+    - `%bb_then: ... ret %vT`
+    - `%bb_else: ... ret %vE`
+- Future (out-of-scope for P2):
+  - 非終端 then/else の合流に PHI を用いる（Phase 16以降）。
+  - `ensure_cond` による in‑block の Copy/材化最適化（P2で最小版を導入）。
+
+LocalSSA.ensure_cond（最小）
+- 目的: 分岐直前に使う値が “このブロック内で定義済み” になるように、必要なら Copy を発行する。
+- 仕様（最小）:
+  - ブロック先頭の PHI 群の直後に Copy を挿入（PHIの後、最初の通常命令の前）。
+  - 呼び出し（call/boxcall）直前にレシーバ/引数に対しても材化を許容（P2では代表ケースのみ）。
+  - 戻り値: ローカルに材化された ValueId。
+
 Environment (Runners use these)
 - NYASH_USE_NY_COMPILER=1   // enable Ny child compiler path
 - NYASH_NY_COMPILER_MIN_JSON=1  // append --min-json to child

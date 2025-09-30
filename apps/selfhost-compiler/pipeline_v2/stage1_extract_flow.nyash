@@ -75,4 +75,34 @@ flow Stage1ExtractFlow {
     local rhs = RegexFlow.to_int(rhs_ds)
     return { cmp: opk, lhs: lhs, rhs: rhs }
   }
+
+  // If(cond=Compare(lhs,rhs,op), then=[Return(Int 1)], else=[Return(Int 0)]) → {cmp, lhs, rhs} or null
+  extract_if_compare(ast_json) {
+    if ast_json == null { return null }
+    // Find If node first (tolerant to whitespace)
+    local ip = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
+    if ip < 0 { return null }
+    // Find Compare under/after If
+    local q = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", ip)
+    if q < 0 { return null }
+    // Extract op
+    local opk_pos = RegexFlow.find_from(ast_json, "\"op\":\"", q)
+    if opk_pos < 0 { return null }
+    local opk_end = RegexFlow.find_from(ast_json, "\"", opk_pos + 6)
+    if opk_end < 0 { return null }
+    local opk = ast_json.substring(opk_pos + 6, opk_end)
+    // Extract lhs/rhs integer values
+    local lhsp = RegexFlow.find_from(ast_json, "\"lhs\"", q)
+    local rhsp = RegexFlow.find_from(ast_json, "\"rhs\"", q)
+    if lhsp < 0 || rhsp < 0 { return null }
+    local lval = RegexFlow.find_from(ast_json, "\"value\":", lhsp)
+    local rval = RegexFlow.find_from(ast_json, "\"value\":", rhsp)
+    if lval < 0 || rval < 0 { return null }
+    local lhs_ds = RegexFlow.digits_from(ast_json, lval + 8)
+    local rhs_ds = RegexFlow.digits_from(ast_json, rval + 8)
+    if lhs_ds == "" || rhs_ds == "" { return null }
+    local lhs = RegexFlow.to_int(lhs_ds)
+    local rhs = RegexFlow.to_int(rhs_ds)
+    return { cmp: opk, lhs: lhs, rhs: rhs }
+  }
 }
