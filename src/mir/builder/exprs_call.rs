@@ -32,7 +32,7 @@ impl super::MirBuilder {
             self.emit_instruction(super::MirInstruction::Call {
                 dst: Some(dst),
                 func: callee_id,
-                callee: None, // Legacy call expression - use old resolution
+                callee: None, // legacy dynamic call resolution
                 args: arg_ids,
                 effects: super::EffectMask::PURE,
             })?;

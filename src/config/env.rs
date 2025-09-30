@@ -68,11 +68,54 @@ pub fn bootstrap_from_toml_env() {
     if std::env::var("NYASH_SKIP_TOML_ENV").ok().as_deref() == Some("1") {
         return;
     }
-    let path = "nyash.toml";
-    let content = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(_) => return,
-    };
+    // Accept brand alias environment variables before reading files
+    alias_prefixes_bootstrap();
+    // Resolve hako.toml/nyash.toml/hakorune.toml from CWD, fallback to *_ROOT if necessary.
+    let mut content = String::new();
+    // Prefer hako.toml first
+    let path_hako = std::path::Path::new("hako.toml");
+    if path_hako.exists() {
+        match std::fs::read_to_string(path_hako) {
+            Ok(s) => { content = s; }
+            Err(_) => return,
+        }
+    } else {
+        // Try nyash.toml in CWD next
+        let path_ny = std::path::Path::new("nyash.toml");
+        if path_ny.exists() {
+            match std::fs::read_to_string(path_ny) {
+                Ok(s) => { content = s; }
+                Err(_) => return,
+            }
+        } else {
+            // Try hakorune.toml in CWD next
+        let path_alt = std::path::Path::new("hakorune.toml");
+        if path_alt.exists() {
+            match std::fs::read_to_string(path_alt) {
+                Ok(s) => { content = s; }
+                Err(_) => return,
+            }
+        } else if let Some(root) = env_root_any() {
+            // Try $ROOT/nyash.toml then $ROOT/hakorune.toml
+            // Also prefer hako.toml under root
+            let ph = std::path::Path::new(&root).join("hako.toml");
+            if let Ok(s) = std::fs::read_to_string(&ph) { content = s; }
+            else {
+                let p = std::path::Path::new(&root).join("nyash.toml");
+                if let Ok(s) = std::fs::read_to_string(&p) { content = s; }
+                else {
+                    let p2 = std::path::Path::new(&root).join("hakorune.toml");
+                    match std::fs::read_to_string(p2) {
+                    Ok(s) => { content = s; }
+                    Err(_) => return,
+                    }
+                }
+            }
+        } else {
+            return;
+        }
+        }
+    }
     let Ok(value) = toml::from_str::<toml::Value>(&content) else {
         return;
     };
@@ -98,6 +141,36 @@ pub fn bootstrap_from_toml_env() {
     let mut cur = current();
     cur.overrides.extend(overrides);
     set_current(cur);
+}
+
+/// Copy HAKU_*/HRN_* to NYASH_* if unset (non-destructive), incl. *_ROOT.
+pub fn alias_prefixes_bootstrap() {
+    // Root alias first
+    if std::env::var("NYASH_ROOT").ok().is_none() {
+        if let Ok(v) = std::env::var("HAKO_ROOT") { std::env::set_var("NYASH_ROOT", v); }
+        else if let Ok(v) = std::env::var("HAKU_ROOT") { std::env::set_var("NYASH_ROOT", v); }
+        else if let Ok(v) = std::env::var("HRN_ROOT") { std::env::set_var("NYASH_ROOT", v); }
+    }
+    // General mapping
+    let snapshot: Vec<(String, String)> = std::env::vars().collect();
+    for (k, v) in snapshot.iter() {
+        if let Some(tail) = k.strip_prefix("HAKO_")
+            .or_else(|| k.strip_prefix("HAKU_"))
+            .or_else(|| k.strip_prefix("HRN_")) {
+            let ny = format!("NYASH_{}", tail);
+            if std::env::var(&ny).ok().is_none() {
+                std::env::set_var(ny, v);
+            }
+        }
+    }
+}
+
+/// Return NYASH_ROOT or its aliases (HAKU_ROOT/HRN_ROOT)
+fn env_root_any() -> Option<String> {
+    std::env::var("NYASH_ROOT").ok()
+        .or_else(|| std::env::var("HAKO_ROOT").ok())
+        .or_else(|| std::env::var("HAKU_ROOT").ok())
+        .or_else(|| std::env::var("HRN_ROOT").ok())
 }
 
 /// Get await maximum milliseconds, centralized here for consistency.
@@ -200,7 +273,15 @@ pub fn plugin_caps_enforce() -> bool {
 /// If enabled, the optimizer will try lightweight rewrites for Load/Store/NewBox/Unary,
 /// and the final verifier will reject any remaining non-Core-13 ops.
 pub fn mir_core13_pure() -> bool {
-    std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1")
+    // Deprecated: Core-13 pure mode has been removed (no-op).
+    // If explicitly set, emit a deprecation note only when verbose, then return false.
+    if let Some(v) = std::env::var("NYASH_MIR_CORE13_PURE").ok() {
+        let on = matches!(v.as_str(), "1" | "true" | "on" | "TRUE" | "ON");
+        if on && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("[deprecated] NYASH_MIR_CORE13_PURE is ignored (feature removed)");
+        }
+    }
+    false
 }
 
 /// Enable heuristic pre-pin of comparison operands in if/loop headers.
@@ -398,6 +479,15 @@ pub fn extern_route_slots() -> bool {
 pub fn cli_verbose() -> bool {
     std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1")
 }
+/// Global quiet mode for CLI/logging. True when any of the following:
+/// - NYASH_JSON_ONLY=1 (child pipelines printing JSON to stdout)
+/// - NYASH_QUIET=1 (explicit quiet)
+/// - NYASH_CLI_VERBOSE=0 (explicitly disable verbose)
+pub fn cli_quiet() -> bool {
+    std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0")
+}
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
     // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
@@ -575,6 +665,17 @@ pub fn entry_allow_toplevel_main() -> bool {
 /// be introduced in future if needed, but we keep minimal toggles now.
 pub fn expr_postfix_catch() -> bool {
     parser_stage3()
+}
+/// Parser gate for `flow` (stateless namespace) acceptance.
+/// Default: ON. Disable with NYASH_ENABLE_FLOW=0|false|off
+pub fn parser_flow_enabled() -> bool {
+    match std::env::var("NYASH_ENABLE_FLOW").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
 }
 /// Parser gate for Unified Members (stored/computed/once/birth_once).
 /// Default: ON during Phase-15 (set NYASH_ENABLE_UNIFIED_MEMBERS=0|false|off to disable).

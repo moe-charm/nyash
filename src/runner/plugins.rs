@@ -70,7 +70,7 @@ impl NyashRunner {
                             for p in list {
                                 if list_only { println!("  • {}", p); continue; }
                                 match std::fs::read_to_string(&p) {
-                                    Ok(code) => {
+                                    Ok(_code) => {
                                         // Legacy interpreter removed - ny_plugins execution disabled
                                         println!("[ny_plugins] {}: SKIP (legacy interpreter removed)", p);
                                     }

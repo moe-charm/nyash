@@ -1,9 +1,0 @@
-include "apps/selfhost-compiler/boxes/parser_box.nyash"
-include "apps/selfhost-compiler/boxes/emitter_box.nyash"
-static box Main {
-  main(args) {
-    local src = "abc"
-    print(src)
-    return 0
-  }
-}

@@ -106,12 +106,14 @@ impl PluginHost {
             }
             // Load the library now
             l.load_plugin_direct(lib_name, &def)?;
-            // Ingest nyash_box.toml (if present) to populate box_specs: type_id/method ids
-            let nyb_path = std::path::Path::new(path)
+            // Ingest hako_box.toml / nyash_box.toml (if present) to populate box_specs: type_id/method ids
+            let base_dir = std::path::Path::new(path)
                 .parent()
-                .unwrap_or(std::path::Path::new("."))
-                .join("nyash_box.toml");
-            l.ingest_box_specs_from_nyash_box(lib_name, &def.boxes, &nyb_path);
+                .unwrap_or(std::path::Path::new("."));
+            let hako_box = base_dir.join("hako_box.toml");
+            let nyash_box = base_dir.join("nyash_box.toml");
+            let pick = if hako_box.exists() { hako_box } else { nyash_box };
+            l.ingest_box_specs_from_nyash_box(lib_name, &def.boxes, &pick);
             // Also register providers in the v2 BoxFactoryRegistry so `new BoxType()` works
             let registry = crate::runtime::get_global_registry();
             for bx in &def.boxes {

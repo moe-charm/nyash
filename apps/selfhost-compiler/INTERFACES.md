@@ -1,0 +1,48 @@
+Selfhost Compiler Interfaces (Draft)
+
+Purpose
+- Document minimal, stable interfaces between boxes to keep responsibilities clear and changes local.
+- Apply Fail-Fast: interfaces return explicit errors; no implicit fallbacks.
+
+Boxes and Roles
+- ParserBox: source text -> Stage‑1 JSON (AST-ish)
+  - Methods:
+    - stage3_enable(flag: i64) -> Void
+    - extract_usings(src: String) -> Void
+    - get_usings_json() -> String  // JSON array `[{name, path?}, ...]`
+    - parse_program2(src: String) -> String  // Stage‑1 JSON
+- EmitterBox: Stage‑1 JSON + usings -> JSON v0 (header+body)
+  - Methods:
+    - emit_program(json: String, usings_json: String) -> String // JSON v0 line
+- Pipeline v2 (emit‑only; Phase 15.7)
+  - ExecutionPipelineBox (apps/selfhost-compiler/pipeline_v2)
+    - birth(name: String="vm") -> i64  // backend tag only
+    - run_source(src: String, stage3_flag: i64=0) -> i64  // prints JSON v0; 0 on success
+  - BackendBox (stub)
+    - birth(name: String) -> i64
+    - get_name() -> String
+    - execute(mir_json: String) -> i64   // reserved; returns 0 in Phase 15.7
+  - MirBuilderBox (stub)
+    - build(ast_json: String) -> String  // pass-through
+
+Contracts
+- ParserBox.parse_program2 returns a single-line JSON when `NYASH_JSON_ONLY=1`.
+- EmitterBox.emit_program returns a single-line JSON v0 with non-empty header, and `meta.usings` present (possibly empty array).
+- Pipeline v2 prints exactly one JSON line to stdout and returns 0 on success.
+
+Environment (Runners use these)
+- NYASH_USE_NY_COMPILER=1   // enable Ny child compiler path
+- NYASH_NY_COMPILER_MIN_JSON=1  // append --min-json to child
+- NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir ..."  // child args passthrough
+- NYASH_JSON_ONLY=1         // quiet: stdout=JSON only
+ - NYASH_QUIET=1            // force quiet logs (no non-essential stderr)
+- NYASH_VM_USE_PY=1         // execute MIR via PyVM (default: Rust VM)
+- NYASH_NY_COMPILER_TIMEOUT_MS=2000 // child timeout
+
+Non-Goals (Phase 15.7)
+- Complex optimization passes, dynamic plugin loading, or large I/O are out of scope.
+- Behavior changes to Core VM/LLVM are prohibited; all changes are local and flag-guarded.
+
+Acceptance (dev)
+- JSON v0 header non-empty when --min-json is set.
+- Minimal MIR(JSON v0) executes under Rust VM with quick smokes.

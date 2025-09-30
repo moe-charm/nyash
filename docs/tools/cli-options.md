@@ -1,4 +1,6 @@
-# Nyash CLI Options Quick Reference
+# HakoRune CLI Options Quick Reference (aka Nyash)
+
+Brand alias: You can use the `hrn` binary as an alias of `nyash`. Environment variables also accept `HAKO_*`/`HAKU_*`/`HRN_*` as non-destructive aliases of `NYASH_*`.
 
 最終更新: 2025-08-23
 

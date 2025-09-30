@@ -75,16 +75,14 @@ impl PluginLoaderV2 {
                             ptr: std::ptr::null(),
                             len: 0,
                         };
-                        let code = unsafe {
-                            (final_invoke)(
-                                type_id,
-                                method_id,
-                                instance_id,
-                                values.as_ptr(),
-                                values.len(),
-                                &mut out,
-                            )
-                        };
+                        let code = (final_invoke)(
+                            type_id,
+                            method_id,
+                            instance_id,
+                            values.as_ptr(),
+                            values.len(),
+                            &mut out,
+                        );
                         if dbg_on() {
                             eprintln!(
                                 "[PluginLoaderV2] final call {}.{}: code={} status={} tag={}",

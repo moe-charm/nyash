@@ -4,16 +4,14 @@
  * SSA-form instructions with effect tracking for optimization
  */
 
-use super::{Effect, EffectMask, ValueId};
+use super::{EffectMask, ValueId};
 use crate::mir::definitions::Callee;  // Import Callee from unified definitions
 use crate::mir::types::{
     BarrierOp, BinaryOp, CompareOp, ConstValue, MirType, TypeOpKind, UnaryOp, WeakRefOp,
 };
 
-use std::fmt;
 
 // Kind-specific metadata (non-functional refactor scaffolding)
-use crate::mir::instruction_kinds as inst_meta;
 
 /// MIR instruction types - limited to 20 core instructions
 #[derive(Debug, Clone, PartialEq)]

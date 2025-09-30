@@ -122,9 +122,10 @@ impl NyashRunner {
             use crate::runner::modes::common_util::selfhost::{child, json};
             let exe = std::env::current_exe()
                 .unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
-            let parser_prog_hyphen = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+            let parser_prog_hako = std::path::Path::new("apps/selfhost-compiler/compiler.hako");
+            let parser_prog_nyash = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
             let parser_prog_legacy = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
-            let parser_prog = if parser_prog_hyphen.exists() { parser_prog_hyphen } else { parser_prog_legacy };
+            let parser_prog = if parser_prog_hako.exists() { parser_prog_hako } else if parser_prog_nyash.exists() { parser_prog_nyash } else { parser_prog_legacy };
             if parser_prog.exists() {
                 // Build extra args forwarded to child program
                 let mut extra_owned: Vec<String> = Vec::new();
@@ -156,6 +157,7 @@ impl NyashRunner {
                     &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
+                        ("NYASH_QUIET", "1"),
                         ("NYASH_ENABLE_USING", "1"),
                         ("NYASH_ALLOW_USING_FILE", "1"),
                         ("NYASH_USING_AST", "1"),
@@ -392,7 +394,7 @@ impl NyashRunner {
             }
             let inline_path = std::path::Path::new("tmp").join("inline_selfhost_emit.nyash");
             let inline_code = format!(
-                "include \"apps/selfhost-compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
+                "include \"apps/selfhost-compiler/boxes/parser_box.hako\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.hako\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
                 esc
             );
             if let Err(e) = std::fs::write(&inline_path, inline_code) {
@@ -406,6 +408,10 @@ impl NyashRunner {
             cmd.env_remove("NYASH_USE_NY_COMPILER");
             cmd.env_remove("NYASH_CLI_VERBOSE");
             cmd.env("NYASH_JSON_ONLY", "1");
+            // Allow file-based using in the inline child code (it includes ParserBox/EmitterBox)
+            cmd.env("NYASH_ENABLE_USING", "1");
+            cmd.env("NYASH_ALLOW_USING_FILE", "1");
+            cmd.env("NYASH_USING_AST", "1");
             let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -426,30 +432,17 @@ impl NyashRunner {
         if json_line.is_empty() {
             return false;
         }
+        // Emit-only mode: print raw JSON line and return
+        if std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1" {
+            println!("{}", json_line);
+            return true;
+        }
         match super::json_v0_bridge::parse_json_v0_to_module(&json_line) {
             Ok(module) => {
                 super::json_v0_bridge::maybe_dump_mir(&module);
-                let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY")
-                    .unwrap_or_else(|_| "1".to_string())
-                    == "1";
-                if emit_only {
-                    return false;
-                }
-                // Phase-15 policy: when NYASH_VM_USE_PY=1, prefer PyVM as reference executor
-                // regardless of BoxCall presence to ensure semantics parity (e.g., PHI merges).
-                let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
-                // Backward compatibility: if not preferring PyVM explicitly, still auto-enable when BoxCalls exist.
-                let needs_pyvm = !prefer_pyvm
-                    && module.functions.values().any(|f| {
-                        f.blocks.values().any(|bb| {
-                            bb.instructions.iter().any(|inst| {
-                                matches!(inst, crate::mir::MirInstruction::BoxCall { .. })
-                            })
-                        })
-                    });
-                if prefer_pyvm || needs_pyvm {
-                    let label = if prefer_pyvm { "selfhost" } else { "selfhost-fallback" };
-                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, label) {
+                // Policy update: prefer Rust VM by default. Use PyVM only when explicitly requested.
+                if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost") {
                         println!("Result: {}", code);
                         std::process::exit(code);
                     }

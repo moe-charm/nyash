@@ -1,5 +1,7 @@
 # Nyash Language Reference – Index
 
+Branding note: The project brand is HakoRune (aka Nyash). CLI alias `hrn` is available; docs and tools continue to use “nyash” for compatibility. See reference/project/branding.md.
+
 This is the entry point for Nyash language documentation.
 
 - Full Language Reference (2025): reference/language/LANGUAGE_REFERENCE_2025.md
@@ -18,6 +20,9 @@ Imports and namespaces
 
 Stateless namespaces (flow)
 - See: reference/language/flow.md — `flow` is a fieldless, stateless method container suitable for entry modules and utilities.
+
+Declarative MIR (recommended style)
+- See: guides/declarative-mir.md — Author MIR as Map/Array literals and stringify via `.toJSON()` (Rust JSONBox). Safer and more readable than string concatenation.
 
 Grammar (EBNF)
 - See: reference/language/EBNF.md — Stage‑2 grammar specification used by parser implementations.

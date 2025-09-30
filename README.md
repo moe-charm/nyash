@@ -1,4 +1,4 @@
-# 🐱 Nyash Programming Language
+# 🐱 HakoRune Programming Language (aka Nyash)
 **A Seriously-Crafted Hobby Language**  
 **From Zero to Native Binary in 20 Days - The AI-Powered Language Revolution**
 
@@ -23,8 +23,9 @@ Execution Status (Feature Additions Pause)
  - Policy (clarification): No major feature additions during this phase. Bug fixes and correctness/Fail‑Fast improvements are allowed and encouraged (bringing behavior in line with documented semantics). Any experimental additions must be guarded behind flags default‑OFF and be reversible.
 
 Quick pointers
+- Preferred config is `hako.toml` (compat: `nyash.toml` is still accepted).
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
-- Run PyVM: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`.
+- Run VM: `./target/release/nyash --backend vm apps/APP/main.nyash` (CLI alias `hrn` may be available).
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
  - VM engine toggle: `NYASH_VM_ENGINE={fallback|full}` (default: fallback). See `docs/guides/runtime-architecture.md`.
  - Using/Plugins (ENV quick):
@@ -37,7 +38,7 @@ Dev shortcuts (Operator Boxes & JSON smokes)
 - Details: `docs/guides/operator-boxes.md`
 
 Dev mode and defaults
-- `nyash --dev script.nyash` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal) while `nyash script.nyash` stays production‑like and quiet.
+- `nyash --dev script.nyash` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal). The CLI alias `hrn` may be used equivalently.
 - You can still use the dev shortcuts for a one‑command setup: `./tools/opbox-json.sh`, `./tools/opbox-quick.sh`.
 - Using guard: duplicate `using` of the same file (or alias rebind to a different file) now errors with a line number hint to avoid ambiguous resolution.
   - Example error: `using: duplicate import of '<canon_path>' at file.nyash:12 (previous alias 'X' first seen at line 5)`
@@ -135,7 +136,7 @@ Specs & Constraints
 
 MIR note: Core‑13 minimal kernel is enforced by default (NYASH_MIR_CORE13=1). Legacy ops are normalized (Array/Ref→BoxCall; TypeCheck/Cast/Barrier/WeakRef unified).
 
-Pure mode: set `NYASH_MIR_CORE13_PURE=1` to enable strict Core‑13. The optimizer rewrites a few ops (Load/Store/NewBox/Unary) to Core‑13 forms, and the compiler rejects any remaining non‑Core‑13 ops. This may break execution temporarily by design to surface MIR violations early.
+Core‑13 is enabled by default. The former “Core‑13 pure” mode has been removed.
 
 Note: JIT runtime execution is currently disabled to reduce debugging overhead. Use Interpreter/VM for running and AOT (Cranelift/LLVM) for distribution.
 
@@ -296,17 +297,17 @@ The WASM/browser path is currently not maintained and is not part of CI. The old
 
 ## 🧰 One‑Command Build (MVP): `nyash --build`
 
-Reads `nyash.toml`, builds plugins → core → emits AOT object → links an executable in one shot.
+Reads `hako.toml` (compat: `nyash.toml`), builds plugins → core → emits AOT object → links an executable in one shot.
 
 Basic (Cranelift AOT)
 ```bash
-./target/release/nyash --build nyash.toml \
+./target/release/nyash --build hako.toml \
   --app apps/egui-hello-plugin/main.nyash \
   --out app_egui
 ```
 
 Key options (minimal)
-- `--build <path>`: path to nyash.toml
+- `--build <path>`: path to hako.toml (compat: nyash.toml)
 - `--app <file>`: entry `.nyash`
 - `--out <name>`: output executable (default: `app`/`app.exe`)
 - `--build-aot cranelift|llvm` (default: cranelift)
@@ -473,7 +474,7 @@ typedef struct {
 
 ### Plugin Configuration
 ```toml
-# nyash.toml v3.0 - Unified plugin support
+# hako.toml v3.0 - Unified plugin support (compat: nyash.toml)
 [plugins.map]
 path = "plugins/map.so"
 abi = "c"              # Traditional C ABI

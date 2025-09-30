@@ -72,6 +72,11 @@ static box MirJsonBuilderMin {
     local b = "{\"id\":" + me._int_to_str(id) + ",\"instructions\":["
     return me._append(st, b)
   }
+  // Close current block and continue blocks array (adds "]},")
+  end_block_continue(st) {
+    // Close instructions array and block object, then add comma to continue
+    return me._append(st, "]},")
+  }
   _comma_if_needed(st) {
     local first = 1
     if st.has("first_inst") { first = st.get("first_inst") }
@@ -99,6 +104,16 @@ static box MirJsonBuilderMin {
   add_ret(st, val) {
     me._comma_if_needed(st)
     local b = "{\"op\":\"ret\",\"value\":" + me._int_to_str(val) + "}"
+    return me._append(st, b)
+  }
+  add_branch(st, cond, then_id, else_id) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"branch\",\"cond\":" + me._int_to_str(cond) + ",\"then\":" + me._int_to_str(then_id) + ",\"else\":" + me._int_to_str(else_id) + "}"
+    return me._append(st, b)
+  }
+  add_jump(st, target) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"jump\",\"target\":" + me._int_to_str(target) + "}"
     return me._append(st, b)
   }
   end_all(st) {

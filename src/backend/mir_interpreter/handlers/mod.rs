@@ -21,27 +21,33 @@ impl MirInterpreter {
                 box_type,
                 args,
             } => self.handle_new_box(*dst, box_type, args)?,
-            MirInstruction::PluginInvoke {
-                dst,
-                box_val,
-                method,
-                args,
-                ..
-            } => self.handle_plugin_invoke(*dst, *box_val, method, args)?,
-            MirInstruction::BoxCall {
-                dst,
-                box_val,
-                method,
-                args,
-                ..
-            } => self.handle_box_call(*dst, *box_val, method, args)?,
-            MirInstruction::ExternCall {
-                dst,
-                iface_name,
-                method_name,
-                args,
-                ..
-            } => self.handle_extern_call(*dst, iface_name, method_name, args)?,
+            MirInstruction::PluginInvoke { dst, .. } => {
+                if let Some(res) = self.try_execute_via_callee(inst) {
+                    let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }
+                } else {
+                    if let MirInstruction::PluginInvoke { dst, box_val, method, args, .. } = inst {
+                        self.handle_plugin_invoke(*dst, *box_val, method, args)?
+                    } else { unreachable!() }
+                }
+            }
+            MirInstruction::BoxCall { dst, .. } => {
+                if let Some(res) = self.try_execute_via_callee(inst) {
+                    let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }
+                } else {
+                    if let MirInstruction::BoxCall { dst, box_val, method, args, .. } = inst {
+                        self.handle_box_call(*dst, *box_val, method, args)?
+                    } else { unreachable!() }
+                }
+            }
+            MirInstruction::ExternCall { dst, .. } => {
+                if let Some(res) = self.try_execute_via_callee(inst) {
+                    let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }
+                } else {
+                    if let MirInstruction::ExternCall { dst, iface_name, method_name, args, .. } = inst {
+                        self.handle_extern_call(*dst, iface_name, method_name, args)?
+                    } else { unreachable!() }
+                }
+            }
             MirInstruction::RefSet {
                 reference,
                 field,

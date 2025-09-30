@@ -65,9 +65,9 @@ pub fn desugar_alias_field_access(ast: &ASTNode, aliases: &HashSet<String>, to_p
                                 let new_name = format!("{}_{}.{}{}", a, head, tail, format!("/{}", arity));
                                 return ASTNode::FunctionCall { name: new_name, arguments: args2, span: Span::unknown() };
                             } else {
-                                // Alias.TopSymbol(...) → Alias_TopSymbol/arity
+                                // Alias.method(...) → Alias_Alias.method/arity （static box同名規約）
                                 let arity = args2.len();
-                                let new_name = format!("{}_{}{}", a, rest, format!("/{}", arity));
+                                let new_name = format!("{}_{}.{}{}", a, a, rest, format!("/{}", arity));
                                 return ASTNode::FunctionCall { name: new_name, arguments: args2, span: Span::unknown() };
                             }
                         }

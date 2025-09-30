@@ -1,4 +1,4 @@
-# 🐱 Nyash プログラミング言語
+# 🐱 HakoRune プログラミング言語（旧称 Nyash）
 **超真面目に作っている趣味言語**  
 **20日でゼロからネイティブバイナリへ - AI駆動の言語革命**
 
@@ -93,7 +93,7 @@ Phase‑15（2025‑09）アップデート
 
 MIR注記: Core‑13 最小カーネルは既定で有効（NYASH_MIR_CORE13=1）。旧命令は正規化されます（Array/Ref→BoxCall、TypeCheck/Cast/Barrier/WeakRefの統一）。
 
-純化モード: `NYASH_MIR_CORE13_PURE=1` を有効にすると、Optimizer が Load/Store/NewBox/Unary を Core‑13 形に書き換え、残存する非Core‑13命令があればコンパイルを失敗させます。あえて実行が壊れる可能性がありますが、MIR違反を早期に発見するための設計です。
+Core‑13 は既定で有効です。旧「純化モード（Core‑13 pure）」は撤廃されました。
 
 変更履歴（要点）: `CHANGELOG.md`
 
@@ -248,11 +248,11 @@ WASM/ブラウザ経路は現在メンテ対象外です（CI未対象）。古�
 
 ---
 
-## 🧰 タスク実行 (nyash.toml)
+## 🧰 タスク実行 (hako.toml)
 
-`nyash.toml` の `[tasks]` と `[env]` で、ビルド/スモークなどのタスクを簡単に実行できます（MVP）。
+`hako.toml`（互換: `nyash.toml`）の `[tasks]` と `[env]` で、ビルド/スモークなどのタスクを簡単に実行できます（MVP）。
 
-例（nyash.toml の末尾に追記）:
+例（hako.toml の末尾に追記）:
 
 ```
 [env]
@@ -300,17 +300,17 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 
 ## 🧰 一発ビルド（MVP）: `nyash --build`
 
-`nyash.toml` を読み、プラグイン → コア → AOT → リンクまでを一発実行する最小ビルド機能です。
+`hako.toml`（互換: `nyash.toml`）を読み、プラグイン → コア → AOT → リンクまでを一発実行する最小ビルド機能です。
 
 基本（Cranelift AOT）
 ```bash
-./target/release/nyash --build nyash.toml \
+./target/release/nyash --build hako.toml \
   --app apps/egui-hello-plugin/main.nyash \
   --out app_egui
 ```
 
 主なオプション（最小）
-- `--build <path>`: nyash.toml の場所
+- `--build <path>`: hako.toml の場所（互換: nyash.toml）
 - `--app <file>`: エントリ `.nyash`
 - `--out <name>`: 出力EXE名（既定: `app`/`app.exe`）
 - `--build-aot cranelift|llvm`（既定: cranelift）
@@ -398,7 +398,7 @@ box EnhancedArray from ArrayBox {
 Nyashは「Everything is Plugin」アーキテクチャを開拓：
 
 ```toml
-# nyash.toml - プラグイン設定
+# hako.toml - プラグイン設定（互換: nyash.toml）
 [libraries."libnyash_python_plugin.so"]
 boxes = ["PyRuntimeBox", "PyObjectBox"]
 

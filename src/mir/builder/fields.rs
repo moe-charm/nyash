@@ -1,5 +1,5 @@
 // Field access and assignment lowering
-use super::{ConstValue, EffectMask, MirInstruction, ValueId};
+use super::{EffectMask, MirInstruction, ValueId};
 use crate::ast::ASTNode;
 use crate::mir::slot_registry;
 

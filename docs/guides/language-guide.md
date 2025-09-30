@@ -9,6 +9,14 @@ Start here to learn Nyash language basics and find deeper references.
   - Tokens & Grammar: development/roadmap/phases/phase-12.7/ancp-specs/ANCP-Token-Specification-v1.md
 - Sugar transformations (?., ??, |> ...): tools/nyfmt/NYFMT_POC_ROADMAP.md
 
+## Syntax Sugar (実用の要点)
+- 既定ON（dev/prod共通）。`NYASH_SYNTAX_SUGAR_LEVEL={off|basic|full}` で切替。
+- 主な構文と正規化: guides/syntax-sugar.md を参照。
+  - `x |> f(a,b)` → `f(x,a,b)`、`x |> .m(a)` → `x.m(a)`、`x |> f(_,k)` は `_` を `x` で1回だけ置換
+  - `a?.b` / `x ?? y` は `match` に正規化
+  - Raw Strings（full）: `r"…"` / `r#"…"#` / `r##"…"##`
+  - 末尾カンマ / 数値セパレータ `_` は PreLex で安定化
+
 Common Constructs
 - Ternary operator: `cond ? then : else` (Phase 12.7); lowered to If-expression
 - Match expression (pattern matching): `match value { pat => expr, _, ... }`

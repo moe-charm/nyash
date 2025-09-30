@@ -1,0 +1,38 @@
+using "apps/selfhost-compiler/pipeline_v2/stage1_extract_flow.nyash" as Stage1ExtractFlow
+using "apps/selfhost-compiler/pipeline_v2/emit_mir_flow.nyash" as EmitMirFlow
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.nyash" as RegexFlow
+
+flow PipelineV2 {
+  lower_stage1_to_mir(ast_json, prefer_cfg) {
+    if ast_json == null { return EmitMirFlow.emit_return_int(0) }
+    // Try Compare first (avoid mis-detection by 'op' field inside Compare)
+    // Guard by raw scan to avoid calling methods on null-like values
+    {
+      local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
+      if cq >= 0 {
+        local c = Stage1ExtractFlow.extract_return_compare(ast_json)
+        if prefer_cfg == 1 {
+          // MapBox access via get("key") for portability
+          local lhs = c.get("lhs")
+          local rhs = c.get("rhs")
+          local cmp = c.get("cmp")
+          return EmitMirFlow.emit_compare_cfg(lhs, rhs, cmp)
+        }
+      }
+    }
+    // Then BinOp (guard by raw scan)
+    {
+      local bq = RegexFlow.find_from(ast_json, "\"type\":\"BinOp\"", 0)
+      if bq >= 0 {
+        local b = Stage1ExtractFlow.extract_return_binop(ast_json)
+        local lhs = b.get("lhs")
+        local rhs = b.get("rhs")
+        local kind = b.get("kind")
+        return EmitMirFlow.emit_binop(lhs, rhs, kind)
+      }
+    }
+    // Fallback Return(Int)
+    local v = Stage1ExtractFlow.extract_return_int(ast_json)
+    return EmitMirFlow.emit_return_int(v)
+  }
+}

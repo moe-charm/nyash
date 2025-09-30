@@ -7,8 +7,12 @@ set -uo pipefail
 
 # ルート/バイナリ検出（CWDに依存しない実行を保証）
 if [ -z "${NYASH_ROOT:-}" ]; then
-  export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+  # Prefer HAKO_ROOT as an alias when present
+  if [ -n "${HAKO_ROOT:-}" ]; then export NYASH_ROOT="$HAKO_ROOT"; else
+    export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+  fi
 fi
+# Binary path (nyash remains the canonical binary name; alias 'hrn' may be available)
 export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
 
 # グローバル変数
@@ -75,6 +79,16 @@ filter_noise() {
       | grep -v "^🚀 Nyash VM Backend - Executing file:"
 }
 
+# Ensure hako.toml exists when tests generate only nyash.toml (compat copy)
+ensure_hako_toml() {
+    local dirs=("." "$NYASH_ROOT")
+    for d in "${dirs[@]}"; do
+        if [ -f "$d/nyash.toml" ] && [ ! -f "$d/hako.toml" ]; then
+            cp -f "$d/nyash.toml" "$d/hako.toml" 2>/dev/null || true
+        fi
+    done
+}
+
 # 環境チェック（必須）
 require_env() {
     local required_tools=("cargo" "grep" "jq")
@@ -94,8 +108,8 @@ require_env() {
 
     # Nyash実行ファイル確認
     if [ ! -f "$NYASH_BIN" ]; then
-        log_error "Nyash executable not found at $NYASH_BIN"
-        log_error "Please run 'cargo build --release' first (in $NYASH_ROOT)"
+    log_error "Hakorune executable not found at $NYASH_BIN (binary name: nyash)"
+    log_error "Please run 'cargo build --release' first (in $NYASH_ROOT)"
         return 1
     fi
 
@@ -105,6 +119,11 @@ require_env() {
 
 # プラグイン整合性チェック（必須）
 preflight_plugins() {
+    # Skip when plugins are explicitly disabled by environment
+    if [ "${NYASH_DISABLE_PLUGINS:-0}" = "1" ] || [ "${NYASH_PLUGIN_POLICY:-}" = "off" ]; then
+        log_warn "Plugins disabled via env; skipping plugin checks"
+        return 0
+    fi
     # プラグインマネージャーが存在する場合は実行
     if [ -f "$(dirname "${BASH_SOURCE[0]}")/plugin_manager.sh" ]; then
         source "$(dirname "${BASH_SOURCE[0]}")/plugin_manager.sh"
@@ -170,6 +189,7 @@ run_nyash_vm() {
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$tmpfile" || true
         fi
         # プラグイン初期化メッセージを除外
+        ensure_hako_toml
         NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
             "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         local exit_code=${PIPESTATUS[0]}
@@ -181,6 +201,7 @@ run_nyash_vm() {
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
         fi
         # プラグイン初期化メッセージを除外
+        ensure_hako_toml
         NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
             "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         return ${PIPESTATUS[0]}
@@ -224,6 +245,7 @@ run_nyash_llvm() {
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
         fi
         # プラグイン初期化メッセージを除外
+        ensure_hako_toml
         PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_LLVM_USE_HARNESS=1 NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
@@ -237,6 +259,7 @@ run_nyash_llvm() {
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
         fi
         # プラグイン初期化メッセージを除外
+        ensure_hako_toml
         PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_LLVM_USE_HARNESS=1 NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \

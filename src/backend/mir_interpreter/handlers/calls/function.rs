@@ -1,0 +1,210 @@
+//! function.rs — Global function calls
+//!
+//! Behavior-preserving extraction of execute_global_function from legacy.
+
+use super::super::*;
+
+impl MirInterpreter {
+    /// Dev-only bridge: JSON.stringify(any) when invoked as a Global callee.
+    /// Returns Some(result) to short-circuit normal flow.
+    pub(crate) fn try_dev_json_stringify_bridge_global(
+        &mut self,
+        func_name: &str,
+        args: &[ValueId],
+    ) -> Option<Result<VMValue, VMError>> {
+        if std::env::var("NYASH_JSON_STRINGIFY_DEV").ok().as_deref() == Some("1") {
+            if func_name == "JSON.stringify" || func_name.starts_with("JSON.stringify/") {
+                if let Some(a0) = args.get(0) {
+                    let v0 = match self.reg_load(*a0) { Ok(v) => v.to_nyash_box(), Err(e) => return Some(Err(e)) };
+                    let s = crate::boxes::json::stringify_any(v0);
+                    return Some(Ok(VMValue::String(s)));
+                }
+            }
+        }
+        None
+    }
+
+    /// Handle Global callee: emit trace then dispatch to global function table.
+    pub(crate) fn handle_callee_global(
+        &mut self,
+        func_name: &str,
+        args: &[ValueId],
+    ) -> Result<VMValue, VMError> {
+        if let Some(r) = self.try_dev_json_stringify_bridge_global(func_name, args) { return r; }
+        let label = format!("Global:{}", func_name);
+        self.emit_call_trace_label(&label, args.len(), None);
+        self.execute_global_function(func_name, args)
+    }
+
+    /// Handle Extern callee: emit trace then dispatch to externs.
+    pub(crate) fn handle_callee_extern(
+        &mut self,
+        extern_name: &str,
+        args: &[ValueId],
+    ) -> Result<VMValue, VMError> {
+        let label = format!("Extern:{}", extern_name);
+        self.emit_call_trace_label(&label, args.len(), None);
+        self.execute_extern_function(extern_name, args)
+    }
+    pub(crate) fn execute_global_function(
+        &mut self,
+        func_name: &str,
+        args: &[ValueId],
+    ) -> Result<VMValue, VMError> {
+        match func_name {
+            "nyash.builtin.print" | "print" | "nyash.console.log" => {
+                if let Some(arg_id) = args.get(0) {
+                    let val = self.reg_load(*arg_id)?;
+                    // Dev-only: print trace (kind/class) before actual print
+                    if Self::print_trace_enabled() {
+                        self.print_trace_emit(&val);
+                    }
+                    // Dev observe: Null/Missing boxes quick normalization (no behavior change to prod)
+                    if let VMValue::BoxRef(bx) = &val {
+                        // NullBox → always print as null (stable)
+                        if bx
+                            .as_any()
+                            .downcast_ref::<crate::boxes::null_box::NullBox>()
+                            .is_some()
+                        {
+                            println!("null");
+                            return Ok(VMValue::Void);
+                        }
+                        // MissingBox → default prints as null; when flag ON, show (missing)
+                        if bx
+                            .as_any()
+                            .downcast_ref::<crate::boxes::missing_box::MissingBox>()
+                            .is_some()
+                        {
+                            if crate::config::env::null_missing_box_enabled() {
+                                println!("(missing)");
+                            } else {
+                                println!("null");
+                            }
+                            return Ok(VMValue::Void);
+                        }
+                    }
+                    // Dev: treat VM Void and BoxRef(VoidBox) as JSON null for print
+                    match &val {
+                        VMValue::Void => {
+                            println!("null");
+                            return Ok(VMValue::Void);
+                        }
+                        VMValue::BoxRef(bx) => {
+                            if bx
+                                .as_any()
+                                .downcast_ref::<crate::box_trait::VoidBox>()
+                                .is_some()
+                            {
+                                println!("null");
+                                return Ok(VMValue::Void);
+                            }
+                        }
+                        _ => {}
+                    }
+                    // Print raw strings directly (avoid double quoting via StringifyOperator)
+                    match &val {
+                        VMValue::String(s) => {
+                            println!("{}", s);
+                            return Ok(VMValue::Void);
+                        }
+                        VMValue::BoxRef(bx) => {
+                            if let Some(sb) = bx
+                                .as_any()
+                                .downcast_ref::<crate::box_trait::StringBox>()
+                            {
+                                println!("{}", sb.value);
+                                return Ok(VMValue::Void);
+                            }
+                        }
+                        _ => {}
+                    }
+                    // Operator Box (Stringify) – dev flag gated
+                    if std::env::var("NYASH_OPERATOR_BOX_STRINGIFY")
+                        .ok()
+                        .as_deref()
+                        == Some("1")
+                    {
+                        if let Some(op) = self
+                            .functions
+                            .get("StringifyOperator.apply/1")
+                            .cloned()
+                        {
+                            let out = self.exec_function_inner(&op, Some(&[val.clone()]))?;
+                            println!("{}", out.to_string());
+                        } else {
+                            println!("{}", val.to_string());
+                        }
+                    } else {
+                        println!("{}", val.to_string());
+                    }
+                }
+                Ok(VMValue::Void)
+            }
+            "nyash.builtin.error" => {
+                if let Some(arg_id) = args.get(0) {
+                    let val = self.reg_load(*arg_id)?;
+                    eprintln!("Error: {}", val.to_string());
+                }
+                Ok(VMValue::Void)
+            }
+            _ => Err(VMError::InvalidInstruction(format!(
+                "Unknown global function: {}",
+                func_name
+            ))),
+        }
+    }
+
+    /// Handle ModuleFunction callee: resolves against the MIR module's function table.
+    /// Name can be canonical ("BoxName.method/Arity") or base without arity; if
+    /// arity is missing, it is appended using the call-site argument count.
+    pub(crate) fn handle_callee_module_function(
+        &mut self,
+        name: &str,
+        args: &[ValueId],
+    ) -> Result<VMValue, VMError> {
+        let label = format!("ModuleFn:{}", name);
+        self.emit_call_trace_label(&label, args.len(), None);
+
+        // Normalize name: ensure canonical "/arity" suffix
+        let want_name = if name.contains('/') {
+            name.to_string()
+        } else {
+            format!("{}/{}", name, args.len())
+        };
+
+        // Exact match first
+        if let Some(func) = self.functions.get(&want_name).cloned() {
+            let mut argv: Vec<VMValue> = Vec::new();
+            for a in args { argv.push(self.reg_load(*a)?); }
+            return self.exec_function_inner(&func, Some(&argv));
+        }
+
+        // Tail-based fallback: collect candidates that end with ".method/arity"
+        // if the provided name was not canonical but looked like "Class.method".
+        if let Some((class_or_alias, method)) = name.split_once('.') {
+            let tail = format!(".{}{}", method, format!("/{}", args.len()));
+            let mut cands: Vec<String> = self
+                .functions
+                .keys()
+                .filter(|k| k.ends_with(&tail) && (k.starts_with(&format!("{}.", class_or_alias)) || k.starts_with(&format!("{}_", class_or_alias))))
+                .cloned()
+                .collect();
+            if !cands.is_empty() {
+                cands.sort();
+                let pick = cands.remove(0);
+                if let Some(func) = self.functions.get(&pick).cloned() {
+                    let mut argv: Vec<VMValue> = Vec::new();
+                    for a in args { argv.push(self.reg_load(*a)?); }
+                    return self.exec_function_inner(&func, Some(&argv));
+                }
+            }
+        }
+
+        Err(VMError::InvalidInstruction(format!(
+            "Unknown module function: {} (arity={})",
+            name,
+            args.len()
+        )))
+    }
+}

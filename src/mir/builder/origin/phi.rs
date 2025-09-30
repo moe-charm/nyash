@@ -1,4 +1,4 @@
-use super::super::{MirBuilder, MirInstruction, MirType, ValueId, BasicBlockId};
+use super::super::{MirBuilder, MirType, ValueId, BasicBlockId};
 
 /// Lightweight propagation at PHI when all inputs agree（型/起源）。
 /// 仕様は不変: 一致時のみ dst にコピーする（不一致/未知は何もしない）。

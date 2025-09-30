@@ -32,7 +32,7 @@ pub(super) fn try_handle_string_box(
                         return Err(VMError::InvalidInstruction("indexOf expects at least 1 arg".into()));
                     }
                     let needle = this.reg_load(args[0])?.to_string();
-                    let hay = if args.len() >= 2 {
+                    let _hay = if args.len() >= 2 {
                         let from = this.reg_load(args[1])?.as_integer().unwrap_or(0).max(0) as usize;
                         if from >= sb.value.len() { "" } else { &sb.value[from..] }
                     } else { &sb.value[..] };

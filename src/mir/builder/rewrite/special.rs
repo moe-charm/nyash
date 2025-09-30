@@ -1,4 +1,4 @@
-use super::super::{ConstValue, Effect, EffectMask, MirBuilder, MirInstruction};
+use super::super::MirBuilder;
 
 /// Early special-case: toString/stringify → str（互換）を処理。
 /// 戻り値: Some(result_id) なら処理済み。None なら通常経路へ委譲。

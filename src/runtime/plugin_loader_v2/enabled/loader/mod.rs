@@ -6,8 +6,8 @@ mod specs;
 mod util;
 
 use super::host_bridge::BoxInvokeFn;
-use super::types::{LoadedPluginV2, PluginBoxMetadata, PluginBoxV2, PluginHandleInner};
-use crate::bid::{BidError, BidResult};
+use super::types::{LoadedPluginV2, PluginBoxMetadata, PluginHandleInner};
+use crate::bid::BidResult;
 use crate::box_trait::NyashBox;
 use crate::config::nyash_toml_v2::{LibraryDefinition, NyashConfigV2};
 use specs::LoadedBoxSpec;
@@ -18,6 +18,8 @@ pub struct PluginLoaderV2 {
     pub(super) plugins: RwLock<HashMap<String, Arc<LoadedPluginV2>>>,
     pub config: Option<NyashConfigV2>,
     pub(super) config_path: Option<String>,
+    // Cached parsed nyash.toml (hot‑path use; reduces repeated I/O and parse)
+    pub(super) cached_toml: Option<toml::Value>,
     pub(super) singletons: RwLock<HashMap<(String, String), Arc<PluginHandleInner>>>,
     pub(super) box_specs: RwLock<HashMap<(String, String), LoadedBoxSpec>>,
 }
@@ -28,6 +30,7 @@ impl PluginLoaderV2 {
             plugins: RwLock::new(HashMap::new()),
             config: None,
             config_path: None,
+            cached_toml: None,
             singletons: RwLock::new(HashMap::new()),
             box_specs: RwLock::new(HashMap::new()),
         }

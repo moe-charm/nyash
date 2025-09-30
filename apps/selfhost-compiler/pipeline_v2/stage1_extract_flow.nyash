@@ -1,0 +1,78 @@
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.nyash" as RegexFlow
+
+flow Stage1ExtractFlow {
+  // Extract minimal info from Stage‑1 JSON (Return Int / BinOp / Compare)
+
+  _idx(s, needle) { return RegexFlow.find_from(s, needle, 0) }
+  _idx_from(s, needle, pos) { return RegexFlow.find_from(s, needle, pos) }
+
+  extract_return_int(ast_json) {
+    if ast_json == null { return 0 }
+    local ret_key = "\"type\":\"Return\""
+    local p = RegexFlow.last_index_of(ast_json, ret_key)
+    if p < 0 { p = _idx(ast_json, ret_key) }
+    if p < 0 { return 0 }
+    // whitespace tolerant: find 'type:"Int"' then subsequent 'value:'
+    local tpos = _idx_from(ast_json, "\"type\":\"Int\"", p)
+    if tpos < 0 { return 0 }
+    local vpos = _idx_from(ast_json, "\"value\":", tpos)
+    if vpos < 0 { return 0 }
+    local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+    return RegexFlow.to_int(ds)
+  }
+
+  extract_return_binop(ast_json) {
+    // Return(BinOp) → {kind, lhs, rhs} or null
+    if ast_json == null { return null }
+    local p = _idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = _idx_from(ast_json, "\"type\":\"BinOp\"", p)
+    if q < 0 { return null }
+    local opk_pos = _idx_from(ast_json, "\"op\":\"", q)
+    if opk_pos < 0 { return null }
+    local opk_end = _idx_from(ast_json, "\"", opk_pos + 6)
+    if opk_end < 0 { return null }
+    local opk = ast_json.substring(opk_pos + 6, opk_end)
+    // lhs/rhs int (whitespace tolerant)
+    local lhsp = _idx_from(ast_json, "\"lhs\"", q)
+    local rhsp = _idx_from(ast_json, "\"rhs\"", q)
+    if lhsp < 0 || rhsp < 0 { return null }
+    local lval = _idx_from(ast_json, "\"value\":", lhsp)
+    local rval = _idx_from(ast_json, "\"value\":", rhsp)
+    if lval < 0 || rval < 0 { return null }
+    local lhs_ds = RegexFlow.digits_from(ast_json, lval + 8)
+    local rhs_ds = RegexFlow.digits_from(ast_json, rval + 8)
+    if lhs_ds == "" || rhs_ds == "" { return null }
+    local lhs = RegexFlow.to_int(lhs_ds)
+    local rhs = RegexFlow.to_int(rhs_ds)
+    local kind = opk
+    return { kind: kind, lhs: lhs, rhs: rhs }
+  }
+
+  extract_return_compare(ast_json) {
+    // Return(Compare) → {cmp, lhs, rhs} or null
+    if ast_json == null { return null }
+    local p = _idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = _idx_from(ast_json, "\"type\":\"Compare\"", p)
+    if q < 0 { return null }
+    local opk_pos = _idx_from(ast_json, "\"op\":\"", q)
+    if opk_pos < 0 { return null }
+    local opk_end = _idx_from(ast_json, "\"", opk_pos + 6)
+    if opk_end < 0 { return null }
+    local opk = ast_json.substring(opk_pos + 6, opk_end)
+    // lhs/rhs int (whitespace tolerant)
+    local lhsp = _idx_from(ast_json, "\"lhs\"", q)
+    local rhsp = _idx_from(ast_json, "\"rhs\"", q)
+    if lhsp < 0 || rhsp < 0 { return null }
+    local lval = _idx_from(ast_json, "\"value\":", lhsp)
+    local rval = _idx_from(ast_json, "\"value\":", rhsp)
+    if lval < 0 || rval < 0 { return null }
+    local lhs_ds = RegexFlow.digits_from(ast_json, lval + 8)
+    local rhs_ds = RegexFlow.digits_from(ast_json, rval + 8)
+    if lhs_ds == "" || rhs_ds == "" { return null }
+    local lhs = RegexFlow.to_int(lhs_ds)
+    local rhs = RegexFlow.to_int(rhs_ds)
+    return { cmp: opk, lhs: lhs, rhs: rhs }
+  }
+}

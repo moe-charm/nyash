@@ -1,0 +1,11 @@
+// BackendBox — backend tag holder (no execution in Phase 15.7)
+box BackendBox {
+  name
+  birth(n) { if n == null { n = "vm" } me.name = n return 0 }
+  get_name() { return me.name }
+  // Stub execute: reserved for future; returns 0 for now
+  execute(_mir_json) { return 0 }
+}
+
+static box BackendStub { main(args) { return 0 } }
+

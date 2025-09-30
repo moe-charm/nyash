@@ -93,7 +93,7 @@ pub(super) fn try_handle_instance_box(
                     _ => VMValue::Void,
                 };
                 if matches!(recv_v, VMValue::Void) {
-                    if crate::config::env::cli_verbose() {
+                    if crate::config::env::cli_verbose() && !crate::config::env::cli_quiet() {
                         eprintln!("[warn] dev verify: NewBox→birth invariant warnings: me==Void");
                     }
                 }
@@ -109,4 +109,3 @@ pub(super) fn try_handle_instance_box(
     // If we reach here, no instance or no function matched
     Ok(false)
 }
-

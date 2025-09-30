@@ -1,2 +1,0 @@
-if false { break } else { }
-return 0

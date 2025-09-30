@@ -1,4 +1,4 @@
-using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
+using "apps/selfhost-compiler/compiler.hako" as CompilerMod
 
 static box Main {
   main(){
@@ -11,4 +11,3 @@ static box Main {
     return 0
   }
 }
-

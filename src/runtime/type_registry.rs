@@ -92,6 +92,11 @@ const ARRAY_METHODS: &[MethodEntry] = &[
         arity: 2,
         slot: 111,
     },
+    MethodEntry {
+        name: "toJSON",
+        arity: 0,
+        slot: 112,
+    },
 ];
 static ARRAYBOX_TB: TypeBox = TypeBox::new_with("ArrayBox", ARRAY_METHODS);
 
@@ -147,6 +152,11 @@ const MAP_METHODS: &[MethodEntry] = &[
         name: "clear",
         arity: 0,
         slot: 208,
+    },
+    MethodEntry {
+        name: "toJSON",
+        arity: 0,
+        slot: 209,
     },
 ];
 static MAPBOX_TB: TypeBox = TypeBox::new_with("MapBox", MAP_METHODS);

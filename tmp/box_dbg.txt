@@ -1,8 +1,0 @@
-[pyvm] run entry=Main.main
-[pyvm] call Main.main args=[]
-[pyvm] boxcall recv={'__box__': 'MiniVm'} method=birth args=[]
-[pyvm] boxcall unresolved: 'MiniVm.birth/0' — no candidates; methods for MiniVm: []
-[pyvm] boxcall recv={'__box__': 'MiniVm'} method=index_of_from args=['{"kind":"Program","statements":[{"kind":"Print","expression":{"kind":"BinaryOp","operator":"+","left":{"kind":"Literal","value":{"type":"int","value":12}},"right":{"kind":"Literal","value":{"type":"int","value":34}}}}]}', '"expression":{', 0]
-[pyvm] boxcall unresolved: 'MiniVm.index_of_from/3' — no candidates; methods for MiniVm: []
-[pyvm] externcall func=nyash.console.log args=[None]
-[pyvm] ret i64 value=0

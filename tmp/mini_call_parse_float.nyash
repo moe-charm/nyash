@@ -1,9 +1,0 @@
-using "apps/lib/json_native/utils/string.nyash" as StringUtils
-
-main() {
-  println(StringUtils.parse_integer("42"))
-  // call parse_float just to test resolution
-  local f = StringUtils.parse_float("1.2")
-  println(f)
-  return 0
-}

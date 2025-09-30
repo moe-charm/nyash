@@ -39,6 +39,14 @@ impl NyashRunner {
             &mut aliases,
             &mut packages,
         );
+        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+            use crate::runner::trace::log as tlog;
+            if !crate::config::env::cli_quiet() {
+                tlog(format!("[using] ctx: paths={:?}", using_paths));
+                tlog(format!("[using] ctx: aliases={:?}", aliases));
+                tlog(format!("[using] ctx: packages={:?}", packages.keys().collect::<Vec<_>>()));
+            }
+        }
 
         // Env overrides: modules and using paths
         if let Ok(ms) = std::env::var("NYASH_MODULES") {
@@ -183,7 +191,7 @@ pub(super) fn resolve_using_target(
     // Resolve aliases early (provided map) — and then recursively resolve the target
     if let Some(v) = aliases.get(tgt) {
         if trace {
-            crate::runner::trace::log(format!("[using/resolve] alias '{}' -> '{}'", tgt, v));
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] alias '{}' -> '{}'", tgt, v)); }
         }
         // Recurse to resolve the alias target into a concrete path/token
         let rec = resolve_using_target(v, false, modules, using_paths, aliases, packages, context_dir, strict, verbose)?;
@@ -198,32 +206,37 @@ pub(super) fn resolve_using_target(
                 // Return a marker token to avoid inlining attempts; loader will consume later stages
                 let out = format!("dylib:{}", pkg.path);
                 if trace {
-                    crate::runner::trace::log(format!("[using/resolve] dylib '{}' -> '{}'", tgt, out));
+                    if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] dylib '{}' -> '{}'", tgt, out)); }
                 }
                 crate::runner::trace::log_json_using(tgt, Some(&out), &[], "dylib");
                 crate::runner::box_index::cache_put(&key, out.clone());
                 return Ok(out);
             }
             PackageKind::Package => {
-                // Compute entry: main or <dir_last>.nyash
+                // Compute entry: main or <dir_last>.hako (preferred) / .nyash (legacy)
                 let base = std::path::Path::new(&pkg.path);
                 let out = if let Some(m) = &pkg.main {
-                    if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                    if matches!(base.extension().and_then(|s| s.to_str()), Some("hako") | Some("nyash")) {
                         // path is a file; ignore main and use as-is
                         pkg.path.clone()
                     } else {
                         base.join(m).to_string_lossy().to_string()
                     }
                 } else {
-                    if base.extension().and_then(|s| s.to_str()) == Some("nyash") {
+                    if matches!(base.extension().and_then(|s| s.to_str()), Some("hako") | Some("nyash")) {
                         pkg.path.clone()
                     } else {
                         let leaf = base.file_name().and_then(|s| s.to_str()).unwrap_or(tgt);
-                        base.join(format!("{}.nyash", leaf)).to_string_lossy().to_string()
+                        let cand_h = base.join(format!("{}.hako", leaf));
+                        if cand_h.exists() {
+                            cand_h.to_string_lossy().to_string()
+                        } else {
+                            base.join(format!("{}.nyash", leaf)).to_string_lossy().to_string()
+                        }
                     }
                 };
                 if trace {
-                    crate::runner::trace::log(format!("[using/resolve] package '{}' -> '{}'", tgt, out));
+                    if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] package '{}' -> '{}'", tgt, out)); }
                 }
                 crate::runner::trace::log_json_using(tgt, Some(&out), &[], "package");
                 crate::runner::box_index::cache_put(&key, out.clone());
@@ -254,7 +267,7 @@ pub(super) fn resolve_using_target(
     if let Some((_, p)) = modules.iter().find(|(n, _)| n == tgt) {
         let out = p.clone();
         if trace {
-            crate::runner::trace::log(format!("[using/resolve] modules '{}' -> '{}'", tgt, out));
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] modules '{}' -> '{}'", tgt, out)); }
         }
         crate::runner::trace::log_json_using(tgt, Some(&out), &[], "modules");
         crate::runner::box_index::cache_put(&key, out.clone());
@@ -264,26 +277,27 @@ pub(super) fn resolve_using_target(
     if tgt == "nyashstd" {
         let out = "builtin:nyashstd".to_string();
         if trace {
-            crate::runner::trace::log(format!("[using/resolve] builtin '{}' -> '{}'", tgt, out));
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] builtin '{}' -> '{}'", tgt, out)); }
         }
         crate::runner::trace::log_json_using(tgt, Some(&out), &[], "builtin");
         crate::runner::box_index::cache_put(&key, out.clone());
         return Ok(out);
     }
-    // 3) build candidate list: relative then using-paths
-    let rel = tgt.replace('.', "/") + ".nyash";
+    // 3) build candidate list: relative then using-paths (prefer .hako, fallback .nyash)
+    let rel_h = tgt.replace('.', "/") + ".hako";
+    let rel_ny = tgt.replace('.', "/") + ".nyash";
     let mut cand: Vec<String> = Vec::new();
     if let Some(dir) = context_dir {
-        let c = dir.join(&rel);
-        if c.exists() {
-            cand.push(c.to_string_lossy().to_string());
-        }
+        let c1 = dir.join(&rel_h);
+        let c2 = dir.join(&rel_ny);
+        if c1.exists() { cand.push(c1.to_string_lossy().to_string()); }
+        if c2.exists() { cand.push(c2.to_string_lossy().to_string()); }
     }
     for base in using_paths {
-        let c = std::path::Path::new(base).join(&rel);
-        if c.exists() {
-            cand.push(c.to_string_lossy().to_string());
-        }
+        let c1 = std::path::Path::new(base).join(&rel_h);
+        let c2 = std::path::Path::new(base).join(&rel_ny);
+        if c1.exists() { cand.push(c1.to_string_lossy().to_string()); }
+        if c2.exists() { cand.push(c2.to_string_lossy().to_string()); }
     }
     if cand.is_empty() {
         // Always emit a concise unresolved note to aid diagnostics in smokes
@@ -294,12 +308,12 @@ pub(super) fn resolve_using_target(
         if cands.len() < 5 { suggest_in_base(".", leaf, &mut cands); }
         if trace {
             if cands.is_empty() {
-                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths)", tgt));
+                if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths)", tgt)); }
             } else {
-                crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", ")));
+                if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using] unresolved '{}' (searched: rel+paths) candidates: {}", tgt, cands.join(", ")))};
             }
         } else {
-            eprintln!("[using] not found: '{}'", tgt);
+            if !crate::config::env::cli_quiet() { eprintln!("[using] not found: '{}'", tgt); }
         }
         crate::runner::trace::log_json_using(tgt, None, &cands, "unresolved");
         return Ok(tgt.to_string());
@@ -309,7 +323,7 @@ pub(super) fn resolve_using_target(
     }
     let out = cand.remove(0);
     if trace {
-        crate::runner::trace::log(format!("[using/resolve] '{}' -> '{}'", tgt, out));
+        if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] '{}' -> '{}'", tgt, out)); }
     }
     crate::runner::trace::log_json_using(tgt, Some(&out), &[], "fs");
     crate::runner::box_index::cache_put(&key, out.clone());

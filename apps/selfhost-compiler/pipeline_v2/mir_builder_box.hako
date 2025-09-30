@@ -1,0 +1,17 @@
+// MirBuilderBox — IF-only stub for future Ny→MIR(JSON v0) lowering
+// Phase 15.7: not wired; keep methods minimal and no-op.
+
+box MirBuilderBox {
+  // Placeholder for optimizer toggle
+  optimize_flag
+  birth() { me.optimize_flag = 0 return 0 }
+  set_optimize(v) { if v == null { v = 0 } me.optimize_flag = v return 0 }
+
+  // Accept AST JSON and return it unchanged (pass-through)
+  build(ast_json) {
+    return ast_json
+  }
+}
+
+static box MirBuilderStub { main(args) { return 0 } }
+

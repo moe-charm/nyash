@@ -1,7 +1,0 @@
-static box Main {
-  main(args) {
-    local s = "value\":12}"
-    print(s.length())
-    return 0
-  }
-}

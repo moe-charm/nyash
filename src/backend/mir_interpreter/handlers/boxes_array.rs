@@ -86,6 +86,17 @@ pub(super) fn try_handle_array_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::Void); }
                     return Ok(true);
                 }
+                "toJSON" => {
+                    if !args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"ArrayBox","method":"toJSON","expected":0,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("ArrayBox.toJSON expects 0 args".into()));
+                    }
+                    let ret = ab.toJSON();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
+                    return Ok(true);
+                }
                 _ => {}
             }
         }

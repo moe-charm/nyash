@@ -45,7 +45,7 @@ $env:NYASH_JIT_EXEC = '1'
 $env:NYASH_JIT_HOSTCALL = '1'
 $env:NYASH_JIT_HOST_BRIDGE = '1'
 
-# 4) Ensure plugin search paths include typical locations (nyash.toml already covers these)
+# 4) Ensure plugin search paths include typical locations (hako.toml covers these; compat: nyash.toml)
 #    Allow overriding via NYASH_PLUGIN_PATHS if the user prefers a custom path list.
 if (-not $env:NYASH_PLUGIN_PATHS) {
   $env:NYASH_PLUGIN_PATHS = @(
@@ -73,4 +73,3 @@ if ($code -ne 0) {
 }
 
 Info "Done."
-

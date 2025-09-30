@@ -2,6 +2,9 @@
 // Scope: Return(Int) only (const + ret). Safe default to 0 when not found.
 // Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
 
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "apps/lib/json_native/stringify.nyash" as JSON
+
 static box MirEmitterBox {
   _index_of(hay, needle) { return hay.indexOf(needle) }
   _index_of_from(hay, needle, pos) {
@@ -96,14 +99,18 @@ static box MirEmitterBox {
               if lhs_digits != "" && rhs_digits != "" {
                 local a = me._str_to_int(lhs_digits)
                 local b = me._str_to_int(rhs_digits)
-                // MIR: const a -> 1, const b -> 2, binop kind 1,2 -> 3, ret 3
-                local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
-                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + a + "},\\\"dst\\\":1},"
-                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + b + "},\\\"dst\\\":2},"
-                s = s + "{\\\"op\\\":\\\"binop\\\",\\\"op_kind\\\":\\\"" + kind + "\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
-                s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":3}"
-                s = s + "]}]}]}"
-                return s
+                // MIR via builder: const a -> 1, const b -> 2, binop kind 1,2 -> 3, ret 3
+                local j = MirJsonBuilderMin.make()
+                  |> MirJsonBuilderMin.start_module()
+                  |> MirJsonBuilderMin.start_function("main")
+                  |> MirJsonBuilderMin.start_block(0)
+                  |> MirJsonBuilderMin.add_const(1, a)
+                  |> MirJsonBuilderMin.add_const(2, b)
+                  |> MirJsonBuilderMin.add_binop(kind, 1, 2, 3)
+                  |> MirJsonBuilderMin.add_ret(3)
+                  |> MirJsonBuilderMin.end_all()
+                  |> MirJsonBuilderMin.to_string()
+                return j
               }
             }
           }
@@ -129,32 +136,34 @@ static box MirEmitterBox {
               if lhs_digits != "" && rhs_digits != "" {
                 local a = me._str_to_int(lhs_digits)
                 local b = me._str_to_int(rhs_digits)
-                //
-                // MIR CFG layout (IDs are dense for readability):
-                //   bb0: const a->1; const b->2; compare(lhs=1,rhs=2)->3; branch(cond=3, then=1, else=2)
-                //   bb1: const 1->6; jump 3
-                //   bb2: const 0->6; jump 3
-                //   bb3: ret 6
-                //
-                local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":["
-                // bb0
-                s = s + "{\\\"id\\\":0,\\\"instructions\\\":["
-                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + a + "},\\\"dst\\\":1},"
-                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + b + "},\\\"dst\\\":2},"
-                s = s + "{\\\"op\\\":\\\"compare\\\",\\\"cmp\\\":\\\"" + kind + "\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
-                s = s + "{\\\"op\\\":\\\"branch\\\",\\\"cond\\\":3,\\\"then\\\":1,\\\"else\\\":2}]},"
-                // bb1 (then)
-                s = s + "{\\\"id\\\":1,\\\"instructions\\\":["
-                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":1},\\\"dst\\\":6},"
-                s = s + "{\\\"op\\\":\\\"jump\\\",\\\"target\\\":3}]},"
-                // bb2 (else)
-                s = s + "{\\\"id\\\":2,\\\"instructions\\\":["
-                s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":0},\\\"dst\\\":6},"
-                s = s + "{\\\"op\\\":\\\"jump\\\",\\\"target\\\":3}]},"
-                // bb3 (merge)
-                s = s + "{\\\"id\\\":3,\\\"instructions\\\":[{\\\"op\\\":\\\"ret\\\",\\\"value\\\":6}]}]"
-                s = s + "}]}]}"
-                return s
+                // MIR CFG via declarative Map/Array + stringify
+                local mir = {
+                  functions: [{
+                    name: "main",
+                    params: [],
+                    blocks: [
+                      { id: 0, instructions: [
+                          { op:"const", dst:1, value:{ type:"i64", value:a } },
+                          { op:"const", dst:2, value:{ type:"i64", value:b } },
+                          { op:"compare", cmp: kind, lhs:1, rhs:2, dst:3 },
+                          { op:"branch", cond:3, "then":1, "else":2 }
+                        ]
+                      },
+                      { id: 1, instructions: [
+                          { op:"const", dst:6, value:{ type:"i64", value:1 } },
+                          { op:"jump", target:3 }
+                        ]
+                      },
+                      { id: 2, instructions: [
+                          { op:"const", dst:6, value:{ type:"i64", value:0 } },
+                          { op:"jump", target:3 }
+                        ]
+                      },
+                      { id: 3, instructions: [ { op:"ret", value:6 } ] }
+                    ]
+                  }]
+                }
+                return JSON.stringify_map(mir)
               }
               }
             }
@@ -228,10 +237,20 @@ static box MirEmitterBox {
         }
       }
     }
-    local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
-    s = s + "{\\\"op\\\":\\\"const\\\",\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":" + retv + "},\\\"dst\\\":1},"
-    s = s + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":1}"
-    s = s + "]}]}]}"
-    return s
+    // Declarative: Map/Array リテラル + JSON.stringify（読みやすさ優先・挙動同一）
+    local mir = {
+      functions: [{
+        name: "main",
+        params: [],
+        blocks: [{
+          id: 0,
+          instructions: [
+            { op: "const", dst: 1, value: { type: "i64", value: retv } },
+            { op: "ret", value: 1 }
+          ]
+        }]
+      }]
+    }
+    return JSON.stringify_map(mir)
   }
 }

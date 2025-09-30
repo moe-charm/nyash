@@ -1,7 +1,7 @@
 # Flow (Stateless Namespace)
 
 Status
-- Planned for staged introduction (dev-first). Default runtime behavior remains unchanged until enabled via profile/flags.
+- Default ON (can be disabled with NYASH_ENABLE_FLOW=0). Backends behavior remains unchanged; this only introduces a clearer surface for stateless modules.
 - Purpose: replace legacy "static box" for stateless utilities and entry modules with a clearer, safer construct.
 
 Definition
@@ -53,3 +53,6 @@ Migration (from legacy static box)
 Notes
 - Keep flows small and stateless. For stateful/services or plugin-backed providers, use dedicated instance/service boxes.
 - Flows are a good fit for entry points, pure helpers, and utility modules.
+
+Env toggle
+- Parser acceptance is ON by default. Disable with `NYASH_ENABLE_FLOW=0` when needed.

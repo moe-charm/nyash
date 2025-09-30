@@ -20,8 +20,8 @@ $objDir = Join-Path $PSScriptRoot "..\target\aot_objects"
 New-Item -ItemType Directory -Path $objDir -Force | Out-Null
 $objPath = Join-Path $objDir ("{0}.o" -f ([IO.Path]::GetFileNameWithoutExtension($Out)))
 
-# Build nyash with LLVM backend
-Info "Building nyash (release, feature=llvm)"
+# Build nyash with LLVM backend (HakoRune aka Nyash)
+Info "Building nyash (HakoRune) (release, feature=llvm)"
 if ($env:LLVM_SYS_181_PREFIX) { Info "LLVM_SYS_181_PREFIX=$($env:LLVM_SYS_181_PREFIX)" }
 elseif ($env:LLVM_SYS_180_PREFIX) { Info "LLVM_SYS_180_PREFIX=$($env:LLVM_SYS_180_PREFIX)" }
 cargo build --release --features llvm | Out-Null

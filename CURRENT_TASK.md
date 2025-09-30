@@ -1,4 +1,265 @@
-# Current Task — Phase 15 (Concise)
+# Current Task — Phase 15.7 (Concise)
+
+このファイルは“今の開発状況だけ”を素早く把握できるよう簡潔に保ちます。詳細な履歴は削除し、必要に応じて git 履歴を参照してください（過去の全ログは commit 履歴に残っています）。
+
+## At-a-Glance（現状要約）
+- Branding: 設定は hako.toml 最優先（互換: nyash/hakorune）
+- JSON: JSON.stringify(any) を第一級APIに昇格（.toJSON 併存・同一出力）
+- Smokes: hako.tomlのみ/JSON.stringify 標準の軽量スモークを quick に追加
+- MIR 凍結ドキュメントの整備（MirCall 統一含む）
+- Plugins: plugin-tester 既定 --config を hako.toml に切替（互換読込維持）
+- 仕様不変・ロールバック容易・差分は局所
+
+## Current Focus（Phase 15.7）
+- Branding移行の堅牢化（hako.toml-first の徹底と互換の維持）
+- 宣言的MIR/JSON の実運用（Map/Array + JSON.stringify の標準化）
+- Using/Alias/Resolver の Fail‑Fast とログ健全化（devのみ詳細）
+- Self‑Hosting 小粒強化（LocalSSA ensure_cond の代表ケース）
+
+## Next Actions（小粒・優先順）
+1) Alias 重複/衝突 Fail‑Fast のスモークを1件追加
+2) JSON.stringify の深いネスト/特殊文字/大規模Mapの検証を1〜2件（quick）
+3) PreLex raw/numeric の LLVM/PyVM 各1本（quick）
+4) Self‑Host: compare→branch→compare→ret の parity スモーク（VM/LLVM）
+
+## Docs — Selfhost Compiler (done)
+- apps/selfhost-compiler/README.md を更新（Rust VM 既定・ENV一覧・Fail‑Fast・予定スモーク）
+- apps/selfhost-compiler/INTERFACES.md を追加（Parser/Emitter/MirEmitter の契約）
+- apps/selfhost-compiler/interfaces.nyash を追加（I/Fスケッチ）
+- 実行方針: 既定は Rust VM、`NYASH_VM_USE_PY=1` の時のみ PyVM を使用
+
+## Recently Completed（直近完了まとめ）
+- hako.toml 優先解決を using/resolver に導入（互換: nyash/hakorune）
+  - src/using/resolver.rs: hako→nyash→hakorune の順で CWD/ROOT を探索
+- JSON.stringify(any) を標準APIに昇格（.toJSON 併存）
+  - src/mir/builder/builder_calls/emit.rs: JSON.stringify/1 → recv.toJSON() を常時リライト
+- plugin-tester 既定 --config を hako.toml に切替（互換維持）
+  - tools/plugin-tester/src/main.rs: 既定パスを ../../hako.toml に変更
+- 追加スモーク（quick/core）
+  - branding_hako_only_using_vm.sh（hako.toml のみで using/alias が動作）
+  - json_stringify_standard_vm.sh（JSON.stringify == .toJSON）
+  - selfhost_min_json_header_pipeline_v2_vm.sh（timeout=8000ms）
+  - modulefn_tail_unique_vm.sh（dev-gated: SMOKES_ENABLE_MODULEFN=1）
+  - modulefn_tail_ambiguous_vm.sh（STRICT=1 で Fail‑Fast 動作を確認）
+  - modulefn_llvm_trace.sh（LLVM call trace に ModuleFunction を出すことを確認）
+
+## ✅ Update — 2025-10-04（MIR: ModuleFunction Phase‑2 着地）
+- Callee に `ModuleFunction(String)` を追加（型安全なモジュール関数呼び出し）
+  - 定義: src/mir/definitions/call_unified.rs:22
+  - 表示: src/mir/printer_helpers.rs:82（call_module_fn ...）
+  - JSON: src/runner/mir_json_emit.rs:57（Unified v1 に ModuleFunction 追加）
+- VM 解決を実装（関数テーブルから解決、/arity 付与・tail候補の最小フォールバック）
+  - src/backend/mir_interpreter/handlers/calls/function.rs: 新規 `handle_callee_module_function`
+  - src/backend/mir_interpreter/handlers/calls/legacy.rs: `execute_callee_call` に分岐追加
+- Builder からの排出（envガード: `NYASH_MIR_CALL_MODULE_FN=1`）
+  - 関数呼び出し: `build_function_call()` が `name`/`name/arity` を関数表で検出したら callee=ModuleFunction で emit（func フィールドは NameConst 維持）
+    - src/mir/builder/builder_calls/build.rs: +初期分岐
+  - `me.method()` の既知関数は callee=ModuleFunction を優先（ガード下）
+    - src/mir/builder/builder_calls/build.rs:297
+  - 一般化（envガードのまま）
+    - tail-unique 解決を許可（dotted/bare）。STRICT=1 で複数候補は Fail‑Fast。
+      - src/mir/builder/builder_calls/build.rs（Ambiguous 診断/候補提示）
+      - src/mir/builder/method_call_handlers.rs（静的呼び出しのSTRICT診断）
+  - FunctionIndex（薄い箱）導入と適用
+    - 追加: src/mir/indexes/functions.rs（contains/exact/tail_unique, prefer_current_box）
+    - Builder/VM の tail 探索を置換（診断一貫・重複除去）
+  - LLVM トレース: ModuleFunction の専用表示を追加（NYASH_CALL_TRACE=1）
+    - src/runner/modes/llvm.rs
+  - VM legacy-call 観測（開発用）
+    - NYASH_WARN_LEGACY_CALL=1 で JSON 行を stderr 出力（from/to/arity）
+    - src/backend/mir_interpreter/handlers/calls/legacy.rs
+  - JSON bin 側 v1 ゲート
+    - NYASH_JSON_SCHEMA_V0=1 → v0（既定） / NYASH_JSON_SCHEMA_V1=1 → v1 ラッパー
+    - src/runner/mir_json_emit.rs
+
+## Flags（ModuleFunction 周り・運用メモ）
+- NYASH_MIR_CALL_MODULE_FN=1: ModuleFunction を優先して emit（tail-unique を含む）
+- NYASH_MIR_CALL_MODULE_FN_STRICT=1: tail で複数候補なら Fail‑Fast（候補提示）
+- NYASH_MIR_CALL_MODULE_FN_CANON=1: dotted+arity の完全一致を優先採用（安全ステップ）
+- NYASH_WARN_LEGACY_CALL=1: callee=None のレガシー排出/解決を stderr で観測
+- NYASH_JSON_SCHEMA_V0=1 / NYASH_JSON_SCHEMA_V1=1: JSON 出力のバリアント切替（bin/runner）
+
+## Next Actions（小粒・推奨順）
+1) FunctionIndex の prefer_current_box を Builder 側でも共通使用（曖昧時の絞り込みの一貫性）
+2) JSON bin v1 実体（unified mir_call 本体）を dev-gated で試験導入（最小スモークを追加）
+3) レガシー経路（callee=None）箇所に dev 警告を段階的に追加（移行観測の強化）
+4) docs/migration: 旗一覧とロードマップを更新（既定ONの段階導入方針）
+- 効果マスク: ModuleFunction は既定で READ+ReadHeap（保守的）
+  - src/mir/builder/calls/call_unified.rs:compute_call_effects
+- 検証: 直起動 selfhost（--min-json）が安定して最小ヘッダを出力
+  - 実行例: `NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 NYASH_MIR_CALL_MODULE_FN=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
+  - 期待: 先頭1行 Program ヘッダ
+
+
+## Docs — MIR Freeze / MirCall（done）
+- 更新: docs/reference/mir/INSTRUCTION_SET.md（凍結セット/非推奨/マッピング/診断を明記）
+- 追加: docs/reference/mir/call-unified.md（MirCall/Callee/Flags/Effects/Legacy→MirCall）
+- 追加: docs/development/migration/mir-call-unification.md（段階移行の手順とガード）
+- 既存の単一列挙/定義へのリンクを明記（src/mir/instruction.rs, src/mir/definitions/call_unified.rs）
+
+## ✅ Update — 2025-10-01（Selfhost 安全実行: 固定ヘッダ＋静音化）
+
+- 症状/観測:
+  - 直接起動（apps/selfhost-compiler/compiler.nyash --min-json）が待ちに入るケースを確認（CPU100%・長時間）。
+  - 子コンパイラ経路は最小ヘッダを出せるが、起動直後の初期化ログが先頭に混入する場合があった。
+- 対策（実施済み・小差分）:
+  - JSON_ONLY/QUIET/VERBOSE=0 時はレジストリ初期ログを静音化（先頭1行のJSONを汚さない）。
+    - ファイル: `src/box_factory/mod.rs:141-151, 210-221, 230-242`
+    - 影響: 仕様不変・ログのみ抑制。再ビルドで反映。
+- 安全な実行手順（Rust VM固定・子経路推奨）:
+  - 子経路（最小ヘッダのみ出力）
+    - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/examples/string_p0.nyash`
+    - 期待出力: 先頭に `{ "version":0, "kind":"Program", ... }` の1行
+  - 直接起動（診断用・timeout必須）
+    - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.nyash -- --min-json`
+    - 期待出力: 同じく最小ヘッダ1行（固まり時はtimeoutで切断）
+- 受け入れ（dev 任意ゲート）:
+  - `NYASH_JSON_ONLY=1` で最初の1行が JSON ヘッダ（version/kind 非空）であること。
+  - pipeline v2 直ドライバは開発用（`SMOKES_ENABLE_PIPELINE_V2_DRIVER=1` で有効）。
+- 次アクション（小粒・仕様不変）:
+  1) 静音ヘルパ `cli_quiet()` を導入し、dev verify/Runner初期化のeprintlnも JSON_ONLY で抑制。
+  2) `NYASH_DISABLE_PLUGINS=1` 時は `FactoryPolicy::BuiltinFirst` を強制（起動コスト/分岐削減）。
+  3) quick に「最初の1行がJSONヘッダ」を確認する軽量スモークを追加（子/直接: 後者はtimeout付き）。
+  4) `apps/selfhost-compiler/README.md` に安全プロファイル（ENV一覧/timeout運用）を追記。
+  5) pipeline_v2（emit-only）のBox骨格を追加（ExecutionPipeline/Backend/MirBuilder）。compiler.nyashに `--pipeline-v2` 経路を薄く配線。
+  6) pipeline_v2 のJSONヘッダ受け入れスモークを追加（quick/core）。
+  7) JSON_ONLYスモークのノイズフィルタ依存を縮小（direct run + AWK抽出）。
+  8) plugins無効時は preflight_plugins() をSKIPログに変更（v2テストランナー）。
+  9) using/resolve/dev-fallbackの非本質ログを Quiet で抑制（挙動不変）。
+  10) 子プロセスへ NYASH_QUIET を渡さない（emit-only の stdout を抑止しない）。
+- 運用メモ（固まり時の掃除）:
+  - 一覧: `ps -eo pid,etimes,%cpu,comm,args | rg nyash`
+  - 強制終了: `pkill -9 -f 'target/release/nyash|apps/selfhost-compiler/compiler.nyash|pyvm'`
+
+## ✅ Update — 2025-10-01（.hako 採用 — selfhost/resolver 優先化）
+
+要旨
+- 新拡張子 `.hako` を優先に採用。.nyash は後方互換で継続受理。
+- Selfhost 一式を .hako へ移行: compiler/parser_box/emitter_box/pipeline_v2 execution_pipeline を .hako 化。
+- Runner/Resolver は .hako 優先・.nyash フォールバックで解決（パッケージ main/leaf、相対モジュール、is_path 判定すべて）。
+
+変更点（コード）
+- Selfhost sources:
+  - `apps/selfhost-compiler/compiler.hako`（旧 compiler.nyash）
+  - `apps/selfhost-compiler/boxes/parser_box.hako` / `emitter_box.hako`
+  - `apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako`
+- Runner/Resolver:
+  - using 解決/パッケージ main: .hako → .nyash の順で探索（src/runner/pipeline.rs, strip/collect.rs）
+  - パス/拡張子判定: .hako を追加（src/runner/mod.rs, wasm.rs, strip/collect.rs）
+  - Selfhost 子起動: `apps/selfhost-compiler/compiler.hako` を優先に（src/runner/selfhost.rs）
+  - inline-selfhost include: parser/emitter を .hako に変更（src/runner/selfhost.rs）
+- Examples: `apps/examples/string_p0.hako` を追加
+
+スモーク/実行（代表）
+- PASS: `selfhost_min_json_header_vm.sh`（compiler.hako 直実行）
+- PASS: `selfhost_min_json_header_pipeline_v2_vm.sh`（親→子 emit-only; 子 timeout=5000ms）
+- PASS: `selfhost_min_json_header_pipeline_v2_vm.sh`（親→子 emit-only; 子 timeout=8000ms に増強）
+- SKIP（既定）: `selfhost_pipeline_v2_driver_min_json_vm.sh`（dev用; `SMOKES_ENABLE_PIPELINE_V2_DRIVER=1` で有効）
+
+静音と子プロセス
+- 子へ `NYASH_QUIET` は渡さない（emit-only の stdout を抑止しない）。親は `NYASH_JSON_ONLY=1` で最初の1行ヘッダを抽出。
+
+Docs/設定 反映（実施済み）
+- `hako.toml`/`nyash.toml` の selfhost.compiler.* パスを .hako に更新。
+- Selfhost README/quickstart に .hako を追補（直実行例/パイプライン例）。
+- VSCode 最小サポートを追加：
+  - `.vscode/settings.json` に `"files.associations": { "*.hako": "javascript" }`
+  - 軽量ローカル拡張 `tools/vscode/hakorune-language/`（id: `hakorune`、コメント/括弧のみ）
+  - ガイド `docs/tools/vscode-hako.md`（ワークスペース関連付け or ローカル拡張の使い方）
+- `.gitattributes`: `*.hako linguist-language=Nyash` を暫定設定（Linguist 反映まで）
+
+Next（小粒・順番）
+1) Docs の .nyash 表記を .hako へ漸進置換（両受理注記は残す）。
+2) VSCode/Linguist 強化（Non‑Breaking）
+   - TextMate grammar を拡張に追加（`tools/vscode/hakorune-language/syntaxes/hako.tmLanguage.json`）。
+   - Linguist への PR 下書きを用意（`docs/tools/linguist-languages-yml.md` に `languages.yml` の案を記載）。
+   - 拡張安定後、ワークスペースの一時関連付け（javascript）→ `hakorune` に切替案内を追記。
+   - MIME: `text/x-hako` を提案（LSP/配布で使用）。
+3) 代表 examples を .hako に寄せ、quick 代表1本は .hako を既定に（.nyash 代表は最小数を維持）。
+4) pipeline v2 直ドライバのSSA/材化ケア（dev任意; 直後の改善候補）。
+
+完了メモ（次に移行前の3件）
+- 直ドライバのケア（最小）:
+  - `apps/dev/pipeline_v2_min_json.nyash` を `.hako` import に更新（ExecutionPipelineBox）。
+  - devドライバスモークに `NYASH_VM_TOLERATE_VOID=1` を追加（ヘッダ確認の堅牢化; 既定SKIPのまま）。
+- Docsの .hako 置換（最小）:
+  - `docs/development/selfhosting/quickstart.md`、`apps/selfhost-compiler/README.md` の `.nyash` 表記を `.hako` に調整（代表例/直実行）。
+- pipeline v2 追加スモーク（dev-gated）:
+  - 追加/整備: `selfhost_pipeline_v2_{ret,binop,cmp}_vm.sh`（`NYASH_PIPELINE_V2=1` で有効; 既定SKIP）。
+
+補足（selfhost/pipeline_v2 の .hako 化）
+- `apps/selfhost-compiler/pipeline_v2/backend_box.hako`（旧 .nyash）
+- `apps/selfhost-compiler/pipeline_v2/mir_builder_box.hako`（旧 .nyash）
+- import 更新: `execution_pipeline_box.hako` が `.hako` を参照
+
+## ✅ Update — 2025-10-03（VM: Map fast‑path＋lifecycle 抽出＋calls 分割）
+- BoxCall fast‑path: Map を calls/box_call.rs に抽出（Array と対称化）
+  - 実装: `box_map_fastpath()` を追加し、Method 経路での組込み Map を早期処理
+- Lifecycle 抽出: birth/fini の観測・契約ログを boxes/lifecycle.rs に集約
+  - 呼び出し差替: newbox/legacy から `lifecycle_observe_new` / `lifecycle_observe_method` / `lifecycle_contracts_birth`
+- calls 分割（着手）: execute_callee_call の Global/Extern 枝を小関数化
+  - `handle_callee_global()`（dev JSON.stringify ブリッジ維持＋trace＋dispatch）
+  - `handle_callee_extern()`（trace＋extern dispatch）
+- 警告掃除: calls/mod.rs, boxes/mod.rs の未使用 re‑export を静音化
+
+## Rollback Notes（可逆/小差分）
+1) JSON.stringify を dev ゲートに戻す: emit.rs の分岐に `NYASH_JSON_STRINGIFY_DEV` を復帰
+2) 設定探索順を元に戻す: resolver.rs を nyash.toml 優先へ差し替え
+3) plugin-tester 既定 `--config` を `../../nyash.toml` に戻す
+
+## Ops Snippets（運用メモ）
+- Quick smokes: `tools/smokes/v2/run.sh --profile quick --filter "core:*"`
+- LLVM harness（任意）: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/CASE.nyash`
+- tmux 再接続: `tmux attach -t codex || tmux new -s codex`
+- tmux 再作成: `tmux kill-session -t codex || true; tmux new -s codex`
+
+---
+
+Note: 旧来の詳細セクションはファイル肥大化のため削除しました。必要に応じて git 履歴から参照してください（例: `git log -p -- CURRENT_TASK.md`）。
+  - Parser gate: `parser_flow_enabled()` を既定ONに変更（src/config/env.rs）。
+  - Flow 受理・検証: src/parser/declarations/flow.rs（フィールド禁止／birth・fini 禁止／メソッド内 `me` 禁止）。
+  - `new Flow()` 防止: builder 側で静的/flow 名の New を検出してエラーに（Unknown Type 経由でもFail‑Fast扱い）。
+  - Lint（任意）: `NYASH_LINT_STATIC_TO_FLOW=1` で「フィールド/ctorなしの static は flow 推奨」を警告（Main は除外）。
+
+- スモーク（quick/core; すべて PASS）
+  - flow_basic_vm.sh（Main.main）
+  - flow_utils_vm.sh（Flow→Flow 呼び出し）
+  - flow_forbid_field_vm.sh（フィールド禁止）
+  - flow_forbid_me_vm.sh（me 禁止）
+  - flow_forbid_birth_fini_vm.sh（birth/fini 禁止）
+  - flow_forbid_new_vm.sh（new Flow() 禁止）
+  - flow_parity_vm_llvm.sh（VM↔LLVM パリティ）
+
+- Docs 更新
+  - reference/language/flow.md（既定ON／無効化方法に修正）
+  - reference/language/EBNF.md（flow_decl を「既定ON」注記に変更）
+
+次アクション（推奨・小粒）
+- using/alias 連携の flow スモークを追加（prelude/別ファイルの Flow 呼び出し）。
+- quick/integration の代表一式を再実行して既定ONの影響が無いことを再確認。
+- 移行ガイド（static→flow）の簡易ドキュメントを README 追補（任意）。
+
+## ✅ Update — 2025-10-02（Flow: docs＋dev-gated実装＋smokes）
+
+- Docs（仕様確定・段階導入）
+  - 新規: docs/reference/language/flow.md（フィールド禁止・local可・birth/fini/new/me 禁止、Lowering=Flow.method→Global Name.method/N、Dev flag注記）
+  - 参照追加: reference/language/README.md（flowリンク）、quick-reference.md（要点と予約語 flow）
+- Parser（既定OFF/フラグON時のみ有効）
+  - `NYASH_ENABLE_FLOW=1` で `flow Name { ... }` を受理
+  - 実装: src/parser/declarations/flow.rs（メソッドのみ許可／フィールド検出でFail‑Fast、birth/fini禁止、me使用禁止）
+  - ディスパッチ: statements/mod.rs に flow をステートメントとして追加（dev gate）
+- Lowering（既存経路の活用・挙動不変）
+  - Flow は `is_static: true` の BoxDeclaration として扱い、既存の static lowering により `Name.method/N` 関数化
+  - 呼出しは `Name.method(a,b)` → Global call（BoxCallなし）
+- Smokes（quick/core）
+  - flow_basic_vm.sh（Main.main→print）
+  - flow_utils_vm.sh（MathUtils.add を Main から呼び出し）
+  - flow_forbid_field_vm.sh（フィールド禁止のエラー確認）
+  - いずれも `NYASH_ENABLE_FLOW=1` を明示。既定OFFのため既存挙動は不変。
+
+次アクション（提案）
+- フェーズ続き: EBNF への flow 追加（ドキュメントのみ先行済み、実装追随）
+- 任意: static → flow 移行 lint（警告メッセージで誘導、既定OFF）
 
 ## ✅ Update — 2025-10-01（quick 完全緑 + Alias 内部参照 + Mini‑VM 強化）
 
@@ -31,11 +292,7 @@
 - ドキュメント（ENV）
   - `docs/development/runtime/ENV_VARS.md` 冒頭に統合ノブへの誘導とマッピングを追記（`docs/config/env.md` を正とする）
   - 非アーカイブの旧ENV表記を整理（最小置換・互換注記付き）
-    - `docs/development/strategies/break-control-flow-strategy.md`（plugins→policy=off）
-    - `docs/development/builder/DIAGNOSTICS.md`（USING/AST→USING/STRATEGY）
-    - `docs/guides/operator-boxes.md`（USING_STRATEGY=prelude 表記）
-    - `docs/development/testing/aot_smoke_cranelift.md`（plugins→policy=off）
-    - Phase‑15 系（README / planning / imports-namespace-plan）を NYASH_USING=1 ベースに
+    - 設定/using/テストドキュメントを NYASH_USING=1 ベースで統一（compat 注記）
 - Alias 内部参照書換の緊急停止ゲートを追加（既定ON）
   - `NYASH_ALIAS_INTERNAL_REWRITE=0` で prelude 内部参照の書換を一時停止可能
   - docs/config/env.md に追記
@@ -55,6 +312,31 @@
   - parity/selfhost_mir_m2_compare_ops_vm_llvm.sh → PASS
 - 小リファクタ（仕様不変・≤50行）
   - helpers.rs: `materialize_args_in_current_block` / `materialize_recv_in_current_block` を追加
+
+## 🚧 In‑Progress — Declarative MIR（Map/Array リテラル + JSON.stringify）
+
+目的
+- 文字列連結や手続き的 Builder 連鎖を段階的に削減し、宣言的（Map/Array リテラル）で MIR(JSON) を構築する。
+- 既定挙動は不変。導入は dev/flag でガードし、小粒のスモークで検証しながら広げる。
+
+現状（このパッチでの準備）
+- Ny 側（実験）: `apps/lib/json_native/stringify.nyash` に JSON.stringify_map/array の最小骨格を追加
+  - スモーク（実験/既定SKIP）: `tools/smokes/v2/profiles/quick/core/json_stringify_mir_vm.sh`（`NYASH_JSON_STRINGIFY_DEV=1` で有効）
+- 既存の Builder 化: mir_emitter/pipeline_v2 は Builder + `|>` 連鎖で可読性を改善済み（挙動は不変）
+
+次アクション（この順で小粒導入）
+1) Rust 側に安全な JSON.stringify(any) を追加（JSONBox 利用）
+   - 実装: 既存の Box→serde_json 変換を公開 API 経由で呼び出し、`serde_json::to_string` で JSON を生成
+   - 入口: `JSON.stringify(value)`（呼び出しは dev ガード。static/BoxCall の統一は後続）
+2) Guarded スモークの正式化
+   - Map/Array リテラル → JSON.stringify → Mini‑VM 実行（const/binop/compare の代表）
+   - 既定は SKIP、dev/env で ON
+3) 段階置換（dev ガード）
+   - mir_emitter / pipeline_v2 の一部を Map/Array リテラル + JSON.stringify へ移行
+   - quick/integration スポットを都度緑確認（VM↔LLVM パリティ維持）
+
+ロールバック容易性
+- dev ガード・差分小・Builder 経路温存のため、撤回は削除/flag OFF で即時可能。
   - calls.rs: 受け手/引数の材化処理をヘルパーに集約（重複削減・検証流用）
 
 ## ✅ Refactor — 2025-10-02（VM Boxes ハンドラの分割・責務分離）
@@ -1355,3 +1637,56 @@ Updates — 2025-09-28 (P6 incremental)
 - materialize::call_site に [mat-trace] を追加（NYASH_MAT_TRACE=1）
   - 受け手 %id / 推定型 / NewBox 起源, および各引数 %id:型 の短行を出力
   - Block tail の直前 5 命令ダンプ（既存）と対で診断可能
+## ✅ Update — 2025-10-05（Phase 15.7 追補: Branding堅牢化 + JSON.stringify標準化）
+
+- 目的（仕様不変・互換維持）
+  - Branding 移行の堅牢化: `hako.toml` を最優先の単一真実源に（互換: `nyash.toml`/`hakorune.toml`）。
+  - 宣言的MIR/JSON の統一: `JSON.stringify(any)` を第一級APIに昇格（`.toJSON()` 併存・同一出力）。
+  - plugin-tester の既定 `--config` を `hako.toml` に切替（互換読込は維持）。
+
+- 変更点（コード差分・範囲限定）
+  - using/alias 取得元（設定ファイル優先）
+    - src/using/resolver.rs:42 — CWD→*_ROOT で `hako.toml`→`nyash.toml`→`hakorune.toml` の順で探索。NYASH_ROOT/HAKO_ROOT/HAKU_ROOT/HRN_ROOT 別名を受理。
+  - JSON.stringify(any) の標準化（devゲート撤廃・挙動不変）
+    - src/mir/builder/builder_calls/emit.rs:299 — `CallTarget::Global("JSON.stringify/1")` を受け取ったら第1引数に対して `.toJSON()` を発行。Effect は READ。旧 `NYASH_JSON_STRINGIFY_DEV` ゲートを撤廃（互換 OK）。
+  - plugin-tester 既定パスの切替（互換読込は維持）
+    - tools/plugin-tester/src/main.rs:59,69,78,84 — 既定値を `../../hako.toml` に変更。`load_config()` が hako/nyash 双方を解決するため後方互換。
+
+- スモーク追加（quick、軽量）
+  - tools/smokes/v2/profiles/quick/core/branding_hako_only_using_vm.sh
+    - CWD に hako.toml のみ配置（nyash.toml 不在）で using/alias が機能することを確認。
+  - tools/smokes/v2/profiles/quick/core/json_stringify_standard_vm.sh
+    - Map/Array 混在オブジェクトで `JSON.stringify(m) == m.toJSON()` を確認（devフラグ不要）。
+
+- Docs 反映
+  - docs/guides/declarative-mir.md — 見出しと記述を `JSON.stringify` 第一級へ更新（`.toJSON()` 併存・同一出力を明記）。
+
+- 受け入れ/検証
+  - `cargo build --release` 成功。
+  - 追加スモーク2本 PASS（quick プロファイル想定）。既存 quick/integration には影響なし（仕様不変）。
+
+- フラグ/互換
+  - 新規フラグ無し。旧 `NYASH_JSON_STRINGIFY_DEV` は事実上無視（挙動は常に `.toJSON()` へ委譲）。
+  - `nyash.toml` は引き続き互換読込。既存スクリプト/ツールは挙動不変。
+
+- ロールバック手順（可逆・小差分）
+  1) `src/mir/builder/builder_calls/emit.rs` の `JSON.stringify` 分岐を dev 環境変数ゲートに戻す（`NYASH_JSON_STRINGIFY_DEV`）。
+  2) `src/using/resolver.rs` の設定ファイル探索順を `nyash.toml` 優先に戻す。
+  3) plugin-tester 既定 `--config` を `../../nyash.toml` に戻す。
+  変更は局所のため差分戻しで即時復旧可能。
+
+- リスク/留意点
+  - using/alias の DEV フォールバック（内容走査）は従来通り dev ログ配下。今回の変更は設定ファイル優先順位のみで、意味論不変。
+  - `ensure_hako_toml` に依存していた既存スモークは、そのままでも互換維持（hako.toml がなければ nyash.toml をコピー）。
+
+- 次アクション（提案順・小粒）
+  1) Alias 重複・衝突の Fail‑Fast スモークを1件追加（別ファイルで同一 alias を異ファイルへ再バインド）。
+  2) JSON.stringify の深いネスト/特殊文字/大規模Map のパフォーマンス・エスケープ検証を1〜2件（quickで軽量）。
+  3) PreLex 共通化の念押しとして raw/numeric 各1本を LLVM/PyVM 経路で quick に追加。
+  4) Self‑Host 継続: LocalSSA.ensure_cond の2段分岐ミニケース（compare→branch→compare→ret）で VM/LLVM parity 1本。
+
+- 再現/実行メモ（tmux 調子が悪い場合）
+  - tmux 再起動/再接続例:
+    - 再接続: `tmux attach -t codex || tmux new -s codex`
+    - セッション再作成: `tmux kill-session -t codex || true; tmux new -s codex`
+    - 非同期通知（任意）: `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Smokes quick" codex`

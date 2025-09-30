@@ -4,7 +4,7 @@ Collect VM instruction stats (JSON) to guide optimization and instruction set di
 
 ## Prerequisites
 - Build: `cargo build --release -j32`
-- Ensure plugins are configured in `nyash.toml` if your program uses them.
+- Ensure plugins are configured in `hako.toml` (compat: `nyash.toml`) if your program uses them.
 
 ## Quick Start
 ```bash

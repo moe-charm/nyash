@@ -1,4 +1,4 @@
-use super::super::{ConstValue, Effect, EffectMask, MirBuilder, MirInstruction, ValueId};
+use super::super::{Effect, EffectMask, MirBuilder, MirInstruction, ValueId};
 
 /// Gate: whether instance→function rewrite is enabled.
 fn rewrite_enabled() -> bool {
@@ -89,7 +89,13 @@ pub(crate) fn try_known_rewrite_to_dst(
     call_args.append(&mut arg_values);
     crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
     let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
-    if let Err(e) = builder.emit_instruction(MirInstruction::Call { dst: Some(actual_dst), func: name_const, callee: None, args: call_args, effects: EffectMask::READ.add(Effect::ReadHeap) }) { return Some(Err(e)); }
+    if let Err(e) = builder.emit_instruction(MirInstruction::Call {
+        dst: Some(actual_dst),
+        func: name_const,
+        callee: None,
+        args: call_args,
+        effects: EffectMask::READ.add(Effect::ReadHeap)
+    }) { return Some(Err(e)); }
     builder.annotate_call_result_from_func_name(actual_dst, &fname);
     let meta = serde_json::json!({
         "recv_cls": cls,

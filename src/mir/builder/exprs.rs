@@ -1,5 +1,5 @@
 // Expression lowering split from builder.rs to keep files lean
-use super::{ConstValue, MirInstruction, ValueId};
+use super::{MirInstruction, ValueId};
 use crate::ast::{ASTNode, AssignStmt, ReturnStmt, BinaryExpr, CallExpr, MethodCallExpr, FieldAccessExpr};
 
 impl super::MirBuilder {
@@ -119,6 +119,23 @@ impl super::MirBuilder {
                 weak_fields,
                 ..
             } => {
+                // Dev lint: suggest flow for fieldless static boxes (staged)
+                if is_static
+                    && std::env::var("NYASH_LINT_STATIC_TO_FLOW").ok().as_deref() == Some("1")
+                {
+                    let has_fields = !fields.is_empty() || !weak_fields.is_empty();
+                    let has_ctors = !constructors.is_empty();
+                    if !has_fields && !has_ctors && name != "Main" {
+                        eprintln!(
+                            "[lint][flow] static box '{}' has no fields/ctors; consider 'flow {} {{ ... }}'",
+                            name, name
+                        );
+                    }
+                }
+                if is_static {
+                    // Record static/flow box name for later checks (e.g., forbid new Flow())
+                    self.static_box_names.insert(name.clone());
+                }
                 if is_static && name == "Main" {
                     // Special entry box: materialize main() as Program and lower others as static functions
                     self.build_static_main_box(name.clone(), methods.clone())

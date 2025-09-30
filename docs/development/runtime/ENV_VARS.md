@@ -1,7 +1,16 @@
-# Nyash Environment Variables (管理棟ガイド)
+# Nyash Environment Variables (歴史的互換性リファレンス)
 
-> Compatibility note (Phase‑15 ENV consolidation):
-> Primary knobs are documented in `docs/config/env.md`.
+> **⚠️ 重要**: このドキュメントは歴史的変数と互換性情報を保持しています。
+>
+> **最新の推奨変数は [docs/config/env.md](../../config/env.md) を参照してください。**
+>
+> Phase 15 ENV統合により、`env.md` が正本となりました。
+> 本ファイルは互換性確認・移行ガイドとして残されています。
+
+Quiet / JSON-only
+- `NYASH_JSON_ONLY=1`: child/acceptance runs print JSON payloads only to stdout.
+- `NYASH_QUIET=1`: suppress non-essential logs (stderr) across subsystems.
+  - Runner/registry/plugin init/dev verifiers honor quiet by default.
 > Historical variables like `NYASH_ENABLE_USING`, `NYASH_USING_AST`, `NYASH_DISABLE_PLUGINS`, `NYASH_PLUGIN_ONLY` remain as compatibility aliases.
 > Mappings:
 > - `NYASH_ENABLE_USING` → `NYASH_USING=1`
@@ -73,4 +82,4 @@ NYASH_PLUGIN_POLICY = "off"   # compat: NYASH_DISABLE_PLUGINS = "1"
 - NYASH_MIR_ARRAY_BOXCALL: ArrayGet/Set → BoxCall 変換を有効化
 - NYASH_MIR_REF_BOXCALL: RefGet/Set → BoxCall 変換を有効化
 - NYASH_MIR_CORE13: Core‑13 セットの一括有効（将来拡張）
-- NYASH_MIR_CORE13_PURE: Core‑13 純化モード（"1" で有効）。最終MIRは13命令のみ許可され、Load/Store などは `env.local.get/set`、`new` は `env.box.new` 経由へ強制正規化。禁制命令が残存するとコンパイルエラーで早期失敗。
+- NYASH_MIR_CORE13_PURE: [Deprecated / No‑Op] Core‑13 純化モードは撤廃され、このフラグは無視されます（`NYASH_CLI_VERBOSE=1` 時に非推奨メッセージのみ出力）。通常の Core‑13 は既定ONのままです。

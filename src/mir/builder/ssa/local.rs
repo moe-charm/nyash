@@ -1,6 +1,5 @@
 use crate::mir::builder::MirBuilder;
 use crate::mir::{ValueId, Callee};
-use std::collections::HashMap;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub enum LocalKind {

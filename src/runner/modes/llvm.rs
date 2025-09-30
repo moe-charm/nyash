@@ -123,6 +123,9 @@ impl NyashRunner {
                                         Some(nyash_rust::mir::definitions::call_unified::Callee::Global(name)) => {
                                             eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Global:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(name), args.len(), esc(fname), bb);
                                         }
+                                        Some(nyash_rust::mir::definitions::call_unified::Callee::ModuleFunction(name)) => {
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"ModuleFunction:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(name), args.len(), esc(fname), bb);
+                                        }
                                         Some(nyash_rust::mir::definitions::call_unified::Callee::Method{ box_name, method, .. }) => {
                                             eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Method:{}.{}/{}\",\"fn\":\"{}\",\"bb\":{}}}", esc(box_name), esc(method), args.len(), esc(fname), bb);
                                         }

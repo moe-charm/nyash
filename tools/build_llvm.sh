@@ -98,7 +98,7 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
         fi
         NYRT_DIR_HINT="${NYASH_LLVM_NYRT:-crates/nyash_kernel/target/release}"
         ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OUT" --emit exe --nyrt "$NYRT_DIR_HINT" ${NYASH_LLVM_LIBS:+--libs "$NYASH_LLVM_LIBS"}
-        echo "✅ Done: $OUT"; echo "   (runtime may require nyash.toml and plugins depending on app)"; exit 0
+        echo "✅ Done: $OUT"; echo "   (runtime may require hako.toml (compat: nyash.toml) and plugins depending on app)"; exit 0
       else
         ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OBJ"
       fi
@@ -146,4 +146,4 @@ cc "$OBJ" \
   -lpthread -ldl -lm -o "$OUT"
 
 echo "✅ Done: $OUT"
-echo "   (runtime requires nyash.toml and plugin .so per config)"
+echo "   (runtime requires hako.toml (compat: nyash.toml) and plugin .so per config)"

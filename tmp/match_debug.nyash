@@ -1,6 +1,0 @@
-static box Main {
-  main(args) {
-    match 1 { _ => 0 }
-    return 0
-  }
-}

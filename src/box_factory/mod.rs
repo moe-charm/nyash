@@ -132,13 +132,27 @@ impl UnifiedBoxRegistry {
 
     /// Create registry with policy from environment variable (Phase 15.5 setup)
     pub fn with_env_policy() -> Self {
-        let policy = match std::env::var("NYASH_BOX_FACTORY_POLICY").ok().as_deref() {
+        let mut policy = match std::env::var("NYASH_BOX_FACTORY_POLICY").ok().as_deref() {
             Some("compat_plugin_first") => FactoryPolicy::CompatPluginFirst,
             Some("builtin_first") => FactoryPolicy::BuiltinFirst,
             Some("strict_plugin_first") | _ => FactoryPolicy::StrictPluginFirst, // Phase 15.5: Plugin First DEFAULT!
         };
 
-        eprintln!("[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)", policy);
+        // When plugins are globally disabled, prefer builtin factory ordering to reduce overhead.
+        if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() == Some("1") {
+            policy = FactoryPolicy::BuiltinFirst;
+        }
+
+        // Quiet in JSON-only/quiet modes to avoid polluting child JSON output
+        let is_quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0");
+        if !is_quiet {
+            eprintln!(
+                "[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)",
+                policy
+            );
+        }
         Self::with_policy(policy)
     }
 
@@ -199,10 +213,16 @@ impl UnifiedBoxRegistry {
                 for type_name in types {
                     // Enforce reserved names: only builtin factory may claim them
                     if is_reserved_type(type_name) && !factory.is_builtin_factory() {
-                        eprintln!(
-                            "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
-                            type_name, factory_index
-                        );
+                        // Quiet noisy logs in JSON-only/quiet modes
+                        let is_quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+                            || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+                            || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0");
+                        if !is_quiet {
+                            eprintln!(
+                                "[UnifiedBoxRegistry] ❌ Rejecting registration of reserved type '{}' by non-builtin factory #{}",
+                                type_name, factory_index
+                            );
+                        }
                         continue;
                     }
 
@@ -212,8 +232,19 @@ impl UnifiedBoxRegistry {
                     match entry {
                         Entry::Occupied(existing) => {
                             // Collision: type already claimed by higher-priority factory
-                            eprintln!("[UnifiedBoxRegistry] ⚠️ Policy '{}': type '{}' kept by higher priority factory #{}, ignoring factory #{}",
-                                      format!("{:?}", self.policy), existing.key(), existing.get(), factory_index);
+                            // Quiet noisy logs in JSON-only/quiet modes
+                            let is_quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+                                || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+                                || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0");
+                            if !is_quiet {
+                                eprintln!(
+                                    "[UnifiedBoxRegistry] ⚠️ Policy '{}': type '{}' kept by higher priority factory #{}, ignoring factory #{}",
+                                    format!("{:?}", self.policy),
+                                    existing.key(),
+                                    existing.get(),
+                                    factory_index
+                                );
+                            }
                         }
                         Entry::Vacant(v) => {
                             v.insert(factory_index);

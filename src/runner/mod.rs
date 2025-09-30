@@ -131,7 +131,7 @@ impl NyashRunner {
             let (target, alias) = if let Some(pos) = s.find(" as ") {
                 (s[..pos].trim().to_string(), Some(s[pos + 4..].trim().to_string()))
             } else { (s.to_string(), None) };
-            let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+    let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".hako") || target.ends_with(".nyash");
             if is_path {
                 let path = target.trim_matches('"').to_string();
                 let name = alias.clone().unwrap_or_else(|| {

@@ -1,0 +1,22 @@
+{
+  "name": "hakorune-language",
+  "displayName": "Hakorune (.hako) Language Basics",
+  "description": "Minimal language config for Hakorune (.hako): comments/brackets and file association.",
+  "version": "0.0.1",
+  "publisher": "local-dev",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": ["Programming Languages"],
+  "contributes": {
+    "languages": [
+      {
+        "id": "hakorune",
+        "aliases": ["Hakorune", "hakorune"],
+        "extensions": [".hako"],
+        "configuration": "./language-configuration.json"
+      }
+    ]
+  }
+}
+

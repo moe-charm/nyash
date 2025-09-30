@@ -8,6 +8,7 @@ stmt      := 'return' expr
            | 'local' IDENT '=' expr
            | 'if' expr block ('else' block)?
            | 'loop' '('? expr ')' ? block
+           | flow_decl                 ; default ON (disable: NYASH_ENABLE_FLOW=0)
            | expr                         ; expression statement
 
 block     := '{' stmt* '}'
@@ -47,6 +48,11 @@ call_tail := '.' IDENT '(' args? ')'   ; method
            | '(' args? ')'             ; function call
 
 args      := expr (',' expr)*
+
+; ---- Flow (stateless namespace) — default ON; disable with NYASH_ENABLE_FLOW=0 ----
+flow_decl := 'flow' IDENT '{' flow_member* '}'
+flow_member := method_decl
+; Forbidden inside flow: field declarations, 'birth'/'fini' methods, 'me' usage in method bodies
 
 Notes
 - ASI: Newline is the primary statement separator. Do not insert a semicolon between a closed block and a following 'else'.

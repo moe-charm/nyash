@@ -1,8 +1,8 @@
-include "apps/selfhost/compiler/boxes/parser_box.nyash"
-include "apps/selfhost/compiler/boxes/emitter_box.nyash"
+include "apps/selfhost-compiler/boxes/parser_box.hako"
+include "apps/selfhost-compiler/boxes/emitter_box.hako"
 static box Main {
   main(args) {
-    local s = "// string_p0 – minimal example for JIT smoke
+    local s = "// string_p0 – minimal example for JIT smoke (.hako)
 static box Main {
   init { }
   main(args) {

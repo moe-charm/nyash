@@ -24,6 +24,10 @@ pub enum Callee {
     /// Resolves to built-in or global functions at compile time
     Global(String),
 
+    /// Module function call (e.g., ParserBox.starts_with/3)
+    /// Fully qualified function present in the MIR module function table
+    ModuleFunction(String),
+
     /// Box method call with explicit receiver
     /// Enables static resolution of box.method() patterns
     Method {

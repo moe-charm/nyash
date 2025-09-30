@@ -99,6 +99,17 @@ pub(super) fn try_handle_map_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
+                "toJSON" => {
+                    if !args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"MapBox","method":"toJSON","expected":0,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("MapBox.toJSON expects 0 args".into()));
+                    }
+                    let ret = mb.toJSON();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
+                    return Ok(true);
+                }
                 _ => {}
             }
         }

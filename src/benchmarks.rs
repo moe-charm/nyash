@@ -33,7 +33,7 @@ impl BenchmarkSuite {
 
     /// Run comprehensive benchmark across all backends
     pub fn run_all(&self) -> Vec<BenchmarkResult> {
-        let mut results = Vec::new();
+        let results = Vec::new();
 
         let benchmarks = [
             ("bench_light", "benchmarks/bench_light.nyash"),
@@ -45,7 +45,7 @@ impl BenchmarkSuite {
             println!("🚀 Running benchmark: {}", name);
 
             // Test if file exists and is readable
-            if let Ok(source) = fs::read_to_string(file_path) {
+            if let Ok(_source) = fs::read_to_string(file_path) {
                 // Run on all backends
                 // Interpreter benchmark removed with legacy interpreter
 

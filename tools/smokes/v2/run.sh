@@ -49,7 +49,7 @@ log_header() {
 # ヘルプ表示
 show_help() {
     cat << 'EOF'
-Smoke Tests v2 - Nyash 2-Pillar Testing System
+Smoke Tests v2 - HakoRune (aka Nyash) 2-Pillar Testing System
 
 Usage:
   ./run.sh --profile PROFILE [options]
@@ -447,7 +447,7 @@ main() {
 
     # バナー表示
     if [ "$FORMAT" = "text" ]; then
-        log_header "🔥 Nyash Smoke Tests v2 - 2-Pillar Testing System"
+        log_header "🔥 HakoRune Smoke Tests v2 (aka Nyash) - 2-Pillar Testing System"
         log_info "Profile: $PROFILE | Format: $FORMAT | Jobs: $JOBS"
         if [ -n "$FILTER" ]; then
             log_info "Filter: $FILTER"

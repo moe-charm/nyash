@@ -1,27 +1,31 @@
-# Nyash MIR Instruction Set (Canonical 26 → migrating to Core-15 → Core-14)
+# Nyash MIR Instruction Set — Freeze Plan (Phase 15.7)
 
-Status: Canonical (Source of Truth) — transitioning
-Last Updated: 2025-09-01
+Status: Canonical (Source of Truth)
+Last Updated: 2025-10-03
 
-この文書はNyashのMIR命令セットの唯一の参照（現状は26命令）だよ。Core-15 への段階移行を進めており、さらに Phase 12 で Core-14 へ（PluginInvoke → BoxCall 統合）。安定次第この文書を14命令へ更新し、テスト固定数も切り替える（移行中は26を維持）。
+この文書は Nyash の MIR 命令セットの唯一の参照だよ。今フェーズで「凍結セット」を定義し、呼び出しを MirCall に統一する設計を確定する。実装は段階導入だけど、仕様はここに集約するよ。
 
-注意: Debug/Nop/Safepointはビルドモードでの降格用メタ命令であり、コア命令数には数えない。
+単一の列挙はコードでここにある: `src/mir/instruction.rs`
+呼び出し統一の定義はここ: `src/mir/definitions/call_unified.rs`
 
-Transition Note
+注意: Debug/Nop/Safepoint はメタ命令（計数外）。
 
-- Builder/Rewrite/JIT は既に以下の統合を段階適用中
+Transition Note（要点）
+
+- MirCall（Callee）へ統一: 呼び出しは 1 命令に集約（Call/BoxCall/ExternCall/NewBox/NewClosure/PluginInvoke を表現できる）
+- 既定: Builder/VM/Printer は順次 MirCall 優先へ寄せる（レガシーは互換/診断対象）
+- 統合の方向性（段階適用済み含む）
   - TypeCheck/Cast → TypeOp
-  - WeakNew/WeakLoad → WeakRef
-  - BarrierRead/BarrierWrite → Barrier
-  - Print → ExternCall(env.console.log)（Deprecated）
-  - PluginInvoke → BoxCall（Deprecated; 名前/スロット解決はBoxCall側で処理）
-- Phase 12（ビルトインBox廃止）での追加統合
-  - PluginInvoke → BoxCall 完全統合（ビルトインフォールバックがなくなるため区別不要）
-  - VM層でC ABI/Nyash ABI/Scriptプラグインを自動判定
-- VM/JIT の代表的な Core-15 カバー手順は `docs/reference/mir/MIR15_COVERAGE_CHECKLIST.md` を参照。
-- Core-14 安定後に本ドキュメントの「Core Instructions」を14命令へ更新し、マッピング表を併記する。
+  - WeakNew/WeakLoad → WeakRef（統合PoC）
+  - BarrierRead/BarrierWrite → Barrier（統合版）
+  - Print → ExternCall("env.console.log")（Deprecated）
+  - PluginInvoke → MirCall(Method) に吸収（完全移行時は消滅）
 
-## Core Instructions（26）
+診断/ガード
+- レガシー検出: `src/mir/optimizer_passes/diagnostics.rs`
+  - `NYASH_OPT_DIAG=1` で警告、`NYASH_OPT_DIAG_FORBID_LEGACY=1` で Fail‑Fast
+
+## 現在の列挙 — 実装に存在する主な命令（網羅）
 - Const
 - Copy
 - Load
@@ -48,28 +52,53 @@ Transition Note
 - TypeOp（TypeCheck/Cast統合）
 - WeakRef（WeakNew/WeakLoad統合）
 - Barrier（Read/Write統合）
+ - NewClosure
+ - PluginInvoke（Deprecated → MirCallへ移行）
+ - Throw / Catch（Deprecated → Result‑modeへ）
+ - BarrierRead / BarrierWrite（Deprecated → Barrierへ）
 
-## Core-15（Target; 移行中の最小コア）
+## 凍結セット（本フェーズでの安定仕様）
 - 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
 - メモリ(2): Load, Store
 - 制御(4): Branch, Jump, Return, Phi
-- Box(3): NewBox, BoxCall, PluginInvoke
-- 配列(2): ArrayGet, ArraySet
-- 外部(1): ExternCall
+- 呼び出し(1): MirCall（Callee で Global/Extern/ModuleFunction/Method/Constructor/Closure/Value を表現）
+- GC(2): Barrier, Safepoint
+- 構造(2): Copy, Nop（最適化/検証用・意味論不変）
 
-## Core-14（Phase 12 Target; PluginInvoke統合後）
-- 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
-- メモリ(2): Load, Store
-- 制御(4): Branch, Jump, Return, Phi
-- Box(2): NewBox, BoxCall  ← PluginInvokeを吸収
-- 配列(2): ArrayGet, ArraySet
-- 外部(1): ExternCall
+参考: 配列/参照（ArrayGet/ArraySet/Ref*/Weak*）は段階的に Box/Extern へ統合。モジュール関数は Callee::ModuleFunction で一元表現し、NameConst/legacy は段階縮小する。
+
+## 非推奨セット（段階的に削除）
+- Throw / Catch（Result‑mode lowering へ移行）
+- PluginInvoke（MirCall(Method) へ統合）
+- BarrierRead / BarrierWrite（Barrier へ統合）
+- TypeCheck / Cast（TypeOp に統合）
+- RefNew / RefGet / RefSet, WeakNew / WeakLoad（WeakRef/BoxCall へ集約）
+
+## MirCall（呼び出しの統一）
+- 定義: `docs/reference/mir/call-unified.md` を参照
+- ソース: `src/mir/definitions/call_unified.rs`
+- 表現:
+  - Global(String)
+  - Extern(String)
+  - ModuleFunction(String)
+  - Method { box_name, method, receiver, certainty }
+  - Constructor { box_type }
+  - Closure { params, captures, me_capture }
+  - Value(ValueId)
+
+### レガシー→MirCall マッピング
+- Call(func=const "name", args) → MirCall::global(name)（ビルトインのみ）
+- Call(func=const "Class.method/N", args) → MirCall::module_function("Class.method/N")
+- BoxCall(box_val, method, args[, method_id]) → MirCall::method(receiver=box_val, method)
+- ExternCall(iface, method, args) → MirCall::external("iface.method")
+- NewBox(box_type, args) → MirCall::constructor(box_type)
+- NewClosure(params, captures, me) → MirCall::closure(...)
+- PluginInvoke → MirCall::method（差分は効果/解決ポリシーに反映）
 
 Notes
-- Print/Debug/Safepointはメタ/Extern化（Print→ExternCall）。
-- WeakRef/Barrier は統合済み（旧WeakNew/WeakLoad/BarrierRead/WriteはRewriteで互換）。
-- Call は BoxCall へ集約（PluginInvokeはDeprecated → Phase 12で完全統合）。
-- Phase 12: ビルトインBox廃止により、BoxCallとPluginInvokeの区別が不要に。VM層でABI判定。
+- Print は Extern 化（`env.console.log`）
+- PHI の不変条件は別紙参照: `docs/reference/mir/phi_invariants.md`
+- Builder/VMの Call サイトでは in‑block 材化（LocalSSA）を優先（仕様不変）
 
 ## Meta (降格対象; カウント外)
 - Debug
@@ -77,5 +106,5 @@ Notes
 - Safepoint
 
 ## 同期ルール
-- 命令の追加/削除/統合は、まずこの文書を更新し、次に実装（列挙/Printer/Verifier/Optimizer/VM）を同期。最後に「総数=26」テストを更新する。
-- 実装が26を外れた場合はCIを赤にする（設計の合意なく増減させないため）。
+- 命令の追加/削除/統合は、本ドキュメント→実装（列挙/Printer/Verifier/Optimizer/VM）→スモーク/ゴールデンの順で同期
+- レガシー検出は常時ONで観測、削除は小粒差分・可逆を維持

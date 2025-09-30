@@ -36,6 +36,8 @@ ChatGPT: 設計・戦略・深い推論の専門家
 - **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 - **現在のタスク**: [CURRENT_TASK.md](CURRENT_TASK.md)
 - **Phase 15詳細**: [docs/development/roadmap/phases/phase-15/](docs/development/roadmap/phases/phase-15/)
+- **🆕 Phase 15.7 Pipeline v2設計**: [docs/development/selfhosting/pipeline_v2.md](docs/development/selfhosting/pipeline_v2.md)
+- **🆕 Pipeline v2実装**: [apps/selfhost-compiler/pipeline_v2/](apps/selfhost-compiler/pipeline_v2/) | [INTERFACES.md](apps/selfhost-compiler/INTERFACES.md)
 
 ---
 
@@ -62,7 +64,7 @@ tools/smokes/v2/run.sh --profile quick --filter "<glob>"
 bash tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_vm.sh
 
 # 単発実行（参考）
-./target/release/nyash --backend vm apps/APP/main.nyash
+./target/release/hakorune --backend vm apps/APP/main.hkr
 ```
 
 #### ⚡ llvmlite ライン（LLVMハーネス）
@@ -74,7 +76,7 @@ bash tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_vm.sh
 tools/smokes/v2/run.sh --profile integration
 
 # 警告低減版（ビルド後に実行・推奨）
-cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm
+cargo build --release -p hakorune-llvm-compiler && cargo build --release --features llvm
 tools/smokes/v2/run.sh --profile integration
 
 # 個別スモークテスト（フィルタ指定）
@@ -83,10 +85,10 @@ tools/smokes/v2/run.sh --profile integration --filter "<glob>"
 # 例: --filter "vm_llvm_*"  # VM/LLVM比較系のみ
 
 # 単発実行
-NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash
+HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm apps/tests/peek_expr_block.hkr
 
 # 有効化確認
-./target/release/nyash --version | rg -i 'features.*llvm'
+./target/release/hakorune --version | rg -i 'features.*llvm'
 ```
 
 **💡 ポイント**:
@@ -104,7 +106,7 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_e
  - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)
 
 ## 🧱 先頭原則: 「箱理論（Box-First）」で足場を積む
-Nyashは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
+Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
 
 - 基本姿勢: 「まず箱に切り出す」→「境界をはっきりさせる」→「差し替え可能にする」
   - 環境依存や一時的なフラグは、可能な限り「箱経由」に集約（例: JitConfigBox）
@@ -125,7 +127,7 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 ### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-**現在のフェーズ：Phase 15 (Nyashセルフホスティング実行器統一化 - Rust VM + LLVM 2本柱体制)**
+**現在のフェーズ：Phase 15 (Hakoruneセルフホスティング実行器統一化 - Rust VM + LLVM 2本柱体制)**
 
 ### 🏆 **Phase 15.5完了！アーキテクチャ革命達成**
 - ✅ **Core Box Unification**: 3-tier → 2-tier 統一化完了
@@ -133,11 +135,18 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - ✅ **プラグインチェッカー**: ChatGPT5 Pro設計の安全性機能実装
 - ✅ **StringBox問題根本解決**: slot_registry統一による完全修正
 
+### 🎊 **Phase 15.7完了！MIR命令セット安定化達成** (2025-10-01)
+- ✅ **Callee::ModuleFunction追加**: モジュール関数の型安全な解決
+- ✅ **MIR命令整理完了**: 40命令→18命令（Core-18凍結）
+- ✅ **Legacy path削除開始**: 統一Call systemに段階的移行
+- ✅ **WASM準備完了**: クリーンな命令セットでWASM実装準備整った
+- 📋 **詳細**: [Phase 15.7 README](docs/development/roadmap/phases/phase-15.7/README.md)
+
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
-- ✅ **NyKernel化成功**: `crates/nyrt` → `crates/nyash_kernel` 完全移行
+- ✅ **NyKernel化成功**: `crates/nyrt` → `crates/hakorune_kernel` 完全移行
 - ✅ **42%削減達成**: `with_legacy_vm_args` 11箇所系統的削除完了
 - ✅ **Plugin-First統一**: 旧VM依存システム完全根絶
-- ✅ **ビルド成功**: libnyash_kernel.a完全生成（0エラー・0警告）
+- ✅ **ビルド成功**: libhakorune_kernel.a完全生成（0エラー・0警告）
 - ✅ **ChatGPT5×Claude協働**: 歴史的画期的成果達成！
 
 ### 🚀 **Phase 15戦略確定: Rust VM + LLVM 2本柱**
@@ -168,26 +177,26 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 ### 🎯 **2本柱実行方式** (推奨!)
 ```bash
 # 🔧 開発・デバッグ・検証用 (Rust VM)
-./target/release/nyash program.nyash
-./target/release/nyash --backend vm program.nyash
+./target/release/hakorune program.hkr
+./target/release/hakorune --backend vm program.hkr
 
 # ⚡ 本番・最適化・配布用 (LLVM)
-./target/release/nyash --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hkr
 
 # 🛡️ プラグインエラー対策
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
 
 # 🔍 詳細診断
-NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
 ```
 
 ### 🚀 **Phase 15 セルフホスティング専用**
 ```bash
 # JSON v0ブリッジ（PyVM特殊用途）
-NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
+HAKO_SELFHOST_EXEC=1 ./target/release/hakorune program.hkr
 
 # using処理確認
-./target/release/nyash --enable-using program_with_using.nyash
+./target/release/hakorune --enable-using program_with_using.hkr
 
 # ラウンドトリップテスト
 ./tools/ny_roundtrip_smoke.sh
@@ -199,10 +208,10 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 cargo build --release
 
 # 開発・デバッグ実行（Rust VM）
-./target/release/nyash program.nyash
+./target/release/hakorune program.hkr
 
 # 本番・最適化実行（LLVM）
-./target/release/nyash --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hkr
 ```
 
 ### 🪟 Windows版
@@ -211,7 +220,7 @@ cargo build --release
 cargo build --release --target x86_64-pc-windows-msvc
 
 # 生成された実行ファイル
-target/x86_64-pc-windows-msvc/release/nyash.exe
+target/x86_64-pc-windows-msvc/release/hakorune.exe
 ```
 
 ### 🌐 **WASM/AOT版**（開発中）
@@ -220,7 +229,7 @@ target/x86_64-pc-windows-msvc/release/nyash.exe
 # TODO: VM/LLVMベースのWASM実装に移行予定
 
 # LLVM AOTコンパイル（実験的）
-./target/release/nyash --backend llvm program.nyash  # 実行時最適化
+./target/release/hakorune --backend llvm program.hkr  # 実行時最適化
 ```
 
 ### 🎯 **2本柱ビルド方法** (2025-09-28更新)
@@ -238,20 +247,20 @@ cargo build --release --features llvm
 ```bash
 # 1. Rust VM実行 ✅（開発・デバッグ用）
 cargo build --release
-./target/release/nyash program.nyash
+./target/release/hakorune program.hkr
 
 # 2. LLVM実行 ✅（本番・最適化用, llvmliteハーネス）
 cargo build --release --features llvm
-NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm program.nyash
+HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm program.hkr
 
 # 3. プラグインテスト実証済み ✅
 # CounterBox
-echo 'local c = new CounterBox(); c.inc(); c.inc(); print(c.get())' > test.nyash
-./target/release/nyash --backend llvm test.nyash
+echo 'local c = new CounterBox(); c.inc(); c.inc(); print(c.get())' > test.hkr
+./target/release/hakorune --backend llvm test.hkr
 
 # StringBox
-echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.nyash
-./target/release/nyash test.nyash
+echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.hkr
+./target/release/hakorune test.hkr
 
 ```
 
@@ -266,19 +275,19 @@ echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.nyash
 
 ```bash
 # 🎯 基本実行（まずこれ）- Rust VM
-./target/release/nyash program.nyash
+./target/release/hakorune program.hkr
 
 # ⚡ 本番・最適化実行 - LLVM
-./target/release/nyash --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hkr
 
 # 🛡️ プラグインエラー対策（緊急時のみ）
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
 
 # 🔍 詳細診断情報
-NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
 
 # ⚠️ PyVM特殊用途（JSON v0ブリッジ・セルフホスト専用）
-NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
+HAKO_SELFHOST_EXEC=1 ./target/release/hakorune program.hkr
 ```
 
 ### 🚨 **Phase 15戦略確定**
@@ -291,59 +300,59 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 
 | 環境変数 | 必須度 | 用途 | 使用タイミング |
 |---------|-------|-----|-------------|
-| `NYASH_CLI_VERBOSE=1` | ⭐⭐⭐ | 詳細診断 | デバッグ時 |
-| `NYASH_DISABLE_PLUGINS=1` | ⭐⭐ | エラー対策 | プラグインエラー時 |
-| `NYASH_SELFHOST_EXEC=1` | ⭐ | セルフホスト | JSON v0ブリッジ専用 |
-| ~~`NYASH_VM_USE_PY=1`~~ | ⚠️ | PyVM特殊用途 | ~~開発者明示のみ~~ |
-| ~~`NYASH_ENABLE_USING=1`~~ | ✅ | using処理 | ~~デフォルト化済み~~ |
+| `HAKO_CLI_VERBOSE=1` | ⭐⭐⭐ | 詳細診断 | デバッグ時 |
+| `HAKO_DISABLE_PLUGINS=1` | ⭐⭐ | エラー対策 | プラグインエラー時 |
+| `HAKO_SELFHOST_EXEC=1` | ⭐ | セルフホスト | JSON v0ブリッジ専用 |
+| ~~`HAKO_VM_USE_PY=1`~~ | ⚠️ | PyVM特殊用途 | ~~開発者明示のみ~~ |
+| ~~`HAKO_ENABLE_USING=1`~~ | ✅ | using処理 | ~~デフォルト化済み~~ |
 
-**💡 2本柱戦略**：基本は`./target/release/nyash`（Rust VM）、本番は`--backend llvm`！
+**💡 2本柱戦略**：基本は`./target/release/hakorune`（Rust VM）、本番は`--backend llvm`！
 
 **⚠️ PyVM使用制限**: [PyVM使用ガイドライン](docs/reference/pyvm-usage-guidelines.md)で適切な用途を確認
 
 ### ✅ **using system完全実装完了！** (2025-09-24 ChatGPT実装完了確認済み)
 
-**🎉 歴史的快挙**: `using nyashstd`が完璧動作！環境変数なしでデフォルト有効！
+**🎉 歴史的快挙**: `using hakorune-std`が完璧動作！環境変数なしでデフォルト有効！
 
 **✅ 実装完了内容**：
-- **ビルトイン名前空間解決**: `nyashstd` → `builtin:nyashstd`の自動解決
-- **自動コード生成**: nyashstdのstatic box群（string, integer, bool, array, console）を動的生成
+- **ビルトイン名前空間解決**: `hakorune-std` → `builtin:hakorune-std`の自動解決
+- **自動コード生成**: hakorune-stdのstatic box群（string, integer, bool, array, console）を動的生成
 - **環境変数不要**: デフォルトで有効（--enable-using不要）
 
 **✅ 動作確認済み**：
 ```bash
 # 基本using動作（環境変数・フラグ不要！）
-echo 'using nyashstd' > test.nyash
-echo 'console.log("Hello!")' >> test.nyash
-./target/release/nyash test.nyash
+echo 'using hakorune-std' > test.hkr
+echo 'console.log("Hello!")' >> test.hkr
+./target/release/hakorune test.hkr
 # 出力: Hello!
 
 # 実装箇所
-src/runner/pipeline.rs       # builtin:nyashstd解決
+src/runner/pipeline.rs       # builtin:hakorune-std解決
 src/runner/modes/common_util/resolve/strip.rs  # コード生成
 ```
 
-**📦 含まれるnyashstd機能**：
+**📦 含まれるhakorune-std機能**：
 - `string.create(text)`, `string.upper(str)`
 - `integer.create(value)`, `bool.create(value)`, `array.create()`
 - `console.log(message)`
 
-**🎯 完成状態**: ChatGPT実装で`using nyashstd`完全動作中！
+**🎯 完成状態**: ChatGPT実装で`using hakorune-std`完全動作中！
 
 ## 🧪 テストスクリプト参考集（既存のを活用しよう！）
 ```bash
 # 基本的なテスト
-./target/release/nyash local_tests/hello.nyash              # Hello World
-./target/release/nyash local_tests/test_array_simple.nyash  # ArrayBox
-./target/release/nyash apps/tests/string_ops_basic.nyash    # StringBox
+./target/release/hakorune local_tests/hello.hkr              # Hello World
+./target/release/hakorune local_tests/test_array_simple.hkr  # ArrayBox
+./target/release/hakorune apps/tests/string_ops_basic.hkr    # StringBox
 
 # MIR確認用テスト
-./target/release/nyash --dump-mir apps/tests/loop_min_while.nyash
-./target/release/nyash --dump-mir apps/tests/esc_dirname_smoke.nyash
+./target/release/hakorune --dump-mir apps/tests/loop_min_while.hkr
+./target/release/hakorune --dump-mir apps/tests/esc_dirname_smoke.hkr
 
 # 統一Call テスト（Phase A完成！）
-NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --dump-mir test_simple_call.nyash
-NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --emit-mir-json test.json test.nyash
+HAKO_MIR_UNIFIED_CALL=1 ./target/release/hakorune --dump-mir test_simple_call.hkr
+HAKO_MIR_UNIFIED_CALL=1 ./target/release/hakorune --emit-mir-json test.json test.hkr
 ```
 
 ## 🚀 よく使う実行コマンド（忘れやすい）
@@ -351,17 +360,17 @@ NYASH_MIR_UNIFIED_CALL=1 ./target/release/nyash --emit-mir-json test.json test.n
 ### 🎯 基本実行方法
 ```bash
 # VMバックエンド（デフォルト、高速）
-./target/release/nyash program.nyash
-./target/release/nyash --backend vm program.nyash
+./target/release/hakorune program.hkr
+./target/release/hakorune --backend vm program.hkr
 
 # LLVMバックエンド（最適化済み）
-./target/release/nyash --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hkr
 
 # プラグインテスト（LLVM）
-./target/release/nyash --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hkr
 
 # プラグイン無効（デバッグ用）
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
 ```
 
 ### 🔧 テスト・スモークテスト
@@ -382,7 +391,7 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
 ./tools/ny_stage2_bridge_smoke.sh
 
 # プラグインスモーク（オプション）
-NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
+HAKO_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 
 # using/namespace E2E（要--enable-using）
 ./tools/using_e2e_smoke.sh
@@ -391,37 +400,37 @@ NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 ### 🐛 デバッグ用環境変数
 ```bash
 # 詳細診断
-NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
 
 # JSON IR出力
-NYASH_DUMP_JSON_IR=1 ./target/release/nyash program.nyash
+HAKO_DUMP_JSON_IR=1 ./target/release/hakorune program.hkr
 
 # MIR出力（重要！）
-NYASH_DUMP_MIR=1 ./target/release/nyash program.nyash
-NYASH_VM_DUMP_MIR=1 ./target/release/nyash program.nyash  # VM実行時
-./target/release/nyash --dump-mir program.nyash            # フラグ版
+HAKO_DUMP_MIR=1 ./target/release/hakorune program.hkr
+HAKO_VM_DUMP_MIR=1 ./target/release/hakorune program.hkr  # VM実行時
+./target/release/hakorune --dump-mir program.hkr            # フラグ版
 
 # PyVMデバッグ
-NYASH_PYVM_DEBUG=1 ./target/release/nyash program.nyash
+HAKO_PYVM_DEBUG=1 ./target/release/hakorune program.hkr
 
 # パーサー無限ループ対策
-./target/release/nyash --debug-fuel 1000 program.nyash
+./target/release/hakorune --debug-fuel 1000 program.hkr
 
 # プラグインなし実行
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash program.nyash
+HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
 
 # LLVMプラグイン実行（method_id使用）
-./target/release/nyash --backend llvm program.nyash
+./target/release/hakorune --backend llvm program.hkr
 
 # Python/llvmliteハーネス使用（開発中）
-NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
+HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune program.hkr
 
 # 🚀 **Phase 15.5統一Call完全動作確認済み設定** (2025-09-24)
 # ❌ モックルート回避 - 実際のLLVMハーネス使用
-NYASH_MIR_UNIFIED_CALL=1 NYASH_DISABLE_PLUGINS=1 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_OBJ_OUT=/tmp/output.o ./target/release/nyash --backend llvm program.nyash
+HAKO_MIR_UNIFIED_CALL=1 HAKO_DISABLE_PLUGINS=1 HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_LLVM_USE_HARNESS=1 HAKO_LLVM_OBJ_OUT=/tmp/output.o ./target/release/hakorune --backend llvm program.hkr
 
 # 🔧 Python側で統一Call処理（llvmlite直接実行）
-cd src/llvm_py && NYASH_MIR_UNIFIED_CALL=1 ./venv/bin/python llvm_builder.py input.json -o output.o
+cd src/llvm_py && HAKO_MIR_UNIFIED_CALL=1 ./venv/bin/python llvm_builder.py input.json -o output.o
 ```
 
 ## 🔍 MIRデバッグ出力完全ガイド（必読！）
@@ -430,49 +439,49 @@ cd src/llvm_py && NYASH_MIR_UNIFIED_CALL=1 ./venv/bin/python llvm_builder.py inp
 
 ```bash
 # 1️⃣ 最も確実: CLIフラグ使用
-./target/release/nyash --dump-mir program.nyash
-./target/release/nyash --dump-mir --mir-verbose program.nyash  # 詳細版
+./target/release/hakorune --dump-mir program.hkr
+./target/release/hakorune --dump-mir --mir-verbose program.hkr  # 詳細版
 
 # 2️⃣ VM実行時のMIR出力
-NYASH_VM_DUMP_MIR=1 ./target/release/nyash program.nyash
+HAKO_VM_DUMP_MIR=1 ./target/release/hakorune program.hkr
 
 # 3️⃣ JSON形式でファイル出力
-./target/release/nyash --emit-mir-json debug.json program.nyash
+./target/release/hakorune --emit-mir-json debug.json program.hkr
 cat debug.json | jq .  # 整形表示
 
 # 4️⃣ PyVM用JSON（自動生成）
-NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
-cat tmp/nyash_pyvm_mir.json | jq .
+HAKO_VM_USE_PY=1 ./target/release/hakorune program.hkr
+cat tmp/hakorune_pyvm_mir.json | jq .
 ```
 
 ### 📋 **MIR関連環境変数一覧**
 
 | 環境変数 | 用途 | 出力先 |
 |---------|-----|-------|
-| `NYASH_VM_DUMP_MIR=1` | VM実行前MIR出力 | stderr |
-| `NYASH_DUMP_JSON_IR=1` | JSON IR出力 | stdout |
-| `NYASH_CLI_VERBOSE=1` | 詳細診断（MIR含む） | stderr |
-| `NYASH_DEBUG_MIR_PRINTER=1` | MIRプリンターデバッグ | stderr |
+| `HAKO_VM_DUMP_MIR=1` | VM実行前MIR出力 | stderr |
+| `HAKO_DUMP_JSON_IR=1` | JSON IR出力 | stdout |
+| `HAKO_CLI_VERBOSE=1` | 詳細診断（MIR含む） | stderr |
+| `HAKO_DEBUG_MIR_PRINTER=1` | MIRプリンターデバッグ | stderr |
 
 ### 🚨 **MIRが出力されない時のチェックリスト**
 1. ✅ `--dump-mir` フラグを使用（最も確実）
 2. ✅ `--backend vm` を明示的に指定
-3. ✅ `NYASH_DISABLE_PLUGINS=1` でプラグイン干渉を排除
-4. ✅ `NYASH_CLI_VERBOSE=1` で詳細情報取得
+3. ✅ `HAKO_DISABLE_PLUGINS=1` でプラグイン干渉を排除
+4. ✅ `HAKO_CLI_VERBOSE=1` で詳細情報取得
 
 ### 💡 **実用的デバッグフロー**
 ```bash
 # Step 1: 基本MIR確認
-./target/release/nyash --dump-mir gemini_test_case.nyash
+./target/release/hakorune --dump-mir gemini_test_case.hkr
 
 # Step 2: 詳細MIR + エフェクト情報
-./target/release/nyash --dump-mir --mir-verbose --mir-verbose-effects gemini_test_case.nyash
+./target/release/hakorune --dump-mir --mir-verbose --mir-verbose-effects gemini_test_case.hkr
 
 # Step 3: VM実行時の挙動確認
-NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/nyash gemini_test_case.nyash
+HAKO_VM_DUMP_MIR=1 HAKO_CLI_VERBOSE=1 ./target/release/hakorune gemini_test_case.hkr
 
 # Step 4: JSON形式で詳細解析
-./target/release/nyash --emit-mir-json mir.json gemini_test_case.nyash
+./target/release/hakorune --emit-mir-json mir.json gemini_test_case.hkr
 jq '.functions[0].blocks' mir.json  # ブロック構造確認
 ```
 
@@ -489,7 +498,7 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
   - 外部(1): ExternCall
 
 ### 🔄 統一ループ構文
-```nyash
+```hakorune
 // ✅ 唯一の正しい形式
 loop(condition) { }
 
@@ -499,7 +508,7 @@ loop() { }          // 使用不可
 ```
 
 ### 🌟 birth構文 - 生命をBoxに与える
-```nyash
+```hakorune
 // 🌟 「Boxに生命を与える」直感的コンストラクタ
 box Life {
     name: StringBox
@@ -517,7 +526,7 @@ local alice = new Life("Alice")  // birthが使われる
 ```
 
 ### 📝 変数宣言厳密化システム
-```nyash
+```hakorune
 // 🔥 すべての変数は明示宣言必須！（メモリ安全性・非同期安全性保証）
 
 // ✅ static box内のフィールド
@@ -538,7 +547,7 @@ x = 42  // Runtime Error: 未宣言変数 + 修正提案
 ```
 
 ### 🎯 match式（パターンマッチング）
-```nyash
+```hakorune
 // 値を返す式として使用
 local dv = match d {
     "0" => 0,
@@ -575,7 +584,7 @@ match action {
 ## 📚 ドキュメント構造
 
 ### 🎯 最重要ドキュメント（開発者向け）
-- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - Nyashセルフホスティング実現
+- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - Hakoruneセルフホスティング実現
 - **[Phase 15 ROADMAP](docs/development/roadmap/phases/phase-15/ROADMAP.md)** - 現在の進捗チェックリスト
 - **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)** - 入口の統合
 - **[CURRENT_TASK.md](CURRENT_TASK.md)** - 現在進行状況詳細
@@ -650,27 +659,27 @@ Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
 ### 🎛️ 重要フラグ一覧（Phase 15）
 ```bash
 # プラグイン制御
-NYASH_DISABLE_PLUGINS=1     # Core経路安定化（CI常時）
-NYASH_LOAD_NY_PLUGINS=1     # nyash.tomlのny_pluginsを読み込む
+HAKO_DISABLE_PLUGINS=1     # Core経路安定化（CI常時）
+HAKO_LOAD_NY_PLUGINS=1     # nyash.tomlのny_pluginsを読み込む
 
 # 言語機能
 --enable-using              # using/namespace有効化
-NYASH_ENABLE_USING=1        # 環境変数版
+HAKO_ENABLE_USING=1        # 環境変数版
 
 # パーサー選択
 --parser ny                 # Nyパーサーを使用
-NYASH_USE_NY_PARSER=1       # 環境変数版
-NYASH_USE_NY_COMPILER=1     # NyコンパイラMVP経路
+HAKO_USE_NY_PARSER=1       # 環境変数版
+HAKO_USE_NY_COMPILER=1     # NyコンパイラMVP経路
 
 # デバッグ
-NYASH_CLI_VERBOSE=1         # 詳細診断
-NYASH_DUMP_JSON_IR=1        # JSON IR出力
+HAKO_CLI_VERBOSE=1         # 詳細診断
+HAKO_DUMP_JSON_IR=1        # JSON IR出力
 ```
 
 ### 🤖 AI相談
 ```bash
 # Gemini CLIで相談
-gemini -p "Nyashの実装で困っています..."
+gemini -p "Hakoruneの実装で困っています..."
 
 # Codex実行
 codex exec "質問内容"
@@ -744,7 +753,7 @@ docs/development/proposals/ideas/
 ./tools/ny_roundtrip_smoke.sh
 
 # プラグインスモーク（オプション）
-NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
+HAKO_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 
 # using/namespace E2E（要--enable-using）
 ./tools/using_e2e_smoke.sh
@@ -758,9 +767,9 @@ NYASH_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 #### パーサー無限ループ対策
 ```bash
 # 🔥 デバッグ燃料でパーサー制御
-./target/release/nyash --debug-fuel 1000 program.nyash      # 1000回制限
-./target/release/nyash --debug-fuel unlimited program.nyash  # 無制限
-./target/release/nyash program.nyash                        # デフォルト10万回
+./target/release/hakorune --debug-fuel 1000 program.hkr      # 1000回制限
+./target/release/hakorune --debug-fuel unlimited program.hkr  # 無制限
+./target/release/hakorune program.hkr                        # デフォルト10万回
 ```
 
 **対応状況**: must_advance!マクロでパーサー制御完全実装済み✅

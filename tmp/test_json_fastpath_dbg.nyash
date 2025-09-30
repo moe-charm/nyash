@@ -1,9 +1,0 @@
-static box Main {
-  main(args) {
-    local json = args.get(0)
-    local k_plus = "\"operator\":\"+\""
-    print(json.indexOf("\"BinaryOp\""))
-    print(json.indexOf(k_plus))
-    return 0
-  }
-}

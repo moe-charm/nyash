@@ -13,7 +13,7 @@ if [ "${SMOKES_ENABLE_SELFHOST_ACCEPT:-0}" != "1" ]; then
 fi
 
 OUT=$(NYASH_DISABLE_PLUGINS=1 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_ALLOW_USING_FILE=1 NYASH_ENABLE_USING=1 NYASH_JSON_ONLY=1 \
-      timeout 5 "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.nyash" -- --min-json 2>/dev/null | \
+      timeout 5 "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" -- --min-json 2>/dev/null | \
       awk 'match($0,/^\{/) {print; exit}')
 
 if echo "$OUT" | grep -q '"version"' && echo "$OUT" | grep -q '"kind"'; then
@@ -23,4 +23,3 @@ else
   test_fail "dev_selfhost_min_json_head" "no JSON head"
   exit 1
 fi
-

@@ -140,7 +140,7 @@ preflight_plugins() {
         return 1
     fi
 
-    # Provider Verify（段階導入）: nyash.toml の [verify.required_methods] / [types.*.required_methods]
+    # Provider Verify（段階導入）: hako.toml の [verify.required_methods] / [types.*.required_methods]
     # 既定 warn。SMOKES_PROVIDER_VERIFY_MODE=strict でエラー化。
     local verify_mode="${SMOKES_PROVIDER_VERIFY_MODE:-warn}"
     if [ -f "./target/release/nyash" ]; then

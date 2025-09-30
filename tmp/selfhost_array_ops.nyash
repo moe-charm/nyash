@@ -1,4 +1,0 @@
-local a = new ArrayBox()
-a.push(1)
-a.push(2)
-return a.size()

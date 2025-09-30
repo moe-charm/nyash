@@ -120,8 +120,8 @@ run_test "example" test_example
 
 ### プラグインが見つからない
 ```bash
-# nyash.tomlのパス設定を確認
-grep "path = " nyash.toml
+# hako.toml（互換: nyash.toml）のパス設定を確認
+grep "path = " hako.toml || grep "path = " nyash.toml
 
 # 正しいパス: plugins/*/lib*.so
 # 間違ったパス: target/release/lib*.so
@@ -171,6 +171,20 @@ VM 実行順と LLVM 静的コールサイトの差分を簡易比較するヘ�
 - LLVM 静的：`NYASH_CALL_TRACE=1 NYASH_LLVM_USE_HARNESS=1`（静的サイトのJSON行）
 - 判定方針：VMで実行されたcallee/arityがLLVM静的一覧に含まれていればOK（順序差/未実行サイトの列挙は許容）
 - セットサマリ：順序を無視した集合差も表示されます（VM unique=0 なら OK）。
+
+ショートカット（代表3件の一括チェック）
+```
+./tools/dev/call_trace_samples.sh
+# 代表例:
+# 1) apps/examples/json_lint/main.nyash
+# 2) apps/tests/array_min_ops.nyash
+# 3) apps/selfhost-compiler/compiler.hako -- --min-json --emit-mir
+```
+
+### Plugins プロファイルの SKIP ポリシー（動的libの有無・ABI差）
+- plugins プロファイルはローカルの動的プラグイン(.so/.dylib/.dll)の有無に依存します。
+- プラグインが無い／ABIが合わないケースは「SKIP」で緑を維持します（例: `Fixture plugin not available`, `ABI mismatch`）。
+- `dylib_autoload` 系は `NYASH_USING_DYLIB_AUTOLOAD=1` が有効な時のみ自動読込を試行し、失敗は SKIP へフォールバックします。
 
 ### 契約観測（Contracts Observation）
 開発時に `NYASH_CHECK_CONTRACTS=1` を有効にすると、NewBox/birth の対応やメソッド arity/type/index のヒントを1行JSONで観測できます（挙動は不変）。

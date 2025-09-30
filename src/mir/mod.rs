@@ -10,6 +10,7 @@ pub mod aot_plan_import;
 pub mod basic_block;
 pub mod builder;
 pub mod definitions;  // Unified MIR definitions (MirCall, Callee, etc.)
+pub mod indexes;      // Lightweight indexes over module maps (functions, etc.)
 pub mod effect;
 pub mod function;
 pub mod instruction;
@@ -331,10 +332,7 @@ mod tests {
 
     #[test]
     fn test_lowering_await_expression() {
-        if crate::config::env::mir_core13_pure() {
-            eprintln!("[TEST] skip await under Core-13 pure mode");
-            return;
-        }
+        // Core‑13 pure mode removed; test always runs.
         // Build AST: await 1  (semantic is nonsensical but should emit Await)
         let ast = ASTNode::AwaitExpression {
             expression: Box::new(ASTNode::Literal {
@@ -355,10 +353,7 @@ mod tests {
 
     #[test]
     fn test_await_has_checkpoints() {
-        if crate::config::env::mir_core13_pure() {
-            eprintln!("[TEST] skip await under Core-13 pure mode");
-            return;
-        }
+        // Core‑13 pure mode removed; test always runs.
         use crate::ast::{LiteralValue, Span};
         // Build: await 1
         let ast = ASTNode::AwaitExpression {
@@ -389,10 +384,7 @@ mod tests {
 
     #[test]
     fn test_rewritten_await_still_checkpoints() {
-        if crate::config::env::mir_core13_pure() {
-            eprintln!("[TEST] skip await under Core-13 pure mode");
-            return;
-        }
+        // Core‑13 pure mode removed; test always runs.
         use crate::ast::{LiteralValue, Span};
         // Enable rewrite so Await → ExternCall(env.future.await)
         std::env::set_var("NYASH_REWRITE_FUTURE", "1");
@@ -493,11 +485,7 @@ mod tests {
 
     #[test]
     fn test_try_catch_compilation() {
-        // Core-13 pure モードでは Try/Catch 命令は許容集合外のためスキップ
-        if crate::config::env::mir_core13_pure() {
-            eprintln!("[TEST] skip try/catch under Core-13 pure mode");
-            return;
-        }
+        // Core‑13 pure mode removed; test always runs.
         let mut compiler = MirCompiler::new();
 
         let try_catch_ast = ASTNode::TryCatch {

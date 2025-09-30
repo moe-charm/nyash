@@ -71,7 +71,7 @@ Blocks and Control
 
 Using / SSOT
 - Dev/CI: file‑based `using` allowed for convenience.
-- Prod: `nyash.toml` only. Duplicate imports or alias rebinding is an error.
+- Prod: `hako.toml` only (compat: `nyash.toml`). Duplicate imports or alias rebinding is an error.
 
 Errors (format)
 - Always: `Error at line X, column Y: <message>`

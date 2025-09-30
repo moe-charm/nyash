@@ -1,0 +1,103 @@
+flow RegexFlow {
+  // Minimal regex-like helpers focused on readability and determinism.
+  // Supported primitives: digits (\d+), identifier ([A-Za-z_][A-Za-z0-9_]*),
+  // literal substring find, read_digits from position.
+
+  // Read optional whitespace + optional '-' + digits
+  digits_from(s, pos) {
+    if s == null { return "" }
+    if pos < 0 { pos = 0 }
+    local out = ""
+    local i = pos
+    // skip ASCII whitespaces
+    loop(true) {
+      local ch0 = s.substring(i, i+1)
+      if ch0 == "" { break }
+      if ch0 == " " || ch0 == "\t" || ch0 == "\n" || ch0 == "\r" { i = i + 1  continue }
+      break
+    }
+    // optional minus sign
+    local ch = s.substring(i, i+1)
+    if ch == "-" { out = out + ch  i = i + 1 }
+    // digits
+    loop(true) {
+      ch = s.substring(i, i+1)
+      if ch == "" { break }
+      if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+    }
+    return out
+  }
+
+  ident_from(s, pos) {
+    // [A-Za-z_][A-Za-z0-9_]*
+    if s == null { return "" }
+    if pos < 0 { pos = 0 }
+    local out = ""
+    local i = pos
+    local ch = s.substring(i, i+1)
+    if !((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch == "_") { return "" }
+    out = out + ch
+    i = i + 1
+    loop(true) {
+      ch = s.substring(i, i+1)
+      if ch == "" { break }
+      if ((ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || (ch >= "0" && ch <= "9") || ch == "_") {
+        out = out + ch
+        i = i + 1
+      } else { break }
+    }
+    return out
+  }
+
+  find_from(s, needle, pos) {
+    if s == null { return -1 }
+    if needle == null { return -1 }
+    if pos < 0 { pos = 0 }
+    local n = s.length()
+    local m = needle.length()
+    if m == 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop(i <= limit) {
+      local seg = s.substring(i, i+m)
+      if seg == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+
+  last_index_of(s, needle) {
+    if s == null { return -1 }
+    if needle == null { return -1 }
+    // naive: scan from 0 and keep last within bounds
+    local last = -1
+    local pos = 0
+    loop(true) {
+      local p = RegexFlow.find_from(s, needle, pos)
+      if p < 0 { break }
+      last = p
+      pos = p + 1
+    }
+    return last
+  }
+
+  to_int(digits) {
+    if digits == null { return 0 }
+    local n = digits.length()
+    if n == 0 { return 0 }
+    local i = 0
+    local neg = 0
+    if digits.substring(0,1) == "-" { neg = 1  i = 1 }
+    local acc = 0
+    loop(i < n) {
+      local ch = digits.substring(i, i+1)
+      if ch < "0" || ch > "9" { break }
+      local d = "0123456789".indexOf(ch)
+      if d < 0 { break }
+      acc = acc * 10 + d
+      i = i + 1
+    }
+    if neg == 1 { return 0 - acc }
+    return acc
+  }
+}

@@ -3,8 +3,8 @@
 # stringbox_basic.sh - StringBoxの基本操作テスト
 
 # 共通ライブラリ読み込み（必須）
-source "$(dirname "$0")/../../../lib/test_runner.sh"
-source "$(dirname "$0")/../../../lib/result_checker.sh"
+source "$(dirname "$0")/../../lib/test_runner.sh"
+source "$(dirname "$0")/../../lib/result_checker.sh"
 source "$(dirname "$0")/_ensure_fixture.sh"
 
 # 環境チェック（必須）

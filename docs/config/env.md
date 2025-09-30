@@ -23,6 +23,18 @@ Plugins
   - off: disable external plugins (compat: NYASH_DISABLE_PLUGINS=1)
   - force: plugin-only execution (compat: NYASH_PLUGIN_ONLY=1)
 
+Syntax sugar (default ON)
+- NYASH_SYNTAX_SUGAR_LEVEL={basic|full}（unset=ON）。
+  - basic: pipeline/raw/numeric separators/trailing comma など基本糖衣
+  - full: 将来拡張用（現時点は basic と同等か superset）
+- Deprecated（互換のみ; 将来削除予定）
+  - NYASH_ENABLE_ARRAY_LITERAL / NYASH_ENABLE_MAP_LITERAL / NYASH_ENABLE_MAP_IDENT_KEY
+  - これらは SYNTAX_SUGAR_LEVEL に統合。verbose時に非推奨ログを出力。
+
+Flow（stateless namespace）
+- Default ON（disable with NYASH_ENABLE_FLOW=0|false|off）。
+- Lowering: `Name.method(a,b)` → `Name.method/2`（グローバル関数）。BoxCallなし。
+
 Plugin ABI (Final; experimental, default OFF)
 - NYASH_PLUGIN_ABI_FINAL=1: prefer NyValue/NyResult Final ABI when available (fallback to v2)
 - NYASH_PLUGIN_META=1: log presence of Final ABI/meta (quiet when absent)
@@ -56,6 +68,8 @@ Timeout (dev scripts)
 Compiler Track (dev only; default OFF)
 - NYASH_COMPILER_TRACK: 1 to enable new Selfhost Compiler pipeline pieces under apps/selfhost-compiler/.
 - NYASH_JSON_ONLY: 1 to print only JSON payloads (quiet mode) for acceptance checks.
+- NYASH_QUIET: 1 to suppress non-essential logs even when verbose switches would normally print.
+  - Runner and subsystems honor quiet mode to avoid polluting child JSON output.
 
 Selfhost Compiler (parent→child; official, default OFF)
 - NYASH_USE_NY_COMPILER=1: enable selfhost pipeline in runner (parent executes child Ny compiler program).

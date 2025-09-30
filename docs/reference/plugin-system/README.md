@@ -15,7 +15,7 @@
 - **[../architecture/dynamic-plugin-flow.md](../architecture/dynamic-plugin-flow.md)** - **動的プラグインシステムの全体フロー** 🆕
   - MIR→VM→Registry→プラグインの動的解決フロー
   - コンパイル時決め打ちなし、実行時動的判定の仕組み
-  - nyash.tomlによる透過的な切り替え
+  - 中央設定は `hako.toml`（互換: `nyash.toml`）による透過的な切り替え
 
 - **[vm-plugin-integration.md](./vm-plugin-integration.md)** - **VM統合仕様書** 🆕
   - VMバックエンドとプラグインシステムの統合
@@ -37,7 +37,7 @@
   - `returns_result = true` で成功/失敗を `Ok/Err` に統一（段階導入推奨）
 
 ### ⚙️ 戻り値のResult化（B案サポート）
-- `nyash.toml` のメソッド定義に `returns_result = true` を付けると、
+- 中央設定（`hako.toml` / 互換: `nyash.toml`）のメソッド定義に `returns_result = true` を付けると、
   - 成功: `Ok(value)` の `ResultBox` に包んで返す
   - 失敗（BID負エラー）: `Err(ErrorBox(message))` を返す（例外にはしない）
 
@@ -79,12 +79,12 @@ cat src/lib.rs
 
 ### 3. **Configure Your Plugin**
 ```bash
-# 新スタイル（推奨）: 中央=nyash.toml（レジストリ最小） + 各プラグイン=nyash_box.toml（仕様書）
-cat nyash.toml
-cat plugins/<your-plugin>/nyash_box.toml
+# 新スタイル（推奨）: 中央=hako.toml（レジストリ最小） + 各プラグイン=hako_box.toml（仕様書）
+cat hako.toml   # 互換: nyash.toml も可
+cat plugins/<your-plugin>/hako_box.toml   # 互換: nyash_box.toml も可
 ```
 
-中央の `nyash.toml` 例（抜粋）
+中央の `hako.toml` 例（互換: `nyash.toml`）
 ```toml
 [plugins]
 "libnyash_filebox_plugin" = "./plugins/nyash-filebox-plugin"
@@ -96,7 +96,7 @@ search_paths = ["./plugins/*/target/release", "./plugins/*/target/debug"]
 FileBox = 6
 ```
 
-各プラグインの `nyash_box.toml` 例（抜粋）
+各プラグインの `hako_box.toml` 例（抜粋）
 ```toml
 [box]
 name = "FileBox"
@@ -115,7 +115,7 @@ args = [ { name = "path", type = "string" }, { name = "mode", type = "string", d
 returns = { type = "void", error = "string" }
 ```
 
-ロード時は `nyash_box.toml` が優先参照され、OS差（.so/.dll/.dylib、libプリフィックス）は自動吸収されます。従来の `[libraries]` 設定も当面は後方互換で有効です。
+ロード時は `hako_box.toml` が優先参照され、`nyash_box.toml` は後方互換として受理されます。OS差（.so/.dll/.dylib、libプリフィックス）は自動吸収されます。従来の `[libraries]` 設定も当面は後方互換で有効です。
 
 ### 4. **Test Your Plugin**
 ```bash
@@ -125,8 +125,8 @@ cargo build --release
 ./target/release/plugin-tester check path/to/your/plugin.so
 ```
 
-### 5. **nyash_box.toml テンプレ & スモーク（v2）** 🆕
-- テンプレート: `docs/reference/plugin-system/nyash_box.toml.template`
+### 5. **hako_box.toml テンプレ & スモーク（v2）** 🆕
+- テンプレート: `docs/reference/plugin-system/nyash_box.toml.template`（ファイル名は今後 hako_box.toml に移行予定。内容は共通）
 - スモーク実行（VM・動的プラグイン）:
 ```bash
 tools/smokes/v2/run.sh --profile plugins
@@ -159,7 +159,7 @@ export NYASH_PLUGIN_OVERRIDE_TYPES="ArrayBox,MapBox,ConsoleBox"
 
 - **Working Examples**: `plugins/nyash-filebox-plugin/`
 - **Issues**: Report at [GitHub Issues](https://github.com/moe-charm/nyash/issues)
-- **Configuration**: `nyash.toml` in project root
+- **Configuration**: `hako.toml` in project root (compat: `nyash.toml`)
 
 ---
 

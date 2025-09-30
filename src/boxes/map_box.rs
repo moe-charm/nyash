@@ -229,23 +229,9 @@ impl MapBox {
 
     /// JSON文字列に変換
     pub fn toJSON(&self) -> Box<dyn NyashBox> {
-        let data = self.data.read().unwrap();
-        let mut json_parts = Vec::new();
-
-        for (key, value) in data.iter() {
-            let value_str = value.to_string_box().value;
-            // 値が数値の場合はそのまま、文字列の場合は引用符で囲む
-            let formatted_value = if value.as_any().downcast_ref::<IntegerBox>().is_some()
-                || value.as_any().downcast_ref::<BoolBox>().is_some()
-            {
-                value_str
-            } else {
-                format!("\"{}\"", value_str.replace("\"", "\\\""))
-            };
-            json_parts.push(format!("\"{}\":{}", key, formatted_value));
-        }
-
-        Box::new(StringBox::new(&format!("{{{}}}", json_parts.join(","))))
+        // Robust stringify via JSON module conversion (handles nested maps/arrays)
+        let s = crate::boxes::json::stringify_any(self.clone_box());
+        Box::new(StringBox::new(&s))
     }
 
     /// 内部データへのアクセス（JSONBox用）

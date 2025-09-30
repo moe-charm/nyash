@@ -2,7 +2,7 @@
 // 依存：usingのASTプレリュード統合（dev/ciで既定ON）、ファイルusing許可（NYASH_ALLOW_USING_FILE=1）
 
 // Selfhost wrapper via compiler path: produce MIR(JSON v0) for Return(Compare(5,4) Gt)
-using "apps/selfhost-compiler/compiler.nyash" as CompilerMod
+using "apps/selfhost-compiler/compiler.hako" as CompilerMod
 
 static box Main {
   main(){

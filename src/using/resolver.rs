@@ -3,7 +3,7 @@ use crate::using::policy::UsingPolicy;
 use crate::using::spec::{PackageKind, UsingPackage};
 use std::collections::HashMap;
 
-/// Populate using context vectors from nyash.toml (if present).
+/// Populate using context vectors from configuration file (hako.toml preferred; compat nyash.toml/hakorune.toml).
 /// Keeps behavior aligned with existing runner pipeline:
 ///  - Adds [using.paths] entries to `using_paths`
 ///  - Flattens [modules] into (name, path) pairs appended to `pending_modules`
@@ -15,7 +15,33 @@ pub fn populate_from_toml(
     packages: &mut HashMap<String, UsingPackage>,
 ) -> Result<UsingPolicy, UsingError> {
     let mut policy = UsingPolicy::default();
-    let path = std::path::Path::new("nyash.toml");
+    // Locate hako.toml/nyash.toml/hakorune.toml relative to CWD; fallback to *_ROOT if present.
+    let mut chosen: Option<std::path::PathBuf> = None;
+    // Prefer CWD hako.toml
+    for name in ["hako.toml", "nyash.toml", "hakorune.toml"] {
+        let p = std::path::Path::new(name);
+        if p.exists() { chosen = Some(p.to_path_buf()); break; }
+    }
+    if chosen.is_none() {
+        // Try roots: NYASH_ROOT/HAKO_ROOT/HAKU_ROOT/HRN_ROOT
+        if let Some(root) = std::env::var("NYASH_ROOT").ok()
+            .or_else(|| std::env::var("HAKO_ROOT").ok())
+            .or_else(|| std::env::var("HAKU_ROOT").ok())
+            .or_else(|| std::env::var("HRN_ROOT").ok())
+        {
+            for name in ["hako.toml", "nyash.toml", "hakorune.toml"] {
+                let p = std::path::Path::new(&root).join(name);
+                if p.exists() { chosen = Some(p); break; }
+            }
+        }
+    }
+    let path_opt = chosen.as_ref().map(|p| p.as_path());
+    let path = if let Some(p) = path_opt { p } else { std::path::Path::new("nyash.toml") };
+    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+        if path.exists() {
+            if !crate::config::env::cli_quiet() { eprintln!("[using] toml: using {:?}", std::fs::canonicalize(path).ok()); }
+        }
+    }
     if !path.exists() {
         return Ok(policy);
     }
@@ -23,6 +49,18 @@ pub fn populate_from_toml(
         .map_err(|e| UsingError::ReadToml(e.to_string()))?;
     let doc = toml::from_str::<toml::Value>(&text)
         .map_err(|e| UsingError::ParseToml(e.to_string()))?;
+    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+        if let Some(tbl) = doc.as_table() {
+            let keys: Vec<_> = tbl.keys().cloned().collect();
+            if !crate::config::env::cli_quiet() { eprintln!("[using] toml: root keys = {:?}", keys); }
+            if let Some(using_tbl) = tbl.get("using").and_then(|v| v.as_table()) {
+                let ukeys: Vec<_> = using_tbl.keys().cloned().collect();
+                if !crate::config::env::cli_quiet() { eprintln!("[using] toml: [using] keys = {:?}", ukeys); }
+            } else {
+                if !crate::config::env::cli_quiet() { eprintln!("[using] toml: [using] section missing or not a table"); }
+            }
+        }
+    }
 
     // [modules] table flatten: supports nested namespaces (a.b.c = "path")
     if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {

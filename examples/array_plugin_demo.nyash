@@ -1,5 +1,5 @@
 // ArrayBox plugin demo
-// Requires: plugins/nyash-array-plugin built (release) and nyash.toml updated
+// Requires: plugins/nyash-array-plugin built (release) and hako.toml updated (compat: nyash.toml)
 // Run:
 //   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/array_plugin_demo.nyash
 
@@ -19,4 +19,3 @@ static box Main {
     return a.length()
   }
 }
-
