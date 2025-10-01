@@ -2,6 +2,7 @@
 pub mod llvm;
 pub mod mir;
 pub mod vm_fallback;
+#[cfg(feature = "pyvm-bridge")]
 pub mod pyvm;
 pub mod macro_child;
 pub mod common_util;

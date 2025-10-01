@@ -1,4 +1,5 @@
 from typing import Dict, Any
+import inspect
 from llvmlite import ir
 from trace import debug as trace_debug
 
@@ -28,6 +29,17 @@ from instructions.memory import lower_load, lower_store  # Memory operations
 # PHI instruction is handled by PhiHandler in block_lower.py (箱理論)
 
 
+def _call_lower(fn, *args, inst_ctx=None, **kwargs):
+    """Call lowering function, injecting inst_ctx when accepted (backward compatible)."""
+    try:
+        sig = inspect.signature(fn)
+        if 'inst_ctx' in sig.parameters:
+            return fn(*args, inst_ctx=inst_ctx, **kwargs)
+    except Exception:
+        pass
+    return fn(*args, **kwargs)
+
+
 def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
     """Dispatch a single MIR instruction to appropriate lowering helper.
 
@@ -47,7 +59,7 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
     if op == "const":
         dst = inst.get("dst")
         value = inst.get("value")
-        lower_const(builder, owner.module, dst, value, vmap_ctx, owner.resolver)
+        _call_lower(lower_const, builder, owner.module, dst, value, vmap_ctx, owner.resolver, inst_ctx=inst_ctx)
 
     elif op == "binop":
         operation = inst.get("operation")
@@ -55,29 +67,29 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
         rhs = inst.get("rhs")
         dst = inst.get("dst")
         dst_type = inst.get("dst_type")
-        lower_binop(builder, owner.resolver, operation, lhs, rhs, dst,
+        _call_lower(lower_binop, builder, owner.resolver, operation, lhs, rhs, dst,
                     vmap_ctx, builder.block, owner.preds, owner.block_end_values, owner.bb_map,
-                    dst_type=dst_type)
+                    dst_type=dst_type, inst_ctx=inst_ctx)
 
     elif op == "jump":
         target = inst.get("target")
-        lower_jump(builder, target, owner.bb_map)
+        _call_lower(lower_jump, builder, target, owner.bb_map, inst_ctx=inst_ctx)
 
     elif op == "copy":
         dst = inst.get("dst")
         src = inst.get("src")
-        lower_copy(builder, dst, src, vmap_ctx, owner.resolver, builder.block, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_copy, builder, dst, src, vmap_ctx, owner.resolver, builder.block, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "branch":
         cond = inst.get("cond")
         then_bid = inst.get("then")
         else_bid = inst.get("else")
-        lower_branch(builder, cond, then_bid, else_bid, vmap_ctx, owner.bb_map, owner.resolver, owner.preds, owner.block_end_values)
+        _call_lower(lower_branch, builder, cond, then_bid, else_bid, vmap_ctx, owner.bb_map, owner.resolver, owner.preds, owner.block_end_values, inst_ctx=inst_ctx)
 
     elif op == "ret":
         value = inst.get("value")
-        lower_return(builder, value, vmap_ctx, func.function_type.return_type,
-                     owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_return, builder, value, vmap_ctx, func.function_type.return_type,
+                     owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     # PHI instruction is handled by PhiHandler in block_lower.py (箱理論)
     # Dead code removed: elif op == "phi" was unreachable (PhiHandler processes PHI at block head)
@@ -89,38 +101,38 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
         rhs = inst.get("rhs")
         dst = inst.get("dst")
         cmp_kind = inst.get("cmp_kind")
-        lower_compare(builder, operation, lhs, rhs, dst, vmap_ctx,
+        _call_lower(lower_compare, builder, operation, lhs, rhs, dst, vmap_ctx,
                       owner.resolver, builder.block, owner.preds, owner.block_end_values, owner.bb_map,
                       meta={"cmp_kind": cmp_kind} if cmp_kind else None,
-                      ctx=getattr(owner, 'ctx', None))
+                      ctx=getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "unop":
         # Unary op: kind in {'neg','not','bitnot'}; src is operand
         kind = (inst.get("kind") or inst.get("operation") or "").lower()
         srcv = inst.get("src") or inst.get("operand")
         dst = inst.get("dst")
-        lower_unop(builder, owner.resolver, kind, srcv, dst, vmap_ctx, builder.block,
-                   owner.preds, owner.block_end_values, owner.bb_map, ctx=getattr(owner, 'ctx', None))
+        _call_lower(lower_unop, builder, owner.resolver, kind, srcv, dst, vmap_ctx, builder.block,
+                   owner.preds, owner.block_end_values, owner.bb_map, ctx=getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "mir_call":
         # Unified MIR Call handling
         mir_call = inst.get("mir_call", {})
         dst = inst.get("dst")
-        lower_mir_call(owner, builder, mir_call, dst, vmap_ctx, owner.resolver)
+        _call_lower(lower_mir_call, owner, builder, mir_call, dst, vmap_ctx, owner.resolver, inst_ctx=inst_ctx)
 
     elif op == "call":
         func_name = inst.get("func")
         args = inst.get("args", [])
         dst = inst.get("dst")
-        lower_call(builder, owner.module, func_name, args, dst, vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_call, builder, owner.module, func_name, args, dst, vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "boxcall":
         box_vid = inst.get("box")
         method = inst.get("method")
         args = inst.get("args", [])
         dst = inst.get("dst")
-        lower_boxcall(builder, owner.module, box_vid, method, args, dst,
-                      vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_boxcall, builder, owner.module, box_vid, method, args, dst,
+                      vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
         # Optional: honor explicit dst_type for tagging (string handle)
         try:
             dst_type = inst.get("dst_type")
@@ -141,46 +153,46 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
         func_name = inst.get("func")
         args = inst.get("args", [])
         dst = inst.get("dst")
-        lower_externcall(builder, owner.module, func_name, args, dst,
-                         vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_externcall, builder, owner.module, func_name, args, dst,
+                         vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "newbox":
         box_type = inst.get("type")
         args = inst.get("args", [])
         dst = inst.get("dst")
-        lower_newbox(builder, owner.module, box_type, args, dst,
-                     vmap_ctx, owner.resolver, getattr(owner, 'ctx', None))
+        _call_lower(lower_newbox, builder, owner.module, box_type, args, dst,
+                     vmap_ctx, owner.resolver, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "typeop":
         operation = inst.get("operation")
         src = inst.get("src")
         dst = inst.get("dst")
         target_type = inst.get("target_type")
-        lower_typeop(builder, operation, src, dst, target_type,
-                     vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_typeop, builder, operation, src, dst, target_type,
+                     vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "load":
         dst = inst.get("dst")
         addr = inst.get("addr")
-        lower_load(builder, dst, addr, vmap_ctx, owner.resolver, builder.block,
-                   owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_load, builder, dst, addr, vmap_ctx, owner.resolver, builder.block,
+                   owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "store":
         addr = inst.get("addr")
         value = inst.get("value")
-        lower_store(builder, addr, value, vmap_ctx, owner.resolver, builder.block,
-                    owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+        _call_lower(lower_store, builder, addr, value, vmap_ctx, owner.resolver, builder.block,
+                    owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "safepoint":
         live = inst.get("live", [])
-        lower_safepoint(builder, owner.module, live, vmap_ctx,
+        _call_lower(lower_safepoint, builder, owner.module, live, vmap_ctx,
                         resolver=owner.resolver, preds=owner.preds,
                         block_end_values=owner.block_end_values, bb_map=owner.bb_map,
-                        ctx=getattr(owner, 'ctx', None))
+                        ctx=getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "barrier":
         barrier_type = inst.get("type", "memory")
-        lower_barrier(builder, barrier_type, ctx=getattr(owner, 'ctx', None))
+        _call_lower(lower_barrier, builder, barrier_type, ctx=getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "while":
         # Experimental LoopForm lowering inside a block

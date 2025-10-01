@@ -165,10 +165,10 @@ local py = new PyRuntimeBox()       // Pythonプラグイン
 
 ## 🏗️ **複数の実行モード**
 
-重要: 現在、JIT ランタイム実行は封印中です。実行は「Rust VM（MIR）/ PyVM（開発補助）」、配布は「LLVM AOT（ハーネス）」が主軸です。ASTインタープリタはレガシー扱いでデフォルト無効（`interpreter-legacy` feature）。
+重要: 現在、JIT ランタイム実行は封印中です。実行は「Rust VM（MIR）」、配布は「LLVM AOT（llvmlite ハーネス）」が主軸です。PyVM は開発補助として段階的撤退中（`pyvm-bridge` feature でのみ有効）。ASTインタープリタはレガシー扱いでデフォルト無効（`interpreter-legacy`）。
 
 Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで明示ON
-- 既定ビルド: `--backend vm` は PyVM 経路（python3 + `tools/pyvm_runner.py` が必要）／Rust VM（MIR）
+- 既定ビルド: `--backend vm` は Rust VM（MIR）。PyVM を使うには `--features pyvm-bridge` でビルドし、`NYASH_VM_USE_PY=1` を明示してください（非推奨）。
 - レガシー AST インタープリタを有効化するには（通常は不要）:
   ```bash
   cargo build --release --features interpreter-legacy
@@ -182,18 +182,16 @@ Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで�
 - 完全なデバッグ情報
 - 開発に最適
 
-### 2. **VMモード（既定は PyVM／レガシーは任意）**
+### 2. **VMモード（既定は Rust VM）**
 ```bash
-# 既定: PyVM ハーネス（python3 必要）
+# Rust VM（既定）
 ./target/release/nyash --backend vm program.nyash
 
-# レガシー Rust VM を使う場合
-cargo build --release --features vm-legacy
-./target/release/nyash --backend vm program.nyash
+# （非推奨）PyVM を使う場合: pyvm-bridge を有効化して実行
+cargo build --release --features pyvm-bridge
+NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm program.nyash
 ```
-- 既定（vm-legacy OFF）: MIR(JSON) を出力して `tools/pyvm_runner.py` で実行
-- レガシー VM: インタープリター比で 13.5x（歴史的実測）。比較・検証用途で維持
- - 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
+- 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
 
 ### 3. **ネイティブバイナリ（Cranelift AOT）** （配布用）
 ```bash

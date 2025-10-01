@@ -42,6 +42,18 @@ def incoming_pairs_vb(inst: Any):
                         out.append((int(v), int(b)))
             return out
         inc = inst.get("incoming", []) or []
+        # Support dict form: [{"block":b, "value":v}, ...]
+        if inc and isinstance(inc, list) and all(isinstance(x, dict) for x in inc):
+            out = []
+            for it in inc:
+                try:
+                    v = it.get("value")
+                    b = it.get("block")
+                    if v is not None and b is not None:
+                        out.append((int(v), int(b)))
+                except Exception:
+                    pass
+            return out
         out = []
         for t in inc:
             if isinstance(t, (list, tuple)) and len(t) == 2:

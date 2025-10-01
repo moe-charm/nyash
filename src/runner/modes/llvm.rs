@@ -173,9 +173,16 @@ impl NyashRunner {
 
         // Dev/Test helper: allow executing via PyVM harness when requested
         if std::env::var("SMOKES_USE_PYVM").ok().as_deref() == Some("1") {
-            match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
-                Ok(code) => { std::process::exit(code); }
-                Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
+            #[cfg(feature = "pyvm-bridge")]
+            {
+                match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
+                    Ok(code) => { std::process::exit(code); }
+                    Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
+                }
+            }
+            #[cfg(not(feature = "pyvm-bridge"))]
+            {
+                eprintln!("[warn] SMOKES_USE_PYVM=1 but pyvm-bridge feature is disabled; continuing with LLVM path.");
             }
         }
 

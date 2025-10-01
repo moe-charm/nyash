@@ -4,6 +4,7 @@
  * Minimal extraction to reduce duplication and prepare for full split.
  */
 
+#[cfg(feature = "pyvm-bridge")]
 pub mod pyvm;
 pub mod selfhost_exe;
 pub mod io;

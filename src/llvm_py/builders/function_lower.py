@@ -9,6 +9,7 @@ from phi_wiring import (
     finalize_phis as _finalize_phis,
     build_succs as _build_succs,
 )
+from phi_wiring.verify import verify_phi_cfg as _verify_phi_cfg
 
 
 def lower_function(builder, func_data: Dict[str, Any]):
@@ -235,6 +236,17 @@ def lower_function(builder, func_data: Dict[str, Any]):
                 except Exception:
                     pass
             return defs
+        def _collect_declared_phis(block):
+            phis = set()
+            for ins in block.get('instructions') or []:
+                try:
+                    if ins.get('op') == 'phi':
+                        d = ins.get('dst')
+                        if isinstance(d, int):
+                            phis.add(int(d))
+                except Exception:
+                    pass
+            return phis
         def _collect_uses(block):
             uses = set()
             for ins in block.get('instructions') or []:
@@ -260,8 +272,9 @@ def lower_function(builder, func_data: Dict[str, Any]):
             if len(preds_list) <= 1:
                 continue
             defs = _collect_defs(blk)
+            declared_phis = _collect_declared_phis(blk)
             uses = _collect_uses(blk)
-            need = [u for u in uses if u not in defs]
+            need = [u for u in uses if (u not in defs) and (u not in declared_phis)]
             if not need:
                 continue
             for vid in need:
@@ -311,8 +324,23 @@ def lower_function(builder, func_data: Dict[str, Any]):
     except Exception:
         pass
 
-    # Finalize PHIs for this function
+    # Finalize PHIs for this function (wire-only)
     _finalize_phis(builder)
+
+    # Optional verification pass (fail-fast in dev), gated by NYASH_LLVM_PHI_VERIFY
+    try:
+        import os
+        if os.environ.get('NYASH_LLVM_PHI_VERIFY', '1') != '0':
+            strict = (os.environ.get('NYASH_LLVM_PHI_VERIFY_STRICT') == '1')
+            problems = _verify_phi_cfg(builder, strict=strict)
+            if problems:
+                # Summarize first few problems for quick diagnosis
+                summary = ", ".join([f"bb{p.get('block')} v{p.get('dst')}: {p.get('issue')}" for p in problems[:3]])
+                raise RuntimeError(f"PHI verification failed: {summary} (total {len(problems)})")
+    except Exception as _ve:
+        # In bring-up, allow soft-fail when explicitly opted out
+        if os.environ.get('NYASH_LLVM_PHI_VERIFY_STRICT') == '1':
+            raise
 
     # Safety pass: ensure every basic block ends with a terminator.
     # This avoids llvmlite IR parse errors like "expected instruction opcode" on empty blocks.

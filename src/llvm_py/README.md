@@ -59,9 +59,16 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 - `NYASH_CLI_VERBOSE=1` … 降下やスナップショットの詳細ログ
 - （互換）`NYASH_MIR_NO_PHI=1` / `NYASH_VERIFY_ALLOW_NO_PHI=1` … レガシー検証用のみ
 
+PHI 検証・合成・作成のガード
+- `NYASH_LLVM_PHI_VERIFY=1` … finalize 後に軽量 verify を実行（既定ON）。`=0` で無効化
+- `NYASH_LLVM_PHI_VERIFY_STRICT=1` … 問題発見時に即失敗（Fail‑Fast）
+- `NYASH_LLVM_PHI_STRICT=1` … PhiHandler は生成のみ（配線は finalize に一元化）
+- `NYASH_LLVM_SYNTH_LOCAL_PHI=1` … resolver のローカル合成 PHI を許可（既定OFF）
+- `NYASH_LLVM_PHI_ALLOW_CREATE=1` … finalize 中に PHI を新規作成を許可（既定OFF：wire‑only）
+
 PHI 統一方針（既定）
 - PHI は PhiHandler（block_head）で生成する。
-- finalize_phis は“配線のみ”。PHI を新規生成しない。
+- finalize_phis は“配線のみ”。PHI を新規生成しない（`NYASH_LLVM_PHI_ALLOW_CREATE=1` でのみ許可）。
 - if-merge/loop のプリパスは既定OFF（必要時のみ開発者が明示ON）。
 
 関数境界の不変（関数ごとに初期化される状態）

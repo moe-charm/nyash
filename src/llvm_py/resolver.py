@@ -231,8 +231,28 @@ class Resolver:
                     result = existing_phi
                     return result
 
-                # No declared PHI and multi-pred: synthesize a local PHI at the head of the block
+                # No declared PHI and multi-pred: optionally synthesize a local PHI at the head of the block
                 # using end-of-block snapshots from predecessors.
+                # Gate by NYASH_LLVM_SYNTH_LOCAL_PHI (default off when NYASH_LLVM_PHI_STRICT=1).
+                allow_synth = True
+                try:
+                    strict_env = os.environ.get('NYASH_LLVM_PHI_STRICT') == '1'
+                    allow_env = os.environ.get('NYASH_LLVM_SYNTH_LOCAL_PHI')
+                    allow_synth = (allow_env == '1') if allow_env is not None else (not strict_env)
+                except Exception:
+                    allow_synth = True
+                if not allow_synth:
+                    trace_phi(f"[resolve] skip synth local PHI (strict): bb{cur_bid} v{value_id}")
+                    # Best-effort: use first predecessor end value or zero
+                    try:
+                        if pred_ids:
+                            result = self._value_at_end_i64(value_id, pred_ids[0], preds, block_end_values, vmap, bb_map)
+                        else:
+                            result = ir.Constant(self.i64, 0)
+                    except Exception:
+                        result = ir.Constant(self.i64, 0)
+                    self.i64_cache[cache_key] = result
+                    return result
                 try:
                     # Create PHI at block head
                     head_builder = ir.IRBuilder(current_block)

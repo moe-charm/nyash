@@ -21,12 +21,21 @@ impl NyashRunner {
     // legacy run_file_legacy removed (was commented out)
 
     /// Helper: run PyVM harness over a MIR module, returning the exit code
+    #[cfg(feature = "pyvm-bridge")]
     fn run_pyvm_harness(
         &self,
         module: &nyash_rust::mir::MirModule,
         tag: &str,
     ) -> Result<i32, String> {
         super::common_util::pyvm::run_pyvm_harness(module, tag)
+    }
+    #[cfg(not(feature = "pyvm-bridge"))]
+    fn run_pyvm_harness(
+        &self,
+        _module: &nyash_rust::mir::MirModule,
+        _tag: &str,
+    ) -> Result<i32, String> {
+        Err("pyvm-bridge feature disabled".to_string())
     }
 
     /// Helper: try external selfhost compiler EXE to parse Ny -> JSON v0 and return MIR module

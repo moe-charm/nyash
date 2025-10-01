@@ -12,6 +12,7 @@ This package re-exports the primary helpers for backward compatibility with
 
 from .analysis import analyze_incomings, collect_produced_stringish
 from .wiring import ensure_phi, wire_incomings, finalize_phis, build_succs, nearest_pred_on_path, phi_at_block_head
+from .verify import verify_phi_cfg
 from .tagging import setup_phi_placeholders
 
 # Backward-compatible aliases for tests that used private helpers
@@ -24,6 +25,7 @@ __all__ = [
     "ensure_phi",
     "wire_incomings",
     "finalize_phis",
+    "verify_phi_cfg",
     "phi_at_block_head",
     "build_succs",
     "nearest_pred_on_path",
