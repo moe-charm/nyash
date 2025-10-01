@@ -41,6 +41,13 @@ Env flags
    in the current module, the harness emitter maps it to a legacy `externcall` in v0. This keeps
    compile-only runs green while VM/AOT remain Fail‑Fast (unresolved Global is an error at exec).
 
+PHI Sanitize (grouping at block head)
+- Harness compile enforces LLVM invariant「PHI はブロック先頭でグループ化」
+  - The builder performs a light IR‑text sanitize before verification when `NYASH_LLVM_USE_HARNESS=1` (or `NYASH_LLVM_SANITIZE_EMPTY_PHI=1`):
+    - Drop malformed empty PHIs
+    - Group all PHIs at the top of each basic block (preserving relative order)
+  - Motivation: resolver/legacy finalize may synthesize late PHIs for localized values; sanitize normalizes ordering without changing semantics.
+
 Status
 - Harness path is stable for object emission and PHI diagnostics.
 - Parity-by-execution with LLVM remains optional until NyKernel minimal ABI is finalized.

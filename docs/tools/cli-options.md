@@ -2,7 +2,7 @@
 
 Primary binary is `hako`. Aliases `nyash`/`hrn` may be available. Environment variables accept `HAKO_*`/`HAKU_*`/`HRN_*` as aliases of `NYASH_*` (auto-mapped both ways).
 
-最終更新: 2025-08-23
+最終更新: 2025-10-02
 
 ## 基本
 - `file`: 実行するNyashファイル（位置引数）
@@ -13,6 +13,9 @@ Primary binary is `hako`. Aliases `nyash`/`hrn` may be available. Environment va
 - `--dump-mir`: MIRを出力（実行はしない）
 - `--verify`: MIR検証を実施
 - `--mir-verbose`: 詳細MIR出力（統計など）
+- `--emit-mir-json FILE`: MIR(JSON) を FILE に書き出して終了（バックエンド非依存・早期ゲート）
+  - 補足: どの `--backend` でも有効。パース→MIRコンパイル→JSON出力→即終了。
+  - 互換: v1（mir_call）経路はハーネス時に `NYASH_LLVM_DOWNGRADE_V1=1` で v0 へ降格可能（compile‑only）。
 
 ## VM関連
 - `--vm-stats`: VM命令統計を有効化（`NYASH_VM_STATS=1`）
@@ -50,6 +53,9 @@ hako --backend vm --vm-stats --vm-stats-json program.nyash
 
 # MIRを出力
 hako --dump-mir --mir-verbose program.nyash
+
+# MIR(JSON)を書き出し（出力後に終了）
+hako --emit-mir-json /tmp/out.json program.nyash
 
 # ベンチマーク
 hako --benchmark --iterations 100

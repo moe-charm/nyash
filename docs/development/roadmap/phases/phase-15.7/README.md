@@ -94,6 +94,29 @@ Hakoruneで実行器書く
   - `tools/smokes/v2/profiles/quick/llvm/phi_loop_compile_ok.sh`
 - 返り値→終了コードの統一（VM/WASM/AOT）: Rust VM はプログラムの戻り値をプロセス終了コードへ反映（0..255）。
 
+【2025-10-02 追記】
+- FlowEntryBox / FlowRunner（箱化・薄導線）
+  - 追加: `apps/selfhost-compiler/pipeline_v2/flow_entry.hako`（emit-only 入口）
+  - 追加: `apps/selfhost/vm/flow_runner.hako`（Mini‑VM 実行薄箱）
+  - 役割分離: emit は selfhost-compiler 配下、実行は selfhost/vm 配下（箱境界）
+- LocalSSA 材化ポリシーの統一
+  - `ensure_calls`（call/method/new）、`ensure_cond`（branch cond）ともに「PHI直後に copy 挿入」に統一
+  - JSONテキスト整形で挙動不変・Fail‑Fast（未対応形は無変更）
+- MirCall v1（統一呼出し）
+  - 薄箱: `apps/selfhost-compiler/pipeline_v2/mir_call_box.hako` を追加（emit-only）
+  - ハーネス時の v1→v0 ダウングレード (`NYASH_LLVM_DOWNGRADE_V1=1`) を前提に shape/compile を安定化
+  - 未解決 Global は v0 extern へ降格（compile-only）、VM/AOT は未解決エラー（Fail‑Fast）
+- CLI: `--emit-mir-json` をグローバル早期ゲートに（バックエンド非依存）
+  - どの backend 指定でも、パース→MIR→JSON 書き出し→即終了
+  - ベンチ／WASM パイプラインの自動化に利用
+- 工具: WASM 一括スクリプトを追加
+  - `tools/build_and_run_wasm.sh`（.nyash → MIR(JSON) → WASM → 実行/exit code）
+  - 依存: python3+llvmlite, node（wasm_runner.js）
+- LLVM ハーネス（PHI）
+  - Φ生成=PhiHandler、配線=finalize の不変を明記
+  - 関数境界で `phi_wired`/`block_phi_incomings` をクリア（リーク防止）
+  - ハーネス compile 前に IR をサニタイズ: 空PHI除去＋ブロック先頭へのPHIグループ化（検証を安定化）
+
 #### **P2: Hakoruneコンパイラ MVP（次の主作業）**
 - **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出
