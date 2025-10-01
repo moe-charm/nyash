@@ -268,6 +268,42 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - 🔄 **Phase 3.2**: 複雑制御フロー拡張
 - 🔄 **Phase 3.4**: Parity確認開始
 
+#### **Week 3.5: selfhostブランチ統合完了** (2025-10-02) ✅ **完了！**
+**🎉 ChatGPT実装PHI改善完全統合成功！**
+
+- ✅ **origin/selfhost統合**: 6コミット完全マージ (a7281f5e..89b3fbef)
+  - **コミット**: 50bed98b
+  - **ビルド**: ✅ 成功 (49 warnings, 0 errors)
+  - **WASM動作確認**: ✅ 2/2 PASS
+
+- ✅ **PyVM撤退** (ff906ae3)
+  - PyVMコード1436行削除
+  - `pyvm-bridge`フィーチャーに隔離（デフォルトOFF）
+  - 使用には`--features pyvm-bridge` + `NYASH_VM_USE_PY=1`が必要
+
+- ✅ **PHI改善統合** (ChatGPT実装)
+  - PHIグルーピング最適化（llvm_builder.py）
+  - PHI検証システム（verify_phi_cfg）
+  - phi_wired状態管理統一
+  - `NYASH_LLVM_SANITIZE_EMPTY_PHI`環境変数対応
+
+- ✅ **MirCall v1統合** (9ae7d3a4)
+  - Box/PHI per-function初期化
+  - 関数ごとのPHI状態リセット
+
+- ✅ **conflict解決戦略**
+  - Python LLVM: selfhost版採用（PHI最新実装）
+  - CLAUDE.md: wasm版保持（Phase 15.8進捗）
+  - Phase 15.8計画: wasm版保持
+
+- ✅ **修正完了**
+  - `src/cli/mod.rs`: 重複`entry`フィールド削除
+
+**重要成果**:
+- 🏆 ChatGPT担当PHI生成ロジックが完全統合
+- 🏆 WASM開発基盤が最新selfhost実装に完全同期
+- 🏆 ベンチマーク完全動作 (01_loop_counter, 02_fibonacci PASS)
+
 ### 🚀 **Phase 15.8開始！LLVM→WASM実装** (2025-10-01 ~)
 - 🌿 **専用ブランチ**: `wasm-development` (← `selfhost`からfork)
 - 🎯 **目標**: MIR18命令 → WASM変換、ブラウザ/エッジ環境対応

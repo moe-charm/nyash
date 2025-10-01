@@ -66,8 +66,6 @@ pub struct CliConfig {
     pub macro_expand_child: Option<String>,
     pub dump_expanded_ast_json: bool,
     pub macro_ctx_json: Option<String>,
-    // Optional explicit entry (dotted), e.g., "Main.main"
-    pub entry: Option<String>,
 }
 
 pub use groups::{BackendConfig, BuildConfig, CliGroups, DebugConfig, EmitConfig, InputConfig, JitConfig, ParserPipeConfig};
