@@ -164,9 +164,15 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                 phi_handler.process_phi_instructions(phi_ops, bb, func)
                 trace_debug(f"[llvm-py] Processed {len(phi_ops)} PHI instructions at block head")
             except Exception as e:
-                trace_debug(f"[llvm-py] PHI processing error: {e}")
-                import traceback
-                traceback.print_exc()
+                # Fail-fast by default (箱理論: エラーは隠さず即座に失敗)
+                if os.environ.get('NYASH_LLVM_PHI_LENIENT') == '1':
+                    # Lenient mode: log and continue (development only)
+                    trace_debug(f"[llvm-py] PHI processing error (lenient mode): {e}")
+                    import traceback
+                    traceback.print_exc()
+                else:
+                    # Fail-fast: raise immediately
+                    raise RuntimeError(f"PHI processing failed at block {bb.name}") from e
 
         # Lower body ops
         for i_idx, inst in enumerate(body_ops):

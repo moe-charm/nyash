@@ -145,7 +145,9 @@ class PhiHandler:
                     # PHIに追加
                     phi.add_incoming(val, pred_block)
 
-                # 箱理論: vmapに登録（グローバルと現在の両方）
+                # 箱理論: vmapに登録（二重登録が必要）
+                # 1. vmap（グローバル）: 他のブロックから参照可能にする
+                # 2. _current_vmap（ブロックローカル）: 現在のブロック内で即座に使用可能にする
                 self.builder.vmap[dst] = phi
                 if hasattr(self.builder, '_current_vmap'):
                     self.builder._current_vmap[dst] = phi

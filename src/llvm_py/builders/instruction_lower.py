@@ -24,7 +24,7 @@ from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
 from instructions.controlflow.while_ import lower_while_regular
 from instructions.mir_call import lower_mir_call  # New unified handler
-from instructions.phi import lower_phi  # PHI instruction for SSA merging
+# PHI instruction is handled by PhiHandler in block_lower.py (箱理論)
 
 
 def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
@@ -78,27 +78,8 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
         lower_return(builder, value, vmap_ctx, func.function_type.return_type,
                      owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
 
-    elif op == "phi":
-        # PHI instruction for SSA value merging - 箱理論実装
-        # InstructionContext使用（将来的に全命令に展開予定）
-        dst = inst.get("dst")
-        incoming_list = inst.get("incoming", [])
-        # Convert incoming list format: [{"block": bid, "value": vid}, ...]
-        incoming = [(item.get("value"), item.get("block")) for item in incoming_list]
-
-        # 箱化されたコンテキスト使用（inst_ctx経由でアクセス可能）
-        # Using boxed context (accessible via inst_ctx)
-        lower_phi(
-            builder=builder,
-            dst_vid=dst,
-            incoming=incoming,
-            vmap=vmap_ctx,
-            bb_map=owner.bb_map,
-            current_block=builder.block,
-            resolver=owner.resolver,
-            block_end_values=owner.block_end_values,
-            preds_map=owner.preds
-        )
+    # PHI instruction is handled by PhiHandler in block_lower.py (箱理論)
+    # Dead code removed: elif op == "phi" was unreachable (PhiHandler processes PHI at block head)
 
     elif op == "compare":
         # Dedicated compare op
