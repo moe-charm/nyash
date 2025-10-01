@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_min_vm.sh — Ny製の最小MIR(JSON v0) 実行器スモーク（const→ret）
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

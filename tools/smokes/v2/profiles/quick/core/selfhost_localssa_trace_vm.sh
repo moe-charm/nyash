@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_localssa_trace_vm.sh — Verify LocalSSA trace API reports copy insertions
+# tags: selfhost,trace
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
@@ -40,4 +41,3 @@ test "${val:-0}" -ge 1 || { echo "expected copies>=1, got: $val" >&2; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0
-
