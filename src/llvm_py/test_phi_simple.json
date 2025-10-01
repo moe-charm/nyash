@@ -1,0 +1,60 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 0},
+              "comment": "initial = 0"
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 1},
+              "comment": "increment = 1"
+            },
+            {
+              "op": "binop",
+              "dst": 3,
+              "operation": "+",
+              "lhs": 1,
+              "rhs": 2,
+              "comment": "0 + 1 = 1"
+            },
+            {
+              "op": "jump",
+              "target": 1,
+              "comment": "jump to phi block"
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "op": "phi",
+              "dst": 10,
+              "type": "i64",
+              "incoming": [
+                {"block": 0, "value": 3}
+              ],
+              "comment": "receive value from block 0"
+            },
+            {
+              "op": "ret",
+              "value": 10,
+              "comment": "return phi result (should be 1)"
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

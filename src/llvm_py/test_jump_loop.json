@@ -1,0 +1,130 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 0},
+              "comment": "i = 0"
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 0},
+              "comment": "sum = 0"
+            },
+            {
+              "op": "jump",
+              "target": 1,
+              "comment": "goto loop_head"
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "op": "phi",
+              "dst": 10,
+              "type": "i64",
+              "incoming": [
+                {"block": 0, "value": 1},
+                {"block": 2, "value": 13}
+              ],
+              "comment": "i_phi"
+            },
+            {
+              "op": "phi",
+              "dst": 11,
+              "type": "i64",
+              "incoming": [
+                {"block": 0, "value": 2},
+                {"block": 2, "value": 12}
+              ],
+              "comment": "sum_phi"
+            },
+            {
+              "op": "const",
+              "dst": 3,
+              "value": {"type": "i64", "value": 3},
+              "comment": "limit = 3"
+            },
+            {
+              "op": "compare",
+              "dst": 4,
+              "operation": "<",
+              "lhs": 10,
+              "rhs": 3,
+              "comment": "i < 3?"
+            },
+            {
+              "op": "branch",
+              "cond": 4,
+              "then": 2,
+              "else": 3,
+              "comment": "if (i < 3) goto loop_body else goto exit"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "op": "binop",
+              "dst": 12,
+              "operation": "+",
+              "lhs": 11,
+              "rhs": 10,
+              "comment": "sum = sum + i"
+            },
+            {
+              "op": "const",
+              "dst": 5,
+              "value": {"type": "i64", "value": 1},
+              "comment": "increment"
+            },
+            {
+              "op": "binop",
+              "dst": 13,
+              "operation": "+",
+              "lhs": 10,
+              "rhs": 5,
+              "comment": "i = i + 1"
+            },
+            {
+              "op": "jump",
+              "target": 1,
+              "comment": "goto loop_head"
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "op": "phi",
+              "dst": 20,
+              "type": "i64",
+              "incoming": [
+                {"block": 1, "value": 11}
+              ],
+              "comment": "final_sum"
+            },
+            {
+              "op": "ret",
+              "value": 20,
+              "comment": "return sum"
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

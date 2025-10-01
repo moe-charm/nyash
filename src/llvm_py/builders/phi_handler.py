@@ -33,6 +33,8 @@ class PhiHandler:
         self.verbose = verbose
         self.phi_instructions: List[Dict[str, Any]] = []
         self.phi_count = 0
+        # Track incomplete PHI nodes (for loop PHIs with forward references)
+        self.incomplete_phis: List[Dict[str, Any]] = []
 
     def collect_phi_instructions(self, instructions: List[Dict[str, Any]]) -> tuple:
         """
@@ -112,7 +114,8 @@ class PhiHandler:
                 phi_type = ir.IntType(64)
                 phi = phi_builder.phi(phi_type, name=f"phi_{dst}")
 
-                # incoming値を解決して追加
+                # incoming値を解決して追加（forward referenceは後で追加）
+                incomplete_edges = []
                 for item in incoming_list:
                     block_id = item.get('block')
                     value_id = item.get('value')
@@ -134,18 +137,34 @@ class PhiHandler:
                         val = self.builder.vmap.get(value_id)
 
                     if val is None:
-                        # 見つからない場合は0
-                        val = ir.Constant(phi_type, 0)
+                        # Forward reference（ループPHI等）- 後で追加
+                        incomplete_edges.append({
+                            'block_id': block_id,
+                            'value_id': value_id,
+                            'pred_block': pred_block
+                        })
                         if self.verbose:
-                            print(f"[PhiHandler] Warning: value {value_id} not found, using 0")
+                            print(f"[PhiHandler] Deferred: value {value_id} from block {block_id} (forward reference)")
                     else:
+                        # 解決済みの値を追加
                         if self.verbose:
                             print(f"[PhiHandler] Resolved value {value_id} = {val}")
+                        phi.add_incoming(val, pred_block)
 
-                    # PHIに追加
-                    phi.add_incoming(val, pred_block)
+                # 未完了のedgeがある場合は記録
+                if incomplete_edges:
+                    self.incomplete_phis.append({
+                        'phi': phi,
+                        'dst': dst,
+                        'block': block,
+                        'incomplete_edges': incomplete_edges
+                    })
+                    if self.verbose:
+                        print(f"[PhiHandler] PHI dst={dst} has {len(incomplete_edges)} incomplete edges")
 
-                # 箱理論: vmapに登録（グローバルと現在の両方）
+                # 箱理論: vmapに登録（二重登録が必要）
+                # 1. vmap（グローバル）: 他のブロックから参照可能にする
+                # 2. _current_vmap（ブロックローカル）: 現在のブロック内で即座に使用可能にする
                 self.builder.vmap[dst] = phi
                 if hasattr(self.builder, '_current_vmap'):
                     self.builder._current_vmap[dst] = phi
@@ -166,6 +185,63 @@ class PhiHandler:
 
         return success_count == len(phi_ops)
 
+    def complete_incomplete_phis(self) -> bool:
+        """
+        未完了のPHI incomingエッジを追加（ループPHI対応）
+
+        ブロック本体の処理後に呼び出して、forward referenceを解決する
+
+        Returns:
+            成功した場合True
+        """
+        if not self.incomplete_phis:
+            if self.verbose:
+                print(f"[PhiHandler] No incomplete PHIs to complete")
+            return True
+
+        if self.verbose:
+            print(f"[PhiHandler] Completing {len(self.incomplete_phis)} incomplete PHIs")
+
+        phi_type = ir.IntType(64)
+        completed_count = 0
+
+        for phi_info in self.incomplete_phis:
+            phi = phi_info['phi']
+            dst = phi_info['dst']
+            incomplete_edges = phi_info['incomplete_edges']
+
+            for edge in incomplete_edges:
+                value_id = edge['value_id']
+                pred_block = edge['pred_block']
+
+                # 値を再度解決（今度はブロック本体処理後なので存在するはず）
+                # _current_vmapを優先（ループPHI等、同じブロック内の値）
+                val = None
+                if hasattr(self.builder, '_current_vmap'):
+                    val = self.builder._current_vmap.get(value_id)
+
+                # _current_vmapで見つからない場合はグローバルvmapを確認
+                if val is None and hasattr(self.builder, 'vmap'):
+                    val = self.builder.vmap.get(value_id)
+
+                if val is None:
+                    # それでも見つからない場合は0
+                    val = ir.Constant(phi_type, 0)
+                    if self.verbose:
+                        print(f"[PhiHandler] Warning: value {value_id} still not found after body processing, using 0")
+                else:
+                    if self.verbose:
+                        print(f"[PhiHandler] Completed: value {value_id} = {val}")
+
+                # PHIに追加
+                phi.add_incoming(val, pred_block)
+                completed_count += 1
+
+        if self.verbose:
+            print(f"[PhiHandler] Completed {completed_count} incomplete PHI edges")
+
+        return True
+
     def get_statistics(self) -> Dict[str, int]:
         """
         統計情報取得
@@ -175,5 +251,6 @@ class PhiHandler:
         """
         return {
             'total_phi': self.phi_count,
-            'collected': len(self.phi_instructions)
+            'collected': len(self.phi_instructions),
+            'incomplete': len(self.incomplete_phis)
         }

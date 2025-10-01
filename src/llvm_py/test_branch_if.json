@@ -1,0 +1,73 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 10},
+              "comment": "lhs = 10"
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 5},
+              "comment": "rhs = 5"
+            },
+            {
+              "op": "compare",
+              "dst": 3,
+              "operation": ">",
+              "lhs": 1,
+              "rhs": 2,
+              "comment": "10 > 5 = true"
+            },
+            {
+              "op": "branch",
+              "cond": 3,
+              "then": 1,
+              "else": 2,
+              "comment": "if (10 > 5) goto block1 else goto block2"
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 10,
+              "value": {"type": "i64", "value": 100},
+              "comment": "then branch: return 100"
+            },
+            {
+              "op": "ret",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 20,
+              "value": {"type": "i64", "value": 200},
+              "comment": "else branch: return 200"
+            },
+            {
+              "op": "ret",
+              "value": 20
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

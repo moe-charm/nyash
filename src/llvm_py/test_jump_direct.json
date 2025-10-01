@@ -1,0 +1,37 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "jump",
+              "target": 1,
+              "comment": "jump to block 1"
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 42},
+              "comment": "value = 42"
+            },
+            {
+              "op": "ret",
+              "value": 1,
+              "comment": "return 42"
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

@@ -1,0 +1,105 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 10},
+              "comment": "a = 10"
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 5},
+              "comment": "b = 5"
+            },
+            {
+              "op": "binop",
+              "dst": 3,
+              "operation": "+",
+              "lhs": 1,
+              "rhs": 2,
+              "comment": "add: 10 + 5 = 15"
+            },
+            {
+              "op": "const",
+              "dst": 4,
+              "value": {"type": "i64", "value": 3},
+              "comment": "c = 3"
+            },
+            {
+              "op": "binop",
+              "dst": 5,
+              "operation": "*",
+              "lhs": 3,
+              "rhs": 4,
+              "comment": "mul: 15 * 3 = 45"
+            },
+            {
+              "op": "const",
+              "dst": 6,
+              "value": {"type": "i64", "value": 20},
+              "comment": "d = 20"
+            },
+            {
+              "op": "binop",
+              "dst": 7,
+              "operation": "-",
+              "lhs": 5,
+              "rhs": 6,
+              "comment": "sub: 45 - 20 = 25"
+            },
+            {
+              "op": "const",
+              "dst": 8,
+              "value": {"type": "i64", "value": 5},
+              "comment": "e = 5"
+            },
+            {
+              "op": "binop",
+              "dst": 9,
+              "operation": "/",
+              "lhs": 7,
+              "rhs": 8,
+              "comment": "div: 25 / 5 = 5"
+            },
+            {
+              "op": "const",
+              "dst": 10,
+              "value": {"type": "i64", "value": 3},
+              "comment": "f = 3"
+            },
+            {
+              "op": "binop",
+              "dst": 11,
+              "operation": "%",
+              "lhs": 7,
+              "rhs": 10,
+              "comment": "mod: 25 % 3 = 1"
+            },
+            {
+              "op": "binop",
+              "dst": 12,
+              "operation": "+",
+              "lhs": 9,
+              "rhs": 11,
+              "comment": "final: 5 + 1 = 6"
+            },
+            {
+              "op": "ret",
+              "value": 12,
+              "comment": "return 6"
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}
