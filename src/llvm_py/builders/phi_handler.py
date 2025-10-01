@@ -122,7 +122,7 @@ class PhiHandler:
             try:
                 # 箱化: 直接PHI命令を生成（lower_phi経由だと重複する）
                 dst = inst.get('dst')
-                from ..phi_wiring.common import incoming_pairs_vb
+                from phi_wiring.common import incoming_pairs_vb
                 incoming_list = [{'block': b, 'value': v} for (v,b) in incoming_pairs_vb(inst)]
 
                 if not incoming_list:
