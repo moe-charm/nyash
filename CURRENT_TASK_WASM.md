@@ -37,34 +37,36 @@
   - ✅ 自己ループPHI対応（wiring.py）
   - ✅ **if-PHI完全動作**：200返却成功 🎉
 
-🐛 **現在の問題** (2025-10-01 最新):
-1. **incoming edge重複追加問題** 🔥
-   - **進展**: selfhost wire-only統合完了（ensure_phi削除）✅
-   - **新問題**: PhiHandlerとfinalize_phisが同じedge追加
-   - **症状IR**:
+✅ **Phase 3.1-D完全達成！** (2025-10-01 NEW!) 🎉🎉🎉
+1. **PHI重複問題完全解決** ✅
+   - **selfhost統合**: ff634f2d（phi_wired記録システム）
+   - **実装内容**:
+     - PhiHandler: `builder.phi_wired[(block_id, dst_vid)]`に配線済みpred記録
+     - finalize_phis: `phi_wired`参照して重複skip
+   - **STRICT=1モード**: PhiHandler作成→finalize配線完全分離
+   - **正常IR**:
      ```llvm
-     %"phi_2" = phi i64 [0, %"bb0"], [%"add_4", %"bb1"], [0, %"bb0"], [%"add_4", %"bb1"]
-                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-                        PhiHandlerが追加              finalize_phisが再追加
+     %"phi_2" = phi i64 [0, %"bb0"], [%"add_4", %"bb1"]  ← 完璧！
      ```
-   - **根因**:
-     - PhiHandler: 完全PHI作成（両edge追加）✅
-     - finalize_phis: 重複チェック失敗、さらにedge追加 ❌
-     - llvmlite PHI.incoming属性アクセス失敗？
-   - **対策**:
-     - llvmlite API調査（PHI.operands経由？）
-     - PhiHandler完成PHIのfinalize_phisスキップ実装
-     - ChatGPT相談で解決策確定
+   - **ログ確認**:
+     ```json
+     {"phi":"skip_dup_incoming","dst":2,"pred":0}
+     {"phi":"skip_dup_incoming","dst":2,"pred":1}
+     ```
+   - **WASM実行**: `ny_main() → 10` 完全成功！ ✅
 
 📋 **次のステップ**:
-1. **Phase 3.1-D継続: incoming重複解決** （ChatGPT担当）
-   - llvmlite PHI.incoming API調査
-   - PhiHandler完成PHI判定実装
-   - finalize_phisスキップロジック
-2. **Phase 3.2: ループPHI完全動作確認** ⏸️ 重複解決後
-3. **Phase 3.4: ベンチマークシステム構築** ⏸️ ループPHI修正後
-4. **Phase 3.5: Parity確認開始** ⏸️ ループPHI修正後
+1. **Phase 3.2: 複雑制御フロー拡張** 🎯
+   - nested loop（二重ループ）
+   - if-else in loop（ループ内分岐）
+   - loop break/continue（予定）
+2. **Phase 3.3: ベンチマークシステム構築**
+   - フィボナッチ数列
+   - 素数判定
+   - 配列走査
+3. **Phase 3.4: Parity確認開始**
    - VM/LLVM/WASM同一出力確認
+4. **Phase 4.1: 関数呼び出し実装**
 
 📊 **Week 2実装済みMIR命令**: 13/18 (72%完了)
 - ✅ const, binop, compare, branch, jump, ret
