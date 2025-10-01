@@ -39,6 +39,38 @@
   - 概ね PASS。1 件 FAIL: selfhost_compiler_emit_mir_cmp_v2_vm.sh（devプロファイル影響の可能性高）
   - WASM quick（`SMOKES_ENABLE_WASM=1`）は PASS（プレースホルダ）
 
+## ✅ Update — 2025-10-01（PyVM撤退ドキュメント整備・LLVM Builder 小改良）
+- Docs sweep（PyVM撤退・互換のみ）
+  - 更新: `AGENTS.md`, `README.md`, `README.ja.md`,
+          `docs/development/roadmap/phases/phase-15/README.md`,
+          `docs/guides/selfhost-pilot.md`,
+          `docs/design/using-and-dispatch.md`,
+          `docs/papers/nyash-phase15.7-selfhost/paper.md`,
+          `docs/config/env.md`
+  - 方針: 既定の実行は Rust VM / LLVM（llvmlite ハーネス）。PyVM は `--features pyvm-bridge` + `NYASH_VM_USE_PY=1` の互換のみ（既定OFF）。
+
+- LLVM Python builder（箱化・安全化の最小差分）
+  - BlockVMap を block_lower に適用（per‑block SSA の二層ビューを箱化）。互換のため `_current_vmap` は引き続き dict を公開。
+  - PHI finalize 後に verify を常設（`NYASH_LLVM_PHI_VERIFY=1` 既定、`NYASH_LLVM_PHI_VERIFY_STRICT=1` で Fail‑Fast）。
+  - finalize は wire‑only 既定（PHI新規作成は既定OFF、`NYASH_LLVM_PHI_ALLOW_CREATE=1` で明示許可）。
+  - InstructionContext 注入は維持（今後、各 lowering へ段階拡大）。
+
+- Smokes（quick）
+  - 結果: 103/104 PASS（既知1件 FAIL: `selfhost_compiler_emit_mir_cmp_v2_vm.sh` — 期待1/実際0）。
+  - ノイズ: preflight が Missing dynamic plugins を WARN（`stringbox integerbox mathbox`）。`nyash.toml` の libraries を参照する方式へ修正予定。
+
+- 次アクション（このブランチで継続）
+  1) InstructionContext の適用拡大（binop/compare/branch/ret/copy から開始）。
+  2) plugin preflight の検出改善（`tools/smokes/v2/lib/{preflight.sh,plugin_manager.sh}` で nyash.toml 読み）。
+  3) Python builder の未使用スタブ整理（`llvm_builder.py` の NotImplemented ルートの削除/明確化）。
+  4) Integration 実行（LLVM ハーネス）：`NYASH_LLVM_USE_HARNESS=1 tools/smokes/v2/run.sh --profile integration --timeout 180`。
+
+- 再開手順（再起動後）
+  - ビルド: `cargo build --release`
+  - クイック: `tools/smokes/v2/run.sh --profile quick`
+  - インテグ: `NYASH_LLVM_USE_HARNESS=1 tools/smokes/v2/run.sh --profile integration --timeout 180`
+  - 必要に応じ plugins ビルド（preflight の案内に従う）
+
 ## Current Focus（Phase 15.7）
 - Branding移行の堅牢化（hako.toml-first の徹底と互換の維持）
 - 宣言的MIR/JSON の実運用（Map/Array + JSON.stringify の標準化）
