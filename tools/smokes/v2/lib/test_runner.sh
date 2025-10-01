@@ -248,6 +248,7 @@ run_nyash_llvm() {
         ensure_hako_toml
         PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_LLVM_USE_HARNESS=1 NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
+            grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:'
         local exit_code=${PIPESTATUS[0]}
@@ -262,6 +263,7 @@ run_nyash_llvm() {
         ensure_hako_toml
         PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_LLVM_USE_HARNESS=1 NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
+            grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:'
         return ${PIPESTATUS[0]}
