@@ -296,7 +296,7 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - ✅ 既存LLVM実装がそのままWASM動作（追加実装不要）
 - ✅ Python自己完結型（LLVMツールチェーン不要）
 
-#### **Week 3進捗** (2025-10-15 ~ 10-21) ✅ **Phase 3.1完了！**
+#### **Week 3進捗** (2025-10-15 ~ 10-21) 🔥 **調査中**
 - ✅ **Phase 3.1-A**: 根本原因特定完了 [2025-10-01]
   - block_lower.pyでPHI命令スキップを発見
   - resolver.pyで重複PHI生成を発見
@@ -315,8 +315,14 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
   - コンパイル成功: `tmp/nyash_llvm_py.o`
   - **成果**: PHI先頭配置・正しい値・重複なし・完全動作✅
 
-- 📋 **Phase 3.2**: ループPHIテスト（次のステップ）
-- 📋 **Phase 3.3**: 複雑制御フロー（予定）
+- 🔥 **Phase 3.3**: ループPHI実装（調査中） [2025-10-02]
+  - ✅ test_phi_loop.json実装済み（while/loop PHI + self-loop back-edge）
+  - ✅ PhiHandler forward reference対応完了（incomplete_phis機構）
+  - 🐛 **LLVM IR構文エラー発見**: `phi i64 [0, %"bb0"]` ← 生の数値問題
+  - 📋 次の調査: val型確認、llvmlite内部動作、block_end_values取得確認
+
+- 📋 **Phase 3.4**: ベンチマークシステム構築（ループPHI修正後）
+- 📋 **Phase 3.5**: Parity確認（予定）
 
 #### **Week 3総括** (2025-10-01完了) 🎉🎉🎉
 **達成事項**:

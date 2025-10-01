@@ -159,17 +159,28 @@ WASM Binary (.wasm)
 - ベンチマークシステム構築
 - VM/LLVM/WASMパリティ確認
 
-#### Phase 3.3: ループPHI実装（最優先）
+#### Phase 3.3: ループPHI実装（調査中） 🔥
 **目標**: while/loopでのPHI命令完全動作
-1. **ループPHIテスト作成**
-   - test_phi_loop.json: シンプルwhile（counter PHI）
-   - test_phi_nested.json: ネストループ（2重PHI）
-2. **PHI wireling修正**
-   - ループback-edge対応
-   - 複数predecessor処理
-3. **動作確認**
-   - LLVM IR: 正しいPHI生成
-   - WASM: ループ実行成功
+
+**✅ 実装完了**:
+1. **ループPHIテスト作成完了**
+   - ✅ test_phi_loop.json: シンプルwhile（counter PHI）
+   - ⏸️ test_phi_nested.json: ネストループ（2重PHI）
+2. **PHI wiring完全実装**
+   - ✅ ループback-edge対応（PhiHandler.incomplete_phis）
+   - ✅ 複数predecessor処理（process_phi_instructions）
+   - ✅ forward reference解決（complete_incomplete_phis）
+
+**🐛 発見された問題** (2025-10-02):
+- **LLVM IR構文エラー**: `phi i64 [0, %"bb0"]` ← 生の数値
+- **期待**: `phi i64 [%const_1, %"bb0"]` ← Constant参照
+- **原因仮説**: llvmlite の phi.add_incoming() 動作、または block_end_values 取得問題
+- **次の調査**: val の型確認、llvmlite 内部動作調査
+
+**📋 残タスク**:
+1. ⏸️ LLVM IR構文エラー修正
+2. ⏸️ test_phi_nested.json作成
+3. ⏸️ WASM実行成功確認（0→1→2→...→10）
 
 #### Phase 3.4: ベンチマークシステム構築
 **ディレクトリ構造**:

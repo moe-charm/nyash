@@ -53,14 +53,16 @@ python src/llvm_py/llvm_builder.py input.mir.json -o output.o
 NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 ```
 
-## 🔧 開発用フラグ（プリパス/トレース）
+## 🔧 開発用フラグ（最小）
 - `NYASH_LLVM_USE_HARNESS=1` … Rust 実行から llvmlite ハーネスへ委譲
-- `NYASH_LLVM_PREPASS_LOOP=1` … ループ検出プリパスON（while 形を構造化）
-- `NYASH_LLVM_PREPASS_IFMERGE=1` … if-merge（ret-merge）プリパスON（ret値 PHI を前宣言）
 - `NYASH_LLVM_TRACE_PHI=1` … PHI 配線と end-of-block 解決の詳細トレース
 - `NYASH_CLI_VERBOSE=1` … 降下やスナップショットの詳細ログ
-- `NYASH_MIR_NO_PHI=1` … MIR13（PHI-off）を明示（既定1）
-- `NYASH_VERIFY_ALLOW_NO_PHI=1` … PHI-less を検証で許容（既定1）
+- （互換）`NYASH_MIR_NO_PHI=1` / `NYASH_VERIFY_ALLOW_NO_PHI=1` … レガシー検証用のみ
+
+PHI 統一方針（既定）
+- PHI は PhiHandler（block_head）で生成する。
+- finalize_phis は"配線のみ"。PHI を新規生成しない。
+- if-merge/loop のプリパスは既定OFF（必要時のみ開発者が明示ON）。
 
 ## 📋 設計原則（LLVM_LAYER_OVERVIEWに準拠）
 1. Resolver-only reads（原則）: 直接の cross-block vmap 参照は避け、resolver 経由で取得
@@ -72,16 +74,15 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 - [ ] 基本構造（MIR読み込み）
 - [x] ControlFlow 分離（branch/jump/while_regular）
 - [x] CFG/Prepass 分離（cfg/utils.py, prepass/loops.py, prepass/if_merge.py）
-- [x] if-merge（ret-merge）の PHI 前宣言（ゲート: NYASH_LLVM_PREPASS_IFMERGE=1）
-- [x] ループプリパス（ゲート: NYASH_LLVM_PREPASS_LOOP=1）
+- [x] if-merge/loop のプリパス: 既定OFF。PhiHandler 主導で安定化。
 - [ ] 追加命令/Stage-3 の持続的整備
 
 ## ✅ テスト・検証
 - パリティ（llvmlite vs PyVM。既定は終了コードのみ比較）
   - `./tools/pyvm_vs_llvmlite.sh apps/tests/ternary_nested.nyash`
-  - 代表例（プリパス有効）:
-    - `NYASH_LLVM_PREPASS_IFMERGE=1 ./tools/pyvm_vs_llvmlite.sh apps/tests/ternary_nested.nyash`
-    - `NYASH_LLVM_PREPASS_LOOP=1 ./tools/pyvm_vs_llvmlite.sh apps/tests/loop_if_phi.nyash`
+  - 代表例（プリパス不要）:
+    - `./tools/pyvm_vs_llvmlite.sh apps/tests/ternary_nested.nyash`
+    - `./tools/pyvm_vs_llvmlite.sh apps/tests/loop_if_phi.nyash`
 - 厳密比較（標準出力+終了コード）
   - `CMP_STRICT=1 ./tools/pyvm_vs_llvmlite.sh <file.nyash>`
 - まとまったスモーク（PHI-off 既定）

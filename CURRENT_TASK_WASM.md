@@ -35,16 +35,19 @@
   - 後方互換性確保（incoming_pairs_vb）
   - WASM生成成功（535バイト）
 
-🚀 **Week 3優先タスク** (2025-10-02 ~ 10-08):
-1. **Phase 3.3: ループPHI実装** 🔥 最優先
-   - test_phi_loop.json作成（while/loop PHI）
-   - test_phi_nested.json作成（ネストループ）
-   - PHI wiring修正（back-edge対応）
-2. **Phase 3.4: ベンチマークシステム構築**
+🚀 **Week 3現在の状況** (2025-10-02 ~):
+1. **Phase 3.3: ループPHI実装** 🔥 調査中
+   - ✅ test_phi_loop.json実装済み（while/loop PHI）
+   - ✅ PhiHandler forward reference対応済み
+   - 🐛 **LLVM IR構文エラー発見** ← 現在調査中
+     - 問題: `phi i64 [0, %"bb0"]` ← 生の数値
+     - 期待: `phi i64 [%const_1, %"bb0"]` ← Constant参照
+   - 📋 次: test_phi_nested.json（ネストループ）
+2. **Phase 3.4: ベンチマークシステム構築** ⏸️ ループPHI修正後
    - factorial/fibonacci/sum_loop実装
    - apps/benchmarks/wasm/構造確立
    - tools/run_wasm_benchmarks.sh作成
-3. **Phase 3.5: Parity確認開始**
+3. **Phase 3.5: Parity確認開始** ⏸️ ループPHI修正後
    - VM/LLVM/WASM同一出力確認
 
 📊 **Week 2実装済みMIR命令**: 13/18 (72%完了)
@@ -155,22 +158,94 @@ python3 src/llvm_py/llvm_builder.py /tmp/test.json --target wasm32 -o /tmp/test.
 
 ---
 
-## 📖 Week 3計画詳細
+## 📖 Week 3進捗詳細
 
-### 🔥 Phase 3.3: ループPHI実装 [優先タスク]
-**目標**: while/loopでのPHI命令完全動作
+### 🔥 Phase 3.3: ループPHI実装 [調査中] (2025-10-02)
 
-**実装計画**:
-1. **ループPHIテスト作成**
-   - test_phi_loop.json: シンプルwhile（counter PHI）
-   - test_phi_nested.json: ネストループ（2重PHI）
-2. **PHI wiring修正**
-   - ループback-edge対応（block 2 → block 1）
-   - 複数predecessor処理（block 0, block 2 → block 1）
-   - vmap解決タイミング調整
-3. **動作確認**
-   - LLVM IR: `%phi_2 = phi i64 [0, %bb0], [%6, %bb2]`
-   - WASM: ループ実行成功（0→1→2→...→10）
+#### ✅ **実装済み内容**
+1. **test_phi_loop.json**: ループPHIテストケース作成完了
+   ```json
+   Block 0: counter = 0 初期化, jump to Block 1
+   Block 1:
+     - PHI(2) = incoming: [Block 0: value 1], [Block 1: value 4]  ← self-loop!
+     - counter(2) + 1 = 4
+     - counter(2) < 10 チェック
+     - if true: jump to Block 1 (back-edge), else: jump to Block 2
+   Block 2: return counter(2)
+   ```
+
+2. **PhiHandler forward reference対応**: 完全実装済み
+   - `incomplete_phis`: 前方参照追跡リスト
+   - `complete_incomplete_phis()`: ループback-edge解決
+   - 詳細ログ確認:
+     ```
+     [PhiHandler] Resolved value 1 = i64 0        ✓
+     [PhiHandler] Deferred: value 4 (forward ref) ✓
+     [PhiHandler] Created PHI dst=2               ✓
+     [PhiHandler] Completed value 4 = %"add_4"    ✓
+     ```
+
+#### 🐛 **発見された問題 + 根本原因特定完了** (2025-10-02) ✅
+
+**LLVM IR構文エラー**:
+```
+RuntimeError: LLVM IR parsing error
+<string>:11:3: error: expected '[' in phi value list
+  %"phi_2" = phi  i64 [0, %"bb0"], [%"add_4", %"bb1"]
+  ^
+```
+
+**生成されたLLVM IR**:
+```llvm
+bb1:
+  %"phi_2.1" = phi  i64              ← 空のPHI（finalize_phis経路）
+  %"phi_2" = phi  i64 [0, %"bb0"], [%"add_4", %"bb1"]  ← 正しいPHI（PhiHandler経路）
+```
+
+**根本原因（完全特定済み）**:
+1. **2つのPHIシステムが競合**:
+   - `PhiHandler` (block_lower.py): MIR JSON PHI命令を直接処理 → 正しいPHI生成 ✅
+   - `finalize_phis` (phi_wiring/wiring.py): block_phi_incomings から空PHI生成 ❌
+
+2. **function_lower.py のフロー**:
+   ```python
+   181: _setup_phi_placeholders(builder, blocks)  # メタデータ収集
+   212-266: # multi-pred自動検出PHI登録（無効化フラグなし）
+   279: _lower_blocks(...)  # PhiHandler → 正しいPHI生成
+   303: _finalize_phis(builder)  # ensure_phi() → 空PHI生成
+   ```
+
+3. **ensure_phi() のチェック不完全**:
+   - PhiHandler は `_current_vmap` に登録
+   - ensure_phi() は `builder.vmap` のみチェック
+   - → PhiHandler生成のPHIを検出できず、空PHI生成
+
+**詳細分析**: [phi_double_generation_analysis.md](src/llvm_py/docs/phi_double_generation_analysis.md)
+
+#### ✅ **回避策確立 + 動作確認済み** (2025-10-02)
+
+**回避策**:
+```bash
+export NYASH_LLVM_USE_HARNESS=1
+export NYASH_LLVM_SANITIZE_EMPTY_PHI=1
+export NYASH_LLVM_PREPASS_IFMERGE=0
+export NYASH_LLVM_PREPASS_LOOP=0
+```
+
+**動作確認結果**:
+- ✅ ループPHI WASM実行成功: `ny_main() returned: 10` ✅
+- ✅ if-PHI WASM実行成功（回避策で空PHI削除）
+- ✅ NYASH_LLVM_SANITIZE_EMPTY_PHI=1 が空PHI自動削除
+
+**根本解決案（検討中）**:
+1. **案1**: finalize_phis() 無効化（PhiHandlerのみ使用）
+2. **案2**: 自動検出PHI登録無効化（環境変数追加）
+3. **案3**: ensure_phi() チェック強化（_current_vmap対応）
+
+#### 📋 **残タスク**
+1. ⏸️ 根本解決策の選択・実装
+2. ⏸️ test_phi_nested.json作成（ネストループ）
+3. ⏸️ CURRENT_TASK_WASM.md + Phase 15.8 README更新
 
 ### 📊 Phase 3.4: ベンチマークシステム構築
 **目標**: 性能測定・回帰防止の基盤確立
