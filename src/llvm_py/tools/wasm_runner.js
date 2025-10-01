@@ -48,9 +48,8 @@ const nyashRuntime = {
         return h1;
     },
     'nyash.string.to_i8p_h': (handle) => {
-        // Stub: convert i64 handle to i8* pointer (returns i32)
-        // WASM pointers are i32, not i64
-        return Number(BigInt(handle) & 0xFFFFFFFFn);
+        // Stub: convert i64 handle to i8* pointer (just return as number)
+        return Number(handle);
     }
 };
 
@@ -72,36 +71,31 @@ async function runWasm() {
             }
         });
 
-        // Find and call entry point (try multiple names)
-        const entryPoints = ['ny_main', 'Main.main', 'test_fn', 'main'];
-        let entryFn = null;
+        // Try ny_main first, then Main.main, then main, then test_fn
+        let entryFunc = null;
         let entryName = null;
 
-        for (const name of entryPoints) {
-            if (instance.exports[name]) {
-                entryFn = instance.exports[name];
-                entryName = name;
-                break;
-            }
+        if (instance.exports.ny_main) {
+            entryFunc = instance.exports.ny_main;
+            entryName = 'ny_main';
+        } else if (instance.exports['Main.main']) {
+            entryFunc = instance.exports['Main.main'];
+            entryName = 'Main.main';
+        } else if (instance.exports.test_fn) {
+            entryFunc = instance.exports.test_fn;
+            entryName = 'test_fn';
+        } else if (instance.exports.main) {
+            entryFunc = instance.exports.main;
+            entryName = 'main';
         }
 
-        if (entryFn) {
+        if (entryFunc) {
             console.log(`🚀 Calling ${entryName}()...`);
-            try {
-                const result = entryFn();
-                if (result === undefined) {
-                    console.log('⚠️ Function returned undefined');
-                    return 0n;
-                }
-                console.log(`✅ ${entryName}() returned: ${result}`);
-                return result;
-            } catch (e) {
-                console.error(`❌ Error during execution: ${e.message}`);
-                console.error(e.stack);
-                throw e;
-            }
+            const result = entryFunc();
+            console.log(`✅ ${entryName}() returned: ${result}`);
+            return result;
         } else {
-            console.error('❌ Error: No entry point found');
+            console.error('❌ Error: No entry point found (tried: ny_main, Main.main, main)');
             console.log('Available exports:', Object.keys(instance.exports));
             process.exit(1);
         }

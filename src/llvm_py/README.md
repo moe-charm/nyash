@@ -61,7 +61,7 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash program.nyash
 
 PHI 統一方針（既定）
 - PHI は PhiHandler（block_head）で生成する。
-- finalize_phis は"配線のみ"。PHI を新規生成しない。
+- finalize_phis は“配線のみ”。PHI を新規生成しない。
 - if-merge/loop のプリパスは既定OFF（必要時のみ開発者が明示ON）。
 
 ## 📋 設計原則（LLVM_LAYER_OVERVIEWに準拠）

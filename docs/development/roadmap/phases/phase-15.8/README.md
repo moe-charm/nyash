@@ -59,25 +59,41 @@ WASM Binary (.wasm)
 
 ## 🗓️ **タイムラインと成果物**
 
-### **Week 1: LLVM→WASM変換パイプライン** (2025-10-01 ~ 10-07)
-#### 目標
-- llvmlite → LLVM IR → WASM 基本変換確立
-- Hello World (.wasm) 生成成功
-
-#### タスク
-1. **llvmlite WASM target対応**
-   - `target = "wasm32-unknown-wasi"`設定
-   - WASM calling convention調整
-2. **ビルドスクリプト作成**
-   - `tools/build_wasm.sh`: MIR JSON → WASM一括変換
-3. **Hello World動作確認**
-   - `print("Hello, WASM!")` → WASM実行成功
-
-#### 成果物 ✅ **完了** (2025-10-01)
+### **Week 1: LLVM→WASM変換パイプライン** (2025-10-01 ~ 10-07) ✅ **完了**
+#### 成果物
 - ✅ `tools/build_wasm.sh` - WASMビルドスクリプト
 - ✅ `tools/wasm_runner.js` - Node.js実行確認スクリプト
 - ✅ `tools/test_wasm_init.sh` - 統合テストスクリプト（Phase 1.1+1.2+1.3）
 - ✅ `src/llvm_py/llvm_builder.py` - WASM target対応（wasm32-unknown-wasi）
+- ✅ **重要発見**: llvmliteだけでWASM生成可能（LLC/wasm-ld不要）
+
+### **Week 2: MIR命令実装 + PHI処理** (2025-10-08 ~ 10-14) ✅ **完了**
+#### 成果物
+- ✅ WASI runtime実装（fd_write, proc_exit）
+- ✅ 文字列constants処理（グローバルリテラル生成）
+- ✅ binop全演算WASM動作確認
+- ✅ 箱理論LLVM/WASM分離設計（targets/モジュール）
+- ✅ 制御フロー完全動作（compare/branch/jump）
+- ✅ 回帰テスト体制確立（3スモークテスト）
+
+### **Week 3: selfhost統合 + PHI修正** (2025-10-15 ~ 10-21) ✅ **完了**
+#### 成果物
+- ✅ **selfhostブランチ統合完了** 🎉
+  - PHI統一ポリシー適用（wiring.py）
+  - PyVM values[]対応（ops_core.py）
+  - call.py resolver優先順序変更
+  - WASMツール強化（wasm_inspect.py, wasm_runner.js）
+- ✅ **PHI incoming dict形式完全対応**
+  - common.py: dict/array両形式サポート
+  - analysis.py/tagging.py: インデント修正
+  - phi_handler.py: import修正
+  - wiring.py: 自己ループPHI対応
+- ✅ **if-PHI完全動作**: 200返却成功 🎉
+
+#### 🐛 **残存問題**
+- **loop-PHI重複生成**: PhiHandlerが自己ループforward reference未対応
+  - `phi_2.1`（不完全）と`phi_2`（完全）の重複
+  - 対策: ChatGPT報告（PhiHandler自己ループ対応）
 - 📝 `apps/tests/hello_wasm.hkr` - 保留（Week 2で関数エクスポート解決後）
 
 **Week 1完了報告**:

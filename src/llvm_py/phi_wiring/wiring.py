@@ -86,7 +86,8 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
     if bb is None:
         return
     phi = ensure_phi(builder, block_id, dst_vid, bb)
-    preds_raw = [p for p in builder.preds.get(block_id, []) if p != block_id]
+    # Include self-loops for loop PHIs
+    preds_raw = builder.preds.get(block_id, [])
     seen = set()
     preds_list: List[int] = []
     for p in preds_raw:
@@ -154,7 +155,32 @@ def finalize_phis(builder):
         total_blocks += 1
         for dst_vid, incoming in (dst_map or {}).items():
             total_dsts += 1
-            wired = wire_incomings(builder, int(block_id), int(dst_vid), incoming)
+            # Unification policy: PHI is created by PhiHandler at block head.
+            # Here we only wire incomings to an existing PHI. We do NOT create new PHIs by default.
+            # If no PHI exists for (block,dst), skip wiring to avoid creating empty/unwired PHIs.
+            phi_obj = None
+            try:
+                phi_obj = builder.vmap.get(int(dst_vid))
+            except Exception:
+                phi_obj = None
+
+            allow_create = False
+            try:
+                import os
+                allow_create = os.environ.get('NYASH_LLVM_PHI_ALLOW_CREATE') == '1'
+            except Exception:
+                allow_create = False
+
+            if phi_obj is None or not hasattr(phi_obj, 'add_incoming'):
+                if allow_create:
+                    # Fallback (opt‑in): ensure/create a PHI only when explicitly allowed.
+                    wired = wire_incomings(builder, int(block_id), int(dst_vid), incoming)
+                else:
+                    trace({"phi": "finalize_skip_missing_phi", "block": int(block_id), "dst": int(dst_vid)})
+                    wired = 0
+            else:
+                # PHI exists at block head; wire incomings normally.
+                wired = wire_incomings(builder, int(block_id), int(dst_vid), incoming)
             total_wired += int(wired or 0)
             trace({"phi": "finalize", "block": int(block_id), "dst": int(dst_vid), "wired": int(wired or 0)})
     trace({"phi": "finalize_summary", "blocks": int(total_blocks), "dsts": int(total_dsts), "incoming_wired": int(total_wired)})

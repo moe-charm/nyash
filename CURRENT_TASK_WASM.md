@@ -20,33 +20,38 @@
 
 ## 🎯 現在の状況（一目でわかる）
 
-**Week 2完了！** (2025-10-01) ✅
-**Week 3開始** (2025-10-02 ~) 🚀
+**Week 3完了！** (2025-10-01) ✅
+**selfhostブランチ統合完了** (2025-10-01) 🎉
 
-✅ **Week 2完了内容**:
-- Phase 2.1-2.7: 完全達成（関数エクスポート〜スモークテスト）
-- **Phase 3.1: PHI処理完全修正** 🎉
-  - PhiHandler箱化（197行）
-  - InstructionContext箱化（98行）
-  - if文PHIテスト完全成功
-- **Phase 3.2 (NEW!): PHI 'values'形式統一** 🎉
-  - selfhostブランチから移植完了
-  - "incoming": [[v,b]] → "values": [{"value":v, "block":b}]
-  - 後方互換性確保（incoming_pairs_vb）
-  - WASM生成成功（535バイト）
+✅ **Week 3完了内容**:
+- **selfhostブランチからの重要変更取り込み完了** 🎉
+  - PHI統一ポリシー適用（wiring.py）
+  - PyVM values[]対応（ops_core.py）
+  - call.py resolver優先順序変更
+  - WASMツール強化（wasm_inspect.py, wasm_runner.js）
 
-🚀 **Week 3現在の状況** (2025-10-02 ~):
-1. **Phase 3.3: ループPHI実装** 🔥 調査中
-   - ✅ test_phi_loop.json実装済み（while/loop PHI）
-   - ✅ PhiHandler forward reference対応済み
-   - 🐛 **LLVM IR構文エラー発見** ← 現在調査中
-     - 問題: `phi i64 [0, %"bb0"]` ← 生の数値
-     - 期待: `phi i64 [%const_1, %"bb0"]` ← Constant参照
-   - 📋 次: test_phi_nested.json（ネストループ）
+- **Phase 3.1-3.2完了**:
+  - ✅ PHI incoming dict形式対応（common.py）
+  - ✅ インデント修正（analysis.py, tagging.py）
+  - ✅ import修正（phi_handler.py）
+  - ✅ 自己ループPHI対応（wiring.py）
+  - ✅ **if-PHI完全動作**：200返却成功 🎉
+
+🐛 **現在の問題** (2025-10-01):
+1. **loop-PHI重複生成問題** 🔥
+   - **症状**: PhiHandlerとfinalize_phisの両方がPHI生成
+   - **影響**: `phi_2.1`（不完全）と`phi_2`（完全）の重複
+   - **原因**: PhiHandlerが自己ループforward reference未対応
+   - **問題IR**:
+     ```llvm
+     %"phi_2.1" = phi  i64 [0, %"bb0"]          ← 不完全（自己ループ欠落）
+     %"phi_2" = phi  i64 [0, %"bb0"], [%"add_4", %"bb1"]  ← 完全
+     ```
+   - **対策**: ChatGPTに報告（PhiHandler自己ループ対応 or 重複防止徹底）
+
+📋 **次のステップ**:
+1. **Phase 3.3: loop-PHI根本修正** （ChatGPT担当）
 2. **Phase 3.4: ベンチマークシステム構築** ⏸️ ループPHI修正後
-   - factorial/fibonacci/sum_loop実装
-   - apps/benchmarks/wasm/構造確立
-   - tools/run_wasm_benchmarks.sh作成
 3. **Phase 3.5: Parity確認開始** ⏸️ ループPHI修正後
    - VM/LLVM/WASM同一出力確認
 

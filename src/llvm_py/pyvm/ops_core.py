@@ -12,7 +12,11 @@ from typing import Any, Dict, Optional
 
 
 def op_phi(owner, inst: Dict[str, Any], regs: Dict[int, Any], prev: Optional[int]) -> None:
-    incoming = inst.get("incoming", [])
+    values = inst.get("values") or []
+    if isinstance(values, list) and values:
+        incoming = [(int(it.get("value")), int(it.get("block"))) for it in values if isinstance(it, dict)]
+    else:
+        incoming = inst.get("incoming", [])
     chosen: Any = None
     dbg = owner and getattr(owner, "_debug", False) and (owner and (owner.__class__.__name__ == "PyVM"))
     # Use dedicated env flag for phi trace (matches existing behavior)
