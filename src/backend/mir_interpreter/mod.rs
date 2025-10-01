@@ -60,11 +60,40 @@ impl MirInterpreter {
         // Snapshot functions for call resolution
         self.functions = module.functions.clone();
 
-        // Prefer static Main.main when present; otherwise fall back to top-level main
+        // Prefer static Main.main when present; otherwise consider a unique <Box>.main,
+        // then fall back to top-level main when allowed.
+        let allow_top = crate::config::env::entry_allow_toplevel_main();
+        let prefer_static = crate::config::env::entry_prefer_static_main();
         let (entry_name, pass_argv) = if module.functions.contains_key("Main.main") {
             ("Main.main", true)
+        } else if prefer_static {
+            // Collect unique candidates matching "*.main" or "*.main/0"
+            let mut cands: Vec<&str> = Vec::new();
+            for k in module.functions.keys() {
+                if k.ends_with(".main") || k.ends_with(".main/0") {
+                    cands.push(k.as_str());
+                }
+            }
+            if cands.len() == 1 {
+                (cands[0], true)
+            } else if allow_top && module.functions.contains_key("main") {
+                ("main", true)
+            } else if module.functions.contains_key("main") {
+                // Use top-level main but warn (unless quiet)
+                if !crate::config::env::cli_quiet() {
+                    eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence.");
+                }
+                ("main", true)
+            } else {
+                return Err(VMError::InvalidInstruction("missing main".into()));
+            }
+        } else if allow_top && module.functions.contains_key("main") {
+            ("main", true)
         } else if module.functions.contains_key("main") {
-            ("main", true) // if main has params, provide empty argv; harmless if zero params
+            if !crate::config::env::cli_quiet() {
+                eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence.");
+            }
+            ("main", true)
         } else {
             return Err(VMError::InvalidInstruction("missing main".into()));
         };
@@ -85,7 +114,25 @@ impl MirInterpreter {
         Ok(ret.to_nyash_box())
     }
 
-    fn execute_function(&mut self, func: &MirFunction) -> Result<VMValue, VMError> {
+    
+
+    pub fn execute_entry_by_name(&mut self, module: &MirModule, entry_name: &str) -> Result<Box<dyn NyashBox>, VMError> {
+        self.functions = module.functions.clone();
+        let func = module
+            .functions
+            .get(entry_name)
+            .ok_or_else(|| VMError::InvalidInstruction(format!("entry not found: {}", entry_name)))?;
+        if !func.params.is_empty() {
+            let argv = VMValue::from_nyash_box(Box::new(ArrayBox::new()));
+            let args: [VMValue; 1] = [argv];
+            let ret = self.exec_function_inner(func, Some(&args))?;
+            Ok(ret.to_nyash_box())
+        } else {
+            let ret = self.execute_function(func)?;
+            Ok(ret.to_nyash_box())
+        }
+    }
+fn execute_function(&mut self, func: &MirFunction) -> Result<VMValue, VMError> {
         self.exec_function_inner(func, None)
     }
 }

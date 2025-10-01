@@ -660,6 +660,27 @@ pub fn entry_allow_toplevel_main() -> bool {
     }
 }
 
+/// Entry policy: prefer a unique static `<Box>.main` when `Main.main` is absent.
+///
+/// Behavior:
+/// - If `Main.main` exists, it is always preferred.
+/// - Otherwise, when enabled, if exactly one function named like `Box.main` or
+///   `Box.main/0` exists, that function is chosen as the entry point.
+/// - If multiple candidates are found, this preference is ignored to avoid
+///   ambiguity and the resolver falls back to top-level `main` (when allowed).
+///
+/// Default: true (helps benchmarks and WASM harnesses that use a static box
+/// other than `Main` as the entry container).
+pub fn entry_prefer_static_main() -> bool {
+    match std::env::var("NYASH_ENTRY_PREFER_STATIC_MAIN").ok() {
+        Some(v) => {
+            let v = v.to_ascii_lowercase();
+            v == "1" || v == "true" || v == "on"
+        }
+        None => true,
+    }
+}
+
 /// Parser gate for expression-level postfix catch/cleanup acceptance.
 /// Enabled when Stage-3 gate is on (NYASH_PARSER_STAGE3=1). Separate gate can
 /// be introduced in future if needed, but we keep minimal toggles now.

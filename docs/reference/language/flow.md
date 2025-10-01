@@ -51,6 +51,7 @@ Migration (from legacy static box)
 - Calls remain source-compatible (`Name.method(...)`), lowering becomes explicit global function resolution.
 
 Notes
+- Hakorune recommends `flow Main` as the standard entry style. Entry policy is Strict（既定は `Main.main` のみをエントリとみなす）— details: `docs/reference/language/entrypoints.md`。
 - Keep flows small and stateless. For stateful/services or plugin-backed providers, use dedicated instance/service boxes.
 - Flows are a good fit for entry points, pure helpers, and utility modules.
 

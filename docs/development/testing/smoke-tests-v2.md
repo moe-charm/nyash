@@ -49,8 +49,8 @@ Phase 15.5でCore Box完全削除後のNyashテストシステム。すべての
 
 ### 重要な環境変数（開発時の補助）
 ```bash
-# エントリ解決（既定ON: top-level main も許可されます。無効化したい場合のみ0を設定）
-# export NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0
+# エントリ解決は Strict（既定: Main.main のみ）。トップレベル main は非対象です。
+# flow Main を推奨。詳細: docs/reference/language/entrypoints.md
 
 # プラグイン設定（Phase 15.5以降は基本OFF非推奨）
 # NYASH_PLUGIN_POLICY=off   # ⚠️ 原則非推奨。最小コア検証など一部の隔離ケースでのみ使用。

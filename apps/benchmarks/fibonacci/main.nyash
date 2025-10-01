@@ -2,15 +2,17 @@
 // Expected Result: 55 (fibonacci(10))
 // Tests: Integer arithmetic, recursion, control flow
 
-flow Fibonacci {
+static box Main {
   compute(n) {
     if n <= 1 {
       return n
     }
-    return Fibonacci.compute(n - 1) + Fibonacci.compute(n - 2)
+    return me.compute(n - 1) + me.compute(n - 2)
   }
 
   main() {
-    return Fibonacci.compute(10)  // → 55
+    local result = me.compute(10)
+    print(result)
+    return result  // → 55
   }
 }

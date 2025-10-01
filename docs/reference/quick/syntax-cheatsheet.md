@@ -27,14 +27,10 @@ box ClassName {
 }
 ```
 
-### エントリーポイント（優先順）
+### エントリーポイント（Strict）
 
-Nyash はエントリを以下の順で解決します。
-
-1) `Main.main` があれば優先
-2) なければトップレベル `main()`
-
-両方ある場合は `Main.main` が使われます。トップレベル `main` は既定で許可されています（無効化したい場合は `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0`）。
+既定のエントリは「`Main.main` のみ」です。Hakorune では入門者向けに `flow Main` を推奨します（`flow Main { main() { ... } }`）。
+詳細は `docs/reference/language/entrypoints.md` を参照してください。
 
 ### Static Box（エントリーポイント）
 ```nyash
@@ -49,11 +45,13 @@ static box Main {
 }
 ```
 
-### トップレベル main（既定で許可）
+### flow Main（推奨）
 ```nyash
-main() {
-  println("Hello Nyash!")
-  return 0
+flow Main {
+  main() {
+    println("Hello Nyash!")
+    return 0
+  }
 }
 ```
 

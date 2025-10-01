@@ -65,6 +65,8 @@ pub struct CliConfig {
     pub macro_expand_child: Option<String>,
     pub dump_expanded_ast_json: bool,
     pub macro_ctx_json: Option<String>,
+    // Optional explicit entry (dotted), e.g., "Main.main"
+    pub entry: Option<String>,
 }
 
 pub use groups::{BackendConfig, BuildConfig, CliGroups, DebugConfig, EmitConfig, InputConfig, JitConfig, ParserPipeConfig};
@@ -74,7 +76,7 @@ impl CliConfig {
 
     pub fn as_groups(&self) -> CliGroups {
         CliGroups {
-            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone() },
+            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone(), entry: self.entry.clone() },
             debug: DebugConfig {
                 debug_fuel: self.debug_fuel,
                 dump_ast: self.dump_ast,
@@ -196,6 +198,7 @@ impl Default for CliConfig {
             macro_expand_child: None,
             dump_expanded_ast_json: false,
             macro_ctx_json: None,
+            entry: None,
         }
     }
 }

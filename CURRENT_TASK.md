@@ -22,6 +22,23 @@
 - Pipeline V2 の header スモーク安定化
   - `selfhost_min_json_header_pipeline_v2_vm.sh` → PASS（timeout=8000ms 維持）
 
+## ✅ Update — 2025-10-01（ModuleFunction + LLVM/WASM 同期）
+- ModuleFunction（既定OFF）
+  - Builder: module.functions 命中/安全なtail一致で `callee=ModuleFunction` を付与（`NYASH_MIR_CALL_MODULE_FN=1`）
+  - VM/Printer/JSON: ModuleFunction を解決・表示・v1 mir_call 出力に対応
+  - スモーク（dev無効）:
+    - quick/core/modulefn_tail_prefer_current_box_vm.sh（A側）
+    - quick/core/modulefn_tail_prefer_current_box_B_vm.sh（B側）
+    - quick/core/modulefn_tail_prefer_current_box_arity_vm.sh（arity一致）
+    - quick/core/json_v1_modulefn_mir_call_vm.sh（backend mir + --emit-mir-json）
+- 受け口整理: `NYASH_VM_RECV_ARG_FALLBACK` を削除（devフォールバックの誤発火を防止）。ParserBoxのme救済・length=0は維持。
+- LLVM/WASM 同期（wasm-development → selfhost）
+  - src/llvm_py/ 以下のハーネス/targets/工具一式を同期（MIR命令フル実装、PHI配線、WASMターゲット）
+  - quick/wasm, integration/wasm にプレースホルダスモーク（ゲートONで最小PASS）
+- スモーク状況（quick）
+  - 概ね PASS。1 件 FAIL: selfhost_compiler_emit_mir_cmp_v2_vm.sh（devプロファイル影響の可能性高）
+  - WASM quick（`SMOKES_ENABLE_WASM=1`）は PASS（プレースホルダ）
+
 ## Current Focus（Phase 15.7）
 - Branding移行の堅牢化（hako.toml-first の徹底と互換の維持）
 - 宣言的MIR/JSON の実運用（Map/Array + JSON.stringify の標準化）
@@ -1764,3 +1781,13 @@ Updates — 2025-09-28 (P6 incremental)
     - 再接続: `tmux attach -t codex || tmux new -s codex`
     - セッション再作成: `tmux kill-session -t codex || true; tmux new -s codex`
     - 非同期通知（任意）: `CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "Smokes quick" codex`
+
+## New — EntryResolveBox 設計（flow Main 推奨 + Strict）
+- 目的: 既定を Strict（Main.main のみ）に固定し、CLI `--entry <dotted>` による明示指定を一元化する小箱を導入。
+- 設計文書: docs/architecture/runner/entry-resolve-box.md
+- 方針: 環境変数は増やさない。自動推測（唯一の <Box>.main / top-level main）は採用しない（候補列挙のみ）。
+- 段階導入:
+  - Phase A: ドキュメント合意（本コミット）
+  - Phase B: CLI `--entry` 追加（Runner 配線）
+  - Phase C: VM/LLVM/PyVM/子プロセスのエントリ選択を EntryResolveBox に置換
+  - Phase D: 旧便宜フラグの撤廃（既定 OFF → 削除）

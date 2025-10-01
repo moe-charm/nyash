@@ -46,6 +46,10 @@ const nyashRuntime = {
     'nyash.string.concat_hh': (h1, h2) => {
         // Stub: return first handle
         return h1;
+    },
+    'nyash.string.to_i8p_h': (handle) => {
+        // Stub: convert i64 handle to i8* pointer (just return as number)
+        return Number(handle);
     }
 };
 
@@ -67,14 +71,31 @@ async function runWasm() {
             }
         });
 
-        // Find and call ny_main
+        // Try ny_main first, then Main.main, then main, then test_fn
+        let entryFunc = null;
+        let entryName = null;
+
         if (instance.exports.ny_main) {
-            console.log('🚀 Calling ny_main()...');
-            const result = instance.exports.ny_main();
-            console.log(`✅ ny_main() returned: ${result}`);
+            entryFunc = instance.exports.ny_main;
+            entryName = 'ny_main';
+        } else if (instance.exports['Main.main']) {
+            entryFunc = instance.exports['Main.main'];
+            entryName = 'Main.main';
+        } else if (instance.exports.test_fn) {
+            entryFunc = instance.exports.test_fn;
+            entryName = 'test_fn';
+        } else if (instance.exports.main) {
+            entryFunc = instance.exports.main;
+            entryName = 'main';
+        }
+
+        if (entryFunc) {
+            console.log(`🚀 Calling ${entryName}()...`);
+            const result = entryFunc();
+            console.log(`✅ ${entryName}() returned: ${result}`);
             return result;
         } else {
-            console.error('❌ Error: ny_main not found in exports');
+            console.error('❌ Error: No entry point found (tried: ny_main, Main.main, main)');
             console.log('Available exports:', Object.keys(instance.exports));
             process.exit(1);
         }

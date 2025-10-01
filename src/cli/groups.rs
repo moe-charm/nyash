@@ -2,6 +2,7 @@
 pub struct InputConfig {
     pub file: Option<String>,
     pub cli_usings: Vec<String>,
+    pub entry: Option<String>,
 }
 
 #[derive(Debug, Clone)]

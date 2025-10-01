@@ -24,6 +24,7 @@ mod json_v0_bridge;
 mod mir_json_emit;
 pub mod modes;
 mod pipe_io;
+mod entry_resolve;
 mod pipeline;
 mod jit_direct;
 mod selfhost;

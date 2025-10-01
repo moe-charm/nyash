@@ -812,6 +812,154 @@ bash -c 'ls *.md | wc -l'
 find . -name "*.md" -exec wc -l {} \;
 ```
 
+## 🌐 **Phase 15.8 WASM開発** (2025-10-01 ~) ✅ E2E成功！
+
+### **🎉 重要な成果（2025-10-01完了）**
+
+#### **✅ 複数関数MIR JSON動作確認完了！** (2025-10-01)
+```
+関数間呼び出し: add_helper(15, 27) → Main.main()
+✅ Result: 42 (完全動作！)
+```
+
+**解決した問題**:
+- wasm_runner.js に `nyash.string.to_i8p_h` 関数追加
+- 関数インデックス計算: インポート数(3) + 定義順 = Main.mainはindex 3
+
+#### **E2Eパイプライン動作確認完了！**
+```
+Nyash Source (15 + 27)
+  ↓ MIR JSON (単一/複数関数どちらもOK!)
+WASM Binary
+  ↓ Python llvm_builder.py --target wasm32
+WASM Binary
+  ↓ wasm_add_export.py (function index計算)
+Exported WASM
+  ↓ Node.js + WASI runtime
+✅ Result: 42
+```
+
+#### **完全動作確認済みコマンド**
+```bash
+# 1. シンプルMIR JSONからWASM生成（確実に動く！）
+cd src/llvm_py
+python3 llvm_builder.py --target wasm32 /tmp/simple_add_e2e.json -o /tmp/test.wasm
+
+# 2. Export追加（function index 0）
+python3 tools/wasm_add_export.py /tmp/test.wasm /tmp/test_fixed.wasm "Main.main" 0
+
+# 3. 実行
+node tools/wasm_runner.js /tmp/test_fixed.wasm
+# 出力: ✅ Main.main() returned: 42
+```
+
+### **📦 箱化ツール（作成済み）**
+
+#### **wasm_inspect.py** - WASM構造可視化
+```bash
+python3 src/llvm_py/tools/wasm_inspect.py test.wasm
+# 出力:
+#   - Section構造
+#   - Import count（関数以外も含む）
+#   - Function count（定義された関数のみ）
+#   - Export情報
+```
+
+#### **wasm_add_export.py** - Export section追加
+```bash
+python3 src/llvm_py/tools/wasm_add_export.py input.wasm output.wasm "func_name" index
+```
+
+#### **wasm_runner.js** - Node.js実行環境 ✅ 拡張完了
+```bash
+node src/llvm_py/tools/wasm_runner.js test.wasm
+# WASI runtime実装済み:
+#   - fd_write, proc_exit, ny_check_safepoint
+#   - nyash.console.log, nyash.box.from_i8_string
+#   - nyash.string.concat_hh, nyash.string.to_i8p_h ← 新規追加！
+# 自動エントリポイント検索（ny_main → Main.main → test_fn → main）
+```
+
+### **🔍 重要な発見**
+
+#### **✅ 複数関数MIR JSON完全動作！**
+```json
+{
+  "functions": [
+    {
+      "name": "add_helper",
+      "params": [{"name": "a", "reg": 0}, {"name": "b", "reg": 1}],
+      "blocks": [...]
+    },
+    {
+      "name": "Main.main",      // ← 複数関数でもOK！
+      "params": [],
+      "blocks": [{
+        "instructions": [
+          {"op": "call", "func": "add_helper", "args": [0, 1], "dst": 2}  // ← 重要！"func"キー
+        ]
+      }]
+    }
+  ]
+}
+```
+
+**重要ポイント**:
+- ✅ 複数関数対応完了！関数間呼び出しも動作
+- ✅ 関数インデックス: `インポート数 + 定義順`
+  - インポート3つ + add_helper(0) + Main.main(1) → Main.main = index 3
+- ⚠️ call命令は `"func": "function_name"` キー（`"function"`ではない）
+
+#### **llvmliteの制限**
+- `emit_object()`でWASMバイナリ生成可能
+- ただし**Export sectionは生成されない**
+- → `wasm_add_export.py`で追加必要
+
+### **📚 関連ファイル**
+
+- **MIR JSON例**: `src/llvm_py/test_arithmetic_smoke.json`（動作確認済み）
+- **E2E成功例**: `/tmp/simple_add_e2e.json`（15+27=42）
+- **LLVM IR確認**: `/tmp/debug_ir.ll`（llvm_builder.py実行時自動生成）
+- **ドキュメント**: `docs/development/roadmap/phases/phase-15.8/README.md`
+
+### **⚠️ 既知の問題**
+
+1. **Nyashコンパイラ生成MIR JSONの複雑さ**
+   - 解決策: シンプルMIR JSON手動作成（現状）
+   - 将来: コンパイラ出力簡略化またはpost-process
+
+2. **Export section手動追加が必要**
+   - 解決策: `wasm_add_export.py`（実装済み・動作確認済み）
+
+3. **⚠️ branch命令のWASM変換不具合** (2025-10-01発見)
+   - **症状**: 条件分岐が正しく変換されず、常にfalse扱い
+   - **LLVM IR**: `icmp ne i64 0, 0` と生成される（常にfalse）
+   - **影響**: fibonacci等の再帰関数が動作しない（結果0を返す）
+   - **回避策**: 現状なし、要修正
+   - **該当ファイル**: `src/llvm_py/builders/controlflow/branch.py` または `instruction_lower.py`
+
+4. **⚠️ LLVM Mockルート問題** (2025-10-01発見)
+   - **症状**: `--backend llvm` でモック実行になり、実際に動作しない
+   - **原因**: `nyash`バイナリが `--features llvm` でビルドされていない
+   - **エラー**: "LLVM backend not available (object emit)"
+   - **回避策**: Python llvmliteハーネスを直接使用
+     ```bash
+     cd src/llvm_py
+     python3 llvm_builder.py input.json -o output.o  # Native object
+     python3 llvm_builder.py --target wasm32 input.json -o output.wasm  # WASM
+     ```
+   - **解決**: `cargo build --release --features llvm` でビルド（3-5分）
+
+### **🎯 次のステップ**
+
+- [x] fibonacci用シンプルMIR JSON作成（作成済み、branch命令不具合により動作せず）
+- [x] 3-Backend Trinity Benchmark完成（simple_addで動作確認完了）
+- [ ] **branch命令のWASM変換修正**（優先度高）
+- [ ] fibonacci WASM実行（branch修正後）
+- [ ] ベンチマークランナーのWASM対応改善
+
+---
+
 ## 🚨 コンテキスト圧縮時: 作業停止→状況確認→CURRENT_TASK.md確認→ユーザー確認
 
 ---
@@ -821,3 +969,4 @@ Notes:
 - 詳細情報は各docsファイルへのリンクから辿る
 - このファイルは500行以内が目安（あくまで目安であり、必要に応じて増減可）
 - Phase 15セルフホスティング実装中！詳細は[Phase 15](docs/development/roadmap/phases/phase-15/)へ
+- **Phase 15.8 WASM開発**: wasm-developmentブランチで進行中

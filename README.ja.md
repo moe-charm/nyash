@@ -126,22 +126,24 @@ cargo build --release --features cranelift-jit
 // 従来の言語は複雑な型システムを持つ
 // Nyash: 一つの概念がすべてを支配する - Box
 
-static box Main {
+flow Main {  # 推奨: flow Main（エントリ: Strict=Main.main）
     main() {
         // すべての値はBox - 統一、安全、シンプル
         local name = new StringBox("Nyash")
         local count = new IntegerBox(42)
         local data = new MapBox()
-        
+
         // PythonオブジェクトもBox！
         local py = new PyRuntimeBox()
         local math = py.import("math")
         print("sqrt(9) = " + math.getattr("sqrt").call(9).str())
-        
+
         return 0
     }
 }
 ```
+
+エントリ規約（Strict）: 既定のエントリは `Main.main` のみ。詳細は `docs/reference/language/entrypoints.md` を参照。
 
 ### ⚡ **前例のない開発速度**
 - **1日目**: 基本インタープリター動作

@@ -173,22 +173,24 @@ cargo build --release --features cranelift-jit
 // Traditional languages have complex type systems
 // Nyash: One concept rules them all - Box
 
-static box Main {
+flow Main {  # Hakorune recommends flow Main as the standard entry
     main() {
         // Every value is a Box - unified, safe, simple
         local name = new StringBox("Nyash")
         local count = new IntegerBox(42)
         local data = new MapBox()
-        
+
         // Even Python objects are Boxes!
         local py = new PyRuntimeBox()
         local math = py.import("math")
         print("sqrt(9) = " + math.getattr("sqrt").call(9).str())
-        
+
         return 0
     }
 }
 ```
+
+Entry policy (Strict): default entry is `Main.main` only. See `docs/reference/language/entrypoints.md`.
 
 ### ⚡ **Unprecedented Development Speed**
 - **Day 1**: Basic interpreter working

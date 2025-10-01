@@ -40,6 +40,7 @@ pub fn build_command() -> Command {
         .arg(Arg::new("gc").long("gc").value_name("{auto,rc+cycle,minorgen,stw,rc,off}").help("Select GC mode (default: rc+cycle)"))
         .arg(Arg::new("parser").long("parser").value_name("{rust|ny}").help("Choose parser: 'rust' (default) or 'ny' (direct v0 bridge)"))
         .arg(Arg::new("ny-parser-pipe").long("ny-parser-pipe").help("Read Ny JSON IR v0 from stdin and execute via MIR Interpreter").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("entry").long("entry").value_name("DOTTED").help("Explicit entry function (Strict override), e.g., Main.main"))
         .arg(Arg::new("json-file").long("json-file").value_name("FILE").help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter"))
         .arg(Arg::new("emit-mir-json").long("emit-mir-json").value_name("FILE").help("Emit MIR JSON v0 to file and exit"))
         .arg(Arg::new("emit-exe").long("emit-exe").value_name("FILE").help("Emit native executable via ny-llvmc and exit"))
@@ -153,6 +154,7 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         macro_expand_child: matches.get_one::<String>("macro-expand-child").cloned(),
         dump_expanded_ast_json: matches.get_flag("dump-expanded-ast-json"),
         macro_ctx_json: matches.get_one::<String>("macro-ctx-json").cloned(),
+        entry: matches.get_one::<String>("entry").cloned(),
     };
 
     if cfg.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }

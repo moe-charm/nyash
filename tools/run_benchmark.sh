@@ -31,7 +31,13 @@ echo ""
 # 1. Rust VM
 echo "📊 [1/3] Rust VM Backend"
 echo "------------------------"
-RESULT_VM=$(./target/release/nyash --backend vm "$BENCH_FILE" 2>&1 | grep -oP '(?<=Result: )\d+' || echo "ERROR")
+# Get the last line that's a number (filter out stderr and empty lines)
+OUTPUT_VM=$(./target/release/nyash --backend vm "$BENCH_FILE" 2>&1)
+RESULT_VM=$(echo "$OUTPUT_VM" | grep -v "UnifiedBoxRegistry" | grep -E '^[0-9]+$' | tail -1)
+# If empty, mark as ERROR
+if [ -z "$RESULT_VM" ]; then
+    RESULT_VM="ERROR"
+fi
 echo "Result: $RESULT_VM"
 echo ""
 

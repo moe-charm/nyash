@@ -39,10 +39,22 @@ pub fn run_pyvm_module(module: &MirModule, label: &str) -> Option<i32> {
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
         eprintln!("[Bridge] using PyVM ({}) → {}", label, mir_json_path.display());
     }
-    // Select entry (prefer Main.main; top-level main only if allowed)
+    // Select entry (prefer Main.main; otherwise a unique <Box>.main; then top-level main when allowed)
     let allow_top = crate::config::env::entry_allow_toplevel_main();
+    let prefer_static = crate::config::env::entry_prefer_static_main();
     let entry = if module.functions.contains_key("Main.main") {
         "Main.main"
+    } else if prefer_static {
+        let mut cands: Vec<&str> = Vec::new();
+        for k in module.functions.keys() {
+            if k.ends_with(".main") || k.ends_with(".main/0") {
+                cands.push(k.as_str());
+            }
+        }
+        if cands.len() == 1 { cands[0] }
+        else if allow_top && module.functions.contains_key("main") { "main" }
+        else if module.functions.contains_key("main") { eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence."); "main" }
+        else { "Main.main" }
     } else if allow_top && module.functions.contains_key("main") {
         "main"
     } else if module.functions.contains_key("main") {
