@@ -668,17 +668,52 @@ class NyashLLVMBuilder:
             print(f"[DEBUG] IR dumped to /tmp/debug_ir.ll")
         except Exception as e:
             print(f"[DEBUG] Failed to dump IR: {e}")
-        # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
-        # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Additionally, auto-enable when harness is requested.
+        # Optional sanitize passes for IR text before verification
+        # 1) Drop empty PHIs (no incoming pairs)
+        # 2) Group PHIs at the block head (LLVM invariant: all PHIs at top)
         if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1' or os.environ.get('NYASH_LLVM_USE_HARNESS') == '1':
             try:
-                fixed_lines = []
-                for line in ir_text.splitlines():
+                lines = ir_text.splitlines()
+                # Pass 1: remove malformed empty PHIs
+                tmp = []
+                for line in lines:
                     if (" = phi  i64" in line or " = phi i64" in line) and ("[" not in line):
-                        # Skip malformed PHI without incoming pairs
                         continue
-                    fixed_lines.append(line)
-                ir_text = "\n".join(fixed_lines)
+                    tmp.append(line)
+                lines = tmp
+                # Pass 2: group PHIs at block head
+                grouped = []
+                i = 0
+                n = len(lines)
+                while i < n:
+                    line = lines[i]
+                    grouped.append(line)
+                    # Detect basic block start like: "bb<N>:" (possibly with leading spaces)
+                    stripped = line.strip()
+                    if stripped.endswith(":") and stripped.startswith("bb"):
+                        # Collect subsequent PHI and non-PHI lines until next label or end
+                        phi_buf = []
+                        body_buf = []
+                        j = i + 1
+                        while j < n:
+                            l2 = lines[j]
+                            s2 = l2.strip()
+                            # Next block label?
+                            if s2.endswith(":") and s2.startswith("bb"):
+                                break
+                            if (" = phi  i64" in s2) or (" = phi i64" in s2):
+                                phi_buf.append(l2)
+                            else:
+                                body_buf.append(l2)
+                            j += 1
+                        # Emit PHIs first (preserve relative order), then rest
+                        if phi_buf or body_buf:
+                            grouped.extend(phi_buf)
+                            grouped.extend(body_buf)
+                            i = j
+                            continue
+                    i += 1
+                ir_text = "\n".join(grouped)
             except Exception:
                 pass
         mod = llvm.parse_assembly(ir_text)
