@@ -78,6 +78,22 @@ Hakoruneで実行器書く
 - 単一パス＋厳密セグメントで緑維持
 - **成果**: `apps/selfhost/vm/boxes/mir_vm_min.nyash` 安定動作
 
+【2025-10-01 追記】
+- Mini‑VM に call/boxcall/newbox の最小意味論（i64 引数の総和）を追加。代表スモーク（exec）を quick に追加:
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_call_exec_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_method_exec_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_newbox_exec_vm.sh`
+- Stage‑1 抽出器を負数/空白に寛容化。Emit 側は配列/文字列の両方から引数を正規化材化。
+- Pipeline V2 に `LocalSSA.ensure_calls(...)` を導入（call/method/new の材化ポリシー集約）。
+- v1 `mir_call` の shape スモーク（VM-only）を追加:
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_call_v1_shape_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_method_v1_shape_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_newbox_v1_shape_vm.sh`
+- LLVM ハーネス compile-only の PHI 形状スモークを追加（STRICT=1）:
+  - `tools/smokes/v2/profiles/quick/llvm/phi_if_merge_compile_ok.sh`
+  - `tools/smokes/v2/profiles/quick/llvm/phi_loop_compile_ok.sh`
+- 返り値→終了コードの統一（VM/WASM/AOT）: Rust VM はプログラムの戻り値をプロセス終了コードへ反映（0..255）。
+
 #### **P2: Hakoruneコンパイラ MVP（次の主作業）**
 - **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出
@@ -197,9 +213,21 @@ Mini-VM（Hakorune実装）
 1. **quick プロファイル**: 全緑維持（96/96 PASS）
    - Mini-VM（M2/M3）代表スモーク緑
    - const/binop/compare/branch/jump/ret 動作確認
+   - call/boxcall/newbox（最小意味論）実行スモーク緑
+   - v1 `mir_call` 形状スモーク（VM-only）緑
+   - LLVM/PHI compile-only スモーク緑（if-merge / loop）
 
 2. **integration プロファイル**: 代表パリティ緑（llvmlite/ハーネス）
    - VM↔LLVM↔Ny のパリティ一致
+
+### 🔧 ENV クイックリファレンス（関連）
+- `NYASH_PIPELINE_V2=1` — Selfhost Pipeline V2 を有効化
+- `NYASH_LLVM_USE_HARNESS=1` — LLVM llvmlite ハーネス経路
+- `NYASH_LLVM_PHI_STRICT=1` — PHI: create-only（PhiHandler）/ wiring（finalize）
+- `NYASH_JSON_SCHEMA_V1=1` — JSON v1（mir_call）を有効化（shape 検証用）
+- `NYASH_LLVM_DOWNGRADE_V1=1` — ハーネス出力時に v1→v0 ダウングレード（compile-only 安定化）
+- `NYASH_VM_USE_PY=1` — PyVM 経路（開発/比較用）
+
 
 3. **Builder観測**: resolve.try/choose と ssa.phi が dev‑only で取得可能
    - 環境変数: `HAKO_DEBUG_*`
