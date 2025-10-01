@@ -78,6 +78,11 @@ pub fn compute_call_effects(callee: &Callee) -> EffectMask {
                 _ => EffectMask::IO,
             }
         },
+        Callee::ModuleFunction(_name) => {
+            // Conservative default for user/module functions
+            // Assume they may read heap; refined by future inference
+            EffectMask::READ.add(Effect::ReadHeap)
+        },
 
         Callee::Method { method, box_name, .. } => {
             match method.as_str() {

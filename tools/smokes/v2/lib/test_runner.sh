@@ -9,7 +9,13 @@ set -uo pipefail
 if [ -z "${NYASH_ROOT:-}" ]; then
   export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 fi
-export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
+if [ -z "${NYASH_BIN:-}" ]; then
+  if [ -x "$NYASH_ROOT/target/release/hako" ]; then
+    export NYASH_BIN="$NYASH_ROOT/target/release/hako"
+  else
+    export NYASH_BIN="$NYASH_ROOT/target/release/nyash"
+  fi
+fi
 
 # グローバル変数
 export SMOKES_V2_LIB_LOADED=1

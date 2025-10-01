@@ -168,6 +168,7 @@ impl MirInterpreter {
                 ))
             }
             Callee::Extern(extern_name) => self.execute_extern_function(extern_name, args),
+            Callee::ModuleFunction(name) => self.execute_global_function(name, args),
         }
     }
 

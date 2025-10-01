@@ -11,6 +11,14 @@ use nyash_rust::runner::NyashRunner;
 fn main() {
     // Bootstrap env overrides from nyash.toml [env] early (管理棟)
     env_config::bootstrap_from_toml_env();
+    // Deprecation note when invoked as `nyash` (use `hako`) unless JSON-only
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(name) = exe.file_name().and_then(|s| s.to_str()) {
+            if name == "nyash" && std::env::var("NYASH_JSON_ONLY").ok().as_deref() != Some("1") {
+                eprintln!("[deprecate] CLI name 'nyash' is deprecated; use 'hako' instead.");
+            }
+        }
+    }
     // Parse command-line arguments
     let config = CliConfig::parse();
 

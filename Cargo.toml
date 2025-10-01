@@ -62,6 +62,10 @@ crate-type = ["cdylib", "rlib"]
 [[bin]]
 name = "nyash"
 path = "src/main.rs"
+[[bin]]
+name = "hako"
+path = "src/bin/hako.rs"
+
 
 # Test binary for multi-box plugin loader
 [[bin]]

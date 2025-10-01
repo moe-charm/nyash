@@ -448,7 +448,7 @@ impl NyashRunner {
                     });
                 if prefer_pyvm || needs_pyvm {
                     let label = if prefer_pyvm { "selfhost" } else { "selfhost-fallback" };
-                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, label) {
+                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, label, self.config.as_groups().input.entry.as_deref()) {
                         println!("Result: {}", code);
                         std::process::exit(code);
                     }
