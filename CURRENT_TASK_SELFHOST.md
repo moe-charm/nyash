@@ -36,6 +36,7 @@ Next actions
 - [x] Enable commit/push for selfhost branches (local hooks updated)
 - [x] PipelineV2: Apply LocalSSA.ensure_cond as final pass (fail‑safe)
 - [x] Add quick smokes for If(Compare) CFG and loop counter
+ - [x] Verify Jump lowering and add docs pointers (quick/selfhost jump smokes; LLVM PHI harness smokes)
 
 Phase 15.7 — NyKernel (Option B) minimal AOT step
 - [x] Introduce `crates/hako_kernel` minimal static shim (C‑ABI stubs)

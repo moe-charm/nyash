@@ -37,6 +37,14 @@ CFG conventions (lowered by the bridge)
 - Short‑circuit Logical: create `rhs_bb`, `fall_bb`, `merge_bb` with constants on fall path.
 - All blocks end with a terminator (branch/jump/return).
 
+Control‑flow status (Phase‑15, Self‑Host)
+- Branch and Jump are implemented in the lowering path and exercised in quick smokes.
+  - Jump single hop: `tools/smokes/v2/profiles/quick/selfhost/selfhost_mir_m3_jump_vm.sh`
+  - Jump chain 0→1→2: `tools/smokes/v2/profiles/quick/selfhost/selfhost_mir_m3_jump_chain_vm.sh`
+  - LLVM harness compiles PHI shapes around branch/jump (incoming/values) via:
+    - `tools/smokes/v2/profiles/quick/llvm/harness_phi_incoming_compile_ok.sh`
+    - `tools/smokes/v2/profiles/quick/llvm/harness_phi_values_compile_ok.sh`
+
 PHI merging（Phase‑15 終盤の方針）
 - MIR 生成層は PHI を生成しない（MIR13 運用）。If/Loop の合流は LLVM 層（llvmlite/Resolver）が PHI を合成。
 - ループは既存 CFG（preheader→cond→{body|exit}; body→cond）の検出により、ヘッダ BB で搬送値の PHI を構築。

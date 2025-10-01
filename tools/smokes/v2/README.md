@@ -117,10 +117,16 @@ run_test "test_name" {
 - JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
 - 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
 - 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
+ - 代表ケース（制御フロー）
+   - Jump 単発: `profiles/quick/selfhost/selfhost_mir_m3_jump_vm.sh`
+   - Jump チェーン: `profiles/quick/selfhost/selfhost_mir_m3_jump_chain_vm.sh`
 
 #### **quick/llvm** - 軽量LLVM/ハーネス・トレース
 - llvmlite ハーネス使用のミニテスト（IRダンプ/trace）
 - ビルドが無い環境では自動SKIP（検出は run.sh に内蔵）
+ - PHI 形状（incoming/values）コンパイル検査:
+   - `profiles/quick/llvm/harness_phi_incoming_compile_ok.sh`
+   - `profiles/quick/llvm/harness_phi_values_compile_ok.sh`
 
 #### **integration/parity** - VM↔LLVM観点合わせ
 - 同一スクリプトでRust VM vs LLVM実行
@@ -202,7 +208,8 @@ run_test "test_name" {
 新しいノイズが出たらフィルタへ追加し、各テスト個別の `grep -v` は増やさない。
 
 ### LLVM パリティ（Python ハーネス）
-- Integration の `check_parity` は LLVM 実行時に `NYASH_LLVM_USE_HARNESS=1` を自動付与して llvmlite ハーネスで検証する。
+- Harness-first: Integration の LLVM 経路は llvmlite ハーネスを既定とし、`NYASH_LLVM_USE_HARNESS=1` を付与してオブジェクト生成・IR/トレースを検証する。
+- 実行までのパリティ（VM==LLVM 実行結果）は NyKernel（静的）連携が整っている環境でのみ有効。通常はハーネスでのコンパイル成功をゴールとする。
 - 使い方（例）:
   - `check_parity -c 'print("Hello")' "hello_parity"`
   - 同一コードを VM と LLVM で実行し、終了コードと整形後の標準出力を比較する。
