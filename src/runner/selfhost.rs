@@ -164,7 +164,7 @@ impl NyashRunner {
                     parser_prog,
                     timeout_ms,
                     &extra,
-                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE"],
+                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE", "NYASH_QUIET"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
                         ("NYASH_ENABLE_USING", "1"),
@@ -355,7 +355,7 @@ impl NyashRunner {
                     program,
                     timeout_ms,
                     &extra_refs,
-                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE"],
+                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE", "NYASH_QUIET"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
                         ("NYASH_ENABLE_USING", "1"),
