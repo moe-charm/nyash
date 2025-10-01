@@ -10,6 +10,18 @@
 - Plugins: plugin-tester 既定 --config を hako.toml に切替（互換読込維持）
 - 仕様不変・ロールバック容易・差分は局所
 
+## ✅ Update — 2025-10-01（Smokes v2 再編と selfhost 配線）
+- Smokes v2 の物理分割（quick 配下）
+  - 追加: `profiles/quick/selfhost/`（selfhost/pipeline_v2/emit-only）
+  - 追加: `profiles/quick/llvm/`（軽量LLVM/ハーネス・トレース）
+  - 既存 selfhost_* / *_vm_llvm を上記へ移設（run.sh の探索は再帰なので互換）
+- Runner（親→子）引数透過を拡充（既定OFF・安全）
+  - `NYASH_EMIT_TRACE=1` → `--emit-trace`
+  - `NYASH_PREFER_CFG=1` / `NYASH_PREFER_CFG2=1` → `--prefer-cfg` / `--prefer-cfg2`
+  - `NYASH_QUIET` は子へ渡さない（JSON出力のサイレンス防止）
+- Pipeline V2 の header スモーク安定化
+  - `selfhost_min_json_header_pipeline_v2_vm.sh` → PASS（timeout=8000ms 維持）
+
 ## Current Focus（Phase 15.7）
 - Branding移行の堅牢化（hako.toml-first の徹底と互換の維持）
 - 宣言的MIR/JSON の実運用（Map/Array + JSON.stringify の標準化）
@@ -17,6 +29,16 @@
 - Self‑Hosting 小粒強化（LocalSSA ensure_cond の代表ケース）
 
 ## Next Actions（小粒・優先順）
+P0（任意・おすすめの改善）
+1) selfhost/dev スモークの追加
+   - emit-trace 検知: 先頭 `[emit]` 1行 + 最終 JSON 1行を確認（`--emit-trace` 布告）
+   - prefer-cfg2 検知: JSONに `"op":"copy"` が含まれることを確認
+2) ドキュメント参照の追随
+   - `quick/core/selfhost_*` → `quick/selfhost/*` への参照残を再走査して更新
+3) テストタグ（任意）
+   - 各スモーク先頭に `# tags: selfhost,pipeline_v2` の簡易タグを付与（将来のセレクタ用）
+4) Makefile タスク（任意）
+   - `make smoke-quick`, `make smoke-int` の薄いエイリアスを追加（開発者体験向上）
 P0（dev観測の整理・安全化）
 1) EmitトレースのENVガード化（候補: EnvBox最小導入 or Runner引数透過）。
    - 方針A: `EnvBox.get("NYASH_EMIT_TRACE")` を最小で提供（外部I/Oなし・純粋）。

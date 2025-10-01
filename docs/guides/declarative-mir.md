@@ -84,5 +84,5 @@ Migration Tips
 - Keep Builder around as a fallback during migration; remove gradually after parity smokes are green.
 
 Dev Flags / Smokes
-- Pipeline V2 examples are guarded by `NYASH_PIPELINE_V2=1` (dev only). See tools/smokes/v2/profiles/quick/core/selfhost_pipeline_v2_cmp_vm.sh.
+- Pipeline V2 examples are guarded by `NYASH_PIPELINE_V2=1` (dev only). See tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_cmp_vm.sh.
 - JSON stringify is now first-class. Legacy dev bridge docs remain for historical context; see tools/smokes/v2/profiles/quick/core/json_stringify_standard_vm.sh.

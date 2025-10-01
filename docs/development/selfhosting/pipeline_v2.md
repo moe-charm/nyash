@@ -26,8 +26,8 @@ Usage (dev)
 - For Runner-driven acceptance, keep using `NYASH_USE_NY_COMPILER=1 ... NYASH_JSON_ONLY=1`.
 
 Smokes (quick)
-- Child path (emit-only): `tools/smokes/v2/profiles/quick/core/selfhost_min_json_header_pipeline_v2_vm.sh`
-- Direct driver (emit-only): `tools/smokes/v2/profiles/quick/core/selfhost_pipeline_v2_driver_min_json_vm.sh`
+- Child path (emit-only): `tools/smokes/v2/profiles/quick/selfhost/selfhost_min_json_header_pipeline_v2_vm.sh`
+- Direct driver (emit-only): `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_driver_min_json_vm.sh`
 
 Fail-Fast
 - Empty/invalid JSON emission must return non-zero and avoid stdout noise.
