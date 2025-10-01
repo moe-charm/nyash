@@ -1,0 +1,19 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 100}},
+            {"op": "typeop", "dst": 2, "src": 1, "operation": "cast", "target_type": "IntegerBox"},
+            {"op": "ret", "value": 2}
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

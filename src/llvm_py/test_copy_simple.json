@@ -1,0 +1,20 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 42}},
+            {"op": "copy", "dst": 2, "src": 1},
+            {"op": "binop", "dst": 3, "lhs": 2, "rhs": 1, "operation": "+"},
+            {"op": "ret", "value": 3}
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

@@ -203,9 +203,10 @@ Compiled to tmp/nyash_llvm_py.o  ← 成功！
 ## 📖 詳細ドキュメント
 
 - **Phase 15.8 README**: [docs/development/roadmap/phases/phase-15.8/README.md](docs/development/roadmap/phases/phase-15.8/README.md)
+- **🆕 WASM実装ロードマップ**: [src/llvm_py/docs/wasm_roadmap.md](src/llvm_py/docs/wasm_roadmap.md) - フルWASM実装までの詳細計画
+- **🆕 PHI設計ドキュメント**: [src/llvm_py/docs/phi_design.md](src/llvm_py/docs/phi_design.md) - PHI処理の箱理論実装
 - **CLAUDE.md**: Week完了時の進捗サマリー
 - **バックアップ**: CURRENT_TASK.md.backup_* （詳細履歴保存済み）
-- **詳細版**: `src/llvm_py/CURRENT_TASK.md` （Phase 3.1完全記録）
 
 ---
 

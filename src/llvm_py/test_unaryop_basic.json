@@ -1,0 +1,25 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 42}},
+            {"op": "unop", "dst": 2, "src": 1, "kind": "neg"},
+            {"op": "const", "dst": 3, "value": {"type": "i64", "value": 1}},
+            {"op": "unop", "dst": 4, "src": 3, "kind": "not"},
+            {"op": "const", "dst": 5, "value": {"type": "i64", "value": 5}},
+            {"op": "unop", "dst": 6, "src": 5, "kind": "bitnot"},
+            {"op": "binop", "dst": 7, "lhs": 2, "rhs": 4, "operation": "+"},
+            {"op": "binop", "dst": 8, "lhs": 7, "rhs": 6, "operation": "+"},
+            {"op": "ret", "value": 8}
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}
