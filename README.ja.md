@@ -76,7 +76,7 @@ Phase‑15（2025‑09）アップデート
 - 他言語との比較: `docs/guides/comparison/nyash-vs-others.md`
 
 プロファイル（クイック）
-- `--profile dev` → マクロON（strict）、PyVM 開発向けの既定を適用（必要に応じて環境で上書き可）
+- `--profile dev` → マクロON（strict）、開発向け VM 既定（必要に応じて環境で上書き可）
 - `--profile lite` → マクロOFF の軽量実行
   - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
 

@@ -247,9 +247,9 @@ fn check_layer_boundary() {
 - 非推奨（下位互換のみ）:
   - `NYASH_MACRO_BOX_NY*`, `NYASH_MACRO_BOX_CHILD_RUNNER`, `NYASH_MACRO_TOPLEVEL_ALLOW`（必要なら `--macro-top-level-allow` を明示）
 - 自己ホスト前展開:
-  - 自動（auto）で安全に有効化済み。PyVM 環境でのみ働く。問題時はログで検知しやすい。
+  - 自動（auto）で安全に有効化済み。Dev 環境（LLVM ハーネス）でのみ働く。問題時はログで検知しやすい。
 - 受け入れチェック（ポーズ中のガード）:
-  - cargo check（全体）/ 代表スモーク（PyVM/LLVM）/ マクロ・ゴールデンが緑であること。
+  - cargo check（全体）/ 代表スモーク（LLVM/Rust VM）/ マクロ・ゴールデンが緑であること。
   - 変更は最小・局所・仕様不変。既定挙動は変えない。
 
 Compiler Track 部分解禁（Selfhost Compiler 開発向け）
@@ -348,24 +348,24 @@ Notes
 - 非対象: プラグイン動的ロード/ABI、GC/スケジューラ、例外/非同期、大きな I/O/OS 依存、性能最適化。
 - 今後: 完全撤去を予定。llvmlite ハーネス/Rust VM に一本化する。
 
-## Interpreter vs PyVM（実行経路の役割と優先度）
-- 優先経路: Rust VM（MIR）/LLVM（llvmlite ハーネス）。
+## Runtime Lines（役割と優先度）
+- 優先経路: Rust VM（MIR）と LLVM（llvmlite ハーネス）。
 - 補助経路: Rust の MIR Interpreter は純Rustの簡易器として維持（最小実装）。
 - Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter。
-- 開発の原則: 仕様差が出た場合は llvmlite を基準に整合。
+- 原則: 仕様差が出た場合は LLVM ハーネス基準に整合（PyVM は互換用途のみ）。
 
-## 脱Rust（開発効率最優先）ポリシー
-- Phase‑15 中は Rust VM/JIT への新規機能追加を最小化し、Python（llvmlite/PyVM）側での実装・検証を優先する。
-- Runner/Bridge は必要最小の配線のみ（子プロセスタイムアウト・静音・フォールバック）。意味論の追加はまず PyVM/llvmlite に実装し、必要時のみ Rust 側へ反映。
+## 実装優先ポリシー（Phase‑15+）
+- 新規機能追加は Rust VM/LLVM ハーネス側を優先（PyVM は互換テスト限定）。
+- Runner/Bridge は必要最小の配線のみ（子プロセスタイムアウト・静音・フォールバック）。意味論の追加は LLVM 基準で先行し、必要時のみ VM へ反映。
 
-## Self‑Hosting への移行（PyVM → Nyash）ロードマップ（将来）
-- 目標: PyVM の最小実行器を Nyash スクリプトへ段階移植し、自己ホスト中も Python 依存を徐々に縮小する。
+## Self‑Hosting への移行（Nyash Mini‑VM ルート）
+- 目標: Nyash 製 Mini‑VM（最小命令）を段階実装し、Python 依存を縮小・排除する。
 - ステップ（小粒度）:
-  1) Nyash で MIR(JSON) ローダ（ファイル→構造体）を実装（最小 op セット）。
-  2) const/binop/compare/branch/jump/ret/phi を Nyash で実装し、既存 PyVM スモークを通過。
+  1) Nyash で MIR(JSON) ローダ（最小 op セット）を実装。
+  2) const/binop/compare/branch/jump/ret/phi を Nyash で実装し、VM/LLVM とパリティ確認。
   3) call/externcall/boxcall（最小）・String/Array/Map の必要メソッドを Nyash で薄く実装。
-  4) CI は当面 PyVM を主、Nyash 実装は実験ジョブとして並走→安定後に切替検討。
-- 注意: 本移行は自己ホストの進捗に合わせて段階実施（Phase‑15 では設計・骨格の準備のみ）。
+  4) CI は LLVM ハーネス/Rust VM を主。PyVM は `pyvm-bridge` 有効時のみローカル互換用途で使用（既定では不使用）。
+ - 注意: 本移行は自己ホストの進捗に合わせて段階実施（Phase‑15 では設計・骨格の準備のみ）。
 
 ## ⚠ 現状の安定度に関する重要メモ（Phase‑15 進行中）
 - VM と Cranelift(JIT) は MIR14 へ移行中のため、現在は実行経路として安定していないよ（検証・実装作業の都合で壊れている場合があるにゃ）。

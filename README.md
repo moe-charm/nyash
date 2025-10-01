@@ -16,7 +16,7 @@
 Execution Status (Feature Additions Pause)
 - Active
   - `--backend llvm` (Python/llvmlite harness; AOT object emit)
-  - `--backend vm` (PyVM harness)
+  - `--backend vm` (Rust VM)
 - Inactive/Sealed
   - `--backend cranelift`, `--jit-direct` (sealed; use LLVM harness)
   - AST interpreter (legacy) is gated by feature `interpreter-legacy` and excluded from default builds (Rust VM + LLVM are the two main lines)
@@ -109,7 +109,7 @@ Layer guard (one-way deps: origin→observe→rewrite)
 - VoidBox common methods (length/size/get/push) are neutral no-ops in guarded paths to avoid dev-time hard stops.
 
 Profiles (quick)
-- `--profile dev` → Macros ON (strict), PyVM dev向け設定を適用（必要に応じて環境で上書き可）
+- `--profile dev` → Macros ON (strict)、開発向け VM 既定（必要に応じて環境で上書き可）
 - `--profile lite` → Macros OFF の軽量実行
   - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
 
@@ -212,16 +212,9 @@ local py = new PyRuntimeBox()       // Python plugin
 
 ## 🏗️ **Multiple Execution Modes**
 
-Important: JIT runtime execution is sealed for now. Use PyVM/VM for running, and Cranelift AOT/LLVM AOT for native executables.
+Important: JIT runtime execution is sealed for now. Use Rust VM for running, and LLVM AOT (llvmlite harness) for native executables.
 
-Phase‑15 (Self‑Hosting): Legacy VM/Interpreter are feature‑gated
-- Default build runs PyVM for `--backend vm` (python3 + `tools/pyvm_runner.py` required)
-- To enable legacy Rust VM/Interpreter, build with:
-  ```bash
-  cargo build --release --features vm-legacy,interpreter-legacy
-  ```
-  Then `--backend vm`/`--backend interpreter` use the legacy paths.
- - Note: `--benchmark` requires the legacy VM. Build with `--features vm-legacy` before running benchmarks.
+Phase‑15 (Self‑Hosting): Interpreter is feature‑gated and not enabled by default.
 
 ### 1. **Interpreter Mode** (Development)
 ```bash
@@ -231,17 +224,12 @@ Phase‑15 (Self‑Hosting): Legacy VM/Interpreter are feature‑gated
 - Full debug information
 - Perfect for development
 
-### 2. **VM Mode (PyVM default / Legacy optional)**
+### 2. **VM Mode (Rust VM default)**
 ```bash
-# Default: PyVM harness (requires python3)
-./target/release/nyash --backend vm program.nyash
-
-# Enable legacy Rust VM if needed
-cargo build --release --features vm-legacy
 ./target/release/nyash --backend vm program.nyash
 ```
-- Default (vm-legacy OFF): PyVM executes MIR(JSON) via `tools/pyvm_runner.py`
-- Legacy VM: 13.5x over interpreter (historical); kept for comparison and plugin tests
+- Default: Rust VM executes MIR.
+- Note (compat, deprecated): PyVM is withdrawn by default. If you must use it for local compatibility checks, build with `--features pyvm-bridge` and run with `NYASH_VM_USE_PY=1`.
 
 ### 3. **Native Binary (Cranelift AOT)** (Distribution)
 ```bash

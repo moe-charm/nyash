@@ -32,7 +32,7 @@ Code Responsibilities
 - Using resolution (static)
   - Entry: `src/runner/modes/common_util/resolve/resolve_prelude_paths_profiled`
   - Core: `collect_using_and_strip` (SSOT enforcement, path/alias/package resolution, profile gates)
-  - Consumers: all runners (VM, LLVM/harness, PyVM, selfhost) call the same helper to avoid drift.
+- Consumers: all runners (VM, LLVM/harness, selfhost) call the same helper to avoid drift. (PyVM is compatibility‑only and not used in CI.)
 - Builder (lowering)
   - Instance→Function rewrite and method materialization live in `src/mir/builder/*`.
 - VM (runtime)
