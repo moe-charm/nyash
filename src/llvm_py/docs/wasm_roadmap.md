@@ -34,7 +34,7 @@
 
 ---
 
-## 🔧 **実装済みMIR命令** (10/18命令)
+## 🔧 **実装済みMIR命令** (18/18命令) 🎉🎉🎉
 
 | 命令 | 状態 | Week | テスト |
 |------|------|------|--------|
@@ -45,129 +45,145 @@
 | **jump** | ✅ 完了 | W2 | test_jump_*.json |
 | **ret** | ✅ 完了 | W2 | test_control_flow_smoke.json |
 | **externcall** | ✅ 完了 | W2 | Hello World (print) |
-| **phi** | ✅ 完了 | W3 | test_phi_if.json |
-| **constants** | ✅ 完了 | W2 | グローバル文字列 |
 | **call** | ✅ 完了 | - | 既存実装（mir_call.py） |
+| **constants** | ✅ 完了 | W2 | グローバル文字列 |
+| **phi** | ✅ 完了 | W3 | test_phi_if.json + **test_phi_loop.json** |
+| **unop** | ✅ 完了 | W3 | test_unaryop_basic.json |
+| **typeop** | ✅ 完了 | W3 | test_typeop_cast.json |
+| **copy** | ✅ 完了 | W3 | test_copy_simple.json |
+| **load** | ✅ 完了 | W3 | test_memory_basic.json |
+| **store** | ✅ 完了 | W3 | test_memory_basic.json |
+| **newbox** | ✅ 完了 | W3 | test_newbox_simple.json |
+| **boxcall** | ✅ 完了 | W3 | test_boxcall_method.json |
+| **safepoint** | ✅ 完了 | W3 | test_safepoint_nop.json |
+| **barrier** | ✅ 完了 | W3 | test_barrier_nop.json |
+
+**🎉🎉🎉 MIR18命令セット100%完全実装達成！**
 
 ---
 
-## 📋 **未実装MIR命令** (8/18命令)
+## 📋 **未実装MIR命令** (0/18命令)
 
-### 🚀 **Phase 3.2: 基本命令完成** (優先度A - 即実装)
-**期間**: 2025-10-02 ~ 10-04（3日間）
+**すべて実装完了！** 🎊
 
-#### 実装対象
-1. **unaryop** (単項演算)
-   - 実装箇所: `src/llvm_py/instructions/unop.py` (既存)
+### ✅ **Phase 3.2: 基本命令完成** (完了 2025-10-01)
+**期間**: 2025-10-02 ~ 10-04（3日間） → **1日で完了！**
+
+#### 実装内容
+1. ✅ **unaryop** (単項演算)
    - LLVM IR: neg, not, bitwise_not
-   - WASM: i64.sub(0, x), i32.eqz, i64.xor(-1, x)
    - テスト: `test_unaryop_basic.json`
-   - 工数: 0.5日
 
-2. **typeop** (型変換)
-   - 実装箇所: `src/llvm_py/instructions/typeop.py` (既存)
+2. ✅ **typeop** (型変換)
    - LLVM IR: zext, sext, trunc, bitcast
-   - WASM: i32.wrap_i64, i64.extend_i32_s, etc.
    - テスト: `test_typeop_cast.json`
-   - 工数: 0.5日
 
-3. **copy/nop** (コピー・nop)
-   - 実装箇所: `src/llvm_py/instructions/copy.py` (既存)
+3. ✅ **copy/nop** (コピー・nop)
    - LLVM IR: local.get (copy), nop
-   - WASM: local.get, nop
    - テスト: `test_copy_simple.json`
-   - 工数: 0.5日
 
-#### 成果物
-- ✅ 基本演算完全対応（unaryop, typeop, copy）
+#### 成果
+- 🎉 基本演算完全対応
 - ✅ スモークテスト3本追加
-- ✅ WASM命令マッピング表更新
 
 ---
 
-### 🔥 **Phase 3.3: Box/GC命令実装** (優先度B - 重要)
-**期間**: 2025-10-05 ~ 10-09（5日間）
+### ✅ **Phase 3.3: Box/GC命令実装** (完了 2025-10-01)
+**期間**: 2025-10-05 ~ 10-09（5日間） → **1日で完了！**
 
-#### 実装対象
-1. **load/store** (メモリアクセス)
-   - 実装箇所: 新規 `src/llvm_py/instructions/memory.py`
+#### 実装内容
+1. ✅ **load/store** (メモリアクセス)
+   - 新規: `src/llvm_py/instructions/memory.py`
    - LLVM IR: load, store
-   - WASM: i32.load, i32.store (linear memory)
-   - Memory Model:
-     - Stack: [0..1MB]
-     - Heap: [1MB..16MB]
-   - テスト: `test_memory_stack.json`, `test_memory_heap.json`
-   - 工数: 2日
+   - Memory Model: inttoptr/ptrtoint変換
+   - テスト: `test_memory_basic.json`
 
-2. **newbox** (Box生成)
-   - 実装箇所: `src/llvm_py/instructions/newbox.py` (既存)
+2. ✅ **newbox** (Box生成)
    - LLVM IR: call @gc_alloc
-   - WASM: call $gc_alloc (manual ref counting)
-   - 依存: load/store完了後
    - テスト: `test_newbox_simple.json`
-   - 工数: 1.5日
 
-3. **boxcall** (Boxメソッド呼び出し)
-   - 実装箇所: `src/llvm_py/instructions/boxcall.py` (既存)
+3. ✅ **boxcall** (Boxメソッド呼び出し)
    - LLVM IR: call_indirect
-   - WASM: call_indirect $type_table
-   - 依存: newbox完了後
+   - method_id経由呼び出し
    - テスト: `test_boxcall_method.json`
-   - 工数: 1.5日
 
-#### 成果物
-- ✅ Memory Model実装（linear memory）
+#### 成果
+- 🎉 Memory Model実装完了
 - ✅ Box生成・メソッド呼び出し対応
-- ✅ GC skeleton（manual ref counting）
-- ✅ スモークテスト5本追加
+- ✅ スモークテスト3本追加
 
 ---
 
-### 🎯 **Phase 3.4: GC補助命令実装** (優先度C - 後回し可)
-**期間**: 2025-10-10 ~ 10-12（3日間）
+### ✅ **Phase 3.4: GC補助命令実装** (完了 2025-10-01)
+**期間**: 2025-10-10 ~ 10-12（3日間） → **1日で完了！**
 
-#### 実装対象
-1. **safepoint** (GCセーフポイント)
-   - 実装箇所: `src/llvm_py/instructions/safepoint.py` (既存)
-   - LLVM IR: call @gc_safepoint
-   - WASM: call $gc_safepoint (Phase 15.8はnop)
-   - 将来: WASM GC proposal対応時に実装
+#### 実装内容
+1. ✅ **safepoint** (GCセーフポイント)
+   - LLVM IR: call @ny_safepoint
+   - live値トラッキング
    - テスト: `test_safepoint_nop.json`
-   - 工数: 0.5日
 
-2. **barrier** (GCバリア)
-   - 実装箇所: `src/llvm_py/instructions/barrier.py` (既存)
-   - LLVM IR: call @gc_barrier
-   - WASM: nop (Phase 15.8は無視)
-   - 将来: WASM GC proposal対応時に実装
+2. ✅ **barrier** (メモリバリア)
+   - LLVM IR: fence seq_cst
+   - Phase 15.8ではnop（将来WASM GC proposal対応）
    - テスト: `test_barrier_nop.json`
-   - 工数: 0.5日
 
-#### 成果物
-- ✅ GC補助命令skeleton実装
+#### 成果
+- 🎉 GC補助命令skeleton実装完了
 - ✅ WASM GC proposal対応準備完了
 - ✅ スモークテスト2本追加
 
 ---
 
-### 🌟 **Phase 3.5: ループPHI + 複雑制御フロー** (優先度A+)
-**期間**: 2025-10-13 ~ 10-15（3日間）
+### ✅ **Phase 3.5-A/B: ループPHI完全対応** (完了 2025-10-01) 🎉🎉🎉
+**期間**: 2025-10-13 ~ 10-15（3日間） → **1日で完了！**
 
-#### 実装対象
-1. **ループPHIテスト**
-   - テスト: `test_phi_loop.json`
-   - 自己参照PHI: `phi i64 [0, %entry], [%inc, %loop]`
-   - 既存PhiHandler実装で対応済み
-   - 工数: 1日（テスト作成・検証のみ）
+#### 実装内容
+1. ✅ **PhiHandler拡張**
+   - `incomplete_phis`トラッキング追加（前方参照対応）
+   - `complete_incomplete_phis()`メソッド実装
+   - 二段階PHI解決（即座+遅延）
 
-2. **複雑制御フロー**
-   - ネストif: `test_controlflow_nested_if.json`
-   - 多段ループ: `test_controlflow_nested_loop.json`
-   - switch文相当: `test_controlflow_switch.json`
-   - 工数: 2日
+2. ✅ **block_lower.py統合**
+   - PHI完成呼び出し追加（body ops後）
+   - `_current_vmap`優先参照
 
-#### 成果物
-- ✅ ループPHI動作確認
+3. ✅ **llvmlite検証**
+   - `test_phi_delayed.py`で`add_incoming`遅延追加確認
+
+#### 成果
+- 🎉🎉🎉 **ループPHI完全動作！**
+- ✅ 前方参照（forward reference）解決
+- ✅ テストファイル: `test_phi_loop.json`, `test_phi_delayed.py`
+
+#### LLVM IR生成例
+```llvm
+bb1:
+  %"phi_2" = phi i64 [0, %"bb0"], [%"add_4", %"bb1"]  ← 自己参照！
+  %"add_4" = add i64 %"phi_2", 1
+  %"cmp_6" = icmp slt i64 %"phi_2", 10
+  br i1 %"cmp_6", label %"bb1", label %"bb2"
+```
+
+---
+
+### 🚧 **Phase 3.5-C/D/E: 複雑制御フロー** (残り - 優先度A)
+**期間**: 2025-10-01 ~ 10-03（3日間予定）
+
+#### 残実装対象
+1. **ネストif**
+   - テスト: `test_controlflow_nested_if.json`
+   - if内if、多段分岐
+
+2. **ネストループ**
+   - テスト: `test_controlflow_nested_loop.json`
+   - ループ内ループ、break/continue
+
+3. **switch文相当**
+   - テスト: `test_controlflow_switch.json`
+   - 多分岐パターン
+
+#### 期待成果
 - ✅ 複雑制御フローテスト完備
 - ✅ PhiHandlerの堅牢性確認
 
