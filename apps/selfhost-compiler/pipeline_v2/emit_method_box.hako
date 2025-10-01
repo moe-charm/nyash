@@ -1,0 +1,38 @@
+// EmitMethodBox — Return(Method recv, method, args[int...]) → MIR(JSON v0)
+// 最小形: const recv→r1; 各引数を r2..rN; boxcall(method, recv=r1, args=r2..) → rK; ret rK
+
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+
+static box EmitMethodBox {
+  emit_method_int_args(method, recv_val, args) {
+    if method == null { method = "" }
+    if args == null { args = [] }
+    local n = 0
+    if args.size { n = args.size() }
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, recv_val)
+    // materialize args r2..r(n+1)
+    local i = 0
+    loop (i < n) {
+      local v = args.get(i)
+      b = b |> MirJsonBuilderMin.add_const(2 + i, v)
+      i = i + 1
+    }
+    local dst = n + 2
+    if n > 0 {
+      b = b |> MirJsonBuilderMin.add_boxcall_range(method, 1, 2, n, dst)
+    } else {
+      // args 空でも空配列で boxcall を発行
+      b = b |> MirJsonBuilderMin.add_boxcall_range(method, 1, 2, 0, dst)
+    }
+    b = b |> MirJsonBuilderMin.add_ret(dst)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+}
+
+static box EmitMethodStub { main(args) { return 0 } }
+

@@ -1,0 +1,32 @@
+// EmitNewBoxBox — Return(New class, args[int...]) → MIR(JSON v0)
+// 最小形: 各引数を r1..rN; newbox(class, args=r1..rN) → rK; ret rK
+
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+
+static box EmitNewBoxBox {
+  emit_newbox_int_args(class_name, args) {
+    if class_name == null { class_name = "" }
+    if args == null { args = [] }
+    local n = 0
+    if args.size { n = args.size() }
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+    // materialize args r1..rN
+    local i = 0
+    loop (i < n) {
+      local v = args.get(i)
+      b = b |> MirJsonBuilderMin.add_const(1 + i, v)
+      i = i + 1
+    }
+    local dst = n + 1
+    b = b |> MirJsonBuilderMin.add_newbox_range(class_name, 1, n, dst)
+      |> MirJsonBuilderMin.add_ret(dst)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+}
+
+static box EmitNewBoxStub { main(args) { return 0 } }
+

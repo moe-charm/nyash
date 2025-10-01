@@ -47,6 +47,18 @@ static box MirJsonBuilderMin {
     }
     return "\"" + out + "\""
   }
+  _ids_range_json(start, count) {
+    // Build JSON array text like [start, start+1, ..., start+count-1]
+    local i = 0
+    local out = "["
+    loop (i < count) {
+      if i > 0 { out = out + "," }
+      out = out + me._int_to_str(start + i)
+      i = i + 1
+    }
+    out = out + "]"
+    return out
+  }
   _ensure_phase(st, want) {
     // Fail-fast guard for misuse
     if !st.has("phase") { return st }
@@ -104,6 +116,27 @@ static box MirJsonBuilderMin {
   add_ret(st, val) {
     me._comma_if_needed(st)
     local b = "{\"op\":\"ret\",\"value\":" + me._int_to_str(val) + "}"
+    return me._append(st, b)
+  }
+  add_call_ids(st, name, args_json_text, dst) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"call\",\"name\":" + me._quote(name) + ",\"args\":" + args_json_text + ",\"dst\":" + me._int_to_str(dst) + "}"
+    return me._append(st, b)
+  }
+  add_call_range(st, name, start, count, dst) {
+    local arr = me._ids_range_json(start, count)
+    return me.add_call_ids(st, name, arr, dst)
+  }
+  add_boxcall_range(st, method, recv_id, args_start, count, dst) {
+    me._comma_if_needed(st)
+    local arr = me._ids_range_json(args_start, count)
+    local b = "{\"op\":\"boxcall\",\"method\":" + me._quote(method) + ",\"recv\":" + me._int_to_str(recv_id) + ",\"args\":" + arr + ",\"dst\":" + me._int_to_str(dst) + "}"
+    return me._append(st, b)
+  }
+  add_newbox_range(st, box_type, args_start, count, dst) {
+    me._comma_if_needed(st)
+    local arr = me._ids_range_json(args_start, count)
+    local b = "{\"op\":\"newbox\",\"box_type\":" + me._quote(box_type) + ",\"args\":" + arr + ",\"dst\":" + me._int_to_str(dst) + "}"
     return me._append(st, b)
   }
   add_branch(st, cond, then_id, else_id) {

@@ -1,5 +1,5 @@
 // EmitReturnBox — return(Int) の最小 MIR(JSON v0) 生成
-using "apps/lib/json_native/stringify.nyash" as JSON
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
 static box EmitReturnBox {
   emit_return_int(v) { return EmitReturnBox.emit_return_int2(v, 0) }
@@ -7,20 +7,14 @@ static box EmitReturnBox {
   emit_return_int2(v, trace) {
     // dev-trace (minimal, env-gate想定): trace==1 の時のみ出力
     if trace == 1 { print("[emit] return v=" + v) }
-    local mir = {
-      functions: [{
-        name: "main",
-        params: [],
-        blocks: [{
-          id: 0,
-          instructions: [
-            { op:"const", dst:1, value:{ type:"i64", value: v } },
-            { op:"ret", value:1 }
-          ]
-        }]
-      }]
-    }
-    return JSON.stringify_map(mir)
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, v)
+      |> MirJsonBuilderMin.add_ret(1)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
   }
 }
 

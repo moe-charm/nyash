@@ -1,5 +1,5 @@
 // EmitBinopBox — binop の最小 MIR(JSON v0) 生成
-using "apps/lib/json_native/stringify.nyash" as JSON
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
 static box EmitBinopBox {
   _map_binop(opk) {
@@ -17,17 +17,16 @@ static box EmitBinopBox {
     // dev-trace (minimal, env-gate想定)
     if trace == 1 { print("[emit] binop lhs=" + lhs + " rhs=" + rhs + " op=" + opk) }
     local kind = EmitBinopBox._map_binop(opk)
-    local mir = {
-      functions: [{ name:"main", params: [], blocks: [
-        { id:0, instructions: [
-          { op:"const", dst:1, value:{ type:"i64", value: lhs } },
-          { op:"const", dst:2, value:{ type:"i64", value: rhs } },
-          { op:"binop", op_kind: kind, lhs:1, rhs:2, dst:3 },
-          { op:"ret", value:3 }
-        ] }
-      ] }]
-    }
-    return JSON.stringify_map(mir)
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, lhs)
+      |> MirJsonBuilderMin.add_const(2, rhs)
+      |> MirJsonBuilderMin.add_binop(kind, 1, 2, 3)
+      |> MirJsonBuilderMin.add_ret(3)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
   }
 }
 

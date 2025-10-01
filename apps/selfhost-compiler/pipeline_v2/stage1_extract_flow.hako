@@ -106,6 +106,70 @@ flow Stage1ExtractFlow {
     return { cmp: opk, lhs: lhs, rhs: rhs }
   }
 
+  // Return(Method recv, method, args) → {method, args:[int,...]} or null
+  extract_return_method(ast_json) {
+    if ast_json == null { return null }
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Method\"", p)
+    if q < 0 { return null }
+    // method name
+    local mk = Stage1ExtractFlow._idx_from(ast_json, "\"method\":\"", q)
+    if mk < 0 { return null }
+    local mk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", mk + 10)
+    if mk_end < 0 { return null }
+    local mname = ast_json.substring(mk + 10, mk_end)
+    // args (integers only; recv は無視)
+    local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
+    local args = []
+    if ak >= 0 {
+      local i = ak + 8
+      loop(true) {
+        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", i)
+        if vpos < 0 { break }
+        // bound to args array end
+        local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+        if rb >= 0 && vpos > rb { break }
+        local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+        if ds == "" { i = vpos + 8  continue }
+        args.push(RegexFlow.to_int(ds))
+        i = vpos + 8 + ds.length()
+      }
+    }
+    return { method: mname, args: args }
+  }
+
+  // Return(New class(args)) → {class, args:[int,...]} or null
+  extract_return_new(ast_json) {
+    if ast_json == null { return null }
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"New\"", p)
+    if q < 0 { return null }
+    local ck = Stage1ExtractFlow._idx_from(ast_json, "\"class\":\"", q)
+    if ck < 0 { return null }
+    local ck_end = Stage1ExtractFlow._idx_from(ast_json, "\"", ck + 9)
+    if ck_end < 0 { return null }
+    local cname = ast_json.substring(ck + 9, ck_end)
+    // args integers only
+    local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
+    local args = []
+    if ak >= 0 {
+      local i = ak + 8
+      loop(true) {
+        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", i)
+        if vpos < 0 { break }
+        local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+        if rb >= 0 && vpos > rb { break }
+        local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+        if ds == "" { i = vpos + 8  continue }
+        args.push(RegexFlow.to_int(ds))
+        i = vpos + 8 + ds.length()
+      }
+    }
+    return { class: cname, args: args }
+  }
+
   // Return(Call name(args...)) → {name, args:[int,...]} or null
   extract_return_call(ast_json) {
     if ast_json == null { return null }

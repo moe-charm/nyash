@@ -5,6 +5,8 @@ using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EmitCompareB
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA
 using "apps/selfhost-compiler/pipeline_v2/emit_call_box.hako" as EmitCallBox
+using "apps/selfhost-compiler/pipeline_v2/emit_method_box.hako" as EmitMethodBox
+using "apps/selfhost-compiler/pipeline_v2/emit_newbox_box.hako" as EmitNewBoxBox
 
 flow PipelineV2 {
   lower_stage1_to_mir(ast_json, prefer_cfg) {
@@ -35,6 +37,28 @@ flow PipelineV2 {
         if k != null {
           local j4 = EmitCallBox.emit_call_int_args(k.get("name"), k.get("args"))
           return LocalSSA.ensure_cond(j4)
+        }
+      }
+    }
+    // Next Method (Return(Method ...)) — minimal int args only; recv is 0 (placeholder)
+    {
+      local mq = RegexFlow.find_from(ast_json, "\"type\":\"Method\"", 0)
+      if mq >= 0 {
+        local m = Stage1ExtractFlow.extract_return_method(ast_json)
+        if m != null {
+          local j5 = EmitMethodBox.emit_method_int_args(m.get("method"), 0, m.get("args"))
+          return LocalSSA.ensure_cond(j5)
+        }
+      }
+    }
+    // Next New (Return(New ...)) — minimal int args only
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local n = Stage1ExtractFlow.extract_return_new(ast_json)
+        if n != null {
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(n.get("class"), n.get("args"))
+          return LocalSSA.ensure_cond(j6)
         }
       }
     }
