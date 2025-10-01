@@ -75,7 +75,7 @@ impl NyashRunner {
                         Ok(result) => {
                             let prefer_pyvm = crate::config::env::vm_use_py();
                             if prefer_pyvm {
-                                if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand", self.config.as_groups().input.entry.as_deref()) {
+                                if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand") {
                                     println!("Result: {}", code);
                                     std::process::exit(code);
                                 } else {
@@ -122,9 +122,10 @@ impl NyashRunner {
             use crate::runner::modes::common_util::selfhost::{child, json};
             let exe = std::env::current_exe()
                 .unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
-            let parser_prog_hyphen = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+            let parser_prog_hako = std::path::Path::new("apps/selfhost-compiler/compiler.hako");
+            let parser_prog_nyash = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
             let parser_prog_legacy = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
-            let parser_prog = if parser_prog_hyphen.exists() { parser_prog_hyphen } else { parser_prog_legacy };
+            let parser_prog = if parser_prog_hako.exists() { parser_prog_hako } else if parser_prog_nyash.exists() { parser_prog_nyash } else { parser_prog_legacy };
             if parser_prog.exists() {
                 // Build extra args forwarded to child program
                 let mut extra_owned: Vec<String> = Vec::new();
@@ -133,6 +134,16 @@ impl NyashRunner {
                 if crate::config::env::selfhost_read_tmp() { extra_owned.push("--read-tmp".to_string()); }
                 if crate::config::env::ny_compiler_min_json() { extra_owned.push("--min-json".to_string()); }
                 if crate::config::env::ny_compiler_stage3() { extra_owned.push("--stage3".to_string()); }
+                // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace (emit-only, safe; default OFF)
+                if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {
+                    extra_owned.push("--emit-trace".to_string());
+                }
+                // Optional lowering preference (CFG/materialize); default OFF
+                if std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1") {
+                    extra_owned.push("--prefer-cfg2".to_string());
+                } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
+                    extra_owned.push("--prefer-cfg".to_string());
+                }
                 // Optional: map env toggles to child args (prepasses)
                 if std::env::var("NYASH_SCOPEBOX_ENABLE").ok().as_deref() == Some("1") {
                     extra_owned.push("--scopebox".to_string());
@@ -153,7 +164,7 @@ impl NyashRunner {
                     parser_prog,
                     timeout_ms,
                     &extra,
-                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE"],
+                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE", "NYASH_QUIET"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
                         ("NYASH_ENABLE_USING", "1"),
@@ -172,7 +183,7 @@ impl NyashRunner {
                             // Regular execution path
                             // Prefer PyVM path when requested
                             if crate::config::env::vm_use_py() {
-                                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost", self.config.as_groups().input.entry.as_deref()) {
+                                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost") {
                                         println!("Result: {}", code);
                                         std::process::exit(code);
                                     }
@@ -195,10 +206,7 @@ impl NyashRunner {
                 if py.exists() {
                     let mut cmd = std::process::Command::new(&py3);
                     cmd.arg(py).arg(&tmp_path);
-                    let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(2000);
+                    let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                     let out = match super::modes::common_util::io::spawn_with_timeout(cmd, timeout_ms) {
                         Ok(o) => o,
                         Err(e) => { eprintln!("[ny-compiler] python harness failed: {}", e); return false; }
@@ -216,7 +224,7 @@ impl NyashRunner {
                                         // Regular execution path
                                         // Prefer PyVM for selfhost pipeline (parity reference)
                                         if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                                            let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py", self.config.as_groups().input.entry.as_deref()) {
+                                            let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py") {
                                                 Ok(c) => c,
                                                 Err(e) => { eprintln!("❌ PyVM error: {}", e); 1 }
                                             };
@@ -264,10 +272,7 @@ impl NyashRunner {
                 }
             };
             if exe_path.exists() {
-                let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(2000);
+                    let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                 if let Some(module) = super::modes::common_util::selfhost_exe::exe_try_parse_json_v0(filename, timeout_ms) {
                     super::json_v0_bridge::maybe_dump_mir(&module);
                     let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY")
@@ -287,12 +292,13 @@ impl NyashRunner {
                                     process::exit(1);
                                 }
                                 crate::cli_v!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
-                                let entry = match crate::runner::entry_resolver::resolve_entry_for_module(&module, self.config.as_groups().input.entry.as_deref()) {
-                                    Ok(res) => res.name,
-                                    Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
-                                };
+                                let allow_top = crate::config::env::entry_allow_toplevel_main();
+                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                                            else if allow_top && module.functions.contains_key("main") { "main" }
+                                            else if module.functions.contains_key("main") { eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence."); "main" }
+                                            else { "Main.main" };
                                 let status = std::process::Command::new(py3)
-                                    .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", &entry])
+                                    .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
                                     .status()
                                     .map_err(|e| format!("spawn pyvm: {}", e))
                                     .unwrap();
@@ -328,6 +334,16 @@ impl NyashRunner {
                 if want_read_tmp { extra.push("--read-tmp".to_string()); }
                 if want_min_json { extra.push("--min-json".to_string()); }
                 if want_stage3 { extra.push("--stage3".to_string()); }
+                // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace
+                if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {
+                    extra.push("--emit-trace".to_string());
+                }
+                // Optional lowering preference flags
+                if std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1") {
+                    extra.push("--prefer-cfg2".to_string());
+                } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
+                    extra.push("--prefer-cfg".to_string());
+                }
                 if let Some(a) = child_args_env {
                     for tok in a.split_whitespace() { if !tok.is_empty() { extra.push(tok.to_string()); } }
                 }
@@ -339,7 +355,7 @@ impl NyashRunner {
                     program,
                     timeout_ms,
                     &extra_refs,
-                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE"],
+                    &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE", "NYASH_QUIET"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
                         ("NYASH_ENABLE_USING", "1"),
@@ -357,7 +373,7 @@ impl NyashRunner {
                             super::json_v0_bridge::maybe_dump_mir(&module);
                             // Prefer PyVM when requested
                             if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                                if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost-child", self.config.as_groups().input.entry.as_deref()) {
+                                if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost-child") {
                                     println!("Result: {}", code);
                                     std::process::exit(code);
                                 }
@@ -391,7 +407,7 @@ impl NyashRunner {
             }
             let inline_path = std::path::Path::new("tmp").join("inline_selfhost_emit.nyash");
             let inline_code = format!(
-                "include \"apps/selfhost/compiler/boxes/parser_box.nyash\"\ninclude \"apps/selfhost/compiler/boxes/emitter_box.nyash\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
+                "include \"apps/selfhost-compiler/boxes/parser_box.hako\"\ninclude \"apps/selfhost-compiler/boxes/emitter_box.hako\"\nstatic box Main {{\n  main(args) {{\n    local s = \"{}\"\n    local p = new ParserBox()\n    p.stage3_enable(1)\n    local json = p.parse_program2(s)\n    local e = new EmitterBox()\n    json = e.emit_program(json, \"[]\")\n    print(json)\n    return 0\n  }}\n}}\n",
                 esc
             );
             if let Err(e) = std::fs::write(&inline_path, inline_code) {
@@ -405,6 +421,10 @@ impl NyashRunner {
             cmd.env_remove("NYASH_USE_NY_COMPILER");
             cmd.env_remove("NYASH_CLI_VERBOSE");
             cmd.env("NYASH_JSON_ONLY", "1");
+            // Allow file-based using in the inline child code (it includes ParserBox/EmitterBox)
+            cmd.env("NYASH_ENABLE_USING", "1");
+            cmd.env("NYASH_ALLOW_USING_FILE", "1");
+            cmd.env("NYASH_USING_AST", "1");
             let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
                 .ok()
                 .and_then(|s| s.parse().ok())
@@ -425,30 +445,17 @@ impl NyashRunner {
         if json_line.is_empty() {
             return false;
         }
+        // Emit-only mode: print raw JSON line and return
+        if std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1" {
+            println!("{}", json_line);
+            return true;
+        }
         match super::json_v0_bridge::parse_json_v0_to_module(&json_line) {
             Ok(module) => {
                 super::json_v0_bridge::maybe_dump_mir(&module);
-                let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY")
-                    .unwrap_or_else(|_| "1".to_string())
-                    == "1";
-                if emit_only {
-                    return false;
-                }
-                // Phase-15 policy: when NYASH_VM_USE_PY=1, prefer PyVM as reference executor
-                // regardless of BoxCall presence to ensure semantics parity (e.g., PHI merges).
-                let prefer_pyvm = std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1");
-                // Backward compatibility: if not preferring PyVM explicitly, still auto-enable when BoxCalls exist.
-                let needs_pyvm = !prefer_pyvm
-                    && module.functions.values().any(|f| {
-                        f.blocks.values().any(|bb| {
-                            bb.instructions.iter().any(|inst| {
-                                matches!(inst, crate::mir::MirInstruction::BoxCall { .. })
-                            })
-                        })
-                    });
-                if prefer_pyvm || needs_pyvm {
-                    let label = if prefer_pyvm { "selfhost" } else { "selfhost-fallback" };
-                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, label, self.config.as_groups().input.entry.as_deref()) {
+                // Policy update: prefer Rust VM by default. Use PyVM only when explicitly requested.
+                if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
+                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost") {
                         println!("Result: {}", code);
                         std::process::exit(code);
                     }

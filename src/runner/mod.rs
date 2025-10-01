@@ -24,13 +24,14 @@ mod json_v0_bridge;
 mod mir_json_emit;
 pub mod modes;
 mod pipe_io;
+mod entry_resolve;
 mod pipeline;
 mod jit_direct;
-mod entry_resolver;
 mod selfhost;
 mod tasks;
 mod trace;
 mod plugins;
+pub mod vm_iface;
 
 // v2 plugin system imports
 use nyash_rust::runner_plugin_init;
@@ -131,7 +132,7 @@ impl NyashRunner {
             let (target, alias) = if let Some(pos) = s.find(" as ") {
                 (s[..pos].trim().to_string(), Some(s[pos + 4..].trim().to_string()))
             } else { (s.to_string(), None) };
-            let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".nyash");
+    let is_path = target.starts_with('"') || target.starts_with("./") || target.starts_with('/') || target.ends_with(".hako") || target.ends_with(".nyash");
             if is_path {
                 let path = target.trim_matches('"').to_string();
                 let name = alias.clone().unwrap_or_else(|| {
@@ -146,6 +147,31 @@ impl NyashRunner {
         for (ns, path) in using_ctx.pending_modules.iter() {
             let sb = crate::box_trait::StringBox::new(path.clone());
             crate::runtime::modules_registry::set(ns.clone(), Box::new(sb));
+        }
+        // Phase: plugins – proactively load dylib packages from nyash.toml [using.*]
+        // Behavior: best-effort, quiet on failure; keeps default behavior unchanged.
+        // Rationale: v2 plugins profile expects `using <name> { kind="dylib", path=..., bid=... }`
+        // to autoload libraries without additional CLI flags.
+        if !using_ctx.packages.is_empty() {
+            for (pkg_name, pkg) in using_ctx.packages.iter() {
+                if matches!(pkg.kind, crate::using::spec::PackageKind::Dylib) {
+                    let path = pkg.path.as_str();
+                    // Boxes list: prefer declared `bid`, else empty (TypeBox FFI may populate later)
+                    let boxes: Vec<String> = pkg
+                        .bid
+                        .as_ref()
+                        .map(|b| vec![b.clone()])
+                        .unwrap_or_else(|| Vec::new());
+                    // Use package name as library handle (stable within this process)
+                    let host = nyash_rust::runtime::get_global_plugin_host();
+                    if let Ok(ro) = host.read() {
+                        let _ = ro.load_library_direct(pkg_name, path, &boxes);
+                    }
+                    // Also record marker token so suggesters/diagnostics can see it
+                    let sb = nyash_rust::box_trait::StringBox::new(format!("dylib:{}", path));
+                    nyash_rust::runtime::modules_registry::set(pkg_name.clone(), Box::new(sb));
+                }
+            }
         }
         // Optional dependency tree bridge (log-only)
         if let Ok(dep_path) = std::env::var("NYASH_DEPS_JSON") {

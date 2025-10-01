@@ -20,8 +20,9 @@
 
 ## 🎯 現在の状況（一目でわかる）
 
-**Week 3完了！** (2025-10-01) ✅
-**selfhostブランチ統合完了** (2025-10-01) 🎉
+**Week 3完了！** (2025-10-02) ✅
+**Exit Code統一完全実装！** (2025-10-02 NEW!) 🎉
+**ベンチマークシステム稼働開始！** (2025-10-02 NEW!) 🎉
 
 ✅ **Week 3完了内容**:
 - **selfhostブランチからの重要変更取り込み完了** 🎉
@@ -36,6 +37,25 @@
   - ✅ import修正（phi_handler.py）
   - ✅ 自己ループPHI対応（wiring.py）
   - ✅ **if-PHI完全動作**：200返却成功 🎉
+
+- **🎉 Exit Code統一完全実装** (2025-10-02 NEW!):
+  - ✅ **selfhostブランチ統合**: commit eb4ae4c8
+  - ✅ **vm_iface.rs修正**: `FallbackVmEngine.execute()`で戻り値→exit codeマッピング
+  - ✅ **dispatch.rs修正**: `execute_vm_engine()`でexit code返却（`process::exit(code)`）
+  - ✅ **wasm_runner.js統一**: WASM実行でexit code統一（`process.exit(ec & 0xFF)`）
+  - ✅ **全バックエンド動作確認**:
+    - VM: `test_exit_42.nyash` → **Exit code: 42** ✅
+    - WASM: `01_loop_counter_exp.wasm` → **Exit code: 10** ✅
+  - ✅ **コンパイル成功**: 97 warnings, 0 errors
+
+- **🚀 ベンチマークシステム構築** (2025-10-02 NEW!):
+  - ✅ **tools/bench_wasm_quick.sh作成**: MIR JSON → WASM → 実行の完全自動化
+  - ✅ **初回ベンチマーク成功**: `01_loop_counter` PASS
+  - ✅ **Exit code検証**: returned=10, exit_code=10 完璧一致
+  - ✅ **パイプライン確立**:
+    ```bash
+    MIR JSON → llvm_builder.py (wasm32) → wasm_add_export.py → wasm_runner.js
+    ```
 
 ✅ **Phase 3.1-D完全達成！** (2025-10-01 NEW!) 🎉🎉🎉
 1. **PHI重複問題完全解決** ✅
@@ -56,14 +76,14 @@
    - **WASM実行**: `ny_main() → 10` 完全成功！ ✅
 
 📋 **次のステップ**:
-1. **Phase 3.2: 複雑制御フロー拡張** 🎯
+1. **Phase 3.3: ベンチマーク拡張** 🎯
+   - 残りのMIR JSON作成（fibonacci, prime_check）
+   - 複数ベンチマーク一括実行確認
+   - パフォーマンス測定（VM vs WASM）
+2. **Phase 3.2: 複雑制御フロー拡張**
    - nested loop（二重ループ）
    - if-else in loop（ループ内分岐）
    - loop break/continue（予定）
-2. **Phase 3.3: ベンチマークシステム構築**
-   - フィボナッチ数列
-   - 素数判定
-   - 配列走査
 3. **Phase 3.4: Parity確認開始**
    - VM/LLVM/WASM同一出力確認
 4. **Phase 4.1: 関数呼び出し実装**

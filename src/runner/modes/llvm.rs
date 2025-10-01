@@ -112,7 +112,7 @@ impl NyashRunner {
 
         // Dev/Test helper: allow executing via PyVM harness when requested
         if std::env::var("SMOKES_USE_PYVM").ok().as_deref() == Some("1") {
-            match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast", self.config.as_groups().input.entry.as_deref()) {
+            match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
                 Ok(code) => { std::process::exit(code); }
                 Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
             }

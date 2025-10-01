@@ -2,7 +2,7 @@
 
 /// Run PyVM harness over a MIR module, returning the exit code
 #[allow(dead_code)]
-pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str, entry_override: Option<&str>) -> Result<i32, String> {
+pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str) -> Result<i32, String> {
     let py3 = which::which("python3").map_err(|e| format!("python3 not found: {}", e))?;
     // Resolve runner path relative to CWD or NYASH_ROOT fallback
     let mut runner_buf = std::path::PathBuf::from("tools/pyvm_runner.py");
@@ -22,9 +22,16 @@ pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str, entry_overrid
         .map_err(|e| format!("PyVM MIR JSON emit error: {}", e))?;
     crate::cli_v!("[ny-compiler] using PyVM ({} ) → {}", tag, mir_json_path.display());
     // Determine entry function (prefer Main.main; top-level main only if allowed)
-    let entry = match crate::runner::entry_resolver::resolve_entry_for_module(module, entry_override) {
-        Ok(res) => res.name,
-        Err(e) => { return Err(e); }
+    let allow_top = crate::config::env::entry_allow_toplevel_main();
+    let entry = if module.functions.contains_key("Main.main") {
+        "Main.main"
+    } else if allow_top && module.functions.contains_key("main") {
+        "main"
+    } else if module.functions.contains_key("main") {
+        eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence.");
+        "main"
+    } else {
+        "Main.main"
     };
     // Optional: Mini‑VM stdin loader — when enabled, read entire stdin and pass as argv[0]
     let mut cmd = std::process::Command::new(py3);
@@ -42,7 +49,7 @@ pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str, entry_overrid
             "--in",
             &mir_json_path.display().to_string(),
             "--entry",
-            &entry,
+            entry,
             "--args-env",
             "NYASH_SCRIPT_ARGS_JSON",
         ])
@@ -57,7 +64,7 @@ pub fn run_pyvm_harness(module: &crate::mir::MirModule, tag: &str, entry_overrid
 
 /// Run PyVM harness over a nyash_rust (lib) MIR module, returning the exit code
 #[allow(dead_code)]
-pub fn run_pyvm_harness_lib(module: &nyash_rust::mir::MirModule, tag: &str, entry_override: Option<&str>) -> Result<i32, String> {
+pub fn run_pyvm_harness_lib(module: &nyash_rust::mir::MirModule, tag: &str) -> Result<i32, String> {
     let py3 = which::which("python3").map_err(|e| format!("python3 not found: {}", e))?;
     let mut runner_buf = std::path::PathBuf::from("tools/pyvm_runner.py");
     if !runner_buf.exists() {
@@ -76,9 +83,16 @@ pub fn run_pyvm_harness_lib(module: &nyash_rust::mir::MirModule, tag: &str, entr
         .map_err(|e| format!("PyVM MIR JSON emit error: {}", e))?;
     crate::cli_v!("[Runner] using PyVM ({} ) → {}", tag, mir_json_path.display());
     // Determine entry function (prefer Main.main; top-level main only if allowed)
-    let entry = match crate::runner::entry_resolver::resolve_entry_for_module(module, entry_override) {
-        Ok(res) => res.name,
-        Err(e) => { return Err(e); }
+    let allow_top = crate::config::env::entry_allow_toplevel_main();
+    let entry = if module.functions.contains_key("Main.main") {
+        "Main.main"
+    } else if allow_top && module.functions.contains_key("main") {
+        "main"
+    } else if module.functions.contains_key("main") {
+        eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence.");
+        "main"
+    } else {
+        "Main.main"
     };
     let mut cmd = std::process::Command::new(py3);
     if std::env::var("NYASH_MINIVM_READ_STDIN").ok().as_deref() == Some("1") {
@@ -94,7 +108,7 @@ pub fn run_pyvm_harness_lib(module: &nyash_rust::mir::MirModule, tag: &str, entr
             "--in",
             &mir_json_path.display().to_string(),
             "--entry",
-            &entry,
+            entry,
             "--args-env",
             "NYASH_SCRIPT_ARGS_JSON",
         ])

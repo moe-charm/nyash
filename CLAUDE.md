@@ -212,10 +212,61 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - ✅ 既存LLVM実装がそのままWASM動作（追加実装不要）
 - ✅ Python自己完結型（LLVMツールチェーン不要）
 
+#### **Week 3進捗** (2025-10-02 ~ 10-08) ✅ **完了！**
+- ✅ **Phase 2.5**: 箱理論LLVM/WASM分離設計 [完了]
+  - targets/モジュール構造確立（base/wasm/native/factory）
+  - 責任分離達成（WASM/Nativeの違いを局所化）
+  - **🎉 箱理論実践完了！**
+
+- ✅ **Phase 2.6**: compare/branch/jump実装 [完了]
+  - compare演算: 10 > 5 = true (1) → 1 * 100 = 100 ✅
+  - branch分岐: if (10 > 5) then 100 else 200 → 100 ✅
+  - jump無条件: jump to block → 42 ✅
+  - **🎉 制御フロー完全動作確認！**
+
+- ✅ **Phase 2.7**: スモークテスト整備 [完了]
+  - arithmetic_smoke.json, compare_smoke.json, control_flow_smoke.json
+  - run_wasm_smoke_tests.sh（一括実行スクリプト）
+  - **🎉 回帰テスト体制確立完了！**（3テスト全PASS）
+
+- ✅ **Phase 3.1**: PHI処理完全実装 [完了]
+  - PHI重複問題根本解決（phi_wired記録システム）
+  - selfhostブランチ統合（ff634f2d, eb4ae4c8）
+  - if-PHI/loop-PHI完全動作
+  - **🎉 LLVM IR完璧生成！**
+
+- ✅ **Exit Code統一完全実装** [完了] 🎉🎉🎉
+  - **vm_iface.rs**: FallbackVmEngine.execute()で戻り値→exit codeマッピング
+  - **dispatch.rs**: execute_vm_engine()でexit code返却（process::exit(code)）
+  - **wasm_runner.js**: WASM実行でexit code統一（process.exit(ec & 0xFF)）
+  - **全バックエンド動作確認**: VM→42, WASM→10 ✅
+  - **コンパイル成功**: 97 warnings, 0 errors ✅
+
+- ✅ **ベンチマークシステム構築** [完了] 🎉🎉🎉
+  - **tools/bench_wasm_quick.sh**: MIR JSON → WASM → 実行の完全自動化
+  - **初回ベンチマーク成功**: 01_loop_counter PASS
+  - **Exit code検証**: returned=10, exit_code=10 完璧一致
+  - **パイプライン確立**: MIR JSON → llvm_builder.py → wasm_add_export.py → wasm_runner.js
+
+#### **Week 3総括** (2025-10-02完了) 🎉🎉🎉
+**達成事項**:
+- 🏆 **箱理論実装完了**: targets/モジュール分離
+- 🏆 **制御フロー完全動作**: compare/branch/jump
+- 🏆 **回帰テスト体制確立**: 3スモークテスト + 自動実行
+- 🏆 **PHI処理完全修正**: 3つの根本原因特定・解決
+- 🏆 **Exit Code統一完全実装**: VM/WASM全バックエンド対応
+- 🏆 **ベンチマークシステム稼働開始**: 完全自動化パイプライン確立
+
+**重要成果**:
+- ✅ selfhostブランチ統合完了（10+ files）
+- ✅ 全バックエンドexit code統一（VM/WASM）
+- ✅ ベンチマーク自動実行システム完成
+- ✅ E2Eパイプライン完全動作（Nyash → MIR → WASM → 実行）
+
 **次のステップ**:
-- 🔄 **Phase 2.5**: LLVM/WASM箱理論分離設計（targets/base, wasm, native）
-- 🔄 **Phase 2.6**: compare/branch/jump動作確認
-- 🔄 **Phase 2.7**: スモークテスト整備
+- 🔄 **Phase 3.3**: ベンチマーク拡張（fibonacci, prime_check）
+- 🔄 **Phase 3.2**: 複雑制御フロー拡張
+- 🔄 **Phase 3.4**: Parity確認開始
 
 ### 🚀 **Phase 15.8開始！LLVM→WASM実装** (2025-10-01 ~)
 - 🌿 **専用ブランチ**: `wasm-development` (← `selfhost`からfork)

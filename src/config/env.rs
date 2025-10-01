@@ -68,11 +68,54 @@ pub fn bootstrap_from_toml_env() {
     if std::env::var("NYASH_SKIP_TOML_ENV").ok().as_deref() == Some("1") {
         return;
     }
-    let path = "nyash.toml";
-    let content = match std::fs::read_to_string(path) {
-        Ok(s) => s,
-        Err(_) => return,
-    };
+    // Accept brand alias environment variables before reading files
+    alias_prefixes_bootstrap();
+    // Resolve hako.toml/nyash.toml/hakorune.toml from CWD, fallback to *_ROOT if necessary.
+    let mut content = String::new();
+    // Prefer hako.toml first
+    let path_hako = std::path::Path::new("hako.toml");
+    if path_hako.exists() {
+        match std::fs::read_to_string(path_hako) {
+            Ok(s) => { content = s; }
+            Err(_) => return,
+        }
+    } else {
+        // Try nyash.toml in CWD next
+        let path_ny = std::path::Path::new("nyash.toml");
+        if path_ny.exists() {
+            match std::fs::read_to_string(path_ny) {
+                Ok(s) => { content = s; }
+                Err(_) => return,
+            }
+        } else {
+            // Try hakorune.toml in CWD next
+        let path_alt = std::path::Path::new("hakorune.toml");
+        if path_alt.exists() {
+            match std::fs::read_to_string(path_alt) {
+                Ok(s) => { content = s; }
+                Err(_) => return,
+            }
+        } else if let Some(root) = env_root_any() {
+            // Try $ROOT/nyash.toml then $ROOT/hakorune.toml
+            // Also prefer hako.toml under root
+            let ph = std::path::Path::new(&root).join("hako.toml");
+            if let Ok(s) = std::fs::read_to_string(&ph) { content = s; }
+            else {
+                let p = std::path::Path::new(&root).join("nyash.toml");
+                if let Ok(s) = std::fs::read_to_string(&p) { content = s; }
+                else {
+                    let p2 = std::path::Path::new(&root).join("hakorune.toml");
+                    match std::fs::read_to_string(p2) {
+                    Ok(s) => { content = s; }
+                    Err(_) => return,
+                    }
+                }
+            }
+        } else {
+            return;
+        }
+        }
+    }
     let Ok(value) = toml::from_str::<toml::Value>(&content) else {
         return;
     };
@@ -98,6 +141,36 @@ pub fn bootstrap_from_toml_env() {
     let mut cur = current();
     cur.overrides.extend(overrides);
     set_current(cur);
+}
+
+/// Copy HAKU_*/HRN_* to NYASH_* if unset (non-destructive), incl. *_ROOT.
+pub fn alias_prefixes_bootstrap() {
+    // Root alias first
+    if std::env::var("NYASH_ROOT").ok().is_none() {
+        if let Ok(v) = std::env::var("HAKO_ROOT") { std::env::set_var("NYASH_ROOT", v); }
+        else if let Ok(v) = std::env::var("HAKU_ROOT") { std::env::set_var("NYASH_ROOT", v); }
+        else if let Ok(v) = std::env::var("HRN_ROOT") { std::env::set_var("NYASH_ROOT", v); }
+    }
+    // General mapping
+    let snapshot: Vec<(String, String)> = std::env::vars().collect();
+    for (k, v) in snapshot.iter() {
+        if let Some(tail) = k.strip_prefix("HAKO_")
+            .or_else(|| k.strip_prefix("HAKU_"))
+            .or_else(|| k.strip_prefix("HRN_")) {
+            let ny = format!("NYASH_{}", tail);
+            if std::env::var(&ny).ok().is_none() {
+                std::env::set_var(ny, v);
+            }
+        }
+    }
+}
+
+/// Return NYASH_ROOT or its aliases (HAKU_ROOT/HRN_ROOT)
+fn env_root_any() -> Option<String> {
+    std::env::var("NYASH_ROOT").ok()
+        .or_else(|| std::env::var("HAKO_ROOT").ok())
+        .or_else(|| std::env::var("HAKU_ROOT").ok())
+        .or_else(|| std::env::var("HRN_ROOT").ok())
 }
 
 /// Get await maximum milliseconds, centralized here for consistency.
@@ -150,7 +223,7 @@ pub fn mir_core13() -> bool {
             let lv = v.to_ascii_lowercase();
             !(lv == "0" || lv == "false" || lv == "off")
         }
-        None => false,
+        None => true,
     }
 }
 pub fn mir_ref_boxcall() -> bool {
@@ -163,14 +236,52 @@ pub fn mir_plugin_invoke() -> bool {
     std::env::var("NYASH_MIR_PLUGIN_INVOKE").ok().as_deref() == Some("1")
 }
 pub fn plugin_only() -> bool {
+    if let Some(pol) = std::env::var("NYASH_PLUGIN_POLICY").ok() {
+        if pol.eq_ignore_ascii_case("force") { return true; }
+    }
     std::env::var("NYASH_PLUGIN_ONLY").ok().as_deref() == Some("1")
+}
+
+// ---- Plugin ABI Final (Phase A minimal) ----
+/// Prefer probing Final ABI (NyValue/NyResult) in loader.
+/// Default: OFF. Enable with NYASH_PLUGIN_ABI_FINAL=1
+pub fn plugin_abi_final() -> bool {
+    std::env::var("NYASH_PLUGIN_ABI_FINAL").ok().as_deref() == Some("1")
+}
+/// Enable optional metadata probing/logging for plugins (quiet when absent).
+/// Default: OFF. Enable with NYASH_PLUGIN_META=1
+pub fn plugin_meta() -> bool {
+    std::env::var("NYASH_PLUGIN_META").ok().as_deref() == Some("1")
+}
+/// Development-only: trace side effects from plugin calls (no behavior change).
+/// Default: OFF. Enable with NYASH_TRACE_EFFECTS=1
+pub fn trace_effects() -> bool {
+    std::env::var("NYASH_TRACE_EFFECTS").ok().as_deref() == Some("1")
+}
+/// Development-only: check plugin contracts and log violations.
+/// Default: OFF. Enable with NYASH_CHECK_CONTRACTS=1
+pub fn check_contracts() -> bool {
+    std::env::var("NYASH_CHECK_CONTRACTS").ok().as_deref() == Some("1")
+}
+/// Enforce capability declarations for plugin methods (dev/ci only).
+/// Default: OFF. Enable with NYASH_PLUGIN_CAPS_ENFORCE=1
+pub fn plugin_caps_enforce() -> bool {
+    std::env::var("NYASH_PLUGIN_CAPS_ENFORCE").ok().as_deref() == Some("1")
 }
 
 /// Core-13 "pure" mode: after normalization, only the 13 canonical ops are allowed.
 /// If enabled, the optimizer will try lightweight rewrites for Load/Store/NewBox/Unary,
 /// and the final verifier will reject any remaining non-Core-13 ops.
 pub fn mir_core13_pure() -> bool {
-    std::env::var("NYASH_MIR_CORE13_PURE").ok().as_deref() == Some("1")
+    // Deprecated: Core-13 pure mode has been removed (no-op).
+    // If explicitly set, emit a deprecation note only when verbose, then return false.
+    if let Some(v) = std::env::var("NYASH_MIR_CORE13_PURE").ok() {
+        let on = matches!(v.as_str(), "1" | "true" | "on" | "TRUE" | "ON");
+        if on && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+            eprintln!("[deprecated] NYASH_MIR_CORE13_PURE is ignored (feature removed)");
+        }
+    }
+    false
 }
 
 /// Enable heuristic pre-pin of comparison operands in if/loop headers.
@@ -368,10 +479,19 @@ pub fn extern_route_slots() -> bool {
 pub fn cli_verbose() -> bool {
     std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1")
 }
+/// Global quiet mode for CLI/logging. True when any of the following:
+/// - NYASH_JSON_ONLY=1 (child pipelines printing JSON to stdout)
+/// - NYASH_QUIET=1 (explicit quiet)
+/// - NYASH_CLI_VERBOSE=0 (explicitly disable verbose)
+pub fn cli_quiet() -> bool {
+    std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0")
+}
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
-    // NYASH_ENABLE_USING=0 で明示的に無効化可能
-    match std::env::var("NYASH_ENABLE_USING").ok().as_deref() {
+    // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
+    match std::env::var("NYASH_USING").ok().or_else(|| std::env::var("NYASH_ENABLE_USING").ok()).as_deref() {
         Some("0") | Some("false") | Some("off") => false,
         _ => true, // デフォルト: ON
     }
@@ -399,6 +519,17 @@ pub fn allow_using_file() -> bool {
 /// 1) Explicit env `NYASH_USING_AST` = 1/true/on → enabled, = 0/false/off → disabled
 /// 2) Default by profile: dev/ci → ON, prod → OFF
 pub fn using_ast_enabled() -> bool {
+    // 優先順: NYASH_USING_STRATEGY / NYASH_USING_IMPL → NYASH_USING_AST（後方互換）。
+    if let Some(mode) = std::env::var("NYASH_USING_STRATEGY").ok()
+        .or_else(|| std::env::var("NYASH_USING_IMPL").ok())
+    {
+        let m = mode.to_ascii_lowercase();
+        return match m.as_str() {
+            "prelude" => true,
+            "resolver" => false,
+            _ => !using_is_prod(),
+        };
+    }
     match std::env::var("NYASH_USING_AST").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
         Some(ref s) if s == "1" || s == "true" || s == "on" => true,
         Some(ref s) if s == "0" || s == "false" || s == "off" => false,
@@ -428,12 +559,43 @@ pub fn vm_use_dispatch() -> bool {
     std::env::var("NYASH_VM_USE_DISPATCH").ok().as_deref() == Some("1")
 }
 
+/// Policy: prefer routing BoxCall to PluginInvoke when receiver is a plugin box.
+/// Default: OFF. Enable with NYASH_VM_BOXCALL_PLUGIN_FIRST=1 (dev/experiments only).
+pub fn vm_boxcall_plugin_first() -> bool {
+    match std::env::var("NYASH_VM_BOXCALL_PLUGIN_FIRST").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+
+/// Phase C scaffold: prefer plugin path for ArrayBox (default OFF)
+pub fn vm_plugin_prefer_array() -> bool {
+    match std::env::var("NYASH_VM_PLUGIN_PREFER_ARRAY").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+/// Phase C scaffold: prefer plugin path for StringBox (default OFF)
+pub fn vm_plugin_prefer_string() -> bool {
+    match std::env::var("NYASH_VM_PLUGIN_PREFER_STRING").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+/// Phase C scaffold: prefer plugin path for MapBox (default OFF)
+pub fn vm_plugin_prefer_map() -> bool {
+    match std::env::var("NYASH_VM_PLUGIN_PREFER_MAP").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
+
 // Self-host compiler knobs
 pub fn ny_compiler_timeout_ms() -> u64 {
     std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(2000)
+        .unwrap_or(8000)
 }
 pub fn ny_compiler_emit_only() -> bool {
     std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1"
@@ -486,10 +648,31 @@ pub fn method_catch() -> bool {
     std::env::var("NYASH_METHOD_CATCH").ok().as_deref() == Some("1") || parser_stage3()
 }
 
-/// Entry policy (deprecated): allow top-level `main` resolution in addition to `Main.main`.
-/// Default: false (Strict policy). Use CLI `--entry` to override explicitly.
+/// Entry policy: allow top-level `main` resolution in addition to `Main.main`.
+/// Default: true (prefer `Main.main` when both exist; otherwise accept `main`).
 pub fn entry_allow_toplevel_main() -> bool {
     match std::env::var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN").ok() {
+        Some(v) => {
+            let v = v.to_ascii_lowercase();
+            v == "1" || v == "true" || v == "on"
+        }
+        None => true,
+    }
+}
+
+/// Entry policy: prefer a unique static `<Box>.main` when `Main.main` is absent.
+///
+/// Behavior:
+/// - If `Main.main` exists, it is always preferred.
+/// - Otherwise, when enabled, if exactly one function named like `Box.main` or
+///   `Box.main/0` exists, that function is chosen as the entry point.
+/// - If multiple candidates are found, this preference is ignored to avoid
+///   ambiguity and the resolver falls back to top-level `main` (when allowed).
+///
+/// Default: true (helps benchmarks and WASM harnesses that use a static box
+/// other than `Main` as the entry container).
+pub fn entry_prefer_static_main() -> bool {
+    match std::env::var("NYASH_ENTRY_PREFER_STATIC_MAIN").ok() {
         Some(v) => {
             let v = v.to_ascii_lowercase();
             v == "1" || v == "true" || v == "on"
@@ -503,6 +686,17 @@ pub fn entry_allow_toplevel_main() -> bool {
 /// be introduced in future if needed, but we keep minimal toggles now.
 pub fn expr_postfix_catch() -> bool {
     parser_stage3()
+}
+/// Parser gate for `flow` (stateless namespace) acceptance.
+/// Default: ON. Disable with NYASH_ENABLE_FLOW=0|false|off
+pub fn parser_flow_enabled() -> bool {
+    match std::env::var("NYASH_ENABLE_FLOW").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
 }
 /// Parser gate for Unified Members (stored/computed/once/birth_once).
 /// Default: ON during Phase-15 (set NYASH_ENABLE_UNIFIED_MEMBERS=0|false|off to disable).
