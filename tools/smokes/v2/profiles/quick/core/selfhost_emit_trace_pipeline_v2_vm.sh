@@ -13,6 +13,12 @@ if [[ "${SMOKES_ENABLE_EMIT_TRACE:-}" != "1" ]]; then
   exit 0
 fi
 
+# Skip when compiler.hako or pipeline_v2 is not available on this branch
+if [ ! -f "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" ] || [ ! -d "$NYASH_ROOT/apps/selfhost-compiler/pipeline_v2" ]; then
+  test_skip "selfhost_emit_trace_pipeline_v2_vm" "pipeline_v2 or compiler.hako not present on this branch"
+  exit 0
+fi
+
 test_selfhost_emit_trace_pipeline_v2_vm() {
   local all first json
   # Parent→child: pass pipeline-v2 + emit-mir + emit-trace; ensure child prints one [emit] line and final JSON
@@ -34,4 +40,3 @@ test_selfhost_emit_trace_pipeline_v2_vm() {
 
 run_test "selfhost_emit_trace_pipeline_v2_vm" test_selfhost_emit_trace_pipeline_v2_vm || exit 1
 exit 0
-
