@@ -10,11 +10,8 @@ APP_FILE="$NYASH_ROOT/apps/dev/mir_cfg_branch_smoke.nyash"
 
 output_vm=$(run_nyash_vm "$APP_FILE" --dev)
 
-if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-  test_skip "LLVM backend not available in this build"; exit 0
-fi
+# Harness-first: rely on run_nyash_llvm() to decide availability (harness or features)
 
 NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$APP_FILE" --dev)
 
 compare_outputs "$output_vm" "$output_llvm" "selfhost_mir_cfg_branch_vm_llvm" || exit 1
-

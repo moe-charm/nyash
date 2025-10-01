@@ -64,6 +64,12 @@ PHI 統一方針（既定）
 - finalize_phis は“配線のみ”。PHI を新規生成しない。
 - if-merge/loop のプリパスは既定OFF（必要時のみ開発者が明示ON）。
 
+Strict モード（段階導入）
+- `NYASH_LLVM_PHI_STRICT=1`
+  - PhiHandler は PHI を「生成のみ」とし、incoming の追加を行わない。
+  - incoming の配線は finalize_phis に一元化。
+  - 目的: 二重配線/二重生成の温床を解消し、責務を明確化するための段階的スイッチ。
+
 ## 📋 設計原則（LLVM_LAYER_OVERVIEWに準拠）
 1. Resolver-only reads（原則）: 直接の cross-block vmap 参照は避け、resolver 経由で取得
 2. Localize at block start: ブロック先頭で PHI を作る（if-merge は prepass で前宣言）

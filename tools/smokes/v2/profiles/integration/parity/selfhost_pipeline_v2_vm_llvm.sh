@@ -6,9 +6,7 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-  test_skip "LLVM backend not available in this build"; exit 0
-fi
+# Harness-first: rely on run_nyash_llvm() to decide availability
 
 # Experimental guard: only when Pipeline V2 is enabled
 if [[ "${NYASH_PIPELINE_V2:-}" != "1" ]]; then

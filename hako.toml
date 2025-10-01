@@ -41,6 +41,8 @@ selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.nyash"
 selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.nyash"
 selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.nyash"
 selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.nyash"
+selfhost.vm.flow_runner = "apps/selfhost/vm/flow_runner.hako"
+selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
 
 # Selfhost compiler main module (avoid file-path using in dev wrappers)
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
@@ -123,6 +125,10 @@ fini = { method_id = 4294967295 }
 [libraries."libnyash_string_plugin.so"]
 boxes = ["StringBox"]
 path = "plugins/nyash-string-plugin/libnyash_string_plugin.so"
+
+[libraries."libnyash_integer_plugin.so"]
+boxes = ["IntegerBox"]
+path = "plugins/nyash-integer-plugin/libnyash_integer_plugin.so"
 
 [libraries."libnyash_regex_plugin.so"]
 boxes = ["RegexBox"]

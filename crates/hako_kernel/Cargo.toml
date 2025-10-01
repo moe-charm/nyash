@@ -1,0 +1,12 @@
+[package]
+name = "hako_kernel"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hako_kernel"
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+nyash-rust = { path = "../../" }
+

@@ -37,8 +37,8 @@ cat > "$JSON_IN" << 'JSON'
 }
 JSON
 
-"$NY_LLVMc" --in "$JSON_IN" --emit exe --out "$EXE_OUT"
-"$EXE_OUT"
+NYASH_HAKO_MIN_SEM=1 "$NY_LLVMc" --in "$JSON_IN" --emit exe --out "$EXE_OUT"
+NYASH_HAKO_MIN_SEM=1 "$EXE_OUT"
 code=$?
 echo "AOT exit=$code"
 test "$code" -eq 0

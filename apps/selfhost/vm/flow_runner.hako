@@ -1,0 +1,17 @@
+// flow_runner.hako — Selfhost VM runner thin box（exec allowed under selfhost/vm/）
+
+using selfhost.compiler.pipeline_v2.flow_entry as FlowEntryBox
+using selfhost.vm.mir_min as MirVmMin
+
+static box FlowRunner {
+  // Execute on Mini‑VM from Stage‑1 JSON. compat=1 で v1→v0 経路。
+  run_vm_min_from_ast(ast_json, prefer_cfg, compat) {
+    local j = null
+    if compat == 1 { j = FlowEntryBox.emit_v1_compat_from_ast(ast_json, prefer_cfg) }
+    else { j = FlowEntryBox.emit_v0_from_ast(ast_json, prefer_cfg) }
+    return MirVmMin.run(j)
+  }
+
+  main(args) { return 0 }
+}
+

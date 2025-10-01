@@ -26,7 +26,7 @@ def setup_phi_placeholders(builder, blocks: List[Dict[str, Any]]):
                 try:
                     dst0 = int(inst.get("dst"))
                     from .common import incoming_pairs_vb
-                incoming0 = incoming_pairs_vb(inst)
+                    incoming0 = incoming_pairs_vb(inst)
                 except Exception:
                     dst0 = None
                     incoming0 = []

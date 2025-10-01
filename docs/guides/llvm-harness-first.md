@@ -37,6 +37,9 @@ Env flags
 - NYASH_LLVM_TRACE_PHI=1      # PHI JSONL diagnostics (optionally set NYASH_LLVM_TRACE_OUT)
 - NYASH_JSON_SCHEMA_V1=1      # enable JSON v1 (mir_call) emission (shape/dev only)
 - NYASH_LLVM_DOWNGRADE_V1=1   # when set, force v1→v0 downgrade for harness emit
+ - Downgrade extern fallback: when NYASH_LLVM_DOWNGRADE_V1=1 and a v1 Global callee is not defined
+   in the current module, the harness emitter maps it to a legacy `externcall` in v0. This keeps
+   compile-only runs green while VM/AOT remain Fail‑Fast (unresolved Global is an error at exec).
 
 Status
 - Harness path is stable for object emission and PHI diagnostics.
@@ -48,3 +51,4 @@ Smokes (compile-only)
   - tools/smokes/v2/profiles/quick/llvm/phi_loop_compile_ok.sh
 - v1→v0 downgrade gate:
   - tools/smokes/v2/profiles/quick/llvm/harness_v1_downgrade_call_compile_ok.sh
+  - tools/smokes/v2/profiles/quick/llvm/harness_v1_downgrade_global_extern_compile_ok.sh

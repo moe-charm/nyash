@@ -316,9 +316,15 @@ pub fn emit_mir_json_for_harness(
                             dst, func, callee, args, effects, ..
                         } => {
                             // Phase 15.5: Unified Call support with environment variable control
-                            let use_unified = match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-                                Some(s) if s == "0" || s == "false" || s == "off" => false,
-                                _ => true,
+                            // If NYASH_LLVM_DOWNGRADE_V1=1 is set, force v0 and allow extern fallback for unresolved Global
+                            let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+                            let use_unified = if downgrade_v1 {
+                                false
+                            } else {
+                                match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                                    Some(s) if s == "0" || s == "false" || s == "off" => false,
+                                    _ => true,
+                                }
                             };
 
                             if use_unified && callee.is_some() {
@@ -334,6 +340,24 @@ pub fn emit_mir_json_for_harness(
                                 insts.push(unified_call);
                             } else {
                                 // v0: Legacy call format (fallback)
+                                // If downgrading from v1 and callee is Global but not defined in this module,
+                                // emit externcall for compile-only harness stability.
+                                if downgrade_v1 {
+                                    if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
+                                        let is_defined = module.functions.contains_key(gname);
+                                        if !is_defined {
+                                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                            insts.push(json!({
+                                                "op":"externcall",
+                                                "func": gname,
+                                                "args": args_a,
+                                                "dst": dst.map(|d| d.as_u32())
+                                            }));
+                                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                                            break;
+                                        }
+                                    }
+                                }
                                 let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                                 insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             }
@@ -632,6 +656,25 @@ pub fn emit_mir_json_for_harness_bin(
                                 }
                             }
                             // v0 or no callee → legacy call payload (func is a NameConst value id)
+                            // If we are downgrading v1 (NYASH_LLVM_DOWNGRADE_V1=1) and callee is Global but not defined,
+                            // emit externcall for compile-only harness stability.
+                            let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+                            if downgrade_v1 {
+                                if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
+                                    let is_defined = module.functions.contains_key(gname);
+                                    if !is_defined {
+                                        let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                        insts.push(json!({
+                                            "op":"externcall",
+                                            "func": gname,
+                                            "args": args_a,
+                                            "dst": dst.map(|d| d.as_u32())
+                                        }));
+                                        if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                                        break;
+                                    }
+                                }
+                            }
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                             insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }

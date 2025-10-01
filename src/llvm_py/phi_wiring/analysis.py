@@ -48,7 +48,7 @@ def analyze_incomings(blocks: List[Dict[str, Any]]) -> Dict[int, Dict[int, List[
                 try:
                     dst0 = int(inst.get("dst"))
                     from .common import incoming_pairs_vb
-                incoming0 = incoming_pairs_vb(inst)
+                    incoming0 = incoming_pairs_vb(inst)
                 except Exception:
                     dst0 = None
                     incoming0 = []
@@ -66,4 +66,3 @@ def analyze_incomings(blocks: List[Dict[str, Any]]) -> Dict[int, Dict[int, List[
                 except Exception:
                     pass
     return result
-

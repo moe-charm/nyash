@@ -1,0 +1,151 @@
+using "apps/lib/json_native/stringify.nyash" as JSON
+
+flow EmitMirFlowMap {
+  _i(n) { return n }
+
+  _empty_arr() { return new ArrayBox() }
+  _empty_map() { return new MapBox() }
+
+  _instr_const(dst, val) {
+    local v = EmitMirFlowMap._empty_map()
+    v.set("type", "i64")
+    v.set("value", EmitMirFlowMap._i(val))
+    local m = EmitMirFlowMap._empty_map()
+    m.set("op", "const")
+    m.set("dst", EmitMirFlowMap._i(dst))
+    m.set("value", v)
+    return m
+  }
+  _instr_ret(val) {
+    local m = EmitMirFlowMap._empty_map()
+    m.set("op", "ret")
+    m.set("value", EmitMirFlowMap._i(val))
+    return m
+  }
+  _instr_binop(kind, lhs, rhs, dst) {
+    local m = EmitMirFlowMap._empty_map()
+    m.set("op", "binop")
+    m.set("op_kind", kind)
+    m.set("lhs", EmitMirFlowMap._i(lhs))
+    m.set("rhs", EmitMirFlowMap._i(rhs))
+    m.set("dst", EmitMirFlowMap._i(dst))
+    return m
+  }
+  _instr_compare(cmp, lhs, rhs, dst) {
+    local m = EmitMirFlowMap._empty_map()
+    m.set("op", "compare")
+    m.set("cmp", cmp)
+    m.set("lhs", EmitMirFlowMap._i(lhs))
+    m.set("rhs", EmitMirFlowMap._i(rhs))
+    m.set("dst", EmitMirFlowMap._i(dst))
+    return m
+  }
+  _instr_branch(cond, then_id, else_id) {
+    local m = EmitMirFlowMap._empty_map()
+    m.set("op", "branch")
+    m.set("cond", EmitMirFlowMap._i(cond))
+    m.set("then", EmitMirFlowMap._i(then_id))
+    m.set("else", EmitMirFlowMap._i(else_id))
+    return m
+  }
+  _instr_jump(target) {
+    local m = EmitMirFlowMap._empty_map()
+    m.set("op", "jump")
+    m.set("target", EmitMirFlowMap._i(target))
+    return m
+  }
+  _block(id, insts) {
+    local b = EmitMirFlowMap._empty_map()
+    b.set("id", EmitMirFlowMap._i(id))
+    b.set("instructions", insts)
+    return b
+  }
+  _single_function_main(blocks) {
+    local f = EmitMirFlowMap._empty_map()
+    f.set("name", "main")
+    f.set("params", EmitMirFlowMap._empty_arr())
+    f.set("blocks", blocks)
+    local fns = EmitMirFlowMap._empty_arr()
+    fns.push(f)
+    local mod = EmitMirFlowMap._empty_map()
+    mod.set("functions", fns)
+    return mod
+  }
+
+  emit_return_int(v) {
+    local insts = EmitMirFlowMap._empty_arr()
+    insts.push(EmitMirFlowMap._instr_const(1, v))
+    insts.push(EmitMirFlowMap._instr_ret(1))
+    local blocks = EmitMirFlowMap._empty_arr()
+    blocks.push(EmitMirFlowMap._block(0, insts))
+    local mod = EmitMirFlowMap._single_function_main(blocks)
+    return JSON.stringify_map(mod)
+  }
+
+  emit_binop(lhs, rhs, opk) {
+    local insts = EmitMirFlowMap._empty_arr()
+    insts.push(EmitMirFlowMap._instr_const(1, lhs))
+    insts.push(EmitMirFlowMap._instr_const(2, rhs))
+    insts.push(EmitMirFlowMap._instr_binop(opk, 1, 2, 3))
+    insts.push(EmitMirFlowMap._instr_ret(3))
+    local blocks = EmitMirFlowMap._empty_arr()
+    blocks.push(EmitMirFlowMap._block(0, insts))
+    local mod = EmitMirFlowMap._single_function_main(blocks)
+    return JSON.stringify_map(mod)
+  }
+
+  // materialize: 0/1 (builder parity)
+  emit_compare_cfg2(lhs, rhs, cmp, materialize) {
+    local b0 = EmitMirFlowMap._empty_arr()
+    b0.push(EmitMirFlowMap._instr_const(1, lhs))
+    b0.push(EmitMirFlowMap._instr_const(2, rhs))
+    b0.push(EmitMirFlowMap._instr_compare(cmp, 1, 2, 3))
+    b0.push(EmitMirFlowMap._instr_branch(3, 1, 2))
+
+    local b1 = EmitMirFlowMap._empty_arr()
+    b1.push(EmitMirFlowMap._instr_const(6, 1))
+    b1.push(EmitMirFlowMap._instr_jump(3))
+
+    local b2 = EmitMirFlowMap._empty_arr()
+    b2.push(EmitMirFlowMap._instr_const(6, 0))
+    b2.push(EmitMirFlowMap._instr_jump(3))
+
+    local b3 = EmitMirFlowMap._empty_arr()
+    b3.push(EmitMirFlowMap._instr_ret(6))
+
+    local blocks = EmitMirFlowMap._empty_arr()
+    blocks.push(EmitMirFlowMap._block(0, b0))
+    blocks.push(EmitMirFlowMap._block(1, b1))
+    blocks.push(EmitMirFlowMap._block(2, b2))
+    blocks.push(EmitMirFlowMap._block(3, b3))
+    local mod = EmitMirFlowMap._single_function_main(blocks)
+    return JSON.stringify_map(mod)
+  }
+
+  emit_loop_counter(limit) {
+    local b0 = EmitMirFlowMap._empty_arr()
+    b0.push(EmitMirFlowMap._instr_const(1, 0))
+    b0.push(EmitMirFlowMap._instr_const(2, limit))
+    b0.push(EmitMirFlowMap._instr_const(4, 1))
+    b0.push(EmitMirFlowMap._instr_jump(1))
+
+    local b1 = EmitMirFlowMap._empty_arr()
+    b1.push(EmitMirFlowMap._instr_compare("Lt", 1, 2, 3))
+    b1.push(EmitMirFlowMap._instr_branch(3, 2, 3))
+
+    local b2 = EmitMirFlowMap._empty_arr()
+    b2.push(EmitMirFlowMap._instr_binop("Add", 1, 4, 1))
+    b2.push(EmitMirFlowMap._instr_jump(1))
+
+    local b3 = EmitMirFlowMap._empty_arr()
+    b3.push(EmitMirFlowMap._instr_ret(1))
+
+    local blocks = EmitMirFlowMap._empty_arr()
+    blocks.push(EmitMirFlowMap._block(0, b0))
+    blocks.push(EmitMirFlowMap._block(1, b1))
+    blocks.push(EmitMirFlowMap._block(2, b2))
+    blocks.push(EmitMirFlowMap._block(3, b3))
+    local mod = EmitMirFlowMap._single_function_main(blocks)
+    return JSON.stringify_map(mod)
+  }
+}

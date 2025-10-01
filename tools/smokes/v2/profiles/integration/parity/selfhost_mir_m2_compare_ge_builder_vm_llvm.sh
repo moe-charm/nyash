@@ -6,9 +6,7 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-  test_skip "LLVM backend not available in this build"; exit 0
-fi
+# Harness-first: rely on run_nyash_llvm() to decide availability
 
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
@@ -46,4 +44,3 @@ compare_outputs "$output_vm" "$output_llvm" "selfhost_mir_m2_compare_ge_builder_
 
 rm -rf "$TMP_DIR"
 exit 0
-
