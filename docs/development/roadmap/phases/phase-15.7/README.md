@@ -1,5 +1,9 @@
 # Phase 15.7: セルフホスティング実現への道筋 - Hakoruneコンパイラ完成計画
 
+Branch Note (selfhost)
+- このブランチでは CLI バイナリ名は `hako` だよ。本文中の `hakorune`/`nyash` は `hako` に読み替えて実行してね。
+- 環境変数は `HAKO_*`/`HAKU_*`/`HRN_*` は `NYASH_*` と相互エイリアス（自動マップ）なので、そのまま使ってOK。
+
 ## 🎯 **Phase 15.7の真の目的**
 
 **「Hakorune で Hakorune をコンパイルする」完全なセルフホスティングの実現**
