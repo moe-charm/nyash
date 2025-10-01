@@ -80,4 +80,35 @@ flow EmitMirFlow {
     }
     return JSON.stringify_map(mir)
   }
+
+  // emit_loop_counter: while (i < limit) { i = i + 1 } ; return i
+  // Minimal loop CFG without PHI by updating the same dst id for 'i'.
+  // Blocks:
+  //   0: const i=0 -> r1; const limit -> r2; const one=1 -> r4; jump 1
+  //   1: compare lt r1 r2 -> r3; branch r3 then:2 else:3
+  //   2: binop add r1 r4 -> r1; jump 1
+  //   3: ret r1
+  emit_loop_counter(limit) {
+    local lim = limit
+    local mir = {
+      functions: [{ name:"main", params: [], blocks: [
+        { id:0, instructions: [
+          { op:"const", dst:1, value:{ type:"i64", value:0 } },
+          { op:"const", dst:2, value:{ type:"i64", value: lim } },
+          { op:"const", dst:4, value:{ type:"i64", value:1 } },
+          { op:"jump", target:1 }
+        ] },
+        { id:1, instructions: [
+          { op:"compare", cmp:"Lt", lhs:1, rhs:2, dst:3 },
+          { op:"branch", cond:3, "then":2, "else":3 }
+        ] },
+        { id:2, instructions: [
+          { op:"binop", op_kind:"Add", lhs:1, rhs:4, dst:1 },
+          { op:"jump", target:1 }
+        ] },
+        { id:3, instructions: [ { op:"ret", value:1 } ] }
+      ] }]
+    }
+    return JSON.stringify_map(mir)
+  }
 }

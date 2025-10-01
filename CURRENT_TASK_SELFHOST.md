@@ -34,5 +34,7 @@ Next actions
 - [x] Add/update CURRENT_TASK for selfhost (this file)
 - [x] Append a short PHI `values` spec to reference docs
 - [x] Enable commit/push for selfhost branches (local hooks updated)
+- [x] PipelineV2: Apply LocalSSA.ensure_cond as final pass (fail‑safe)
+- [x] Add quick smokes for If(Compare) CFG and loop counter
 
 Updated: 2025‑10‑01

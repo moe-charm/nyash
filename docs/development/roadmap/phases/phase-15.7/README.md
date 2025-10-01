@@ -34,8 +34,8 @@ Branch Note (selfhost)
     - 🧪 **[スモーク](../../selfhosting/pipeline_v2.md#smokes-quick)** - 受け入れテスト
 
 #### ❌ **未完成（Phase 15.7の目標）**
-1. **branch/jump最小生成** 🔄（P2優先事項）
-2. **LocalSSA.ensure_cond** 🔄（P2優先事項）
+1. **branch/jump最小生成** ✅（完了）
+2. **LocalSSA.ensure_cond** ✅（最終パスに統合）
 3. **全構文サポート** 📝（match式、property、lambda等）
 4. **最適化パス** 📝（デッドコード削除、インライン化等）
 5. **完全なブートストラップ** 🎯（c0→c1→c1'）
@@ -82,9 +82,9 @@ Hakoruneで実行器書く
 - **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出
 - **直近TODO**:
-  1. branch/jump 最小生成（P2・2日）
-  2. LocalSSA.ensure_cond の材化コピー最終化（P2・1日）
-  3. Mini‑VM 代表追加1件（任意）
+  1. branch/jump 最小生成（完了）
+  2. LocalSSA.ensure_cond 材化コピー（完了）
+  3. Mini‑VM 代表追加（If/Compare 代表、Loop カウンタ 代表 追加済み）
 
 #### **P3: Known/Rewrite 統合 Stage‑1 の仕上げ（dev観測）**
 - 仕様は不変のまま、観測（resolve.try/choose / ssa.phi）と関数化の一貫性を高める
