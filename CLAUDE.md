@@ -938,17 +938,28 @@ node src/llvm_py/tools/wasm_runner.js test.wasm
    - **回避策**: 現状なし、要修正
    - **該当ファイル**: `src/llvm_py/builders/controlflow/branch.py` または `instruction_lower.py`
 
-4. **⚠️ LLVM Mockルート問題** (2025-10-01発見)
+4. **⚠️ LLVM Mockルート問題** (2025-10-01発見・解決)
    - **症状**: `--backend llvm` でモック実行になり、実際に動作しない
    - **原因**: `nyash`バイナリが `--features llvm` でビルドされていない
    - **エラー**: "LLVM backend not available (object emit)"
-   - **回避策**: Python llvmliteハーネスを直接使用
-     ```bash
-     cd src/llvm_py
-     python3 llvm_builder.py input.json -o output.o  # Native object
-     python3 llvm_builder.py --target wasm32 input.json -o output.wasm  # WASM
-     ```
-   - **解決**: `cargo build --release --features llvm` でビルド（3-5分）
+
+   **🔍 詳細調査結果**:
+   - ✅ **`llvm-harness = []` は空の配列** = Rust依存なし
+   - ✅ **Python llvmliteハーネス** = 外部プロセス呼び出し
+   - ⚠️ **条件分岐を有効にするため** `--features llvm` は必要
+   - `#[cfg(feature = "llvm-harness")]` のコードをコンパイルに含める
+
+   **回避策1**: Python llvmliteハーネスを直接使用
+   ```bash
+   cd src/llvm_py
+   python3 llvm_builder.py input.json -o output.o  # Native object
+   python3 llvm_builder.py --target wasm32 input.json -o output.wasm  # WASM
+   ```
+
+   **解決策**: `cargo build --release --features llvm` でビルド（3-5分）
+   - Rust依存追加なし（`llvm-harness = []`）
+   - 条件分岐コードのみ有効化
+   - Python llvmlite呼び出しコードがコンパイルされる
 
 ### **🎯 次のステップ**
 
