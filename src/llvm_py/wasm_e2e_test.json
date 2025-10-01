@@ -1,0 +1,36 @@
+{
+  "functions": [
+    {
+      "name": "Main.main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 0,
+              "value": {"type": "i64", "value": 15}
+            },
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 27}
+            },
+            {
+              "op": "binop",
+              "operation": "+",
+              "lhs": 0,
+              "rhs": 1,
+              "dst": 2
+            },
+            {
+              "op": "ret",
+              "value": 2
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

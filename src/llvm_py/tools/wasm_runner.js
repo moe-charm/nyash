@@ -38,6 +38,14 @@ const nyashRuntime = {
         // For now, just print the pointer value
         console.log(`[Nyash] console.log called with ptr: ${strPtr}`);
         return 0n;
+    },
+    'nyash.box.from_i8_string': (ptr) => {
+        // Stub: return handle (just the pointer)
+        return BigInt(ptr);
+    },
+    'nyash.string.concat_hh': (h1, h2) => {
+        // Stub: return first handle
+        return h1;
     }
 };
 
