@@ -64,6 +64,14 @@ def nearest_pred_on_path(
 ) -> Optional[int]:
     from collections import deque
 
+    # Self-loop special-case: declaration and target are the same block.
+    # If the target has a self predecessor edge, accept it directly.
+    try:
+        if int(decl_b) == int(target_bid):
+            return int(target_bid) if int(target_bid) in list(preds_list or []) else None
+    except Exception:
+        pass
+
     q = deque([decl_b])
     visited = set([decl_b])
     parent: Dict[int, Any] = {decl_b: None}
@@ -71,7 +79,10 @@ def nearest_pred_on_path(
         cur = q.popleft()
         if cur == target_bid:
             par = parent.get(target_bid)
-            return par if par in preds_list else None
+            # If parent is not a real predecessor but target itself is, allow it (self-loop tolerance).
+            if par in preds_list:
+                return par
+            return target_bid if target_bid in preds_list else None
         for nx in succs.get(cur, []):
             if nx not in visited:
                 visited.add(nx)
@@ -81,12 +92,26 @@ def nearest_pred_on_path(
 
 
 def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[int, int]]):
-    """Wire PHI incoming edges for (block_id, dst_vid) using declared (decl_b, v_src) pairs."""
+    """Wire PHI incoming edges for (block_id, dst_vid) using declared (decl_b, v_src) pairs.
+
+    Contract: PHI must already exist at the block head (created by PhiHandler).
+    This helper never creates PHIs; it only wires incoming edges.
+    """
     bb = builder.bb_map.get(block_id)
     if bb is None:
-        return
-    phi = ensure_phi(builder, block_id, dst_vid, bb)
-    preds_raw = [p for p in builder.preds.get(block_id, []) if p != block_id]
+        return 0
+    # Wire-only: fetch existing PHI from vmap
+    phi = None
+    try:
+        phi = builder.vmap.get(int(dst_vid))
+    except Exception:
+        phi = None
+    if phi is None or not hasattr(phi, 'add_incoming'):
+        trace({"phi": "wire_skip_no_phi", "block": int(block_id), "dst": int(dst_vid)})
+        return 0
+    # Preserve declared predecessor order and allow self-loop when present.
+    raw_list = builder.preds.get(block_id, []) or []
+    preds_raw = list(dict.fromkeys(raw_list))
     seen = set()
     preds_list: List[int] = []
     for p in preds_raw:
@@ -139,7 +164,22 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
         pred_bb = builder.bb_map.get(pred_bid)
         if pred_bb is None:
             continue
-        # llvmlite requires (value, block) of correct types
+        # llvmlite requires (value, block) of correct types; avoid duplicate incoming per predecessor
+        try:
+            existing = list(getattr(phi, 'incoming', []) or [])
+        except Exception:
+            existing = []
+        already = False
+        for (_v0, bb0) in existing:
+            try:
+                if getattr(bb0, 'name', None) == getattr(pred_bb, 'name', None):
+                    already = True
+                    break
+            except Exception:
+                pass
+        if already:
+            trace({"phi": "skip_dup_incoming", "dst": int(dst_vid), "pred": int(pred_bid)})
+            continue
         phi.add_incoming(val, pred_bb)
         trace({"phi": "add_incoming", "dst": int(dst_vid), "pred": int(pred_bid)})
         wired += 1
