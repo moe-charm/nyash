@@ -7,6 +7,7 @@ using "apps/selfhost-compiler/boxes/parser_box.hako" as ParserBoxMod
 using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
 // Pipeline v2 (emit-only; Box-First architecture; --pipeline-v2)
 using "apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako" as PipelineMod
+using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
 // Note (Phase 15.7): keep includes minimal for --min-json path
 
 // (removed) Transitional duplicate using lines to avoid resolver duplicate-import error
@@ -110,8 +111,12 @@ static box Main {
     // Gate: minimal JSON when requested via script arg
     local min_mode = me.has_arg(args, "--min-json")
     local emit_mir = me.has_arg(args, "--emit-mir")
+    local emit_trace = me.has_arg(args, "--emit-trace")
     local json = null
     local pipeline_v2 = me.has_arg(args, "--pipeline-v2")
+    // prefer_cfg: 0=Return-only, 1=CFG(no copy), 2=CFG(materialize copy)
+    local prefer_cfg = 0
+    if me.has_arg(args, "--prefer-cfg2") == 1 { prefer_cfg = 2 } else { if me.has_arg(args, "--prefer-cfg") == 1 { prefer_cfg = 1 } }
     local ast_json = null
     if min_mode == 1 {
       // Optional: pipeline v2 (emit-only). When enabled and not emitting MIR,
@@ -127,23 +132,39 @@ static box Main {
       local has_cmp = 0
       if me.has_arg(args, "--min-json-binop") == 1 { has_binop = 1 }
       if me.has_arg(args, "--min-json-cmp") == 1 { has_cmp = 1 }
-      // Fast path: when emit-mir is also requested, emit MIR(JSON) directly without emitter
+      // Fast path: when emit-mir is also requested
       if emit_mir == 1 {
-        local out = null
-        if has_cmp == 1 {
-          // Return(Compare(5,4) Gt) → minimal CFG
-          out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":5},\"dst\":1},{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":4},\"dst\":2},{\"op\":\"compare\",\"cmp\":\"Gt\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"branch\",\"cond\":3,\"then\":1,\"else\":2}]},{\"id\":1,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":1},\"dst\":6},{\"op\":\"jump\",\"target\":3}]},{\"id\":2,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":0},\"dst\":6},{\"op\":\"jump\",\"target\":3}]},{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":6}]}]}]}"
-        } else {
+        if pipeline_v2 == 1 {
+          // Build minimal AST JSON according to flags, then lower via PipelineV2 with trace
           if has_binop == 1 {
-            // Return(BinOp(2,5) Add)
-            out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":2},\"dst\":1},{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":5},\"dst\":2},{\"op\":\"binop\",\"op_kind\":\"Add\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"ret\",\"value\":3}]}]}]}"
+            ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"BinOp\",\"op\":\"Add\",\"lhs\":{\"type\":\"Int\",\"value\":2},\"rhs\":{\"type\":\"Int\",\"value\":5}}}]}"
           } else {
-            // Return(Int 0)
-            out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":0},\"dst\":1},{\"op\":\"ret\",\"value\":1}]}]}]}"
+            if has_cmp == 1 {
+              ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Compare\",\"op\":\"Gt\",\"lhs\":{\"type\":\"Int\",\"value\":5},\"rhs\":{\"type\":\"Int\",\"value\":4}}}]}"
+            } else {
+              ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
+            }
           }
+          local trace = 0
+          if emit_trace == 1 { trace = 1 }
+          local out = PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace)
+          if out != null { print(out) } else { print("{}") }
+          return 0
+        } else {
+          // Legacy inline payloads (kept for stability)
+          local out = null
+          if has_cmp == 1 {
+            out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":5},\"dst\":1},{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":4},\"dst\":2},{\"op\":\"compare\",\"cmp\":\"Gt\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"branch\",\"cond\":3,\"then\":1,\"else\":2}]},{\"id\":1,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":1},\"dst\":6},{\"op\":\"jump\",\"target\":3}]},{\"id\":2,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":0},\"dst\":6},{\"op\":\"jump\",\"target\":3}]},{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":6}]}]}]}"
+          } else {
+            if has_binop == 1 {
+              out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":2},\"dst\":1},{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":5},\"dst\":2},{\"op\":\"binop\",\"op_kind\":\"Add\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"ret\",\"value\":3}]}]}]}"
+            } else {
+              out = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"value\":{\"type\":\"i64\",\"value\":0},\"dst\":1},{\"op\":\"ret\",\"value\":1}]}]}]}"
+            }
+          }
+          if out != null { print(out) } else { print("{}") }
+          return 0
         }
-        if out != null { print(out) } else { print("{}") }
-        return 0
       }
       if has_binop == 1 {
         // Return(BinOp(Int 2, Int 5) op:"Add")
