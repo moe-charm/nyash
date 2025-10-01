@@ -24,6 +24,7 @@ from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
 from instructions.controlflow.while_ import lower_while_regular
 from instructions.mir_call import lower_mir_call  # New unified handler
+from instructions.memory import lower_load, lower_store  # Memory operations
 # PHI instruction is handled by PhiHandler in block_lower.py (箱理論)
 
 
@@ -157,6 +158,18 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
         target_type = inst.get("target_type")
         lower_typeop(builder, operation, src, dst, target_type,
                      vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+
+    elif op == "load":
+        dst = inst.get("dst")
+        addr = inst.get("addr")
+        lower_load(builder, dst, addr, vmap_ctx, owner.resolver, builder.block,
+                   owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
+
+    elif op == "store":
+        addr = inst.get("addr")
+        value = inst.get("value")
+        lower_store(builder, addr, value, vmap_ctx, owner.resolver, builder.block,
+                    owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
 
     elif op == "safepoint":
         live = inst.get("live", [])

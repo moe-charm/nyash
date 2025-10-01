@@ -1,0 +1,21 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 1000}},
+            {"op": "const", "dst": 2, "value": {"type": "i64", "value": 42}},
+            {"op": "store", "addr": 1, "value": 2},
+            {"op": "load", "dst": 3, "addr": 1},
+            {"op": "ret", "value": 3}
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

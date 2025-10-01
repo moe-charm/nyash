@@ -1,0 +1,19 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "newbox", "dst": 1, "type": "ArrayBox", "args": []},
+            {"op": "typeop", "dst": 2, "src": 1, "operation": "cast", "target_type": "i64"},
+            {"op": "ret", "value": 2}
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

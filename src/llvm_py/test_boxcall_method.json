@@ -1,0 +1,20 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "newbox", "dst": 1, "type": "ArrayBox", "args": []},
+            {"op": "const", "dst": 2, "value": {"type": "i64", "value": 42}},
+            {"op": "boxcall", "dst": 3, "box": 1, "method": "push", "args": [2]},
+            {"op": "ret", "value": 3}
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}
