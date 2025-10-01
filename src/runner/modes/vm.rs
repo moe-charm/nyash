@@ -382,6 +382,12 @@ impl NyashRunner {
                     println!("ResultType(MIR): {}", ety);
                     println!("Result: {}", sval);
                 }
+                // Unify exit behavior across backends: map return value to process exit code.
+                // - Integer/Bool → exit code (masked to 0..255)
+                // - Others → 0
+                let code_i64 = nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref()).unwrap_or(0);
+                let code = (code_i64 as i32) & 0xFF;
+                process::exit(code);
             }
             Err(e) => {
                 eprintln!("❌ VM execution error: {}", e);

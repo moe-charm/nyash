@@ -93,6 +93,15 @@ async function runWasm() {
             console.log(`🚀 Calling ${entryName}()...`);
             const result = entryFunc();
             console.log(`✅ ${entryName}() returned: ${result}`);
+            // Unify exit behavior: map return value to process exit code when available.
+            try {
+                const ec = (typeof result === 'number' ? (result|0) : 0) & 0xFF;
+                if (typeof process !== 'undefined' && process && typeof process.exit === 'function') {
+                    process.exit(ec);
+                }
+            } catch (_) {
+                // ignore and just return
+            }
             return result;
         } else {
             console.error('❌ Error: No entry point found (tried: ny_main, Main.main, main)');
