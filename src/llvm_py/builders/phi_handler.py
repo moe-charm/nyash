@@ -10,6 +10,7 @@ PHI命令の処理を一元化し、block_lowerとinstruction_lowerの間を橋�
 """
 
 from typing import Dict, List, Any
+import os
 from llvmlite import ir
 
 
@@ -35,6 +36,16 @@ class PhiHandler:
         self.phi_count = 0
         # Track incomplete PHI nodes (for loop PHIs with forward references)
         self.incomplete_phis: List[Dict[str, Any]] = []
+        # Record of already wired predecessors for each (block_id, dst_vid)
+        # Used to prevent duplicate incoming edges when finalize_phis runs.
+        try:
+            if not hasattr(builder, 'phi_wired') or builder.phi_wired is None:
+                builder.phi_wired = {}
+        except Exception:
+            try:
+                builder.phi_wired = {}
+            except Exception:
+                pass
 
     def collect_phi_instructions(self, instructions: List[Dict[str, Any]]) -> tuple:
         """
@@ -97,6 +108,16 @@ class PhiHandler:
                 print(f"[PhiHandler] Warning: position_at_start failed: {e}")
 
         success_count = 0
+        strict = os.environ.get('NYASH_LLVM_PHI_STRICT') == '1'
+        def _bid_of_block(b):
+            try:
+                for k, v in self.builder.bb_map.items():
+                    if v is b:
+                        return int(k)
+            except Exception:
+                pass
+            return None
+
         for inst in phi_ops:
             try:
                 # 箱化: 直接PHI命令を生成（lower_phi経由だと重複する）
@@ -106,6 +127,7 @@ class PhiHandler:
 
                 if not incoming_list:
                     # incoming無しの場合は0を設定
+                    # strict の場合でも、定数0を vmap に登録する既存挙動は維持
                     self.builder.vmap[dst] = ir.Constant(ir.IntType(64), 0)
                     if self.verbose:
                         print(f"[PhiHandler] PHI dst={dst} has no incoming, set to 0")
@@ -115,8 +137,19 @@ class PhiHandler:
                 phi_type = ir.IntType(64)
                 phi = phi_builder.phi(phi_type, name=f"phi_{dst}")
 
+                # strict モード: 生成のみ（配線は finalize_phis に一元化）。
+                if strict:
+                    self.builder.vmap[dst] = phi
+                    if hasattr(self.builder, '_current_vmap'):
+                        self.builder._current_vmap[dst] = phi
+                    success_count += 1
+                    if self.verbose:
+                        print(f"[PhiHandler] (STRICT) Created PHI dst={dst} (no incoming wired)")
+                    continue
+
                 # incoming値を解決して追加（forward referenceは後で追加）
                 incomplete_edges = []
+                cur_bid = _bid_of_block(block)
                 for item in incoming_list:
                     block_id = item.get('block')
                     value_id = item.get('value')
@@ -151,6 +184,13 @@ class PhiHandler:
                         if self.verbose:
                             print(f"[PhiHandler] Resolved value {value_id} = {val}")
                         phi.add_incoming(val, pred_block)
+                        # Mark as wired to avoid duplicates during finalize
+                        try:
+                            key = (int(cur_bid) if cur_bid is not None else int(block_id), int(dst))
+                            st = self.builder.phi_wired.setdefault(key, set())
+                            st.add(int(block_id))
+                        except Exception:
+                            pass
 
                 # 未完了のedgeがある場合は記録
                 if incomplete_edges:
@@ -195,6 +235,12 @@ class PhiHandler:
         Returns:
             成功した場合True
         """
+        # strict モード: 配線は finalize_phis に一元化するため、ここでは何もしない
+        if os.environ.get('NYASH_LLVM_PHI_STRICT') == '1':
+            if self.verbose:
+                print(f"[PhiHandler] (STRICT) skip completing incomplete PHIs")
+            return True
+
         if not self.incomplete_phis:
             if self.verbose:
                 print(f"[PhiHandler] No incomplete PHIs to complete")
@@ -206,10 +252,20 @@ class PhiHandler:
         phi_type = ir.IntType(64)
         completed_count = 0
 
+        def _bid_of_block(b):
+            try:
+                for k, v in self.builder.bb_map.items():
+                    if v is b:
+                        return int(k)
+            except Exception:
+                pass
+            return None
+
         for phi_info in self.incomplete_phis:
             phi = phi_info['phi']
             dst = phi_info['dst']
             incomplete_edges = phi_info['incomplete_edges']
+            cur_bid = _bid_of_block(phi_info.get('block'))
 
             for edge in incomplete_edges:
                 value_id = edge['value_id']
@@ -236,6 +292,15 @@ class PhiHandler:
 
                 # PHIに追加
                 phi.add_incoming(val, pred_block)
+                # Mark as wired
+                try:
+                    pred_bid = int(edge.get('block_id')) if edge.get('block_id') is not None else _bid_of_block(pred_block)
+                    key = (int(cur_bid) if cur_bid is not None else int(pred_bid), int(dst))
+                    st = self.builder.phi_wired.setdefault(key, set())
+                    if pred_bid is not None:
+                        st.add(int(pred_bid))
+                except Exception:
+                    pass
                 completed_count += 1
 
         if self.verbose:

@@ -164,23 +164,22 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
         pred_bb = builder.bb_map.get(pred_bid)
         if pred_bb is None:
             continue
-        # llvmlite requires (value, block) of correct types; avoid duplicate incoming per predecessor
+        # Avoid duplicate incoming per predecessor: consult PhiHandler-wired set
         try:
-            existing = list(getattr(phi, 'incoming', []) or [])
+            wired_set = getattr(builder, 'phi_wired', {}).get((int(block_id), int(dst_vid)), set())
         except Exception:
-            existing = []
-        already = False
-        for (_v0, bb0) in existing:
-            try:
-                if getattr(bb0, 'name', None) == getattr(pred_bb, 'name', None):
-                    already = True
-                    break
-            except Exception:
-                pass
-        if already:
+            wired_set = set()
+        if int(pred_bid) in wired_set:
             trace({"phi": "skip_dup_incoming", "dst": int(dst_vid), "pred": int(pred_bid)})
             continue
         phi.add_incoming(val, pred_bb)
+        # Update wired set for future passes
+        try:
+            key = (int(block_id), int(dst_vid))
+            st = getattr(builder, 'phi_wired', {}).setdefault(key, set())
+            st.add(int(pred_bid))
+        except Exception:
+            pass
         trace({"phi": "add_incoming", "dst": int(dst_vid), "pred": int(pred_bid)})
         wired += 1
     return wired
