@@ -205,3 +205,6 @@ docs/research/papers-under-review/
 /*.c
 /hello_windows
 /test_simple_windows.c
+
+# Removed local analysis tool
+nekocode-rust/
