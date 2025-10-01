@@ -134,6 +134,16 @@ impl NyashRunner {
                 if crate::config::env::selfhost_read_tmp() { extra_owned.push("--read-tmp".to_string()); }
                 if crate::config::env::ny_compiler_min_json() { extra_owned.push("--min-json".to_string()); }
                 if crate::config::env::ny_compiler_stage3() { extra_owned.push("--stage3".to_string()); }
+                // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace (emit-only, safe; default OFF)
+                if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {
+                    extra_owned.push("--emit-trace".to_string());
+                }
+                // Optional lowering preference (CFG/materialize); default OFF
+                if std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1") {
+                    extra_owned.push("--prefer-cfg2".to_string());
+                } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
+                    extra_owned.push("--prefer-cfg".to_string());
+                }
                 // Optional: map env toggles to child args (prepasses)
                 if std::env::var("NYASH_SCOPEBOX_ENABLE").ok().as_deref() == Some("1") {
                     extra_owned.push("--scopebox".to_string());
@@ -324,6 +334,16 @@ impl NyashRunner {
                 if want_read_tmp { extra.push("--read-tmp".to_string()); }
                 if want_min_json { extra.push("--min-json".to_string()); }
                 if want_stage3 { extra.push("--stage3".to_string()); }
+                // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace
+                if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {
+                    extra.push("--emit-trace".to_string());
+                }
+                // Optional lowering preference flags
+                if std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1") {
+                    extra.push("--prefer-cfg2".to_string());
+                } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
+                    extra.push("--prefer-cfg".to_string());
+                }
                 if let Some(a) = child_args_env {
                     for tok in a.split_whitespace() { if !tok.is_empty() { extra.push(tok.to_string()); } }
                 }

@@ -37,6 +37,8 @@ Parent→child ENV mapping（official）
 - `NYASH_SELFHOST_READ_TMP=1`    → child gets `-- --read-tmp` (reads `tmp/ny_parser_input.ny`)
 - `NYASH_NY_COMPILER_STAGE3=1`   → child gets `-- --stage3`
 - `NYASH_NY_COMPILER_CHILD_ARGS="..."` → child gets extra args verbatim
+- `NYASH_EMIT_TRACE=1`           → child gets `-- --emit-trace` (dev trace: 1行だけ [emit] 出力。最後のJSON行は不変)
+- `NYASH_PREFER_CFG=1|NYASH_PREFER_CFG2=1` → child gets `-- --prefer-cfg` or `--prefer-cfg2`（CFG優先/材化あり）
 - Timeouts / quiet pipe:
   - `NYASH_NY_COMPILER_TIMEOUT_MS=2000`（default）
   - `NYASH_JSON_ONLY=1`（suppress logs, print JSON only）
