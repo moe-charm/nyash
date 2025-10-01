@@ -4,6 +4,7 @@ using "apps/selfhost-compiler/pipeline_v2/emit_binop_box.hako" as EmitBinopBox
 using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EmitCompareBox
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA
+using "apps/selfhost-compiler/pipeline_v2/emit_call_box.hako" as EmitCallBox
 
 flow PipelineV2 {
   lower_stage1_to_mir(ast_json, prefer_cfg) {
@@ -23,6 +24,17 @@ flow PipelineV2 {
           if prefer_cfg >= 2 { mat = 1 }
           local j0 = EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat, trace)
           return LocalSSA.ensure_cond(j0)
+        }
+      }
+    }
+    // Next Call (Return(Call ...)) — minimal int args only
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        local k = Stage1ExtractFlow.extract_return_call(ast_json)
+        if k != null {
+          local j4 = EmitCallBox.emit_call_int_args(k.get("name"), k.get("args"))
+          return LocalSSA.ensure_cond(j4)
         }
       }
     }

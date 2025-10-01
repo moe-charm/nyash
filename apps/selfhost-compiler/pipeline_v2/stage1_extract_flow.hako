@@ -105,4 +105,38 @@ flow Stage1ExtractFlow {
     local rhs = RegexFlow.to_int(rhs_ds)
     return { cmp: opk, lhs: lhs, rhs: rhs }
   }
+
+  // Return(Call name(args...)) → {name, args:[int,...]} or null
+  extract_return_call(ast_json) {
+    if ast_json == null { return null }
+    // Return → Call 検出
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Call\"", p)
+    if q < 0 { return null }
+    // name 抽出
+    local nk = Stage1ExtractFlow._idx_from(ast_json, "\"name\":\"", q)
+    if nk < 0 { return null }
+    local nk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", nk + 8)
+    if nk_end < 0 { return null }
+    local name = ast_json.substring(nk + 8, nk_end)
+    // args 抽出（整数に限定）
+    local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
+    if ak < 0 { return { name: name, args: [] } }
+    local args = []
+    local i = ak + 8
+    loop(true) {
+      // 次の '"value":' を探して整数を読む（Intノード前提）
+      local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", i)
+      if vpos < 0 { break }
+      // 引数リストの範囲を大きく超えたら終了（']'位置を超えたらやめる）
+      local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+      if rb >= 0 && vpos > rb { break }
+      local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+      if ds == "" { i = vpos + 8  continue }
+      args.push(RegexFlow.to_int(ds))
+      i = vpos + 8 + ds.length()
+    }
+    return { name: name, args: args }
+  }
 }

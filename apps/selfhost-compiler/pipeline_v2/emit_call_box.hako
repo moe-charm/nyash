@@ -1,0 +1,37 @@
+// EmitCallBox — Return(Call name(int_args...)) を MIR(JSON v0) に最小変換
+// 仕様: 各引数を const i64 として材化し、call を発行、dst を ret する。
+
+using "apps/lib/json_native/stringify.nyash" as JSON
+
+static box EmitCallBox {
+  emit_call_int_args(name, args) {
+    if name == null { name = "" }
+    if args == null { args = [] }
+    // 1..N を引数用の dst として予約
+    local insts = []
+    local i = 0
+    local n = 0
+    if args.size { n = args.size() } else { n = 0 }
+    loop (i < n) {
+      local v = args.get(i)
+      local dst = i + 1
+      insts.push({ op:"const", dst: dst, value:{ type:"i64", value: v } })
+      i = i + 1
+    }
+    // args 配列は 1..N の連番を参照
+    local arg_ids = []
+    i = 0
+    loop (i < n) { arg_ids.push(i + 1)  i = i + 1 }
+    local dst_ret = n + 1
+    insts.push({ op:"call", name: name, args: arg_ids, dst: dst_ret })
+    insts.push({ op:"ret", value: dst_ret })
+    // 単一関数 main の MIR として返す
+    local mir = {
+      functions: [{ name:"main", params: [], blocks: [ { id:0, instructions: insts } ] }]
+    }
+    return JSON.stringify_map(mir)
+  }
+}
+
+static box EmitCallStub { main(args) { return 0 } }
+
