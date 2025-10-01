@@ -238,7 +238,8 @@ class NyashLLVMBuilder:
                     if inst.get("op") == "phi":
                         try:
                             dst0 = int(inst.get("dst"))
-                            incoming0 = inst.get("incoming", []) or []
+                            from .phi_wiring.common import incoming_pairs_vb
+                            incoming0 = incoming_pairs_vb(inst)
                         except Exception:
                             dst0 = None; incoming0 = []
                         if dst0 is None:

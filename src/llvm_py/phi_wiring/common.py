@@ -24,3 +24,29 @@ def trace(msg: Any):
         except Exception:
             pass
 
+def incoming_pairs_vb(inst: Any):
+    """Return list of (value, block) pairs for PHI instruction JSON.
+
+    Supports new shape ("values": [{"value":v, "block":b}, ...]) and
+    falls back to legacy shape ("incoming": [[v,b], ...]).
+    """
+    try:
+        vals = inst.get("values")
+        if isinstance(vals, list):
+            out = []
+            for it in vals:
+                if isinstance(it, dict):
+                    v = it.get("value")
+                    b = it.get("block")
+                    if v is not None and b is not None:
+                        out.append((int(v), int(b)))
+            return out
+        inc = inst.get("incoming", []) or []
+        out = []
+        for t in inc:
+            if isinstance(t, (list, tuple)) and len(t) == 2:
+                v, b = t
+                out.append((int(v), int(b)))
+        return out
+    except Exception:
+        return []

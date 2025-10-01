@@ -150,9 +150,9 @@ pub fn emit_mir_json_for_harness(
                         continue;
                     }
                     if let I::Phi { dst, inputs } = inst {
-                        let incoming: Vec<_> = inputs
+                        let values_objs: Vec<_> = inputs
                             .iter()
-                            .map(|(b, v)| json!([v.as_u32(), b.as_u32()]))
+                            .map(|(b, v)| json!({"value": v.as_u32(), "block": b.as_u32()}))
                             .collect();
                         // dst_type hint: if all incoming values are String-ish, annotate result as String handle
                         let all_str =
@@ -165,12 +165,12 @@ pub fn emit_mir_json_for_harness(
                                 });
                         if all_str {
                             insts.push(json!({
-                                "op":"phi","dst": dst.as_u32(), "incoming": incoming,
+                                "op":"phi","dst": dst.as_u32(), "values": values_objs,
                                 "dst_type": {"kind":"handle","box_type":"StringBox"}
                             }));
                         } else {
                             insts.push(
-                                json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}),
+                                json!({"op":"phi","dst": dst.as_u32(), "values": values_objs}),
                             );
                         }
                     }
@@ -501,9 +501,9 @@ pub fn emit_mir_json_for_harness_bin(
                 let mut emitted_defs: std::collections::HashSet<u32> = std::collections::HashSet::new();
                 for inst in &bb.instructions {
                     if let I::Phi { dst, inputs } = inst {
-                        let incoming: Vec<_> = inputs
+                        let values_objs: Vec<_> = inputs
                             .iter()
-                            .map(|(b, v)| json!([v.as_u32(), b.as_u32()]))
+                            .map(|(b, v)| json!({"value": v.as_u32(), "block": b.as_u32()}))
                             .collect();
                         let all_str =
                             inputs
@@ -515,12 +515,12 @@ pub fn emit_mir_json_for_harness_bin(
                                 });
                         if all_str {
                             insts.push(json!({
-                                "op":"phi","dst": dst.as_u32(), "incoming": incoming,
+                                "op":"phi","dst": dst.as_u32(), "values": values_objs,
                                 "dst_type": {"kind":"handle","box_type":"StringBox"}
                             }));
                         } else {
                             insts.push(
-                                json!({"op":"phi","dst": dst.as_u32(), "incoming": incoming}),
+                                json!({"op":"phi","dst": dst.as_u32(), "values": values_objs}),
                             );
                         }
                         emitted_defs.insert(dst.as_u32());
