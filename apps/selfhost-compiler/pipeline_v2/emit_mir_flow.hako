@@ -1,5 +1,5 @@
 using "apps/lib/json_native/stringify.nyash" as JSON
-using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSAMod
+using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
 
 flow EmitMirFlow {
   _int(n) { return "" + n }

@@ -20,7 +20,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using selfhost.vm.mir_min as MirVmMin
-using "apps/selfhost-compiler/pipeline_v2/pipeline.nyash" as PipelineV2
+using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {
   main() {
@@ -38,4 +38,3 @@ compare_outputs "$expected" "$out" "selfhost_pipeline_v2_binop_vm" || { cd /; rm
 
 rm -rf "$TMP_DIR"
 exit 0
-

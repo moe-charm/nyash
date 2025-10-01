@@ -12,7 +12,13 @@ Boxes
 
 Responsibilities
 - Parse: use existing ParserBox (apps/selfhost-compiler/boxes/parser_box.hako).
-- Emit: use existing EmitterBox (apps/selfhost-compiler/boxes/emitter_box.hako).
+- Emit（boxed）:
+  - EmitReturnBox: return(Int) の最小 JSON 生成
+  - EmitBinopBox: binop(lhs,rhs,kind)
+  - EmitCompareBox: compare/branch/jump/ret（materialize有り/無し）
+  - LocalSSABox: 材化（copy 挿入）ポリシーの集約
+  - 既存の emit_mir_flow.hako は段階的に委譲→削減（互換維持）
+  - Dev観測: `NYASH_EMIT_TRACE=1` を想定した最小トレース（現状は無条件1行出力。最終JSON行は変わらず）
 - Execute: delegated to Rust Runner (parent→child). This directory must NOT perform execution.
 
 Non-goals (Phase 15.7)

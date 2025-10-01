@@ -16,7 +16,13 @@
         "extensions": [".hako"],
         "configuration": "./language-configuration.json"
       }
+    ],
+    "grammars": [
+      {
+        "language": "hakorune",
+        "scopeName": "source.hako",
+        "path": "./syntaxes/hako.tmLanguage.json"
+      }
     ]
   }
 }
-

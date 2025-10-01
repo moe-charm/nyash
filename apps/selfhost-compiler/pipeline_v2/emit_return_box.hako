@@ -1,0 +1,25 @@
+// EmitReturnBox — return(Int) の最小 MIR(JSON v0) 生成
+using "apps/lib/json_native/stringify.nyash" as JSON
+
+static box EmitReturnBox {
+  emit_return_int(v) {
+    // dev-trace (minimal)
+    print("[emit] return v=" + v)
+    local mir = {
+      functions: [{
+        name: "main",
+        params: [],
+        blocks: [{
+          id: 0,
+          instructions: [
+            { op:"const", dst:1, value:{ type:"i64", value: v } },
+            { op:"ret", value:1 }
+          ]
+        }]
+      }]
+    }
+    return JSON.stringify_map(mir)
+  }
+}
+
+static box EmitReturnStub { main(args) { return 0 } }

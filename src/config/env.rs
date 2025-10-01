@@ -595,7 +595,7 @@ pub fn ny_compiler_timeout_ms() -> u64 {
     std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or(2000)
+        .unwrap_or(8000)
 }
 pub fn ny_compiler_emit_only() -> bool {
     std::env::var("NYASH_NY_COMPILER_EMIT_ONLY").unwrap_or_else(|_| "1".to_string()) == "1"

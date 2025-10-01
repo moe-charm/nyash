@@ -12,11 +12,15 @@ Option B — Local language basics extension (recommended)
 - Provides:
   - Language registration for `.hako`
   - Comment toggling and bracket pairs via `language-configuration.json`
+  - Minimal TextMate grammar for colorization (`syntaxes/hako.tmLanguage.json`)
 - Install locally:
   - VSCode: "Developer: Install Extension from Location..." → select the folder
   - Or CLI: `code --install-extension tools/vscode/hakorune-language`
 
-Next steps
-- Add a TextMate grammar under `syntaxes/` for true colorization.
-- Publish the extension when stable; replace workspace mapping.
+After installing the extension
+- You can change the workspace mapping to use the new language id:
+  - `.vscode/settings.json` → `"files.associations": { "*.hako": "hakorune" }`
+  - Or remove the mapping entirely (the extension associates `.hako` automatically).
 
+Next steps
+- Publish the extension when stable; replace workspace mapping across repos.

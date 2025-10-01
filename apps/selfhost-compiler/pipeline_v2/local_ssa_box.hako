@@ -1,7 +1,7 @@
 // LocalSSABox — 材化（materialize）/Copy 挿入の最小ポリシーを集約
 // Phase 15.7: 最小実装。将来 PHI/Call 前の規約をここに集約して拡張する。
 
-box LocalSSABox {
+static box LocalSSABox {
   // 汎用: copy 命令を insts（ArrayBox of Map）末尾に追加
   add_copy(insts, dst, src) {
     if insts == null { return 1 }
@@ -11,9 +11,41 @@ box LocalSSABox {
 
   // PHI直後の材化（最小）: いまは add_copy と同じ。将来 PHI 群スキップを実装
   ensure_after_phis_copy(insts, src, dst) {
-    return me.add_copy(insts, dst, src)
+    if insts == null { return 1 }
+    // 先頭から連続する phi の個数を数える
+    local n = 0
+    if insts.size { n = insts.size() } else { return me.add_copy(insts, dst, src) }
+    local i = 0
+    loop (i < n) {
+      local ins = insts.get(i)
+      if ins == null { break }
+      local op = ins.get("op")
+      if op == null || op != "phi" { break }
+      i = i + 1
+    }
+    local insert_at = i  // phi 直後
+    local node = { op:"copy", dst: dst, src: src }
+    if insert_at >= n {
+      // 末尾に追加
+      insts.push(node)
+      return 0
+    }
+    // 1つ末尾に空きを作る（末尾要素を複製して押し出す）
+    if n > 0 {
+      insts.push(insts.get(n - 1))
+      // 末尾から insert_at までを右にシフト
+      local j = n - 1
+      loop (j >= insert_at) {
+        insts.set(j + 1, insts.get(j))
+        j = j - 1
+      }
+      insts.set(insert_at, node)
+      return 0
+    } else {
+      insts.push(node)
+      return 0
+    }
   }
 }
 
 static box LocalSSAStub { main(args) { return 0 } }
-

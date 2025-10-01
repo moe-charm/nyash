@@ -1,0 +1,32 @@
+// EmitBinopBox — binop の最小 MIR(JSON v0) 生成
+using "apps/lib/json_native/stringify.nyash" as JSON
+
+static box EmitBinopBox {
+  _map_binop(opk) {
+    if opk == "+" { return "Add" }
+    if opk == "-" { return "Sub" }
+    if opk == "*" { return "Mul" }
+    if opk == "/" { return "Div" }
+    if opk == "%" { return "Mod" }
+    return opk
+  }
+
+  emit_binop(lhs, rhs, opk) {
+    // dev-trace (minimal)
+    print("[emit] binop lhs=" + lhs + " rhs=" + rhs + " op=" + opk)
+    local kind = EmitBinopBox._map_binop(opk)
+    local mir = {
+      functions: [{ name:"main", params: [], blocks: [
+        { id:0, instructions: [
+          { op:"const", dst:1, value:{ type:"i64", value: lhs } },
+          { op:"const", dst:2, value:{ type:"i64", value: rhs } },
+          { op:"binop", op_kind: kind, lhs:1, rhs:2, dst:3 },
+          { op:"ret", value:3 }
+        ] }
+      ] }]
+    }
+    return JSON.stringify_map(mir)
+  }
+}
+
+static box EmitBinopStub { main(args) { return 0 } }

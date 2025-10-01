@@ -18,7 +18,7 @@ TMP_DIR="/tmp/selfhost_pipeline_v2_stage1_neg_ws_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/pipeline_v2/pipeline.nyash" as PipelineV2
+using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {
   main() {
@@ -51,4 +51,3 @@ compare_outputs "$expected" "$out" "selfhost_pipeline_v2_stage1_neg_ws_vm" || { 
 
 rm -rf "$TMP_DIR"
 exit 0
-

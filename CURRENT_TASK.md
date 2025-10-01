@@ -17,6 +17,12 @@
 - Self‑Hosting 小粒強化（LocalSSA ensure_cond の代表ケース）
 
 ## Next Actions（小粒・優先順）
+P0（dev観測の整理・安全化）
+1) EmitトレースのENVガード化（候補: EnvBox最小導入 or Runner引数透過）。
+   - 方針A: `EnvBox.get("NYASH_EMIT_TRACE")` を最小で提供（外部I/Oなし・純粋）。
+   - 方針B: 親Runner→子に `--emit-trace=1` を渡し、ExecutionPipeline経由で各EmitBoxへ布告。
+   - 現状: 無条件1行出力（最終JSON行は不変）。Env準備でき次第AまたはBに切替。
+
 P2（Selfhost Compiler / Pipeline v2 — 制御フローの最小対応）
 1) if/else → branch/jump/ret の最小 Lowering（PHIなし・両枝ret限定）
    - Docs: INTERFACES.md に仕様追記（済）
@@ -28,8 +34,8 @@ P2（Selfhost Compiler / Pipeline v2 — 制御フローの最小対応）
 
 P1（周辺の安定化・非破壊）
 3) pipeline_v2 子タイムアウト/環境伝搬の再点検（8000ms継続、必要時拡張）
-4) .hako ドキュメントの表記更新（両受理注記は残す）
-5) VSCode: TextMate grammar の最小追加（シンタックス色付け）
+4) （完了）.hako ドキュメントの表記更新（両受理注記は残す）
+5) （完了）VSCode: TextMate grammar の最小追加（シンタックス色付け）
 
 ## Docs — Selfhost Compiler (done)
 - apps/selfhost-compiler/README.md を更新（Rust VM 既定・ENV一覧・Fail‑Fast・予定スモーク）
@@ -53,6 +59,20 @@ P1（周辺の安定化・非破壊）
   - modulefn_llvm_trace.sh（LLVM call trace に ModuleFunction を出すことを確認）
   - json_v1_mir_call_vm.sh（PyVMブリッジJSONで unified mir_call を検知）
   - selfhost_if_else_ret_vm.sh（設計先行のSKIPテスト: if/else→ret の受け皿）
+
+## ✅ Update — 2025-10-01（dev観測トレースとVSCode強化）
+- Emit devトレース（最小、1行・ENV想定）を追加（現在は無条件出力。最後のJSON行でテストは影響なし）
+  - apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako
+  - apps/selfhost-compiler/pipeline_v2/emit_return_box.hako
+  - apps/selfhost-compiler/pipeline_v2/emit_binop_box.hako
+  - 備考: 将来 `NYASH_EMIT_TRACE=1` の Env 読取を .hako 側に提供後、条件出力へ切替予定。
+- Docs の .hako 表記を代表ガイドに反映（.nyash は後方受理の注記を付与）
+  - docs/development/roadmap/phases/phase-15.7/README.md（コマンド例を .hako へ）
+  - docs/development/builder/DIAGNOSTICS.md（.hako へ）
+- VSCode ローカル拡張に TextMate grammar を追加（最小）
+  - tools/vscode/hakorune-language/syntaxes/hako.tmLanguage.json
+  - package.json に grammar を登録（language id: hakorune）
+  - docs/tools/vscode-hako.md に関連付け切替手順を追記（"javascript"→"hakorune"）
 
 ## ✅ Update — 2025-10-04（MIR: ModuleFunction Phase‑2 着地）
 - Callee に `ModuleFunction(String)` を追加（型安全なモジュール関数呼び出し）
@@ -131,10 +151,10 @@ P1（周辺の安定化・非破壊）
     - 影響: 仕様不変・ログのみ抑制。再ビルドで反映。
 - 安全な実行手順（Rust VM固定・子経路推奨）:
   - 子経路（最小ヘッダのみ出力）
-    - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/examples/string_p0.nyash`
+    - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/examples/string_p0.hako`
     - 期待出力: 先頭に `{ "version":0, "kind":"Program", ... }` の1行
   - 直接起動（診断用・timeout必須）
-    - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.nyash -- --min-json`
+    - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`  （互換: .nyash も受理）
     - 期待出力: 同じく最小ヘッダ1行（固まり時はtimeoutで切断）
 - 受け入れ（dev 任意ゲート）:
   - `NYASH_JSON_ONLY=1` で最初の1行が JSON ヘッダ（version/kind 非空）であること。
@@ -144,7 +164,7 @@ P1（周辺の安定化・非破壊）
   2) `NYASH_DISABLE_PLUGINS=1` 時は `FactoryPolicy::BuiltinFirst` を強制（起動コスト/分岐削減）。
   3) quick に「最初の1行がJSONヘッダ」を確認する軽量スモークを追加（子/直接: 後者はtimeout付き）。
   4) `apps/selfhost-compiler/README.md` に安全プロファイル（ENV一覧/timeout運用）を追記。
-  5) pipeline_v2（emit-only）のBox骨格を追加（ExecutionPipeline/Backend/MirBuilder）。compiler.nyashに `--pipeline-v2` 経路を薄く配線。
+  5) pipeline_v2（emit-only）のBox骨格を追加（ExecutionPipeline/Backend/MirBuilder）。compiler.hako に `--pipeline-v2` 経路を薄く配線（互換: .nyash）。
   6) pipeline_v2 のJSONヘッダ受け入れスモークを追加（quick/core）。
   7) JSON_ONLYスモークのノイズフィルタ依存を縮小（direct run + AWK抽出）。
   8) plugins無効時は preflight_plugins() をSKIPログに変更（v2テストランナー）。
@@ -152,7 +172,7 @@ P1（周辺の安定化・非破壊）
   10) 子プロセスへ NYASH_QUIET を渡さない（emit-only の stdout を抑止しない）。
 - 運用メモ（固まり時の掃除）:
   - 一覧: `ps -eo pid,etimes,%cpu,comm,args | rg nyash`
-  - 強制終了: `pkill -9 -f 'target/release/nyash|apps/selfhost-compiler/compiler.nyash|pyvm'`
+  - 強制終了: `pkill -9 -f 'target/release/nyash|apps/selfhost-compiler/compiler.hako|pyvm'`
 
 ## ✅ Update — 2025-10-01（.hako 採用 — selfhost/resolver 優先化）
 

@@ -1,0 +1,44 @@
+// EmitCompareBox — compare/branch/jump/ret の最小 MIR(JSON v0) 生成
+using "apps/lib/json_native/stringify.nyash" as JSON
+using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
+
+static box EmitCompareBox {
+  emit_compare_cfg(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, 0) }
+
+  emit_compare_cfg2(lhs, rhs, cmp, materialize) {
+    // dev-trace (minimal): one line; JSON line is printed by caller later
+    // Note: currently unconditional to avoid env dependency in .hako runtime.
+    // Smokes tail -n 1 (last line is JSON), so this line is ignored.
+    print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize)
+    // entry: const lhs/rhs; compare→r3; (optional copy r4=copy r3); branch r{3|4} then:1 else:2
+    // then: const 1→r6; jump 3 | else: const 0→r6; jump 3 | merge: ret r6
+    local insts0 = [
+      { op:"const", dst:1, value:{ type:"i64", value: lhs } },
+      { op:"const", dst:2, value:{ type:"i64", value: rhs } },
+      { op:"compare", cmp: cmp, lhs:1, rhs:2, dst:3 }
+    ]
+    if materialize == 1 {
+      LocalSSABox.ensure_after_phis_copy(insts0, 3, 4)
+      insts0.push({ op:"branch", cond:4, "then":1, "else":2 })
+    } else {
+      insts0.push({ op:"branch", cond:3, "then":1, "else":2 })
+    }
+    local mir = {
+      functions: [{ name:"main", params: [], blocks: [
+        { id:0, instructions: insts0 },
+        { id:1, instructions: [
+          { op:"const", dst:6, value:{ type:"i64", value:1 } },
+          { op:"jump", target:3 }
+        ] },
+        { id:2, instructions: [
+          { op:"const", dst:6, value:{ type:"i64", value:0 } },
+          { op:"jump", target:3 }
+        ] },
+        { id:3, instructions: [ { op:"ret", value:6 } ] }
+      ] }]
+    }
+    return JSON.stringify_map(mir)
+  }
+}
+
+static box EmitCompareStub { main(args) { return 0 } }

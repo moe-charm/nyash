@@ -40,7 +40,7 @@
 
 #### 💡 **理由1: 相互検証が可能**
 ```
-Hakoruneコンパイラ（apps/selfhost-compiler/compiler.nyash）
+Hakoruneコンパイラ（apps/selfhost-compiler/compiler.hako｜互換: .nyash）
     ↓ MIR生成
 Mini-VM（apps/selfhost/vm/boxes/mir_vm_min.nyash）
     ↓ 実行
@@ -75,7 +75,7 @@ Hakoruneで実行器書く
 - **成果**: `apps/selfhost/vm/boxes/mir_vm_min.nyash` 安定動作
 
 #### **P2: Hakoruneコンパイラ MVP（次の主作業）**
-- **既存**: `apps/selfhost-compiler/compiler.nyash` を軸に実装
+- **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出
 - **直近TODO**:
   1. branch/jump 最小生成（P2・2日）
@@ -206,14 +206,14 @@ Mini-VM（Hakorune実装）
 5. **Selfhost Compiler（dev限定）**:
    ```bash
    HAKO_JSON_ONLY=1 ./target/release/hakorune \
-     apps/selfhost-compiler/compiler.nyash -- --stage3
+     apps/selfhost-compiler/compiler.hako -- --stage3   # 互換: compiler.nyash も受理
    ```
    → JSON ヘッダ（`{"version":…, "kind":…}`）を出力（非空）
 
 6. **ブートストラップ成功**:
    ```bash
    # c0（Rustコンパイラ）→ c1（Hakoruneコンパイラ）
-   ./target/release/hakorune apps/selfhost-compiler/compiler.nyash \
+   ./target/release/hakorune apps/selfhost-compiler/compiler.hako \
      -- input.hkr > output.json
 
    # c1 → c1'（自己コンパイル）
@@ -290,7 +290,7 @@ tools/smokes/v2/run.sh --profile quick --filter "selfhost_mir_m*"
 ### **手動テスト**
 ```bash
 # Hakoruneコンパイラ実行
-./target/release/hakorune apps/selfhost-compiler/compiler.nyash \
+./target/release/hakorune apps/selfhost-compiler/compiler.hako \
   -- --stage3 sample.hkr > output.json
 
 # Mini-VM実行
@@ -384,7 +384,7 @@ HAKO_COMPILER_TRACK=1 # コンパイラトラック有効化
 - P1: Mini‑VM 仕上げ（完了）
   - M2/M3 の代表＋エッジスモークを quick に追加し、単一パス＋厳密セグメントで緑維持。
 - P2: Nyash コンパイラ MVP（Phase 15.6）の前進（次の主作業）
-  - 既存 `apps/selfhost-compiler/compiler.nyash` を軸に、Stage‑2/3 入力から JSON v0 を安定排出。
+- 既存 `apps/selfhost-compiler/compiler.hako` を軸に、Stage‑2/3 入力から JSON v0 を安定排出（.nyash は後方受理）。
   - 受け入れ（dev限定）: `NYASH_JSON_ONLY=1` で `version/kind` を含む JSON ヘッダが非空であること。
   - 既定挙動は不変。コンパイラは別アプリ（apps/）として進め、VM/LLVM 本線は影響最小。
   - 直近 TODO: branch/jump 最小生成＋LocalSSA.ensure_cond の材化コピー最終化、Mini‑VM 代表追加1件。
@@ -446,7 +446,7 @@ Unified Call（開発既定ON）
 - 表示API: QuickRef/ガイドが `str()` に統一（実行挙動は従前と同じ）
 - Unified Call は開発既定ONだが、`NYASH_MIR_UNIFIED_CALL=0|false|off` で即時オプトアウト可能（段階移行）。
 - Selfhost Compiler（dev限定・任意ゲート）:
-  - `NYASH_JSON_ONLY=1 ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --stage3` が JSON ヘッダ（`{"version":…, "kind":…}`）を出力（非空）。
+- `NYASH_JSON_ONLY=1 ./target/release/nyash apps/selfhost-compiler/compiler.hako -- --stage3` が JSON ヘッダ（`{"version":…, "kind":…}`）を出力（非空）。
 
 実装タスク（小粒）
 1. origin/observe/rewrite の分割方針を CURRENT_TASK に反映（ガイド/README付き）

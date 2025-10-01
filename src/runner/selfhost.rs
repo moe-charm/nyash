@@ -157,7 +157,6 @@ impl NyashRunner {
                     &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
-                        ("NYASH_QUIET", "1"),
                         ("NYASH_ENABLE_USING", "1"),
                         ("NYASH_ALLOW_USING_FILE", "1"),
                         ("NYASH_USING_AST", "1"),
@@ -197,10 +196,7 @@ impl NyashRunner {
                 if py.exists() {
                     let mut cmd = std::process::Command::new(&py3);
                     cmd.arg(py).arg(&tmp_path);
-                    let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
-                        .ok()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(2000);
+                    let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                     let out = match super::modes::common_util::io::spawn_with_timeout(cmd, timeout_ms) {
                         Ok(o) => o,
                         Err(e) => { eprintln!("[ny-compiler] python harness failed: {}", e); return false; }
@@ -266,10 +262,7 @@ impl NyashRunner {
                 }
             };
             if exe_path.exists() {
-                let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")
-                    .ok()
-                    .and_then(|s| s.parse().ok())
-                    .unwrap_or(2000);
+                    let timeout_ms: u64 = crate::config::env::ny_compiler_timeout_ms();
                 if let Some(module) = super::modes::common_util::selfhost_exe::exe_try_parse_json_v0(filename, timeout_ms) {
                     super::json_v0_bridge::maybe_dump_mir(&module);
                     let emit_only = std::env::var("NYASH_NY_COMPILER_EMIT_ONLY")
