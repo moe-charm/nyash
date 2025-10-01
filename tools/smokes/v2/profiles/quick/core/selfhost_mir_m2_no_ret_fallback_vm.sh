@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_no_ret_fallback_vm.sh — No ret → fallback to first const i64
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
@@ -34,4 +35,3 @@ compare_outputs "$expected" "$out" "selfhost_mir_m2_no_ret_fallback_vm" || { cd 
 
 rm -rf "$TMP_DIR"
 exit 0
-

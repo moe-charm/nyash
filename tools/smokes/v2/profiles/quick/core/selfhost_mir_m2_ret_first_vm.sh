@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_ret_first_vm.sh — ret at block head (value undefined → treated as 0)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
@@ -33,4 +34,3 @@ compare_outputs "$expected" "$out" "selfhost_mir_m2_ret_first_vm" || { cd /; rm 
 
 rm -rf "$TMP_DIR"
 exit 0
-

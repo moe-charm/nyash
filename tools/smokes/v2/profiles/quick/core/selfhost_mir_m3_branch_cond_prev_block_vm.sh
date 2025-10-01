@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m3_branch_cond_prev_block_vm.sh — branch(cond) uses value defined in previous block
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
@@ -39,4 +40,3 @@ compare_outputs "$expected" "$out" "selfhost_mir_m3_branch_cond_prev_block_vm" |
 
 rm -rf "$TMP_DIR"
 exit 0
-

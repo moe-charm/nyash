@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m3_jump_vm.sh — jump(target) changes block
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

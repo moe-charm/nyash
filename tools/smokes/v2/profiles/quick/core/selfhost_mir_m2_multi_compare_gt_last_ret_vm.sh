@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_multi_compare_gt_last_ret_vm.sh — Multi-compare (v0/v1 mix); last Gt decides (expect 1)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
@@ -44,4 +45,3 @@ compare_outputs "$expected" "$out" "selfhost_mir_m2_multi_compare_gt_last_ret_vm
 
 rm -rf "$TMP_DIR"
 exit 0
-

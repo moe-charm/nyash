@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_compare_ops_vm.sh — Minimal compare ops (Eq/Ne/Lt/Le/Gt/Ge) → 0/1
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
