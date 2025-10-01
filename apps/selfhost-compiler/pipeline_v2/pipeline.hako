@@ -3,6 +3,7 @@ using "apps/selfhost-compiler/pipeline_v2/emit_return_box.hako" as EmitReturnBox
 using "apps/selfhost-compiler/pipeline_v2/emit_binop_box.hako" as EmitBinopBox
 using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EmitCompareBox
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA
 
 flow PipelineV2 {
   lower_stage1_to_mir(ast_json, prefer_cfg) {
@@ -20,7 +21,8 @@ flow PipelineV2 {
         if ic != null {
           local mat = 0
           if prefer_cfg >= 2 { mat = 1 }
-          return EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat, trace)
+          local j0 = EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat, trace)
+          return LocalSSA.ensure_cond(j0)
         }
       }
     }
@@ -37,7 +39,8 @@ flow PipelineV2 {
           local cmp = c.get("cmp")
           local mat = 0
           if prefer_cfg >= 2 { mat = 1 }
-          return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, mat, trace)
+          local j1 = EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, mat, trace)
+          return LocalSSA.ensure_cond(j1)
         }
       }
     }
@@ -49,11 +52,13 @@ flow PipelineV2 {
         local lhs = b.get("lhs")
         local rhs = b.get("rhs")
         local kind = b.get("kind")
-        return EmitBinopBox.emit_binop2(lhs, rhs, kind, trace)
+        local j2 = EmitBinopBox.emit_binop2(lhs, rhs, kind, trace)
+        return LocalSSA.ensure_cond(j2)
       }
     }
     // Fallback Return(Int)
     local v = Stage1ExtractFlow.extract_return_int(ast_json)
-    return EmitReturnBox.emit_return_int2(v, trace)
+    local j3 = EmitReturnBox.emit_return_int2(v, trace)
+    return LocalSSA.ensure_cond(j3)
   }
 }
