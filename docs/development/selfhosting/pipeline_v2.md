@@ -25,9 +25,21 @@ Usage (dev)
 - Construct `ExecutionPipelineBox` and call `run_source(src, stage3_flag)`.
 - For Runner-driven acceptance, keep using `NYASH_USE_NY_COMPILER=1 ... NYASH_JSON_ONLY=1`.
 
+Dev knobs
+- prefer_cfg levels (for Compare/If-Else lowering):
+  - 0 = Return-only (no CFG)
+  - 1 = CFG (no materialize copy)
+  - 2 = CFG + materialize copy before branch (LocalSSA.ensure_after_phis_copy)
+- trace (emit-only): pass `--emit-trace` to print a single `[emit] ...` line before the final JSON.
+- MirBuilderBox bridge (dev-only):
+  - Programmatic: `b.set_pipeline_v2(1); b.set_prefer_cfg(0|1|2); b.build(ast_json)`
+  - CLI: `--emit-mir --builder-bridge` + `--prefer-cfg` / `--prefer-cfg2`
+
 Smokes (quick)
 - Child path (emit-only): `tools/smokes/v2/profiles/quick/selfhost/selfhost_min_json_header_pipeline_v2_vm.sh`
 - Direct driver (emit-only): `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_driver_min_json_vm.sh`
+ - Compare variants (dev): `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_cmp_*.sh`
+ - Materialize check (prefer_cfg=2): `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_cmp_materialize_vm.sh`
 
 Fail-Fast
 - Empty/invalid JSON emission must return non-zero and avoid stdout noise.
