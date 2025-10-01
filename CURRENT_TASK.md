@@ -23,6 +23,11 @@ P0（dev観測の整理・安全化）
    - 方針B: 親Runner→子に `--emit-trace=1` を渡し、ExecutionPipeline経由で各EmitBoxへ布告。
    - 現状: 無条件1行出力（最終JSON行は不変）。Env準備でき次第AまたはBに切替。
 
+✅ 実施（Option B の導線・小粒）
+- compiler.hako に `--emit-trace` を受理し、`--emit-mir --pipeline-v2` の組み合わせで PipelineV2 の traceエントリに委譲。
+- `--prefer-cfg`/`--prefer-cfg2` を導入（0|1|2）。2で材化copyあり、1でCFGのみ、0でReturn中心。
+- 互換: pipeline_v2 OFF では従来のインライン MIR JSON を継続。
+
 P2（Selfhost Compiler / Pipeline v2 — 制御フローの最小対応）
 1) if/else → branch/jump/ret の最小 Lowering（PHIなし・両枝ret限定）
    - Docs: INTERFACES.md に仕様追記（済）
@@ -31,6 +36,10 @@ P2（Selfhost Compiler / Pipeline v2 — 制御フローの最小対応）
 2) LocalSSA.ensure_cond の最小実装（分岐直前/Call直前の材化）
    - Docs: INTERFACES.md 追記（済）
    - Impl: MirBuilderBox.hako に ensure_after_phis_copy 相当を実装（次）
+   - 追加（済）: LocalSSABox は `{instructions:[...]}` 形式も受理し、API不足時は安全フォールバック。
+
+受け入れ（dev 任意）
+- `./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --emit-mir --pipeline-v2 --emit-trace --prefer-cfg` で先頭に `[emit] ...` が1行、最後に MIR(JSON) が1行出力されること（tail -n 1 でJSONが取れる）。
 
 P1（周辺の安定化・非破壊）
 3) pipeline_v2 子タイムアウト/環境伝搬の再点検（8000ms継続、必要時拡張）
