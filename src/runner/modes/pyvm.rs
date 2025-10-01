@@ -146,7 +146,7 @@ pub fn execute_pyvm_only(runner: &NyashRunner, filename: &str) {
     }
 
     // Delegate to common PyVM harness
-    match crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&compile_result.module, "pyvm") {
+    match crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&compile_result.module, "pyvm", runner.config.as_groups().input.entry.as_deref()) {
         Ok(code) => { process::exit(code); }
         Err(e) => { eprintln!("❌ PyVM error: {}", e); process::exit(1); }
     }

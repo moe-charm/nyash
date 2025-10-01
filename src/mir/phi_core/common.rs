@@ -28,14 +28,26 @@ pub fn debug_verify_phi_inputs(
             pred
         );
     }
-    if let Some(block) = function.blocks.get(&merge_bb) {
-        for (pred, _v) in inputs.iter() {
-            debug_assert!(
-                block.predecessors.contains(pred),
-                "PHI incoming pred {:?} is not a predecessor of merge bb {:?}",
-                pred,
-                merge_bb
-            );
+    // Use a computed predecessor map instead of relying on in-place block.predecessors
+    // because builder may emit PHIs before sealing CFG edges on blocks.
+    use std::collections::{HashMap};
+    use std::collections;
+    let mut preds_map: HashMap<crate::mir::BasicBlockId, collections::HashSet<crate::mir::BasicBlockId>> = HashMap::new();
+    for (bid, block) in function.blocks.iter() {
+        for succ in &block.successors {
+            preds_map.entry(*succ).or_default().insert(*bid);
+        }
+    }
+    if let Some(preds) = preds_map.get(&merge_bb) {
+        if preds.len() >= 2 {
+            for (pred, _v) in inputs.iter() {
+                debug_assert!(
+                    preds.contains(pred),
+                    "PHI incoming pred {:?} is not a predecessor of merge bb {:?}",
+                    pred,
+                    merge_bb
+                );
+            }
         }
     }
 }

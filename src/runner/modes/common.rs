@@ -26,7 +26,7 @@ impl NyashRunner {
         module: &nyash_rust::mir::MirModule,
         tag: &str,
     ) -> Result<i32, String> {
-        super::common_util::pyvm::run_pyvm_harness(module, tag)
+        super::common_util::pyvm::run_pyvm_harness(module, tag, self.config.as_groups().input.entry.as_deref())
     }
 
     /// Helper: try external selfhost compiler EXE to parse Ny -> JSON v0 and return MIR module

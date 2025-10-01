@@ -67,14 +67,18 @@ def lower_call(
         except Exception:
             pass
 
-    # Resolver helpers (prefer resolver when available)
+    # Resolver helpers (prefer vmap for current block, then resolver)
     def _res_i64(vid: int):
+        # First check if value exists in current vmap (same-block SSA)
+        if vid in vmap:
+            return vmap.get(vid)
+        # Otherwise try resolver for cross-block resolution
         if r is not None and p is not None and bev is not None and bbm is not None:
             try:
                 return r.resolve_i64(vid, builder.block, p, bev, vmap, bbm)
             except Exception:
                 return None
-        return vmap.get(vid)
+        return None
 
     def _res_ptr(vid: int):
         if r is not None and p is not None and bev is not None:

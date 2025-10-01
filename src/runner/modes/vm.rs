@@ -228,7 +228,7 @@ impl NyashRunner {
         // Optional: PyVM path. When NYASH_VM_USE_PY=1, emit MIR(JSON) and delegate execution to tools/pyvm_runner.py
         // Safety valve: if runner is not found or fails to launch, gracefully fall back to Rust VM
         if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-            match super::common_util::pyvm::run_pyvm_harness_lib(&module_vm, "vm") {
+            match super::common_util::pyvm::run_pyvm_harness_lib(&module_vm, "vm", self.config.as_groups().input.entry.as_deref()) {
                 Ok(code) => { process::exit(code); }
                 Err(e) => {
                     // Fallback unless explicitly required

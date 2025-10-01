@@ -75,7 +75,7 @@ impl NyashRunner {
                         Ok(result) => {
                             let prefer_pyvm = crate::config::env::vm_use_py();
                             if prefer_pyvm {
-                                if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand") {
+                                if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand", self.config.as_groups().input.entry.as_deref()) {
                                     println!("Result: {}", code);
                                     std::process::exit(code);
                                 } else {
@@ -172,7 +172,7 @@ impl NyashRunner {
                             // Regular execution path
                             // Prefer PyVM path when requested
                             if crate::config::env::vm_use_py() {
-                                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost") {
+                                    if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost", self.config.as_groups().input.entry.as_deref()) {
                                         println!("Result: {}", code);
                                         std::process::exit(code);
                                     }
@@ -216,7 +216,7 @@ impl NyashRunner {
                                         // Regular execution path
                                         // Prefer PyVM for selfhost pipeline (parity reference)
                                         if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                                            let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py") {
+                                            let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py", self.config.as_groups().input.entry.as_deref()) {
                                                 Ok(c) => c,
                                                 Err(e) => { eprintln!("❌ PyVM error: {}", e); 1 }
                                             };
@@ -287,13 +287,12 @@ impl NyashRunner {
                                     process::exit(1);
                                 }
                                 crate::cli_v!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
-                                let allow_top = crate::config::env::entry_allow_toplevel_main();
-                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                            else if allow_top && module.functions.contains_key("main") { "main" }
-                                            else if module.functions.contains_key("main") { eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence."); "main" }
-                                            else { "Main.main" };
+                                let entry = match crate::runner::entry_resolver::resolve_entry_for_module(&module, self.config.as_groups().input.entry.as_deref()) {
+                                    Ok(res) => res.name,
+                                    Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
+                                };
                                 let status = std::process::Command::new(py3)
-                                    .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
+                                    .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", &entry])
                                     .status()
                                     .map_err(|e| format!("spawn pyvm: {}", e))
                                     .unwrap();
@@ -358,7 +357,7 @@ impl NyashRunner {
                             super::json_v0_bridge::maybe_dump_mir(&module);
                             // Prefer PyVM when requested
                             if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                                if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost-child") {
+                                if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost-child", self.config.as_groups().input.entry.as_deref()) {
                                     println!("Result: {}", code);
                                     std::process::exit(code);
                                 }

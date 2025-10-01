@@ -150,7 +150,7 @@ pub fn mir_core13() -> bool {
             let lv = v.to_ascii_lowercase();
             !(lv == "0" || lv == "false" || lv == "off")
         }
-        None => true,
+        None => false,
     }
 }
 pub fn mir_ref_boxcall() -> bool {
@@ -486,8 +486,8 @@ pub fn method_catch() -> bool {
     std::env::var("NYASH_METHOD_CATCH").ok().as_deref() == Some("1") || parser_stage3()
 }
 
-/// Entry policy: allow top-level `main` resolution in addition to `Main.main`.
-/// Default: true (prefer `Main.main` when both exist; otherwise accept `main`).
+/// Entry policy (deprecated): allow top-level `main` resolution in addition to `Main.main`.
+/// Default: false (Strict policy). Use CLI `--entry` to override explicitly.
 pub fn entry_allow_toplevel_main() -> bool {
     match std::env::var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN").ok() {
         Some(v) => {

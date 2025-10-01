@@ -58,6 +58,7 @@ pub struct CliConfig {
     pub build_profile: Option<String>,
     pub build_target: Option<String>,
     pub cli_usings: Vec<String>,
+    pub entry: Option<String>,
     pub emit_mir_json: Option<String>,
     pub emit_exe: Option<String>,
     pub emit_exe_nyrt: Option<String>,
@@ -74,7 +75,7 @@ impl CliConfig {
 
     pub fn as_groups(&self) -> CliGroups {
         CliGroups {
-            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone() },
+            input: InputConfig { file: self.file.clone(), cli_usings: self.cli_usings.clone(), entry: self.entry.clone() },
             debug: DebugConfig {
                 debug_fuel: self.debug_fuel,
                 dump_ast: self.dump_ast,
@@ -196,6 +197,7 @@ impl Default for CliConfig {
             macro_expand_child: None,
             dump_expanded_ast_json: false,
             macro_ctx_json: None,
+            entry: None,
         }
     }
 }

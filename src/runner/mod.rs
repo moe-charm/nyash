@@ -26,6 +26,7 @@ pub mod modes;
 mod pipe_io;
 mod pipeline;
 mod jit_direct;
+mod entry_resolver;
 mod selfhost;
 mod tasks;
 mod trace;

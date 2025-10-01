@@ -21,7 +21,7 @@ pub fn parse_json_v0_line(line: &str) -> Result<MirModule, String> {
 
 /// Emit MIR JSON for PyVM and execute the Python runner. Returns exit code on success.
 /// Prints a verbose note when `NYASH_CLI_VERBOSE=1`.
-pub fn run_pyvm_module(module: &MirModule, label: &str) -> Option<i32> {
+pub fn run_pyvm_module(module: &MirModule, label: &str, entry_override: Option<&str>) -> Option<i32> {
     // Resolve python3 and runner path
     let py3 = which::which("python3").ok()?;
     let runner = Path::new("tools/pyvm_runner.py");
@@ -40,16 +40,9 @@ pub fn run_pyvm_module(module: &MirModule, label: &str) -> Option<i32> {
         eprintln!("[Bridge] using PyVM ({}) → {}", label, mir_json_path.display());
     }
     // Select entry (prefer Main.main; top-level main only if allowed)
-    let allow_top = crate::config::env::entry_allow_toplevel_main();
-    let entry = if module.functions.contains_key("Main.main") {
-        "Main.main"
-    } else if allow_top && module.functions.contains_key("main") {
-        "main"
-    } else if module.functions.contains_key("main") {
-        eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence.");
-        "main"
-    } else {
-        "Main.main"
+    let entry = match crate::runner::entry_resolver::resolve_entry_for_module(module, entry_override) {
+        Ok(res) => res.name,
+        Err(e) => { eprintln!("❌ {}", e); return None; }
     };
     let status = std::process::Command::new(py3)
         .args([
@@ -57,7 +50,7 @@ pub fn run_pyvm_module(module: &MirModule, label: &str) -> Option<i32> {
             "--in",
             &mir_json_path.display().to_string(),
             "--entry",
-            entry,
+            &entry,
         ])
         .status()
         .map_err(|e| format!("spawn pyvm: {}", e))
