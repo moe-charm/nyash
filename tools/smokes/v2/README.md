@@ -53,8 +53,10 @@ tools/smokes/v2/
 ├── README.md                 # このファイル
 ├── profiles/                 # テストプロファイル
 │   ├── quick/                # 開発時高速テスト（1-2分）
-│   │   ├── core/             # 言語・制御構文・演算
-│   │   └── boxes/            # 各Boxの最小API
+│   │   ├── core/             # 言語・制御構文・演算（プラグイン非依存）
+│   │   ├── boxes/            # 各Boxの最小API
+│   │   ├── selfhost/         # selfhost/pipeline_v2/Stage‑1/Emit 最小テスト
+│   │   └── llvm/             # LLVM/ハーネスを使う軽量テスト（IR/trace など）
 │   ├── integration/          # 統合テスト（5-10分）
 │   │   ├── parity/           # VM↔LLVM・動的↔静的観点合わせ
 │   │   └── plugins/          # プラグイン整合性
@@ -110,6 +112,15 @@ run_test "test_name" {
 - toString/length/concat等の基本API
 - 1Box1ファイル原則
 - エラーハンドリング確認
+
+#### **quick/selfhost** - selfhost / emit-only / pipeline_v2
+- JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
+- 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
+- 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
+
+#### **quick/llvm** - 軽量LLVM/ハーネス・トレース
+- llvmlite ハーネス使用のミニテスト（IRダンプ/trace）
+- ビルドが無い環境では自動SKIP（検出は run.sh に内蔵）
 
 #### **integration/parity** - VM↔LLVM観点合わせ
 - 同一スクリプトでRust VM vs LLVM実行
@@ -179,6 +190,8 @@ run_test "test_name" {
 - Quick/Core: 目安 12〜16 本。意味論の軽量ガードのみ（< 0.5s/本）
   - 増やす基準: バグ/回帰が出たとき“最小再現”を1本追加
   - 既存と同型のバリエーションは増やさない（効果逓減を避ける）
+- Quick/Selfhost: 目安 6〜10 本。emit-only/CFG/LocalSSA 代表ケース（ヘッダ/branch/copy）
+- Quick/LLVM: 目安 2〜4 本。IR/trace の最小検査
 - Integration/Parity: 目安 8〜10 本。代表構文の VM ↔ LLVM ハーネス一致
   - 増やす基準: LLVM 側の修正で差分が出る領域のみ 1 本追加
 - Plugins: 1〜3 本/プラグイン。環境依存は必ず SKIP ガード
