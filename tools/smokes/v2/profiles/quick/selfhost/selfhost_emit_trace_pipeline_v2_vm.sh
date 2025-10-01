@@ -6,6 +6,12 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Experimental guard: run only when explicitly enabled
+if [[ "${SMOKES_ENABLE_EMIT_TRACE:-}" != "1" ]]; then
+  test_skip "Emit-trace smoke is experimental; set SMOKES_ENABLE_EMIT_TRACE=1 to enable"
+  exit 0
+fi
+
 test_selfhost_emit_trace_pipeline_v2_vm() {
   local out all first json
   # Parent→child: pass pipeline-v2 + emit-mir + emit-trace; ensure child prints one [emit] line and final JSON

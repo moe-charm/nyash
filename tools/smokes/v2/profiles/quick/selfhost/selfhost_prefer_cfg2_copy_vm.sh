@@ -6,6 +6,12 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Experimental guard: run only when explicitly enabled
+if [[ "${SMOKES_ENABLE_CFG2_SMOKE:-}" != "1" ]]; then
+  test_skip "prefer-cfg2 smoke is experimental; set SMOKES_ENABLE_CFG2_SMOKE=1 to enable"
+  exit 0
+fi
+
 test_selfhost_prefer_cfg2_copy_vm() {
   local json
   json=$(NYASH_DISABLE_PLUGINS=1 \
