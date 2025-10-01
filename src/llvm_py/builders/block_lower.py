@@ -224,6 +224,16 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                         created_ids.append(dst)
             except Exception:
                 pass
+
+        # 箱理論: 未完了PHIの完成（ループPHI対応）
+        # Complete incomplete PHI nodes after body ops are lowered (for loop PHIs)
+        if phi_ops:
+            try:
+                phi_handler.complete_incomplete_phis()
+                trace_debug(f"[llvm-py] Completed incomplete PHI edges")
+            except Exception as e:
+                trace_debug(f"[llvm-py] Warning: Failed to complete PHI edges: {e}")
+
         # Lower terminators
         for inst in term_ops:
             try:
