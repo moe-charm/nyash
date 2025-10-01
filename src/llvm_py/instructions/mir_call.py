@@ -20,7 +20,6 @@ def lower_mir_call(owner, builder: ir.IRBuilder, mir_call: Dict[str, Any], dst_v
     - vmap: Value mapping dict
     - resolver: Value resolver instance
     """
-
     # Check if unified call is enabled
     use_unified = os.getenv("NYASH_MIR_UNIFIED_CALL", "1").lower() not in ("0", "false", "off")
     if not use_unified:

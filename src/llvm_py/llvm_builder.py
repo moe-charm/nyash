@@ -656,9 +656,17 @@ class NyashLLVMBuilder:
         # Create target machine for the specified target triple
         target = llvm.Target.from_triple(self.target_triple)
         target_machine = target.create_target_machine()
-        
+
         # Compile
         ir_text = str(self.module)
+
+        # Debug: Always dump IR for debugging
+        try:
+            with open('/tmp/debug_ir.ll', 'w') as f:
+                f.write(ir_text)
+            print(f"[DEBUG] IR dumped to /tmp/debug_ir.ll")
+        except Exception as e:
+            print(f"[DEBUG] Failed to dump IR: {e}")
         # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
         # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Additionally, auto-enable when harness is requested.
         if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1' or os.environ.get('NYASH_LLVM_USE_HARNESS') == '1':

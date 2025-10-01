@@ -224,6 +224,13 @@ class Resolver:
                         placeholder = cand
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
+                # 箱理論: vmapに既にPHIが存在する場合は、それを使用（PhiHandlerからの重複回避）
+                existing_phi = vmap.get(value_id)
+                if existing_phi is not None and hasattr(existing_phi, 'add_incoming'):
+                    trace_phi(f"[resolve] use existing PHI from vmap: bb{cur_bid} v{value_id}")
+                    result = existing_phi
+                    return result
+
                 # No declared PHI and multi-pred: synthesize a local PHI at the head of the block
                 # using end-of-block snapshots from predecessors.
                 try:

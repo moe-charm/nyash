@@ -217,6 +217,127 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - 🔄 **Phase 2.6**: compare/branch/jump動作確認
 - 🔄 **Phase 2.7**: スモークテスト整備
 
+### 🚀 **Phase 15.8開始！LLVM→WASM実装** (2025-10-01 ~)
+- 🌿 **専用ブランチ**: `wasm-development` (← `selfhost`からfork)
+- 🎯 **目標**: MIR18命令 → WASM変換、ブラウザ/エッジ環境対応
+- 📋 **戦略**: llvm_py拡張（既存800行活用）+ WASI runtime連携
+- 📚 **計画書**: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
+
+#### **Week 1進捗** (2025-10-01 ~ 10-07) ✅ **完了！**
+- ✅ **Phase 1.1**: llvmlite WASM初期化 [完了]
+  - targetパラメータ追加（native/wasm32）
+  - wasm32-unknown-wasi triple初期化
+  - module.triple設定
+  - 統合テストスクリプト作成
+  - **成果**: native/WASM両方のコンパイル成功、triple検証PASS
+
+- ✅ **Phase 1.2/1.3**: WASMビルドパイプライン [完了]
+  - WASM calling convention調整（external linkage）
+  - llvmliteで直接WASMバイナリ生成成功
+  - tools/build_wasm.sh作成（MIR JSON → WASM）
+  - tools/wasm_runner.js作成（Node.js実行）
+  - **成果**: WASMバイナリ生成成功（102 bytes）
+  - **発見**: llvmliteだけでWASM生成可能！LLC/wasm-ld不要
+  - **制限**: 関数エクスポートにLLVM toolchain推奨
+
+#### **Week 1総括**
+🎉 **予定以上の成果！**
+- 当初計画: llvmlite初期化 + calling convention + ビルドスクリプト
+- 実際成果: 上記 + WASMバイナリ直接生成 + Node.js実行環境
+- 重要発見: LLVMツールチェーン不要でWASM生成可能（llvmlite内蔵）
+
+#### **Week 2進捗** (2025-10-08 ~ 10-14) ✅ **完了！**
+- ✅ **Phase 2.1**: 関数エクスポート解決 + 基本パイプライン [完了]
+  - WASI runtime実装（fd_write, proc_exit）
+  - wasm_runner.js更新（BigInt対応）
+  - Python自己完結型ツールチェーン確立
+
+- ✅ **Phase 2.2**: WASI fd_write実装 [完了]
+  - externcall.py更新（nyrt_print → nyash.console.log）
+
+- ✅ **Phase 2.3**: 文字列constants処理実装 [完了]
+  - function_lower.pyに40+行追加
+  - グローバル文字列リテラル生成
+  - **🎉 Hello World WASM実行成功！**（"Hello, WASM!" 出力確認）
+
+- ✅ **Phase 2.4**: binop演算完全実装 [完了]
+  - binop.py既存実装確認（269行）
+  - 算術演算: +, -, *, /, %
+  - ビット演算: &, |, ^, <<, >>
+  - **🎉 全演算WASM動作確認完了！**（44 = 15+12+12+5）
+
+- ✅ **Phase 2.5**: 箱理論LLVM/WASM分離設計 [完了]
+  - targets/モジュール構造確立（base/wasm/native/factory）
+  - 責任分離達成（WASM/Nativeの違いを局所化）
+  - **🎉 箱理論実践完了！**
+
+- ✅ **Phase 2.6**: compare/branch/jump実装 [完了]
+  - compare演算: 10 > 5 = true (1) → 1 * 100 = 100 ✅
+  - branch分岐: if (10 > 5) then 100 else 200 → 100 ✅
+  - jump無条件: jump to block → 42 ✅
+  - **🎉 制御フロー完全動作確認！**
+
+- ✅ **Phase 2.7**: スモークテスト整備 [完了]
+  - arithmetic_smoke.json, compare_smoke.json, control_flow_smoke.json
+  - run_wasm_smoke_tests.sh（一括実行スクリプト）
+  - **🎉 回帰テスト体制確立完了！**（3テスト全PASS）
+
+#### **Week 2総括** (2025-10-01)
+**達成事項**:
+- 🎉 P0課題完全解決（関数エクスポート → Python自己完結型ツール）
+- 🎉 Hello World WASM実行成功（完全パイプライン確立）
+- 🎉 binop全演算WASM動作確認（既存実装そのまま動作）
+- 🎉 箱理論実装完了（targets/モジュール分離）
+- 🎉 制御フロー完全動作（compare/branch/jump）
+- 🎉 回帰テスト体制確立（3スモークテスト + 自動実行）
+
+**重要発見**:
+- ✅ llvmliteだけでWASM生成可能（LLC/wasm-ld不要）
+- ✅ 既存LLVM実装がそのままWASM動作（追加実装不要）
+- ✅ Python自己完結型（LLVMツールチェーン不要）
+
+#### **Week 3進捗** (2025-10-15 ~ 10-21) ✅ **Phase 3.1完了！**
+- ✅ **Phase 3.1-A**: 根本原因特定完了 [2025-10-01]
+  - block_lower.pyでPHI命令スキップを発見
+  - resolver.pyで重複PHI生成を発見
+  - vmapの参照不一致を特定
+  - **手法**: ultrathink + LLVM IR直接確認 + PhiHandler verbose
+
+- ✅ **Phase 3.1-B**: 箱化実装完了 [2025-10-01]
+  - **PhiHandler** (197行) - PHI処理統一ハンドラー
+  - **InstructionContext** (98行) - 命令コンテキスト箱化
+  - block_lower.py, instruction_lower.py, resolver.py修正
+  - **成果**: 完全な箱理論実践（分離・境界・見える化）
+
+- ✅ **Phase 3.1-C**: テスト完全成功 [2025-10-01]
+  - test_phi_if.json実行成功
+  - 正しいLLVM IR生成: `%"phi_6" = phi i64 [100, %"bb1"], [200, %"bb2"]`
+  - コンパイル成功: `tmp/nyash_llvm_py.o`
+  - **成果**: PHI先頭配置・正しい値・重複なし・完全動作✅
+
+- 📋 **Phase 3.2**: ループPHIテスト（次のステップ）
+- 📋 **Phase 3.3**: 複雑制御フロー（予定）
+
+#### **Week 3総括** (2025-10-01完了) 🎉🎉🎉
+**達成事項**:
+- 🏆 **PHI処理完全修正**: 3つの根本原因特定・解決
+- 🏆 **箱化実装完了**: 2つの新規箱クラス（295行）
+- 🏆 **テスト完全成功**: if文PHIテストPASS
+- 📝 **新規ファイル**: `phi_handler.py` (197行), `instruction_context.py` (98行), `test_phi_if.json`
+- 🔧 **修正ファイル**: block_lower, instruction_lower, resolver, mir_call, llvm_builder (5ファイル)
+
+**重要成果**:
+- ✅ PHI命令が正しい位置（ブロック先頭）に生成
+- ✅ PHI値が正しい（100, 200）
+- ✅ 重複なし（1つのPHIのみ）
+- ✅ コンパイル成功
+- ✅ 箱理論実践完了（PhiHandler, InstructionContext）
+
+**技術革新**:
+- 箱化によるPHI処理の完全統一
+- vmap二重登録による重複回避
+- ultrathink調査手法の確立
+
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/nyash_kernel` 完全移行
 - ✅ **42%削減達成**: `with_legacy_vm_args` 11箇所系統的削除完了

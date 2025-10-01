@@ -2,6 +2,9 @@ from typing import Dict, Any
 from llvmlite import ir
 from trace import debug as trace_debug
 
+# Import instruction context (箱理論)
+from builders.instruction_context import InstructionContext
+
 # Import instruction handlers
 from instructions.const import lower_const
 from instructions.binop import lower_binop
@@ -21,6 +24,7 @@ from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
 from instructions.controlflow.while_ import lower_while_regular
 from instructions.mir_call import lower_mir_call  # New unified handler
+from instructions.phi import lower_phi  # PHI instruction for SSA merging
 
 
 def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: ir.Function):
@@ -31,6 +35,13 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
     op = inst.get("op")
     # Pick current vmap context (per-block context during lowering)
     vmap_ctx = getattr(owner, '_current_vmap', owner.vmap)
+
+    # 箱理論: InstructionContext作成（PHI等の複雑な命令用）
+    # Create instruction context box for complex instructions like PHI
+    try:
+        inst_ctx = InstructionContext.from_owner(owner, builder, builder.block)
+    except Exception:
+        inst_ctx = None  # Fallback if context creation fails
 
     if op == "const":
         dst = inst.get("dst")
@@ -69,13 +80,25 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
 
     elif op == "phi":
         # PHI instruction for SSA value merging - 箱理論実装
-        from instructions.phi_simple import lower_phi_simple
+        # InstructionContext使用（将来的に全命令に展開予定）
         dst = inst.get("dst")
         incoming_list = inst.get("incoming", [])
         # Convert incoming list format: [{"block": bid, "value": vid}, ...]
         incoming = [(item.get("value"), item.get("block")) for item in incoming_list]
-        lower_phi_simple(builder, dst, incoming, vmap_ctx, owner.bb_map, builder.block,
-                        owner.block_end_values, debug=False)
+
+        # 箱化されたコンテキスト使用（inst_ctx経由でアクセス可能）
+        # Using boxed context (accessible via inst_ctx)
+        lower_phi(
+            builder=builder,
+            dst_vid=dst,
+            incoming=incoming,
+            vmap=vmap_ctx,
+            bb_map=owner.bb_map,
+            current_block=builder.block,
+            resolver=owner.resolver,
+            block_end_values=owner.block_end_values,
+            preds_map=owner.preds
+        )
 
     elif op == "compare":
         # Dedicated compare op

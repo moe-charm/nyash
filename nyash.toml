@@ -42,6 +42,9 @@ selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.nyash"
 selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.nyash"
 selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.nyash"
 
+# WASM target (dev only; refer in smokes)
+targets.wasm.driver = "apps/targets/wasm/wasm_driver_box.hako"
+
 # Selfhost compiler main module (avoid file-path using in dev wrappers)
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.nyash"
 
