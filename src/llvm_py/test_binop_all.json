@@ -1,0 +1,125 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 10},
+              "comment": "10"
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 5},
+              "comment": "5"
+            },
+            {
+              "op": "binop",
+              "dst": 3,
+              "operation": "+",
+              "lhs": 1,
+              "rhs": 2,
+              "comment": "10 + 5 = 15"
+            },
+            {
+              "op": "const",
+              "dst": 4,
+              "value": {"type": "i64", "value": 20},
+              "comment": "20"
+            },
+            {
+              "op": "const",
+              "dst": 5,
+              "value": {"type": "i64", "value": 8},
+              "comment": "8"
+            },
+            {
+              "op": "binop",
+              "dst": 6,
+              "operation": "-",
+              "lhs": 4,
+              "rhs": 5,
+              "comment": "20 - 8 = 12"
+            },
+            {
+              "op": "const",
+              "dst": 7,
+              "value": {"type": "i64", "value": 3},
+              "comment": "3"
+            },
+            {
+              "op": "const",
+              "dst": 8,
+              "value": {"type": "i64", "value": 4},
+              "comment": "4"
+            },
+            {
+              "op": "binop",
+              "dst": 9,
+              "operation": "*",
+              "lhs": 7,
+              "rhs": 8,
+              "comment": "3 * 4 = 12"
+            },
+            {
+              "op": "const",
+              "dst": 10,
+              "value": {"type": "i64", "value": 15},
+              "comment": "15"
+            },
+            {
+              "op": "const",
+              "dst": 11,
+              "value": {"type": "i64", "value": 3},
+              "comment": "3"
+            },
+            {
+              "op": "binop",
+              "dst": 12,
+              "operation": "/",
+              "lhs": 10,
+              "rhs": 11,
+              "comment": "15 / 3 = 5"
+            },
+            {
+              "op": "binop",
+              "dst": 13,
+              "operation": "+",
+              "lhs": 3,
+              "rhs": 6,
+              "comment": "15 + 12 = 27"
+            },
+            {
+              "op": "binop",
+              "dst": 14,
+              "operation": "+",
+              "lhs": 13,
+              "rhs": 9,
+              "comment": "27 + 12 = 39"
+            },
+            {
+              "op": "binop",
+              "dst": 15,
+              "operation": "+",
+              "lhs": 14,
+              "rhs": 12,
+              "comment": "39 + 5 = 44"
+            },
+            {
+              "op": "ret",
+              "value": 15,
+              "comment": "return 44 (15+12+12+5)"
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

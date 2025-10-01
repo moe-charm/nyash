@@ -1,0 +1,116 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 10}
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 5}
+            },
+            {
+              "op": "compare",
+              "dst": 3,
+              "operation": ">",
+              "lhs": 1,
+              "rhs": 2,
+              "comment": "10 > 5"
+            },
+            {
+              "op": "branch",
+              "cond": 3,
+              "then": 1,
+              "else": 4,
+              "comment": "if (10 > 5) goto block1 else goto block4"
+            }
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 4,
+              "value": {"type": "i64", "value": 3}
+            },
+            {
+              "op": "const",
+              "dst": 5,
+              "value": {"type": "i64", "value": 7}
+            },
+            {
+              "op": "compare",
+              "dst": 6,
+              "operation": "<",
+              "lhs": 4,
+              "rhs": 5,
+              "comment": "3 < 7"
+            },
+            {
+              "op": "branch",
+              "cond": 6,
+              "then": 2,
+              "else": 3,
+              "comment": "if (3 < 7) goto block2 else goto block3"
+            }
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 10,
+              "value": {"type": "i64", "value": 111},
+              "comment": "nested then-then: return 111"
+            },
+            {
+              "op": "ret",
+              "value": 10
+            }
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 20,
+              "value": {"type": "i64", "value": 222},
+              "comment": "nested then-else: return 222"
+            },
+            {
+              "op": "ret",
+              "value": 20
+            }
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 30,
+              "value": {"type": "i64", "value": 333},
+              "comment": "outer else: return 333"
+            },
+            {
+              "op": "ret",
+              "value": 30
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}

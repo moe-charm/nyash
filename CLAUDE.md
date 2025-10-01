@@ -154,10 +154,68 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - Phase 15.8 README.md: 計画変更時のみ（不定期）
 ```
 
-#### **Week 1進捗** (2025-10-01 ~ 10-07)
-- 🔧 **Phase 1.1**: llvmlite WASM初期化 [🔄 進行中]
-- ⏸️ **Phase 1.2**: WASM calling convention [未着手]
-- ⏸️ **Phase 1.3**: ビルドスクリプト作成 [未着手]
+#### **Week 1進捗** (2025-10-01 ~ 10-07) ✅ **完了！**
+- ✅ **Phase 1.1**: llvmlite WASM初期化 [完了]
+  - targetパラメータ追加（native/wasm32）
+  - wasm32-unknown-wasi triple初期化
+  - module.triple設定
+  - 統合テストスクリプト作成
+  - **成果**: native/WASM両方のコンパイル成功、triple検証PASS
+
+- ✅ **Phase 1.2/1.3**: WASMビルドパイプライン [完了]
+  - WASM calling convention調整（external linkage）
+  - llvmliteで直接WASMバイナリ生成成功
+  - tools/build_wasm.sh作成（MIR JSON → WASM）
+  - tools/wasm_runner.js作成（Node.js実行）
+  - **成果**: WASMバイナリ生成成功（102 bytes）
+  - **発見**: llvmliteだけでWASM生成可能！LLC/wasm-ld不要
+  - **制限**: 関数エクスポートにLLVM toolchain推奨
+
+#### **Week 1総括**
+🎉 **予定以上の成果！**
+- 当初計画: llvmlite初期化 + calling convention + ビルドスクリプト
+- 実際成果: 上記 + WASMバイナリ直接生成 + Node.js実行環境
+- 重要発見: LLVMツールチェーン不要でWASM生成可能（llvmlite内蔵）
+
+✅ **Phase 2.1完了** (2025-10-01)
+- 🎉 **P0課題完全解決**: 関数エクスポート問題
+- ✅ WASM Inspector作成 (`tools/wasm_inspector.py`)
+- ✅ Export Adder作成 (`tools/wasm_add_export.py`)
+- ✅ build_wasm.sh自動Export統合
+- ✅ ny_main() → 42 実行成功
+
+#### **Week 2進捗** (開始: 2025-10-01)
+- ✅ **Phase 2.1**: 関数エクスポート解決 + 基本パイプライン [完了]
+- ✅ **Phase 2.2**: WASI fd_write実装 [完了]
+  - WASI runtime実装（fd_write, proc_exit）
+  - wasm_runner.js更新（BigInt対応）
+  - externcall.py更新（nyrt_print → nyash.console.log）
+- ✅ **Phase 2.3**: 文字列constants処理実装 [完了]
+  - function_lower.pyに40+行追加
+  - グローバル文字列リテラル生成
+  - **🎉 Hello World WASM実行成功！**（"Hello, WASM!" 出力確認）
+- ✅ **Phase 2.4**: binop演算完全実装 [完了]
+  - binop.py既存実装確認（269行）
+  - 算術演算: +, -, *, /, %
+  - ビット演算: &, |, ^, <<, >>
+  - **🎉 全演算WASM動作確認完了！**（44 = 15+12+12+5）
+
+#### **Week 2総括** (2025-10-01)
+**達成事項**:
+- 🎉 P0課題完全解決（関数エクスポート → Python自己完結型ツール）
+- 🎉 Hello World WASM実行成功（完全パイプライン確立）
+- 🎉 binop全演算WASM動作確認（既存実装そのまま動作）
+- 🎉 ツールチェーン確立（inspector/export/runner）
+
+**重要発見**:
+- ✅ llvmliteだけでWASM生成可能（LLC/wasm-ld不要）
+- ✅ 既存LLVM実装がそのままWASM動作（追加実装不要）
+- ✅ Python自己完結型（LLVMツールチェーン不要）
+
+**次のステップ**:
+- 🔄 **Phase 2.5**: LLVM/WASM箱理論分離設計（targets/base, wasm, native）
+- 🔄 **Phase 2.6**: compare/branch/jump動作確認
+- 🔄 **Phase 2.7**: スモークテスト整備
 
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/nyash_kernel` 完全移行

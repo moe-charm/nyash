@@ -121,7 +121,9 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             if opx in ("ret","jump","branch"):
                 term_ops.append(inst)
             elif opx == "phi":
-                continue
+                # PHI instructions should be processed as regular body ops
+                # They will be handled by instruction_lower.py
+                body_ops.append(inst)
             else:
                 body_ops.append(inst)
         # Per-block SSA map

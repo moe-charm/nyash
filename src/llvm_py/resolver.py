@@ -224,8 +224,48 @@ class Resolver:
                         placeholder = cand
                 result = placeholder if (placeholder is not None and hasattr(placeholder, 'add_incoming')) else ir.Constant(self.i64, 0)
             else:
-                # No declared PHI and multi-pred: do not synthesize; fallback to zero
-                result = ir.Constant(self.i64, 0)
+                # No declared PHI and multi-pred: synthesize a local PHI at the head of the block
+                # using end-of-block snapshots from predecessors.
+                try:
+                    # Create PHI at block head
+                    head_builder = ir.IRBuilder(current_block)
+                    try:
+                        head_builder.position_at_start(current_block)
+                    except Exception:
+                        pass
+                    phi = head_builder.phi(self.i64, name=f"phi_loc_{value_id}")
+                    # Add incoming values from each predecessor
+                    incomings = []
+                    for p in pred_ids:
+                        v_end = self._value_at_end_i64(value_id, p, preds, block_end_values, vmap, bb_map)
+                        # Resolve predecessor basic block
+                        bbpred = None
+                        try:
+                            if bb_map is not None:
+                                bbpred = bb_map.get(int(p))
+                        except Exception:
+                            bbpred = None
+                        if bbpred is None:
+                            # Cannot resolve predecessor; coerce to zero to keep IR valid
+                            v_end = ir.Constant(self.i64, 0)
+                        incomings.append((v_end, bbpred))
+                    # Filter out any missing predecessor blocks (should be rare)
+                    incomings = [(v, b) for (v, b) in incomings if b is not None]
+                    if len(incomings) == 0:
+                        result = ir.Constant(self.i64, 0)
+                    else:
+                        for (v, b) in incomings:
+                            phi.add_incoming(v, b)
+                        trace_phi(f"[resolve] synth local PHI: bb{cur_bid} v{value_id} preds={pred_ids}")
+                        # Update local map to dominate subsequent users in this block
+                        try:
+                            vmap[value_id] = phi
+                        except Exception:
+                            pass
+                        result = phi
+                except Exception:
+                    # Fallback to zero on any error to keep IR generation robust in dev
+                    result = ir.Constant(self.i64, 0)
         
         # Cache and return
         self.i64_cache[cache_key] = result

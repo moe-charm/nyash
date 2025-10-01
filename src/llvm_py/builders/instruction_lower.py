@@ -68,8 +68,14 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
                      owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None))
 
     elif op == "phi":
-        # No-op here: PHIはメタのみ（resolverがon‑demand生成）
-        return
+        # PHI instruction for SSA value merging - 箱理論実装
+        from instructions.phi_simple import lower_phi_simple
+        dst = inst.get("dst")
+        incoming_list = inst.get("incoming", [])
+        # Convert incoming list format: [{"block": bid, "value": vid}, ...]
+        incoming = [(item.get("value"), item.get("block")) for item in incoming_list]
+        lower_phi_simple(builder, dst, incoming, vmap_ctx, owner.bb_map, builder.block,
+                        owner.block_end_values, debug=False)
 
     elif op == "compare":
         # Dedicated compare op

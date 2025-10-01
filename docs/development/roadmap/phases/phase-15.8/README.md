@@ -73,10 +73,18 @@ WASM Binary (.wasm)
 3. **Hello World動作確認**
    - `print("Hello, WASM!")` → WASM実行成功
 
-#### 成果物
-- ✅ `tools/build_wasm.sh`
-- ✅ `apps/tests/hello_wasm.hkr` → `hello_wasm.wasm`
-- ✅ Node.js実行確認スクリプト
+#### 成果物 ✅ **完了** (2025-10-01)
+- ✅ `tools/build_wasm.sh` - WASMビルドスクリプト
+- ✅ `tools/wasm_runner.js` - Node.js実行確認スクリプト
+- ✅ `tools/test_wasm_init.sh` - 統合テストスクリプト（Phase 1.1+1.2+1.3）
+- ✅ `src/llvm_py/llvm_builder.py` - WASM target対応（wasm32-unknown-wasi）
+- 📝 `apps/tests/hello_wasm.hkr` - 保留（Week 2で関数エクスポート解決後）
+
+**Week 1完了報告**:
+- 🎉 llvmliteだけでWASMバイナリ生成成功（LLC/wasm-ld不要）
+- ✅ Native/WASMコンパイル両対応（--target native/wasm32）
+- ✅ WASM triple検証PASS（wasm32-unknown-wasi）
+- ⚠️ 関数エクスポート制限（LLVM toolchain or wabt後処理で解決予定）
 
 ---
 

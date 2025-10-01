@@ -1,0 +1,55 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {
+              "op": "const",
+              "dst": 1,
+              "value": {"type": "i64", "value": 10},
+              "comment": "lhs = 10"
+            },
+            {
+              "op": "const",
+              "dst": 2,
+              "value": {"type": "i64", "value": 5},
+              "comment": "rhs = 5"
+            },
+            {
+              "op": "compare",
+              "dst": 3,
+              "operation": ">",
+              "lhs": 1,
+              "rhs": 2,
+              "comment": "10 > 5 should be true (1)"
+            },
+            {
+              "op": "const",
+              "dst": 4,
+              "value": {"type": "i64", "value": 100},
+              "comment": "multiply by 100"
+            },
+            {
+              "op": "binop",
+              "dst": 5,
+              "operation": "*",
+              "lhs": 3,
+              "rhs": 4,
+              "comment": "true * 100 = 100"
+            },
+            {
+              "op": "ret",
+              "value": 5,
+              "comment": "return 100 (proof of true)"
+            }
+          ]
+        }
+      ],
+      "constants": {}
+    }
+  ]
+}
