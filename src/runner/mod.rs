@@ -106,6 +106,20 @@ impl NyashRunner {
             }
             return;
         }
+        // Early: global emit gates (independent of backend)
+        // If --emit-mir-json is specified, compile and emit JSON, then exit.
+        // This keeps behavior consistent regardless of selected backend (vm/mir/llvm).
+        {
+            let groups = self.config.as_groups();
+            if groups.emit.emit_mir_json.is_some() {
+                if let Some(ref file) = groups.input.file {
+                    // Reuse MIR mode to parse/compile and write JSON, then exit
+                    self.execute_mir_mode(file);
+                    return;
+                }
+            }
+        }
+
         // Common env + runtime/plugins
         self.apply_common_env(&groups);
         self.init_runtime_and_plugins(&groups);

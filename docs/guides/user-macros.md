@@ -147,7 +147,7 @@ Purpose: restrict side‑effects and ensure deterministic macro expansion.
   - net=false → no Http/Socket inside macro
   - env=false → MacroCtx.getEnv disabled; child inherits scrubbed env
 - Planned configuration (nyash.toml): see `docs/reference/macro/capabilities.md`
-- PoC mapping: child is always `NYASH_VM_USE_PY=1`, `NYASH_DISABLE_PLUGINS=1`, timeout via `NYASH_NY_COMPILER_TIMEOUT_MS`
+- PoC mapping: child is always `NYASH_VM_USE_PY=1`, `NYASH_PLUGIN_POLICY=off`（compat: `NYASH_DISABLE_PLUGINS=1`）、timeout via `NYASH_NY_COMPILER_TIMEOUT_MS`
 
 ## Top-level static MacroBoxSpec (safety)
 - 既定では無効（`NYASH_MACRO_TOPLEVEL_ALLOW=0`）。Box宣言なしで `static function MacroBoxSpec.expand` を受理したい場合は `--macro-top-level-allow` を指定してください。

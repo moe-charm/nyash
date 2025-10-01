@@ -27,7 +27,13 @@ def ensure_phi(builder, block_id: int, dst_vid: int, bb: ir.Block) -> ir.Instruc
         builder.vmap[dst_vid] = phi
         trace({"phi": "ensure_predecl", "block": int(block_id), "dst": int(dst_vid)})
         return phi
+    # Check both global and current block-local maps to avoid duplicate PHIs
     cur = builder.vmap.get(dst_vid)
+    if cur is None and hasattr(builder, "_current_vmap"):
+        try:
+            cur = builder._current_vmap.get(dst_vid)
+        except Exception:
+            cur = None
     try:
         if cur is not None and hasattr(cur, "add_incoming") and getattr(getattr(cur, "basic_block", None), "name", None) == bb.name:
             return cur
@@ -35,6 +41,12 @@ def ensure_phi(builder, block_id: int, dst_vid: int, bb: ir.Block) -> ir.Instruc
         pass
     ph = b.phi(builder.i64, name=f"phi_{dst_vid}")
     builder.vmap[dst_vid] = ph
+    # Keep block-local view in sync when present
+    try:
+        if hasattr(builder, "_current_vmap") and isinstance(builder._current_vmap, dict):
+            builder._current_vmap[dst_vid] = ph
+    except Exception:
+        pass
     trace({"phi": "ensure_create", "block": int(block_id), "dst": int(dst_vid)})
     return ph
 
@@ -205,13 +217,21 @@ def finalize_phis(builder):
             allow_create = False
             try:
                 import os
-                allow_create = os.environ.get('NYASH_LLVM_PHI_ALLOW_CREATE') == '1'
+                # Default: wire-only (do not create new PHIs). Opt-in via env.
+                env_val = os.environ.get('NYASH_LLVM_PHI_ALLOW_CREATE')
+                allow_create = (env_val == '1') if env_val is not None else False
             except Exception:
                 allow_create = False
 
             if phi_obj is None or not hasattr(phi_obj, 'add_incoming'):
                 if allow_create:
-                    # Fallback (opt‑in): ensure/create a PHI only when explicitly allowed.
+                    # Ensure/create a placeholder at block head, then wire incomings.
+                    bb = (getattr(builder, 'bb_map', {}) or {}).get(int(block_id))
+                    if bb is not None:
+                        try:
+                            ensure_phi(builder, int(block_id), int(dst_vid), bb)
+                        except Exception:
+                            pass
                     wired = wire_incomings(builder, int(block_id), int(dst_vid), incoming)
                 else:
                     trace({"phi": "finalize_skip_missing_phi", "block": int(block_id), "dst": int(dst_vid)})

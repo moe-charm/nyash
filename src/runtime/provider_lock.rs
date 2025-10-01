@@ -30,9 +30,10 @@ pub fn guard_before_new_box(box_type: &str) -> Result<(), String> {
     if warn {
         // Print once per process
         let _ = WARN_ONCE.get_or_init(|| {
-            eprintln!("[provider-lock][warn] NewBox emitted before Provider Lock. Set NYASH_PROVIDER_LOCK_STRICT=1 to error.");
+            if !crate::config::env::cli_quiet() {
+                eprintln!("[provider-lock][warn] NewBox emitted before Provider Lock. Set NYASH_PROVIDER_LOCK_STRICT=1 to error.");
+            }
         });
     }
     Ok(())
 }
-

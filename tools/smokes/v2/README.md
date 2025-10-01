@@ -56,8 +56,7 @@ tools/smokes/v2/
 │   │   ├── core/             # 言語・制御構文・演算（プラグイン非依存）
 │   │   ├── boxes/            # 各Boxの最小API
 │   │   ├── selfhost/         # selfhost/pipeline_v2/Stage‑1/Emit 最小テスト
-│   │   ├── llvm/             # LLVM/ハーネスを使う軽量テスト（IR/trace など）
-│   │   └── wasm/             # WASM ハーネス（任意・ゲート付）
+│   │   └── llvm/             # LLVM/ハーネスを使う軽量テスト（IR/trace など）
 │   ├── integration/          # 統合テスト（5-10分）
 │   │   ├── parity/           # VM↔LLVM・動的↔静的観点合わせ
 │   │   └── plugins/          # プラグイン整合性
@@ -113,6 +112,21 @@ run_test "test_name" {
 - toString/length/concat等の基本API
 - 1Box1ファイル原則
 - エラーハンドリング確認
+
+#### **quick/selfhost** - selfhost / emit-only / pipeline_v2
+- JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
+- 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
+- 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
+ - 代表ケース（制御フロー）
+   - Jump 単発: `profiles/quick/selfhost/selfhost_mir_m3_jump_vm.sh`
+   - Jump チェーン: `profiles/quick/selfhost/selfhost_mir_m3_jump_chain_vm.sh`
+
+#### **quick/llvm** - 軽量LLVM/ハーネス・トレース
+- llvmlite ハーネス使用のミニテスト（IRダンプ/trace）
+- ビルドが無い環境では自動SKIP（検出は run.sh に内蔵）
+ - PHI 形状（incoming/values）コンパイル検査:
+   - `profiles/quick/llvm/harness_phi_incoming_compile_ok.sh`
+   - `profiles/quick/llvm/harness_phi_values_compile_ok.sh`
 
 #### **integration/parity** - VM↔LLVM観点合わせ
 - 同一スクリプトでRust VM vs LLVM実行
@@ -182,6 +196,8 @@ run_test "test_name" {
 - Quick/Core: 目安 12〜16 本。意味論の軽量ガードのみ（< 0.5s/本）
   - 増やす基準: バグ/回帰が出たとき“最小再現”を1本追加
   - 既存と同型のバリエーションは増やさない（効果逓減を避ける）
+- Quick/Selfhost: 目安 6〜10 本。emit-only/CFG/LocalSSA 代表ケース（ヘッダ/branch/copy）
+- Quick/LLVM: 目安 2〜4 本。IR/trace の最小検査
 - Integration/Parity: 目安 8〜10 本。代表構文の VM ↔ LLVM ハーネス一致
   - 増やす基準: LLVM 側の修正で差分が出る領域のみ 1 本追加
 - Plugins: 1〜3 本/プラグイン。環境依存は必ず SKIP ガード
@@ -192,7 +208,8 @@ run_test "test_name" {
 新しいノイズが出たらフィルタへ追加し、各テスト個別の `grep -v` は増やさない。
 
 ### LLVM パリティ（Python ハーネス）
-- Integration の `check_parity` は LLVM 実行時に `NYASH_LLVM_USE_HARNESS=1` を自動付与して llvmlite ハーネスで検証する。
+- Harness-first: Integration の LLVM 経路は llvmlite ハーネスを既定とし、`NYASH_LLVM_USE_HARNESS=1` を付与してオブジェクト生成・IR/トレースを検証する。
+- 実行までのパリティ（VM==LLVM 実行結果）は NyKernel（静的）連携が整っている環境でのみ有効。通常はハーネスでのコンパイル成功をゴールとする。
 - 使い方（例）:
   - `check_parity -c 'print("Hello")' "hello_parity"`
   - 同一コードを VM と LLVM で実行し、終了コードと整形後の標準出力を比較する。
@@ -246,15 +263,3 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend llvm test.nyash
 #### **plugins** - プラグイン専用（任意）
 - 安定検証用に最小フィクスチャプラグイン（`nyash-fixture-plugin`）を優先利用
 - 実在プラグイン（Counter/Math/String）は存在すれば追加で実行（無ければSKIP）
-#### **quick/selfhost** - selfhost / emit-only / pipeline_v2
-- JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
-- 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
-- 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
-
-#### **quick/llvm** - 軽量LLVM/ハーネス・トレース
-- llvmlite ハーネス使用のミニテスト（IRダンプ/trace）
-- ビルドが無い環境では自動SKIP（検出は run.sh に内蔵）
-
-#### **quick/wasm** - 軽量WASM（任意・ゲート）
-- 既定は SKIP。`SMOKES_ENABLE_WASM=1` または `NYASH_WASM_USE=1` で有効化
-- ハーネスやツールチェーン未整備でも他領域への影響なし（箱分離）

@@ -130,6 +130,12 @@ impl JSONBox {
     }
 }
 
+/// Public helper: stringify any NyashBox into a JSON string using serde_json
+pub fn stringify_any(value: Box<dyn NyashBox>) -> String {
+    let v = nyash_box_to_json_value(value);
+    v.to_string()
+}
+
 impl BoxCore for JSONBox {
     fn box_id(&self) -> u64 {
         self.base.id

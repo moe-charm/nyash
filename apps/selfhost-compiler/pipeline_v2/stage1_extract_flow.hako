@@ -1,0 +1,206 @@
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+flow Stage1ExtractFlow {
+  // Extract minimal info from Stage‑1 JSON (Return Int / BinOp / Compare)
+
+  _idx(s, needle) { return RegexFlow.find_from(s, needle, 0) }
+  _idx_from(s, needle, pos) { return RegexFlow.find_from(s, needle, pos) }
+
+  extract_return_int(ast_json) {
+    if ast_json == null { return 0 }
+    local ret_key = "\"type\":\"Return\""
+    local p = RegexFlow.last_index_of(ast_json, ret_key)
+    if p < 0 { p = Stage1ExtractFlow._idx(ast_json, ret_key) }
+    if p < 0 { return 0 }
+    // whitespace tolerant: find 'type:"Int"' then subsequent 'value:'
+    local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", p)
+    if tpos < 0 { return 0 }
+    local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+    if vpos < 0 { return 0 }
+    local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+    return RegexFlow.to_int(ds)
+  }
+
+  extract_return_binop(ast_json) {
+    // Return(BinOp) → {kind, lhs, rhs} or null
+    if ast_json == null { return null }
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"BinOp\"", p)
+    if q < 0 { return null }
+    local opk_pos = Stage1ExtractFlow._idx_from(ast_json, "\"op\":\"", q)
+    if opk_pos < 0 { return null }
+    local opk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", opk_pos + 6)
+    if opk_end < 0 { return null }
+    local opk = ast_json.substring(opk_pos + 6, opk_end)
+    // lhs/rhs int (whitespace tolerant)
+    local lhsp = Stage1ExtractFlow._idx_from(ast_json, "\"lhs\"", q)
+    local rhsp = Stage1ExtractFlow._idx_from(ast_json, "\"rhs\"", q)
+    if lhsp < 0 || rhsp < 0 { return null }
+    local lval = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", lhsp)
+    local rval = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", rhsp)
+    if lval < 0 || rval < 0 { return null }
+    local lhs_ds = RegexFlow.digits_from(ast_json, lval + 8)
+    local rhs_ds = RegexFlow.digits_from(ast_json, rval + 8)
+    if lhs_ds == "" || rhs_ds == "" { return null }
+    local lhs = RegexFlow.to_int(lhs_ds)
+    local rhs = RegexFlow.to_int(rhs_ds)
+    local kind = opk
+    return { kind: kind, lhs: lhs, rhs: rhs }
+  }
+
+  extract_return_compare(ast_json) {
+    // Return(Compare) → {cmp, lhs, rhs} or null
+    if ast_json == null { return null }
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Compare\"", p)
+    if q < 0 { return null }
+    local opk_pos = Stage1ExtractFlow._idx_from(ast_json, "\"op\":\"", q)
+    if opk_pos < 0 { return null }
+    local opk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", opk_pos + 6)
+    if opk_end < 0 { return null }
+    local opk = ast_json.substring(opk_pos + 6, opk_end)
+    // lhs/rhs int (whitespace tolerant)
+    local lhsp = Stage1ExtractFlow._idx_from(ast_json, "\"lhs\"", q)
+    local rhsp = Stage1ExtractFlow._idx_from(ast_json, "\"rhs\"", q)
+    if lhsp < 0 || rhsp < 0 { return null }
+    local lval = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", lhsp)
+    local rval = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", rhsp)
+    if lval < 0 || rval < 0 { return null }
+    local lhs_ds = RegexFlow.digits_from(ast_json, lval + 8)
+    local rhs_ds = RegexFlow.digits_from(ast_json, rval + 8)
+    if lhs_ds == "" || rhs_ds == "" { return null }
+    local lhs = RegexFlow.to_int(lhs_ds)
+    local rhs = RegexFlow.to_int(rhs_ds)
+    return { cmp: opk, lhs: lhs, rhs: rhs }
+  }
+
+  // If(cond=Compare(lhs,rhs,op), then=[Return(Int 1)], else=[Return(Int 0)]) → {cmp, lhs, rhs} or null
+  extract_if_compare(ast_json) {
+    if ast_json == null { return null }
+    // Find If node first (tolerant to whitespace)
+    local ip = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
+    if ip < 0 { return null }
+    // Find Compare under/after If
+    local q = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", ip)
+    if q < 0 { return null }
+    // Extract op
+    local opk_pos = RegexFlow.find_from(ast_json, "\"op\":\"", q)
+    if opk_pos < 0 { return null }
+    local opk_end = RegexFlow.find_from(ast_json, "\"", opk_pos + 6)
+    if opk_end < 0 { return null }
+    local opk = ast_json.substring(opk_pos + 6, opk_end)
+    // Extract lhs/rhs integer values
+    local lhsp = RegexFlow.find_from(ast_json, "\"lhs\"", q)
+    local rhsp = RegexFlow.find_from(ast_json, "\"rhs\"", q)
+    if lhsp < 0 || rhsp < 0 { return null }
+    local lval = RegexFlow.find_from(ast_json, "\"value\":", lhsp)
+    local rval = RegexFlow.find_from(ast_json, "\"value\":", rhsp)
+    if lval < 0 || rval < 0 { return null }
+    local lhs_ds = RegexFlow.digits_from(ast_json, lval + 8)
+    local rhs_ds = RegexFlow.digits_from(ast_json, rval + 8)
+    if lhs_ds == "" || rhs_ds == "" { return null }
+    local lhs = RegexFlow.to_int(lhs_ds)
+    local rhs = RegexFlow.to_int(rhs_ds)
+    return { cmp: opk, lhs: lhs, rhs: rhs }
+  }
+
+  // Return(Method recv, method, args) → {method, args:[int,...]} or null
+  extract_return_method(ast_json) {
+    if ast_json == null { return null }
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Method\"", p)
+    if q < 0 { return null }
+    // method name
+    local mk = Stage1ExtractFlow._idx_from(ast_json, "\"method\":\"", q)
+    if mk < 0 { return null }
+    local mk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", mk + 10)
+    if mk_end < 0 { return null }
+    local mname = ast_json.substring(mk + 10, mk_end)
+    // args (integers only; recv は無視)
+    local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
+    local args = []
+    if ak >= 0 {
+      local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+      if rb < 0 { rb = ast_json.length() }
+      local i = ak
+      loop(true) {
+        local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
+        if tpos < 0 || tpos >= rb { break }
+        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+        if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+        local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+        if ds != "" { args.push(RegexFlow.to_int(ds)) }
+        i = vpos + 8 + ds.length()
+      }
+    }
+    return { method: mname, args: args }
+  }
+
+  // Return(New class(args)) → {class, args:[int,...]} or null
+  extract_return_new(ast_json) {
+    if ast_json == null { return null }
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"New\"", p)
+    if q < 0 { return null }
+    local ck = Stage1ExtractFlow._idx_from(ast_json, "\"class\":\"", q)
+    if ck < 0 { return null }
+    local ck_end = Stage1ExtractFlow._idx_from(ast_json, "\"", ck + 9)
+    if ck_end < 0 { return null }
+    local cname = ast_json.substring(ck + 9, ck_end)
+    // args integers only
+    local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
+    local args = []
+    if ak >= 0 {
+      local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+      if rb < 0 { rb = ast_json.length() }
+      local i = ak
+      loop(true) {
+        local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
+        if tpos < 0 || tpos >= rb { break }
+        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+        if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+        local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+        if ds != "" { args.push(RegexFlow.to_int(ds)) }
+        i = vpos + 8 + ds.length()
+      }
+    }
+    return { class: cname, args: args }
+  }
+
+  // Return(Call name(args...)) → {name, args:[int,...]} or null
+  extract_return_call(ast_json) {
+    if ast_json == null { return null }
+    // Return → Call 検出
+    local p = Stage1ExtractFlow._idx(ast_json, "\"type\":\"Return\"")
+    if p < 0 { return null }
+    local q = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Call\"", p)
+    if q < 0 { return null }
+    // name 抽出
+    local nk = Stage1ExtractFlow._idx_from(ast_json, "\"name\":\"", q)
+    if nk < 0 { return null }
+    local nk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", nk + 8)
+    if nk_end < 0 { return null }
+    local name = ast_json.substring(nk + 8, nk_end)
+    // args 抽出（整数に限定）: args 配列内の Int ノードのみを拾う
+    local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
+    if ak < 0 { return { name: name, args: [] } }
+    local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+    if rb < 0 { rb = ast_json.length() }
+    local args = []
+    local i = ak
+    loop(true) {
+      local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
+      if tpos < 0 || tpos >= rb { break }
+      local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+      if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+      local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+      if ds != "" { args.push(RegexFlow.to_int(ds)) }
+      i = vpos + 8 + ds.length()
+    }
+    return { name: name, args: args }
+  }
+}

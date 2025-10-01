@@ -177,6 +177,59 @@ fn check_layer_boundary() {
 4. 最後に実装
 
 ---
+### 8. 環境変数ポリシー（芯の通った最小主義）
+
+目的
+- 使い方を迷わせないため「既定の挙動は一つ」にする。
+- 環境変数は最小限。開発補助や実験のために一時的に使い、開発が終わったら整理・削除する。
+- 原則は CLI 優先・ENV は補助（観測や一時フラグに限定）。
+
+原則
+- 既定挙動は仕様/CLIで定義し、ENVで既定を変えない。
+- 新規 ENV は「短命・局所・可逆」（TTL つきの実験/観測用途に限定）。
+- 既定 ON の新規 ENV は禁止（公開仕様として明文化されたもののみ既定ON可）。
+
+導入ルール（追加時の要件）
+- CLI が先、ENV は補助。
+  - 例: 実行エントリは `--entry` を先に用意し、ENV は導入しない。
+- ドキュメント必須。
+  - 理由・影響範囲・既定挙動・戻し手順を `CURRENT_TASK.md` に記録。
+  - 使用方法は `docs/` に追記（対象箇所・使用例・失効予定）。
+- ガードとスコープ。
+  - 開発限定（dev only）やランナー限定など、作用範囲をファイル境界で明確化。
+  - 影響が広いものは箱（Box/モジュール）で隔離し、入口を一本化。
+
+整理・廃止（Finish Strong）
+- 開発が終わったら ENV を整理。
+  - 実験フラグは削除、または CLI に格上げ。
+  - ロールバック容易な小差分で戻す。
+- 廃止手順。
+  - 段階: 非推奨告知 → 既定OFF → 削除。
+  - 移行期は警告メッセージを 1 リリース分だけ表示（観測のため）。
+
+命名規約
+- 形式: `NYASH_<領域>_<目的>`（例: `NYASH_VM_STATS=1`）。
+- 値: 真偽は `0|1|true|false|on|off` を許可（内部で正規化）。
+- 既定 OFF（無指定は無効）。本番で意味が変わらない命名にする。
+
+やらないこと
+- 既定挙動の切替を ENV で行う。
+- 同じ意味の ENV を複数用意する（重複・競合）。
+- ENV マトリクス依存のテスト（再現不能の温床）。
+
+チェックリスト（PR 前）
+- その ENV は本当に必要？ CLI で代替できない？
+- 既定挙動は変えていない？（仕様は Strict に保つ）
+- `CURRENT_TASK.md` に追加理由・戻し手順を書いた？
+- 作用範囲を箱で限定した？（Runner/VM/LLVM 等の境界）
+- 失効計画（削除時期・削除条件）を記載した？
+- ログ/観測は既定OFFでノイズを出さない？
+
+補足（適用例）
+- エントリ解決は Strict（`Main.main` のみ）。便利 ENV による自動推測はしない。例外は CLI `--entry` のみ。
+- 観測やデバッグ（例: 詳細トレース）は ENV で短命運用OK。ただし既定OFF・影響は局所。
+
+---
 
 **Fail-Fast原則**: フォールバック処理は原則禁止。過去に分岐ミスでエラー発見が遅れた経験から、エラーは早期に明示的に失敗させること。特にChatGPTが入れがちなフォールバック処理には要注意だよ！
 
@@ -224,7 +277,7 @@ Compiler Track 部分解禁（Selfhost Compiler 開発向け）
 - 受け入れ条件（ガード）:
   - 公開仕様は不変（新フラグは既定OFF、影響は局所・可逆）。既存の誤った挙動を正す修正は対象外（許可）。
   - 差分は最小・目的は明確（unblock/安定化/診断）
-  - 代表スモーク（PyVM/LLVM）・cargo check が緑
+  - 代表スモーク（LLVM/Rust VM）・cargo check が緑
   - CURRENT_TASK.md に理由/範囲/フラグ名/戻し手順を記録
   - ロールバック容易（小さな差分、ガード除去で原状回復）
 
@@ -236,39 +289,14 @@ Compiler Track 部分解禁（Selfhost Compiler 開発向け）
   - 既定OFFフラグでガードされた新経路の追加（影響が局所かつ可逆）
  参考: 本文末尾の「補足: 『仕様不変』の再定義」も参照。
 
-**Cranelift 開発メモ（このブランチの主目的）**
-- ここは Nyash の Cranelift JIT/AOT 開発用ブランチだよ。JIT 経路の実装・検証・計測が主対象だよ。
-- ビルド（JIT有効）: `cargo build --release --features cranelift-jit`
-- 実行モード:
-  - CLI Cranelift: `./target/release/nyash --backend cranelift apps/APP/main.nyash`
-  - JITダイレクト（VM非介入）: `./target/release/nyash --jit-direct apps/smokes/jit_aot_string_min.nyash`
-- デバッグ環境変数（例）:
-  - `NYASH_JIT_EXEC=1`（JIT実行許可）
-  - `NYASH_JIT_STATS=1`（コンパイル/実行統計）
-  - `NYASH_JIT_TRACE_IMPORT=1`（JITのimport解決ログ）
-  - `NYASH_AOT_OBJECT_OUT=target/aot_objects/`（AOT .o 書き出し）
-  - `NYASH_LEN_FORCE_BRIDGE=1`（一時回避: 文字列長をブリッジ経路に強制）
-- 主要ファイル案内:
-  - Lower/Builder: `src/jit/lower/core.rs`, `src/jit/lower/builder/cranelift.rs`
-  - JITエンジン: `src/jit/engine.rs`, ポリシー: `src/jit/policy.rs`
-  - バックエンド入口: `src/backend/cranelift/`
-  - ランナー: `src/runner/modes/cranelift.rs`, `--jit-direct` は `src/runner/mod.rs`
-- 進行中の論点と手順は `CURRENT_TASK.md` を参照してね（最新のデバッグ方針・フラグが載ってるよ）。
+**PyVM 撤退ポリシー（Phase‑15+）**
+- 既定の実行経路は Rust VM（MIR）と LLVM（llvmlite ハーネス）。
+- PyVM は撤退済み（既定OFF）。互換目的でのみ `--features pyvm-bridge` 有効化と `NYASH_VM_USE_PY=1` の併用で起動可能（非推奨・将来削除予定）。
+- パリティ検証は LLVM ハーネス基準に一本化。PyVM は必要最小限のローカル確認に限定。
 
-**PyVM 主経路（Phase‑15 方針）**
-- 主経路: Python/llvmlite + PyVM を標準の実行/検証経路として扱うよ。Rust VM/JIT は補助（保守/比較/プラグイン検証）。
-- 使い分け:
-  - PyVM（推奨・日常確認）: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/APP/main.nyash`
-  - llvmlite ハーネス: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
-  - パリティ検証: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/CASE.nyash`
-- 自己ホスト（Ny→JSON v0）: `NYASH_USE_NY_COMPILER=1` は emit‑only 既定で運用（`NYASH_NY_COMPILER_EMIT_ONLY=1`）。子プロセスは Quiet pipe（`NYASH_JSON_ONLY=1`）。
+自己ホスト（Ny→JSON v0）
+- `NYASH_USE_NY_COMPILER=1` は emit‑only 既定（`NYASH_NY_COMPILER_EMIT_ONLY=1`）。子プロセスは Quiet pipe（`NYASH_JSON_ONLY=1`）。
 - 子プロセス安全策: タイムアウト `NYASH_NY_COMPILER_TIMEOUT_MS`（既定 2000ms）。違反時は kill→フォールバック（無限ループ抑止）。
-- スモーク（代表）:
-  - PyVM Stage‑2: `tools/pyvm_stage2_smoke.sh`
-  - PHI/Stage‑2: `tools/ny_parser_stage2_phi_smoke.sh`
-  - Bridge/Stage‑2: `tools/ny_stage2_bridge_smoke.sh`
-  - 文字列/dirname など: `apps/tests/*.nyash` を PyVM で都度確認
-- 注意: Phase‑15 では VM/JIT は MIR14 以降の更新を最小とし、PyVM/llvmlite のパリティを最優先で維持するよ。
 
 ## Codex Async Workflow (Background Jobs)
 - Purpose: run Codex tasks in the background and notify a tmux session on completion.
@@ -303,7 +331,7 @@ Notes
 - If wrappers spawn multiple processes per task (node/codex), set `CODEX_COUNT_MODE=pgid` (default) to count unique process groups rather than raw processes.
 
 ## Dev Helpers
-- 推奨フラグ一括: `source tools/dev_env.sh pyvm`（PyVMを既定、Bridge→PyVM直送: `NYASH_PIPE_USE_PYVM=1`）
+- 旧 `tools/dev_env.sh pyvm` は撤退。PyVM は `--features pyvm-bridge` 有効時のみ互換運用可能。
 - 解除: `source tools/dev_env.sh reset`
 
 ## Selfhost 子プロセスの引数透過（開発者向け）
@@ -314,31 +342,17 @@ Notes
   - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
 - 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
 
-## PyVM Scope & Policy（Stage‑2 開発用の範囲）
-- 目的: PyVM は「開発用の参照実行器」だよ。JSON v0 → MIR 実行の意味論確認と llvmlite とのパリティ監視に使う（プロダクション最適化はしない）。
-- 必須命令: `const/binop/compare/branch/jump/ret/phi`、`call/externcall/boxcall`（最小）。
-- Box/メソッド（最小実装）:
-  - ConsoleBox: `print/println/log`
-  - String: `length/substring/lastIndexOf/esc_json`、文字列連結（`+`）
-  - ArrayBox: `size/len/get/set/push/toString`
-  - MapBox: `size/has/get/set/toString`（キーは文字列前提）
-  - FileBox: 読み取り限定の `open/read/close`（必要最小）
-  - PathBox: `dirname/join`（POSIX 風の最小）
-- 真偽・短絡: 比較は i64 0/1、分岐は truthy 規約。`&&`/`||` は分岐+PHI で短絡を表現（副作用なしは Bridge、ありは PyVM 側で検証）。
-- エントリ/終了: `--entry` 省略時に `Main.main`/`main` を自動解決。整数は exit code に反映、bool は 0/1。
-- 非対象（やらない）: プラグイン動的ロード/ABI、GC/スケジューラ、例外/非同期、大きな I/O/OS 依存、性能最適化。
-- 運用ポリシー: 仕様差は llvmlite に合わせて PyVM を調整。未知の extern/boxcall は安全に `None`/no-op。既定は静音、`NYASH_CLI_VERBOSE=1` で詳細。
-- 実行とスモーク:
-  - PyVM 実行: `NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/tests/CASE.nyash`
-  - 代表スクリプト: `tools/pyvm_stage2_smoke.sh`, `tools/pyvm_collections_smoke.sh`, `tools/pyvm_stage2_dot_chain_smoke.sh`
-  - Bridge 短絡（RHS スキップ）: `tools/ny_stage2_shortcircuit_smoke.sh`
-- CI: `.github/workflows/pyvm-smoke.yml` を常時緑に維持。LLVM18 がある環境では `tools/parity.sh --lhs pyvm --rhs llvmlite` を任意ジョブで回す。
+## PyVM Scope & Policy（互換モード）
+- 目的: 互換確認のための限定的な実行器（既定OFF）。プロダクション/CIでは使用しない。
+- 利用条件: `cargo build --features pyvm-bridge`（ビルド時）と `NYASH_VM_USE_PY=1`（実行時）を併用。
+- 非対象: プラグイン動的ロード/ABI、GC/スケジューラ、例外/非同期、大きな I/O/OS 依存、性能最適化。
+- 今後: 完全撤去を予定。llvmlite ハーネス/Rust VM に一本化する。
 
 ## Interpreter vs PyVM（実行経路の役割と優先度）
-- 優先経路: PyVM（Python）を"意味論リファレンス実行器"として採用。日常の機能確認・CI の軽量ゲート・llvmlite とのパリティ監視を PyVM で行う。
-- 補助経路: Rust の MIR Interpreter は純Rust単独で回る簡易器として維持。拡張はしない（BoxCall 等の未対応は既知）。Python が使えない環境での簡易再現や Pipe ブリッジの補助に限定。
-- Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter を使用。副作用なしの短絡など、実装範囲内を確認。副作用を含む実行検証は PyVM スモーク側で担保。
-- 開発の原則: 仕様差が出た場合、llvmlite に合わせて PyVM を優先調整。Rust Interpreter は保守維持（安全修正のみ）。
+- 優先経路: Rust VM（MIR）/LLVM（llvmlite ハーネス）。
+- 補助経路: Rust の MIR Interpreter は純Rustの簡易器として維持（最小実装）。
+- Bridge（--ny-parser-pipe）: 既定は Rust MIR Interpreter。
+- 開発の原則: 仕様差が出た場合は llvmlite を基準に整合。
 
 ## 脱Rust（開発効率最優先）ポリシー
 - Phase‑15 中は Rust VM/JIT への新規機能追加を最小化し、Python（llvmlite/PyVM）側での実装・検証を優先する。
@@ -447,8 +461,7 @@ Notes
 
 - スモーク/検証の方針
   - 既定の開発確認は Rust VM ラインで行い、LLVM ラインは AOT/ハーネスの代表スモークでカバー。
-  - v2 ランナーは実行系を切り替え可能（環境変数・引数で VM/LLVM/（必要時）PyVM を選択）。
-  - PyVM は参照実行器（保守最小）。言語機能の確認や LLVM ハーネスのパリティ検証が主目的で、既定経路では使わない。
+  - v2 ランナーは実行系を切り替え可能（環境変数・引数で VM/LLVM）。PyVM は `pyvm-bridge` 有効時の互換に限定。
 
 - 実行例（目安）
   - Rust VM（既定）: `./target/release/nyash apps/APP/main.nyash`
@@ -542,6 +555,28 @@ Flags
 - LLVM builds require system LLVM 18; install via apt.llvm.org in CI.
 - Optional logs: enable `NYASH_CLI_VERBOSE=1` for detailed emit diagnostics.
 - LLVM harness safety valve (dev only): set `NYASH_LLVM_SANITIZE_EMPTY_PHI=1` to drop malformed empty PHI lines from IR before llvmlite parses it. Keep OFF for normal runs; use only to unblock bring-up when `finalize_phis` is being debugged.
+
+## ENV Consolidation — Using & Plugins（Phase‑15）
+
+Purpose: 過剰な環境変数を避け、意味の分かる少数へ集約する。
+
+- Using（機能のON/OFFと統合戦略）
+  - `NYASH_USING=0|1`（既定=1）: using を有効/無効
+  - `NYASH_USING_STRATEGY={resolver|prelude}`（別名: `NYASH_USING_IMPL`、既定=resolver）
+    - resolver: 名前解決のみ（AST 統合なし）
+    - prelude: AST プレリュード統合
+  - 互換: `NYASH_ENABLE_USING` → `NYASH_USING`、`NYASH_USING_AST` → `NYASH_USING_STRATEGY=prelude`
+- Plugins（読み込み/強制/無効）
+  - `NYASH_PLUGIN_POLICY={auto|off|force}`（既定=auto）
+    - off → `NYASH_DISABLE_PLUGINS=1` 相当
+    - force → `NYASH_PLUGIN_ONLY=1` 相当
+  - 互換: 既存の `NYASH_DISABLE_PLUGINS` / `NYASH_PLUGIN_ONLY` は継続サポート
+
+Recommended defaults（未設定時の挙動）
+- NYASH_USING=1
+- NYASH_USING_STRATEGY=resolver（dev/ci は prelude が既定ON）
+- NYASH_PLUGIN_POLICY=auto
+- 本番では `NYASH_DEV_FALLBACK=0`、quick ではプロファイル側で `NYASH_DEV_FALLBACK=1`
 
 ### LLVM Python Builder Layout (after split)
 - Files (under `src/llvm_py/`):

@@ -1,2 +1,0 @@
-Compiled to tmp/h_dbg.o
-[harness] object written: tmp/h_dbg.o

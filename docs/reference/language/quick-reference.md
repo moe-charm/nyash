@@ -6,7 +6,7 @@ Purpose
 
 Keywords (reserved)
 - control: `if`, `else`, `loop`, `match`, `case`, `break`, `continue`, `return`
-- decl: `static`, `box`, `local`, `using`, `as`
+- decl: `flow`, `static`, `box`, `local`, `using`, `as`
 - lit: `true`, `false`, `null`, `void`
 
 Expressions and Calls
@@ -71,7 +71,7 @@ Blocks and Control
 
 Using / SSOT
 - Dev/CI: file‑based `using` allowed for convenience.
-- Prod: `nyash.toml` only. Duplicate imports or alias rebinding is an error.
+- Prod: `hako.toml` only (compat: `nyash.toml`). Duplicate imports or alias rebinding is an error.
 
 Errors (format)
 - Always: `Error at line X, column Y: <message>`
@@ -79,9 +79,16 @@ Errors (format)
 
 Dev/Prod toggles (indicative)
 - `NYASH_DEV=1` — developer defaults (diagnostics, tracing; behavior unchanged)
-- `NYASH_ENABLE_USING=1` — enable using resolver
+- `NYASH_USING=1` — enable using resolver (`NYASH_USING_STRATEGY={resolver|prelude}` for merge mode)
 - `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1` — allow `main` as top‑level entry
 
 Notes
 - Keep the language small. Prefer explicit conversions (`int(x)`, `str(x)`, `bool(x)`) in standard helpers over implicit coercions.
 - Builder rewrites method calls to keep runtime dispatch simple and consistent across backends.
+
+Flow (stateless namespace)
+- `flow Name { ... }` defines a stateless container of methods.
+- Allowed: methods, local variables inside methods.
+- Forbidden: fields, `birth`/`fini`, `new Name()`, `me` inside methods.
+- Lowering intent: `Name.method(a, b)` → global `Name.method/2` (no BoxCall).
+- Use for entry modules (Main.main) and utility groups.

@@ -8,7 +8,7 @@
 use crate::box_factory::builtin::BuiltinBoxFactory;
 #[cfg(feature = "plugins")]
 use crate::box_factory::plugin::PluginBoxFactory;
-use crate::box_factory::{UnifiedBoxRegistry, FactoryPolicy};
+use crate::box_factory::UnifiedBoxRegistry;
 use std::sync::{Arc, Mutex, OnceLock};
 
 /// Global registry instance

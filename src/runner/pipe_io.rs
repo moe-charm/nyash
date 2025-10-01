@@ -42,10 +42,12 @@ impl NyashRunner {
                 super::json_v0_bridge::maybe_dump_mir(&module);
                 // Optional: delegate to PyVM when NYASH_PIPE_USE_PYVM=1
                 if crate::config::env::pipe_use_pyvm() {
-                    let py = which::which("python3").ok();
-                    if let Some(py3) = py {
-                        let runner = std::path::Path::new("tools/pyvm_runner.py");
-                        if runner.exists() {
+                    #[cfg(feature = "pyvm-bridge")]
+                    {
+                        let py = which::which("python3").ok();
+                        if let Some(py3) = py {
+                            let runner = std::path::Path::new("tools/pyvm_runner.py");
+                            if runner.exists() {
                             // Emit MIR(JSON) for PyVM
                             let tmp_dir = std::path::Path::new("tmp");
                             let _ = std::fs::create_dir_all(tmp_dir);
@@ -96,13 +98,18 @@ impl NyashRunner {
                             let code = status.code().unwrap_or(1);
                             if !status.success() { crate::cli_v!("❌ PyVM (pipe) failed (status={})", code); }
                             std::process::exit(code);
+                            } else {
+                                eprintln!("❌ PyVM runner not found: {}", runner.display());
+                                std::process::exit(1);
+                            }
                         } else {
-                            eprintln!("❌ PyVM runner not found: {}", runner.display());
+                            eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM with --ny-parser-pipe.");
                             std::process::exit(1);
                         }
-                    } else {
-                        eprintln!("❌ python3 not found in PATH. Install Python 3 to use PyVM with --ny-parser-pipe.");
-                        std::process::exit(1);
+                    }
+                    #[cfg(not(feature = "pyvm-bridge"))]
+                    {
+                        eprintln!("[pipe] PyVM bridge disabled (feature off); using MIR interpreter path.");
                     }
                 }
                 // Default: Execute via MIR interpreter

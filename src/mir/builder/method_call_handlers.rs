@@ -6,7 +6,7 @@
 use crate::ast::ASTNode;
 use crate::mir::builder::{MirBuilder, ValueId};
 use crate::mir::builder::builder_calls::CallTarget;
-use crate::mir::{MirInstruction, TypeOpKind, MirType};
+use crate::mir::{MirInstruction, TypeOpKind};
 
 impl MirBuilder {
     /// Handle static method calls: BoxName.method(args)
@@ -30,8 +30,73 @@ impl MirBuilder {
             eprintln!("[builder] static-call {}", func_name);
         }
 
-        // Use legacy global-call emission to avoid unified builtin/extern constraints
-        self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
+        // If exact name is not present (aliased prelude renamed to Alias_Top),
+        // try unique tail-match fallback (…<Box>.<method>/<arity>)
+        let target_name = if let Some(ref module) = self.current_module {
+            if module.functions.contains_key(&func_name) {
+                func_name.clone()
+            } else {
+                let idx = crate::mir::indexes::functions::FunctionIndex::new(module);
+                match idx.tail_unique(Some(box_name), method, arg_values.len()) {
+                    crate::mir::indexes::functions::TailQueryResult::Unique(n) => n,
+                    crate::mir::indexes::functions::TailQueryResult::Ambiguous(mut cands) => {
+                        if std::env::var("NYASH_MIR_CALL_MODULE_FN_STRICT").ok().as_deref() == Some("1") {
+                            cands.sort();
+                            return Err(format!(
+                                "Ambiguous static method resolution for '{}.{}', arity={} ({} candidates): {}",
+                                box_name, method, arg_values.len(), cands.len(), cands.join(", ")
+                            ));
+                        }
+                        // method-only unique fallback
+                        match idx.tail_unique(None, method, arg_values.len()) {
+                            crate::mir::indexes::functions::TailQueryResult::Unique(n2) => n2,
+                            crate::mir::indexes::functions::TailQueryResult::Ambiguous(c2) => {
+                                if std::env::var("NYASH_MIR_CALL_MODULE_FN_STRICT").ok().as_deref() == Some("1") {
+                                    let mut c2s = c2; let shown = c2s.len().min(10); c2s.sort();
+                                    return Err(format!(
+                                        "Ambiguous static method resolution (method-only) for '{}', arity={} ({} candidates, showing {}): {}",
+                                        method, arg_values.len(), c2s.len(), shown, c2s.iter().take(shown).cloned().collect::<Vec<_>>().join(", ")
+                                    ));
+                                }
+                                func_name.clone()
+                            }
+                            crate::mir::indexes::functions::TailQueryResult::None => func_name.clone(),
+                        }
+                    }
+                    crate::mir::indexes::functions::TailQueryResult::None => {
+                        // method-only unique fallback
+                        match idx.tail_unique(None, method, arg_values.len()) {
+                            crate::mir::indexes::functions::TailQueryResult::Unique(n2) => n2,
+                            _ => func_name.clone(),
+                        }
+                    }
+                }
+            }
+        } else {
+            func_name.clone()
+        };
+
+        // Prefer ModuleFunction under env gate when the function exists in the module
+        let use_modfn = std::env::var("NYASH_MIR_CALL_MODULE_FN").ok().as_deref() == Some("1");
+        if use_modfn {
+            if let Some(ref module) = self.current_module {
+                if module.functions.contains_key(&target_name) {
+                    let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(dst),
+                        func: name_val,
+                        callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
+                        args: arg_values,
+                        effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                    })?;
+                    self.annotate_call_result_from_func_name(dst, &target_name);
+                    return Ok(dst);
+                }
+            }
+        }
+
+        // Fallback: legacy global-call emission to keep behavior identical
+        self.emit_legacy_call(Some(dst), CallTarget::Global(target_name), arg_values)?;
         Ok(dst)
     }
 

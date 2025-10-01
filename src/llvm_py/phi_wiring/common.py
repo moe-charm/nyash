@@ -42,16 +42,21 @@ def incoming_pairs_vb(inst: Any):
                         out.append((int(v), int(b)))
             return out
         inc = inst.get("incoming", []) or []
+        # Support dict form: [{"block":b, "value":v}, ...]
+        if inc and isinstance(inc, list) and all(isinstance(x, dict) for x in inc):
+            out = []
+            for it in inc:
+                try:
+                    v = it.get("value")
+                    b = it.get("block")
+                    if v is not None and b is not None:
+                        out.append((int(v), int(b)))
+                except Exception:
+                    pass
+            return out
         out = []
         for t in inc:
-            # Handle dict format (same as "values")
-            if isinstance(t, dict):
-                v = t.get("value")
-                b = t.get("block")
-                if v is not None and b is not None:
-                    out.append((int(v), int(b)))
-            # Handle legacy array format [[v,b], ...]
-            elif isinstance(t, (list, tuple)) and len(t) == 2:
+            if isinstance(t, (list, tuple)) and len(t) == 2:
                 v, b = t
                 out.append((int(v), int(b)))
         return out

@@ -21,7 +21,7 @@ Environment toggles
 - `NYASH_CLIF_ECHO_SMOKE=1`: run echo smoke (stdin → stdout).
 - `NYASH_CLIF_VINVOKE_SMOKE=1`: run variable‑length invoke smoke (plugins required).
 - `NYASH_CLIF_VINVOKE_RET_SMOKE=1`: run vinvoke return/size smokes (plugins required).
-- `NYASH_DISABLE_PLUGINS=1`: disable plugin‑dependent smokes.
+- `NYASH_PLUGIN_POLICY=off`: disable plugin‑dependent smokes (compat: `NYASH_DISABLE_PLUGINS=1`).
 - `NYASH_LINK_VERBOSE=1`: print final link command.
 
 Pseudo run
@@ -72,4 +72,3 @@ Future alignment with LinkerBox
 - This smoke is the acceptance test for LinkerBox’s AOT path on Cranelift:
   - Same entrypoint (`nyash_main`), runtime linkage (`nyrt.lib`/`libnyrt.a`), and CLI env (`NYASH_LINKER`, `NYASH_LINK_FLAGS`, `NYASH_LINK_VERBOSE`).
   - When LinkerBox becomes default, keep CLI stable and swap implementation behind it.
-

@@ -1,4 +1,4 @@
-use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, BasicBlockId, ConstValue};
+use super::{EffectMask, FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, BasicBlockId};
 use crate::ast::ASTNode;
 
 // Lifecycle routines extracted from builder.rs
@@ -240,7 +240,7 @@ impl super::MirBuilder {
                                     MirInstruction::Const { value, .. } => {
                                         if let super::ConstValue::String(s) = value { last_const_name = Some(s.clone()); }
                                     }
-                                    MirInstruction::Call { func, .. } => {
+                                    MirInstruction::Call {  .. } => {
                                         // If immediately preceded by matching Const String, accept
                                         if let Some(prev) = last_const_name.as_ref() {
                                             if prev == &expect_tail { ok = true; break; }
@@ -252,7 +252,14 @@ impl super::MirBuilder {
                                 j += 1;
                             }
                             if !ok {
-                                eprintln!("[warn] dev verify: NewBox {} at v{} not followed by birth() call (expect {})", box_type, dst, expect_tail);
+                                if !crate::config::env::cli_quiet() {
+                                    eprintln!(
+                                        "[warn] dev verify: NewBox {} at v{} not followed by birth() call (expect {})",
+                                        box_type,
+                                        dst,
+                                        expect_tail
+                                    );
+                                }
                                 warn_count += 1;
                             }
                         }
@@ -260,7 +267,7 @@ impl super::MirBuilder {
                     idx += 1;
                 }
             }
-            if warn_count > 0 {
+            if warn_count > 0 && !crate::config::env::cli_quiet() {
                 eprintln!("[warn] dev verify: NewBox→birth invariant warnings: {}", warn_count);
             }
         }
@@ -270,7 +277,7 @@ impl super::MirBuilder {
         // Dev stub: provide condition_fn when missing to satisfy predicate calls in JSON lexers
         // Returns integer 1 (truthy) and accepts one argument (unused).
         if module.functions.get("condition_fn").is_none() {
-            let mut sig = FunctionSignature {
+            let sig = FunctionSignature {
                 name: "condition_fn".to_string(),
                 params: vec![MirType::Integer], // accept one i64-like arg
                 return_type: MirType::Integer,

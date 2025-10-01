@@ -1,5 +1,5 @@
 // Declarations lowering: static boxes and box declarations
-use super::{ConstValue, MirInstruction, ValueId};
+use super::{MirInstruction, ValueId};
 use crate::ast::ASTNode;
 use crate::mir::slot_registry::{get_or_assign_type_id, reserve_method_slot};
 use std::collections::HashSet;
@@ -78,7 +78,7 @@ impl super::MirBuilder {
         weak_fields: Vec<String>,
     ) -> Result<(), String> {
         // Create a type registration constant (marker)
-        let type_id = crate::mir::builder::emission::constant::emit_string(self, format!("__box_type_{}", name));
+        let _type_id = crate::mir::builder::emission::constant::emit_string(self, format!("__box_type_{}", name));
 
         // Emit field metadata markers
         for field in fields {

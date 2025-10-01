@@ -1,6 +1,0 @@
-static box Main {
-  main(args) {
-    if args { if args.size() > 0 { print(args.get(0)) } else { print("EMPTY") } } else { print("NOARGS") }
-    return 0
-  }
-}

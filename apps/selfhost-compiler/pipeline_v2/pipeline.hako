@@ -1,0 +1,209 @@
+using "apps/selfhost-compiler/pipeline_v2/stage1_extract_flow.hako" as Stage1ExtractFlow
+using "apps/selfhost-compiler/pipeline_v2/emit_return_box.hako" as EmitReturnBox
+using "apps/selfhost-compiler/pipeline_v2/emit_binop_box.hako" as EmitBinopBox
+using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EmitCompareBox
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA
+using "apps/selfhost-compiler/pipeline_v2/emit_call_box.hako" as EmitCallBox
+using "apps/selfhost-compiler/pipeline_v2/emit_method_box.hako" as EmitMethodBox
+using "apps/selfhost-compiler/pipeline_v2/emit_newbox_box.hako" as EmitNewBoxBox
+using "apps/selfhost-compiler/pipeline_v2/mir_call_box.hako" as MirCallBox
+using selfhost.common.json.mir_v1_adapter as MirJsonV1Adapter
+
+flow PipelineV2 {
+  lower_stage1_to_mir(ast_json, prefer_cfg) {
+    // Backward-compatible entry (trace=0)
+    return PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, 0)
+  }
+
+  // Experimental: emit JSON v1 (MirCall) directly (no adapter). Shape-only focus.
+  lower_stage1_to_mir_v1(ast_json, prefer_cfg) {
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, 0) }
+    // Call
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        local k = Stage1ExtractFlow.extract_return_call(ast_json)
+        if k != null {
+          // Robust parse of int args directly from Stage‑1 JSON (negatives/whitespace ok)
+          local ak = RegexFlow.find_from(ast_json, "\"args\":[", kq)
+          // bracket-aware seek for matching ']'
+          local rb = -1
+          if ak >= 0 {
+            local lb = RegexFlow.find_from(ast_json, "[", ak)
+            if lb >= 0 {
+              local i2 = lb + 1
+              local depth = 1
+              loop(true) {
+                local ch = ast_json.substring(i2, i2+1)
+                if ch == "" { break }
+                if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
+                if depth == 0 { rb = i2  break }
+                i2 = i2 + 1
+              }
+            }
+          }
+          if rb < 0 { rb = ast_json.length() }
+          local vals = []
+          if ak >= 0 {
+            local i = ak
+            loop(true) {
+              local tpos = RegexFlow.find_from(ast_json, "\"type\":\"Int\"", i)
+              if tpos < 0 || tpos >= rb { break }
+              local vpos = RegexFlow.find_from(ast_json, "\"value\":", tpos)
+              if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+              local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+              if ds != "" { vals.push(RegexFlow.to_int(ds)) }
+              i = vpos + 8 + ds.length()
+            }
+          }
+          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(k.get("name"), vals))
+        }
+      }
+    }
+    // Method (recv:0 placeholder)
+    {
+      local mq = RegexFlow.find_from(ast_json, "\"type\":\"Method\"", 0)
+      if mq >= 0 {
+        local m = Stage1ExtractFlow.extract_return_method(ast_json)
+        if m != null {
+          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(m.get("method"), 0, m.get("args")))
+        }
+      }
+    }
+    // New
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local n = Stage1ExtractFlow.extract_return_new(ast_json)
+        if n != null {
+          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(n.get("class"), n.get("args")))
+        }
+      }
+    }
+    // Fallback to v0 path for remaining cases
+    return PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg)
+  }
+
+  // Experimental helper: emit v1 then downgrade to v0 for Mini‑VM exec
+  lower_stage1_to_mir_v1_compat(ast_json, prefer_cfg) {
+    local j1 = PipelineV2.lower_stage1_to_mir_v1(ast_json, prefer_cfg)
+    return MirJsonV1Adapter.to_v0(j1)
+  }
+
+  lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace) {
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, trace) }
+    // If(...) pattern (prefer CFG form)
+    {
+      local iq = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
+      if iq >= 0 {
+        local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
+        if ic != null {
+          local mat = 0
+          if prefer_cfg >= 2 { mat = 1 }
+          local j0 = EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat, trace)
+          return LocalSSA.ensure_cond(j0)
+        }
+      }
+    }
+    // Next Call (Return(Call ...)) — minimal int args only
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        local k = Stage1ExtractFlow.extract_return_call(ast_json)
+        if k != null {
+          // Re-parse args from Stage‑1 JSON to be robust to Flow return forms
+          local ak = RegexFlow.find_from(ast_json, "\"args\":[", kq)
+          // bracket-aware seek for matching ']'
+          local rb = -1
+          if ak >= 0 {
+            local lb = RegexFlow.find_from(ast_json, "[", ak)
+            if lb >= 0 {
+              local i2 = lb + 1
+              local depth = 1
+              loop(true) {
+                local ch = ast_json.substring(i2, i2+1)
+                if ch == "" { break }
+                if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
+                if depth == 0 { rb = i2  break }
+                i2 = i2 + 1
+              }
+            }
+          }
+          if rb < 0 { rb = ast_json.length() }
+          local vals = []
+          if ak >= 0 {
+            local i = ak
+            loop(true) {
+              local tpos = RegexFlow.find_from(ast_json, "\"type\":\"Int\"", i)
+              if tpos < 0 || tpos >= rb { break }
+              local vpos = RegexFlow.find_from(ast_json, "\"value\":", tpos)
+              if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+              local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+              if ds != "" { vals.push(RegexFlow.to_int(ds)) }
+              i = vpos + 8 + ds.length()
+            }
+          }
+          local j4 = EmitCallBox.emit_call_int_args(k.get("name"), vals)
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
+        }
+      }
+    }
+    // Next Method (Return(Method ...)) — minimal int args only; recv is 0 (placeholder)
+    {
+      local mq = RegexFlow.find_from(ast_json, "\"type\":\"Method\"", 0)
+      if mq >= 0 {
+        local m = Stage1ExtractFlow.extract_return_method(ast_json)
+        if m != null {
+          local j5 = EmitMethodBox.emit_method_int_args(m.get("method"), 0, m.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5))
+        }
+      }
+    }
+    // Next New (Return(New ...)) — minimal int args only
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local n = Stage1ExtractFlow.extract_return_new(ast_json)
+        if n != null {
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(n.get("class"), n.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
+        }
+      }
+    }
+    // Try Compare first (avoid mis-detection by 'op' field inside Compare)
+    // Guard by raw scan to avoid calling methods on null-like values
+    {
+      local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
+      if cq >= 0 {
+        local c = Stage1ExtractFlow.extract_return_compare(ast_json)
+        if prefer_cfg >= 1 {
+          // MapBox access via get("key") for portability
+          local lhs = c.get("lhs")
+          local rhs = c.get("rhs")
+          local cmp = c.get("cmp")
+          local mat = 0
+          if prefer_cfg >= 2 { mat = 1 }
+          local j1 = EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, mat, trace)
+          return LocalSSA.ensure_cond(j1)
+        }
+      }
+    }
+    // Then BinOp (guard by raw scan)
+    {
+      local bq = RegexFlow.find_from(ast_json, "\"type\":\"BinOp\"", 0)
+      if bq >= 0 {
+        local b = Stage1ExtractFlow.extract_return_binop(ast_json)
+        local lhs = b.get("lhs")
+        local rhs = b.get("rhs")
+        local kind = b.get("kind")
+        local j2 = EmitBinopBox.emit_binop2(lhs, rhs, kind, trace)
+        return LocalSSA.ensure_cond(j2)
+      }
+    }
+    // Fallback Return(Int)
+    local v = Stage1ExtractFlow.extract_return_int(ast_json)
+    local j3 = EmitReturnBox.emit_return_int2(v, trace)
+    return LocalSSA.ensure_cond(j3)
+  }
+}

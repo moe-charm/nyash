@@ -28,19 +28,46 @@ impl NyashRunner {
         let use_ast_prelude =
             crate::config::env::enable_using() && crate::config::env::using_ast_enabled();
         let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        let mut alias_names: std::collections::HashSet<String> = std::collections::HashSet::new();
         if crate::config::env::enable_using() {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
                 self, &code2, filename,
             ) {
-                Ok((clean, paths, _alias_pairs)) => {
+                Ok((clean, paths, alias_pairs)) => {
                     code2 = clean;
+                    for (alias, _canon) in alias_pairs.iter() { alias_names.insert(alias.clone()); }
+                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                        if !alias_names.is_empty() {
+                            eprintln!("[vm-fallback/alias] collected aliases: {:?}", alias_names.iter().cloned().collect::<Vec<_>>());
+                        }
+                    }
                     if !paths.is_empty() && !use_ast_prelude {
                         eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         process::exit(1);
                     }
                     if use_ast_prelude && !paths.is_empty() {
                         match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => prelude_asts = v.into_iter().map(|(_p,a)| a).collect(),
+                            Ok(v) => {
+                                // Apply alias rename to prelude top symbols when applicable (collision-guarded)
+                                use std::collections::HashMap;
+                                let mut alias_map: HashMap<String,String> = HashMap::new();
+                                for (a,p) in alias_pairs { alias_map.insert(p.clone(), a.clone()); }
+                                let mut used_prefixed: std::collections::HashSet<String> = std::collections::HashSet::new();
+                                for (path, ast) in v.into_iter() {
+                                    let canon = std::fs::canonicalize(&path)
+                                        .ok()
+                                        .map(|pb| pb.to_string_lossy().to_string())
+                                        .unwrap_or(path.clone());
+                                    if let Some(alias) = alias_map.get(&canon) {
+                                        match crate::runner::modes::common_util::resolve::alias_tools::rename_with_collision_guard(&ast, alias, &mut used_prefixed, &canon) {
+                                            Ok(renamed) => prelude_asts.push(renamed),
+                                            Err(e) => { eprintln!("❌ using: {}", e); process::exit(1); }
+                                        }
+                                    } else {
+                                        prelude_asts.push(ast);
+                                    }
+                                }
+                            }
                             Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
                         }
                     }
@@ -66,6 +93,26 @@ impl NyashRunner {
         let ast_combined = if use_ast_prelude && !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
+        // Apply alias desugar on combined AST so `Alias.X` becomes `Alias_X` (matching prelude renames)
+        let ast_combined = crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast_combined, &alias_names, true);
+        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
+            fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
+                match n {
+                    nyash_rust::ast::ASTNode::Variable { name, .. } => aliases.contains(name),
+                    nyash_rust::ast::ASTNode::FieldAccess { object, .. } => contains_alias_var(object, aliases),
+                    nyash_rust::ast::ASTNode::MethodCall { object, arguments, .. } => {
+                        contains_alias_var(object, aliases) || arguments.iter().any(|a| contains_alias_var(a, aliases))
+                    }
+                    nyash_rust::ast::ASTNode::FunctionCall { arguments, .. } => arguments.iter().any(|a| contains_alias_var(a, aliases)),
+                    nyash_rust::ast::ASTNode::Program { statements, .. } => statements.iter().any(|s| contains_alias_var(s, aliases)),
+                    nyash_rust::ast::ASTNode::Assignment { target, value, .. } => contains_alias_var(target, aliases) || contains_alias_var(value, aliases),
+                    _ => false,
+                }
+            }
+            if contains_alias_var(&ast_combined, &alias_names) {
+                eprintln!("[vm-fallback/alias] post-desugar alias var still present");
+            }
+        }
         // Optional: dump AST statement kinds for quick diagnostics
         if std::env::var("NYASH_AST_DUMP").ok().as_deref() == Some("1") {
             use nyash_rust::ast::ASTNode;

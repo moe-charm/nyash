@@ -21,9 +21,9 @@ Flags (env)
 Tips
 - Minimal selfhost VM chase:
   ```bash
-  NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+  NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude \
   NYASH_RESOLVE_TRACE=1 NYASH_LOCAL_SSA_TRACE=1 NYASH_MAT_TRACE=1 NYASH_VARMAP_TRACE=1 \
-  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.nyash -- --min-json --stage3
+  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --stage3   # 互換: .nyash も受理
   ```
 - Look for clusters of:
   - `[vm-call-final] … class=DebugBox|ConsoleBox` on string methods → likely receiver mis-binding.

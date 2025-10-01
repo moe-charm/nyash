@@ -90,6 +90,32 @@ pub(super) fn load_plugin(
                 );
             }
         }
+        // Optional: probe Final ABI (env-gated) — no behavior change when absent
+        if crate::config::env::plugin_abi_final() {
+            let final_sym = format!("nyash_typebox_final_{}\0", box_type);
+            unsafe {
+                if let Ok(f_sym) = lib_arc.get::<Symbol<&super::super::types::NyashTypeBoxFinalFfi>>(
+                    final_sym.as_bytes(),
+                ) {
+                    let _ = specs::record_typebox_final_spec(loader, lib_name, box_type, &*f_sym);
+                    if crate::config::env::plugin_meta() && super::util::dbg_on() {
+                        eprintln!(
+                            "[PluginLoaderV2] Final ABI available for {}.{} (symbol='{}')",
+                            lib_name,
+                            box_type,
+                            final_sym.trim_end_matches('\0')
+                        );
+                    }
+                } else if crate::config::env::plugin_meta() && super::util::dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] Final ABI not found for {}.{} (looked for '{}')",
+                        lib_name,
+                        box_type,
+                        final_sym.trim_end_matches('\0')
+                    );
+                }
+            }
+        }
     }
 
     Ok(())

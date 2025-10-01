@@ -1,5 +1,5 @@
 //! Control-flow entrypoints (if/loop/try/throw) centralized here.
-use super::{ConstValue, Effect, EffectMask, MirInstruction, ValueId};
+use super::{Effect, EffectMask, MirInstruction, ValueId};
 use crate::ast::ASTNode;
 
 impl super::MirBuilder {

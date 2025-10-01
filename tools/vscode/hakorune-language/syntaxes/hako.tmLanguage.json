@@ -1,0 +1,59 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Hakorune",
+  "scopeName": "source.hako",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#strings" },
+    { "include": "#numbers" },
+    { "include": "#keywords" },
+    { "include": "#types" },
+    { "include": "#boxes" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        { "name": "comment.line.double-slash.hako", "match": "//.*$" },
+        { "name": "comment.block.hako", "begin": "/\\*", "end": "\\*/" }
+      ]
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.hako",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [{ "name": "constant.character.escape.hako", "match": "\\\\." }]
+        }
+      ]
+    },
+    "numbers": {
+      "patterns": [
+        { "name": "constant.numeric.integer.hako", "match": "\\b[0-9]+\\b" }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "name": "keyword.control.hako",
+          "match": "\\b(if|else|match|case|loop|break|continue|return)\\b"
+        },
+        {
+          "name": "keyword.other.hako",
+          "match": "\\b(using|as|new|local|box|static|flow|birth)\\b"
+        }
+      ]
+    },
+    "types": {
+      "patterns": [
+        { "name": "support.type.hako", "match": "\\b(StringBox|IntegerBox|ArrayBox|MapBox|ConsoleBox)\\b" }
+      ]
+    },
+    "boxes": {
+      "patterns": [
+        { "name": "entity.name.type.box.hako", "match": "\\bbox\\s+([A-Za-z_][A-Za-z0-9_]*)" }
+      ]
+    }
+  }
+}
+

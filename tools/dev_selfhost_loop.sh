@@ -24,7 +24,7 @@ Usage: tools/dev_selfhost_loop.sh [options] [script.nyash] [-- ARGS]
 Options:
   --watch           Re-run on file changes (apps/**/*.nyash)
   --backend <mode>  interpreter|mir|vm (default: vm)
-  --std             Load Ny std scripts from nyash.toml ([ny_plugins])
+  --std             Load Ny std scripts from hako.toml ([ny_plugins], compat: nyash.toml)
   -v, --verbose     Verbose CLI output
   -h, --help        Show this help
 

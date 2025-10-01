@@ -3,7 +3,7 @@
 This note shows how to run the Nyash self‑host compiler MVP to emit MIR(JSON v0) and execute it with the current VM line. The flow keeps defaults unchanged and uses small, opt‑in flags for development.
 
 ## Layout
-- Compiler MVP: `apps/selfhost-compiler/compiler.nyash`
+- Compiler MVP: `apps/selfhost-compiler/compiler.hako`
 - Runtime helpers (dev): `apps/selfhost-runtime/`
 - Mini‑VM samples (dev): `apps/selfhost/vm/`
 
@@ -13,17 +13,23 @@ Use the runner’s selfhost pipeline with parent→child ENV forwarding. Default
 Examples (safe, short, quiet):
 ```
 # Emit minimal AST JSON (header must contain {"version", "kind"})
+NYASH_DISABLE_PLUGINS=1 \
 NYASH_USE_NY_COMPILER=1 \
 NYASH_NY_COMPILER_MIN_JSON=1 \
+NYASH_NY_COMPILER_EMIT_ONLY=1 \
+NYASH_NY_COMPILER_SKIP_PY=1 \
 NYASH_JSON_ONLY=1 \
-timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash
+timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako
 
 # Emit minimal MIR(JSON v0) (const→ret)
+NYASH_DISABLE_PLUGINS=1 \
 NYASH_USE_NY_COMPILER=1 \
 NYASH_NY_COMPILER_MIN_JSON=1 \
 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" \
+NYASH_NY_COMPILER_EMIT_ONLY=1 \
+NYASH_NY_COMPILER_SKIP_PY=1 \
 NYASH_JSON_ONLY=1 \
-timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.nyash
+timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako
 ```
 
 Parent→child ENV mapping（official）
@@ -31,14 +37,22 @@ Parent→child ENV mapping（official）
 - `NYASH_SELFHOST_READ_TMP=1`    → child gets `-- --read-tmp` (reads `tmp/ny_parser_input.ny`)
 - `NYASH_NY_COMPILER_STAGE3=1`   → child gets `-- --stage3`
 - `NYASH_NY_COMPILER_CHILD_ARGS="..."` → child gets extra args verbatim
+- `NYASH_EMIT_TRACE=1`           → child gets `-- --emit-trace` (dev trace: 1行だけ [emit] 出力。最後のJSON行は不変)
+- `NYASH_PREFER_CFG=1|NYASH_PREFER_CFG2=1` → child gets `-- --prefer-cfg` or `--prefer-cfg2`（CFG優先/材化あり）
 - Timeouts / quiet pipe:
   - `NYASH_NY_COMPILER_TIMEOUT_MS=2000`（default）
   - `NYASH_JSON_ONLY=1`（suppress logs, print JSON only）
 
 Direct run (dev only; requires allowing file using):
 ```
-NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
-  ./target/release/nyash apps/selfhost-compiler/compiler.nyash -- --min-json
+timeout 5 \
+  NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude NYASH_JSON_ONLY=1 \
+  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json
+  
+# Optional: pipeline v2 (emit-only)
+timeout 5 \
+  NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude NYASH_JSON_ONLY=1 \
+  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2
 ```
 
 ## Execute MIR(JSON v0)

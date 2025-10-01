@@ -18,12 +18,9 @@ Execution policy (Phase 15.7)
 
 Direct run (dev only)
 - Allow file using and AST merge when running the Ny compiler program directly (use timeout to prevent hangs):
-  - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.nyash -- --min-json`
+  - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
 - Optional (emit-only pipeline v2): append `--pipeline-v2` to route via ExecutionPipelineBox
-  - `... apps/selfhost-compiler/compiler.nyash -- --min-json --pipeline-v2`  (if pipeline_v2 is present)
- - Optional (builder bridge to PipelineV2 under emit-mir): append `--emit-mir --builder-bridge` and prefer CFG level
-  - `... apps/selfhost-compiler/compiler.nyash -- --min-json --emit-mir --builder-bridge --prefer-cfg2`
-   - prefer levels: `--prefer-cfg` (CFG/no copy), `--prefer-cfg2` (CFG/materialize copy)
+  - `... apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2`
 
 Flags
 - `NYASH_COMPILER_TRACK=1` — enable new builder/ssa/rewrite steps as they land (default OFF).

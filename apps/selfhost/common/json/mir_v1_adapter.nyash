@@ -1,0 +1,152 @@
+// mir_v1_adapter.nyash — Minimal JSON v1 (mir_call) to v0 adapter for selfhost
+// Scope: selfhost only. Transforms op:"mir_call" into legacy v0 ops (call/boxcall/newbox).
+
+static box MirJsonV1Adapter {
+  // Lightweight helpers (duplicated minimal scan utils to avoid deep deps)
+  _index_of_from(hay, needle, pos) {
+    if pos < 0 { pos = 0 }
+    local n = hay.length()
+    if pos >= n { return -1 }
+    local m = needle.length()
+    if m <= 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop (i <= limit) {
+      local seg = hay.substring(i, i + m)
+      if seg == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+  _seek_obj_end(text, obj_start) {
+    local i = obj_start
+    local depth = 0
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch == "{" { depth = depth + 1 } else { if ch == "}" { depth = depth - 1 } }
+      if depth == 0 { return i + 1 }
+      i = i + 1
+    }
+    return i
+  }
+  _seek_array_end(text, pos_after_bracket) {
+    local i = pos_after_bracket
+    local depth = 1
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
+      if depth == 0 { return i }
+      i = i + 1
+    }
+    return i
+  }
+  _read_digits(text, pos) {
+    local out = ""
+    local i = pos
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+    }
+    return out
+  }
+  _read_string(text, pos_after_quote) {
+    local q = pos_after_quote
+    local end = me._index_of_from(text, "\"", q)
+    if end < 0 { return "" }
+    return text.substring(q, end)
+  }
+
+  // Convert one mir_call object JSON segment to v0 legacy op JSON
+  _convert_mir_call(seg) {
+    // dst
+    local dpos = me._index_of_from(seg, "\"dst\":", 0)
+    local dst = 0
+    if dpos >= 0 {
+      local dd = me._read_digits(seg, dpos + 6)
+      if dd != "" { dst = 0 + ("" + dd).length()  // placeholder to avoid lints
+        dst = 0  // reassign after parse
+        // parse int
+        local acc = 0
+        local i = 0
+        loop(i < dd.length()) { acc = acc * 10 + ("0123456789".indexOf(dd.substring(i,i+1)))  i = i + 1 }
+        dst = acc
+      }
+    }
+    // args array substring (reuse existing as-is)
+    local ak = me._index_of_from(seg, "\"args\":[", 0)
+    local args_json = "[]"
+    if ak >= 0 {
+      local lb = seg.indexOf("[", ak)
+      if lb >= 0 {
+        local rb = me._seek_array_end(seg, lb + 1)
+        if rb > lb { args_json = seg.substring(lb, rb + 1) }
+      }
+    }
+    // callee type
+    local ck = me._index_of_from(seg, "\"callee\":{\"type\":\"", 0)
+    if ck < 0 { return seg }
+    local ct = me._read_string(seg, ck + 18)
+    if ct == "Global" {
+      local nk = me._index_of_from(seg, "\"name\":\"", ck)
+      local name = ""
+      if nk >= 0 { name = me._read_string(seg, nk + 8) }
+      return "{\"op\":\"call\",\"name\":\"" + name + "\",\"args\":" + args_json + ",\"dst\":" + dst + "}"
+    }
+    if ct == "Method" {
+      local mk = me._index_of_from(seg, "\"method\":\"", ck)
+      local method = ""
+      if mk >= 0 { method = me._read_string(seg, mk + 10) }
+      local rk = me._index_of_from(seg, "\"receiver\":", ck)
+      local recv = 0
+      if rk >= 0 {
+        local rd = me._read_digits(seg, rk + 11)
+        if rd != "" {
+          local acc2 = 0
+          local i2 = 0
+          loop(i2 < rd.length()) { acc2 = acc2 * 10 + ("0123456789".indexOf(rd.substring(i2,i2+1)))  i2 = i2 + 1 }
+          recv = acc2
+        }
+      }
+      return "{\"op\":\"boxcall\",\"method\":\"" + method + "\",\"recv\":" + recv + ",\"args\":" + args_json + ",\"dst\":" + dst + "}"
+    }
+    if ct == "Constructor" {
+      local tk = me._index_of_from(seg, "\"box_type\":\"", ck)
+      local tname = ""
+      if tk >= 0 { tname = me._read_string(seg, tk + 12) }
+      return "{\"op\":\"newbox\",\"box_type\":\"" + tname + "\",\"args\":" + args_json + ",\"dst\":" + dst + "}"
+    }
+    // default: return original segment
+    return seg
+  }
+
+  // Public API: convert all mir_call objects within MIR(JSON v1) to v0 legacy ops
+  to_v0(mjson) {
+    if mjson == null { return null }
+    local out = mjson
+    local cur = 0
+    loop(true) {
+      local op = me._index_of_from(out, "\"op\":\"mir_call\"", cur)
+      if op < 0 { break }
+      // find object bounds
+      local start = op
+      loop(start >= 0) {
+        if out.substring(start, start+1) == "{" { break }
+        start = start - 1
+      }
+      if start < 0 { break }
+      local end = me._seek_obj_end(out, start)
+      if end <= start { break }
+      local seg = out.substring(start, end)
+      local rep = me._convert_mir_call(seg)
+      out = out.substring(0, start) + rep + out.substring(end, out.length())
+      cur = start + rep.length()
+    }
+    return out
+  }
+}
+
+static box MirJsonV1AdapterStub { main(args) { return 0 } }
+

@@ -12,11 +12,15 @@ use crate::box_factory::RuntimeError;
 ///
 /// ⚠️ DEPRECATED: Check if nyash-map-plugin exists
 pub fn create(_args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, RuntimeError> {
-    eprintln!(
-        "⚠️ [DEPRECATED] Using builtin MapBox - check nyash-map-plugin!\n\
-        📋 Phase 15.5: Everything is Plugin!\n\
-        🔧 Check: plugins/nyash-map-plugin"
-    );
+    let verbose = std::env::var("NYASH_DEPRECATED_BUILTIN_VERBOSE").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1");
+    if verbose {
+        eprintln!(
+            "⚠️ [DEPRECATED] Using builtin MapBox - check nyash-map-plugin!\n\
+            📋 Phase 15.5: Everything is Plugin!\n\
+            🔧 Check: plugins/nyash-map-plugin"
+        );
+    }
 
     Ok(Box::new(crate::boxes::map_box::MapBox::new()))
 }

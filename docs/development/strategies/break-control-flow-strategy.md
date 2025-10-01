@@ -139,10 +139,10 @@ impl MirBuilder {
 ```bash
 # 最小再現テスト
 echo 'loop(true) { if(cond1) { if(cond2) { x=1 } else { x=2 } break } }' > test.nyash
-NYASH_DISABLE_PLUGINS=1 ./target/release/nyash test.nyash
+NYASH_PLUGIN_POLICY=off ./target/release/nyash test.nyash  # compat: NYASH_DISABLE_PLUGINS=1
 
 # collect_prints修正確認
-NYASH_DISABLE_PLUGINS=1 NYASH_RESOLVE_FIX_BRACES=1 ./target/release/nyash apps/selfhost/vm/collect_empty_args_using_smoke.nyash
+NYASH_PLUGIN_POLICY=off NYASH_RESOLVE_FIX_BRACES=1 ./target/release/nyash apps/selfhost/vm/collect_empty_args_using_smoke.nyash  # compat: NYASH_DISABLE_PLUGINS=1
 ```
 
 ### PHI検証

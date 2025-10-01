@@ -93,6 +93,8 @@ pub struct MirBuilder {
 
     /// Names of user-defined boxes declared in the current module
     pub(super) user_defined_boxes: HashSet<String>,
+    /// Names of static boxes (including flow) declared in the current module
+    pub(super) static_box_names: HashSet<String>,
 
     /// Weak field registry: BoxName -> {weak field names}
     pub(super) weak_fields_by_box: HashMap<String, HashSet<String>>,
@@ -191,6 +193,7 @@ impl MirBuilder {
             pending_phis: Vec::new(),
             value_origin_newbox: HashMap::new(),
             user_defined_boxes: HashSet::new(),
+            static_box_names: HashSet::new(),
             weak_fields_by_box: HashMap::new(),
             property_getters_by_box: HashMap::new(),
             field_origin_class: HashMap::new(),
@@ -446,11 +449,11 @@ impl MirBuilder {
         let block_id = self.current_block.ok_or("No current basic block")?;
 
         // Precompute debug metadata to avoid borrow conflicts later
-        let dbg_fn_name = self
+        let _dbg_fn_name = self
             .current_function
             .as_ref()
             .map(|f| f.signature.name.clone());
-        let dbg_region_id = self.debug_current_region_id();
+        let _dbg_region_id = self.debug_current_region_id();
         // P0: PHI の軽量補強と観測は、関数ブロック取得前に実施して借用競合を避ける
         if let MirInstruction::Phi { dst, inputs } = &instruction {
             origin::phi::propagate_phi_meta(self, *dst, inputs);
@@ -528,34 +531,15 @@ impl MirBuilder {
         class: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
-        // Phase 9.78a: Unified Box creation using NewBox instruction
-        // Core-13 pure mode: emit ExternCall(env.box.new) with type name const only
-        if crate::config::env::mir_core13_pure() {
-            // Emit Const String for type name（ConstantEmissionBox）
-            let ty_id = crate::mir::builder::emission::constant::emit_string(self, class.clone());
-            // Evaluate arguments (pass through to env.box.new shim)
-            let mut arg_vals: Vec<ValueId> = Vec::with_capacity(arguments.len());
-            for a in arguments {
-                arg_vals.push(self.build_expression(a)?);
-            }
-            // Build arg list: [type, a1, a2, ...]
-            let mut args: Vec<ValueId> = Vec::with_capacity(1 + arg_vals.len());
-            args.push(ty_id);
-            args.extend(arg_vals);
-            // Call env.box.new
-            let dst = self.value_gen.next();
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: Some(dst),
-                iface_name: "env.box".to_string(),
-                method_name: "new".to_string(),
-                args,
-                effects: EffectMask::PURE,
-            })?;
-            // 型注釈（最小）
-            self.value_types
-                .insert(dst, super::MirType::Box(class.clone()));
-            return Ok(dst);
+        // Forbid instantiation of static/flow boxes declared in source
+        if self.static_box_names.contains(&class) {
+            return Err(format!(
+                "Cannot instantiate static/flow box '{}' (use 'flow {} {{ ... }}' with static methods)",
+                class, class
+            ));
         }
+        // Phase 9.78a: Unified Box creation using NewBox instruction
+        // Core‑13 pure mode removed; normal path only.
 
         // Optimization: Primitive wrappers → emit Const directly when possible
         if class == "IntegerBox" && arguments.len() == 1 {

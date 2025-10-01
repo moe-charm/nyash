@@ -1,10 +1,10 @@
-# `nyash --help` Snapshot
+# `nyash --help` Snapshot (HakoRune CLI alias `hrn` available)
 
 Captured: 2025-08-23
-Source: Built-in clap help from the `nyash` binary
+Source: Built-in clap help from the `nyash` binary (aka HakoRune)
 
 ```
-🦀 Nyash Programming Language - Everything is Box in Rust! 🦀
+🦀 HakoRune Programming Language (aka Nyash) — Everything is Box in Rust! 🦀
 
 Usage: nyash [OPTIONS] [FILE]
 
@@ -30,4 +30,3 @@ Options:
 ```
 
 関連: CLIオプション早見表は `docs/tools/cli-options.md`
-

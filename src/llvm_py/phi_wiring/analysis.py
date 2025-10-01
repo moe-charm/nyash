@@ -66,4 +66,3 @@ def analyze_incomings(blocks: List[Dict[str, Any]]) -> Dict[int, Dict[int, List[
                 except Exception:
                     pass
     return result
-

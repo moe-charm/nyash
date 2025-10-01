@@ -49,11 +49,11 @@ Phase 15.5でCore Box完全削除後のNyashテストシステム。すべての
 
 ### 重要な環境変数（開発時の補助）
 ```bash
-# エントリ解決（既定ON: top-level main も許可されます。無効化したい場合のみ0を設定）
-# export NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0
+# エントリ解決は Strict（既定: Main.main のみ）。トップレベル main は非対象です。
+# flow Main を推奨。詳細: docs/reference/language/entrypoints.md
 
-# プラグイン設定（Phase 15.5以降は削除不可）
-# NYASH_DISABLE_PLUGINS=1  # ❌ 使用不可（すべてプラグイン化済み）
+# プラグイン設定（Phase 15.5以降は基本OFF非推奨）
+# NYASH_PLUGIN_POLICY=off   # ⚠️ 原則非推奨。最小コア検証など一部の隔離ケースでのみ使用。
 
 # デバッグ用（任意）
 NYASH_CLI_VERBOSE=1        # 詳細ログ出力
@@ -120,8 +120,8 @@ run_test "example" test_example
 
 ### プラグインが見つからない
 ```bash
-# nyash.tomlのパス設定を確認
-grep "path = " nyash.toml
+# hako.toml（互換: nyash.toml）のパス設定を確認
+grep "path = " hako.toml || grep "path = " nyash.toml
 
 # 正しいパス: plugins/*/lib*.so
 # 間違ったパス: target/release/lib*.so
@@ -153,3 +153,40 @@ Phase 15.5でCore Box削除後、プラグイン実装が不完全。現在調�
 - [Phase 15.5 Core Box Unification](../roadmap/phases/phase-15/phase-15.5-core-box-unification.md)
 - [Plugin System Reference](../../reference/plugin-system/)
 - [PyVM Usage Guidelines](../../reference/pyvm-usage-guidelines.md)
+### ENV オーバレイ（プロファイル毎の既定ENV）
+`tools/smokes/v2/configs/env/<profile>.env` が存在する場合、`run.sh --profile <profile>` 実行時に自動で source されます。
+- quick: using=prelude、plugins=auto（軽量）
+- integration: using=resolver、plugins=off（再現性優先）
+
+### コールトレース（VM↔LLVM パリティの目視支援）
+VM 実行順と LLVM 静的コールサイトの差分を簡易比較するヘルパーを用意しています。
+
+```
+./tools/dev/call_trace_diff.sh <file.nyash>
+# 種別を絞る場合（Method/Global/BoxCall/PluginInvoke をカンマ区切り）
+./tools/dev/call_trace_diff.sh <file.nyash> --kinds 'Method,BoxCall'
+```
+
+- VM 実行：`NYASH_CALL_TRACE=1`（ランタイム順のJSON行をstderrに出力）
+- LLVM 静的：`NYASH_CALL_TRACE=1 NYASH_LLVM_USE_HARNESS=1`（静的サイトのJSON行）
+- 判定方針：VMで実行されたcallee/arityがLLVM静的一覧に含まれていればOK（順序差/未実行サイトの列挙は許容）
+- セットサマリ：順序を無視した集合差も表示されます（VM unique=0 なら OK）。
+
+ショートカット（代表3件の一括チェック）
+```
+./tools/dev/call_trace_samples.sh
+# 代表例:
+# 1) apps/examples/json_lint/main.nyash
+# 2) apps/tests/array_min_ops.nyash
+# 3) apps/selfhost-compiler/compiler.hako -- --min-json --emit-mir
+```
+
+### Plugins プロファイルの SKIP ポリシー（動的libの有無・ABI差）
+- plugins プロファイルはローカルの動的プラグイン(.so/.dylib/.dll)の有無に依存します。
+- プラグインが無い／ABIが合わないケースは「SKIP」で緑を維持します（例: `Fixture plugin not available`, `ABI mismatch`）。
+- `dylib_autoload` 系は `NYASH_USING_DYLIB_AUTOLOAD=1` が有効な時のみ自動読込を試行し、失敗は SKIP へフォールバックします。
+
+### 契約観測（Contracts Observation）
+開発時に `NYASH_CHECK_CONTRACTS=1` を有効にすると、NewBox/birth の対応やメソッド arity/type/index のヒントを1行JSONで観測できます（挙動は不変）。
+
+詳しくは: `docs/development/testing/contracts-observation.md`

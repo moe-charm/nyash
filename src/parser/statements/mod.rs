@@ -126,7 +126,7 @@ impl NyashParser {
         let mut statements = Vec::new();
 
         // Helper: lookahead for `ident '(' ... ')' [NEWLINE*] '{'`
-        let mut looks_like_method_head = |this: &Self| -> bool {
+        let looks_like_method_head = |this: &Self| -> bool {
             // Only meaningful when starting at a new statement head
             match &this.current_token().token_type {
                 TokenType::IDENTIFIER(_) => {
@@ -216,6 +216,10 @@ impl NyashParser {
             TokenType::USING => self.parse_using(),
             TokenType::FROM => self.parse_from_call_statement(),
 
+            // Flow declaration (staged) — treat 'flow Name { ... }' as a declaration when enabled
+            TokenType::IDENTIFIER(s) if s == "flow" && crate::config::env::parser_flow_enabled() => {
+                self.parse_flow_declaration()
+            }
             // Assignment or function call
             TokenType::IDENTIFIER(_) | TokenType::THIS | TokenType::ME => {
                 self.parse_assignment_or_function_call()

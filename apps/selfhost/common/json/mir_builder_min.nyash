@@ -17,6 +17,11 @@ static box MirJsonBuilderMin {
   _append(st, s) { local b = me._get_buf(st)  b = b + s  return me._set_buf(st, b) }
   _int_to_str(n) {
     if n == 0 { return "0" }
+    // Handle negatives
+    if n < 0 {
+      local p = 0 - n
+      return "-" + me._int_to_str(p)
+    }
     local v = n
     local out = ""
     local digits = "0123456789"
@@ -47,6 +52,18 @@ static box MirJsonBuilderMin {
     }
     return "\"" + out + "\""
   }
+  _ids_range_json(start, count) {
+    // Build JSON array text like [start, start+1, ..., start+count-1]
+    local i = 0
+    local out = "["
+    loop (i < count) {
+      if i > 0 { out = out + "," }
+      out = out + me._int_to_str(start + i)
+      i = i + 1
+    }
+    out = out + "]"
+    return out
+  }
   _ensure_phase(st, want) {
     // Fail-fast guard for misuse
     if !st.has("phase") { return st }
@@ -71,6 +88,11 @@ static box MirJsonBuilderMin {
     st.set("first_inst", 1)
     local b = "{\"id\":" + me._int_to_str(id) + ",\"instructions\":["
     return me._append(st, b)
+  }
+  // Close current block and continue blocks array (adds "]},")
+  end_block_continue(st) {
+    // Close instructions array and block object, then add comma to continue
+    return me._append(st, "]},")
   }
   _comma_if_needed(st) {
     local first = 1
@@ -99,6 +121,77 @@ static box MirJsonBuilderMin {
   add_ret(st, val) {
     me._comma_if_needed(st)
     local b = "{\"op\":\"ret\",\"value\":" + me._int_to_str(val) + "}"
+    return me._append(st, b)
+  }
+  add_call_ids(st, name, args_json_text, dst) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"call\",\"name\":" + me._quote(name) + ",\"args\":" + args_json_text + ",\"dst\":" + me._int_to_str(dst) + "}"
+    return me._append(st, b)
+  }
+  add_call_range(st, name, start, count, dst) {
+    local arr = me._ids_range_json(start, count)
+    return me.add_call_ids(st, name, arr, dst)
+  }
+  add_boxcall_range(st, method, recv_id, args_start, count, dst) {
+    me._comma_if_needed(st)
+    local arr = me._ids_range_json(args_start, count)
+    local b = "{\"op\":\"boxcall\",\"method\":" + me._quote(method) + ",\"recv\":" + me._int_to_str(recv_id) + ",\"args\":" + arr + ",\"dst\":" + me._int_to_str(dst) + "}"
+    return me._append(st, b)
+  }
+  add_newbox_range(st, box_type, args_start, count, dst) {
+    me._comma_if_needed(st)
+    local arr = me._ids_range_json(args_start, count)
+    local b = "{\"op\":\"newbox\",\"box_type\":" + me._quote(box_type) + ",\"args\":" + arr + ",\"dst\":" + me._int_to_str(dst) + "}"
+    return me._append(st, b)
+  }
+  // --- JSON v1 (MirCall) helpers: experimental minimal emission ---
+  _args_array_json_from_ids(ids_start, count) {
+    return me._ids_range_json(ids_start, count)
+  }
+  add_mir_call_global_ids(st, name, args_json_text, dst) {
+    me._comma_if_needed(st)
+    // {"op":"mir_call","dst":<d>,"callee":{"type":"Global","name":"..."},"args":[...]}
+    local b = "{\"op\":\"mir_call\",\"dst\":" + me._int_to_str(dst) + ",\"callee\":{\"type\":\"Global\",\"name\":" + me._quote(name) + "},\"args\":" + args_json_text + "}"
+    return me._append(st, b)
+  }
+  add_mir_call_method_ids(st, method, recv_id, args_json_text, dst) {
+    me._comma_if_needed(st)
+    // {"op":"mir_call","dst":<d>,"callee":{"type":"Method","method":"m","receiver":<id>},"args":[...]}
+    local b = "{\"op\":\"mir_call\",\"dst\":" + me._int_to_str(dst) + ",\"callee\":{\"type\":\"Method\",\"method\":" + me._quote(method) + ",\"receiver\":" + me._int_to_str(recv_id) + "},\"args\":" + args_json_text + "}"
+    return me._append(st, b)
+  }
+  add_mir_call_constructor_ids(st, box_type, args_json_text, dst) {
+    me._comma_if_needed(st)
+    // {"op":"mir_call","dst":<d>,"callee":{"type":"Constructor","box_type":"T"},"args":[...]}
+    local b = "{\"op\":\"mir_call\",\"dst\":" + me._int_to_str(dst) + ",\"callee\":{\"type\":\"Constructor\",\"box_type\":" + me._quote(box_type) + "},\"args\":" + args_json_text + "}"
+    return me._append(st, b)
+  }
+  add_mir_call_global_range(st, name, start, count, dst) {
+    local arr = me._ids_range_json(start, count)
+    return me.add_mir_call_global_ids(st, name, arr, dst)
+  }
+  add_mir_call_method_range(st, method, recv_id, args_start, count, dst) {
+    local arr = me._ids_range_json(args_start, count)
+    return me.add_mir_call_method_ids(st, method, recv_id, arr, dst)
+  }
+  add_mir_call_constructor_range(st, box_type, args_start, count, dst) {
+    local arr = me._ids_range_json(args_start, count)
+    return me.add_mir_call_constructor_ids(st, box_type, arr, dst)
+  }
+  add_branch(st, cond, then_id, else_id) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"branch\",\"cond\":" + me._int_to_str(cond) + ",\"then\":" + me._int_to_str(then_id) + ",\"else\":" + me._int_to_str(else_id) + "}"
+    return me._append(st, b)
+  }
+  add_jump(st, target) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"jump\",\"target\":" + me._int_to_str(target) + "}"
+    return me._append(st, b)
+  }
+  // Minimal: append a copy instruction (dst <- src)
+  add_copy(st, dst, src) {
+    me._comma_if_needed(st)
+    local b = "{\"op\":\"copy\",\"dst\":" + me._int_to_str(dst) + ",\"src\":" + me._int_to_str(src) + "}"
     return me._append(st, b)
   }
   end_all(st) {

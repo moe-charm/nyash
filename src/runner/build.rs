@@ -126,7 +126,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
                     let p = e.path();
                     if p.is_dir() {
                         walk(&p, acc);
-                    } else if p.file_name().map(|n| n == "main.nyash").unwrap_or(false) {
+                    } else if p.file_name().map(|n| n == "main.hako" || n == "main.nyash").unwrap_or(false) {
                         acc.push(p.display().to_string());
                     }
                 }

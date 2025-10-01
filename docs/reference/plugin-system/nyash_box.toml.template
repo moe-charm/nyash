@@ -28,4 +28,5 @@ thread_safe = <true|false>
 windows = "target/x86_64-pc-windows-msvc/release/<your>.dll"
 linux   = "target/release/lib<your>.so"
 macos   = "target/release/lib<your>.dylib"
-
+[# Preferred filename: hako_box.toml]
+# Compatibility: this template also serves for nyash_box.toml. The content is identical; only the filename changes.

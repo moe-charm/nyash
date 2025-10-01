@@ -2,12 +2,15 @@ use std::collections::HashMap;
 
 use super::super::MirType;
 
-/// Load plugin method signatures from `nyash_box.toml`.
+/// Load plugin method signatures from `hako_box.toml` (preferred) or `nyash_box.toml`.
 ///
 /// Returns mapping `(BoxName, MethodName) -> MirType`.
 pub fn load_plugin_method_sigs() -> HashMap<(String, String), MirType> {
     let mut sigs = HashMap::new();
-    if let Ok(content) = std::fs::read_to_string("nyash_box.toml") {
+    // Prefer hako_box.toml; fallback to nyash_box.toml
+    let content = std::fs::read_to_string("hako_box.toml")
+        .or_else(|_| std::fs::read_to_string("nyash_box.toml"));
+    if let Ok(content) = content {
         if let Ok(root) = toml::from_str::<toml::Value>(&content) {
             if let Some(table) = root.as_table() {
                 for (box_name, box_val) in table {

@@ -43,11 +43,14 @@ impl NyashRunner {
                                 use std::collections::HashMap;
                                 let mut alias_map: HashMap<String,String> = HashMap::new();
                                 for (a,p) in alias_pairs { alias_map.insert(p, a); }
+                                let mut used_prefixed: std::collections::HashSet<String> = std::collections::HashSet::new();
                                 for (path, ast) in v.into_iter() {
                                     let canon = std::fs::canonicalize(&path).ok().map(|pb| pb.to_string_lossy().to_string()).unwrap_or(path.clone());
                                     if let Some(alias) = alias_map.get(&canon) {
-                                        let renamed = crate::runner::modes::common_util::resolve::alias_tools::rename_prelude_top_symbols(&ast, alias);
-                                        prelude_asts.push(renamed);
+                                        match crate::runner::modes::common_util::resolve::alias_tools::rename_with_collision_guard(&ast, alias, &mut used_prefixed, &canon) {
+                                            Ok(renamed) => prelude_asts.push(renamed),
+                                            Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
+                                        }
                                     } else {
                                         prelude_asts.push(ast);
                                     }
@@ -101,6 +104,64 @@ impl NyashRunner {
             }
         };
 
+        // Optional: emit static call-site trace (JSON lines) for parity checks
+        if std::env::var("NYASH_CALL_TRACE").ok().as_deref() == Some("1") {
+            use nyash_rust::mir::MirInstruction;
+            // helper to escape strings
+            fn esc(s: &str) -> String { s.replace('"', "\\\"") }
+            for (fname, func) in compile_result.module.functions.iter() {
+                // Attempt deterministic block order by sorting ids when possible
+                let mut keys: Vec<_> = func.blocks.keys().cloned().collect();
+                keys.sort_by_key(|k| k.as_u32());
+                for bb_id in keys.into_iter() {
+                    if let Some(bb) = func.blocks.get(&bb_id) {
+                        for inst in bb.instructions.iter() {
+                            match inst {
+                                MirInstruction::Call { callee, args, .. } => {
+                                    let bb = bb_id.as_u32();
+                                    match callee {
+                                        Some(nyash_rust::mir::definitions::call_unified::Callee::Global(name)) => {
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Global:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(name), args.len(), esc(fname), bb);
+                                        }
+                                        Some(nyash_rust::mir::definitions::call_unified::Callee::ModuleFunction(name)) => {
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"ModuleFunction:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(name), args.len(), esc(fname), bb);
+                                        }
+                                        Some(nyash_rust::mir::definitions::call_unified::Callee::Method{ box_name, method, .. }) => {
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Method:{}.{}/{}\",\"fn\":\"{}\",\"bb\":{}}}", esc(box_name), esc(method), args.len(), esc(fname), bb);
+                                        }
+                                        Some(nyash_rust::mir::definitions::call_unified::Callee::Extern(name)) => {
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Extern:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(name), args.len(), esc(fname), bb);
+                                        }
+                                        Some(other) => {
+                                            let tag = format!("{:?}", other);
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(&tag), args.len(), esc(fname), bb);
+                                        }
+                                        None => {
+                                            eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Legacy\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", args.len(), esc(fname), bb);
+                                        }
+                                    }
+                                }
+                                MirInstruction::BoxCall { method, args, .. } => {
+                                    let bb = bb_id.as_u32();
+                                    eprintln!("{{\"kind\":\"call_static\",\"callee\":\"BoxCall:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(method), args.len(), esc(fname), bb);
+                                }
+                                MirInstruction::PluginInvoke { method, args, .. } => {
+                                    let bb = bb_id.as_u32();
+                                    eprintln!("{{\"kind\":\"call_static\",\"callee\":\"PluginInvoke:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(method), args.len(), esc(fname), bb);
+                                }
+                                MirInstruction::ExternCall { iface_name, method_name, args, .. } => {
+                                    let bb = bb_id.as_u32();
+                                    let full = format!("{}.{}", iface_name, method_name);
+                                    eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Extern:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(&full), args.len(), esc(fname), bb);
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         println!("📊 MIR Module compiled successfully!");
         println!("📊 Functions: {}", compile_result.module.functions.len());
 
@@ -112,9 +173,16 @@ impl NyashRunner {
 
         // Dev/Test helper: allow executing via PyVM harness when requested
         if std::env::var("SMOKES_USE_PYVM").ok().as_deref() == Some("1") {
-            match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
-                Ok(code) => { std::process::exit(code); }
-                Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
+            #[cfg(feature = "pyvm-bridge")]
+            {
+                match super::common_util::pyvm::run_pyvm_harness_lib(&module, "llvm-ast") {
+                    Ok(code) => { std::process::exit(code); }
+                    Err(e) => { eprintln!("❌ PyVM harness error: {}", e); std::process::exit(1); }
+                }
+            }
+            #[cfg(not(feature = "pyvm-bridge"))]
+            {
+                eprintln!("[warn] SMOKES_USE_PYVM=1 but pyvm-bridge feature is disabled; continuing with LLVM path.");
             }
         }
 

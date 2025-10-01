@@ -1,9 +1,0 @@
-include "apps/macros/examples/array_prepend_zero_macro.nyash"
-
-function main(args) {
-  local j, r
-  j = args.get(0)
-  r = MacroBoxSpec.expand(j)
-  print(r)
-  return 0
-}

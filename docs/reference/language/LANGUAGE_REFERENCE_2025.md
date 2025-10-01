@@ -440,16 +440,10 @@ area = MathUtils.circleArea(5)
 sum = MathUtils.add(10, 20)
 ```
 
-#### **アプリケーションエントリーポイント**
-Nyash は次の順序でエントリを解決します（既定挙動）。
+#### **アプリケーションエントリーポイント（Strict）**
+既定のエントリは「`Main.main` のみ」です。Hakorune では入門者向けに `flow Main` を推奨します。静的状態が必要な場合のみ `static box Main` を採用してください。
 
-1) `Main.main` が存在すれば、常にそれを優先します。
-2) `Main.main` が無く、トップレベルに `main()` があれば、それをエントリとして採用します。
-
-備考
-- 既定でトップレベル `main` も許可されます（2025‑09仕様）。
-- 両方ある場合は `Main.main` を優先します（従来互換）。
-- トップレベル `main` を禁止したい場合は `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=0|false|off` を設定してください。
+詳細は `docs/reference/language/entrypoints.md` を参照してください。
 
 ```nyash
 # 🎯 推奨: Static Box Main パターン

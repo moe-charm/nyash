@@ -4,10 +4,10 @@ Status: In Progress（9.79 P2PBox前のゲート）
 Last Updated: 2025-08-25
 
 ## 🎯 目的
-P2PBox（Phase 9.79）に着手する前に、MIRパイプライン（Builder/SSA/MIR26/Verifier/Optimizer/VM整合）を完全に安定化し、26命令セットで凍結する。これにより、P2P/Craneliftの土台を強固にする。
+P2PBox（Phase 9.79）に着手する前に、MIRパイプライン（Builder/SSA/MIR26/Verifier/Optimizer/VM整合）を完全に安定化し、26命令セットで仕様を固定する。これにより、P2P/Craneliftの土台を強固にする。
 
 ## 📦 スコープ（MIRまわりの全タスク）
-0) 命令セットの凍結（26命令が正）
+0) 命令セットの固定（26命令が正）
 - 命令セットの単一出典: `docs/reference/mir/INSTRUCTION_SET.md` を唯一の参照に統一
 - コード側の列挙とテスト: `src/mir/instruction.rs` の列挙と一致、総数26のテストで保証（ドキュメント≧コードではなくコード≡ドキュメント）
 - 25命令文献はアーカイブへ移動（本流は26命令）
@@ -16,7 +16,7 @@ P2PBox（Phase 9.79）に着手する前に、MIRパイプライン（Builder/SS
 - Loop SSA復帰: `loop_api` によるPhi挿入・seal・predecessor更新の段階適用、簡易lowering除去
 - TypeOp早期lowering網羅: `is/as/isType/asType` の関数/メソッド両パスで確実に `TypeOp(Check/Cast)` 生成、`print(isType(...))` 直下もdst化
 
-2) MIR26命令ダイエットの凍結
+2) MIR26命令ダイエットの固定
 - TypeOp統合: Check/Castの意味論確定、Printer表示/エフェクト統一
 - WeakRef/Barrier統合: flag ON/OFFで差分固定（PoC featureで比較可能に）
 - 命令リストの合意化: 26命令でのPrinter/Verifier/Optimizer整合

@@ -14,6 +14,11 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
 - 次の主タスク: Nyash 製 JSON ライブラリ（JSON v0 DOM: parse/stringify）。完了後に Ny Executor（最小命令）へ直行。
 - 既定挙動は不変。新経路はすべて env トグルで opt‑in。
 
+## 🔄 2025‑10‑02 Update（PyVM 撤退・LLVM本流）
+- 実行系の既定は Rust VM（MIR）と LLVM（llvmlite ハーネス）。
+- PyVM は撤退（既定OFF）。互換確認が必要な場合のみ `--features pyvm-bridge` を明示してビルドし、`NYASH_VM_USE_PY=1` で起動する。
+- パリティ検証は LLVM ハーネス基準に一本化。PyVM はローカル限定の互換用途に留める。
+
 推奨トグル
 - `NYASH_LLVM_USE_HARNESS=1`（LLVM Python ハーネス）
 - `NYASH_PARSER_TOKEN_CURSOR=1`（TokenCursor 経路）
@@ -167,12 +172,12 @@ Call { callee: Callee, args }
   - `tools/parity.sh --lhs pyvm --rhs llvmlite <test.nyash>`（常時）
 
 Imports/Namespace plan（15.3‑late）
-- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_ENABLE_USING=1`.
+- See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_USING=1` (compat: `NYASH_ENABLE_USING=1`).
 
 - Operational switches
   - `NYASH_USE_NY_COMPILER=1`（selfhost compiler 経路ON）
   - `NYASH_JSON_ONLY=1`（子プロセスの余計な出力抑止）
-  - `NYASH_DISABLE_PLUGINS=1`（必要に応じて子のみ最小化）
+- `NYASH_PLUGIN_POLICY=off`（必要に応じて子のみ最小化; compat: `NYASH_DISABLE_PLUGINS=1`）
   - 文分離: 最小ASIルール（深さ0・直前が継続子でない改行のみ終端）
 
 - Risks / Rollback

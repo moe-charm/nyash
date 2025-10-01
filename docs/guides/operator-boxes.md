@@ -14,7 +14,7 @@ Flags
 - NYASH_OPERATOR_BOX_COMPARE=1    Enable CompareOperator (observer) on compare ops
 - NYASH_OPERATOR_BOX_ADD=1        Enable AddOperator (observer) on Add binop
 - NYASH_OPERATOR_BOX_ALL=1        Enable auto-prelude injection for all operator modules (runtime convenience)
-- NYASH_USING_AST=1               Required to AST‑merge the operator modules automatically
+- NYASH_USING_STRATEGY=prelude    Required to AST‑merge the operator modules automatically (compat: NYASH_USING_AST=1)
   
 Parser tokens
 - Tokenizer accepts `~`, `<<`, `>>` in non‑strict mode (default). In strict_12_7, shift tokens are gated.

@@ -1,9 +1,9 @@
-//! Nyash Plugin Tester v2 - nyash.toml中心設計対応版
+//! Nyash Plugin Tester v2 - hako.toml（互換: nyash.toml）中心設計
 //! 
 //! 究極のシンプル設計:
 //! - Host VTable廃止
 //! - nyash_plugin_invokeのみ使用
-//! - すべてのメタ情報はnyash.tomlから取得
+//! - すべてのメタ情報は hako.toml から取得（互換: nyash.toml）
 
 use clap::{Parser, Subcommand};
 use colored::*;
@@ -13,7 +13,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-// ============ nyash.toml v2 Types ============
+// ============ hako.toml v2 Types (compat: nyash.toml) ============
 
 #[derive(Debug, Deserialize)]
 struct NyashConfigV2 {
@@ -45,7 +45,7 @@ struct MethodDefinition {
 
 #[derive(Parser)]
 #[command(name = "plugin-tester-v2")]
-#[command(about = "Nyash plugin testing tool v2 - nyash.toml centric", long_about = None)]
+#[command(about = "Nyash plugin testing tool v2 — hako.toml centric (compat: nyash.toml)", long_about = None)]
 struct Args {
     #[command(subcommand)]
     command: Commands,
@@ -53,35 +53,35 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Check plugin with nyash.toml v2
+    /// Check plugin with hako.toml v2 (compat: nyash.toml)
     Check {
-        /// Path to nyash.toml file
-        #[arg(short, long, default_value = "../../nyash.toml")]
+        /// Path to hako.toml file (compat: nyash.toml)
+        #[arg(short, long, default_value = "../../hako.toml")]
         config: PathBuf,
         
         /// Library name (e.g., "libnyash_filebox_plugin.so")
         #[arg(short, long)]
         library: Option<String>,
     },
-    /// Test Box lifecycle with nyash.toml v2
+    /// Test Box lifecycle with hako.toml v2 (compat: nyash.toml)
     Lifecycle {
-        /// Path to nyash.toml file
-        #[arg(short, long, default_value = "../../nyash.toml")]
+        /// Path to hako.toml file (compat: nyash.toml)
+        #[arg(short, long, default_value = "../../hako.toml")]
         config: PathBuf,
         
         /// Box type name (e.g., "FileBox")
         box_type: String,
     },
-    /// Validate all plugins in nyash.toml
+    /// Validate all plugins in hako.toml (compat: nyash.toml)
     ValidateAll {
-        /// Path to nyash.toml file
-        #[arg(short, long, default_value = "../../nyash.toml")]
+        /// Path to hako.toml file (compat: nyash.toml)
+        #[arg(short, long, default_value = "../../hako.toml")]
         config: PathBuf,
     },
     /// Phase 15.5: Safety check with ChatGPT recommended features
     SafetyCheck {
-        /// Path to nyash.toml file
-        #[arg(short, long, default_value = "../../nyash.toml")]
+        /// Path to hako.toml file (compat: nyash.toml)
+        #[arg(short, long, default_value = "../../hako.toml")]
         config: PathBuf,
 
         /// Library name to check (optional, checks all if not specified)
@@ -182,35 +182,15 @@ fn resolve_plugin_path(base: &Path, raw: &str) -> PathBuf {
 }
 
 fn check_v2(config_path: &PathBuf, library_filter: Option<&str>) {
-    println!("{}", "=== Plugin Check v2 (nyash.toml centric) ===".bold());
-    
-    // Load nyash.toml v2
-    let config_content = match fs::read_to_string(config_path) {
-        Ok(content) => content,
-        Err(e) => {
-            eprintln!("{}: Failed to read config: {}", "ERROR".red(), e);
-            return;
-        }
+    println!("{}", "=== Plugin Check v2 (hako.toml centric — compat: nyash.toml) ===".bold());
+
+    // Load configuration (hako.toml preferred, compat nyash.toml)
+    let (config, raw_config) = match load_config(config_path) {
+        Ok((cfg, raw)) => (cfg, raw),
+        Err(e) => { eprintln!("{}: {}", "ERROR".red(), e); return; }
     };
-    
-    let config: NyashConfigV2 = match toml::from_str(&config_content) {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            eprintln!("{}: Failed to parse nyash.toml v2: {}", "ERROR".red(), e);
-            return;
-        }
-    };
-    
-    println!("{}: Loaded {} libraries from nyash.toml", "✓".green(), config.libraries.len());
-    
-    // Also parse raw TOML for nested box configs
-    let raw_config: toml::Value = match toml::from_str(&config_content) {
-        Ok(val) => val,
-        Err(e) => {
-            eprintln!("{}: Failed to parse TOML value: {}", "ERROR".red(), e);
-            return;
-        }
-    };
+
+    println!("{}: Loaded {} libraries from hako.toml (compat: nyash.toml)", "✓".green(), config.libraries.len());
     
     // Base dir for relative plugin paths
     let config_base = config_path.parent().unwrap_or(Path::new("."));
@@ -287,30 +267,17 @@ fn test_lifecycle_v2(config_path: &PathBuf, box_type: &str) {
     println!("{}", "=== Lifecycle Test v2 ===".bold());
     println!("Box type: {}", box_type.cyan());
     
-    // Load nyash.toml
-    let config_content = match fs::read_to_string(config_path) {
-        Ok(content) => content,
-        Err(e) => {
-            eprintln!("{}: Failed to read config: {}", "ERROR".red(), e);
-            return;
-        }
+    // Load configuration (hako.toml preferred, compat nyash.toml)
+    let (config, raw_config) = match load_config(config_path) {
+        Ok((cfg, raw)) => (cfg, raw),
+        Err(e) => { eprintln!("{}: {}", "ERROR".red(), e); return; }
     };
-    
-    let config: NyashConfigV2 = match toml::from_str(&config_content) {
-        Ok(cfg) => cfg,
-        Err(e) => {
-            eprintln!("{}: Failed to parse nyash.toml: {}", "ERROR".red(), e);
-            return;
-        }
-    };
-    
-    let raw_config: toml::Value = toml::from_str(&config_content).unwrap();
     
     // Find library that provides this box type
     let (lib_name, lib_def) = match find_library_for_box(&config, box_type) {
         Some((name, def)) => (name, def),
         None => {
-            eprintln!("{}: Box type '{}' not found in nyash.toml", "ERROR".red(), box_type);
+            eprintln!("{}: Box type '{}' not found in hako.toml (compat: nyash.toml)", "ERROR".red(), box_type);
             return;
         }
     };
@@ -577,18 +544,66 @@ fn safety_check_v2(config_path: &PathBuf, library_filter: Option<&str>, box_type
     }
 }
 
-/// Load and parse nyash.toml configuration
+/// Load and parse hako.toml (compat: nyash.toml). Accepts:
+/// - Direct file path
+/// - Directory containing hako.toml/nyash.toml
+/// - Missing file fallback: swap basename between hako/nyash
 fn load_config(config_path: &PathBuf) -> Result<(NyashConfigV2, toml::Value), String> {
-    let config_content = fs::read_to_string(config_path)
-        .map_err(|e| format!("Failed to read config: {}", e))?;
+    use std::ffi::OsStr;
 
-    let config: NyashConfigV2 = toml::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse nyash.toml v2: {}", e))?;
+    let resolve_candidates = |p: &Path| -> Vec<PathBuf> {
+        let mut cands = Vec::new();
+        if p.is_file() {
+            cands.push(p.to_path_buf());
+            // Swap basename between hako.toml and nyash.toml when missing
+            if let Some(fname) = p.file_name().and_then(OsStr::to_str) {
+                if fname == "nyash.toml" {
+                    cands.push(p.parent().unwrap_or(Path::new(".")).join("hako.toml"));
+                } else if fname == "hako.toml" {
+                    cands.push(p.parent().unwrap_or(Path::new(".")).join("nyash.toml"));
+                }
+            }
+        } else if p.is_dir() {
+            cands.push(p.join("hako.toml"));
+            cands.push(p.join("nyash.toml"));
+        } else {
+            // Not existing; try treating as dir, then swap names by basename
+            if let Some(parent) = p.parent() {
+                cands.push(parent.join("hako.toml"));
+                cands.push(parent.join("nyash.toml"));
+            }
+            if let Some(fname) = p.file_name().and_then(OsStr::to_str) {
+                if fname == "nyash.toml" {
+                    cands.push(Path::new(".").join("hako.toml"));
+                } else if fname == "hako.toml" {
+                    cands.push(Path::new(".").join("nyash.toml"));
+                }
+            }
+        }
+        // Always try CWD as last resort
+        cands.push(Path::new(".").join("hako.toml"));
+        cands.push(Path::new(".").join("nyash.toml"));
+        cands
+    };
 
-    let raw_config: toml::Value = toml::from_str(&config_content)
-        .map_err(|e| format!("Failed to parse TOML value: {}", e))?;
-
-    Ok((config, raw_config))
+    let mut last_err: Option<String> = None;
+    for cand in resolve_candidates(config_path) {
+        match fs::read_to_string(&cand) {
+            Ok(content) => {
+                let config: NyashConfigV2 = match toml::from_str(&content) {
+                    Ok(cfg) => cfg,
+                    Err(e) => { last_err = Some(format!("Failed to parse {}: {}", cand.display(), e)); continue; }
+                };
+                let raw_config: toml::Value = match toml::from_str(&content) {
+                    Ok(val) => val,
+                    Err(e) => { last_err = Some(format!("Failed to parse TOML value in {}: {}", cand.display(), e)); continue; }
+                };
+                return Ok((config, raw_config));
+            }
+            Err(e) => { last_err = Some(format!("Failed to read {}: {}", cand.display(), e)); }
+        }
+    }
+    Err(last_err.unwrap_or_else(|| "Could not locate hako.toml/nyash.toml".to_string()))
 }
 
 /// Perform all 4 ChatGPT recommended safety checks
@@ -641,7 +656,7 @@ fn check_universal_slot_conflicts(methods: &HashMap<String, MethodDefinition>, b
                     eprintln!("    🚨 {}: Method '{}' claims universal slot {} (reserved for '{}')",
                         "UNIVERSAL SLOT CONFLICT".red().bold(),
                         method_name, slot_id, universal_name);
-                    eprintln!("       Fix: Change method_id in nyash.toml to {} or higher", 4);
+                    eprintln!("       Fix: Change method_id in hako.toml (compat: nyash.toml) to {} or higher", 4);
                     issues += 1;
                 } else {
                     println!("    ✅ Universal slot {}: {} correctly assigned", slot_id, universal_name);
@@ -743,7 +758,7 @@ fn check_e_method_detection(
                     eprintln!("    🚨 {}: Method '{}' (id={}) returns E_METHOD - NOT IMPLEMENTED!",
                         "E_METHOD DETECTED".red().bold(), method_name, method_def.method_id);
                     eprintln!("       This is exactly what caused StringBox.get() to fail!");
-                    eprintln!("       Fix: Implement method '{}' in plugin or remove from nyash.toml", method_name);
+                    eprintln!("       Fix: Implement method '{}' in plugin or remove from hako.toml (compat: nyash.toml)", method_name);
                     issues += 1;
                 }
                 -8 => {

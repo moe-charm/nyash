@@ -279,7 +279,11 @@ def dedup_fn_prints_in_slice(text: str) -> str:
 
 def combine(entry: str, fix_braces: bool, dedup_box: bool, dedup_fn: bool, seam_debug: bool) -> str:
     repo_root = os.getcwd()
-    modules, using_paths = load_toml_modules(os.path.join(repo_root, 'nyash.toml'))
+    # Prefer hako.toml; fallback to nyash.toml for compatibility
+    hako = os.path.join(repo_root, 'hako.toml')
+    nyash = os.path.join(repo_root, 'nyash.toml')
+    cfg = hako if os.path.exists(hako) else nyash
+    modules, using_paths = load_toml_modules(cfg)
     visited = set()
 
     def resolve_ns(ns: str) -> str | None:

@@ -13,9 +13,7 @@ export NYASH_BUILDER_REWRITE_INSTANCE=0
 output_vm=$(run_nyash_vm "$APP_DIR/main.nyash" --dev)
 
 # LLVM availability check
-if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
-  test_skip "LLVM backend not available in this build"; exit 0
-fi
+# Harness-first: rely on run_nyash_llvm() to decide availability
 
 NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$APP_DIR/main.nyash" --dev)
 

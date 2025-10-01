@@ -1,7 +1,7 @@
 // ArrayBox plugin demo (set)
 // Build plugin:
 //   (cd plugins/nyash-array-plugin && cargo build --release)
-// Run (plugin host auto-loads from nyash.toml):
+// Run (plugin host auto-loads from hako.toml; compat: nyash.toml):
 //   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/array_plugin_set_demo.nyash
 
 static box Main {
@@ -17,4 +17,3 @@ static box Main {
     return a.get(2)
   }
 }
-

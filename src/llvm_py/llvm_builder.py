@@ -199,101 +199,8 @@ class NyashLLVMBuilder:
 
 
     def setup_phi_placeholders(self, blocks: List[Dict[str, Any]]):
-        """Predeclare PHIs and collect incoming metadata for finalize_phis.
-
-        This pass is function-local and must be invoked after basic blocks are
-        created and before lowering individual blocks. It also tags string-ish
-        values eagerly to help downstream resolvers choose correct intrinsics.
-        """
-        try:
-            # Pass A: collect producer stringish hints per value-id
-            produced_str: Dict[int, bool] = {}
-            for block_data in blocks:
-                for inst in block_data.get("instructions", []) or []:
-                    try:
-                        opx = inst.get("op")
-                        dstx = inst.get("dst")
-                        if dstx is None:
-                            continue
-                        is_str = False
-                        if opx == "const":
-                            v = inst.get("value", {}) or {}
-                            t = v.get("type")
-                            if t == "string" or (isinstance(t, dict) and t.get("kind") in ("handle","ptr") and t.get("box_type") == "StringBox"):
-                                is_str = True
-                        elif opx in ("binop","boxcall","externcall"):
-                            t = inst.get("dst_type")
-                            if isinstance(t, dict) and t.get("kind") == "handle" and t.get("box_type") == "StringBox":
-                                is_str = True
-                        if is_str:
-                            produced_str[int(dstx)] = True
-                    except Exception:
-                        pass
-            # Pass B: materialize PHI placeholders and record incoming metadata
-            self.block_phi_incomings = {}
-            for block_data in blocks:
-                bid0 = block_data.get("id", 0)
-                bb0 = self.bb_map.get(bid0)
-                for inst in block_data.get("instructions", []) or []:
-                    if inst.get("op") == "phi":
-                        try:
-                            dst0 = int(inst.get("dst"))
-                            from .phi_wiring.common import incoming_pairs_vb
-                            incoming0 = incoming_pairs_vb(inst)
-                        except Exception:
-                            dst0 = None; incoming0 = []
-                        if dst0 is None:
-                            continue
-                        # Record incoming metadata for finalize_phis
-                        try:
-                            self.block_phi_incomings.setdefault(bid0, {})[dst0] = [
-                                (int(b), int(v)) for (v, b) in incoming0
-                            ]
-                        except Exception:
-                            pass
-                        # Ensure placeholder exists at block head
-                        if bb0 is not None:
-                            b0 = ir.IRBuilder(bb0)
-                            try:
-                                b0.position_at_start(bb0)
-                            except Exception:
-                                pass
-                            existing = self.vmap.get(dst0)
-                            is_phi = False
-                            try:
-                                is_phi = hasattr(existing, 'add_incoming')
-                            except Exception:
-                                is_phi = False
-                            if not is_phi:
-                                ph0 = b0.phi(self.i64, name=f"phi_{dst0}")
-                                self.vmap[dst0] = ph0
-                            # Tag propagation: if explicit dst_type marks string or any incoming was produced as string-ish, tag dst
-                            try:
-                                dst_type0 = inst.get("dst_type")
-                                mark_str = isinstance(dst_type0, dict) and dst_type0.get("kind") == "handle" and dst_type0.get("box_type") == "StringBox"
-                                if not mark_str:
-                                    for (v_id, _b_id) in incoming0:
-                                        try:
-                                            if produced_str.get(int(v_id)):
-                                                mark_str = True; break
-                                        except Exception:
-                                            pass
-                                if mark_str and hasattr(self.resolver, 'mark_string'):
-                                    self.resolver.mark_string(int(dst0))
-                            except Exception:
-                                pass
-                            # Definition hint: PHI defines dst in this block
-                            try:
-                                self.def_blocks.setdefault(int(dst0), set()).add(int(bid0))
-                            except Exception:
-                                pass
-            # Sync to resolver
-            try:
-                self.resolver.block_phi_incomings = self.block_phi_incomings
-            except Exception:
-                pass
-        except Exception:
-            pass
+        """Legacy stub — use phi_wiring.tagging.setup_phi_placeholders instead."""
+        raise NotImplementedError("setup_phi_placeholders moved to phi_wiring.tagging")
     
     def lower_block(self, bb: ir.Block, block_data: Dict[str, Any], func: ir.Function):
         """Lower a single basic block.
@@ -481,173 +388,17 @@ class NyashLLVMBuilder:
     # to avoid divergence between two implementations.
 
     def _lower_instruction_list(self, builder: ir.IRBuilder, insts: List[Dict[str, Any]], func: ir.Function):
-        """Lower a flat list of instructions using current builder and function."""
-        for sub in insts:
-            # If current block already has a terminator, create a continuation block
-            if builder.block.terminator is not None:
-                cont = func.append_basic_block(name=f"cont_bb_{builder.block.name}")
-                builder.position_at_end(cont)
-            self.lower_instruction(builder, sub, func)
+        """Legacy stub — use builders.instruction_lower instead."""
+        raise NotImplementedError("_lower_instruction_list moved to builders.instruction_lower")
     
     def finalize_phis(self):
-        """Finalize PHIs declared in JSON by wiring incoming edges at block heads.
-        Uses resolver._value_at_end_i64 to materialize values at predecessor ends,
-        ensuring casts/boxing are inserted in predecessor blocks (dominance-safe)."""
-        # Iterate JSON-declared PHIs per block
-        # Build succ map for nearest-predecessor mapping
-        succs: Dict[int, List[int]] = {}
-        for to_bid, from_list in (self.preds or {}).items():
-            for fr in from_list:
-                succs.setdefault(fr, []).append(to_bid)
-        for block_id, dst_map in (getattr(self, 'block_phi_incomings', {}) or {}).items():
-            try:
-                trace_phi_json({"phi": "finalize_begin", "block": int(block_id), "dsts": [int(k) for k in (dst_map or {}).keys()]})
-            except Exception:
-                pass
-            bb = self.bb_map.get(block_id)
-            if bb is None:
-                continue
-            for dst_vid, incoming in (dst_map or {}).items():
-                try:
-                    trace_phi_json({"phi": "finalize_dst", "block": int(block_id), "dst": int(dst_vid), "incoming": [(int(v), int(b)) for (b, v) in [(b, v) for (v, b) in (incoming or [])]]})
-                except Exception:
-                    pass
-                # Ensure placeholder exists at block head with common helper
-                phi = _ensure_phi(self, int(block_id), int(dst_vid), bb)
-                self.vmap[int(dst_vid)] = phi
-                n = getattr(phi, 'name', b'').decode() if hasattr(getattr(phi, 'name', None), 'decode') else str(getattr(phi, 'name', ''))
-                try:
-                    trace_phi_json({"phi": "finalize_target", "block": int(block_id), "dst": int(dst_vid), "ir": str(n)})
-                except Exception:
-                    pass
-                # Wire incoming per CFG predecessor; map src_vid when provided
-                preds_raw = [p for p in self.preds.get(block_id, []) if p != block_id]
-                # Deduplicate while preserving order
-                seen = set()
-                preds_list: List[int] = []
-                for p in preds_raw:
-                    if p not in seen:
-                        preds_list.append(p)
-                        seen.add(p)
-                # Helper: find the nearest immediate predecessor on a path decl_b -> ... -> block_id
-                def nearest_pred_on_path(decl_b: int) -> Optional[int]:
-                    # BFS from decl_b to block_id; return the parent of block_id on that path.
-                    from collections import deque
-                    q = deque([decl_b])
-                    visited = set([decl_b])
-                    parent: Dict[int, Optional[int]] = {decl_b: None}
-                    while q:
-                        cur = q.popleft()
-                        if cur == block_id:
-                            par = parent.get(block_id)
-                            return par if par in preds_list else None
-                        for nx in succs.get(cur, []):
-                            if nx not in visited:
-                                visited.add(nx)
-                                parent[nx] = cur
-                                q.append(nx)
-                    return None
-                # Precompute a non-self initial source (if present) to use for self-carry cases
-                init_src_vid: Optional[int] = None
-                for (b_decl0, v_src0) in incoming:
-                    try:
-                        vs0 = int(v_src0)
-                    except Exception:
-                        continue
-                    if vs0 != int(dst_vid):
-                        init_src_vid = vs0
-                        break
-                # Pre-resolve declared incomings to nearest immediate predecessors
-                chosen: Dict[int, ir.Value] = {}
-                for (b_decl, v_src) in incoming:
-                    try:
-                        bd = int(b_decl); vs = int(v_src)
-                    except Exception:
-                        continue
-                    pred_match = nearest_pred_on_path(bd)
-                    if pred_match is None:
-                        continue
-                    # If self-carry is specified (vs == dst_vid), map to init_src_vid when available
-                    if vs == int(dst_vid) and init_src_vid is not None:
-                        vs = int(init_src_vid)
-                    try:
-                        val = self.resolver._value_at_end_i64(vs, pred_match, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                    except Exception:
-                        val = None
-                    if val is None:
-                        val = ir.Constant(self.i64, 0)
-                    chosen[pred_match] = val
-                # Fill remaining predecessors with dst carry or (optionally) a synthesized default
-                for pred_bid in preds_list:
-                    if pred_bid not in chosen:
-                        val = None
-                        # Optional gated fix for esc_json: default branch should append current char
-                        try:
-                            import os
-                            if os.environ.get('NYASH_LLVM_ESC_JSON_FIX','0') == '1':
-                                fname = getattr(self, 'current_function_name', '') or ''
-                                sub_vid = getattr(self, '_last_substring_vid', None)
-                                if isinstance(fname, str) and 'esc_json' in fname and isinstance(sub_vid, int):
-                                    # Compute out_at_end and ch_at_end in pred block, then concat_hh
-                                    out_end = self.resolver._value_at_end_i64(int(dst_vid), pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                                    ch_end = self.resolver._value_at_end_i64(int(sub_vid), pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                                    if out_end is not None and ch_end is not None:
-                                        pb = ir.IRBuilder(self.bb_map.get(pred_bid))
-                                        try:
-                                            t = self.bb_map.get(pred_bid).terminator
-                                            if t is not None:
-                                                pb.position_before(t)
-                                            else:
-                                                pb.position_at_end(self.bb_map.get(pred_bid))
-                                        except Exception:
-                                            pass
-                                        fnty = ir.FunctionType(self.i64, [self.i64, self.i64])
-                                        callee = None
-                                        for f in self.module.functions:
-                                            if f.name == 'nyash.string.concat_hh':
-                                                callee = f; break
-                                        if callee is None:
-                                            callee = ir.Function(self.module, fnty, name='nyash.string.concat_hh')
-                                        val = pb.call(callee, [out_end, ch_end], name=f"phi_def_concat_{dst_vid}_{pred_bid}")
-                        except Exception:
-                            pass
-                        if val is None:
-                            try:
-                                val = self.resolver._value_at_end_i64(dst_vid, pred_bid, self.preds, self.block_end_values, self.vmap, self.bb_map)
-                            except Exception:
-                                val = None
-                        if val is None:
-                            val = ir.Constant(self.i64, 0)
-                        chosen[pred_bid] = val
-                # Finally add incomings (each predecessor at most once)
-                for pred_bid, val in chosen.items():
-                    pred_bb = self.bb_map.get(pred_bid)
-                    if pred_bb is None:
-                        continue
-                    phi.add_incoming(val, pred_bb)
-                    try:
-                        trace_phi(f"[finalize]   add incoming: bb{pred_bid} -> v{dst_vid}")
-                    except Exception:
-                        pass
-                # Tag dst as string-ish if any declared source was string-ish (post-lowering info)
-                try:
-                    if hasattr(self.resolver, 'is_stringish') and hasattr(self.resolver, 'mark_string'):
-                        any_str = False
-                        for (_b_decl_i, v_src_i) in incoming:
-                            try:
-                                if self.resolver.is_stringish(int(v_src_i)):
-                                    any_str = True; break
-                            except Exception:
-                                pass
-                        if any_str:
-                            self.resolver.mark_string(int(dst_vid))
-                except Exception:
-                    pass
-        # Clear legacy deferrals if any
-        try:
-            self.phi_deferrals.clear()
-        except Exception:
-            pass
+        """Deprecated shim. Use phi_wiring.finalize_phis via builders.function_lower.
+
+        This method now delegates to the wire-only finalizer to avoid legacy
+        ensure+wire duplication. It remains for backward compatibility.
+        """
+        from phi_wiring import finalize_phis as _finalize
+        _finalize(self)
     
     def compile_to_object(self, output_path: str):
         """Compile module to object file"""
@@ -668,17 +419,53 @@ class NyashLLVMBuilder:
             print(f"[DEBUG] IR dumped to /tmp/debug_ir.ll")
         except Exception as e:
             print(f"[DEBUG] Failed to dump IR: {e}")
-        # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
-        # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Additionally, auto-enable when harness is requested.
-        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1' or os.environ.get('NYASH_LLVM_USE_HARNESS') == '1':
+        # Optional sanitize passes for IR text before verification
+        # 1) Drop empty PHIs (no incoming pairs)
+        # 2) Group PHIs at the block head (LLVM invariant: all PHIs at top)
+        # Default OFF. Enable by setting NYASH_LLVM_SANITIZE_EMPTY_PHI=1.
+        if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1':
             try:
-                fixed_lines = []
-                for line in ir_text.splitlines():
+                lines = ir_text.splitlines()
+                # Pass 1: remove malformed empty PHIs
+                tmp = []
+                for line in lines:
                     if (" = phi  i64" in line or " = phi i64" in line) and ("[" not in line):
-                        # Skip malformed PHI without incoming pairs
                         continue
-                    fixed_lines.append(line)
-                ir_text = "\n".join(fixed_lines)
+                    tmp.append(line)
+                lines = tmp
+                # Pass 2: group PHIs at block head
+                grouped = []
+                i = 0
+                n = len(lines)
+                while i < n:
+                    line = lines[i]
+                    grouped.append(line)
+                    # Detect basic block start like: "bb<N>:" (possibly with leading spaces)
+                    stripped = line.strip()
+                    if stripped.endswith(":") and stripped.startswith("bb"):
+                        # Collect subsequent PHI and non-PHI lines until next label or end
+                        phi_buf = []
+                        body_buf = []
+                        j = i + 1
+                        while j < n:
+                            l2 = lines[j]
+                            s2 = l2.strip()
+                            # Next block label?
+                            if s2.endswith(":") and s2.startswith("bb"):
+                                break
+                            if (" = phi  i64" in s2) or (" = phi i64" in s2):
+                                phi_buf.append(l2)
+                            else:
+                                body_buf.append(l2)
+                            j += 1
+                        # Emit PHIs first (preserve relative order), then rest
+                        if phi_buf or body_buf:
+                            grouped.extend(phi_buf)
+                            grouped.extend(body_buf)
+                            i = j
+                            continue
+                    i += 1
+                ir_text = "\n".join(grouped)
             except Exception:
                 pass
         mod = llvm.parse_assembly(ir_text)

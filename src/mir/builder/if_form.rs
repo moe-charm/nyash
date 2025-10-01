@@ -1,4 +1,4 @@
-use super::{ConstValue, MirBuilder, MirInstruction, ValueId};
+use super::{MirBuilder, MirInstruction, ValueId};
 use crate::mir::loop_api::LoopBuilderApi; // for current_block()
 use crate::ast::{ASTNode, BinaryOperator};
 

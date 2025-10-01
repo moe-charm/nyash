@@ -34,6 +34,19 @@ static box LocalSSA {
     }
     return out
   }
+  _count_occurs(hay, needle) {
+    if hay == null { return 0 }
+    if needle == null { return 0 }
+    local n = 0
+    local i = 0
+    loop(true) {
+      local p = hay.indexOf(needle)
+      if p < 0 { break }
+      n = n + 1
+      hay = hay.substring(p + needle.length(), hay.length())
+    }
+    return n
+  }
   _to_int(digits) {
     if digits == null { return 0 }
     local n = digits.length()
@@ -126,9 +139,11 @@ static box LocalSSA {
     // Trace locals (per-call)
     local t_branches = 0
     local t_copies = 0
+    // Block-id trace accumulator (per-call, persisted back at end)
+    local bid_csv = me._trace_copy_blocks_csv
+    if bid_csv == null { bid_csv = "" }
     // LocalSSA: ensure branch(cond) is materialized in the same block by inserting a copy
     if text == null { return text }
-    if me._trace_copy_blocks_csv == null { me._trace_copy_blocks_csv = "" }
     local cur = 0
     local out = text
     loop(true) {
@@ -148,29 +163,21 @@ static box LocalSSA {
       local insts_start = me._block_insts_start(out, obj_start)
       if insts_start < 0 { cur = obj_end  continue }
       local has_def = 0
-      // Search between insts_start..obj_start for an exact dst match (avoid dst:10 matching dst:1)
-      {
-        local scan = insts_start
-        local key = "\"dst\":"
-        loop(true) {
-          local p = me._index_of_from(out, key, scan)
-          if p < 0 || p >= obj_start { break }
-          // read the number at this position
-          local ds = me._read_digits(out, p + key.length())
-          if ds == digits { has_def = 1  break }
-          scan = p + key.length()
-        }
+      local def_pat = "\"dst\":" + digits
+      // Search between insts_start..obj_start
+      local scan = insts_start
+      loop(true) {
+        local p = me._index_of_from(out, def_pat, scan)
+        if p < 0 || p >= obj_start { break }
+        has_def = 1
+        break
       }
       if has_def == 1 {
         cur = obj_end
         continue
       }
-      // Insert copy inside the block instructions
-      // - If there are PHI nodes at the head of this block, place the copy right after the PHI group
-      // - Otherwise, place the copy at the beginning of the block
+      // Insert copy after PHI cluster at block head
       // Trace: capture block id of this branch's block
-      local bid_csv = me._trace_copy_blocks_csv
-      if bid_csv == null { bid_csv = "" }
       local bid = 0
       // Find nearest '"id":<n>' before this block's instructions
       local id_pos = me._last_index_of(out.substring(0, insts_start), "\"id\":")
@@ -180,12 +187,22 @@ static box LocalSSA {
           if bid_csv == "" { bid_csv = "" + bid } else { bid_csv = bid_csv + "," + bid }
         }
       }
-      // Insert just before the branch object start to guarantee ordering w.r.t PHI and branch
-      local insert_pos = obj_start
+      // Compute insertion point just after contiguous PHI nodes
+      local insert_at = insts_start
+      {
+        local scan = insts_start
+        loop(true) {
+          local pphi = me._index_of_from(out, "\"op\":\"phi\"", scan)
+          if pphi < 0 || pphi >= obj_start { break }
+          local sphi = me._seek_obj_start(out, pphi)
+          local ephi = me._seek_obj_end(out, sphi)
+          insert_at = ephi
+          scan = ephi
+        }
+      }
       local new_id = me._max_dst_id(out) + 1
-      // Insert a plain JSON map (no extra escaping)
-      local copy_inst = "{\"op\":\"copy\",\"src\":" + digits + ",\"dst\":" + new_id + "},"
-      out = out.substring(0, insert_pos) + copy_inst + out.substring(insert_pos, out.length())
+      local copy_inst = "{\\\"op\\\":\\\"copy\\\",\\\"src\\\":" + digits + ",\\\"dst\\\":" + new_id + "},"
+      out = out.substring(0, insert_at) + copy_inst + out.substring(insert_at, out.length())
       t_copies = t_copies + 1
       // Rewrite branch cond to new_id within obj segment (adjust obj positions by insertion)
       local delta = copy_inst.length()
@@ -254,6 +271,249 @@ static box LocalSSA {
     return json_text
   }
 
+  // Experimental: call-site operand materialization (minimal)
+  // Insert copy instructions after the PHI cluster of a block when call/method/new operands
+  // (recv/args) are not defined earlier in the same block. This keeps operands locally materialized
+  // without changing semantics. JSON is manipulated textually to avoid adding heavy dependencies.
+  ensure_calls(json_text) {
+    if json_text == null { return json_text }
+    // Only operate on MIR(JSON) text; Stage‑1 remains unchanged
+    if me._is_mir_json(json_text) == 0 { return json_text }
+    local out = json_text
+    local cur = 0
+    loop(true) {
+      // Find next call-like instruction (v0 and v1 tolerant)
+      local p1 = me._index_of_from(out, "\"op\":\"call\"", cur)
+      local p2 = me._index_of_from(out, "\"op\":\"boxcall\"", cur)
+      local p3 = me._index_of_from(out, "\"op\":\"newbox\"", cur)
+      local p4 = me._index_of_from(out, "\"op\":\"mir_call\"", cur)
+      // choose earliest >=0
+      local op_pos = -1
+      local kind = 0 // 1=call,2=boxcall,3=newbox,4=mir_call
+      if p1 >= 0 { op_pos = p1  kind = 1 }
+      if p2 >= 0 && (op_pos < 0 || p2 < op_pos) { op_pos = p2  kind = 2 }
+      if p3 >= 0 && (op_pos < 0 || p3 < op_pos) { op_pos = p3  kind = 3 }
+      if p4 >= 0 && (op_pos < 0 || p4 < op_pos) { op_pos = p4  kind = 4 }
+      if op_pos < 0 { break }
+
+      // Determine instruction object and enclosing block bounds
+      local obj_start = me._seek_obj_start(out, op_pos)
+      local obj_end = me._seek_obj_end(out, obj_start)
+      local insts_start = me._block_insts_start(out, obj_start)
+      if insts_start < 0 { cur = obj_end  continue }
+
+      // Compute insertion point: after the contiguous PHI cluster at the block head
+      local insert_at = insts_start
+      local scan = insts_start
+      loop(true) {
+        local pphi = me._index_of_from(out, "\"op\":\"phi\"", scan)
+        if pphi < 0 || pphi >= obj_start { break }
+        local sphi = me._seek_obj_start(out, pphi)
+        local ephi = me._seek_obj_end(out, sphi)
+        insert_at = ephi
+        scan = ephi
+      }
+
+      // Inline helpers are expanded where needed（Nyash: avoid nested func capture for portability）
+
+      // V0: args array inside the instruction object
+      if kind == 1 || kind == 2 || kind == 3 {
+        // Receiver for boxcall
+        if kind == 2 {
+          local bk = "\"box\":"
+          local bp = me._index_of_from(out, bk, obj_start)
+          if bp >= 0 && bp < obj_end {
+            local digits = me._read_digits(out, bp + bk.length())
+            // Check if dst:<digits> exists before this instruction in the block
+            local has_def = 0
+            if digits != "" {
+              local def_pat = "\"dst\":" + digits
+              local s = insts_start
+              loop(true) {
+                local p = me._index_of_from(out, def_pat, s)
+                if p < 0 || p >= obj_start { break }
+                has_def = 1
+                break
+              }
+            }
+            if digits != "" && has_def == 0 {
+              // Insert copy and rewrite box id
+              local new_id = me._max_dst_id(out) + 1
+              local copy_inst = "{\\\"op\\\":\\\"copy\\\",\\\"src\\\":" + digits + ",\\\"dst\\\":" + new_id + "},"
+              out = out.substring(0, insert_at) + copy_inst + out.substring(insert_at, out.length())
+              local delta = copy_inst.length()
+              if insert_at <= obj_start { obj_start = obj_start + delta  obj_end = obj_end + delta }
+              // rewrite digits at bp
+              local head = out.substring(0, bp + bk.length())
+              local di = bp + bk.length()
+              loop(true) {
+                local ch = out.substring(di, di+1)
+                if ch >= "0" && ch <= "9" { di = di + 1 } else { break }
+              }
+              local tail = out.substring(di, out.length())
+              out = head + new_id + tail
+            }
+          }
+        }
+        // Args list
+        local ak = me._index_of_from(out, "\"args\":[", obj_start)
+        if ak >= 0 && ak < obj_end {
+          // find end of args list (first closing ']' after ak)
+          local i = ak + 8
+          local rb = i
+          loop(true) {
+            local ch = out.substring(i, i+1)
+            if ch == "]" || ch == "" { rb = i  break }
+            i = i + 1
+          }
+          // iterate over digits inside args
+          local pos = ak + 8
+          loop(pos < rb) {
+            local ch = out.substring(pos, pos+1)
+            if ch >= "0" && ch <= "9" {
+              local digits = me._read_digits(out, pos)
+              // materialize this operand if needed
+              if digits != "" {
+                // Check local def
+                local has_def = 0
+                local def_pat = "\"dst\":" + digits
+                local s = insts_start
+                loop(true) {
+                  local p = me._index_of_from(out, def_pat, s)
+                  if p < 0 || p >= obj_start { break }
+                  has_def = 1
+                  break
+                }
+                if has_def == 0 {
+                  local new_id = me._max_dst_id(out) + 1
+                  local copy_inst = "{\\\"op\\\":\\\"copy\\\",\\\"src\\\":" + digits + ",\\\"dst\\\":" + new_id + "},"
+                  out = out.substring(0, insert_at) + copy_inst + out.substring(insert_at, out.length())
+                  local delta = copy_inst.length()
+                  if insert_at <= obj_start { obj_start = obj_start + delta  obj_end = obj_end + delta }
+                  // rewrite occurrence inside [ak..rb)
+                  local head = out.substring(0, ak)
+                  local mid = out.substring(ak, rb)
+                  local q = mid.indexOf(digits)
+                  if q >= 0 {
+                    mid = mid.substring(0, q) + new_id + mid.substring(q + digits.length(), mid.length())
+                    out = head + mid + out.substring(rb, out.length())
+                    // recompute bounds
+                    insts_start = me._block_insts_start(out, obj_start)
+                    insert_at = insts_start
+                    scan = insts_start
+                    loop(true) {
+                      local pphi2 = me._index_of_from(out, "\"op\":\"phi\"", scan)
+                      if pphi2 < 0 || pphi2 >= obj_start { break }
+                      local sphi2 = me._seek_obj_start(out, pphi2)
+                      local ephi2 = me._seek_obj_end(out, sphi2)
+                      insert_at = ephi2
+                      scan = ephi2
+                    }
+                    // refresh rb & pos relative to new string
+                    rb = me._index_of_from(out, "]", ak + 8)
+                    if rb < 0 { rb = obj_end }
+                    pos = ak + 8
+                    continue
+                  }
+                }
+              }
+              // Move after this number (recompute rb due to potential rewrite)
+              rb = me._index_of_from(out, "]", ak + 8)
+              if rb < 0 { rb = obj_end }
+              pos = ak + 8
+              // advance to next non-digit to avoid infinite loop
+              loop(true) {
+                local c2 = out.substring(pos, pos+1)
+                if !(c2 >= "0" && c2 <= "9") { break }
+                pos = pos + 1
+              }
+            } else {
+              pos = pos + 1
+            }
+          }
+        }
+      } else {
+        // V1: mir_call has args in nested object
+        local mk = "\"mir_call\":{"
+        local mp = me._index_of_from(out, mk, obj_start)
+        if mp >= 0 && mp < obj_end {
+          local ak = me._index_of_from(out, "\"args\":[", mp)
+          if ak >= 0 && ak < obj_end {
+            local i = ak + 8
+            local rb = i
+            loop(true) {
+              local ch = out.substring(i, i+1)
+              if ch == "]" || ch == "" { rb = i  break }
+              i = i + 1
+            }
+            local pos = ak + 8
+            loop(pos < rb) {
+              local ch = out.substring(pos, pos+1)
+              if ch >= "0" && ch <= "9" {
+                local digits = me._read_digits(out, pos)
+                // materialize this operand if needed
+                if digits != "" {
+                  local has_def = 0
+                  local def_pat = "\"dst\":" + digits
+                  local s = insts_start
+                  loop(true) {
+                    local p = me._index_of_from(out, def_pat, s)
+                    if p < 0 || p >= obj_start { break }
+                    has_def = 1
+                    break
+                  }
+                  if has_def == 0 {
+                    local new_id = me._max_dst_id(out) + 1
+                    local copy_inst = "{\\\"op\\\":\\\"copy\\\",\\\"src\\\":" + digits + ",\\\"dst\\\":" + new_id + "},"
+                    out = out.substring(0, insert_at) + copy_inst + out.substring(insert_at, out.length())
+                    local delta = copy_inst.length()
+                    if insert_at <= obj_start { obj_start = obj_start + delta  obj_end = obj_end + delta }
+                    local head = out.substring(0, ak)
+                    local mid = out.substring(ak, rb)
+                    local q = mid.indexOf(digits)
+                    if q >= 0 {
+                      mid = mid.substring(0, q) + new_id + mid.substring(q + digits.length(), mid.length())
+                      out = head + mid + out.substring(rb, out.length())
+                      insts_start = me._block_insts_start(out, obj_start)
+                      insert_at = insts_start
+                      scan = insts_start
+                      loop(true) {
+                        local pphi2 = me._index_of_from(out, "\"op\":\"phi\"", scan)
+                        if pphi2 < 0 || pphi2 >= obj_start { break }
+                        local sphi2 = me._seek_obj_start(out, pphi2)
+                        local ephi2 = me._seek_obj_end(out, sphi2)
+                        insert_at = ephi2
+                        scan = ephi2
+                      }
+                      rb = me._index_of_from(out, "]", ak + 8)
+                      if rb < 0 { rb = obj_end }
+                      pos = ak + 8
+                      continue
+                    }
+                  }
+                }
+                rb = me._index_of_from(out, "]", ak + 8)
+                if rb < 0 { rb = obj_end }
+                pos = ak + 8
+                loop(true) {
+                  local c2 = out.substring(pos, pos+1)
+                  if !(c2 >= "0" && c2 <= "9") { break }
+                  pos = pos + 1
+                }
+              } else {
+                pos = pos + 1
+              }
+            }
+          }
+        }
+      }
+
+      // advance cursor beyond this instruction object
+      cur = obj_end
+    }
+    return out
+  }
+
   // --- Trace API (既定OFF) ---
   trace_enable(on) {
     if on { me._trace_on = 1 } else { me._trace_on = 0 }
@@ -273,5 +533,14 @@ static box LocalSSA {
     local c = me._trace_last_copies
     local blk = me._trace_copy_blocks_csv
     return "branches=" + b + ", copies=" + c + ", blocks=[" + blk + "]"
+  }
+
+  // Post-hoc summary computed from a given JSON text (stateless helper)
+  trace_summary_after(text) {
+    if text == null { return "branches=0, copies=0, blocks=[]" }
+    local b = me._count_occurs(text, "\"op\":\"branch\"")
+    // handle both properly-quoted and over-escaped variants for copy op
+    local c = me._count_occurs(text, "\"op\":\"copy\"") + me._count_occurs(text, "\\\"op\\\":\\\"copy\\\"")
+    return "branches=" + b + ", copies=" + c + ", blocks=[]"
   }
 }

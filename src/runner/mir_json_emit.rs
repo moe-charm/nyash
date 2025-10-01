@@ -316,9 +316,15 @@ pub fn emit_mir_json_for_harness(
                             dst, func, callee, args, effects, ..
                         } => {
                             // Phase 15.5: Unified Call support with environment variable control
-                            let use_unified = match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-                                Some(s) if s == "0" || s == "false" || s == "off" => false,
-                                _ => true,
+                            // If NYASH_LLVM_DOWNGRADE_V1=1 is set, force v0 and allow extern fallback for unresolved Global
+                            let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+                            let use_unified = if downgrade_v1 {
+                                false
+                            } else {
+                                match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                                    Some(s) if s == "0" || s == "false" || s == "off" => false,
+                                    _ => true,
+                                }
                             };
 
                             if use_unified && callee.is_some() {
@@ -334,6 +340,24 @@ pub fn emit_mir_json_for_harness(
                                 insts.push(unified_call);
                             } else {
                                 // v0: Legacy call format (fallback)
+                                // If downgrading from v1 and callee is Global but not defined in this module,
+                                // emit externcall for compile-only harness stability.
+                                if downgrade_v1 {
+                                    if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
+                                        let is_defined = module.functions.contains_key(gname);
+                                        if !is_defined {
+                                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                            insts.push(json!({
+                                                "op":"externcall",
+                                                "func": gname,
+                                                "args": args_a,
+                                                "dst": dst.map(|d| d.as_u32())
+                                            }));
+                                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                                            break;
+                                        }
+                                    }
+                                }
                                 let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                                 insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             }
@@ -443,11 +467,17 @@ pub fn emit_mir_json_for_harness(
     }
 
     // Phase 15.5: JSON v1 schema with environment variable control
-    let use_v1_schema = std::env::var("NYASH_JSON_SCHEMA_V1").unwrap_or_default() == "1"
-                     || match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-                            Some(s) if s == "0" || s == "false" || s == "off" => false,
-                            _ => true,
-                        };
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+    let use_v1_schema = if force_v0 {
+        false
+    } else {
+        std::env::var("NYASH_JSON_SCHEMA_V1").unwrap_or_default() == "1"
+            || match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                Some(s) if s == "0" || s == "false" || s == "off" => false,
+                _ => true,
+            }
+    };
 
     let root = if use_v1_schema {
         create_json_v1_root(json!(funs))
@@ -465,6 +495,11 @@ pub fn emit_mir_json_for_harness_bin(
     path: &std::path::Path,
 ) -> Result<(), String> {
     use crate::mir::{BinaryOp as B, CompareOp as C, MirInstruction as I, MirType};
+    use crate::mir::definitions::call_unified::TypeCertainty;
+    // Decide schema once for this emission
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+    let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
     let mut funs = Vec::new();
     for (name, f) in &module.functions {
         let mut blocks = Vec::new();
@@ -603,64 +638,127 @@ pub fn emit_mir_json_for_harness_bin(
                             insts.push(json!({"op":"compare","operation": op_s, "lhs": lhs.as_u32(), "rhs": rhs.as_u32(), "dst": dst.as_u32()}));
                             emitted_defs.insert(dst.as_u32());
                         }
+                        I::Call { dst, func, callee, args, effects } => {
+                            if use_v1_schema {
+                                if let Some(c) = callee.as_ref() {
+                                    let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                    let eff_names = effects.effect_names();
+                                    let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
+                                    let obj = emit_unified_mir_call(
+                                        dst.map(|v| v.as_u32()),
+                                        c,
+                                        &args_u32,
+                                        &eff_slices,
+                                    );
+                                    insts.push(obj);
+                                    if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                                    break;
+                                }
+                            }
+                            // v0 or no callee → legacy call payload (func is a NameConst value id)
+                            // If we are downgrading v1 (NYASH_LLVM_DOWNGRADE_V1=1) and callee is Global but not defined,
+                            // emit externcall for compile-only harness stability.
+                            let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+                            if downgrade_v1 {
+                                if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
+                                    let is_defined = module.functions.contains_key(gname);
+                                    if !is_defined {
+                                        let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                        insts.push(json!({
+                                            "op":"externcall",
+                                            "func": gname,
+                                            "args": args_a,
+                                            "dst": dst.map(|d| d.as_u32())
+                                        }));
+                                        if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                                        break;
+                                    }
+                                }
+                            }
+                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                            insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
+                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                        }
                         I::ExternCall {
                             dst,
                             iface_name,
                             method_name,
                             args,
-                            ..
+                            effects,
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            let mut obj = json!({
-                                "op":"externcall","func": format!("{}.{}", iface_name, method_name), "args": args_a,
-                                "dst": dst.map(|d| d.as_u32()),
-                            });
-                            if iface_name == "env.console" {
-                                if dst.is_some() {
-                                    obj["dst_type"] = json!("i64");
-                                }
+                            if use_v1_schema {
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let eff_names = effects.effect_names();
+                                let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
+                                let callee = Callee::Extern(format!("{}.{}", iface_name, method_name));
+                                let obj = emit_unified_mir_call(dst.map(|v| v.as_u32()), &callee, &args_u32, &eff_slices);
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
+                            } else {
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                let mut obj = json!({
+                                    "op":"externcall","func": format!("{}.{}", iface_name, method_name), "args": args_a,
+                                    "dst": dst.map(|d| d.as_u32()),
+                                });
+                                if iface_name == "env.console" { if dst.is_some() { obj["dst_type"] = json!("i64"); } }
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             }
-                            insts.push(obj);
-                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::BoxCall {
                             dst,
                             box_val,
                             method,
                             args,
-                            ..
+                            effects, method_id: _
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            let mut obj = json!({
-                                "op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())
-                            });
-                            let m = method.as_str();
-                            let dst_ty = if m == "substring"
-                                || m == "dirname"
-                                || m == "join"
-                                || m == "read_all"
-                                || m == "read"
-                            {
-                                Some(json!({"kind":"handle","box_type":"StringBox"}))
-                            } else if m == "length" || m == "lastIndexOf" {
-                                Some(json!("i64"))
+                            if use_v1_schema {
+                                // Try to infer box name from metadata; fall back gracefully
+                                let box_name = match f.metadata.value_types.get(&box_val) {
+                                    Some(MirType::Box(bt)) => bt.clone(),
+                                    Some(MirType::String) => "StringBox".to_string(),
+                                    _ => "UnknownBox".to_string(),
+                                };
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let mut all_args = Vec::with_capacity(args_u32.len() + 1);
+                                all_args.push(box_val.as_u32());
+                                all_args.extend(args_u32.into_iter());
+                                let eff_names = effects.effect_names();
+                                let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
+                                let callee = Callee::Method { box_name, method: method.clone(), receiver: Some(*box_val), certainty: TypeCertainty::Known };
+                                let obj = emit_unified_mir_call(dst.map(|v| v.as_u32()), &callee, &all_args, &eff_slices);
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             } else {
-                                None
-                            };
-                            if let Some(t) = dst_ty {
-                                obj["dst_type"] = t;
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                let mut obj = json!({
+                                    "op":"boxcall","box": box_val.as_u32(), "method": method, "args": args_a, "dst": dst.map(|d| d.as_u32())
+                                });
+                                let m = method.as_str();
+                                let dst_ty = if m == "substring" || m == "dirname" || m == "join" || m == "read_all" || m == "read" {
+                                    Some(json!({"kind":"handle","box_type":"StringBox"}))
+                                } else if m == "length" || m == "lastIndexOf" { Some(json!("i64")) } else { None };
+                                if let Some(t) = dst_ty { obj["dst_type"] = t; }
+                                insts.push(obj);
+                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             }
-                            insts.push(obj);
-                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
                         I::NewBox {
                             dst,
                             box_type,
                             args,
                         } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
-                            emitted_defs.insert(dst.as_u32());
+                            if use_v1_schema {
+                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                                let callee = Callee::Constructor { box_type: box_type.clone() };
+                                let obj = emit_unified_mir_call(Some(dst.as_u32()), &callee, &args_u32, &["alloc"]);
+                                insts.push(obj);
+                                emitted_defs.insert(dst.as_u32());
+                            } else {
+                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                                emitted_defs.insert(dst.as_u32());
+                            }
                         }
                         I::Branch {
                             condition,
@@ -693,7 +791,20 @@ pub fn emit_mir_json_for_harness_bin(
         let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
         funs.push(json!({"name": name, "params": params, "blocks": blocks}));
     }
-    let root = json!({"functions": funs});
+    // Optional: v1 schema wrapper (structure is largely compatible as we keep instruction objects unchanged here)
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+    let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
+    let root = if use_v1_schema {
+        json!({
+            "schema_version": "1.0",
+            "capabilities": ["unified_call","phi","effects","callee_typing"],
+            "metadata": {"generator":"nyash-rust","phase":"15.5","features":["mir_call_unification","json_v1_schema"]},
+            "functions": funs
+        })
+    } else {
+        json!({"functions": funs})
+    };
     std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
         .map_err(|e| format!("write mir json: {}", e))
 }

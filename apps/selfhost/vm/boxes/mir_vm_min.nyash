@@ -13,7 +13,7 @@
 
 static box MirVmMin {
   // Dev trace hook (no-op; enable by converting to print in local dev)
-  _tprint(msg) { /* no-op by default */ }
+  _tprint(msg) { }
   // Public entry used by parity tests (calls into minimal runner)
   run(mjson) {
     local v = me._run_min(mjson)
@@ -53,6 +53,8 @@ static box MirVmMin {
     local i = 0
     local n = s.length()
     local acc = 0
+    local neg = 0
+    if s.substring(0,1) == "-" { neg = 1  i = 1 }
     loop (i < n) {
       local ch = s.substring(i, i+1)
       local d = match ch {
@@ -66,6 +68,7 @@ static box MirVmMin {
       i = i + 1
       continue
     }
+    if neg == 1 { return 0 - acc }
     return acc
   }
   _int_to_str(n) {
@@ -111,6 +114,11 @@ static box MirVmMin {
     loop(true) {
       local ch = seg.substring(i, i+1)
       if ch == "" { break }
+      // skip spaces
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      // optional minus sign
+      if ch == "-" { out = out + ch  i = i + 1  continue }
+      // digits
       if ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" { out = out + ch  i = i + 1 } else { break }
     }
     if out == "" { return null }
@@ -123,6 +131,46 @@ static box MirVmMin {
     local q = me.index_of_from(seg, "\"", p)
     if q < 0 { return "" }
     return seg.substring(p, q)
+  }
+  _skip_spaces(text, pos) {
+    local i = pos
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      break
+    }
+    return i
+  }
+  _parse_args_ids(seg) {
+    // Parse integer ids from '"args": [ ... ]' within a single instruction object segment
+    local out = new ArrayBox()
+    local ap = seg.indexOf("\"args\":")
+    if ap < 0 { return out }
+    local lb = me.index_of_from(seg, "[", ap)
+    if lb < 0 { return out }
+    local rb = me._seek_array_end(seg, lb + 1)
+    if rb <= lb { return out }
+    // scan numbers between lb..rb
+    local i = lb + 1
+    loop(true) {
+      i = me._skip_spaces(seg, i)
+      if i >= rb { break }
+      // read digits (register id, non-negative)
+      local ds = me.read_digits(seg, i)
+      if ds == "" {
+        // move by one to avoid infinite loop
+        i = i + 1
+        continue
+      }
+      out.push(me._str_to_int(ds))
+      i = i + ds.length()
+      // skip trailing spaces/comma
+      i = me._skip_spaces(seg, i)
+      local ch = seg.substring(i, i+1)
+      if ch == "," { i = i + 1 }
+    }
+    return out
   }
   _replace_all(text, needle, repl) {
     // naive global replace, left-to-right
@@ -143,6 +191,19 @@ static box MirVmMin {
       }
     }
     return out
+  }
+  _count_occurs(hay, needle) {
+    if hay == null { return 0 }
+    if needle == null { return 0 }
+    local n = 0
+    local rest = hay
+    loop(true) {
+      local p = rest.indexOf(needle)
+      if p < 0 { break }
+      n = n + 1
+      rest = rest.substring(p + needle.length(), rest.length())
+    }
+    return n
   }
   // --- JSON segment helpers (brace/bracket aware, minimal) ---
   _seek_obj_start(text, from_pos) {
@@ -183,6 +244,21 @@ static box MirVmMin {
       i = i + 1
     }
     return i
+  }
+  _last_index_of_before(text, needle, limit_end) {
+    if text == null { return -1 }
+    if needle == null { return -1 }
+    local last = -1
+    local pos = 0
+    local nlen = needle.length()
+    if limit_end < 0 { limit_end = 0 }
+    loop(true) {
+      local p = me.index_of_from(text, needle, pos)
+      if p < 0 || p + nlen > limit_end { break }
+      last = p
+      pos = p + 1
+    }
+    return last
   }
   _map_binop_symbol(sym) {
     if sym == "+" { return "Add" }
@@ -258,41 +334,47 @@ static box MirVmMin {
       }
       // After optional sanitize, try fast minimal evaluation again within this block
       {
+        // Fast eval only when this block clearly matches const,const,(compare|binop),ret
         local inst2 = mjson.substring(pos, block_end)
-        local keyv2 = "\"value\":{\"type\":\"i64\",\"value\":"
-        local p1b = inst2.indexOf(keyv2)
-        if p1b >= 0 {
-          local d1b = me.read_digits(inst2, p1b + keyv2.length())
-          if d1b != "" {
-            local p2b = me.index_of_from(inst2, keyv2, p1b + keyv2.length())
-            if p2b >= 0 {
-              local d2b = me.read_digits(inst2, p2b + keyv2.length())
-              if d2b != "" {
-                local a = me._str_to_int(d1b)
-                local b = me._str_to_int(d2b)
-                // compare?
-                local pc2 = inst2.indexOf("\"op\":\"compare\"")
-                if pc2 >= 0 {
-                  local kk = ""
-                  if inst2.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
-                    if inst2.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
-                      if inst2.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
-                        if inst2.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
-                          if inst2.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
-                            if inst2.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+        local cnt_val = me._count_occurs(inst2, "\"value\":{\"type\":\"i64\",\"value\":")
+        local cnt_cmp = me._count_occurs(inst2, "\"op\":\"compare\"")
+        local cnt_bin = me._count_occurs(inst2, "\"op\":\"binop\"")
+        if cnt_val == 2 && ((cnt_cmp == 1 && cnt_bin == 0) || (cnt_cmp == 0 && cnt_bin == 1)) {
+          local keyv2 = "\"value\":{\"type\":\"i64\",\"value\":"
+          local p1b = inst2.indexOf(keyv2)
+          if p1b >= 0 {
+            local d1b = me.read_digits(inst2, p1b + keyv2.length())
+            if d1b != "" {
+              local p2b = me.index_of_from(inst2, keyv2, p1b + keyv2.length())
+              if p2b >= 0 {
+                local d2b = me.read_digits(inst2, p2b + keyv2.length())
+                if d2b != "" {
+                  local a = me._str_to_int(d1b)
+                  local b = me._str_to_int(d2b)
+                  // compare?
+                  local pc2 = inst2.indexOf("\"op\":\"compare\"")
+                  if pc2 >= 0 {
+                    local kk = ""
+                    if inst2.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
+                      if inst2.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
+                        if inst2.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
+                          if inst2.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
+                            if inst2.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
+                              if inst2.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
+                            }
                           }
                         }
                       }
                     }
+                    if kk != "" { return me._eval_cmp(kk, a, b) }
                   }
-                  if kk != "" { return me._eval_cmp(kk, a, b) }
-                }
-                // binop?
-                local pb2 = inst2.indexOf("\"op\":\"binop\"")
-                if pb2 >= 0 {
-                  local bk = me._find_str_in(inst2, "\"op_kind\":\"")
-                  if bk == "" { bk = me._map_binop_symbol(me._find_str_in(inst2, "\"operation\":\"")) }
-                  if bk != "" { return me._eval_binop(bk, a, b) }
+                  // binop?
+                  local pb2 = inst2.indexOf("\"op\":\"binop\"")
+                  if pb2 >= 0 {
+                    local bk = me._find_str_in(inst2, "\"op_kind\":\"")
+                    if bk == "" { bk = me._map_binop_symbol(me._find_str_in(inst2, "\"operation\":\"")) }
+                    if bk != "" { return me._eval_binop(bk, a, b) }
+                  }
                 }
               }
             }
@@ -304,57 +386,74 @@ static box MirVmMin {
       {
         local keyv = "\"value\":{\"type\":\"i64\",\"value\":"
         local keyv_esc = "\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":"
-        local p1 = mjson.indexOf(keyv)
-        if p1 < 0 { p1 = mjson.indexOf(keyv_esc)  keyv = keyv_esc }
-        if p1 >= 0 {
-          local d1 = me.read_digits(mjson, p1 + keyv.length())
-          if d1 != "" {
-            local p2 = me.index_of_from(mjson, keyv, p1 + keyv.length())
-            if p2 >= 0 {
-              local d2 = me.read_digits(mjson, p2 + keyv.length())
+        local inst3 = mjson.substring(pos, block_end)
+        // Only apply when exactly two const values present; pick them before ret
+        if me._count_occurs(inst3, keyv) + me._count_occurs(inst3, keyv_esc) == 2 {
+          // normalize key to the one actually present
+          if inst3.indexOf(keyv) < 0 { keyv = keyv_esc }
+          // Find ret boundary within this block
+          local pr = inst3.indexOf("\"op\":\"ret\"")
+          if pr < 0 { pr = inst3.length() }
+          // Find last two const values before ret
+          local p2 = me._last_index_of_before(inst3, keyv, pr)
+          if p2 >= 0 {
+            local p1 = me._last_index_of_before(inst3, keyv, p2)
+            if p1 >= 0 {
+              local d1 = me.read_digits(inst3, p1 + keyv.length())
+              local d2 = me.read_digits(inst3, p2 + keyv.length())
               if d2 != "" {
                 local a = me._str_to_int(d1)
                 local b = me._str_to_int(d2)
+                // Track corresponding dst ids of these consts (nearest dst before each value)
+                local pdst2 = me._last_index_of_before(inst3, "\"dst\":", p2)
+                local dst2 = null
+                if pdst2 >= 0 { dst2 = me._find_int_in(inst3.substring(pdst2, inst3.length()), "\"dst\":") }
+                local pdst1 = me._last_index_of_before(inst3, "\"dst\":", p1)
+                local dst1 = null
+                if pdst1 >= 0 { dst1 = me._find_int_in(inst3.substring(pdst1, inst3.length()), "\"dst\":") }
                 // compare?
-                // Find compare nearest before 'ret'
-                local pr = mjson.indexOf("\"op\":\"ret\"")
-                if pr < 0 { pr = mjson.length() }
-                local pc = mjson.indexOf("\"op\":\"compare\"")
+                // Find compare nearest before 'ret' within this block
+                local pc = inst3.indexOf("\"op\":\"compare\"")
                 if pc >= 0 {
                   loop(true) {
-                    local nxt = me.index_of_from(mjson, "\"op\":\"compare\"", pc + 1)
+                    local nxt = me.index_of_from(inst3, "\"op\":\"compare\"", pc + 1)
                     if nxt < 0 || nxt >= pr { break }
                     pc = nxt
                   }
-                  // Robust: search cmp kind tokens directly (unique in minimal JSON)
-                  local kk = ""
-                  if mjson.indexOf("\"cmp\":\"Gt\"") >= 0 { kk = "Gt" } else {
-                    if mjson.indexOf("\"cmp\":\"Ge\"") >= 0 { kk = "Ge" } else {
-                      if mjson.indexOf("\"cmp\":\"Lt\"") >= 0 { kk = "Lt" } else {
-                        if mjson.indexOf("\"cmp\":\"Le\"") >= 0 { kk = "Le" } else {
-                          if mjson.indexOf("\"cmp\":\"Eq\"") >= 0 { kk = "Eq" } else {
-                            if mjson.indexOf("\"cmp\":\"Ne\"") >= 0 { kk = "Ne" }
-                          }
-                        }
-                      }
+                  // Determine compare kind from the last compare segment
+                  local segc = inst3.substring(pc, pr)
+                  local kk = me._find_str_in(segc, "\"cmp\":\"")
+                  if kk == "" { kk = me._map_cmp_symbol(me._find_str_in(segc, "\"operation\":\"")) }
+                  // Ensure last compare uses these two consts (lhs=dst1, rhs=dst2). Otherwise, fall back.
+                  local clhs = me._find_int_in(segc, "\"lhs\":")
+                  local crhs = me._find_int_in(segc, "\"rhs\":")
+                  if dst1 != null && dst2 != null && clhs != null && crhs != null {
+                    if clhs == dst1 && crhs == dst2 {
+                      local r = me._eval_cmp(kk, a, b)
+                      return r
                     }
                   }
-                  local r = me._eval_cmp(kk, a, b)
-                  return r
                 }
                 // binop?
-                local pb = mjson.indexOf("\"op\":\"binop\"")
+                local pb = inst3.indexOf("\"op\":\"binop\"")
                 if pb >= 0 {
                   loop(true) {
-                    local nxt = me.index_of_from(mjson, "\"op\":\"binop\"", pb + 1)
+                    local nxt = me.index_of_from(inst3, "\"op\":\"binop\"", pb + 1)
                     if nxt < 0 || nxt >= pr { break }
                     pb = nxt
                   }
-                  local seg = mjson.substring(pb, pr)
+                  local seg = inst3.substring(pb, pr)
                   local bk = me._find_str_in(seg, "\"op_kind\":\"")
                   if bk == "" { bk = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
-                  local r = me._eval_binop(bk, a, b)
-                  return r
+                  // Likewise for binop: verify operands come from these consts
+                  local blhs = me._find_int_in(seg, "\"lhs\":")
+                  local brhs = me._find_int_in(seg, "\"rhs\":")
+                  if dst1 != null && dst2 != null && blhs != null && brhs != null {
+                    if blhs == dst1 && brhs == dst2 {
+                      local r = me._eval_binop(bk, a, b)
+                      return r
+                    }
+                  }
                 }
               }
             }
@@ -363,6 +462,7 @@ static box MirVmMin {
       }
       // Fallback: object scan within the block (balanced braces)
       local moved = 0
+      local found_ret = 0
       local inst_seg = mjson.substring(pos, block_end)
       local p = 0
       loop(true) {
@@ -374,71 +474,133 @@ static box MirVmMin {
 
         // dispatch by op name (v0/v1 tolerant)
         local opname = me._find_str_in(seg, "\"op\":\"")
-        me._tprint("[op] " + opname)
         if opname == "const" {
           local cdst = me._find_int_in(seg, "\"dst\":")
           local cval = me._find_int_in(seg, "\"value\":{\"type\":\"i64\",\"value\":")
           if cdst != null and cval != null { me._set_map(regs, "" + cdst, cval) }
-        } else {
-          if opname == "copy" {
-            local cdst = me._find_int_in(seg, "\"dst\":")
-            local csrc = me._find_int_in(seg, "\"src\":")
-            if cdst != null and csrc != null {
-              local v = me._get_map(regs, "" + csrc)
-              me._set_map(regs, "" + cdst, v)
-            }
-          } else {
-          if opname == "binop" {
-            local bdst = me._find_int_in(seg, "\"dst\":")
-            local bkind = me._find_str_in(seg, "\"op_kind\":\"")
-            if bkind == "" { bkind = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
-            local blhs = me._find_int_in(seg, "\"lhs\":")
-            local brhs = me._find_int_in(seg, "\"rhs\":")
-            if bdst != null and blhs != null and brhs != null {
-              local a = me._get_map(regs, "" + blhs)
-              local b = me._get_map(regs, "" + brhs)
-              local r = me._eval_binop(bkind, a, b)
-              me._set_map(regs, "" + bdst, r)
-            }
-          } else {
-            if opname == "compare" {
-              local kdst = me._find_int_in(seg, "\"dst\":")
-              local kkind = me._find_str_in(seg, "\"cmp\":\"")
-              if kkind == "" { kkind = me._map_cmp_symbol(me._find_str_in(seg, "\"operation\":\"")) }
-              local klhs = me._find_int_in(seg, "\"lhs\":")
-              local krhs = me._find_int_in(seg, "\"rhs\":")
-              if kdst != null and klhs != null and krhs != null {
-                local a = me._get_map(regs, "" + klhs)
-                local b = me._get_map(regs, "" + krhs)
-                local r = me._eval_cmp(kkind, a, b)
-                me._set_map(regs, "" + kdst, r)
-              }
-            } else {
-              if opname == "jump" {
-                local tgt = me._find_int_in(seg, "\"target\":")
-                if tgt != null { bb = tgt  scan = block_end  moved = 1  break }
-              } else {
-                if opname == "branch" {
-                  local cond = me._find_int_in(seg, "\"cond\":")
-                  local then_id = me._find_int_in(seg, "\"then\":")
-                  local else_id = me._find_int_in(seg, "\"else\":")
-                  local cval = 0
-                  if cond != null { cval = me._get_map(regs, "" + cond) }
-                  if cval != 0 { bb = then_id } else { bb = else_id }
-                  scan = block_end
-                  moved = 1
-                  break
-                } else {
-                  if opname == "ret" {
-                    local rv = me._find_int_in(seg, "\"value\":")
-                    if rv == null { rv = 0 }
-                    me._tprint("[ret] rv=" + me._int_to_str(rv))
-                    return me._get_map(regs, "" + rv)
-                  }
-                }
-              }
-            }
+        }
+        if opname == "copy" {
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local csrc = me._find_int_in(seg, "\"src\":")
+          if cdst != null and csrc != null {
+            local v = me._get_map(regs, "" + csrc)
+            me._set_map(regs, "" + cdst, v)
           }
+        }
+        if opname == "binop" {
+          local bdst = me._find_int_in(seg, "\"dst\":")
+          local bkind = me._find_str_in(seg, "\"op_kind\":\"")
+          if bkind == "" { bkind = me._map_binop_symbol(me._find_str_in(seg, "\"operation\":\"")) }
+          local blhs = me._find_int_in(seg, "\"lhs\":")
+          local brhs = me._find_int_in(seg, "\"rhs\":")
+          if bdst != null and blhs != null and brhs != null {
+            local a = me._get_map(regs, "" + blhs)
+            local b = me._get_map(regs, "" + brhs)
+            local r = me._eval_binop(bkind, a, b)
+            me._set_map(regs, "" + bdst, r)
+          }
+        }
+        if opname == "compare" {
+          local kdst = me._find_int_in(seg, "\"dst\":")
+          local kkind = me._find_str_in(seg, "\"cmp\":\"")
+          if kkind == "" { kkind = me._map_cmp_symbol(me._find_str_in(seg, "\"operation\":\"")) }
+          local klhs = me._find_int_in(seg, "\"lhs\":")
+          local krhs = me._find_int_in(seg, "\"rhs\":")
+          if kdst != null and klhs != null and krhs != null {
+            local a = me._get_map(regs, "" + klhs)
+            local b = me._get_map(regs, "" + krhs)
+            local r = me._eval_cmp(kkind, a, b)
+            me._set_map(regs, "" + kdst, r)
+          }
+        }
+        if opname == "call" {
+          // Minimal exec: i64-only, pure; result = sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "boxcall" {
+          // Minimal exec: ignore receiver; result = sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "newbox" {
+          // Minimal exec: constructor returns sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "mir_call" {
+          // Minimal exec for v1: treat as call/method/constructor; result = sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "jump" {
+          local tgt = me._find_int_in(seg, "\"target\":")
+          if tgt != null { bb = tgt  scan = block_end  moved = 1  break }
+        }
+        if opname == "branch" {
+          local cond = me._find_int_in(seg, "\"cond\":")
+          local then_id = me._find_int_in(seg, "\"then\":")
+          local else_id = me._find_int_in(seg, "\"else\":")
+          local cval = 0
+          if cond != null { cval = me._get_map(regs, "" + cond) }
+          if cval != 0 { bb = then_id } else { bb = else_id }
+          scan = block_end
+          moved = 1
+          break
+        }
+        if opname == "ret" {
+          found_ret = 1
+          local rv = me._find_int_in(seg, "\"value\":")
+          if rv == null { rv = 0 }
+          return me._get_map(regs, "" + rv)
         }
 
         // advance to end of this object
@@ -451,5 +613,5 @@ static box MirVmMin {
     }
     return me._extract_first_const_i64(mjson)
   }
-  
+
 }

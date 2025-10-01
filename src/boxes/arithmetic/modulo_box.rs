@@ -3,7 +3,6 @@
 //! Implements modulo operations between integer types with error handling.
 
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, IntegerBox, NyashBox, StringBox};
-use std::any::Any;
 use std::fmt::{Debug, Display};
 
 /// Modulo operations between boxes

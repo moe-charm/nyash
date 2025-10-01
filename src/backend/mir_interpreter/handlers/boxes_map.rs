@@ -24,30 +24,62 @@ pub(super) fn try_handle_map_box(
                     return Ok(true);
                 }
                 "set" => {
-                    if args.len() != 2 { return Err(VMError::InvalidInstruction("MapBox.set expects 2 args".into())); }
+                    if args.len() != 2 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"MapBox","method":"set","expected":2,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("MapBox.set expects 2 args".into()));
+                    }
                     let k = this.reg_load(args[0])?.to_nyash_box();
+                    if crate::config::env::check_contracts() && k.as_any().downcast_ref::<crate::box_trait::StringBox>().is_none() {
+                        eprintln!(r#"{{"kind":"contracts_type","box":"MapBox","method":"set","expected":"String","actual":"{}"}}"#, k.type_name());
+                    }
                     let v = this.reg_load(args[1])?.to_nyash_box();
                     let ret = mb.set(k, v);
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
                 "get" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("MapBox.get expects 1 arg".into())); }
+                    if args.len() != 1 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"MapBox","method":"get","expected":1,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("MapBox.get expects 1 arg".into()));
+                    }
                     let k = this.reg_load(args[0])?.to_nyash_box();
+                    if crate::config::env::check_contracts() && k.as_any().downcast_ref::<crate::box_trait::StringBox>().is_none() {
+                        eprintln!(r#"{{"kind":"contracts_type","box":"MapBox","method":"get","expected":"String","actual":"{}"}}"#, k.type_name());
+                    }
                     let ret = mb.get(k);
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
                 "has" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("MapBox.has expects 1 arg".into())); }
+                    if args.len() != 1 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"MapBox","method":"has","expected":1,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("MapBox.has expects 1 arg".into()));
+                    }
                     let k = this.reg_load(args[0])?.to_nyash_box();
+                    if crate::config::env::check_contracts() && k.as_any().downcast_ref::<crate::box_trait::StringBox>().is_none() {
+                        eprintln!(r#"{{"kind":"contracts_type","box":"MapBox","method":"has","expected":"String","actual":"{}"}}"#, k.type_name());
+                    }
                     let ret = mb.has(k);
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
                 "delete" => {
-                    if args.len() != 1 { return Err(VMError::InvalidInstruction("MapBox.delete expects 1 arg".into())); }
+                    if args.len() != 1 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"MapBox","method":"delete","expected":1,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("MapBox.delete expects 1 arg".into()));
+                    }
                     let k = this.reg_load(args[0])?.to_nyash_box();
+                    if crate::config::env::check_contracts() && k.as_any().downcast_ref::<crate::box_trait::StringBox>().is_none() {
+                        eprintln!(r#"{{"kind":"contracts_type","box":"MapBox","method":"delete","expected":"String","actual":"{}"}}"#, k.type_name());
+                    }
                     let ret = mb.delete(k);
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
@@ -64,6 +96,17 @@ pub(super) fn try_handle_map_box(
                 }
                 "values" => {
                     let ret = mb.values();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
+                    return Ok(true);
+                }
+                "toJSON" => {
+                    if !args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"MapBox","method":"toJSON","expected":0,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("MapBox.toJSON expects 0 args".into()));
+                    }
+                    let ret = mb.toJSON();
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }

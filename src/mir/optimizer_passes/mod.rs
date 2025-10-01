@@ -3,5 +3,5 @@ pub mod diagnostics;
 pub mod intrinsics;
 pub mod normalize;
 pub mod reorder;
-pub mod normalize_core13_pure;
+// normalize_core13_pure removed (deprecated)
 pub mod normalize_legacy_all;

@@ -1,8 +1,0 @@
-using StringUtils
-
-static box Main {
-  main(args) {
-    println(StringUtils.starts_with("abc", "a"))
-    return 0
-  }
-}

@@ -397,46 +397,7 @@ impl super::MirBuilder {
                 }
             }
         }
-        // Core-13 純化: UnaryOp を直接 展開（Neg/Not/BitNot）
-        if crate::config::env::mir_core13_pure() {
-            match operator.as_str() {
-                "-" => {
-                    let zero = crate::mir::builder::emission::constant::emit_integer(self, 0);
-                    let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp {
-                        dst,
-                        op: crate::mir::BinaryOp::Sub,
-                        lhs: zero,
-                        rhs: operand_val,
-                    })?;
-                    return Ok(dst);
-                }
-                "!" | "not" => {
-                    let f = crate::mir::builder::emission::constant::emit_bool(self, false);
-                    let dst = self.value_gen.next();
-                    crate::mir::builder::emission::compare::emit_to(
-                        self,
-                        dst,
-                        crate::mir::CompareOp::Eq,
-                        operand_val,
-                        f,
-                    )?;
-                    return Ok(dst);
-                }
-                "~" => {
-                    let all1 = crate::mir::builder::emission::constant::emit_integer(self, -1);
-                    let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BinOp {
-                        dst,
-                        op: crate::mir::BinaryOp::BitXor,
-                        lhs: operand_val,
-                        rhs: all1,
-                    })?;
-                    return Ok(dst);
-                }
-                _ => {}
-            }
-        }
+        // Core‑13 pure mode removed; normal UnaryOp path only.
         let dst = self.value_gen.next();
         let mir_op = self.convert_unary_operator(operator)?;
         self.emit_instruction(MirInstruction::UnaryOp {

@@ -79,6 +79,9 @@ pub fn format_instruction(
                     super::Callee::Global(name) => {
                         format!("call_global {}({})", name, args_str)
                     }
+                    super::Callee::ModuleFunction(name) => {
+                        format!("call_module_fn {}({})", name, args_str)
+                    }
                     super::Callee::Method { box_name, method, receiver, certainty } => {
                         if let Some(recv) = receiver {
                             format!(

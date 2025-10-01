@@ -1,4 +1,23 @@
-# Nyash Environment Variables (管理棟ガイド)
+# Nyash Environment Variables (歴史的互換性リファレンス)
+
+> **⚠️ 重要**: このドキュメントは歴史的変数と互換性情報を保持しています。
+>
+> **最新の推奨変数は [docs/config/env.md](../../config/env.md) を参照してください。**
+>
+> Phase 15 ENV統合により、`env.md` が正本となりました。
+> 本ファイルは互換性確認・移行ガイドとして残されています。
+
+Quiet / JSON-only
+- `NYASH_JSON_ONLY=1`: child/acceptance runs print JSON payloads only to stdout.
+- `NYASH_QUIET=1`: suppress non-essential logs (stderr) across subsystems.
+  - Runner/registry/plugin init/dev verifiers honor quiet by default.
+> Historical variables like `NYASH_ENABLE_USING`, `NYASH_USING_AST`, `NYASH_DISABLE_PLUGINS`, `NYASH_PLUGIN_ONLY` remain as compatibility aliases.
+> Mappings:
+> - `NYASH_ENABLE_USING` → `NYASH_USING=1`
+> - `NYASH_USING_AST=1`  → `NYASH_USING_STRATEGY=prelude`
+> - `NYASH_DISABLE_PLUGINS=1` → `NYASH_PLUGIN_POLICY=off`
+> - `NYASH_PLUGIN_ONLY=1` → `NYASH_PLUGIN_POLICY=force`
+> Prefer the new variables in new docs/scripts; legacy mentions below are kept for reference.
 
 本ドキュメントは Nyash の環境変数を用途別に整理し、最小限の運用セットを提示します。`nyash.toml` の `[env]` で上書き可能（起動時に適用）。
 
@@ -7,14 +26,15 @@
 [env]
 NYASH_JIT_THRESHOLD = "1"
 NYASH_CLI_VERBOSE = "1"
-NYASH_DISABLE_PLUGINS = "1"
+NYASH_PLUGIN_POLICY = "off"   # compat: NYASH_DISABLE_PLUGINS = "1"
 ```
 
-起動時に `nyash` は `[env]` の値を `std::env` に適用します（src/config/env.rs）。
+起動時に `nyash` は `[env]` の値を `std::env` に適用します（src/config/env.rs）。最新の推奨セットは `docs/config/env.md` を参照してください。
 
 ## コア運用セット（最小）
 - NYASH_CLI_VERBOSE: CLI の詳細ログ（"1" で有効）
-- NYASH_DISABLE_PLUGINS: 外部プラグインを無効化（CI/再現性向上）
+- NYASH_PLUGIN_POLICY: プラグインロード方針（`auto|off|force`）
+  - 互換: `NYASH_DISABLE_PLUGINS=1`（off 相当）
 
 ## JIT（共通）
 - NYASH_JIT_THRESHOLD: JIT 降下開始の閾値（整数）
@@ -62,4 +82,4 @@ NYASH_DISABLE_PLUGINS = "1"
 - NYASH_MIR_ARRAY_BOXCALL: ArrayGet/Set → BoxCall 変換を有効化
 - NYASH_MIR_REF_BOXCALL: RefGet/Set → BoxCall 変換を有効化
 - NYASH_MIR_CORE13: Core‑13 セットの一括有効（将来拡張）
-- NYASH_MIR_CORE13_PURE: Core‑13 純化モード（"1" で有効）。最終MIRは13命令のみ許可され、Load/Store などは `env.local.get/set`、`new` は `env.box.new` 経由へ強制正規化。禁制命令が残存するとコンパイルエラーで早期失敗。
+- NYASH_MIR_CORE13_PURE: [Deprecated / No‑Op] Core‑13 純化モードは撤廃され、このフラグは無視されます（`NYASH_CLI_VERBOSE=1` 時に非推奨メッセージのみ出力）。通常の Core‑13 は既定ONのままです。

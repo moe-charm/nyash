@@ -1,0 +1,48 @@
+// EmitCompareBox — compare/branch/jump/ret の最小 MIR(JSON v0) 生成（Builder版）
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
+
+static box EmitCompareBox {
+  emit_compare_cfg(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, 0) }
+
+  emit_compare_cfg2(lhs, rhs, cmp, materialize) { return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, materialize, 0) }
+
+  emit_compare_cfg3(lhs, rhs, cmp, materialize, trace) {
+    // dev-trace (minimal, env-gate想定)
+    if trace == 1 { print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize) }
+    // entry: const lhs/rhs; compare→r3; (optional copy r4=copy r3); branch r{3|4} then:1 else:2
+    // then: const 1→r6; jump 3 | else: const 0→r6; jump 3 | merge: ret r6
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, lhs)
+      |> MirJsonBuilderMin.add_const(2, rhs)
+      |> MirJsonBuilderMin.add_compare(cmp, 1, 2, 3)
+
+    if materialize == 1 {
+      // Insert copy after PHIs via LocalSSABox (not directly supported in builder): emulate by branching on r3
+      b = b |> MirJsonBuilderMin.add_branch(3, 1, 2)
+    } else {
+      b = b |> MirJsonBuilderMin.add_branch(3, 1, 2)
+    }
+    b = b |> MirJsonBuilderMin.end_block_continue()
+    // then block (1)
+    b = b |> MirJsonBuilderMin.start_block(1)
+      |> MirJsonBuilderMin.add_const(6, 1)
+      |> MirJsonBuilderMin.add_jump(3)
+      |> MirJsonBuilderMin.end_block_continue()
+    // else block (2)
+    b = b |> MirJsonBuilderMin.start_block(2)
+      |> MirJsonBuilderMin.add_const(6, 0)
+      |> MirJsonBuilderMin.add_jump(3)
+      |> MirJsonBuilderMin.end_block_continue()
+    // merge block (3)
+    b = b |> MirJsonBuilderMin.start_block(3)
+      |> MirJsonBuilderMin.add_ret(6)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+}
+
+static box EmitCompareStub { main(args) { return 0 } }

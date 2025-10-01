@@ -28,10 +28,10 @@ path = "apps/lib/json_native/core/node.nyash"
 
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
-selfhost.compiler.debug = "apps/selfhost/compiler/boxes/debug_box.nyash"
-selfhost.compiler.parser = "apps/selfhost/compiler/boxes/parser_box.nyash"
-selfhost.compiler.emitter = "apps/selfhost/compiler/boxes/emitter_box.nyash"
-selfhost.compiler.mir = "apps/selfhost/compiler/boxes/mir_emitter_box.nyash"
+selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.nyash"
+selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
+selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
+selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
 selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.nyash"
 selfhost.vm.json = "apps/selfhost/common/json_adapter.nyash"
 selfhost.vm.core = "apps/selfhost/vm/boxes/mini_vm_core.nyash"
@@ -41,12 +41,14 @@ selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.nyash"
 selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.nyash"
 selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.nyash"
 selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.nyash"
+selfhost.vm.flow_runner = "apps/selfhost/vm/flow_runner.hako"
+selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
 
 # WASM target (dev only; refer in smokes)
 targets.wasm.driver = "apps/targets/wasm/wasm_driver_box.hako"
 
 # Selfhost compiler main module (avoid file-path using in dev wrappers)
-selfhost.compiler.main = "apps/selfhost-compiler/compiler.nyash"
+selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 
 # Temporary alias keys (migration aid; keys kept stable)
 selfhost.common.json = "apps/selfhost/common/json_adapter.nyash"
@@ -121,6 +123,11 @@ singleton = false
 birth = { method_id = 0 }
 now = { method_id = 4 }
 fini = { method_id = 4294967295 }
+
+# String plugin (TypeBox v2) — prefer via env when needed
+[libraries."libnyash_string_plugin.so"]
+boxes = ["StringBox"]
+path = "plugins/nyash-string-plugin/libnyash_string_plugin.so"
 
 [libraries."libnyash_regex_plugin.so"]
 boxes = ["RegexBox"]
@@ -410,3 +417,22 @@ birth = { method_id = 0 }
 get = { method_id = 1 }
 set = { method_id = 2 }
 fini = { method_id = 4294967295 }
+
+# ArrayBox Plugin (Core Box replacement)
+[libraries."libnyash_array_plugin.so"]
+boxes = ["ArrayBox"]
+path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
+
+[libraries."libnyash_array_plugin.so".ArrayBox]
+type_id = 10
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_array_plugin.so".ArrayBox.methods]
+birth  = { method_id = 0 }
+length = { method_id = 1 }
+len    = { method_id = 1 }
+get    = { method_id = 2 }
+push   = { method_id = 3 }
+set    = { method_id = 4 }
+fini   = { method_id = 4294967295 }

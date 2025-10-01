@@ -102,10 +102,7 @@ impl MirOptimizer {
             stats.intrinsic_optimizations += updates as usize;
         }
 
-        // Pass 7 (optional): Core-13 pure normalization
-        if crate::config::env::mir_core13_pure() {
-            stats.merge(crate::mir::optimizer_passes::normalize_core13_pure::normalize_pure_core13(self, module));
-        }
+        // Core-13 pure normalization removed (deprecated)
 
         if self.debug {
             println!("✅ Optimization complete: {}", stats);

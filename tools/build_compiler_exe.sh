@@ -10,7 +10,7 @@ usage() {
 Usage: tools/build_compiler_exe.sh [-o <name>] [--no-pack]
 
 Builds the selfhost Nyash parser as a native EXE using the LLVM harness,
-and stages a runnable bundle with required plugin (FileBox) and nyash.toml.
+and stages a runnable bundle with required plugin (FileBox) and hako.toml (compat: nyash.toml).
 
 Options:
   -o <name>   Output executable name (default: nyash_compiler)
@@ -75,8 +75,8 @@ cp -f "$OUT" "$DIST/"
 # Copy plugin binary (platform-specific extension). Copy entire release dir for safety.
 cp -a plugins/nyash-filebox-plugin/target/release/. "$DIST/plugins/nyash-filebox-plugin/target/release/" || true
 
-# Minimal nyash.toml for runtime (FileBox only)
-cat > "$DIST/nyash.toml" << 'TOML'
+# Minimal hako.toml for runtime (FileBox only) — compat nyash.toml is also written
+cat > "$DIST/hako.toml" << 'TOML'
 [libraries]
 [libraries."libnyash_filebox_plugin"]
 boxes = ["FileBox"]
@@ -93,6 +93,9 @@ write = { method_id = 3, args = ["data"] }
 close = { method_id = 4 }
 fini  = { method_id = 4294967295 }
 TOML
+
+# Write compatibility file
+cp -f "$DIST/hako.toml" "$DIST/nyash.toml"
 
 echo "✅ Done: $DIST"
 echo "   Usage:"

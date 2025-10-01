@@ -1,4 +1,6 @@
-# nyash.toml — Configuration Reference (Phase 15.5)
+# hako.toml / nyash.toml — Configuration Reference (Phase 15.5)
+
+Branding note: Preferred file name is `hako.toml`. For backward compatibility, `nyash.toml` (and `hakorune.toml`) are also accepted by the loader in the documented search order. Content/schema is identical.
 
 Status: Proposed（受け口から段階導入。未指定時は現行既定を維持）
 
@@ -9,7 +11,7 @@ Status: Proposed（受け口から段階導入。未指定時は現行既定を�
 ## セクション一覧
 
 ### [env]
-任意の既定環境変数（`NYASH_*`）。CI/ローカルで上書き可。
+任意の既定環境変数（`HAKO_*` 推奨、互換で `NYASH_*` も可）。CI/ローカルで上書き可。
 
 ### [using]
 検索ルート `paths = ["apps","lib","."]`、名前付きパッケージ `[using.<name>]`、エイリアス `[using.aliases]`。

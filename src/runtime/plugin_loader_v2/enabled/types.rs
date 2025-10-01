@@ -89,6 +89,50 @@ pub struct NyashTypeBoxFfi {
     pub capabilities: u64,
 }
 
+// ---- Final ABI (Phase A minimal structs) ----
+// These types provide a minimal FFI surface to probe newer plugins that
+// expose NyValue/NyResult based call interfaces. Phase A uses them only
+// for optional probing/logging; behavior remains unchanged.
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct NyValueFfi {
+    pub tag: u32,        // kind discriminator (implementation dependent)
+    pub reserved: u32,   // alignment/padding
+    pub data0: u64,      // integer/flags or size
+    pub data1: u64,      // extra integer payload
+    pub ptr: *const u8,  // bytes/string pointer (when applicable)
+    pub len: usize,      // length for ptr
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct NyResultFfi {
+    pub status: i32,     // 0=ok, <0=error
+    pub tag: u32,        // result kind (when ok)
+    pub ptr: *const u8,  // optional payload pointer
+    pub len: usize,      // payload length
+}
+
+#[repr(C)]
+pub struct NyashTypeBoxFinalFfi {
+    pub abi_tag: u32,    // e.g., 'TFIN'
+    pub version: u16,    // minor version for compatibility
+    pub struct_size: u16,
+    pub invoke_final: Option<extern "C" fn(
+        u32, /* type_id */
+        u32, /* method_id */
+        u32, /* instance_id */
+        *const NyValueFfi,
+        usize,
+        *mut NyResultFfi,
+    ) -> i32>,
+    // Optional meta (future); Phase A ignores when absent
+    pub get_method_meta: Option<extern "C" fn()>,
+    pub get_all_methods: Option<extern "C" fn()>,
+    pub get_type_info: Option<extern "C" fn()>,
+}
+
 #[derive(Debug, Clone)]
 pub struct PluginBoxV2 {
     pub box_type: String,

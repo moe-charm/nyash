@@ -186,23 +186,30 @@ fn link_executable(
     nyrt_dir_opt: Option<&PathBuf>,
     extra_libs: Option<&str>,
 ) -> Result<()> {
-    // Resolve nyRT static lib
+    // Resolve NyKernel static lib directory (support legacy/new names)
     let nyrt_dir = if let Some(dir) = nyrt_dir_opt {
         dir.clone()
     } else {
-        // try target/release then crates/nyash_kernel/target/release
+        // try target/release then crates/nyash_kernel/target/release, crates/hako_kernel/target/release
         let a = PathBuf::from("target/release");
         let b = PathBuf::from("crates/nyash_kernel/target/release");
-        if a.join("libnyash_kernel.a").exists() {
+        let c = PathBuf::from("crates/hako_kernel/target/release");
+        if a.join("libnyash_kernel.a").exists() || a.join("libhako_kernel.a").exists() {
             a
-        } else {
+        } else if b.join("libnyash_kernel.a").exists() || b.join("libhako_kernel.a").exists() {
             b
+        } else if c.join("libnyash_kernel.a").exists() || c.join("libhako_kernel.a").exists() {
+            c
+        } else {
+            a
         }
     };
-    let libnyrt = nyrt_dir.join("libnyash_kernel.a");
+    let lib_nyash = nyrt_dir.join("libnyash_kernel.a");
+    let lib_hako = nyrt_dir.join("libhako_kernel.a");
+    let libnyrt = if lib_nyash.exists() { &lib_nyash } else { &lib_hako };
     if !libnyrt.exists() {
         bail!(
-            "libnyash_kernel.a not found in {} (use --nyrt to specify)",
+            "Kernel archive not found in {} (looked for libnyash_kernel.a, libhako_kernel.a). Use --nyrt to specify directory",
             nyrt_dir.display()
         );
     }
@@ -222,9 +229,9 @@ fn link_executable(
     let mut cmd = Command::new(linker);
     cmd.arg("-o").arg(out_exe);
     cmd.arg(obj);
-    // Whole-archive libnyash_kernel to ensure all objects are linked
+    // Whole-archive NyKernel to ensure all objects are linked
     cmd.arg("-Wl,--whole-archive")
-        .arg(&libnyrt)
+        .arg(libnyrt)
         .arg("-Wl,--no-whole-archive");
     // Common libs on Linux
     cmd.arg("-ldl").arg("-lpthread").arg("-lm");

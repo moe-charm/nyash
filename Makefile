@@ -94,3 +94,38 @@ artifacts-unlink:
 
 artifacts-restore:
 	@bash tools/move_root_apps.sh restore
+
+# ========================================
+# 🛡️ ルート保護コマンド（2025-09-30）
+# ========================================
+
+.PHONY: check-root clean-root
+
+# ルートの不要ファイルをチェック
+check-root:
+	@echo "🔍 ルートディレクトリチェック中..."
+	@bad_files=$$(ls -1 *.nyash *.o *.err *.log *.tmp *.bak 2>/dev/null | wc -l); \
+	if [ $$bad_files -gt 0 ]; then \
+		echo "❌ ルートに不要なファイルが見つかりました:"; \
+		ls -1 *.nyash *.o *.err *.log *.tmp *.bak 2>/dev/null || true; \
+		echo ""; \
+		echo "実行: make clean-root"; \
+		exit 1; \
+	else \
+		echo "✅ ルートはクリーンです"; \
+	fi
+
+# ルートの不要ファイルを自動削除
+clean-root:
+	@echo "🧹 ルートクリーンアップ中..."
+	@rm -f *.nyash *.o *.err *.log *.tmp *.bak 2>/dev/null || true
+	@rm -f *_temp.* *_tmp.* commit_message*.txt 2>/dev/null || true
+	@echo "✅ ルートクリーンアップ完了"
+
+# ビルド前にルートチェック
+build: check-root
+	cargo build --release
+
+# テスト前にルートチェック  
+test: check-root
+	cargo test

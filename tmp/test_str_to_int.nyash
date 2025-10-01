@@ -1,7 +1,0 @@
-static box Main {
-  main(args) {
-    local vm = new MiniVm()
-    print(vm._int_to_str(vm._str_to_int("12") + vm._str_to_int("34")))
-    return 0
-  }
-}

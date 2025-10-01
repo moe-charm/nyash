@@ -1,2 +1,0 @@
-include "apps/selfhost-compiler/boxes/parser_box.nyash"
-static box Main { main(args){ return 0 } }

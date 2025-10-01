@@ -5,7 +5,7 @@
 **最新の完全な言語リファレンスは以下を参照してください：**
 
 - **[🚀 Nyash Language Reference 2025](../../../reference/language/LANGUAGE_REFERENCE_2025.md)** - 完全な言語仕様（最新版）
-- **[📝 構文早見表](../../quick-reference/syntax-cheatsheet.md)** - よく使う構文のクイックリファレンス
+- **[📝 構文早見表](../quick/syntax-cheatsheet.md)** - よく使う構文のクイックリファレンス
 
 ## 📁 このディレクトリの内容
 

@@ -19,9 +19,9 @@ Key Principles
 
 Environment Knobs (Summary)
 - Using system
-  - `NYASH_ENABLE_USING` (default ON)
+  - `NYASH_USING=0|1` (default ON; alias: `NYASH_ENABLE_USING`)
   - `NYASH_USING_PROFILE={dev|ci|prod}` (default dev)
-  - `NYASH_USING_AST=1|0` (dev/ci default ON; prod default OFF)
+  - `NYASH_USING_STRATEGY={resolver|prelude}`（alias: `NYASH_USING_IMPL`、fallback: `NYASH_USING_AST`）
   - `NYASH_ALLOW_USING_FILE=1|0` (default OFF; dev only when needed)
 - Builder
   - `NYASH_BUILDER_REWRITE_INSTANCE=1|0` (default ON across profiles)
@@ -46,4 +46,3 @@ Testing Strategy
 Future Small Refactors (non‑behavioral)
 - Factor a helper to parse prelude paths into ASTs (single place), and use it from all runners.
 - Add dev‑only WARN when a candidate `Box.method/Arity` is missing from `module.functions` during rewrite.
-

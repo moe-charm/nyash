@@ -42,7 +42,7 @@
 ### 3) using（ゲート付き）設計・実装（15.2/15.3）
 
 **要点:**
-- パーサフック: 'using <ns>' を受理（--enable-using / NYASH_ENABLE_USING=1）
+- パーサフック: 'using <ns>' を受理（--enable-using / NYASH_USING=1; compat: NYASH_ENABLE_USING=1）
 - リゾルバskeleton: resolve(ns) → NyModules を優先。外部/パッケージは TODO として設計のみ。
 - 実行時フック: 未解決時に提案を含む診断。セッションキャッシュを導入（ny_plugins再読込で無効化）。
 - using alias: 'using a.b as x' を設計→段階導入。
@@ -53,7 +53,7 @@
 **完了基準:**
 - フラグONで using 経路が動作し、未解決時の診断・キャッシュ挙動がテストで担保。
 
-【Next】Ny パーサMVPと並走で段階導入（フラグ: `--enable-using`/`NYASH_ENABLE_USING=1`）。
+【Next】Ny パーサMVPと並走で段階導入（フラグ: `--enable-using` / `NYASH_USING=1`；compat: `NYASH_ENABLE_USING=1`）。
 
 ### 3.5) Nyash パーサMVP（サブセット）
 
@@ -151,7 +151,7 @@ cargo build --release --features cranelift-jit
 ## フラグ（抜粋）
 
 - `--load-ny-plugins` / `NYASH_LOAD_NY_PLUGINS=1`
-- `--enable-using` / `NYASH_ENABLE_USING=1`
+- `--enable-using` / `NYASH_USING=1`（compat: `NYASH_ENABLE_USING=1`）
 - `NYASH_CLI_VERBOSE=1`（診断強化）
 
 ## 運用（Codex async / tmux）

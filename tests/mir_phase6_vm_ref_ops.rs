@@ -4,7 +4,7 @@
  * Tests VM execution of hand-built MIR with RefNew/RefGet/RefSet instructions
  */
 
-use nyash_rust::backend::{VMValue, VM};
+use nyash_rust::backend::VM;
 use nyash_rust::box_trait::{IntegerBox, NyashBox};
 use nyash_rust::mir::{
     BasicBlock, BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction,
@@ -139,7 +139,7 @@ fn test_mir_phase6_vm_ref_ops() {
 #[test]
 fn test_vm_ref_ops_basic_field_storage() {
     // Test basic field storage without complex MIR
-    let mut vm = VM::new();
+    let vm = VM::new();
 
     // This is a white-box test to verify field storage mechanism
     // In practice, the VM field storage is tested via the full MIR execution above

@@ -19,7 +19,7 @@ Quickstart
 
 Docs
 
-- One‑page guide: `docs/how-to/self-hosting.md`
+- One‑page guide: `docs/guides/how-to/self-hosting.md`
 
 Flags
 

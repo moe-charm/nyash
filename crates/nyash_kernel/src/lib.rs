@@ -602,7 +602,7 @@ pub extern "C" fn nyash_map_birth_h_export() -> i64 {
 #[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn main() -> i32 {
-    // Initialize plugin host: prefer nyash.toml next to the executable; fallback to CWD
+    // Initialize plugin host: prefer hako.toml next to the executable; fallback to nyash/hakorune and CWD
     let exe_dir = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(|d| d.to_path_buf()));
@@ -660,15 +660,31 @@ pub extern "C" fn main() -> i32 {
 
     let mut inited = false;
     if let Some(dir) = &exe_dir {
-        let candidate = dir.join("nyash.toml");
-        if candidate.exists() {
-            let _ =
-                nyash_rust::runtime::init_global_plugin_host(candidate.to_string_lossy().as_ref());
+        let hk = dir.join("hako.toml");
+        if hk.exists() {
+            let _ = nyash_rust::runtime::init_global_plugin_host(hk.to_string_lossy().as_ref());
             inited = true;
+        } else {
+            let candidate = dir.join("nyash.toml");
+            if candidate.exists() {
+                let _ = nyash_rust::runtime::init_global_plugin_host(candidate.to_string_lossy().as_ref());
+                inited = true;
+            } else {
+                let alt = dir.join("hakorune.toml");
+                if alt.exists() {
+                    let _ = nyash_rust::runtime::init_global_plugin_host(alt.to_string_lossy().as_ref());
+                    inited = true;
+                }
+            }
         }
     }
     if !inited {
-        let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
+        // CWD: hako.toml then nyash.toml then hakorune.toml
+        if nyash_rust::runtime::init_global_plugin_host("hako.toml").is_err() {
+            if nyash_rust::runtime::init_global_plugin_host("nyash.toml").is_err() {
+                let _ = nyash_rust::runtime::init_global_plugin_host("hakorune.toml");
+            }
+        }
     }
     // Optional verbosity
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {

@@ -75,12 +75,20 @@ impl NyashRunner {
                         Ok(result) => {
                             let prefer_pyvm = crate::config::env::vm_use_py();
                             if prefer_pyvm {
-                                if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand") {
-                                    println!("Result: {}", code);
-                                    std::process::exit(code);
-                                } else {
-                                    eprintln!("❌ PyVM error (selfhost-preexpand)");
-                                    std::process::exit(1);
+                                #[cfg(feature = "pyvm-bridge")]
+                                {
+                                    if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand") {
+                                        println!("Result: {}", code);
+                                        std::process::exit(code);
+                                    } else {
+                                        eprintln!("❌ PyVM error (selfhost-preexpand)");
+                                        std::process::exit(1);
+                                    }
+                                }
+                                #[cfg(not(feature = "pyvm-bridge"))]
+                                {
+                                    eprintln!("[ny-compiler] PyVM bridge disabled (feature off); skipping pre-expand fast path");
+                                    return false;
                                 }
                             } else {
                                 // For now, only PyVM path is supported in pre-expand mode; fall back otherwise.
@@ -183,11 +191,18 @@ impl NyashRunner {
                             // Regular execution path
                             // Prefer PyVM path when requested
                             if crate::config::env::vm_use_py() {
+                                #[cfg(feature = "pyvm-bridge")]
+                                {
                                     if let Some(code) = crate::runner::modes::common_util::selfhost::json::run_pyvm_module(&module, "selfhost") {
                                         println!("Result: {}", code);
                                         std::process::exit(code);
                                     }
                                 }
+                                #[cfg(not(feature = "pyvm-bridge"))]
+                                {
+                                    eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM");
+                                }
+                            }
                                 self.execute_mir_module(&module);
                                 return true;
                             }
@@ -224,12 +239,19 @@ impl NyashRunner {
                                         // Regular execution path
                                         // Prefer PyVM for selfhost pipeline (parity reference)
                                         if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                                            let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py") {
-                                                Ok(c) => c,
-                                                Err(e) => { eprintln!("❌ PyVM error: {}", e); 1 }
-                                            };
-                                            println!("Result: {}", code);
-                                            std::process::exit(code);
+                                            #[cfg(feature = "pyvm-bridge")]
+                                            {
+                                                let code = match crate::runner::modes::common_util::pyvm::run_pyvm_harness(&module, "selfhost-py") {
+                                                    Ok(c) => c,
+                                                    Err(e) => { eprintln!("❌ PyVM error: {}", e); 1 }
+                                                };
+                                                println!("Result: {}", code);
+                                                std::process::exit(code);
+                                            }
+                                            #[cfg(not(feature = "pyvm-bridge"))]
+                                            {
+                                                eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM");
+                                            }
                                         }
                                         self.execute_mir_module(&module);
                                         return true;
@@ -281,31 +303,38 @@ impl NyashRunner {
                     if emit_only { return false; }
                     // Prefer PyVM when requested (reference semantics)
                     if std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1") {
-                        if let Ok(py3) = which::which("python3") {
-                            let runner = std::path::Path::new("tools/pyvm_runner.py");
-                            if runner.exists() {
-                                let tmp_dir = std::path::Path::new("tmp");
-                                let _ = std::fs::create_dir_all(tmp_dir);
-                                let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
-                                if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
-                                    eprintln!("❌ PyVM MIR JSON emit error: {}", e);
-                                    process::exit(1);
+                        #[cfg(feature = "pyvm-bridge")]
+                        {
+                            if let Ok(py3) = which::which("python3") {
+                                let runner = std::path::Path::new("tools/pyvm_runner.py");
+                                if runner.exists() {
+                                    let tmp_dir = std::path::Path::new("tmp");
+                                    let _ = std::fs::create_dir_all(tmp_dir);
+                                    let mir_json_path = tmp_dir.join("nyash_pyvm_mir.json");
+                                    if let Err(e) = crate::runner::mir_json_emit::emit_mir_json_for_harness_bin(&module, &mir_json_path) {
+                                        eprintln!("❌ PyVM MIR JSON emit error: {}", e);
+                                        process::exit(1);
+                                    }
+                                    crate::cli_v!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
+                                    let allow_top = crate::config::env::entry_allow_toplevel_main();
+                                    let entry = if module.functions.contains_key("Main.main") { "Main.main" }
+                                                else if allow_top && module.functions.contains_key("main") { "main" }
+                                                else if module.functions.contains_key("main") { eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence."); "main" }
+                                                else { "Main.main" };
+                                    let status = std::process::Command::new(py3)
+                                        .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
+                                        .status()
+                                        .map_err(|e| format!("spawn pyvm: {}", e))
+                                        .unwrap();
+                                    let code = status.code().unwrap_or(1);
+                                    println!("Result: {}", code);
+                                    std::process::exit(code);
                                 }
-                                crate::cli_v!("[Bridge] using PyVM (selfhost) → {}", mir_json_path.display());
-                                let allow_top = crate::config::env::entry_allow_toplevel_main();
-                                let entry = if module.functions.contains_key("Main.main") { "Main.main" }
-                                            else if allow_top && module.functions.contains_key("main") { "main" }
-                                            else if module.functions.contains_key("main") { eprintln!("[entry] Warning: using top-level 'main' without explicit allow; set NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 to silence."); "main" }
-                                            else { "Main.main" };
-                                let status = std::process::Command::new(py3)
-                                    .args(["tools/pyvm_runner.py", "--in", &mir_json_path.display().to_string(), "--entry", entry])
-                                    .status()
-                                    .map_err(|e| format!("spawn pyvm: {}", e))
-                                    .unwrap();
-                                let code = status.code().unwrap_or(1);
-                                println!("Result: {}", code);
-                                std::process::exit(code);
                             }
+                        }
+                        #[cfg(not(feature = "pyvm-bridge"))]
+                        {
+                            eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM");
                         }
                     }
                     self.execute_mir_module(&module);

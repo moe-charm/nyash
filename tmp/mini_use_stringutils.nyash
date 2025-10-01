@@ -1,6 +1,0 @@
-using "apps/lib/json_native/utils/string.nyash" as StringUtils
-
-main() {
-  println(StringUtils.is_integer("42"))
-  return 0
-}

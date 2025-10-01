@@ -1,0 +1,56 @@
+// EmitMethodBox — Return(Method recv, method, args[int...]) → MIR(JSON v0)
+// 最小形: const recv→r1; 各引数を r2..rN; boxcall(method, recv=r1, args=r2..) → rK; ret rK
+
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box EmitMethodBox {
+  emit_method_int_args(method, recv_val, args) {
+    if method == null { method = "" }
+    if args == null { args = [] }
+    // Normalize args by string parse (robust)
+    local s = "" + args
+    local pos = 0
+    local n = 0
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, recv_val)
+    // materialize args r2..r(n+1)
+    { local i = 0  local pos2 = 0  loop(i < n || pos2 < s.length()) { local ds = RegexFlow.digits_from(s, pos2)  if ds == "" { pos2 = pos2 + 1 } else { local pds = RegexFlow.find_from(s, ds, pos2)  if pds < 0 { pos2 = pos2 + 1 } else { b = b |> MirJsonBuilderMin.add_const(2 + i, RegexFlow.to_int(ds))  i = i + 1  pos2 = pds + ds.length() } } if pos2 >= s.length() { break } } }
+    local dst = n + 2
+    if n > 0 {
+      b = b |> MirJsonBuilderMin.add_boxcall_range(method, 1, 2, n, dst)
+    } else {
+      // args 空でも空配列で boxcall を発行
+      b = b |> MirJsonBuilderMin.add_boxcall_range(method, 1, 2, 0, dst)
+    }
+    b = b |> MirJsonBuilderMin.add_ret(dst)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+
+  // JSON v1 (MirCall) emission — experimental, shape-only
+  emit_method_int_args_v1(method, recv_val, args) {
+    if method == null { method = "" }
+    if args == null { args = [] }
+    local s = "" + args
+    local pos = 0
+    local n = 0
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, recv_val)
+    // materialize args r2..r(n+1)
+    { local i = 0  loop(true) { local ds = RegexFlow.digits_from(s, pos)  if ds == "" { pos = pos + 1 } else { b = b |> MirJsonBuilderMin.add_const(2 + i, RegexFlow.to_int(ds))  i = i + 1  n = i  pos = pos + ds.length() }  if pos >= s.length() { break } } }
+    local dst = n + 2
+    b = b |> MirJsonBuilderMin.add_mir_call_method_range(method, 1, 2, n, dst)
+      |> MirJsonBuilderMin.add_ret(dst)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+}
+
+static box EmitMethodStub { main(args) { return 0 } }

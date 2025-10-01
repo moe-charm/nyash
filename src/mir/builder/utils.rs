@@ -263,9 +263,7 @@ impl super::MirBuilder {
         &mut self,
         box_val: super::ValueId,
     ) -> Result<super::ValueId, String> {
-        if crate::config::env::mir_core13_pure() {
-            return Ok(box_val);
-        }
+        // Core‑13 pure mode removed; keep WeakRef emission available.
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::WeakRef {
             dst,
@@ -280,9 +278,7 @@ impl super::MirBuilder {
         &mut self,
         weak_ref: super::ValueId,
     ) -> Result<super::ValueId, String> {
-        if crate::config::env::mir_core13_pure() {
-            return Ok(weak_ref);
-        }
+        // Core‑13 pure mode removed; keep WeakRef emission available.
         let dst = self.value_gen.next();
         self.emit_instruction(super::MirInstruction::WeakRef {
             dst,

@@ -221,6 +221,12 @@ impl ArrayBox {
         Box::new(StringBox::new("ok"))
     }
 
+    /// JSON文字列に変換（ネストも対応）
+    pub fn toJSON(&self) -> Box<dyn NyashBox> {
+        let s = crate::boxes::json::stringify_any(self.clone_box());
+        Box::new(StringBox::new(&s))
+    }
+
     /// 部分配列を取得
     pub fn slice(&self, start: Box<dyn NyashBox>, end: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let items = self.items.read().unwrap();

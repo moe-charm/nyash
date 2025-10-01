@@ -1,0 +1,34 @@
+// MirBuilderBox — minimal Ny→MIR(JSON v0) lowering entry (dev)
+// Phase 15.7: kept optional; pipeline.v2 uses Emit flow directly.
+using "apps/selfhost-compiler/pipeline_v2/stage1_extract_flow.hako" as Stage1ExtractFlow
+using "apps/selfhost-compiler/pipeline_v2/emit_return_box.hako" as EmitReturnBox
+using "apps/selfhost-compiler/pipeline_v2/emit_binop_box.hako" as EmitBinopBox
+using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EmitCompareBox
+
+box MirBuilderBox {
+  // Placeholder for optimizer toggle
+  optimize_flag
+  birth() { me.optimize_flag = 0 return 0 }
+  set_optimize(v) { if v == null { v = 0 } me.optimize_flag = v return 0 }
+
+  // Accept Stage‑1 AST JSON and emit minimal MIR(JSON v0)
+  build(ast_json) {
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, 0) }
+    // If(cond=Compare) → CFG (branch/jump/ret)
+    if ast_json.indexOf("\"type\":\"If\"") >= 0 {
+      local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
+      if ic != null { return EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), 0, 0) }
+    }
+    // Return(Compare)
+    local c = Stage1ExtractFlow.extract_return_compare(ast_json)
+    if c != null { return EmitCompareBox.emit_compare_cfg3(c.get("lhs"), c.get("rhs"), c.get("cmp"), 0, 0) }
+    // Return(BinOp)
+    local b = Stage1ExtractFlow.extract_return_binop(ast_json)
+    if b != null { return EmitBinopBox.emit_binop2(b.get("lhs"), b.get("rhs"), b.get("kind"), 0) }
+    // Fallback: Return(Int)
+    local v = Stage1ExtractFlow.extract_return_int(ast_json)
+    return EmitReturnBox.emit_return_int2(v, 0)
+  }
+}
+
+static box MirBuilderStub { main(args) { return 0 } }

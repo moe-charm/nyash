@@ -14,8 +14,8 @@ use super::extern_calls;
 /// Check if unified call system is enabled
 pub fn is_unified_call_enabled() -> bool {
     match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-        Some(s) if s == "0" || s == "false" || s == "off" => false,
-        _ => true, // default ON during development; explicit opt-out supported
+        Some(s) if s == "1" || s == "true" || s == "on" => true,
+        _ => false, // default OFF to preserve legacy behavior; explicit opt-in supported
     }
 }
 

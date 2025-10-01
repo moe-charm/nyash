@@ -9,7 +9,9 @@ use nyash_rust::runner::NyashRunner;
 
 /// Thin entry point - delegates to CLI parsing and runner execution
 fn main() {
-    // Bootstrap env overrides from nyash.toml [env] early (管理棟)
+    // Bootstrap brand env aliases (HAKU_/HRN_ → NYASH_)
+    env_config::alias_prefixes_bootstrap();
+    // Bootstrap env overrides from nyash.toml/hakorune.toml [env] early (管理棟)
     env_config::bootstrap_from_toml_env();
     // Deprecation note when invoked as `nyash` (use `hako`) unless JSON-only
     if let Ok(exe) = std::env::current_exe() {
@@ -29,8 +31,8 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use nyash_rust::box_trait::{BoxCore, NyashBox, StringBox};
+    
+    use nyash_rust::box_trait::{NyashBox, StringBox};
 
     #[test]
     fn test_main_functionality() {

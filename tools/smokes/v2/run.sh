@@ -49,7 +49,7 @@ log_header() {
 # ヘルプ表示
 show_help() {
     cat << 'EOF'
-Smoke Tests v2 - Nyash 2-Pillar Testing System
+Smoke Tests v2 - HakoRune (aka Nyash) 2-Pillar Testing System
 
 Usage:
   ./run.sh --profile PROFILE [options]
@@ -197,6 +197,14 @@ setup_environment() {
     export SMOKES_OUTPUT_FORMAT="$FORMAT"
     export SMOKES_TEST_FILTER="$FILTER"
 
+    # Optional per-profile env overlay (if present)
+    local env_overlay="$SCRIPT_DIR/configs/env/${PROFILE}.env"
+    if [ -f "$env_overlay" ]; then
+        log_info "Sourcing env overlay: $env_overlay"
+        # shellcheck disable=SC1090
+        source "$env_overlay"
+    fi
+
     # 作業ディレクトリ移動（Nyashプロジェクトルートへ）
     cd "$SCRIPT_DIR/../../.."
     log_info "Working directory: $(pwd)"
@@ -257,7 +265,11 @@ find_test_files() {
         test_files+=("$file")
     done < <(find "$profile_dir" -name "*.sh" -type f -print0)
 
-    printf '%s\n' "${test_files[@]}"
+    # Print only when we actually have entries; avoid emitting a lone empty line
+    # which would be interpreted as an empty test path by callers.
+    if [ ${#test_files[@]} -gt 0 ]; then
+        printf '%s\n' "${test_files[@]}"
+    fi
 }
 
 # 単一テスト実行
@@ -435,7 +447,7 @@ main() {
 
     # バナー表示
     if [ "$FORMAT" = "text" ]; then
-        log_header "🔥 Nyash Smoke Tests v2 - 2-Pillar Testing System"
+        log_header "🔥 HakoRune Smoke Tests v2 (aka Nyash) - 2-Pillar Testing System"
         log_info "Profile: $PROFILE | Format: $FORMAT | Jobs: $JOBS"
         if [ -n "$FILTER" ]; then
             log_info "Filter: $FILTER"

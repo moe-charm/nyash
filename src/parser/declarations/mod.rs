@@ -10,5 +10,6 @@ pub mod box_def;
 pub mod dependency_helpers;
 pub mod static_box;
 pub mod static_def;
+pub mod flow;
 
 // Re-export commonly used items
