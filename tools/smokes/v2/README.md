@@ -53,8 +53,11 @@ tools/smokes/v2/
 ├── README.md                 # このファイル
 ├── profiles/                 # テストプロファイル
 │   ├── quick/                # 開発時高速テスト（1-2分）
-│   │   ├── core/             # 言語・制御構文・演算
-│   │   └── boxes/            # 各Boxの最小API
+│   │   ├── core/             # 言語・制御構文・演算（プラグイン非依存）
+│   │   ├── boxes/            # 各Boxの最小API
+│   │   ├── selfhost/         # selfhost/pipeline_v2/Stage‑1/Emit 最小テスト
+│   │   ├── llvm/             # LLVM/ハーネスを使う軽量テスト（IR/trace など）
+│   │   └── wasm/             # WASM ハーネス（任意・ゲート付）
 │   ├── integration/          # 統合テスト（5-10分）
 │   │   ├── parity/           # VM↔LLVM・動的↔静的観点合わせ
 │   │   └── plugins/          # プラグイン整合性
@@ -243,3 +246,15 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend llvm test.nyash
 #### **plugins** - プラグイン専用（任意）
 - 安定検証用に最小フィクスチャプラグイン（`nyash-fixture-plugin`）を優先利用
 - 実在プラグイン（Counter/Math/String）は存在すれば追加で実行（無ければSKIP）
+#### **quick/selfhost** - selfhost / emit-only / pipeline_v2
+- JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
+- 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
+- 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
+
+#### **quick/llvm** - 軽量LLVM/ハーネス・トレース
+- llvmlite ハーネス使用のミニテスト（IRダンプ/trace）
+- ビルドが無い環境では自動SKIP（検出は run.sh に内蔵）
+
+#### **quick/wasm** - 軽量WASM（任意・ゲート）
+- 既定は SKIP。`SMOKES_ENABLE_WASM=1` または `NYASH_WASM_USE=1` で有効化
+- ハーネスやツールチェーン未整備でも他領域への影響なし（箱分離）
