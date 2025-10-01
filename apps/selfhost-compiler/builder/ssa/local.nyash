@@ -148,20 +148,26 @@ static box LocalSSA {
       local insts_start = me._block_insts_start(out, obj_start)
       if insts_start < 0 { cur = obj_end  continue }
       local has_def = 0
-      local def_pat = "\"dst\":" + digits
-      // Search between insts_start..obj_start
-      local scan = insts_start
-      loop(true) {
-        local p = me._index_of_from(out, def_pat, scan)
-        if p < 0 || p >= obj_start { break }
-        has_def = 1
-        break
+      // Search between insts_start..obj_start for an exact dst match (avoid dst:10 matching dst:1)
+      {
+        local scan = insts_start
+        local key = "\"dst\":"
+        loop(true) {
+          local p = me._index_of_from(out, key, scan)
+          if p < 0 || p >= obj_start { break }
+          // read the number at this position
+          local ds = me._read_digits(out, p + key.length())
+          if ds == digits { has_def = 1  break }
+          scan = p + key.length()
+        }
       }
       if has_def == 1 {
         cur = obj_end
         continue
       }
-      // Insert copy at the start of the block
+      // Insert copy inside the block instructions
+      // - If there are PHI nodes at the head of this block, place the copy right after the PHI group
+      // - Otherwise, place the copy at the beginning of the block
       // Trace: capture block id of this branch's block
       local bid_csv = me._trace_copy_blocks_csv
       if bid_csv == null { bid_csv = "" }
@@ -174,9 +180,12 @@ static box LocalSSA {
           if bid_csv == "" { bid_csv = "" + bid } else { bid_csv = bid_csv + "," + bid }
         }
       }
+      // Insert just before the branch object start to guarantee ordering w.r.t PHI and branch
+      local insert_pos = obj_start
       local new_id = me._max_dst_id(out) + 1
-      local copy_inst = "{\\\"op\\\":\\\"copy\\\",\\\"src\\\":" + digits + ",\\\"dst\\\":" + new_id + "},"
-      out = out.substring(0, insts_start) + copy_inst + out.substring(insts_start, out.length())
+      // Insert a plain JSON map (no extra escaping)
+      local copy_inst = "{\"op\":\"copy\",\"src\":" + digits + ",\"dst\":" + new_id + "},"
+      out = out.substring(0, insert_pos) + copy_inst + out.substring(insert_pos, out.length())
       t_copies = t_copies + 1
       // Rewrite branch cond to new_id within obj segment (adjust obj positions by insertion)
       local delta = copy_inst.length()
