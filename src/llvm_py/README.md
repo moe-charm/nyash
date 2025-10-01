@@ -64,6 +64,15 @@ PHI 統一方針（既定）
 - finalize_phis は“配線のみ”。PHI を新規生成しない。
 - if-merge/loop のプリパスは既定OFF（必要時のみ開発者が明示ON）。
 
+関数境界の不変（関数ごとに初期化される状態）
+- `builder.vmap` / `builder.bb_map` は毎関数クリア
+- `builder.block_phi_incomings` は毎関数リセット（前関数のメタデータを持ち越さない）
+- `builder.phi_wired` は毎関数 `{}` に初期化（重複 incoming 防止セットのリーク防止）
+
+レガシー finalize 経路の扱い
+- finalize_phis は配線専用。`ensure_phi` を内部から呼ばない（既定）
+- 互換が必要な場合のみ `NYASH_LLVM_PHI_ALLOW_CREATE=1` で「配線時にPHI作成」を許可（既定OFF）
+
 Strict モード（段階導入）
 - `NYASH_LLVM_PHI_STRICT=1`
   - PhiHandler は PHI を「生成のみ」とし、incoming の追加を行わない。

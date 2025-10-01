@@ -42,6 +42,18 @@ def lower_function(builder, func_data: Dict[str, Any]):
         builder.bb_map.clear()
     except Exception:
         builder.bb_map = {}
+    # Clear PHI wiring book-keeping and per-function declared incomings
+    try:
+        builder.phi_wired.clear()
+    except Exception:
+        try:
+            builder.phi_wired = {}
+        except Exception:
+            pass
+    try:
+        builder.block_phi_incomings = {}
+    except Exception:
+        pass
     try:
         # Reset resolver caches keyed by block names
         builder.resolver.i64_cache.clear()
