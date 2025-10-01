@@ -37,4 +37,18 @@ Next actions
 - [x] PipelineV2: Apply LocalSSA.ensure_cond as final pass (fail‑safe)
 - [x] Add quick smokes for If(Compare) CFG and loop counter
 
+Phase 15.7 — NyKernel (Option B) minimal AOT step
+- [x] Introduce `crates/hako_kernel` minimal static shim (C‑ABI stubs)
+  - Exports: nyash.box.from_i8_string / nyash.string.* (len_h, concat_hh, eq_hh, substring_hii, lastIndexOf_hh, to_i8p_h, from_u64x2, birth_h), nyash.any.length_h, nyash.env.box.new_i64x, births for Array/Map
+  - Provides `main()` → calls `ny_main()` (no output, exit code propagated)
+- [x] ny-llvmc links exe with `libhako_kernel.a` (or `libnyash_kernel.a`) automatically
+- [x] Quick AOT smokes (compile+link+run)
+  - tools/smokes/v2/profiles/quick/llvm/aot_const_ret_exe.sh (expects exit=0)
+  - tools/smokes/v2/profiles/quick/llvm/aot_compare_branch_exe.sh (expects exit=1)
+- [ ] Expand stubs toward real semantics (string/collections) as needed; keep strict and minimal for now
+
+Notes
+- These stubs do not allocate or hold handles; they exist to unblock AOT linking and basic integer‑only execution.
+- When real string/collections are exercised, swap to `nyash_kernel` (full shim) or gradually enrich `hako_kernel`.
+
 Updated: 2025‑10‑01
