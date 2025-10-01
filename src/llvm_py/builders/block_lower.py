@@ -5,6 +5,7 @@ from trace import phi_json as trace_phi_json
 
 # 箱理論: PHI処理統一ハンドラー
 from builders.phi_handler import PhiHandler
+from builders.block_vmap import BlockVMap
 
 
 def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, Any]], order: List[int], loop_plan: Dict[str, Any] | None):
@@ -132,7 +133,7 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                 term_ops.append(inst)
             else:
                 body_ops.append(inst)
-        # Per-block SSA map
+        # Per-block SSA map（箱化: BlockVMap）
         vmap_cur: Dict[int, ir.Value] = {}
         try:
             for _vid, _val in (builder.vmap or {}).items():
@@ -147,6 +148,9 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                     vmap_cur[_vid] = _val
         except Exception:
             vmap_cur = dict(builder.vmap)
+        # Wrap local/global maps with BlockVMap for unified access
+        bvm = BlockVMap(builder.vmap, vmap_cur)
+        # Backward compat: expose dict view to existing lowering helpers
         builder._current_vmap = vmap_cur
         created_ids: List[int] = []
         defined_here_all: set = set()
@@ -200,9 +204,7 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                                 pass
                     except Exception:
                         pass
-                if skip_now:
-                    pass
-                else:
+                if not skip_now:
                     builder.lower_instruction(ib, inst, func)
             else:
                 builder.lower_instruction(ib, inst, func)
@@ -215,12 +217,12 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                             if hasattr(_gval, 'add_incoming'):
                                 bb_of = getattr(getattr(_gval, 'basic_block', None), 'name', None)
                                 if bb_of == bb.name:
-                                    vmap_cur[dst] = _gval
+                                    bvm.set(dst, _gval)
                             else:
-                                vmap_cur[dst] = _gval
+                                bvm.set(dst, _gval)
                         except Exception:
-                            vmap_cur[dst] = _gval
-                    if dst not in created_ids and dst in vmap_cur:
+                            bvm.set(dst, _gval)
+                    if dst not in created_ids and bvm.get(dst) is not None:
                         created_ids.append(dst)
             except Exception:
                 pass
@@ -249,7 +251,7 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             builder.lower_instruction(ib, inst, func)
         try:
             for vid in created_ids:
-                val = vmap_cur.get(vid)
+                val = bvm.get(vid)
                 if val is not None and hasattr(val, 'add_incoming'):
                     try:
                         builder.vmap[vid] = val
@@ -257,15 +259,15 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                         pass
         except Exception:
             pass
-        # End-of-block snapshot
-        snap = dict(vmap_cur)
+        # End-of-block snapshot（箱化: BlockVMap）
+        snap = bvm.snapshot()
         try:
             keys = sorted(list(snap.keys()))
         except Exception:
             keys = list(snap.keys())
         trace_phi_json({"phi": "snapshot", "block": int(bid), "keys": [int(k) for k in keys[:20]]})
         for vid in created_ids:
-            if vid in vmap_cur:
+            if bvm.get(vid) is not None:
                 builder.def_blocks.setdefault(vid, set()).add(block_data.get("id", 0))
         builder.block_end_values[bid] = snap
         try:
