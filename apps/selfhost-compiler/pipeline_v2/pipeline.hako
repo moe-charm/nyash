@@ -56,7 +56,7 @@ flow PipelineV2 {
               i = vpos + 8 + ds.length()
             }
           }
-          return EmitCallBox.emit_call_int_args_v1(k.get("name"), vals)
+          return LocalSSA.ensure_calls(EmitCallBox.emit_call_int_args_v1(k.get("name"), vals))
         }
       }
     }
@@ -66,7 +66,7 @@ flow PipelineV2 {
       if mq >= 0 {
         local m = Stage1ExtractFlow.extract_return_method(ast_json)
         if m != null {
-          return EmitMethodBox.emit_method_int_args_v1(m.get("method"), 0, m.get("args"))
+          return LocalSSA.ensure_calls(EmitMethodBox.emit_method_int_args_v1(m.get("method"), 0, m.get("args")))
         }
       }
     }
@@ -76,7 +76,7 @@ flow PipelineV2 {
       if nq >= 0 {
         local n = Stage1ExtractFlow.extract_return_new(ast_json)
         if n != null {
-          return EmitNewBoxBox.emit_newbox_int_args_v1(n.get("class"), n.get("args"))
+          return LocalSSA.ensure_calls(EmitNewBoxBox.emit_newbox_int_args_v1(n.get("class"), n.get("args")))
         }
       }
     }
@@ -144,7 +144,7 @@ flow PipelineV2 {
             }
           }
           local j4 = EmitCallBox.emit_call_int_args(k.get("name"), vals)
-          return LocalSSA.ensure_cond(j4)
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
         }
       }
     }
@@ -155,7 +155,7 @@ flow PipelineV2 {
         local m = Stage1ExtractFlow.extract_return_method(ast_json)
         if m != null {
           local j5 = EmitMethodBox.emit_method_int_args(m.get("method"), 0, m.get("args"))
-          return LocalSSA.ensure_cond(j5)
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5))
         }
       }
     }
@@ -166,7 +166,7 @@ flow PipelineV2 {
         local n = Stage1ExtractFlow.extract_return_new(ast_json)
         if n != null {
           local j6 = EmitNewBoxBox.emit_newbox_int_args(n.get("class"), n.get("args"))
-          return LocalSSA.ensure_cond(j6)
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
         }
       }
     }

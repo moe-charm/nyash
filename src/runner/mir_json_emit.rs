@@ -443,7 +443,8 @@ pub fn emit_mir_json_for_harness(
     }
 
     // Phase 15.5: JSON v1 schema with environment variable control
-    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1");
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
     let use_v1_schema = if force_v0 {
         false
     } else {
@@ -472,7 +473,8 @@ pub fn emit_mir_json_for_harness_bin(
     use crate::mir::{BinaryOp as B, CompareOp as C, MirInstruction as I, MirType};
     use crate::mir::definitions::call_unified::TypeCertainty;
     // Decide schema once for this emission
-    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1");
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
     let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
     let mut funs = Vec::new();
     for (name, f) in &module.functions {
@@ -747,7 +749,8 @@ pub fn emit_mir_json_for_harness_bin(
         funs.push(json!({"name": name, "params": params, "blocks": blocks}));
     }
     // Optional: v1 schema wrapper (structure is largely compatible as we keep instruction objects unchanged here)
-    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1");
+    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
     let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
     let root = if use_v1_schema {
         json!({
