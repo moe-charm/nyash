@@ -11,7 +11,7 @@ PyVMは**一般的なプログラム実行には使用しないでください**
 #### 1. JSON v0ブリッジ機能
 ```bash
 # セルフホスティング実行（PyVM自動使用）
-NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
+NYASH_SELFHOST_EXEC=1 ./target/release/hako program.nyash
 ```
 - **用途**: Rust→Python連携でMIR JSON生成
 - **重要性**: Phase 15.3コンパイラMVP開発に必須
@@ -20,7 +20,7 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 #### 2. using処理共通パイプライン
 ```bash
 # using前処理（PyVM内部使用）
-./target/release/nyash --enable-using program_with_using.nyash
+./target/release/hako --enable-using program_with_using.nyash
 ```
 - **用途**: `strip_using_and_register`統一処理
 - **重要性**: Rust VM・LLVMとの共通前処理基盤
@@ -29,7 +29,7 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 #### 3. サンドボックス実行環境
 ```bash
 # 開発者の明示的使用（上級者のみ）
-NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
+NYASH_VM_USE_PY=1 ./target/release/hako program.nyash
 ```
 - **用途**: 安全なコード実行制御、実験的検証
 - **対象**: 開発者・研究者の明示的使用のみ
@@ -39,31 +39,31 @@ NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
 #### 1. 一般的なプログラム実行
 ```bash
 # ❌ 使わないでください
-NYASH_VM_USE_PY=1 ./target/release/nyash my_application.nyash
+NYASH_VM_USE_PY=1 ./target/release/hako my_application.nyash
 
 # ✅ 代わりにこれを使用
-./target/release/nyash my_application.nyash                 # Rust VM
-./target/release/nyash --backend llvm my_application.nyash  # LLVM
+./target/release/hako my_application.nyash                 # Rust VM
+./target/release/hako --backend llvm my_application.nyash  # LLVM
 ```
 
 #### 2. 性能比較・ベンチマーク
 ```bash
 # ❌ 意味のない比較
-time NYASH_VM_USE_PY=1 ./target/release/nyash program.nyash
+time NYASH_VM_USE_PY=1 ./target/release/hako program.nyash
 
 # ✅ 意味のある比較
-time ./target/release/nyash program.nyash                   # Rust VM
-time ./target/release/nyash --backend llvm program.nyash    # LLVM
+time ./target/release/hako program.nyash                   # Rust VM
+time ./target/release/hako --backend llvm program.nyash    # LLVM
 ```
 
 #### 3. 新機能開発・テスト
 ```bash
 # ❌ PyVMでの新機能テスト
-NYASH_VM_USE_PY=1 ./target/release/nyash new_feature.nyash
+NYASH_VM_USE_PY=1 ./target/release/hako new_feature.nyash
 
 # ✅ 2本柱での新機能テスト
-./target/release/nyash new_feature.nyash                    # Rust VM開発
-./target/release/nyash --backend llvm new_feature.nyash     # LLVM検証
+./target/release/hako new_feature.nyash                    # Rust VM開発
+./target/release/hako --backend llvm new_feature.nyash     # LLVM検証
 ```
 
 ## 🎯 **Phase 15推奨実行方法**
@@ -71,31 +71,31 @@ NYASH_VM_USE_PY=1 ./target/release/nyash new_feature.nyash
 ### **開発・デバッグ・一般用途**
 ```bash
 # 基本実行（最も推奨）
-./target/release/nyash program.nyash
+./target/release/hako program.nyash
 
 # 詳細診断
-NYASH_CLI_VERBOSE=1 ./target/release/nyash program.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/hako program.nyash
 
 # プラグインエラー対策（最小隔離時のみ）
-NYASH_PLUGIN_POLICY=off ./target/release/nyash program.nyash
+NYASH_PLUGIN_POLICY=off ./target/release/hako program.nyash
 ```
 
 ### **本番・最適化・配布用途**
 ```bash
 # LLVM最適化実行
-./target/release/nyash --backend llvm program.nyash
+./target/release/hako --backend llvm program.nyash
 
 # LLVM詳細診断
-NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend llvm program.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/hako --backend llvm program.nyash
 ```
 
 ### **セルフホスティング開発用途**
 ```bash
 # JSON v0ブリッジ（PyVM自動使用）
-NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
+NYASH_SELFHOST_EXEC=1 ./target/release/hako program.nyash
 
 # using処理テスト
-./target/release/nyash --enable-using program_with_using.nyash
+./target/release/hako --enable-using program_with_using.nyash
 ```
 
 ## 📊 **技術的根拠**

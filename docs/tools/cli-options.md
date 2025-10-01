@@ -1,6 +1,6 @@
-# HakoRune CLI Options Quick Reference (aka Nyash)
+# Hako CLI Options Quick Reference
 
-Brand alias: You can use the `hrn` binary as an alias of `nyash`. Environment variables also accept `HAKO_*`/`HAKU_*`/`HRN_*` as non-destructive aliases of `NYASH_*`.
+Primary binary is `hako`. Aliases `nyash`/`hrn` may be available. Environment variables accept `HAKO_*`/`HAKU_*`/`HRN_*` as aliases of `NYASH_*` (auto-mapped both ways).
 
 最終更新: 2025-08-23
 
@@ -43,19 +43,19 @@ Brand alias: You can use the `hrn` binary as an alias of `nyash`. Environment va
 ## 使用例
 ```bash
 # インタープリターで実行
-nyash program.nyash
+hako program.nyash
 
 # VMで実行 + 統計をJSON出力
-nyash --backend vm --vm-stats --vm-stats-json program.nyash
+hako --backend vm --vm-stats --vm-stats-json program.nyash
 
 # MIRを出力
-nyash --dump-mir --mir-verbose program.nyash
+hako --dump-mir --mir-verbose program.nyash
 
 # ベンチマーク
-nyash --benchmark --iterations 100
+hako --benchmark --iterations 100
 ```
 
 詳細は `docs/reference/architecture/execution-backends.md` も参照してください。
 
-## 参考: `nyash --help` スナップショット
-- docs/tools/nyash-help.md
+## 参考: `hako --help` スナップショット
+- docs/tools/nyash-help.md（互換）
