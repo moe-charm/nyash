@@ -20,41 +20,51 @@
 
 ## 🎯 現在の状況（一目でわかる）
 
-**Week 3完了** (2025-10-15 ~ 10-21)
+**Week 2完了！** (2025-10-01) ✅
+**Week 3開始** (2025-10-02 ~) 🚀
 
-✅ **完了**:
-- Phase 2.1-2.7: Week 2完全達成（関数エクスポート〜スモークテスト）
+✅ **Week 2完了内容**:
+- Phase 2.1-2.7: 完全達成（関数エクスポート〜スモークテスト）
 - **Phase 3.1: PHI処理完全修正** 🎉
-- **Phase 3.2: 基本命令完成（unop/typeop/copy）** 🎉
-- **Phase 3.3: Box/GC命令（load/store/newbox/boxcall）** 🎉
-- **Phase 3.4: GC補助命令（safepoint/barrier）** 🎉
-- **Phase 3.5-A/B: ループPHI完全対応** 🎉🎉🎉
-  - ✅ 前方参照解決実装（incomplete PHI tracking）
-  - ✅ 二段階PHI解決（即座+遅延）
-  - ✅ ループカウンター動作確認
+  - PhiHandler箱化（197行）
+  - InstructionContext箱化（98行）
+  - if文PHIテスト完全成功
+- **Phase 3.2 (NEW!): PHI 'values'形式統一** 🎉
+  - selfhostブランチから移植完了
+  - "incoming": [[v,b]] → "values": [{"value":v, "block":b}]
+  - 後方互換性確保（incoming_pairs_vb）
+  - WASM生成成功（535バイト）
 
-🎉🎉🎉 **重要成果: MIR18命令100%完全実装達成！**
+🚀 **Week 3優先タスク** (2025-10-02 ~ 10-08):
+1. **Phase 3.3: ループPHI実装** 🔥 最優先
+   - test_phi_loop.json作成（while/loop PHI）
+   - test_phi_nested.json作成（ネストループ）
+   - PHI wiring修正（back-edge対応）
+2. **Phase 3.4: ベンチマークシステム構築**
+   - factorial/fibonacci/sum_loop実装
+   - apps/benchmarks/wasm/構造確立
+   - tools/run_wasm_benchmarks.sh作成
+3. **Phase 3.5: Parity確認開始**
+   - VM/LLVM/WASM同一出力確認
 
-**実装済みMIR命令**: 18/18 (100%完了)
+📊 **Week 2実装済みMIR命令**: 13/18 (72%完了)
 - ✅ const, binop, compare, branch, jump, ret
-- ✅ phi (if-PHI + ループPHI完全対応)
-- ✅ unop, typeop, copy
-- ✅ load, store, newbox, boxcall
-- ✅ safepoint, barrier
+- ✅ phi (if-PHI完全対応)
+- ⏸️ phi (ループPHI) ← Week 3優先
 - ✅ externcall, call, constants
+- ⏸️ unop, typeop, copy, load, store, newbox, boxcall, safepoint, barrier ← Week 3~4
 
-🔥 **ループPHI成果**:
+🎉 **Week 2 PHI成果**:
 ```llvm
-bb1:
-  %"phi_2" = phi i64 [0, %"bb0"], [%"add_4", %"bb1"]  ← 自己参照！
-  %"add_4" = add i64 %"phi_2", 1
-  %"cmp_6" = icmp slt i64 %"phi_2", 10
-  br i1 %"cmp_6", label %"bb1", label %"bb2"
+bb6:
+  %"phi_15" = phi  i64 [100, %"bb4"], [200, %"bb5"]  ← if分岐PHI完璧！
+  ret i64 0
 ```
 
-📋 **次のステップ**:
-- Phase 3.5-C/D/E: 複雑制御フローテスト（ネストif/ループ/switch）
-- Phase 3.6: VM/LLVM/WASMパリティ確認
+📋 **Week 3目標**:
+- ループPHI完全実装
+- ベンチマーク3本実装・動作確認
+- 残りMIR命令実装（5命令優先）
 
 ---
 
@@ -92,82 +102,113 @@ Compiled to tmp/nyash_llvm_py.o  ← 成功！
 
 ---
 
-## 📖 Phase 3.2-3.5完了詳細
+## 📖 Phase 3.2完了詳細
 
-### ✅ Phase 3.2: 基本命令完成 [完了 2025-10-01]
-**目標**: unop/typeop/copy実装
-
-**実装内容**:
-1. ✅ unop (単項演算): neg, not, bitnot
-2. ✅ typeop (型変換): zext, sext, trunc, bitcast
-3. ✅ copy/nop: 値コピー・nop命令
-
-**成果**:
-- 🎉 基本演算完全対応
-- ✅ テストファイル作成: `test_unaryop_basic.json`, `test_typeop_cast.json`, `test_copy_simple.json`
-
----
-
-### ✅ Phase 3.3: Box/GC命令実装 [完了 2025-10-01]
-**目標**: load/store/newbox/boxcall実装
+### ✅ Phase 3.2: PHI 'values'形式統一 [完了 2025-10-01]
+**目標**: selfhostブランチのPHI形式変更をwasm-developmentに統合
 
 **実装内容**:
-1. ✅ load/store (メモリアクセス):
-   - LLVM IR: load/store
-   - WASM: i32.load/i32.store (linear memory)
-   - Memory Model: inttoptr/ptrtoint変換
-2. ✅ newbox (Box生成): ArrayBox作成テスト
-3. ✅ boxcall (Boxメソッド呼び出し): method_id経由
+1. ✅ **Rust側変更（mir_json_emit.rs）**:
+   ```rust
+   // 旧形式: "incoming": [[v, b]]
+   let incoming: Vec<_> = inputs.iter()
+       .map(|(b, v)| json!([v.as_u32(), b.as_u32()]))
+       .collect();
+
+   // 新形式: "values": [{"value": v, "block": b}]
+   let values_objs: Vec<_> = inputs.iter()
+       .map(|(b, v)| json!({"value": v.as_u32(), "block": b.as_u32()}))
+       .collect();
+   ```
+
+2. ✅ **Python側変更**:
+   - `phi_wiring/common.py`: `incoming_pairs_vb()`関数追加（両形式対応）
+   - `phi_wiring/analysis.py`: `incoming_pairs_vb()`使用に移行
+   - `llvm_builder.py`: `incoming_pairs_vb()`使用に移行
+
+3. ✅ **Callee enum拡張**:
+   - `Callee::ModuleFunction(String)` 追加（selfhostとの同期）
 
 **成果**:
-- 🎉 Memory Model実装完了
-- ✅ Box生成・メソッド呼び出し対応
-- ✅ テストファイル作成: `test_memory_basic.json`, `test_newbox_simple.json`, `test_boxcall_method.json`
+- 🎉 **後方互換性確保**: `incoming_pairs_vb()`が旧形式も読める
+- ✅ **段階的移行可能**: Rust/Python両方が新形式対応
+- ✅ **selfhost同期**: Phase 15.7の改善を取り込み完了
+- ✅ **WASM生成成功**: 535バイトWASMバイナリ生成
+- ✅ **LLVM IR正常**: `%"phi_15" = phi i64 [100, %"bb4"], [200, %"bb5"]`
 
----
+**テスト確認**:
+```bash
+# Rust側: "values"形式出力
+NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --emit-mir-json /tmp/test.json test.nyash
 
-### ✅ Phase 3.4: GC補助命令実装 [完了 2025-10-01]
-**目標**: safepoint/barrier skeleton実装
-
-**実装内容**:
-1. ✅ safepoint (GCセーフポイント):
-   - LLVM IR: call @ny_safepoint
-   - live値トラッキング
-2. ✅ barrier (メモリバリア):
-   - LLVM IR: fence seq_cst
-   - Phase 15.8ではnop（将来WASM GC proposal対応）
-
-**成果**:
-- 🎉 GC補助命令skeleton実装完了
-- ✅ WASM GC proposal対応準備完了
-- ✅ テストファイル作成: `test_safepoint_nop.json`, `test_barrier_nop.json`
-
----
-
-### ✅ Phase 3.5-A/B: ループPHI完全対応 [完了 2025-10-01]
-**目標**: ループPHI（自己参照PHI）実装
-
-**実装内容**:
-1. ✅ PhiHandler拡張:
-   - `incomplete_phis`トラッキング追加
-   - `complete_incomplete_phis()`メソッド実装
-   - 二段階PHI解決（即座+遅延）
-2. ✅ block_lower.py統合:
-   - PHI完成呼び出し追加（body ops後）
-   - `_current_vmap`優先参照
-3. ✅ llvmlite検証:
-   - `test_phi_delayed.py`で`add_incoming`遅延追加確認
-
-**成果**:
-- 🎉🎉🎉 **ループPHI完全動作！**
-- ✅ 前方参照（forward reference）解決
-- ✅ テストファイル作成: `test_phi_loop.json`, `test_phi_delayed.py`
+# Python側: WASM生成成功
+python3 src/llvm_py/llvm_builder.py /tmp/test.json --target wasm32 -o /tmp/test.wasm
+# ✅ 535バイトWASMバイナリ生成
+# ✅ LLVM IR: %"phi_15" = phi i64 [100, %"bb4"], [200, %"bb5"]
+```
 
 **箱理論実践**:
-- 「箱化」: PhiHandlerで不完全PHI管理
-- 「境界」: block_lowerとの責任分離
-- 「戻せる」: 既存if-PHIも動作継続
-- 「見える化」: verbose mode完備
+- 「箱化」: incoming_pairs_vb()で形式変換を箱化
+- 「境界」: Rust/Python間の責任分離（JSONインターフェース）
+- 「戻せる」: 後方互換性により旧形式も読める
+- 「見える化」: 新形式の方がデバッグしやすい（{"value":v, "block":b}）
+
+---
+
+## 📖 Week 3計画詳細
+
+### 🔥 Phase 3.3: ループPHI実装 [優先タスク]
+**目標**: while/loopでのPHI命令完全動作
+
+**実装計画**:
+1. **ループPHIテスト作成**
+   - test_phi_loop.json: シンプルwhile（counter PHI）
+   - test_phi_nested.json: ネストループ（2重PHI）
+2. **PHI wiring修正**
+   - ループback-edge対応（block 2 → block 1）
+   - 複数predecessor処理（block 0, block 2 → block 1）
+   - vmap解決タイミング調整
+3. **動作確認**
+   - LLVM IR: `%phi_2 = phi i64 [0, %bb0], [%6, %bb2]`
+   - WASM: ループ実行成功（0→1→2→...→10）
+
+### 📊 Phase 3.4: ベンチマークシステム構築
+**目標**: 性能測定・回帰防止の基盤確立
+
+**ディレクトリ構造**:
+```
+apps/benchmarks/
+  wasm/
+    basic/
+      factorial.nyash      # 階乗計算（再帰）
+      fibonacci.nyash      # フィボナッチ（再帰）
+      sum_loop.nyash       # ループ合計
+```
+
+**実装優先度 (P0)**:
+1. `factorial.nyash`: factorial(20) - 再帰深さ確認
+2. `fibonacci.nyash`: fibonacci(30) - 指数的再帰
+3. `sum_loop.nyash`: sum(100000) - ループPHI性能
+
+**ベンチマーク実行**:
+```bash
+# 一括ベンチマーク
+./tools/run_wasm_benchmarks.sh
+
+# 個別実行
+./tools/build_wasm.sh apps/benchmarks/wasm/basic/factorial.nyash -o /tmp/factorial.wasm
+node tools/wasm_runner.js /tmp/factorial.wasm
+```
+
+### ✅ Phase 3.5: Parity確認開始
+**目標**: VM/LLVM/WASM同一出力確認
+
+**対象テスト**（Week 3）:
+- arithmetic_smoke.json ✓
+- compare_smoke.json ✓
+- control_flow_smoke.json ✓
+- test_phi_simple.json ✓
+- test_phi_loop.json（新規）
 
 ---
 

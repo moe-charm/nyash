@@ -88,39 +88,137 @@ WASM Binary (.wasm)
 
 ---
 
-### **Week 2: MIR18命令WASM変換完成** (2025-10-08 ~ 10-14)
+### **Week 2: MIR18命令WASM変換完成** (2025-10-08 ~ 10-14) ✅ **Week 2完了！** (2025-10-01)
 #### 目標
 - MIR18命令すべてWASM変換対応
 - Const, BinOp, Branch, Jump, Return, Phi動作確認
 
-#### タスク
-1. **基本命令対応** (5命令)
-   - Const, UnaryOp, BinOp, Compare, TypeOp
-2. **メモリ命令対応** (2命令)
-   - Load, Store (WASM linear memory)
-3. **制御命令対応** (4命令)
-   - Branch, Jump, Return, Phi (WASM block/br)
-4. **Box/GC命令対応** (4命令)
-   - MirCall, Safepoint, Barrier, Copy/Nop
-5. **外部連携** (2命令)
-   - ExternCall → WASI import
-   - Print → fd_write
+#### Week 2実績（2025-10-01完了）
+**🎉 予定以上の成果達成！**
 
-#### 成果物
-- ✅ `src/llvm_py/wasm_emitter.py`: WASM専用emitter
-- ✅ スモークテスト5本（基本演算/制御/Box/外部）
-- ✅ WASM命令マッピング表（docs）
+**Phase 2.1-2.3完了**:
+1. ✅ **関数エクスポート完全解決**
+   - wasm_add_export.py実装（Python自己完結型）
+   - WASI runtime実装（fd_write, proc_exit）
+   - wasm_runner.js更新（BigInt対応）
+2. ✅ **Hello World WASM実行成功**
+   - "Hello, WASM!" 完全出力確認
+   - 文字列constants処理実装（40行追加）
+
+**Phase 2.4-2.6完了**:
+3. ✅ **binop全演算WASM動作確認**
+   - 算術演算: +, -, *, /, %
+   - ビット演算: &, |, ^, <<, >>
+   - テスト: 44 = 15+12+12+5 ✓
+4. ✅ **制御フロー完全動作**
+   - compare演算: 10 > 5 = true (1) → 100 ✓
+   - branch分岐: if (10 > 5) then 100 else 200 → 100 ✓
+   - jump無条件: jump to block → 42 ✓
+
+**Phase 2.7完了**:
+5. ✅ **スモークテスト整備**
+   - arithmetic_smoke.json（算術演算）
+   - compare_smoke.json（比較演算）
+   - control_flow_smoke.json（制御フロー）
+   - run_wasm_smoke_tests.sh（一括実行）
+
+**Phase 3.1完了**:
+6. ✅ **PHI処理完全修正**
+   - 根本原因3つ特定・解決
+   - PhiHandler箱化実装（197行）
+   - InstructionContext箱化（98行）
+   - if文PHIテスト完全成功
+
+**Phase 3.2完了** (2025-10-01):
+7. ✅ **PHI 'values'形式統一**
+   - selfhostブランチから移植完了
+   - "incoming": [[v,b]] → "values": [{"value":v, "block":b}]
+   - 後方互換性確保（incoming_pairs_vb）
+   - WASM生成成功（535バイト）
+
+#### 残タスク（Week 3へ繰越）
+1. ⏸️ **ループPHI実装**
+   - while/loop with PHI
+   - 複雑制御フロー（nested loops）
+2. ⏸️ **メモリ命令対応** (Load, Store)
+3. ⏸️ **Box命令拡充** (MirCall完全対応)
+4. ⏸️ **ベンチマークシステム構築**
+
+#### 成果物 ✅
+- ✅ `tools/wasm_add_export.py`: 関数エクスポートツール
+- ✅ `src/llvm_py/phi_wiring/common.py`: incoming_pairs_vb実装
+- ✅ `src/llvm_py/phi_wiring/analysis.py`: values形式対応
+- ✅ スモークテスト3本（arithmetic/compare/control_flow）
+- ✅ run_wasm_smoke_tests.sh: 一括実行スクリプト
 
 ---
 
-### **Week 3: WASI runtime連携 + Parity確認** (2025-10-15 ~ 10-22)
+### **Week 3: ループPHI + ベンチマーク + Parity確認** (2025-10-02 ~ 10-08)
 #### 目標
-- WASI基本I/O動作
+- ループPHI実装完成
+- ベンチマークシステム構築
 - VM/LLVM/WASMパリティ確認
 
-#### タスク
-1. **WASI runtime連携**
-   - fd_write (print)
+#### Phase 3.3: ループPHI実装（最優先）
+**目標**: while/loopでのPHI命令完全動作
+1. **ループPHIテスト作成**
+   - test_phi_loop.json: シンプルwhile（counter PHI）
+   - test_phi_nested.json: ネストループ（2重PHI）
+2. **PHI wireling修正**
+   - ループback-edge対応
+   - 複数predecessor処理
+3. **動作確認**
+   - LLVM IR: 正しいPHI生成
+   - WASM: ループ実行成功
+
+#### Phase 3.4: ベンチマークシステム構築
+**ディレクトリ構造**:
+```
+apps/benchmarks/
+  wasm/
+    basic/
+      factorial.nyash      # 階乗計算（再帰）
+      fibonacci.nyash      # フィボナッチ（再帰）
+      sum_loop.nyash       # ループ合計
+    array/
+      array_push.nyash     # 配列push操作
+      array_search.nyash   # 線形探索
+      array_sort.nyash     # バブルソート
+    string/
+      string_concat.nyash  # 文字列結合
+      string_repeat.nyash  # 文字列繰り返し
+    control/
+      nested_if.nyash      # 深いif-else
+      switch_case.nyash    # match式ベンチ
+    call/
+      mutual_recursion.nyash  # 相互再帰
+      deep_call.nyash         # 深い関数呼び出し
+```
+
+**実装計画**:
+1. **基本ベンチ3本** (P0)
+   - factorial(20): 再帰深さ確認
+   - fibonacci(30): 指数的再帰
+   - sum_loop(100000): ループPHI性能
+2. **配列ベンチ2本** (P1)
+   - array_push(1000): メモリ確認
+   - array_search(1000): 線形探索
+3. **制御ベンチ1本** (P2)
+   - nested_if(10): 分岐予測
+
+**ベンチマーク実行**:
+```bash
+# 一括ベンチマーク
+./tools/run_wasm_benchmarks.sh
+
+# 個別実行
+./tools/build_wasm.sh apps/benchmarks/wasm/basic/factorial.nyash -o /tmp/factorial.wasm
+node tools/wasm_runner.js /tmp/factorial.wasm
+```
+
+#### Phase 3.5: Parity確認
+1. **WASI runtime完全連携**
+   - fd_write (print) - ✅ 完了
    - fd_read (基本入力 - optional)
    - clock_time_get (now関数)
 2. **Parity テスト**
@@ -128,12 +226,47 @@ WASM Binary (.wasm)
    - VM/LLVM/WASM同一出力確認
 3. **ドキュメント整備**
    - WASM実行ガイド
+   - ベンチマークガイド
    - トラブルシューティング
 
 #### 成果物
-- ✅ `tools/smokes/v2/profiles/wasm/`: WASM専用スモークプロファイル
-- ✅ `docs/guides/wasm-execution.md`: WASM実行ガイド
+- ✅ test_phi_loop.json: ループPHIテスト
+- ✅ apps/benchmarks/wasm/: ベンチマークスイート
+- ✅ tools/run_wasm_benchmarks.sh: ベンチマーク実行スクリプト
+- ✅ docs/guides/wasm-benchmarks.md: ベンチマークガイド
+- ⏸️ `tools/smokes/v2/profiles/wasm/`: WASM専用スモークプロファイル（Week 4）
+- ⏸️ `docs/guides/wasm-execution.md`: WASM実行ガイド（Week 4）
+- ⏸️ Parity確認レポート（VM/LLVM/WASM）（Week 4）
+
+---
+
+### **Week 4: WASM最終統合** (2025-10-09 ~ 10-15)
+#### 目標
+- WASM専用スモークプロファイル完成
+- ドキュメント完全整備
+- Phase 15.8完了
+
+#### タスク
+1. **スモークプロファイル作成**
+   - tools/smokes/v2/profiles/wasm/
+   - quickプロファイルWASM変換
+   - 自動パリティ確認
+2. **ドキュメント整備**
+   - docs/guides/wasm-execution.md
+   - docs/guides/wasm-benchmarks.md
+   - トラブルシューティングガイド
+3. **パリティ確認完了**
+   - VM/LLVM/WASM同一出力確認
+   - パリティ確認レポート作成
+4. **Phase 15.8完了判定**
+   - P0条件すべて満たす
+   - Phase 16準備（WASM GC検証）
+
+#### 成果物
+- ✅ tools/smokes/v2/profiles/wasm/
+- ✅ docs/guides/wasm-execution.md
 - ✅ Parity確認レポート（VM/LLVM/WASM）
+- ✅ Phase 15.8完了報告書
 
 ---
 
@@ -221,23 +354,42 @@ python3 -m http.server 8000
 
 ---
 
-## 📋 **成功条件**
+## 📋 **成功条件と進捗** (2025-10-01更新)
 
-### **P0（必須）**
-1. ✅ Hello World WASM実行成功
-2. ✅ MIR18命令すべてWASM変換対応
-3. ✅ 基本演算/制御フローのパリティ確認（VM/LLVM/WASM）
-4. ✅ print関数（fd_write）動作
+### **P0（必須）** - 7/7完了 ✅
+1. ✅ Hello World WASM実行成功 - **完了** (Week 2)
+2. ✅ MIR18基本命令WASM変換対応 - **完了** (Week 2)
+   - ✅ Const, BinOp, Compare ✓
+   - ✅ Branch, Jump, Return ✓
+   - ✅ Phi (if分岐) ✓
+   - ⏸️ Phi (ループ) - Week 3
+3. ✅ 基本演算/制御フローのパリティ確認（VM/LLVM/WASM）- **完了** (Week 2)
+   - ✅ 算術演算: 44 = 15+12+12+5 ✓
+   - ✅ 比較演算: 10 > 5 = 1 ✓
+   - ✅ 制御フロー: if-then-else ✓
+4. ✅ print関数（fd_write）動作 - **完了** (Week 2)
+5. ✅ 関数エクスポート解決 - **完了** (Week 2, wasm_add_export.py)
+6. ✅ PHI処理完全修正 - **完了** (Week 2, PhiHandler箱化)
+7. ✅ PHI 'values'形式統一 - **完了** (Week 2, selfhost移植)
 
-### **P1（推奨）**
-1. ✅ 既存quickスモーク10本WASM変換成功
-2. ✅ WASI clock_time_get対応（now関数）
-3. ✅ エラー処理（panic, error）動作
+### **P1（推奨）** - 0/6完了
+1. ⏸️ ループPHI実装 - Week 3優先タスク
+2. ⏸️ ベンチマークシステム構築（6ベンチ） - Week 3
+3. ⏸️ 既存quickスモーク10本WASM変換成功 - Week 4
+4. ⏸️ WASI clock_time_get対応（now関数） - Week 4
+5. ⏸️ エラー処理（panic, error）動作 - Week 4
+6. ⏸️ WASMスモークプロファイル - Week 4
 
-### **P2（オプション）**
+### **P2（オプション）** - Phase 16以降
 1. ⏸️ async/await基本対応（Promise連携 - Phase 17推奨）
 2. ⏸️ バンドルサイズ<100KB（最適化 - Phase 17推奨）
 3. ⏸️ WASM GC proposal検証（Phase 16推奨）
+
+### **進捗サマリー**
+- **Week 1**: 完了 ✅ (llvmlite WASM初期化)
+- **Week 2**: 完了 ✅ (基本命令 + PHI if + values形式統一)
+- **Week 3**: 進行中 🚀 (ループPHI + ベンチマーク)
+- **Week 4**: 計画 📋 (スモークプロファイル + ドキュメント)
 
 ---
 
