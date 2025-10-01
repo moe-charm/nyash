@@ -47,7 +47,8 @@ def analyze_incomings(blocks: List[Dict[str, Any]]) -> Dict[int, Dict[int, List[
             if inst.get("op") == "phi":
                 try:
                     dst0 = int(inst.get("dst"))
-                    incoming0 = inst.get("incoming", []) or []
+                    from .common import incoming_pairs_vb
+                    incoming0 = incoming_pairs_vb(inst)
                 except Exception:
                     dst0 = None
                     incoming0 = []
