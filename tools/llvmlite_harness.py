@@ -64,6 +64,9 @@ def run_from_json(in_path: str, out_path: str) -> None:
     # Enable safe defaults for prepasses unless explicitly disabled by env
     os.environ.setdefault('NYASH_LLVM_PREPASS_LOOP', os.environ.get('NYASH_LLVM_PREPASS_LOOP', '0'))
     os.environ.setdefault('NYASH_LLVM_PREPASS_IFMERGE', os.environ.get('NYASH_LLVM_PREPASS_IFMERGE', '1'))
+    # PHI policy: builderization unified. Create-only at block head via PhiHandler; finalize wires only.
+    # Default STRICT=1 to avoid double-generation unless caller explicitly overrides.
+    os.environ.setdefault('NYASH_LLVM_PHI_STRICT', os.environ.get('NYASH_LLVM_PHI_STRICT', '1'))
     # Ensure src/llvm_py is on sys.path for relative imports
     builder_dir = str(PY_BUILDER.parent)
     if builder_dir not in sys.path:
