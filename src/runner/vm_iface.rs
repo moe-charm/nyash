@@ -28,11 +28,11 @@ impl VmEngine for FallbackVmEngine {
     fn execute(&mut self, module: &MirModule) -> Result<i32, String> {
         match self.interp.execute_module(module) {
             Ok(ret) => {
-                // The program itself prints via ConsoleBox etc.; here we only return exit code.
-                // Map bool/integer to exit code if possible when needed; default 0.
-                // Keep minimal: return 0 for success.
-                let _ = ret; // result object ignored here; prints already happened.
-                Ok(0)
+                // Map return value to process exit code (0..255).
+                // Integer/Bool → code, others → 0.
+                let code_i64 = crate::runtime::semantics::coerce_to_i64(ret.as_ref()).unwrap_or(0);
+                let code = (code_i64 as i32) & 0xFF;
+                Ok(code)
             }
             Err(e) => Err(format!("VM fallback error: {}", e)),
         }
@@ -60,4 +60,3 @@ pub fn vm_engine_from_env() -> Box<dyn VmEngine> {
         _ => Box::new(FallbackVmEngine::new()),
     }
 }
-

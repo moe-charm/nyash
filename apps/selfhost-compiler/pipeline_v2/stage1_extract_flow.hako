@@ -123,16 +123,16 @@ flow Stage1ExtractFlow {
     local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
     local args = []
     if ak >= 0 {
-      local i = ak + 8
+      local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+      if rb < 0 { rb = ast_json.length() }
+      local i = ak
       loop(true) {
-        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", i)
-        if vpos < 0 { break }
-        // bound to args array end
-        local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
-        if rb >= 0 && vpos > rb { break }
+        local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
+        if tpos < 0 || tpos >= rb { break }
+        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+        if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
         local ds = RegexFlow.digits_from(ast_json, vpos + 8)
-        if ds == "" { i = vpos + 8  continue }
-        args.push(RegexFlow.to_int(ds))
+        if ds != "" { args.push(RegexFlow.to_int(ds)) }
         i = vpos + 8 + ds.length()
       }
     }
@@ -155,15 +155,16 @@ flow Stage1ExtractFlow {
     local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
     local args = []
     if ak >= 0 {
-      local i = ak + 8
+      local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+      if rb < 0 { rb = ast_json.length() }
+      local i = ak
       loop(true) {
-        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", i)
-        if vpos < 0 { break }
-        local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
-        if rb >= 0 && vpos > rb { break }
+        local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
+        if tpos < 0 || tpos >= rb { break }
+        local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+        if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
         local ds = RegexFlow.digits_from(ast_json, vpos + 8)
-        if ds == "" { i = vpos + 8  continue }
-        args.push(RegexFlow.to_int(ds))
+        if ds != "" { args.push(RegexFlow.to_int(ds)) }
         i = vpos + 8 + ds.length()
       }
     }
@@ -184,21 +185,20 @@ flow Stage1ExtractFlow {
     local nk_end = Stage1ExtractFlow._idx_from(ast_json, "\"", nk + 8)
     if nk_end < 0 { return null }
     local name = ast_json.substring(nk + 8, nk_end)
-    // args 抽出（整数に限定）
+    // args 抽出（整数に限定）: args 配列内の Int ノードのみを拾う
     local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
     if ak < 0 { return { name: name, args: [] } }
+    local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
+    if rb < 0 { rb = ast_json.length() }
     local args = []
-    local i = ak + 8
+    local i = ak
     loop(true) {
-      // 次の '"value":' を探して整数を読む（Intノード前提）
-      local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", i)
-      if vpos < 0 { break }
-      // 引数リストの範囲を大きく超えたら終了（']'位置を超えたらやめる）
-      local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
-      if rb >= 0 && vpos > rb { break }
+      local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
+      if tpos < 0 || tpos >= rb { break }
+      local vpos = Stage1ExtractFlow._idx_from(ast_json, "\"value\":", tpos)
+      if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
       local ds = RegexFlow.digits_from(ast_json, vpos + 8)
-      if ds == "" { i = vpos + 8  continue }
-      args.push(RegexFlow.to_int(ds))
+      if ds != "" { args.push(RegexFlow.to_int(ds)) }
       i = vpos + 8 + ds.length()
     }
     return { name: name, args: args }

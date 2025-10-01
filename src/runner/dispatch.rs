@@ -364,7 +364,7 @@ impl NyashRunner {
         // Execute via selected engine
         let mut engine = crate::runner::modes::super_iface::vm_engine_from_env();
         match engine.execute(&compile.module) {
-            Ok(_code) => { /* program output handled inside VM; keep quiet */ }
+            Ok(code) => { process::exit(code); }
             Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
         }
     }

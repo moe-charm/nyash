@@ -53,3 +53,13 @@ Notes
 - When real string/collections are exercised, swap to `nyash_kernel` (full shim) or gradually enrich `hako_kernel`.
 
 Updated: 2025‑10‑01
+
+---
+
+Addendum — 2025‑10‑01 (late)
+- MirVmMin: Minimal exec added for call/boxcall/newbox (i64 sum of args; pure). Also handles v1 `mir_call` similarly.
+- New quick VM smokes (exec):
+  - tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_call_exec_vm.sh
+  - tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_method_exec_vm.sh
+  - tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_newbox_exec_vm.sh
+- Stage‑1 extractors: hardened to accept negatives/whitespace; emitters now accept string‑form args (e.g., "[5, 7]") and materialize ints. Follow‑up: verify PipelineV2 call path end‑to‑end; boundary smoke will be enabled after confirming args materialization.

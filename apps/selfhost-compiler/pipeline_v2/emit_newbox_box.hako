@@ -2,26 +2,44 @@
 // 最小形: 各引数を r1..rN; newbox(class, args=r1..rN) → rK; ret rK
 
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box EmitNewBoxBox {
   emit_newbox_int_args(class_name, args) {
     if class_name == null { class_name = "" }
     if args == null { args = [] }
+    // Normalize by string parse (robust)
+    local s = "" + args
+    local pos = 0
     local n = 0
-    if args.size { n = args.size() }
     local b = MirJsonBuilderMin.make()
       |> MirJsonBuilderMin.start_module()
       |> MirJsonBuilderMin.start_function("main")
       |> MirJsonBuilderMin.start_block(0)
     // materialize args r1..rN
-    local i = 0
-    loop (i < n) {
-      local v = args.get(i)
-      b = b |> MirJsonBuilderMin.add_const(1 + i, v)
-      i = i + 1
-    }
+    { local i = 0  local pos2 = 0  loop(i < n || pos2 < s.length()) { local ds = RegexFlow.digits_from(s, pos2)  if ds == "" { pos2 = pos2 + 1 } else { local pds = RegexFlow.find_from(s, ds, pos2)  if pds < 0 { pos2 = pos2 + 1 } else { b = b |> MirJsonBuilderMin.add_const(1 + i, RegexFlow.to_int(ds))  i = i + 1  pos2 = pds + ds.length() } } if pos2 >= s.length() { break } } }
     local dst = n + 1
     b = b |> MirJsonBuilderMin.add_newbox_range(class_name, 1, n, dst)
+      |> MirJsonBuilderMin.add_ret(dst)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+
+  // JSON v1 (MirCall) emission — experimental, shape-only
+  emit_newbox_int_args_v1(class_name, args) {
+    if class_name == null { class_name = "" }
+    if args == null { args = [] }
+    local s = "" + args
+    local pos = 0
+    local n = 0
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+    // materialize args r1..rN
+    { local i = 0  loop(true) { local ds = RegexFlow.digits_from(s, pos)  if ds == "" { pos = pos + 1 } else { b = b |> MirJsonBuilderMin.add_const(1 + i, RegexFlow.to_int(ds))  i = i + 1  n = i  pos = pos + ds.length() }  if pos >= s.length() { break } } }
+    local dst = n + 1
+    b = b |> MirJsonBuilderMin.add_mir_call_constructor_range(class_name, 1, n, dst)
       |> MirJsonBuilderMin.add_ret(dst)
       |> MirJsonBuilderMin.end_all()
     return MirJsonBuilderMin.to_string(b)
@@ -29,4 +47,3 @@ static box EmitNewBoxBox {
 }
 
 static box EmitNewBoxStub { main(args) { return 0 } }
-

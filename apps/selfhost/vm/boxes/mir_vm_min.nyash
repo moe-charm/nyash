@@ -53,6 +53,8 @@ static box MirVmMin {
     local i = 0
     local n = s.length()
     local acc = 0
+    local neg = 0
+    if s.substring(0,1) == "-" { neg = 1  i = 1 }
     loop (i < n) {
       local ch = s.substring(i, i+1)
       local d = match ch {
@@ -66,6 +68,7 @@ static box MirVmMin {
       i = i + 1
       continue
     }
+    if neg == 1 { return 0 - acc }
     return acc
   }
   _int_to_str(n) {
@@ -111,6 +114,11 @@ static box MirVmMin {
     loop(true) {
       local ch = seg.substring(i, i+1)
       if ch == "" { break }
+      // skip spaces
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      // optional minus sign
+      if ch == "-" { out = out + ch  i = i + 1  continue }
+      // digits
       if ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" { out = out + ch  i = i + 1 } else { break }
     }
     if out == "" { return null }
@@ -123,6 +131,46 @@ static box MirVmMin {
     local q = me.index_of_from(seg, "\"", p)
     if q < 0 { return "" }
     return seg.substring(p, q)
+  }
+  _skip_spaces(text, pos) {
+    local i = pos
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      break
+    }
+    return i
+  }
+  _parse_args_ids(seg) {
+    // Parse integer ids from '"args": [ ... ]' within a single instruction object segment
+    local out = new ArrayBox()
+    local ap = seg.indexOf("\"args\":")
+    if ap < 0 { return out }
+    local lb = me.index_of_from(seg, "[", ap)
+    if lb < 0 { return out }
+    local rb = me._seek_array_end(seg, lb + 1)
+    if rb <= lb { return out }
+    // scan numbers between lb..rb
+    local i = lb + 1
+    loop(true) {
+      i = me._skip_spaces(seg, i)
+      if i >= rb { break }
+      // read digits (register id, non-negative)
+      local ds = me.read_digits(seg, i)
+      if ds == "" {
+        // move by one to avoid infinite loop
+        i = i + 1
+        continue
+      }
+      out.push(me._str_to_int(ds))
+      i = i + ds.length()
+      // skip trailing spaces/comma
+      i = me._skip_spaces(seg, i)
+      local ch = seg.substring(i, i+1)
+      if ch == "," { i = i + 1 }
+    }
+    return out
   }
   _replace_all(text, needle, repl) {
     // naive global replace, left-to-right
@@ -463,6 +511,74 @@ static box MirVmMin {
             local b = me._get_map(regs, "" + krhs)
             local r = me._eval_cmp(kkind, a, b)
             me._set_map(regs, "" + kdst, r)
+          }
+        }
+        if opname == "call" {
+          // Minimal exec: i64-only, pure; result = sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "boxcall" {
+          // Minimal exec: ignore receiver; result = sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "newbox" {
+          // Minimal exec: constructor returns sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
+          }
+        }
+        if opname == "mir_call" {
+          // Minimal exec for v1: treat as call/method/constructor; result = sum(args)
+          local cdst = me._find_int_in(seg, "\"dst\":")
+          local sum = 0
+          if cdst != null {
+            local ids = me._parse_args_ids(seg)
+            local k = 0
+            local n = 0
+            if ids != null { n = ids.size() }
+            loop(k < n) {
+              local rid = ids.get(k)
+              sum = sum + me._get_map(regs, "" + rid)
+              k = k + 1
+            }
+            me._set_map(regs, "" + cdst, sum)
           }
         }
         if opname == "jump" {
