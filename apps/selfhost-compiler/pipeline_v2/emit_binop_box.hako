@@ -11,9 +11,11 @@ static box EmitBinopBox {
     return opk
   }
 
-  emit_binop(lhs, rhs, opk) {
-    // dev-trace (minimal)
-    print("[emit] binop lhs=" + lhs + " rhs=" + rhs + " op=" + opk)
+  emit_binop(lhs, rhs, opk) { return EmitBinopBox.emit_binop2(lhs, rhs, opk, 0) }
+
+  emit_binop2(lhs, rhs, opk, trace) {
+    // dev-trace (minimal, env-gate想定)
+    if trace == 1 { print("[emit] binop lhs=" + lhs + " rhs=" + rhs + " op=" + opk) }
     local kind = EmitBinopBox._map_binop(opk)
     local mir = {
       functions: [{ name:"main", params: [], blocks: [

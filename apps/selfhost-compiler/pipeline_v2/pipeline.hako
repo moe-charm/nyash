@@ -6,7 +6,12 @@ using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 flow PipelineV2 {
   lower_stage1_to_mir(ast_json, prefer_cfg) {
-    if ast_json == null { return EmitReturnBox.emit_return_int(0) }
+    // Backward-compatible entry (trace=0)
+    return PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, 0)
+  }
+
+  lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace) {
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, trace) }
     // If(...) pattern (prefer CFG form)
     {
       local iq = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
@@ -15,7 +20,7 @@ flow PipelineV2 {
         if ic != null {
           local mat = 0
           if prefer_cfg >= 2 { mat = 1 }
-          return EmitCompareBox.emit_compare_cfg2(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat)
+          return EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat, trace)
         }
       }
     }
@@ -32,7 +37,7 @@ flow PipelineV2 {
           local cmp = c.get("cmp")
           local mat = 0
           if prefer_cfg >= 2 { mat = 1 }
-          return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, mat)
+          return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, mat, trace)
         }
       }
     }
@@ -44,11 +49,11 @@ flow PipelineV2 {
         local lhs = b.get("lhs")
         local rhs = b.get("rhs")
         local kind = b.get("kind")
-        return EmitBinopBox.emit_binop(lhs, rhs, kind)
+        return EmitBinopBox.emit_binop2(lhs, rhs, kind, trace)
       }
     }
     // Fallback Return(Int)
     local v = Stage1ExtractFlow.extract_return_int(ast_json)
-    return EmitReturnBox.emit_return_int(v)
+    return EmitReturnBox.emit_return_int2(v, trace)
   }
 }

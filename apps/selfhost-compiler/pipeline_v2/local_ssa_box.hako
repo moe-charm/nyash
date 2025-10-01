@@ -5,6 +5,13 @@ static box LocalSSABox {
   // 汎用: copy 命令を insts（ArrayBox of Map）末尾に追加
   add_copy(insts, dst, src) {
     if insts == null { return 1 }
+    // 柔軟受理: { instructions: [...] } 形式にも対応
+    if insts.get != null {
+      local inner = insts.get("instructions")
+      if inner != null { insts = inner }
+    }
+    // 末尾pushが無い形は非対応
+    if insts.push == null { return 1 }
     insts.push({ op:"copy", dst: dst, src: src })
     return 0
   }
@@ -12,6 +19,15 @@ static box LocalSSABox {
   // PHI直後の材化（最小）: いまは add_copy と同じ。将来 PHI 群スキップを実装
   ensure_after_phis_copy(insts, src, dst) {
     if insts == null { return 1 }
+    // 柔軟受理: { instructions: [...] } 形式にも対応
+    if insts.get != null {
+      local inner = insts.get("instructions")
+      if inner != null { insts = inner }
+    }
+    // 基本的なAPIが無ければフォールバックして末尾追加
+    if insts.size == null || insts.get == null || insts.set == null || insts.push == null {
+      return me.add_copy(insts, dst, src)
+    }
     // 先頭から連続する phi の個数を数える
     local n = 0
     if insts.size { n = insts.size() } else { return me.add_copy(insts, dst, src) }

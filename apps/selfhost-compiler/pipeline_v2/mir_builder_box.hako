@@ -13,21 +13,21 @@ box MirBuilderBox {
 
   // Accept Stage‑1 AST JSON and emit minimal MIR(JSON v0)
   build(ast_json) {
-    if ast_json == null { return EmitReturnBox.emit_return_int(0) }
+    if ast_json == null { return EmitReturnBox.emit_return_int2(0, 0) }
     // If(cond=Compare) → CFG (branch/jump/ret)
     if ast_json.indexOf("\"type\":\"If\"") >= 0 {
       local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
-      if ic != null { return EmitCompareBox.emit_compare_cfg2(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), 0) }
+      if ic != null { return EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), 0, 0) }
     }
     // Return(Compare)
     local c = Stage1ExtractFlow.extract_return_compare(ast_json)
-    if c != null { return EmitCompareBox.emit_compare_cfg2(c.get("lhs"), c.get("rhs"), c.get("cmp"), 0) }
+    if c != null { return EmitCompareBox.emit_compare_cfg3(c.get("lhs"), c.get("rhs"), c.get("cmp"), 0, 0) }
     // Return(BinOp)
     local b = Stage1ExtractFlow.extract_return_binop(ast_json)
-    if b != null { return EmitBinopBox.emit_binop(b.get("lhs"), b.get("rhs"), b.get("kind")) }
+    if b != null { return EmitBinopBox.emit_binop2(b.get("lhs"), b.get("rhs"), b.get("kind"), 0) }
     // Fallback: Return(Int)
     local v = Stage1ExtractFlow.extract_return_int(ast_json)
-    return EmitReturnBox.emit_return_int(v)
+    return EmitReturnBox.emit_return_int2(v, 0)
   }
 }
 

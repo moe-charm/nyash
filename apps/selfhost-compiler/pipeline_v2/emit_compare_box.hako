@@ -5,11 +5,11 @@ using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
 static box EmitCompareBox {
   emit_compare_cfg(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, 0) }
 
-  emit_compare_cfg2(lhs, rhs, cmp, materialize) {
-    // dev-trace (minimal): one line; JSON line is printed by caller later
-    // Note: currently unconditional to avoid env dependency in .hako runtime.
-    // Smokes tail -n 1 (last line is JSON), so this line is ignored.
-    print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize)
+  emit_compare_cfg2(lhs, rhs, cmp, materialize) { return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, materialize, 0) }
+
+  emit_compare_cfg3(lhs, rhs, cmp, materialize, trace) {
+    // dev-trace (minimal, env-gate想定)
+    if trace == 1 { print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize) }
     // entry: const lhs/rhs; compare→r3; (optional copy r4=copy r3); branch r{3|4} then:1 else:2
     // then: const 1→r6; jump 3 | else: const 0→r6; jump 3 | merge: ret r6
     local insts0 = [

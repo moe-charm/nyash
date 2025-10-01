@@ -2,9 +2,11 @@
 using "apps/lib/json_native/stringify.nyash" as JSON
 
 static box EmitReturnBox {
-  emit_return_int(v) {
-    // dev-trace (minimal)
-    print("[emit] return v=" + v)
+  emit_return_int(v) { return EmitReturnBox.emit_return_int2(v, 0) }
+
+  emit_return_int2(v, trace) {
+    // dev-trace (minimal, env-gate想定): trace==1 の時のみ出力
+    if trace == 1 { print("[emit] return v=" + v) }
     local mir = {
       functions: [{
         name: "main",

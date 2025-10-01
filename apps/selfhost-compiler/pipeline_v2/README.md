@@ -30,6 +30,12 @@ Usage (dev only, emit-only)
 - The method prints a single JSON object to stdout and returns 0.
 - Quiet acceptance is ensured by `NYASH_JSON_ONLY=1` (parent runner sets it for child).
 
+Tracing (dev)
+- PipelineV2 flow exposes a trace-enabled entry:
+  - `PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg)` — default (trace=0)
+  - `PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace)` — when `trace==1`, emit boxes print a single-line `[emit] ...` before JSON.
+  - ExecutionPipelineBox は emit-only 経路であり、trace の布告は Runner 引数透過で後段導入予定（既定OFF）。
+
 Fail-Fast
 - If parsing returns null/empty, print an error to stderr and return non-zero.
 - Do not print non-JSON lines when `NYASH_JSON_ONLY=1`.
