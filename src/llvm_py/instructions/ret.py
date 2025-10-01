@@ -45,14 +45,10 @@ def lower_return(
     else:
         # Get return value (prefer resolver)
         ret_val = None
-        # Fast path: if vmap has a concrete non-PHI value defined in this block, use it directly
+        # Fast path: if vmap has a value (including PHI), use it directly
         if isinstance(value_id, int):
             tmp0 = vmap.get(value_id)
-            try:
-                is_phi0 = hasattr(tmp0, 'add_incoming')
-            except Exception:
-                is_phi0 = False
-            if tmp0 is not None and not is_phi0:
+            if tmp0 is not None:
                 ret_val = tmp0
         if ret_val is None:
             if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:

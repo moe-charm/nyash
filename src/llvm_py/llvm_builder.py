@@ -40,18 +40,41 @@ from build_ctx import BuildCtx
 
 from resolver import Resolver
 from mir_reader import MIRReader
+from targets import create_target
 
 class NyashLLVMBuilder:
     """Main LLVM IR builder for Nyash MIR"""
-    
-    def __init__(self):
+
+    def __init__(self, target="native"):
+        """
+        Initialize LLVM IR builder
+
+        Args:
+            target: Target architecture ("native" or "wasm32")
+                    - "native": Native platform (default)
+                    - "wasm32": WebAssembly (wasm32-unknown-wasi)
+        """
         # Initialize LLVM
         llvm.initialize()
-        llvm.initialize_native_target()
-        llvm.initialize_native_asmprinter()
-        
+
+        # Create target object (箱理論: ターゲット抽象化)
+        self.target_obj = create_target(target)
+        self.target = target  # Keep for backward compatibility
+        self.target_triple = self.target_obj.get_triple()
+
+        # Initialize target-specific components
+        if target == "wasm32":
+            # WASM target: initialize all targets to enable wasm32
+            llvm.initialize_all_targets()
+            llvm.initialize_all_asmprinters()
+        else:
+            # Native target (default)
+            llvm.initialize_native_target()
+            llvm.initialize_native_asmprinter()
+
         # Module and basic types
         self.module = ir.Module(name="nyash_module")
+        self.module.triple = self.target_triple  # Set target triple on module
         self.i64 = ir.IntType(64)
         self.i32 = ir.IntType(32)
         self.i8 = ir.IntType(8)
@@ -117,7 +140,9 @@ class NyashLLVMBuilder:
                     exists = True
                     break
             if not exists:
-                ir.Function(self.module, fty, name=name)
+                func = ir.Function(self.module, fty, name=name)
+                # Configure function for target (箱理論: ターゲット固有設定)
+                self.target_obj.configure_function(func)
         
         # Process each function (finalize PHIs per function to avoid cross-function map collisions)
         for func_data in functions:
@@ -625,12 +650,23 @@ class NyashLLVMBuilder:
     
     def compile_to_object(self, output_path: str):
         """Compile module to object file"""
-        # Create target machine
-        target = llvm.Target.from_default_triple()
+        # TODO(Phase 2): Delegate to self.target_obj.emit_object()
+        # Current implementation uses manual target_machine for PHI sanitize logic
+
+        # Create target machine for the specified target triple
+        target = llvm.Target.from_triple(self.target_triple)
         target_machine = target.create_target_machine()
-        
+
         # Compile
         ir_text = str(self.module)
+
+        # Debug: Always dump IR for debugging
+        try:
+            with open('/tmp/debug_ir.ll', 'w') as f:
+                f.write(ir_text)
+            print(f"[DEBUG] IR dumped to /tmp/debug_ir.ll")
+        except Exception as e:
+            print(f"[DEBUG] Failed to dump IR: {e}")
         # Optional sanitize: drop any empty PHI rows (no incoming list) to satisfy IR parser.
         # Gate with NYASH_LLVM_SANITIZE_EMPTY_PHI=1. Additionally, auto-enable when harness is requested.
         if os.environ.get('NYASH_LLVM_SANITIZE_EMPTY_PHI') == '1' or os.environ.get('NYASH_LLVM_USE_HARNESS') == '1':
@@ -658,27 +694,41 @@ class NyashLLVMBuilder:
 
 def main():
     # CLI:
-    #   llvm_builder.py <input.mir.json> [-o output.o]
-    #   llvm_builder.py --dummy [-o output.o]
+    #   llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native]
+    #   llvm_builder.py --dummy [-o output.o] [--target wasm32|native]
     output_file = os.path.join('tmp', 'nyash_llvm_py.o')
     args = sys.argv[1:]
     dummy = False
+    target = "native"  # Default target
 
     if not args:
-        print("Usage: llvm_builder.py <input.mir.json> [-o output.o] | --dummy [-o output.o]")
+        print("Usage: llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native] | --dummy [-o output.o] [--target wasm32|native]")
         sys.exit(1)
 
+    # Parse --target option
+    if "--target" in args:
+        idx = args.index("--target")
+        if idx + 1 < len(args):
+            target = args[idx + 1]
+            if target not in ("wasm32", "native"):
+                print(f"error: invalid target '{target}', must be 'wasm32' or 'native'", file=sys.stderr)
+                sys.exit(1)
+            del args[idx:idx+2]
+
+    # Parse -o option
     if "-o" in args:
         idx = args.index("-o")
         if idx + 1 < len(args):
             output_file = args[idx + 1]
             del args[idx:idx+2]
 
+    # Parse --dummy option
     if args and args[0] == "--dummy":
         dummy = True
         del args[0]
 
-    builder = NyashLLVMBuilder()
+    # Create builder with specified target
+    builder = NyashLLVMBuilder(target=target)
 
     if dummy:
         # Emit dummy ny_main

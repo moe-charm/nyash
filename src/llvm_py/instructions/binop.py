@@ -45,6 +45,13 @@ def lower_binop(
         lhs_val = ir.Constant(ir.IntType(64), 0)
     if rhs_val is None:
         rhs_val = ir.Constant(ir.IntType(64), 0)
+
+    # Convert i1 (boolean) to i64 if needed (from compare operations)
+    i64 = ir.IntType(64)
+    if hasattr(lhs_val, 'type') and isinstance(lhs_val.type, ir.IntType) and lhs_val.type.width == 1:
+        lhs_val = builder.zext(lhs_val, i64, name=f'lhs_i64_{dst}')
+    if hasattr(rhs_val, 'type') and isinstance(rhs_val.type, ir.IntType) and rhs_val.type.width == 1:
+        rhs_val = builder.zext(rhs_val, i64, name=f'rhs_i64_{dst}')
     
     # Relational/equality operators delegate to compare
     if op in ('==','!=','<','>','<=','>='):

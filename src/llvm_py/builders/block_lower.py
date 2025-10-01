@@ -3,6 +3,9 @@ from llvmlite import ir
 from trace import debug as trace_debug
 from trace import phi_json as trace_phi_json
 
+# 箱理論: PHI処理統一ハンドラー
+from builders.phi_handler import PhiHandler
+
 
 def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, Any]], order: List[int], loop_plan: Dict[str, Any] | None):
     skipped: set[int] = set()
@@ -110,18 +113,23 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             pass
         block_data = block_by_id.get(bid, {})
         insts = block_data.get('instructions', []) or []
-        # Split into body and terminator ops
+
+        # 箱理論: PhiHandlerでPHI命令を分離
+        import os
+        phi_verbose = os.environ.get('NYASH_PHI_VERBOSE') == '1'
+        phi_handler = PhiHandler(builder, verbose=phi_verbose)
+        phi_ops, non_phi_insts = phi_handler.collect_phi_instructions(insts)
+
+        # Split non-PHI instructions into body and terminator ops
         body_ops: List[Dict[str, Any]] = []
         term_ops: List[Dict[str, Any]] = []
-        for inst in insts:
+        for inst in non_phi_insts:
             try:
                 opx = inst.get('op')
             except Exception:
                 opx = None
             if opx in ("ret","jump","branch"):
                 term_ops.append(inst)
-            elif opx == "phi":
-                continue
             else:
                 body_ops.append(inst)
         # Per-block SSA map
@@ -149,6 +157,17 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                     defined_here_all.add(d)
             except Exception:
                 pass
+
+        # 箱理論: PHI命令を最初に処理（ブロック先頭）
+        if phi_ops:
+            try:
+                phi_handler.process_phi_instructions(phi_ops, bb, func)
+                trace_debug(f"[llvm-py] Processed {len(phi_ops)} PHI instructions at block head")
+            except Exception as e:
+                trace_debug(f"[llvm-py] PHI processing error: {e}")
+                import traceback
+                traceback.print_exc()
+
         # Lower body ops
         for i_idx, inst in enumerate(body_ops):
             try:

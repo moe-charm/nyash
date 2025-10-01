@@ -60,6 +60,9 @@ def lower_externcall(
         elif func_name == "println" or func_name == "print":
             # Bare println/print fallback
             llvm_name = "nyash.console.log"
+        elif func_name == "nyrt_print":
+            # WASM runtime print (maps to console.log)
+            llvm_name = "nyash.console.log"
         elif func_name.startswith("nyash.console.") and func_name.endswith("println"):
             # Normalize nyash.console.println → nyash.console.log
             llvm_name = "nyash.console.log"

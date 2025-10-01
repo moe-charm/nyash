@@ -75,6 +75,48 @@ def lower_function(builder, func_data: Dict[str, Any]):
     except Exception:
         pass
 
+    # Process constants (string literals, etc.)
+    constants = func_data.get("constants", {})
+    for vid_str, const_data in constants.items():
+        try:
+            vid = int(vid_str)
+            const_type = const_data.get("type")
+            const_value = const_data.get("value")
+
+            if const_type == "string":
+                # Create global string literal
+                str_bytes = (const_value + '\0').encode('utf-8')
+                str_type = ir.ArrayType(ir.IntType(8), len(str_bytes))
+                global_str = ir.GlobalVariable(builder.module, str_type,
+                                               name=f".str.{vid}")
+                global_str.initializer = ir.Constant(str_type, bytearray(str_bytes))
+                global_str.global_constant = True
+                global_str.linkage = 'internal'
+
+                # Get pointer to first element (i8*)
+                i8p = ir.IntType(8).as_pointer()
+                zero = ir.Constant(ir.IntType(32), 0)
+                str_ptr = global_str.gep([zero, zero])
+                builder.vmap[vid] = str_ptr
+
+                # Also register in resolver if available
+                if hasattr(builder, 'resolver') and hasattr(builder.resolver, 'string_ptrs'):
+                    builder.resolver.string_ptrs[vid] = str_ptr
+
+            elif const_type == "i64":
+                # Integer constant
+                i64_val = ir.Constant(builder.i64, const_value)
+                builder.vmap[vid] = i64_val
+
+            elif const_type == "f64":
+                # Float constant
+                f64_val = ir.Constant(builder.f64, const_value)
+                builder.vmap[vid] = f64_val
+
+        except Exception as e:
+            trace_debug(f"[constants] Failed to process constant {vid_str}: {e}")
+            pass
+
     # Build predecessor map from control-flow edges
     builder.preds = {}
     for block_data in blocks:
