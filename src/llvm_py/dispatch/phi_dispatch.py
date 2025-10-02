@@ -21,6 +21,41 @@ import llvmlite.ir as ir
 class PhiDispatchPoint:
     @staticmethod
     def _phi_from_decl(resolver, bb_map, vid: int):
+        """
+        宣言済みPHI探索（PhiRegistry統合版）
+
+        深い設計:
+        - PhiRegistry優先（単一起点保証）
+        - フォールバック実装（互換性・学習効果）
+        - 発見したPHIを自動登録（次回は優先経路）
+
+        箱理論:
+        - 「箱にする」: PHI探索をPhiRegistryに委譲
+        - 「境界を作る」: Registry優先→フォールバック の明確な順序
+        - 「戻せる」: PhiRegistry障害時もフォールバックで動作
+        - 「見える化」: 2段階解決が明確
+
+        学習効果:
+        - フォールバックで発見したPHIをRegistry登録
+        - 次回からはPhiRegistry優先経路で高速取得
+        - 徐々にフォールバック経路が不要になる
+        """
+        # Phase 1: PhiRegistry優先（単一起点保証）
+        # 全ブロックを探索してPhiRegistryから取得
+        try:
+            from phi_wiring.registry import PhiRegistry
+            if bb_map is not None:
+                for block_id in bb_map.keys():
+                    phi = PhiRegistry.get(None, int(block_id), int(vid))
+                    if phi is not None:
+                        # 単一起点から取得成功！✨
+                        return phi
+        except Exception:
+            # PhiRegistry障害時はフォールバックへ
+            pass
+
+        # Phase 2: フォールバック実装（従来の探索）
+        # 互換性維持＋学習効果
         try:
             decls = getattr(resolver, 'block_phi_incomings', {}) if resolver is not None else {}
             for b, dmap in (decls or {}).items():
@@ -36,6 +71,12 @@ class PhiDispatchPoint:
                             if nm.startswith('phi_'):
                                 tail = nm[4:].split('.')[0]
                                 if tail.isdigit() and int(tail) == int(vid):
+                                    # 発見！PhiRegistryに自動登録（学習効果）
+                                    try:
+                                        from phi_wiring.registry import PhiRegistry
+                                        PhiRegistry.register(None, int(b), int(vid), inst)
+                                    except Exception:
+                                        pass
                                     return inst
                         except Exception:
                             break
@@ -60,15 +101,57 @@ class PhiDispatchPoint:
 
     @staticmethod
     def _coerce_i64(builder: ir.IRBuilder, val: Any) -> ir.Value:
+        """
+        i64正規化（SSA順序保証版）
+
+        深い設計:
+        - i1→i64変換を使用地点で実施（SSA順序保証）
+        - 定義済みSSA値のみを変換（forward reference禁止）
+        - builderカーソル位置で変換挿入（順序保証）
+
+        箱理論:
+        - 「境界を作る」: 型変換の責務を明確化
+        - 「見える化」: 変換タイミングが自明
+        - 「Fail-Fast」: 未定義値は変換しない
+        """
         i64 = ir.IntType(64)
+        i1 = ir.IntType(1)
+
         if val is None:
             return ir.Constant(i64, 0)
+
+        # i1→i64変換（最優先・SSA順序保証）
+        # 重要: builderのカーソル位置で変換を挿入
+        # → 使用地点での変換 = SSA順序自動保証！
+        if hasattr(val, 'type') and isinstance(val.type, ir.IntType):
+            if val.type.width == 1:
+                # i1 → i64変換（使用地点で実施）
+                # 定義済みi1値（icmp結果）を使用地点で変換
+                # SSA順序: icmp定義 → [他の命令] → 使用地点でzext ✅
+                try:
+                    # 名前付け: 元の値のdst番号を保持（デバッグ容易性）
+                    orig_name = getattr(val, 'name', '')
+                    if orig_name and orig_name.startswith('cmp_'):
+                        dst_num = orig_name[4:]  # "cmp_5" → "5"
+                        zext_name = f"i1_to_i64_{dst_num}"
+                    else:
+                        zext_name = f"i1_to_i64"
+                    return builder.zext(val, i64, name=zext_name)
+                except Exception:
+                    # フォールバック: 名前なしzext
+                    return builder.zext(val, i64)
+            elif val.type.width != 64:
+                # iN→i64変換（N≠1, N≠64）
+                return builder.zext(val, i64)
+
+        # Pointer→i64変換
         if hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
             return builder.ptrtoint(val, i64)
-        if hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width != 64:
-            return builder.zext(val, i64)
+
+        # 既にi64定数
         if isinstance(val, ir.Constant) and val.type == i64:
             return val
+
         return val
 
     @staticmethod

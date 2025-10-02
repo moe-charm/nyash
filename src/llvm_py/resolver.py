@@ -190,12 +190,13 @@ class Resolver:
                 result = ir.Constant(self.i64, int(plan_val)) if plan_val is not None else ir.Constant(self.i64, 0)
                 trace_phi(f"[resolve] bb{bid} v{value_id} entry/no-preds → 0")
             else:
-                # Use a block-local builder for any coercions we need to insert
-                pb = ir.IRBuilder(current_block)
-                try:
-                    pb.position_at_start(current_block)
-                except Exception:
-                    pass
+                # Insert coercions at the current insertion point to preserve dominance
+                b = self.builder if getattr(self, 'builder', None) is not None else ir.IRBuilder(current_block)
+                if getattr(self, 'builder', None) is None:
+                    try:
+                        b.position_at_start(current_block)
+                    except Exception:
+                        pass
                 # If pointer string, box to handle in current block (use local builder)
                 if hasattr(base_val, 'type') and isinstance(base_val.type, ir.PointerType) and self.module is not None:
                     i8p = ir.IntType(8).as_pointer()
@@ -218,9 +219,9 @@ class Resolver:
                 elif hasattr(base_val, 'type') and isinstance(base_val.type, ir.IntType):
                     # Coerce integer width to i64 (zext/trunc as needed)
                     if int(getattr(base_val.type, 'width', 64)) < 64:
-                        result = pb.zext(base_val, self.i64, name=f"res_zext_{value_id}")
+                        result = b.zext(base_val, self.i64, name=f"res_zext_{value_id}")
                     elif int(getattr(base_val.type, 'width', 64)) > 64:
-                        result = pb.trunc(base_val, self.i64, name=f"res_trunc_{value_id}")
+                        result = b.trunc(base_val, self.i64, name=f"res_trunc_{value_id}")
                     else:
                         result = base_val
                 else:

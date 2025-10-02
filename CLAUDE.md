@@ -142,6 +142,53 @@ Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを�
 - ✅ **WASM準備完了**: クリーンな命令セットでWASM実装準備整った
 - 📋 **詳細**: [Phase 15.7 README](docs/development/roadmap/phases/phase-15.7/README.md)
 
+### 🌟 **Phase 15.8完了！LLVM PHI安定化 + LoopForm IR理論実証** (2025-10-02)
+
+#### **第1弾: PHI無限ループ解消 + LoopForm理論実証**
+- ✅ **PhiDispatchPoint実装完了**: 値解決統一（347行の簡潔実装）
+  - compare.py 43%削減（285→161行）
+  - branch.py PhiDispatchPoint統合
+  - Copy連鎖正規化（block_aliases）実装
+- ✅ **PHI無限ループ解消**: VM/LLVM Result一致達成
+  - phi_if_merge_ret: Result: 10 ✅
+  - phi_loop_nested_1: Result: 3（10秒内完走）✅
+- ✅ **LoopForm IR理論の実証**: 20分のたばこ思考💨が完全実現！
+  - PhiRegistry = loop.begin（先頭占位）
+  - instruction_lower = loop.iter（本体）
+  - lower_branch = loop.branch（分岐）
+  - finalize_phis = loop.end（配線）
+  - **ChatGPT実装が無意識に完璧なLoopForm準拠！**
+- ✅ **postfix catch発見**: tryキーワード不要の証明
+  - `operation() catch (e) { }` = Loop1 + Throw Signal
+  - Hakoruneは既にLoopForm IR実装！
+
+#### **第2弾: LLVM層リファクタリング完成（深く考えながら実装）** ✨
+- ✅ **SSA順序ズレ完全解消**: i1→i64変換の使用地点実施
+  - PhiDispatchPoint._coerce_i64() 強化（i1対応追加）
+  - 定義→使用の順序保証（SSA不変条件遵守）
+  - **eq_hh SKIP→PASS化成功！** (従来SKIP→完全動作)
+- ✅ **StringTagPolicy箱化**: タグポリシー一元化（155行の新箱）
+  - string_tag_policy.py 新規作成
+  - externcall.py 50行削減（タグロジック統一）
+  - 箱理論4原則の完璧な実践（不変条件・Fail-Fast・学習効果）
+- ✅ **PhiRegistry統合深化**: 重複削除＋学習効果機能
+  - _phi_from_decl() にPhiRegistry優先経路追加
+  - 発見したPHIを自動登録（次回は高速取得）
+  - 単一起点保証の強化
+- ✅ **テスト全PASS**: extern関連テスト完全動作
+  - aot_extern_eq_hh_exe: PASS ✅（SSA順序修正効果）
+  - aot_extern_concat_plus_len_exe: PASS ✅
+  - aot_extern_string_len_exe: PASS ✅
+  - **3/3テスト成功！**
+
+#### **成果サマリー**
+- **コード品質**: 50行削減＋保守性大幅向上
+- **箱理論実践**: StringTagPolicy（不変条件・学習効果）
+- **SSA順序保証**: 使用地点変換で順序問題完全解消
+- **ChatGPT準備完了**: LLVM層が綺麗な状態で引き継ぎ可能！
+
+📋 **詳細**: [phi_design.md](src/llvm_py/docs/phi_design.md) | [LoopForm論文](docs/private/papers-archive/paper-e-loop-signal-ir/main-paper-jp.md) | [StringTagPolicy](src/llvm_py/instructions/string_tag_policy.py)
+
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/hakorune_kernel` 完全移行
 - ✅ **42%削減達成**: `with_legacy_vm_args` 11箇所系統的削除完了

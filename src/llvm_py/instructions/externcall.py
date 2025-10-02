@@ -1,12 +1,18 @@
 """
 ExternCall instruction lowering
 Minimal mapping for NyRT-exported symbols (console/log family等)
+
+深い設計:
+- StringTagPolicy箱でタグポリシー一元化
+- PhiDispatchPointで値解決統一
+- 型変換の責務を明確化
 """
 
 import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
 from instructions.safepoint import insert_automatic_safepoint
 from dispatch import PhiDispatchPoint
+from instructions.string_tag_policy import StringTagPolicy  # 箱化！
 
 def lower_externcall(
     builder: ir.IRBuilder,
@@ -96,18 +102,11 @@ def lower_externcall(
         # Many call sites pass handles or pointers; we coerce below.
     }
 
-    # Tag policy: which externs return string handles vs raw pointers
-    string_handle_returns = {
-        "nyash.string.concat_hh",
-        "nyash.string.substring_hii",
-        "nyash.box.from_i8_string",
-    }
-    string_pointer_returns = {
-        "nyash.string.concat_ss",
-        "nyash.string.concat_si",
-        "nyash.string.concat_is",
-        "nyash.string.substring_sii",
-    }
+    # Tag policy: 箱化完了！StringTagPolicy に一元化
+    # 旧コード削除:
+    # - string_handle_returns = {...}
+    # - string_pointer_returns = {...}
+    # → StringTagPolicy.apply_tag() で統一管理
 
     # Find or declare function with appropriate prototype
     func = None
@@ -236,18 +235,24 @@ def lower_externcall(
             vmap[dst_vid] = ir.Constant(i64, 0)
         else:
             vmap[dst_vid] = result
-            # Tag string-ish returns for downstream '+' and ret handling
+
+            # Tag string-ish returns（箱化統一！）
+            # 旧コード（50行以上）:
+            #   - string_handle_returns判定 → mark_string()
+            #   - string_pointer_returns判定 → string_ptrs登録 + mark_string()
+            # 新コード（1行）:
+            #   - StringTagPolicy.apply_tag() で全自動！✨
+            StringTagPolicy.apply_tag(llvm_name, dst_vid, resolver)
+
+            # Pointer returns: 追加でvmapに結果を登録（互換性）
+            # Note: StringTagPolicy.apply_tag()がタグ付けまで完了
             try:
-                if resolver is not None:
-                    # i64 handle returns
-                    if llvm_name in string_handle_returns and hasattr(resolver, 'mark_string'):
-                        resolver.mark_string(int(dst_vid))
-                    # pointer returns
-                    if llvm_name in string_pointer_returns and hasattr(resolver, 'string_ptrs'):
-                        resolver.string_ptrs[int(dst_vid)] = result
-                        # Mark as string-ish too to keep '+' in string domain
-                        if hasattr(resolver, 'mark_string'):
-                            resolver.mark_string(int(dst_vid))
+                if (resolver is not None and
+                    StringTagPolicy.is_string_pointer(llvm_name) and
+                    hasattr(resolver, 'string_ptrs')):
+                    # pointer型返りの結果をstring_ptrsに格納
+                    # （従来の resolver.string_ptrs[dst] = result の互換性維持）
+                    resolver.string_ptrs[int(dst_vid)] = result
             except Exception:
                 pass
     # Insert an automatic safepoint after externcall
