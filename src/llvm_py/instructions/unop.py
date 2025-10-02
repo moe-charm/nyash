@@ -29,7 +29,7 @@ def lower_unop(
     val = vmap.get(src)
     # If unknown, resolve as i64 (resolver may localize through PHI)
     if val is None:
-        val = resolve_i64_strict(resolver, src, current_block, preds, block_end_values, vmap, bb_map)
+        val = resolve_i64_strict(resolver, src, current_block, preds, block_end_values, vmap, bb_map, builder=builder)
     # Logical NOT: prefer i1 when available; otherwise compare == 0
     if kind in ('not', 'logical_not', '!'):
         # If already i1, xor with 1
