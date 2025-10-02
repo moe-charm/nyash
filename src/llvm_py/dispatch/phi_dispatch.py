@@ -184,8 +184,19 @@ class PhiDispatchPoint:
         except Exception:
             base_vid = int(vid)
 
-        # 1) Strict resolver path
+        # 1) Direct vmap lookup（最優先・同一ブロック内の値可視性保証）
+        #    箱理論:
+        #    - 「境界を作る」: vmap直接参照を明示的な層として分離
+        #    - 「見える化」: 同一ブロック内の値（i1 compare結果等）を確実に取得
+        #    - 「戻せる」: vmapになければ次の層へフォールスルー
         i64 = ir.IntType(64)
+        if base_vid in vmap:
+            val = vmap[base_vid]
+            if val is not None:
+                # i1→i64変換を含む型正規化（_coerce_i64が処理）
+                return PhiDispatchPoint._coerce_i64(builder, val)
+
+        # 2) Strict resolver path（クロスブロック解決）
         if resolver is not None:
             try:
                 val = resolver.resolve_i64(base_vid, current_block, preds, block_end_values, vmap, bb_map)
@@ -193,19 +204,19 @@ class PhiDispatchPoint:
                     return PhiDispatchPoint._coerce_i64(builder, val)
             except Exception:
                 pass
-        # 2) Declared PHI placeholder
+        # 3) Declared PHI placeholder（マージポイント解決）
         try:
             p = PhiDispatchPoint._phi_from_decl(resolver, bb_map, base_vid)
             if p is not None:
                 return p
         except Exception:
             pass
-        # 3) Last add in current block (increment patterns)
+        # 4) Last add in current block (increment patterns)
         try:
             addv = PhiDispatchPoint._last_add_in_block(current_block)
             if addv is not None:
                 return PhiDispatchPoint._coerce_i64(builder, addv)
         except Exception:
             pass
-        # 4) default zero
+        # 5) Default zero（最終フォールバック）
         return ir.Constant(i64, 0)
