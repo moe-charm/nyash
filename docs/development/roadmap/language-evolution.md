@@ -15,19 +15,20 @@ Phase 15までの実装により、Nyash/Hakoruneは強力な基礎を確立し�
 
 ---
 
-## 📊 現在の強み（Phase 15時点）
+## 📊 現在の強み（Phase 15-16時点）
 
 ### ✅ **言語機能の充実度**
 1. **プロパティシステム** (stored/computed/once/birth_once) - **業界最先端レベル**
-2. **postfix catch/cleanup** - 非常にモダン（Swift/Kotlin風）
-3. **Result伝播 (? 演算子)** - Rust風エラー処理
-4. **match式** - パターンマッチング
-5. **Lambda式** - 高階関数サポート
-6. **using/namespace** - モジュールシステム基礎
-7. **flow** - stateless namespace（静的関数グループ化）
-8. **非同期** (nowait/await/FutureBox) - 並行処理基礎
-9. **演算子オーバーロード** - トレイトベース
-10. **変数宣言厳密化** - メモリ・非同期安全性保証
+2. **🚀 マクロシステム (Phase 16実装中)** - @derive/@test等、Box-Based Macro革命
+3. **postfix catch/cleanup** - 非常にモダン（Swift/Kotlin風）
+4. **Result伝播 (? 演算子)** - Rust風エラー処理
+5. **match式** - パターンマッチング
+6. **Lambda式** - 高階関数サポート
+7. **using/namespace** - モジュールシステム基礎
+8. **flow** - stateless namespace（静的関数グループ化）
+9. **非同期** (nowait/await/FutureBox) - 並行処理基礎
+10. **演算子オーバーロード** - トレイトベース
+11. **変数宣言厳密化** - メモリ・非同期安全性保証
 
 ### ✅ **Box型ライブラリ充実度**
 30種類以上のBox（String/Integer/Array/Map/JSON/Regex/HTTP/GUI等）
@@ -39,7 +40,9 @@ Phase 15までの実装により、Nyash/Hakoruneは強力な基礎を確立し�
 
 ---
 
-## 🎯 進化計画（10の柱）
+## 🎯 進化計画（9の柱）
+
+**注**: マクロシステム（旧🔟）はPhase 16で既に実装中のため、残り9項目を進化計画とします。
 
 ### **1️⃣ 型システムの段階的強化**
 
@@ -403,42 +406,45 @@ $ hako publish
 
 ---
 
-### **🔟 マクロシステム**
+### **🔟 マクロシステム拡張**
 
-**現状**: マクロなし
+**現状**: ✅ **Phase 16で実装中** - Box-Based Macro革命
 
-**Phase**: 30+
-**優先度**: 🟢 低（YAGNI原則、要望次第）
+**実装済み**:
+- @derive(Equals, ToString, Clone, Debug)
+- @test マクロ + テストランナー
+- AST Pattern Matching基盤
+- Quote/Unquote システム
+- HIRパッチ式マクロエンジン
 
-**改善案**:
+📖 **詳細**: [Phase 16 Macro Revolution](./phases/phase-16-macro-revolution/README.md)
+
+**今後の拡張**:
 ```nyash
-// 衛生的マクロ（Rust風）
-macro derive_debug(box_name) {
-    override toString(): StringBox {
-        return stringify(me)
-    }
-}
-
-@derive_debug
+// さらなる@deriveトレイト追加
+@derive(Hash, Ord, Default, Serialize)
 box MyBox { }
 
-// コンパイル時実行（comptime）
-const CONFIG = comptime {
-    readFile("config.json").parse()
+// カスタムマクロ定義
+macro benchmark(iterations) {
+    // パフォーマンス計測マクロ
 }
 
-// AST操作マクロ
-macro json_literal {
-    { "name": "value" } => new JSONBox().set("name", "value")
+// comptime計算拡張
+const CONFIG = comptime {
+    readFile("config.toml").parse()
 }
 ```
+
+**Phase**: 16（実装中）→ 17-20（拡張）
+**優先度**: 🟡 中（コア実装済み、拡張は要望次第）
 
 ---
 
 ## 📅 実装タイムライン
 
 ### **Phase 16-17: 基礎固め**（最優先）
-1. 🔴 **テストフレームワーク統合** - 開発体験の鍵
+1. 🚀 **マクロシステム完成** - @derive/@test完全動作（Phase 16実装中）
 2. 🟡 **標準ライブラリ体系化開始** - 命名規則統一
 
 ### **Phase 18-20: 開発体験向上**
@@ -454,7 +460,6 @@ macro json_literal {
 8. 🟢 **エラー体系化**
 9. 🟢 **メモリ管理可視性**
 10. 🟢 **ドキュメント生成**
-11. 🟢 **マクロシステム**（要望次第）
 
 ---
 
@@ -481,21 +486,24 @@ macro json_literal {
 
 ## 🎊 まとめ
 
-### **最優先: テストフレームワーク（Phase 16-17）**
-セルフホスティング進行中の今こそ、言語内蔵テストフレームワークを導入すべき。
-これが開発体験・言語採用の最大の鍵となる。
+### **Phase 16: マクロシステム実装中**
+✅ @derive/@test等のBox-Based Macro革命が進行中！
+セルフホスティング進行中の今、言語機能が加速度的に進化している。
 
 ### **現在の設計の優秀さ**
-- プロパティシステム（once/birth_once）は**業界最先端レベル**
-- postfix catch/cleanupは非常に直感的
-- Everything is Box哲学が一貫している
-- コンパクトな実装（Rust実装の13分の1）
+- **プロパティシステム**（once/birth_once）は**業界最先端レベル**
+- **マクロシステム**（Phase 16実装中）はBox-Based設計で革新的
+- **postfix catch/cleanup**は非常に直感的
+- **Everything is Box哲学**が一貫している
+- **コンパクトな実装**（Rust実装の13分の1）
 
 ### **長期ビジョン**
 Phase 16-30を通じて、実用的で表現力豊かな言語へと進化。
-糖衣構文・マクロに頼らず、言語コア機能の洗練で勝負する。
+マクロシステム・プロパティシステム・型システムの三位一体で、
+次世代言語の標準を打ち立てる。
 
 ---
 
 **作成者**: Claude Sonnet 4.5
 **ベース**: ドキュメント深層分析（LANGUAGE_REFERENCE_2025.md, quick-reference.md, using.md）
+**修正**: 2025-10-02 - Phase 16マクロシステム実装中の事実を反映
