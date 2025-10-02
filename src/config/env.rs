@@ -71,6 +71,7 @@ pub fn bootstrap_from_toml_env() {
     // Accept brand alias environment variables before reading files
     alias_prefixes_bootstrap();
     // Resolve hako.toml/nyash.toml/hakorune.toml from CWD, fallback to *_ROOT if necessary.
+    #[allow(unused_assignments)]
     let mut content = String::new();
     // Prefer hako.toml first
     let path_hako = std::path::Path::new("hako.toml");
