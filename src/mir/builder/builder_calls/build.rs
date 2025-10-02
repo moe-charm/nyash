@@ -1,5 +1,5 @@
 // Build functions for function and method calls
-use super::super::{Effect, EffectMask, MirBuilder, MirInstruction, ValueId};
+use super::super::{Effect, EffectMask, MirBuilder, MirInstruction, MirType, ValueId};
 use crate::ast::ASTNode;
 use crate::mir::builder::calls::{call_unified, method_resolution, special_handlers};
 use crate::mir::builder::calls::call_target::CallTarget;
@@ -406,6 +406,12 @@ impl MirBuilder {
                     if iface == "nyrt.time" && *m == "now_ms" && arguments.is_empty() {
                         return self.emit_timer_now_ms_call();
                     }
+                    if iface == "nyrt.array" && *m == "size" && arguments.is_empty() {
+                        return self.emit_array_size_call(object_value);
+                    }
+                    if iface == "nyrt.map" && *m == "size" && arguments.is_empty() {
+                        return self.emit_map_size_call(object_value);
+                    }
                 }
             }
         }
@@ -439,6 +445,34 @@ impl MirBuilder {
             args: vec![],
             effects: EffectMask::READ,
         })?;
+        Ok(dst)
+    }
+
+    fn emit_array_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
+        let recv_local = self.local_recv(receiver);
+        let dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::ExternCall {
+            dst: Some(dst),
+            iface_name: "nyrt.array".to_string(),
+            method_name: "size".to_string(),
+            args: vec![recv_local],
+            effects: EffectMask::READ,
+        })?;
+        self.value_types.insert(dst, MirType::Integer);
+        Ok(dst)
+    }
+
+    fn emit_map_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
+        let recv_local = self.local_recv(receiver);
+        let dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::ExternCall {
+            dst: Some(dst),
+            iface_name: "nyrt.map".to_string(),
+            method_name: "size".to_string(),
+            args: vec![recv_local],
+            effects: EffectMask::READ,
+        })?;
+        self.value_types.insert(dst, MirType::Integer);
         Ok(dst)
     }
 }

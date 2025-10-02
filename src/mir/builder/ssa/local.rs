@@ -46,8 +46,8 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
         if let Some(t) = builder.value_types.get(&v).cloned() {
             builder.value_types.insert(loc, t);
         }
-        if let Some(cls) = builder.value_origin_newbox.get(&v).cloned() {
-            builder.value_origin_newbox.insert(loc, cls);
+        if let Some(cls) = builder.origin_get(v).map(|s| s.to_string()) {
+            builder.origin_register(loc, cls);
         }
         builder.local_ssa_map.insert(key, loc);
         loc

@@ -181,6 +181,21 @@ pub extern "C" fn nyash_string_lastindexof_hh_export(h: i64, n: i64) -> i64 {
     }
 }
 
+// nyrt.time.now_ms() -> i64 (monotonic ms since UNIX_EPOCH, clamped)
+#[export_name = "nyrt.time.now_ms"]
+pub extern "C" fn nyrt_time_now_ms() -> i64 {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_millis(0));
+    let millis = duration.as_millis();
+    if millis > i64::MAX as u128 {
+        i64::MAX
+    } else {
+        millis as i64
+    }
+}
+
 // box.from_i8_string(ptr) -> handle
 // Helper: build a StringBox from i8* and return a handle for AOT marshalling
 #[export_name = "nyash.box.from_i8_string"]
@@ -203,6 +218,41 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
     let h = handles::to_handle_arc(arc) as i64;
     eprintln!("[TRACE] from_i8_string -> {}", h);
     h
+}
+
+// Array.size(handle) -> i64
+#[export_name = "nyrt.array.size"]
+pub extern "C" fn nyrt_array_size(handle: i64) -> i64 {
+    use nyash_rust::{boxes::array::ArrayBox, runtime::host_handles as handles};
+    if handle <= 0 {
+        return 0;
+    }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(arr) = obj.as_any().downcast_ref::<ArrayBox>() {
+            return arr.len() as i64;
+        }
+    }
+    0
+}
+
+// Map.size(handle) -> i64
+#[export_name = "nyrt.map.size"]
+pub extern "C" fn nyrt_map_size(handle: i64) -> i64 {
+    use nyash_rust::{
+        box_trait::IntegerBox, boxes::map_box::MapBox, runtime::host_handles as handles,
+    };
+    if handle <= 0 {
+        return 0;
+    }
+    if let Some(obj) = handles::get(handle as u64) {
+        if let Some(map) = obj.as_any().downcast_ref::<MapBox>() {
+            let size_box = map.size();
+            if let Some(int_box) = size_box.as_any().downcast_ref::<IntegerBox>() {
+                return int_box.value;
+            }
+        }
+    }
+    0
 }
 
 // box.from_f64(val) -> handle

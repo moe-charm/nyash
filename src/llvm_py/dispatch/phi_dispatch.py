@@ -123,6 +123,11 @@ class PhiDispatchPoint:
                     block_end_values: Dict[int, Dict[int, Any]],
                     vmap: Dict[int, Any],
                     bb_map: Optional[Dict[int, ir.Block]] = None) -> ir.Value:
+        # Fail-Fast: vid must be concrete here. None indicates earlier lowering bug.
+        if vid is None:
+            fn_name = getattr(getattr(builder, 'function', None), 'name', 'unknown')
+            bb_name = getattr(current_block, 'name', 'bb?')
+            raise TypeError(f"PhiDispatchPoint.resolve_i64: vid=None (fn={fn_name}, bb={bb_name}). Upstream lowering passed None; this is a bug.")
         # 0) Normalize via same-block alias chase (copy連鎖を基底値に畳み込む)
         base_vid = int(vid)
         try:

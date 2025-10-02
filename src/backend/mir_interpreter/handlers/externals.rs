@@ -9,6 +9,17 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // VM Adapter 経由の疎結合呼び出し（既定ON）。未知は従来のmatchにフォールバック。
+        // 先に args を VMValue に読み出しておき、adapter に渡す。
+        let mut loaded_args: Vec<crate::backend::vm_types::VMValue> = Vec::with_capacity(args.len());
+        for a in args {
+            loaded_args.push(self.reg_load(*a)?);
+        }
+        if let Some(res) = crate::backend::mir_interpreter::extern_adapter::try_call(iface, method, &loaded_args) {
+            let v = res?;
+            if let Some(d) = dst { self.regs.insert(d, v); }
+            return Ok(());
+        }
         match (iface, method) {
             ("env.console", "log") => {
                 if let Some(a0) = args.get(0) {
@@ -99,6 +110,58 @@ impl MirInterpreter {
                 };
                 if let Some(d) = dst {
                     self.regs.insert(d, VMValue::Integer(clamped));
+                }
+                Ok(())
+            }
+            ("nyrt.array", "size") => {
+                if args.is_empty() {
+                    return Err(VMError::InvalidInstruction(
+                        "nyrt.array.size requires receiver".into(),
+                    ));
+                }
+                let recv = self.reg_load(args[0])?;
+                let len = match recv {
+                    VMValue::BoxRef(b) => b
+                        .as_any()
+                        .downcast_ref::<crate::boxes::array::ArrayBox>()
+                        .map(|arr| arr.len() as i64)
+                        .ok_or_else(|| {
+                            VMError::TypeError("nyrt.array.size expects ArrayBox".into())
+                        })?,
+                    _ => {
+                        return Err(VMError::TypeError(
+                            "nyrt.array.size expects ArrayBox".into(),
+                        ))
+                    }
+                };
+                if let Some(d) = dst {
+                    self.regs.insert(d, VMValue::Integer(len));
+                }
+                Ok(())
+            }
+            ("nyrt.map", "size") => {
+                if args.is_empty() {
+                    return Err(VMError::InvalidInstruction(
+                        "nyrt.map.size requires receiver".into(),
+                    ));
+                }
+                let recv = self.reg_load(args[0])?;
+                let len = match recv {
+                    VMValue::BoxRef(b) => b
+                        .as_any()
+                        .downcast_ref::<crate::boxes::map_box::MapBox>()
+                        .map(|map| map.get_data().read().unwrap().len() as i64)
+                        .ok_or_else(|| {
+                            VMError::TypeError("nyrt.map.size expects MapBox".into())
+                        })?,
+                    _ => {
+                        return Err(VMError::TypeError(
+                            "nyrt.map.size expects MapBox".into(),
+                        ))
+                    }
+                };
+                if let Some(d) = dst {
+                    self.regs.insert(d, VMValue::Integer(len));
                 }
                 Ok(())
             }

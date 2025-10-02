@@ -27,12 +27,12 @@ pub(crate) fn propagate_phi_meta(
     let mut common_cls: Option<String> = None;
     let mut cls_agree = true;
     for (_bb, v) in inputs.iter() {
-        if let Some(c) = builder.value_origin_newbox.get(v).cloned() {
+        if let Some(c) = builder.origin_get(*v).map(|s| s.to_string()) {
             match &common_cls {
                 None => common_cls = Some(c),
                 Some(cc) => { if cc != &c { cls_agree = false; break; } }
             }
         } else { cls_agree = false; break; }
     }
-    if cls_agree { if let Some(cc) = common_cls { builder.value_origin_newbox.insert(dst, cc); } }
+    if cls_agree { if let Some(cc) = common_cls { builder.origin_register(dst, cc); } }
 }

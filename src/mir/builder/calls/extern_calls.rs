@@ -6,6 +6,7 @@
  */
 
 use crate::mir::{Effect, EffectMask};
+use crate::mir::externs::registry as extreg;
 
 /// Table-like spec for env.* methods
 /// Returns (iface_name, method_name, effects, returns_value)
@@ -150,6 +151,9 @@ pub fn is_env_interface(name: &str) -> bool {
 
 /// Determine effects for an external call
 pub fn compute_extern_effects(iface: &str, method: &str) -> EffectMask {
+    if let Some(eff) = extreg::effects_for(iface, method) {
+        return eff;
+    }
     match (iface, method) {
         // Runtime time source: monotonic millisecond timestamp (read-only)
         ("nyrt.time", "now_ms") => {
@@ -157,6 +161,7 @@ pub fn compute_extern_effects(iface: &str, method: &str) -> EffectMask {
             // still allow safe reordering against pure ops.
             EffectMask::READ
         }
+        ("nyrt.array", "size") | ("nyrt.map", "size") => EffectMask::READ,
         // Pure reads
         (_, m) if m.starts_with("get") || m == "argv" || m == "env" => {
             EffectMask::READ

@@ -121,7 +121,7 @@ pub(crate) fn try_unique_suffix_rewrite(
         return None;
     }
     // Only attempt if receiver is Known (keeps behavior stable and avoids surprises)
-    if builder.value_origin_newbox.get(&object_value).is_none() {
+    if builder.origin_get(object_value).is_none() {
         return None;
     }
     let mut cands: Vec<String> = builder.method_candidates(method, arg_values.len());
@@ -149,7 +149,7 @@ pub(crate) fn try_unique_suffix_rewrite(
     ) { return Some(Err(e)); }
     builder.annotate_call_result_from_func_name(dst, &fname);
     let meta = serde_json::json!({
-        "recv_cls": builder.value_origin_newbox.get(&object_value).cloned().unwrap_or_default(),
+        "recv_cls": builder.origin_get(object_value).unwrap_or_default().to_string(),
         "method": method,
         "arity": arity_us,
         "chosen": fname,
@@ -169,7 +169,7 @@ pub(crate) fn try_unique_suffix_rewrite_to_dst(
     mut arg_values: Vec<ValueId>,
 ) -> Option<Result<ValueId, String>> {
     if !rewrite_enabled() { return None; }
-    if builder.value_origin_newbox.get(&object_value).is_none() { return None; }
+    if builder.origin_get(object_value).is_none() { return None; }
     let mut cands: Vec<String> = builder.method_candidates(method, arg_values.len());
     if cands.len() != 1 { return None; }
     let fname = cands.remove(0);
@@ -187,7 +187,7 @@ pub(crate) fn try_unique_suffix_rewrite_to_dst(
     ) { return Some(Err(e)); }
     builder.annotate_call_result_from_func_name(actual_dst, &fname);
     let meta = serde_json::json!({
-        "recv_cls": builder.value_origin_newbox.get(&object_value).cloned().unwrap_or_default(),
+        "recv_cls": builder.origin_get(object_value).unwrap_or_default().to_string(),
         "method": method,
         "arity": arity_us,
         "chosen": fname,

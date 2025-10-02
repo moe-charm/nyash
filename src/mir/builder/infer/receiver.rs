@@ -6,15 +6,18 @@ use std::collections::HashMap;
 /// Priority: explicit hint → origin (NewBox) → value_types → UnknownBox.
 /// Normalizes primitives (String → StringBox) and applies narrow safe heuristics
 /// to avoid accidental binding (e.g., ParserBox vs String methods).
-pub fn infer_receiver(
+pub fn infer_receiver<F>(
     box_hint: Option<&str>,
     method: &str,
     receiver: ValueId,
-    value_origin_newbox: &HashMap<ValueId, String>,
+    origin_lookup: F,
     value_types: &HashMap<ValueId, MirType>,
-) -> (String, TypeCertainty) {
+) -> (String, TypeCertainty)
+where
+    F: Fn(ValueId) -> Option<String>,
+{
     // 1) Prefer NewBox origin first（Known が最優先: 起源が明確なら型汚染の影響を受けにくい）
-    if let Some(name) = value_origin_newbox.get(&receiver) {
+    if let Some(name) = origin_lookup(receiver) {
         // If the origin is a user instance but the method is a well-known string API,
         // prefer StringBox to avoid mis-binding (behavioral no-op for typical code where
         // these APIs target strings). This prevents routing to InstanceBox.* for
@@ -24,7 +27,7 @@ pub fn infer_receiver(
         ) {
             return ("StringBox".to_string(), TypeCertainty::Union);
         }
-        return (name.clone(), TypeCertainty::Known);
+        return (name, TypeCertainty::Known);
     }
 
     // 2) 次に MIR types（原始型は正規化）。String は StringBox へ。

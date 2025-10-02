@@ -4,7 +4,7 @@
 //! counts eliminations without rewriting uses (SSA update is TODO). This keeps
 //! behavior identical while modularizing the pass for future enhancement.
 
-use crate::mir::{MirFunction, MirInstruction, MirModule, ValueId};
+use crate::mir::{Callee, MirFunction, MirInstruction, MirModule, ValueId};
 use std::collections::HashMap;
 
 /// Run CSE across the module. Returns the number of eliminated expressions.
@@ -22,6 +22,12 @@ fn cse_in_function(function: &mut MirFunction) -> usize {
 
     for (_bid, block) in &mut function.blocks {
         for inst in &mut block.instructions {
+            // Safety: never CSE external boundary calls (ExternCall or Call→Callee::Extern)
+            match inst {
+                MirInstruction::ExternCall { .. } => { continue; }
+                MirInstruction::Call { callee: Some(Callee::Extern(_)), .. } => { continue; }
+                _ => {}
+            }
             if inst.effects().is_pure() {
                 let key = instruction_key(inst);
                 if let Some(&existing) = expression_map.get(&key) {

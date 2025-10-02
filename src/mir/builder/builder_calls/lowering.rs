@@ -1,5 +1,5 @@
 // Function lowering for method bodies
-use super::super::{MirBuilder, MirFunction, MirInstruction, MirType};
+use super::super::{MirBuilder, MirFunction, MirInstruction, MirType, ValueId};
 use crate::ast::ASTNode;
 use crate::mir::builder::calls::function_lowering;
 
@@ -27,22 +27,26 @@ impl MirBuilder {
         // Per-function metadata scope: ValueId は関数ごとにリセットされるため、
         // value_types / value_origin_newbox は関数単位で分離する（交差汚染防止）。
         let saved_types = std::mem::take(&mut self.value_types);
-        let saved_origin = std::mem::take(&mut self.value_origin_newbox);
+        let saved_origin = self.origin_snapshot();
         let saved_value_gen = self.value_gen.clone();
         self.value_gen.reset();
         self.current_function = Some(function);
         self.current_block = Some(entry);
         self.ensure_block_exists(entry)?;
+        let mut me_origin: Option<ValueId> = None;
         if let Some(ref mut f) = self.current_function {
             let me_id = self.value_gen.next();
+            me_origin = Some(me_id);
             f.params.push(me_id);
             self.variable_map.insert("me".to_string(), me_id);
-            self.value_origin_newbox.insert(me_id, box_name.clone());
             for p in &params {
                 let pid = self.value_gen.next();
                 f.params.push(pid);
                 self.variable_map.insert(p.clone(), pid);
             }
+        }
+        if let Some(me_id) = me_origin {
+            self.origin_register(me_id, box_name.clone());
         }
         let program_ast = function_lowering::wrap_in_program(body);
         let _last = self.build_expression(program_ast)?;
@@ -87,7 +91,7 @@ impl MirBuilder {
         self.variable_map = saved_var_map;
         // Drop per-function metadata and restore outer scope
         self.value_types = saved_types;
-        self.value_origin_newbox = saved_origin;
+        self.origin_restore(saved_origin);
         self.value_gen = saved_value_gen;
         Ok(())
     }
@@ -119,7 +123,7 @@ impl MirBuilder {
         let saved_block = self.current_block.take();
         let saved_var_map = std::mem::take(&mut self.variable_map);
         let saved_types = std::mem::take(&mut self.value_types);
-        let saved_origin = std::mem::take(&mut self.value_origin_newbox);
+        let saved_origin = self.origin_snapshot();
         let saved_value_gen = self.value_gen.clone();
         self.value_gen.reset();
         self.current_function = Some(function);
@@ -180,7 +184,7 @@ impl MirBuilder {
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
         self.value_types = saved_types;
-        self.value_origin_newbox = saved_origin;
+        self.origin_restore(saved_origin);
         self.value_gen = saved_value_gen;
         // Restore static box context
         self.current_static_box = saved_static_ctx;

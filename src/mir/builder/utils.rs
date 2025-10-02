@@ -45,8 +45,7 @@ impl super::MirBuilder {
             .map(|t| matches!(t, super::MirType::String))
             .unwrap_or(false);
         let is_string_origin = self
-            .value_origin_newbox
-            .get(&recv)
+            .origin_get(recv)
             .map(|s| s == "StringBox")
             .unwrap_or(false);
         // Only coerce for ambiguous/non-string non-core receivers (Instance/Parser/Debug/File/Unknown)
@@ -156,7 +155,11 @@ impl super::MirBuilder {
         let use_unified_env = super::calls::call_unified::is_unified_call_enabled();
         // First, infer the receiver class consistently with unified path
         let (mut inferred_cls, _certainty) = crate::mir::builder::infer::receiver::infer_receiver(
-            None, &method, box_val, &self.value_origin_newbox, &self.value_types,
+            None,
+            &method,
+            box_val,
+            |vid| self.origin_get(vid).map(|s| s.to_string()),
+            &self.value_types,
         );
         let mut box_val = box_val;
         // Coerce ambiguous receiver for string-like APIs (Instance/Parser/Debug/File/Unknown)
@@ -203,7 +206,7 @@ impl super::MirBuilder {
             effects,
         })?;
         if let Some(d) = dst {
-            let mut recv_box: Option<String> = self.value_origin_newbox.get(&box_val).cloned();
+            let mut recv_box: Option<String> = self.origin_get(box_val).map(|s| s.to_string());
             if recv_box.is_none() {
                 if let Some(t) = self.value_types.get(&box_val) {
                     match t {

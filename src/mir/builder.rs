@@ -461,7 +461,7 @@ impl MirBuilder {
 
     pub fn origin_register<S: Into<String>>(&mut self, value_id: ValueId, class_name: S) {
         let mut tracker = self.origin_tracker();
-        tracker.register_newbox(value_id, class_name.into());
+        tracker.register_newbox(value_id, class_name);
     }
 
     pub fn origin_propagate(&mut self, from: ValueId, to: ValueId) {
@@ -471,6 +471,14 @@ impl MirBuilder {
 
     pub fn origin_get(&self, value_id: ValueId) -> Option<&str> {
         self.value_origin_newbox.get(&value_id).map(|s| s.as_str())
+    }
+
+    pub fn origin_snapshot(&mut self) -> std::collections::HashMap<ValueId, String> {
+        std::mem::take(&mut self.value_origin_newbox)
+    }
+
+    pub fn origin_restore(&mut self, snapshot: std::collections::HashMap<ValueId, String>) {
+        self.value_origin_newbox = snapshot;
     }
 
 
@@ -613,7 +621,7 @@ impl MirBuilder {
             .insert(dst, super::MirType::Box(class.clone()));
 
         // Record origin for optimization: dst was created by NewBox of class
-        self.value_origin_newbox.insert(dst, class.clone());
+        self.origin_register(dst, class.clone());
 
         // birth 呼び出し（Builder 正規化）
         // 優先: 低下済みグローバル関数 `<Class>.birth/Arity`（Arity は me を含まない）

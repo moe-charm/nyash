@@ -16,8 +16,8 @@ impl super::MirBuilder {
 
         // Unified members: if object class is known and has a synthetic getter for `field`,
         // rewrite to method call `__get_<field>()`.
-        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
-            if let Some(map) = self.property_getters_by_box.get(&class_name) {
+        if let Some(class_name) = self.origin_get(object_value) {
+            if let Some(map) = self.property_getters_by_box.get(class_name) {
                 if let Some(kind) = map.get(&field) {
                     let mname = match kind {
                         super::PropertyKind::Computed => format!("__get_{}", field),
@@ -52,8 +52,8 @@ impl super::MirBuilder {
             .get(&(object_value, field.clone()))
             .cloned()
         {
-            self.value_origin_newbox.insert(field_val, class_name);
-        } else if let Some(base_cls) = self.value_origin_newbox.get(&object_value).cloned() {
+            self.origin_register(field_val, class_name);
+        } else if let Some(base_cls) = self.origin_get(object_value).map(|s| s.to_string()) {
             // Cross-function heuristic: use class-level field origin mapping
             if let Some(fcls) = self
                 .field_origin_by_box
@@ -63,13 +63,13 @@ impl super::MirBuilder {
                 if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
                     super::utils::builder_debug_log(&format!("field-origin hit by box-level map: base={} .{} -> {}", base_cls, field, fcls));
                 }
-                self.value_origin_newbox.insert(field_val, fcls);
+                self.origin_register(field_val, fcls);
             }
         }
 
         // If base is a known newbox and field is weak, emit WeakLoad (+ optional barrier)
         let mut inferred_class: Option<String> =
-            self.value_origin_newbox.get(&object_value).cloned();
+            self.origin_get(object_value).map(|s| s.to_string());
         if inferred_class.is_none() {
             if let ASTNode::FieldAccess {
                 object: inner_obj,
@@ -118,7 +118,7 @@ impl super::MirBuilder {
         value_result = self.local_arg(value_result);
 
         // If base is known and field is weak, create WeakRef before store
-        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+        if let Some(class_name) = self.origin_get(object_value).map(|s| s.to_string()) {
             if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
                 if weak_set.contains(&field) {
                     value_result = self.emit_weak_new(value_result)?;
@@ -143,7 +143,7 @@ impl super::MirBuilder {
         })?;
 
         // Write barrier if weak field
-        if let Some(class_name) = self.value_origin_newbox.get(&object_value).cloned() {
+        if let Some(class_name) = self.origin_get(object_value).map(|s| s.to_string()) {
             if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
                 if weak_set.contains(&field) {
                     let _ = self.emit_barrier_write(value_result);
@@ -152,11 +152,11 @@ impl super::MirBuilder {
         }
 
         // Record origin class for this field value if known
-        if let Some(val_cls) = self.value_origin_newbox.get(&value_result).cloned() {
+        if let Some(val_cls) = self.origin_get(value_result).map(|s| s.to_string()) {
             self.field_origin_class
                 .insert((object_value, field.clone()), val_cls.clone());
             // Also record class-level mapping if base object class is known
-            if let Some(base_cls) = self.value_origin_newbox.get(&object_value).cloned() {
+            if let Some(base_cls) = self.origin_get(object_value).map(|s| s.to_string()) {
                 self.field_origin_by_box
                     .insert((base_cls, field.clone()), val_cls);
             }
