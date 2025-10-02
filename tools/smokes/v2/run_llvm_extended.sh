@@ -30,7 +30,11 @@ for f in "${found[@]:-}"; do
 done
 
 echo "[llvm-ext] building nyash (${MODE})..." >&2
-cargo build ${MODE:+--${MODE}} -q
+if [[ "${NYASH_LLVM_USE_HARNESS:-0}" == "1" ]]; then
+  cargo build ${MODE:+--${MODE}} -q --features llvm
+else
+  cargo build ${MODE:+--${MODE}} -q
+fi
 
 pass=0; fail=0; skip=0
 for app in "${cases[@]}"; do
@@ -60,4 +64,3 @@ done
 
 echo "[llvm-ext] summary: pass=$pass fail=$fail skip=$skip" >&2
 [[ $fail -eq 0 ]]
-
