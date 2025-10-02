@@ -399,34 +399,10 @@ HAKO_SELFHOST_EXEC=1 ./target/release/hakorune program.hkr
 
 **⚠️ PyVM使用制限**: [PyVM使用ガイドライン](docs/reference/pyvm-usage-guidelines.md)で適切な用途を確認
 
-### ✅ **using system完全実装完了！** (2025-09-24 ChatGPT実装完了確認済み)
+### ✅ **using system完全実装完了！** (2025-09-24)
 
-**🎉 歴史的快挙**: `using hakorune-std`が完璧動作！環境変数なしでデフォルト有効！
-
-**✅ 実装完了内容**：
-- **ビルトイン名前空間解決**: `hakorune-std` → `builtin:hakorune-std`の自動解決
-- **自動コード生成**: hakorune-stdのstatic box群（string, integer, bool, array, console）を動的生成
-- **環境変数不要**: デフォルトで有効（--enable-using不要）
-
-**✅ 動作確認済み**：
-```bash
-# 基本using動作（環境変数・フラグ不要！）
-echo 'using hakorune-std' > test.hkr
-echo 'console.log("Hello!")' >> test.hkr
-./target/release/hakorune test.hkr
-# 出力: Hello!
-
-# 実装箇所
-src/runner/pipeline.rs       # builtin:hakorune-std解決
-src/runner/modes/common_util/resolve/strip.rs  # コード生成
-```
-
-**📦 含まれるhakorune-std機能**：
-- `string.create(text)`, `string.upper(str)`
-- `integer.create(value)`, `bool.create(value)`, `array.create()`
-- `console.log(message)`
-
-**🎯 完成状態**: ChatGPT実装で`using hakorune-std`完全動作中！
+`using hakorune-std`が完全動作！環境変数不要・デフォルト有効。
+詳細: [using.md](docs/reference/language/using.md)
 
 ## 🧪 テストスクリプト参考集（既存のを活用しよう！）
 ```bash
@@ -901,162 +877,24 @@ bash -c 'ls *.md | wc -l'
 find . -name "*.md" -exec wc -l {} \;
 ```
 
-## 🌐 **Phase 15.8 WASM開発** (2025-10-01 ~) ✅ E2E成功！
+## 🌐 **Phase 15.8 WASM開発** ✅ E2E成功！
 
-### **🎉 重要な成果（2025-10-01完了）**
+**📋 現状**: MIR JSON → WASM E2Eパイプライン完全動作（Result: 42確認済み）
 
-#### **✅ 複数関数MIR JSON動作確認完了！** (2025-10-01)
-```
-関数間呼び出し: add_helper(15, 27) → Main.main()
-✅ Result: 42 (完全動作！)
-```
-
-**解決した問題**:
-- wasm_runner.js に `nyash.string.to_i8p_h` 関数追加
-- 関数インデックス計算: インポート数(3) + 定義順 = Main.mainはindex 3
-
-#### **E2Eパイプライン動作確認完了！**
-```
-Nyash Source (15 + 27)
-  ↓ MIR JSON (単一/複数関数どちらもOK!)
-WASM Binary
-  ↓ Python llvm_builder.py --target wasm32
-WASM Binary
-  ↓ wasm_add_export.py (function index計算)
-Exported WASM
-  ↓ Node.js + WASI runtime
-✅ Result: 42
-```
-
-#### **完全動作確認済みコマンド**
+### 基本実行コマンド
 ```bash
-# 1. シンプルMIR JSONからWASM生成（確実に動く！）
+# WASM生成 & 実行
 cd src/llvm_py
-python3 llvm_builder.py --target wasm32 /tmp/simple_add_e2e.json -o /tmp/test.wasm
-
-# 2. Export追加（function index 0）
-python3 tools/wasm_add_export.py /tmp/test.wasm /tmp/test_fixed.wasm "Main.main" 0
-
-# 3. 実行
-node tools/wasm_runner.js /tmp/test_fixed.wasm
-# 出力: ✅ Main.main() returned: 42
+python3 llvm_builder.py --target wasm32 input.json -o test.wasm
+python3 tools/wasm_add_export.py test.wasm fixed.wasm "Main.main" 0
+node tools/wasm_runner.js fixed.wasm
 ```
 
-### **📦 箱化ツール（作成済み）**
+### 既知の問題
+- **branch命令のWASM変換不具合**: 条件分岐が常にfalse（fibonacci動作せず）
+- **LLVM Mockルート**: `cargo build --release --features llvm` が必須
 
-#### **wasm_inspect.py** - WASM構造可視化
-```bash
-python3 src/llvm_py/tools/wasm_inspect.py test.wasm
-# 出力:
-#   - Section構造
-#   - Import count（関数以外も含む）
-#   - Function count（定義された関数のみ）
-#   - Export情報
-```
-
-#### **wasm_add_export.py** - Export section追加
-```bash
-python3 src/llvm_py/tools/wasm_add_export.py input.wasm output.wasm "func_name" index
-```
-
-#### **wasm_runner.js** - Node.js実行環境 ✅ 拡張完了
-```bash
-node src/llvm_py/tools/wasm_runner.js test.wasm
-# WASI runtime実装済み:
-#   - fd_write, proc_exit, ny_check_safepoint
-#   - nyash.console.log, nyash.box.from_i8_string
-#   - nyash.string.concat_hh, nyash.string.to_i8p_h ← 新規追加！
-# 自動エントリポイント検索（ny_main → Main.main → test_fn → main）
-```
-
-### **🔍 重要な発見**
-
-#### **✅ 複数関数MIR JSON完全動作！**
-```json
-{
-  "functions": [
-    {
-      "name": "add_helper",
-      "params": [{"name": "a", "reg": 0}, {"name": "b", "reg": 1}],
-      "blocks": [...]
-    },
-    {
-      "name": "Main.main",      // ← 複数関数でもOK！
-      "params": [],
-      "blocks": [{
-        "instructions": [
-          {"op": "call", "func": "add_helper", "args": [0, 1], "dst": 2}  // ← 重要！"func"キー
-        ]
-      }]
-    }
-  ]
-}
-```
-
-**重要ポイント**:
-- ✅ 複数関数対応完了！関数間呼び出しも動作
-- ✅ 関数インデックス: `インポート数 + 定義順`
-  - インポート3つ + add_helper(0) + Main.main(1) → Main.main = index 3
-- ⚠️ call命令は `"func": "function_name"` キー（`"function"`ではない）
-
-#### **llvmliteの制限**
-- `emit_object()`でWASMバイナリ生成可能
-- ただし**Export sectionは生成されない**
-- → `wasm_add_export.py`で追加必要
-
-### **📚 関連ファイル**
-
-- **MIR JSON例**: `src/llvm_py/test_arithmetic_smoke.json`（動作確認済み）
-- **E2E成功例**: `/tmp/simple_add_e2e.json`（15+27=42）
-- **LLVM IR確認**: `/tmp/debug_ir.ll`（llvm_builder.py実行時自動生成）
-- **ドキュメント**: `docs/development/roadmap/phases/phase-15.8/README.md`
-
-### **⚠️ 既知の問題**
-
-1. **Nyashコンパイラ生成MIR JSONの複雑さ**
-   - 解決策: シンプルMIR JSON手動作成（現状）
-   - 将来: コンパイラ出力簡略化またはpost-process
-
-2. **Export section手動追加が必要**
-   - 解決策: `wasm_add_export.py`（実装済み・動作確認済み）
-
-3. **⚠️ branch命令のWASM変換不具合** (2025-10-01発見)
-   - **症状**: 条件分岐が正しく変換されず、常にfalse扱い
-   - **LLVM IR**: `icmp ne i64 0, 0` と生成される（常にfalse）
-   - **影響**: fibonacci等の再帰関数が動作しない（結果0を返す）
-   - **回避策**: 現状なし、要修正
-   - **該当ファイル**: `src/llvm_py/builders/controlflow/branch.py` または `instruction_lower.py`
-
-4. **⚠️ LLVM Mockルート問題** (2025-10-01発見・解決)
-   - **症状**: `--backend llvm` でモック実行になり、実際に動作しない
-   - **原因**: `nyash`バイナリが `--features llvm` でビルドされていない
-   - **エラー**: "LLVM backend not available (object emit)"
-
-   **🔍 詳細調査結果**:
-   - ✅ **`llvm-harness = []` は空の配列** = Rust依存なし
-   - ✅ **Python llvmliteハーネス** = 外部プロセス呼び出し
-   - ⚠️ **条件分岐を有効にするため** `--features llvm` は必要
-   - `#[cfg(feature = "llvm-harness")]` のコードをコンパイルに含める
-
-   **回避策1**: Python llvmliteハーネスを直接使用
-   ```bash
-   cd src/llvm_py
-   python3 llvm_builder.py input.json -o output.o  # Native object
-   python3 llvm_builder.py --target wasm32 input.json -o output.wasm  # WASM
-   ```
-
-   **解決策**: `cargo build --release --features llvm` でビルド（3-5分）
-   - Rust依存追加なし（`llvm-harness = []`）
-   - 条件分岐コードのみ有効化
-   - Python llvmlite呼び出しコードがコンパイルされる
-
-### **🎯 次のステップ**
-
-- [x] fibonacci用シンプルMIR JSON作成（作成済み、branch命令不具合により動作せず）
-- [x] 3-Backend Trinity Benchmark完成（simple_addで動作確認完了）
-- [ ] **branch命令のWASM変換修正**（優先度高）
-- [ ] fibonacci WASM実行（branch修正後）
-- [ ] ベンチマークランナーのWASM対応改善
+📖 詳細: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
 
 ---
 
