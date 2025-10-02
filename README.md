@@ -25,7 +25,7 @@ Execution Status (Feature Additions Pause)
 Quick pointers
 - Preferred config is `hako.toml` (compat: `nyash.toml` is still accepted).
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
-- Run VM: `./target/release/nyash --backend vm apps/APP/main.nyash` (CLI alias `hrn` may be available).
+- Run VM: `./target/release/hakorune --backend vm apps/APP/main.nyash` (aliases `hako`/`nyash` also available).
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
  - VM engine toggle: `NYASH_VM_ENGINE={fallback|full}` (default: fallback). See `docs/guides/runtime-architecture.md`.
  - Using/Plugins (ENV quick):
@@ -64,15 +64,15 @@ ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall
 
 ### Minimal ENV (VM vs LLVM harness)
 - VM: no extra environment needed for typical runs.
-  - Example: `./target/release/nyash --backend vm apps/tests/ternary_basic.nyash`
+  - Example: `./target/release/hakorune --backend vm apps/tests/ternary_basic.nyash`
 - LLVM harness: set three variables so the runner finds the harness and runtime.
   - `NYASH_LLVM_USE_HARNESS=1`
   - `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc`
   - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
-  - Example: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - Example: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.nyash`
 
 ### Branding and Aliases
-- CLI binaries: `nyash` is primary. Aliases `hako` and `hakorune` are available and map to the same entry point.
+- CLI binaries: `hakorune` is preferred (alias `hako`). Legacy `nyash` remains available and maps to the same entry.
 - ENV prefixes: code continues to read `NYASH_*` variables. Brand aliases `HAKO_*`, `HAKU_*`, and `HRN_*` are accepted at process startup and copied to `NYASH_*` when unset (Rust runner and Python harness both do this).
 - Config files: `hako.toml` is preferred. `nyash.toml` and `hakorune.toml` remain compatible.
 
