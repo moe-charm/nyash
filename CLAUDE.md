@@ -29,6 +29,147 @@ ChatGPT: 実装・検証
 
 ---
 
+## ✅ **selfhost PHI修正統合完了** (2025-10-02)
+
+### 🎉 統合内容
+wasm-developmentブランチにselfhostブランチのPHI徹底修正を統合完了！
+
+**統合されたPHI修正**：
+- ✅ **TypeCoercion箱**（310行）: 型変換完全統一
+- ✅ **PhiDispatchPoint**: 値解決統一（5-tier resolution）
+- ✅ **vmap直接参照層**: same-block値可視性修正
+- ✅ **PHI hardening**: ブロック先頭配置保証
+- ✅ **PhiRegistry/lifecycle**: PHI登録・検証機構
+- ✅ **StringTagPolicy**: タグポリシー一元化
+
+**変更統計**: 212ファイル変更、+12,694/-177,025行
+
+### 🔧 ビルド方法（最新版）
+
+```bash
+# 標準ビルド（Rust VM）
+cargo build --release
+
+# LLVM機能付きビルド
+cargo build --release --features llvm
+
+# ビルド成功確認
+./target/release/hako --version
+./target/release/nyash --version  # 非推奨メッセージが出る
+
+# ⚠️ Cargo.toml修正済み: hakoバイナリ重複解決完了
+```
+
+**ビルド時間**: 55秒程度（警告37件は未使用コード関連、動作問題なし）
+
+### 🚀 実行方法（hako推奨）
+
+#### **推奨: hakoコマンド（非推奨メッセージなし）**
+```bash
+# 基本実行
+./target/release/hako program.nyash
+
+# VM実行（明示的）
+./target/release/hako --backend vm program.nyash
+
+# LLVM実行（最適化）
+./target/release/hako --backend llvm program.nyash
+
+# クリーンな出力（デバッグメッセージ抑制）
+NYASH_QUIET=1 ./target/release/hako program.nyash
+```
+
+#### **nyashコマンド（互換性のため残存、非推奨メッセージあり）**
+```bash
+# 非推奨メッセージが出る
+./target/release/nyash program.nyash
+# 出力: [deprecate] CLI name 'nyash' is deprecated; use 'hako' instead.
+
+# 非推奨メッセージを抑制する方法
+NYASH_QUIET=1 ./target/release/nyash program.nyash
+NYASH_JSON_ONLY=1 ./target/release/nyash program.nyash
+```
+
+### 📊 環境変数完全ガイド
+
+#### **🎯 よく使う環境変数（優先度順）**
+
+| 環境変数 | 用途 | 使用タイミング | 効果 |
+|---------|-----|-------------|-----|
+| `NYASH_QUIET=1` | **出力抑制** | スモークテスト・CI | 非推奨メッセージ・デバッグ出力を抑制 |
+| `NYASH_CLI_VERBOSE=1` | 詳細診断 | デバッグ時 | 詳細なログ出力 |
+| `NYASH_LLVM_USE_HARNESS=1` | LLVM実行 | llvmlite使用時 | Python/llvmliteハーネス有効化 |
+| `NYASH_JSON_ONLY=1` | JSON出力専用 | JSON API使用時 | 非推奨メッセージ抑制＋JSON特化 |
+| `NYASH_DISABLE_PLUGINS=1` | プラグイン無効 | エラー対策時 | プラグイン読み込みスキップ |
+
+#### **🔧 開発・デバッグ用環境変数**
+
+```bash
+# MIR出力（重要！）
+NYASH_DUMP_MIR=1 ./target/release/hako program.nyash
+./target/release/hako --dump-mir program.nyash  # フラグ版
+
+# JSON IR出力
+NYASH_DUMP_JSON_IR=1 ./target/release/hako program.nyash
+./target/release/hako --emit-mir-json output.json program.nyash
+
+# PyVMデバッグ（特殊用途のみ）
+NYASH_PYVM_DEBUG=1 ./target/release/hako program.nyash
+
+# ランタイム出力整形
+NYASH_NYRT_SILENT_RESULT=1 ./target/release/hako program.nyash
+```
+
+#### **⚙️ 複合使用例**
+
+```bash
+# スモークテスト最適（推奨）
+NYASH_QUIET=1 ./target/release/hako test.nyash
+
+# デバッグ診断フル
+NYASH_CLI_VERBOSE=1 NYASH_DUMP_MIR=1 ./target/release/hako test.nyash
+
+# LLVM実行（本番）
+NYASH_QUIET=1 NYASH_LLVM_USE_HARNESS=1 ./target/release/hako --backend llvm test.nyash
+
+# プラグインなしクリーン実行
+NYASH_QUIET=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako test.nyash
+```
+
+#### **🚨 非推奨メッセージ回避方法まとめ**
+
+```bash
+# 方法1: hakoコマンド使用（最推奨）
+./target/release/hako program.nyash
+
+# 方法2: NYASH_QUIET=1（nyash使用時）
+NYASH_QUIET=1 ./target/release/nyash program.nyash
+
+# 方法3: NYASH_JSON_ONLY=1（JSON出力時）
+NYASH_JSON_ONLY=1 ./target/release/nyash program.nyash
+```
+
+### 📝 スモークテスト実行（統合後）
+
+```bash
+# 推奨: hakoコマンドでquickテスト
+bash tools/smokes/v2/run.sh --profile quick
+
+# 環境変数で出力抑制（必要に応じて）
+NYASH_QUIET=1 bash tools/smokes/v2/run.sh --profile quick
+
+# fast-fail無効で全テスト確認
+bash tools/smokes/v2/run.sh --profile quick --no-fast-fail
+
+# PHI関連テスト
+bash tools/smokes/v2/run_phi.sh
+
+# LLVM拡張テスト
+bash tools/smokes/v2/run_llvm_extended.sh
+```
+
+---
+
 ## 🚨 重要：スモークテストはv2構造を使う！
 - 📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
 - 📁 **v2詳細ドキュメント**: [tools/smokes/v2/README.md](tools/smokes/v2/README.md)

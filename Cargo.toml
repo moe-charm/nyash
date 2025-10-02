@@ -74,10 +74,6 @@ path = "src/bin/hako.rs"
 
 # Brand aliases for CLI (same main entry)
 [[bin]]
-name = "hako"
-path = "src/main.rs"
-
-[[bin]]
 name = "hakorune"
 path = "src/main.rs"
 
