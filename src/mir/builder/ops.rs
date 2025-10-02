@@ -165,13 +165,11 @@ impl super::MirBuilder {
                 } else {
                     // 既存の比較経路（安全のための型注釈/slot化含む）
                     let (lhs2_raw, rhs2_raw) = if self
-                        .value_origin_newbox
-                        .get(&lhs)
+                        .origin_get(lhs)
                         .map(|s| s == "IntegerBox")
                         .unwrap_or(false)
                         && self
-                            .value_origin_newbox
-                            .get(&rhs)
+                            .origin_get(rhs)
                             .map(|s| s == "IntegerBox")
                             .unwrap_or(false)
                     {
@@ -398,14 +396,8 @@ impl super::MirBuilder {
             }
         }
         // Core‑13 pure mode removed; normal UnaryOp path only.
-        let dst = self.value_gen.next();
         let mir_op = self.convert_unary_operator(operator)?;
-        self.emit_instruction(MirInstruction::UnaryOp {
-            dst,
-            op: mir_op,
-            operand: operand_val,
-        })?;
-        Ok(dst)
+        self.emit_unop(mir_op, operand_val)
     }
 
     // Convert AST binary operator to MIR enum or compare
@@ -440,5 +432,15 @@ impl super::MirBuilder {
             "~" => Ok(UnaryOp::BitNot),
             _ => Err(format!("Unsupported unary operator: {}", op)),
         }
+    }
+
+    pub(super) fn emit_unop(&mut self, op: UnaryOp, operand: ValueId) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::UnaryOp {
+            dst,
+            op,
+            operand,
+        })?;
+        Ok(dst)
     }
 }

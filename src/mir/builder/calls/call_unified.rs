@@ -21,11 +21,14 @@ pub fn is_unified_call_enabled() -> bool {
 
 /// Convert CallTarget to Callee
 /// Main translation layer between builder and MIR representations
-pub fn convert_target_to_callee(
+pub fn convert_target_to_callee<OriginLookup>(
     target: CallTarget,
-    value_origin_newbox: &std::collections::HashMap<ValueId, String>,
+    origin_lookup: OriginLookup,
     value_types: &std::collections::HashMap<ValueId, crate::mir::MirType>,
-) -> Result<Callee, String> {
+) -> Result<Callee, String>
+where
+    OriginLookup: Fn(ValueId) -> Option<String>,
+{
     match target {
         CallTarget::Global(name) => {
             // Check if it's a built-in function
@@ -43,7 +46,7 @@ pub fn convert_target_to_callee(
                 box_type.as_deref(),
                 method.as_str(),
                 receiver,
-                value_origin_newbox,
+                |vid| origin_lookup(vid),
                 value_types,
             );
             Ok(Callee::Method { box_name, method, receiver: Some(receiver), certainty })

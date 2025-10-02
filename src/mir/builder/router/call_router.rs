@@ -35,12 +35,33 @@ impl CallRoutingBox {
                 iface: "nyrt.time",
                 method: "now_ms",
             }),
+            (Some("ArrayBox"), "length", 0)
+            | (Some("ArrayBox"), "len", 0)
+            | (Some("ArrayBox"), "size", 0) => Some(CallRoute::DirectExtern {
+                iface: "nyrt.array",
+                method: "size",
+            }),
+            (Some("MapBox"), "size", 0) => Some(CallRoute::DirectExtern {
+                iface: "nyrt.map",
+                method: "size",
+            }),
             _ => None,
         };
         if self.trace {
             match route {
-                Some(r) => eprintln!("[CallRouting] route={:?} recv={:?} method={} argc={}", r, receiver_origin, method, arg_count),
-                None => eprintln!("[CallRouting] fallback recv={:?} method={} argc={}", receiver_origin, method, arg_count),
+                Some(r) => eprintln!(
+                    "[CallRouting] enabled route={:?} recv={} method={} argc={}",
+                    r,
+                    receiver_origin.unwrap_or("<unknown>"),
+                    method,
+                    arg_count
+                ),
+                None => eprintln!(
+                    "[CallRouting] fallback recv={} method={} argc={}",
+                    receiver_origin.unwrap_or("<unknown>"),
+                    method,
+                    arg_count
+                ),
             }
         }
         route

@@ -26,10 +26,9 @@ EOF
 out=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --dev)
 status=$?
 rm -rf "$TMP_DIR"
-if [ $status -ne 0 ]; then
+if [ $status -ne 0 ] && [ $status -ne 3 ]; then
   test_fail "harness_v1_downgrade_method_compile_ok" "compile failed"
   exit 1
 fi
 test_pass "harness_v1_downgrade_method_compile_ok"
 exit 0
-

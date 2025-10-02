@@ -28,6 +28,9 @@ pub fn llvmlite_emit_object(
     let mir_json_path = tmp_dir.join("nyash_harness_mir.json");
     crate::runner::mir_json_emit::emit_mir_json_for_harness(module, &mir_json_path)
         .map_err(|e| format!("MIR JSON emit error: {}", e))?;
+    // Export externs registry (abstract spec) for harness (optional)
+    let extern_json_path = tmp_dir.join("externs_registry.json");
+    let _ = nyash_rust::mir::externs::registry::export_json(&extern_json_path);
     crate::cli_v!(
         "[Runner/LLVM] using llvmlite harness → {} (mir={})",
         out_path,
@@ -42,6 +45,8 @@ pub fn llvmlite_emit_object(
         "--out",
         out_path,
     ]);
+    // Provide extern spec JSON to harness
+    cmd.env("NYASH_EXTERN_SPEC_JSON", extern_json_path);
     // Default-on: sanitize empty PHIs in IR to keep llvmlite happy.
     // Users can explicitly disable with NYASH_LLVM_SANITIZE_EMPTY_PHI=0.
     if std::env::var("NYASH_LLVM_SANITIZE_EMPTY_PHI").ok().map(|v| v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off")).unwrap_or(false) == false {

@@ -9,7 +9,8 @@ Minimal mapping for NyRT-exported symbols (console/log family等)
 """
 
 import llvmlite.ir as ir
-from typing import Dict, List, Optional, Any
+from llvmlite.ir._utils import DuplicatedNameError
+from typing import Dict, List, Optional, Any, Tuple
 from instructions.safepoint import insert_automatic_safepoint
 from dispatch import PhiDispatchPoint
 from instructions.string_tag_policy import StringTagPolicy  # 箱化！
@@ -81,7 +82,7 @@ def lower_externcall(
     i8p = i8.as_pointer()
     void = ir.VoidType()
 
-    # Known NyRT signatures
+    # Known NyRT signatures (fallback-only). Prefer dynamic registry when available via env NYASH_EXTERN_SPEC_JSON
     sig_map = {
         # Strings (handle-based)
         "nyash.string.len_h": (i64, [i64]),
@@ -98,11 +99,50 @@ def lower_externcall(
         "nyash.string.lastIndexOf_ss": (i64, [i8p, i8p]),
         # Boxing helpers
         "nyash.box.from_i8_string": (i64, [i8p]),
-        # Timer utilities
-        "nyrt.time.now_ms": (i64, []),
         # Console (string pointer expected)
         # Many call sites pass handles or pointers; we coerce below.
     }
+
+    # Dynamic extern registry (abstract spec) → derive LLVM symbol/ABI lazily
+    _extern_specs: Dict[Tuple[str, str], Tuple[Any, List[Any], str]] = {}
+
+    def _mk_symbol(iface: str, method: str) -> str:
+        import os
+        style = os.environ.get('NYASH_LLVM_EXTERN_SYMBOL_STYLE', 'dotted').lower()
+        if style in ('underscores', 'underscore', 'under', 'snake'):
+            return f"{iface.replace('.', '_')}_{method}"
+        # default dotted (matches current Kernel exports)
+        return f"{iface}.{method}"
+
+    def _load_extern_specs_from_env_once():
+        import os, json
+        p = os.environ.get('NYASH_EXTERN_SPEC_JSON')
+        if not p:
+            return
+        try:
+            with open(p, 'r', encoding='utf-8') as f:
+                arr = json.load(f)
+            def mir_to_abi(s: str):
+                if s == 'Integer':
+                    return i64
+                if s.startswith('Box:'):
+                    return i64  # handle
+                if s in ('Float','Bool','String','Void','Unknown'):
+                    return i64
+                return i64
+            for spec in arr:
+                iface = spec.get('interface'); method = spec.get('method')
+                if not iface or not method: continue
+                params = spec.get('params') or []
+                ret = spec.get('returns') or 'Integer'
+                ret_ty = mir_to_abi(ret)
+                arg_tys = [mir_to_abi(x) for x in params]
+                sym = _mk_symbol(iface, method)
+                _extern_specs[(iface, method)] = (ret_ty, arg_tys, sym)
+        except Exception:
+            pass
+
+    _load_extern_specs_from_env_once()
 
     # Tag policy: 箱化完了！StringTagPolicy に一元化
     # 旧コード削除:
@@ -117,18 +157,44 @@ def lower_externcall(
             func = f
             break
     if not func:
-        if llvm_name in sig_map:
+        dyn = None
+        if '.' in llvm_name:
+            parts = llvm_name.rsplit('.', 1)
+            key = (parts[0], parts[1])
+            dyn = _extern_specs.get(key)
+        if dyn is not None:
+            ret_ty, arg_tys, sym = dyn
+            llvm_name = sym
+            fnty = ir.FunctionType(ret_ty, arg_tys)
+            try:
+                func = ir.Function(module, fnty, name=llvm_name)
+            except DuplicatedNameError:
+                func = module.get_global(llvm_name)
+        elif llvm_name in sig_map:
             ret_ty, arg_tys = sig_map[llvm_name]
             fnty = ir.FunctionType(ret_ty, arg_tys)
-            func = ir.Function(module, fnty, name=llvm_name)
+            try:
+                func = ir.Function(module, fnty, name=llvm_name)
+            except DuplicatedNameError:
+                func = module.get_global(llvm_name)
         elif llvm_name.startswith("nyash.console."):
             # console.*: (i8*) -> i64
             fnty = ir.FunctionType(i64, [i8p])
-            func = ir.Function(module, fnty, name=llvm_name)
+            try:
+                func = ir.Function(module, fnty, name=llvm_name)
+            except DuplicatedNameError:
+                func = module.get_global(llvm_name)
         else:
-            # Unknown extern: declare as void(...no args...) and call without args
-            fnty = ir.FunctionType(void, [])
-            func = ir.Function(module, fnty, name=llvm_name)
+            import os
+            if os.environ.get('NYASH_LLVM_UNKNOWN_EXTERN_FALLBACK', '0') in ('1','true','on','yes'):
+                # Legacy fallback (dev only): declare as void() to keep builder running
+                fnty = ir.FunctionType(void, [])
+                try:
+                    func = ir.Function(module, fnty, name=llvm_name)
+                except DuplicatedNameError:
+                    func = module.get_global(llvm_name)
+            else:
+                raise RuntimeError(f"Unknown extern symbol: {llvm_name}. Provide JSON spec (NYASH_EXTERN_SPEC_JSON) or add adapter mapping.")
 
     # Prepare/coerce arguments
     call_args: List[ir.Value] = []

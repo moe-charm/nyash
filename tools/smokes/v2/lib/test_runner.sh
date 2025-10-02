@@ -264,7 +264,8 @@ run_nyash_llvm() {
         fi
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
-        PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_LLVM_USE_HARNESS=1 NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
+        # Harness-first policy: always use llvmlite harness unless explicitly overridden
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
@@ -279,7 +280,8 @@ run_nyash_llvm() {
         fi
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
-        PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_LLVM_USE_HARNESS=1 NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
+        # Harness-first policy: always use llvmlite harness unless explicitly overridden
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
@@ -292,6 +294,20 @@ run_nyash_llvm() {
 test_pass() { log_success "$1"; return 0; }
 test_fail() { log_error "$1 ${2:-}"; return 1; }
 test_skip() { log_warn "SKIP $1 ${2:-}"; return 0; }
+
+# Legacy helpers (compat with older smoke snippets)
+fail() {
+    local msg="${1:-test failed}"
+    local detail="${2:-}"
+    test_fail "$msg" "$detail"
+    exit 1
+}
+
+pass() {
+    local msg="${1:-test passed}"
+    test_pass "$msg"
+    exit 0
+}
 
 # 出力比較ヘルパー
 compare_outputs() {

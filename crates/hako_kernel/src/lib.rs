@@ -159,6 +159,21 @@ pub extern "C" fn nyash_string_birth_h() -> i64 {
     arena().alloc(Obj::Str(String::new()))
 }
 
+// nyrt.time.now_ms(): monotonic-ish millisecond counter
+#[export_name = "nyrt.time.now_ms"]
+pub extern "C" fn hako_time_now_ms() -> i64 {
+    use std::time::{Duration, SystemTime, UNIX_EPOCH};
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_else(|_| Duration::from_millis(0));
+    let millis = duration.as_millis();
+    if millis > i64::MAX as u128 {
+        i64::MAX
+    } else {
+        millis as i64
+    }
+}
+
 // nyash.string.len_h(handle) -> i64
 #[export_name = "nyash.string.len_h"]
 pub extern "C" fn nyash_string_len_h(h: i64) -> i64 {

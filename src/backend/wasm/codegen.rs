@@ -6,6 +6,7 @@
  */
 
 use super::{MemoryManager, RuntimeImports, WasmError};
+use crate::backend::wasm::{wasm_resolve_signature, WasmExternSignature};
 use crate::mir::{
     BasicBlockId, BinaryOp, CompareOp, ConstValue, MirFunction, MirInstruction, MirModule, ValueId,
 };
@@ -420,18 +421,57 @@ impl WasmCodegen {
                 effects: _,
             } => {
                 // Generate call to external function import
-                let (call_target, returns_value) = match (iface_name.as_str(), method_name.as_str()) {
-                    ("env.console", "log") => ("console_log", false),
-                    ("env.canvas", "fillRect") => ("canvas_fillRect", false),
-                    ("env.canvas", "fillText") => ("canvas_fillText", false),
-                    ("nyrt.time", "now_ms") => ("time_now_ms", true),
-                    _ => {
-                        return Err(WasmError::UnsupportedInstruction(format!(
-                            "Unsupported extern call: {}.{}",
-                            iface_name, method_name
-                        )))
-                    }
+                let signature = match (iface_name.as_str(), method_name.as_str()) {
+                    ("env.console", "log") => Some(WasmExternSignature {
+                        module: "env".to_string(),
+                        name: "console_log".to_string(),
+                        params: vec!["i32".to_string(), "i32".to_string()],
+                        result: None,
+                    }),
+                    ("env.canvas", "fillRect") => Some(WasmExternSignature {
+                        module: "env".to_string(),
+                        name: "canvas_fillRect".to_string(),
+                        params: vec![
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                        ],
+                        result: None,
+                    }),
+                    ("env.canvas", "fillText") => Some(WasmExternSignature {
+                        module: "env".to_string(),
+                        name: "canvas_fillText".to_string(),
+                        params: vec![
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                            "i32".to_string(),
+                        ],
+                        result: None,
+                    }),
+                    (iface, method) => wasm_resolve_signature(iface, method),
                 };
+
+                let signature = signature.ok_or_else(|| {
+                    WasmError::UnsupportedInstruction(format!(
+                        "Unsupported extern call: {}.{}",
+                        iface_name, method_name
+                    ))
+                })?;
+
+                let returns_value = signature.result.is_some();
+                let call_target = signature.name;
 
                 let mut instructions = Vec::new();
 

@@ -109,7 +109,7 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
     elif op == "unop":
         # Unary op: kind in {'neg','not','bitnot'}; src is operand
         kind = (inst.get("kind") or inst.get("operation") or "").lower()
-        srcv = inst.get("src") or inst.get("operand")
+        srcv = inst.get("src") if inst.get("src") is not None else inst.get("operand")
         dst = inst.get("dst")
         _call_lower(lower_unop, builder, owner.resolver, kind, srcv, dst, vmap_ctx, builder.block,
                    owner.preds, owner.block_end_values, owner.bb_map, ctx=getattr(owner, 'ctx', None), inst_ctx=inst_ctx)

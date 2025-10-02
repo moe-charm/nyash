@@ -6,11 +6,13 @@
  */
 
 mod codegen;
+mod extern_adapter;
 mod memory;
 mod runtime;
 // mod executor; // TODO: Fix WASM executor build errors
 
 pub use codegen::{WasmCodegen, WasmModule};
+pub use extern_adapter::{all_signatures as wasm_all_extern_signatures, resolve_signature as wasm_resolve_signature, WasmExternSignature};
 pub use memory::{BoxLayout, MemoryManager};
 pub use runtime::RuntimeImports;
 // pub use executor::WasmExecutor; // TODO: Fix WASM executor build errors

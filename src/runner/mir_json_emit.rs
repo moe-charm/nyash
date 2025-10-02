@@ -378,6 +378,7 @@ pub fn emit_mir_json_for_harness(
                             let mut obj = json!({
                                 "op": "externcall",
                                 "func": func_name,
+                                "name": func_name,
                                 "args": args_a,
                                 "dst": dst.map(|d| d.as_u32()),
                             });
@@ -484,7 +485,13 @@ pub fn emit_mir_json_for_harness(
     } else {
         json!({"functions": funs})  // v0 legacy format
     };
-
+    // Validate before writing (Fail-Fast)
+    let skip_validator = std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1");
+    if !skip_validator {
+        if let Err(e) = crate::runner::mir_json_validate::validate_json_root(&root) {
+            return Err(format!("MIR JSON validation failed: {}", e));
+        }
+    }
     std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
         .map_err(|e| format!("write mir json: {}", e))
 }
@@ -667,6 +674,7 @@ pub fn emit_mir_json_for_harness_bin(
                                         insts.push(json!({
                                             "op":"externcall",
                                             "func": gname,
+                                            "name": gname,
                                             "args": args_a,
                                             "dst": dst.map(|d| d.as_u32())
                                         }));
@@ -696,8 +704,10 @@ pub fn emit_mir_json_for_harness_bin(
                                 if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                             } else {
                                 let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
+                                let full_name = format!("{}.{}", iface_name, method_name);
                                 let mut obj = json!({
-                                    "op":"externcall","func": format!("{}.{}", iface_name, method_name), "args": args_a,
+                                    "op":"externcall","func": full_name.clone(), "name": full_name,
+                                    "args": args_a,
                                     "dst": dst.map(|d| d.as_u32()),
                                 });
                                 if iface_name == "env.console" { if dst.is_some() { obj["dst_type"] = json!("i64"); } }
@@ -805,6 +815,13 @@ pub fn emit_mir_json_for_harness_bin(
     } else {
         json!({"functions": funs})
     };
+    // Validate before writing (Fail-Fast)
+    let skip_validator = std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1");
+    if !skip_validator {
+        if let Err(e) = crate::runner::mir_json_validate::validate_json_root(&root) {
+            return Err(format!("MIR JSON validation failed: {}", e));
+        }
+    }
     std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
         .map_err(|e| format!("write mir json: {}", e))
 }

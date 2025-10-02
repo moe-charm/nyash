@@ -1,4 +1,5 @@
 use crate::mir::{Effect, EffectMask};
+use crate::mir::externs::registry as extreg;
 use std::collections::HashMap;
 
 /// Effects決定の最小実装（テーブル駆動）。
@@ -10,12 +11,9 @@ impl EffectResolverBox {
     pub fn new(trace: bool) -> Self { Self { trace } }
 
     fn extern_table(&self) -> HashMap<(&'static str, &'static str), EffectMask> {
-        use EffectMask as EM;
+        // Registry 優先へ移行中。最低限のIO系だけフォールバックを持つ。
         let mut m: HashMap<(&'static str, &'static str), EffectMask> = HashMap::new();
-        // Runtime time source: monotonic ms → READ
-        m.insert(("nyrt.time", "now_ms"), EM::READ);
-        // Console I/O
-        m.insert(("env.console", "log"), EM::IO);
+        m.insert(("env.console", "log"), EffectMask::IO);
         m
     }
 
@@ -33,8 +31,8 @@ impl EffectResolverBox {
     }
 
     pub fn resolve_extern(&self, iface: &str, method: &str) -> Option<EffectMask> {
-        let t = self.extern_table();
-        let eff = t.get(&(iface, method)).copied();
+        let eff = extreg::effects_for(iface, method)
+            .or_else(|| self.extern_table().get(&(iface, method)).copied());
         if self.trace {
             eprintln!("[EffectResolver] extern {}.{} -> {:?}", iface, method, eff);
         }
@@ -50,4 +48,3 @@ impl EffectResolverBox {
         eff
     }
 }
-

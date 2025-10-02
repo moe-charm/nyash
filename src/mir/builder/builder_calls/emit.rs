@@ -33,7 +33,11 @@ impl MirBuilder {
         let arity_for_try = args.len();
         if let CallTarget::Method { ref box_type, ref method, receiver } = target {
             let (recv_cls_infer, _c) = crate::mir::builder::infer::receiver::infer_receiver(
-                box_type.as_deref(), method, receiver, &self.value_origin_newbox, &self.value_types,
+                box_type.as_deref(),
+                method,
+                receiver,
+                |vid| self.origin_get(vid).map(|s| s.to_string()),
+                &self.value_types,
             );
             let recv_cls = recv_cls_infer;
             // Dev trace: help diagnose receiver identity/name binding issues
@@ -56,7 +60,11 @@ impl MirBuilder {
         // Centralized user-box rewrite for method targets (toString/stringify, equals/1, Known→unique)
         if let CallTarget::Method { ref box_type, ref method, receiver } = target {
             let (recv_cls, _c) = crate::mir::builder::infer::receiver::infer_receiver(
-                box_type.as_deref(), method, receiver, &self.value_origin_newbox, &self.value_types,
+                box_type.as_deref(),
+                method,
+                receiver,
+                |vid| self.origin_get(vid).map(|s| s.to_string()),
+                &self.value_types,
             );
             let class_name_opt = Some(recv_cls.clone());
             // Early str-like
@@ -84,7 +92,7 @@ impl MirBuilder {
 
         let mut callee = match call_unified::convert_target_to_callee(
             target.clone(),
-            &self.value_origin_newbox,
+            |vid| self.origin_get(vid).map(|s| s.to_string()),
             &self.value_types,
         ) {
             Ok(c) => c,
@@ -225,7 +233,7 @@ impl MirBuilder {
             if let Callee::Method { method, receiver, box_name, .. } = &callee2 {
                 if let Some(r) = receiver {
                     let rty = self.value_types.get(r).cloned();
-                    let rorig = self.value_origin_newbox.get(r).cloned();
+                    let rorig = self.origin_get(*r).map(|s| s.to_string());
                     eprintln!("[vm-call-final] bb={:?} method={} recv=%{} class={} ty={:?} orig={}",
                         self.current_block, method, r.0, box_name, rty, rorig.as_deref().unwrap_or("-"));
                     // Emit a compact varmap line for the receiver (dev-only)
@@ -271,7 +279,7 @@ impl MirBuilder {
                         None,
                         &method,
                         receiver,
-                        &self.value_origin_newbox,
+                        |vid| self.origin_get(vid).map(|s| s.to_string()),
                         &self.value_types,
                     );
                     let me_local = self.local_recv(receiver);
@@ -315,12 +323,14 @@ impl MirBuilder {
                     ("nyash".to_string(), name)
                 };
 
+                // Compute accurate extern effects (READ/IO/CONTROL…)
+                let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects(&iface, &method);
                 self.emit_instruction(MirInstruction::ExternCall {
                     dst,
                     iface_name: iface,
                     method_name: method,
                     args,
-                    effects: EffectMask::IO,
+                    effects,
                 })
             },
             CallTarget::Global(name) => {

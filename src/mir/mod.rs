@@ -33,6 +33,7 @@ pub mod slot_registry; // Phase 9.79b.1: method slot resolution (IDs)
 pub mod value_id;
 pub mod verification;
 pub mod verification_types; // extracted error types // Optimization subpasses (e.g., type_hints)
+pub mod externs; // ExternCallRegistryBox（共通マッピング；backend疎結合の基点）
 
 // Re-export main types for easy access
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};

@@ -13,7 +13,7 @@ pub fn finalize_call_site(builder: &mut MirBuilder, callee: &mut Callee, args: &
                 let (rid, rty, rorig) = receiver
                     .and_then(|r| {
                         let ty = builder.value_types.get(&r).cloned();
-                        let orig = builder.value_origin_newbox.get(&r).cloned();
+                        let orig = builder.origin_get(r).map(|s| s.to_string());
                         Some((r, ty, orig))
                     })
                     .unwrap_or((ValueId(u32::MAX), None, None));
