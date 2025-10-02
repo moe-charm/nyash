@@ -1,0 +1,21 @@
+// PHI → BoxCall(Array.get) 経由の値解決（DP）を確認
+// 期待: Result: 3
+static box Main {
+  main() {
+    // 準備: 配列に 1,2,3 を格納
+    local a = new ArrayBox()
+    a.push(1)
+    a.push(2)
+    a.push(3)
+
+    // PHI でインデックス n を合流（常に then）
+    local n = 0
+    if (1 < 2) { n = 2 } else { n = 1 }
+
+    // PHI 経由の n をそのまま BoxCall 引数に使用
+    local v = a.get(n)   // 0-based: 2 → 3
+    print("Result: " + v)
+    return 0
+  }
+}
+
