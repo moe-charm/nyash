@@ -176,7 +176,7 @@ Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで�
 
 ### 1. **インタープリターモード** （開発用）
 ```bash
-./target/release/nyash program.nyash
+./target/release/hakorune program.hkr
 ```
 - 即座に実行
 - 完全なデバッグ情報
@@ -185,11 +185,11 @@ Phase‑15（自己ホスト期）: ASTインタープリタは任意featureで�
 ### 2. **VMモード（既定は Rust VM）**
 ```bash
 # Rust VM（既定）
-./target/release/nyash --backend vm program.nyash
+./target/release/hakorune --backend vm program.hkr
 
 # （非推奨）PyVM を使う場合: pyvm-bridge を有効化して実行
 cargo build --release --features pyvm-bridge
-NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm program.nyash
+NYASH_VM_USE_PY=1 ./target/release/hakorune --backend vm program.hkr
 ```
 - 補足: `--benchmark` はレガシー VM（`vm-legacy`）が必要です。実行前に `cargo build --release --features vm-legacy` を行ってください。
 
@@ -214,13 +214,13 @@ cargo build --release -p nyash-llvm-compiler && cargo build --release --features
 NYASH_LLVM_USE_HARNESS=1 \
 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
 NYASH_EMIT_EXE_NYRT=target/release \
-  ./target/release/nyash --backend llvm --emit-exe myapp program.nyash
+  ./target/release/hakorune --backend llvm --emit-exe myapp program.hkr
 ./myapp
 
 # あるいは .o を出力して手動リンク
 NYASH_LLVM_USE_HARNESS=1 \
 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
-  ./target/release/nyash --backend llvm program.nyash \
+  ./target/release/hakorune --backend llvm program.hkr \
   -D NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o
 cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
 ./myapp
@@ -234,7 +234,7 @@ tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
 ### LLVM バックエンドの補足
 - Python llvmlite を使用します。Python3 + llvmlite の用意と `ny-llvmc` のビルド（`cargo build -p nyash-llvm-compiler`）が必要です。`LLVM_SYS_180_PREFIX` は不要です。
 - `NYASH_LLVM_OBJ_OUT`: `--backend llvm` 実行時に `.o` を出力するパス。
-  - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - 例: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.nyash`
 - 削除された `NYASH_LLVM_ALLOW_BY_NAME=1`: すべてのプラグイン呼び出しがmethod_idベースに統一。
   - LLVMバックエンドは性能と型安全性のため、method_idベースのプラグイン呼び出しのみ対応。
 
@@ -267,8 +267,8 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 実行:
 
 ```
-./target/release/nyash --run-task build_llvm
-./target/release/nyash --run-task smoke_obj_array
+./target/release/hakorune --run-task build_llvm
+./target/release/hakorune --run-task smoke_obj_array
 ```
 
 補足:
@@ -278,12 +278,12 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 
 ### ちいさなENVまとめ（VM vs LLVM ハーネス）
 - VM 実行: 追加ENVなしでOK。
-  - 例: `./target/release/nyash --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/hakorune --backend vm apps/tests/ternary_basic.nyash`
 - LLVM ハーネス実行: 下記3つだけ設定してね。
   - `NYASH_LLVM_USE_HARNESS=1`
   - `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc`
   - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
-  - 例: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - 例: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.nyash`
 
 ### DebugHub かんたんガイド
 - 有効化: `NYASH_DEBUG_ENABLE=1`
@@ -304,7 +304,7 @@ smoke_obj_array = "NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER={root}/target
 
 基本（Cranelift AOT）
 ```bash
-./target/release/nyash --build hako.toml \
+./target/release/hakorune --build hako.toml \
   --app apps/egui-hello-plugin/main.nyash \
   --out app_egui
 ```
@@ -421,7 +421,7 @@ cargo build --release --features cranelift-jit
 
 # 最初のプログラムを実行
 echo 'print("Hello Nyash!")' > hello.nyash
-./target/release/nyash hello.nyash
+./target/release/hakorune hello.hkr
 ```
 
 ### Windows

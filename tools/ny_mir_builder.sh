@@ -97,7 +97,8 @@ case "$EMIT" in
     if [[ "$VERIFY" == "1" ]]; then export NYASH_LLVM_VERIFY=1; fi
     if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
       cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-        ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
+        BIN="./target/release/hakorune"; [ -x "$BIN" ] || BIN="./target/release/hako"; [ -x "$BIN" ] || BIN="./target/release/nyash"
+        "$BIN" --backend llvm --ny-parser-pipe >/dev/null || true
     else
       cat "$IN_FILE" | NYASH_LLVM_USE_HARNESS=1 \
         ./target/release/nyash --backend llvm --ny-parser-pipe >/dev/null || true
@@ -146,4 +147,3 @@ case "$EMIT" in
 esac
 
 exit 0
-
