@@ -19,4 +19,4 @@ loop(i < n) {
     i = i + 1
 }
 
-b
+print("Result: " + b)

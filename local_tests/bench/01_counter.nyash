@@ -6,4 +6,4 @@ i = 0
 loop(i < 10) {
     i = i + 1
 }
-i
+print("Result: " + i)
