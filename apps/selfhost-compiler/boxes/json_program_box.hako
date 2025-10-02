@@ -1,0 +1,504 @@
+// JsonProgramBox — JSON v0 正規化の最小箱
+// 責務: Programヘッダの補正・meta.usings注入・主要Stmt/Exprのキー順安定化
+static box JsonProgramBox {
+  normalize(json, usings_json) {
+    local normalized = me.normalize_program(json)
+    return me.ensure_meta(normalized, usings_json)
+  }
+
+  ensure_meta(json, usings_json) {
+    if json == null { return "{\"version\":0,\"kind\":\"Program\",\"body\":[],\"meta\":{\"usings\":[]}}" }
+    local payload = usings_json
+    if payload == null { payload = "[]" }
+    if payload.length() == 0 { payload = "[]" }
+    local n = json.lastIndexOf("}")
+    if n < 0 { return json }
+    local head = json.substring(0, n)
+    local tail = json.substring(n, json.length())
+    local needs_comma = 1
+    if head.length() == 0 { needs_comma = 0 } else {
+      local last = head.substring(head.length() - 1, head.length())
+      if last == "{" || last == "," { needs_comma = 0 }
+    }
+    if needs_comma == 1 { head = head + "," }
+    return head + "\"meta\":{\"usings\":" + payload + "}" + tail
+  }
+
+  normalize_program(json) {
+    if json == null { return json }
+    local trimmed = me.trim(json)
+    if trimmed == null { return json }
+    if me.index_of(trimmed, 0, "\"body\"") < 0 { return json }
+
+    local version = me.extract_value(trimmed, "version")
+    if version == null { version = "0" }
+    local kind_name = me.extract_string_value(trimmed, "kind", "Program")
+    local body_raw = me.extract_value(trimmed, "body")
+    if body_raw == null { body_raw = "[]" }
+    local body_norm = me.normalize_stmt_array(body_raw)
+
+    return "{\"version\":" + version + ",\"kind\":" + me.quote(kind_name) + ",\"body\":" + body_norm + "}"
+  }
+
+  normalize_stmt_array(array_json) {
+    if array_json == null { return "[]" }
+    local trimmed = me.trim(array_json)
+    if trimmed.length() < 2 { return "[]" }
+    if trimmed.substring(0, 1) != "[" { return trimmed }
+    if trimmed == "[]" { return "[]" }
+
+    local parts = me.split_top_level(trimmed)
+    local out = new ArrayBox()
+    local i = 0
+    loop(i < parts.length()) {
+      local item = me.trim(parts.get(i))
+      if item.length() > 0 {
+        out.push(me.normalize_stmt(item))
+      }
+      i = i + 1
+    }
+    return "[" + me.join(out) + "]"
+  }
+
+  normalize_stmt(stmt_json) {
+    if stmt_json == null { return "{}" }
+    local trimmed = me.trim(stmt_json)
+    local type_name = me.extract_string_value(trimmed, "type", null)
+    if type_name == null { return trimmed }
+
+    if type_name == "Return" {
+      local expr_raw = me.extract_value(trimmed, "expr")
+      local expr_norm = me.normalize_expr(expr_raw)
+      if expr_norm == null { expr_norm = "{\"type\":\"Int\",\"value\":0}" }
+      return "{\"type\":\"Return\",\"expr\":" + expr_norm + "}"
+    }
+    if type_name == "If" {
+      local cond_raw = me.extract_value(trimmed, "cond")
+      local cond_norm = me.normalize_expr(cond_raw)
+      if cond_norm == null { cond_norm = "{\"type\":\"Bool\",\"value\":false}" }
+      local then_raw = me.extract_value(trimmed, "then")
+      local then_norm = me.normalize_stmt_array(then_raw)
+      local else_raw = me.extract_value(trimmed, "else")
+      local out = "{\"type\":\"If\",\"cond\":" + cond_norm + ",\"then\":" + then_norm
+      if else_raw != null {
+        local else_trim = me.trim(else_raw)
+        if else_trim != "null" {
+          local else_norm = me.normalize_stmt_array(else_trim)
+          if else_norm != "[]" { out = out + ",\"else\":" + else_norm }
+        }
+      }
+      return out + "}"
+    }
+    if type_name == "Loop" {
+      local cond_raw2 = me.extract_value(trimmed, "cond")
+      local cond_norm2 = me.normalize_expr(cond_raw2)
+      if cond_norm2 == null { cond_norm2 = "{\"type\":\"Bool\",\"value\":false}" }
+      local body_raw = me.extract_value(trimmed, "body")
+      local body_norm = me.normalize_stmt_array(body_raw)
+      return "{\"type\":\"Loop\",\"cond\":" + cond_norm2 + ",\"body\":" + body_norm + "}"
+    }
+    if type_name == "Local" {
+      local name = me.extract_string_value(trimmed, "name", "tmp")
+      local expr_raw3 = me.extract_value(trimmed, "expr")
+      local expr_norm3 = me.normalize_expr(expr_raw3)
+      if expr_norm3 == null { expr_norm3 = "{\"type\":\"Int\",\"value\":0}" }
+      return "{\"type\":\"Local\",\"name\":" + me.quote(name) + ",\"expr\":" + expr_norm3 + "}"
+    }
+    if type_name == "Expr" {
+      local expr_raw4 = me.extract_value(trimmed, "expr")
+      local expr_norm4 = me.normalize_expr(expr_raw4)
+      if expr_norm4 == null { expr_norm4 = "{\"type\":\"Int\",\"value\":0}" }
+      return "{\"type\":\"Expr\",\"expr\":" + expr_norm4 + "}"
+    }
+
+    return trimmed
+  }
+
+  normalize_expr_array(array_json) {
+    if array_json == null { return "[]" }
+    local trimmed = me.trim(array_json)
+    if trimmed.length() < 2 { return "[]" }
+    if trimmed.substring(0, 1) != "[" { return trimmed }
+    if trimmed == "[]" { return "[]" }
+
+    local parts = me.split_top_level(trimmed)
+    local out = new ArrayBox()
+    local i = 0
+    loop(i < parts.length()) {
+      local item = me.trim(parts.get(i))
+      if item.length() > 0 {
+        local norm = me.normalize_expr(item)
+        if norm == null { norm = item }
+        out.push(norm)
+      }
+      i = i + 1
+    }
+    return "[" + me.join(out) + "]"
+  }
+
+  normalize_expr(expr_json) {
+    if expr_json == null { return null }
+    local trimmed = me.trim(expr_json)
+    local type_name = me.extract_string_value(trimmed, "type", null)
+    if type_name == null { return trimmed }
+
+    if type_name == "Int" {
+      local value_raw = me.extract_value(trimmed, "value")
+      if value_raw == null { value_raw = "0" }
+      return "{\"type\":\"Int\",\"value\":" + me.trim(value_raw) + "}"
+    }
+    if type_name == "Str" {
+      local value_raw2 = me.extract_value(trimmed, "value")
+      if value_raw2 == null { value_raw2 = "\"\"" }
+      return "{\"type\":\"Str\",\"value\":" + me.trim(value_raw2) + "}"
+    }
+    if type_name == "Bool" {
+      local value_raw3 = me.extract_value(trimmed, "value")
+      if value_raw3 == null { value_raw3 = "false" }
+      return "{\"type\":\"Bool\",\"value\":" + me.trim(value_raw3) + "}"
+    }
+    if type_name == "Var" {
+      local name = me.extract_string_value(trimmed, "name", "")
+      return "{\"type\":\"Var\",\"name\":" + me.quote(name) + "}"
+    }
+    if type_name == "Call" {
+      local name2 = me.extract_string_value(trimmed, "name", "")
+      local args_raw = me.extract_value(trimmed, "args")
+      local args_norm = me.normalize_expr_array(args_raw)
+      return "{\"type\":\"Call\",\"name\":" + me.quote(name2) + ",\"args\":" + args_norm + "}"
+    }
+    if type_name == "Method" {
+      local recv_raw = me.extract_value(trimmed, "recv")
+      local recv_norm = me.normalize_expr(recv_raw)
+      if recv_norm == null { recv_norm = "{\"type\":\"Var\",\"name\":\"me\"}" }
+      local method_name = me.extract_string_value(trimmed, "method", "")
+      local args_raw2 = me.extract_value(trimmed, "args")
+      local args_norm2 = me.normalize_expr_array(args_raw2)
+      return "{\"type\":\"Method\",\"recv\":" + recv_norm + ",\"method\":" + me.quote(method_name) + ",\"args\":" + args_norm2 + "}"
+    }
+    if type_name == "Binary" {
+      local op = me.extract_string_value(trimmed, "op", "+")
+      local lhs_raw = me.extract_value(trimmed, "lhs")
+      local rhs_raw = me.extract_value(trimmed, "rhs")
+      local lhs_norm = me.normalize_expr(lhs_raw)
+      if lhs_norm == null { lhs_norm = "{\"type\":\"Int\",\"value\":0}" }
+      local rhs_norm = me.normalize_expr(rhs_raw)
+      if rhs_norm == null { rhs_norm = "{\"type\":\"Int\",\"value\":0}" }
+      return "{\"type\":\"Binary\",\"op\":" + me.quote(op) + ",\"lhs\":" + lhs_norm + ",\"rhs\":" + rhs_norm + "}"
+    }
+    if type_name == "Compare" {
+      local op2 = me.extract_string_value(trimmed, "op", "==")
+      local lhs_raw2 = me.extract_value(trimmed, "lhs")
+      local rhs_raw2 = me.extract_value(trimmed, "rhs")
+      local lhs_norm2 = me.normalize_expr(lhs_raw2)
+      if lhs_norm2 == null { lhs_norm2 = "{\"type\":\"Int\",\"value\":0}" }
+      local rhs_norm2 = me.normalize_expr(rhs_raw2)
+      if rhs_norm2 == null { rhs_norm2 = "{\"type\":\"Int\",\"value\":0}" }
+      return "{\"type\":\"Compare\",\"op\":" + me.quote(op2) + ",\"lhs\":" + lhs_norm2 + ",\"rhs\":" + rhs_norm2 + "}"
+    }
+    if type_name == "Logical" {
+      local op3 = me.extract_string_value(trimmed, "op", "&&")
+      local lhs_raw3 = me.extract_value(trimmed, "lhs")
+      local rhs_raw3 = me.extract_value(trimmed, "rhs")
+      local lhs_norm3 = me.normalize_expr(lhs_raw3)
+      if lhs_norm3 == null { lhs_norm3 = "{\"type\":\"Bool\",\"value\":false}" }
+      local rhs_norm3 = me.normalize_expr(rhs_raw3)
+      if rhs_norm3 == null { rhs_norm3 = "{\"type\":\"Bool\",\"value\":false}" }
+      return "{\"type\":\"Logical\",\"op\":" + me.quote(op3) + ",\"lhs\":" + lhs_norm3 + ",\"rhs\":" + rhs_norm3 + "}"
+    }
+
+    return trimmed
+  }
+
+  split_top_level(array_json) {
+    local out = new ArrayBox()
+    local n = array_json.length()
+    local i = 1
+    local start = 1
+    local depth = 0
+    local in_string = 0
+    loop(i < n - 1) {
+      local ch = array_json.substring(i, i + 1)
+      if in_string == 1 {
+        if ch == "\\" {
+          i = i + 2
+        } else {
+          if ch == "\"" { in_string = 0 }
+          i = i + 1
+        }
+      } else {
+        if ch == "\"" {
+          in_string = 1
+          i = i + 1
+        } else {
+          if ch == "{" || ch == "[" { depth = depth + 1 }
+          else if ch == "}" || ch == "]" { depth = depth - 1 }
+          else if ch == "," && depth == 0 {
+            local part = array_json.substring(start, i)
+            out.push(part)
+            start = i + 1
+          }
+          i = i + 1
+        }
+      }
+    }
+    if start < n - 1 {
+      out.push(array_json.substring(start, n - 1))
+    }
+    return out
+  }
+
+  extract_value(json, key) {
+    if json == null { return null }
+    local pattern = "\"" + key + "\""
+    local idx = me.index_of(json, 0, pattern)
+    if idx < 0 { return null }
+    idx = idx + pattern.length()
+    idx = me.skip_ws(json, idx)
+    if json.substring(idx, idx + 1) != ":" { return null }
+    idx = me.skip_ws(json, idx + 1)
+    local res = me.read_value(json, idx)
+    local at = me.last_index_of(res, "@")
+    if at < 0 { return null }
+    return res.substring(0, at)
+  }
+
+  extract_string_value(json, key, default_value) {
+    local raw = me.extract_value(json, key)
+    if raw == null { return default_value }
+    local trimmed = me.trim(raw)
+    if trimmed.length() >= 2 && trimmed.substring(0,1) == "\"" && trimmed.substring(trimmed.length()-1, trimmed.length()) == "\"" {
+      return me.unescape_string(trimmed.substring(1, trimmed.length()-1))
+    }
+    return default_value
+  }
+
+  read_value(json, idx) {
+    local n = json.length()
+    if idx >= n { return "@" + me.i2s(idx) }
+    local ch = json.substring(idx, idx + 1)
+    if ch == "\"" { return me.read_string(json, idx) }
+    if ch == "{" { return me.read_object(json, idx) }
+    if ch == "[" { return me.read_array(json, idx) }
+    return me.read_literal(json, idx)
+  }
+
+  read_string(json, idx) {
+    local i = idx + 1
+    local n = json.length()
+    local done = 0
+    loop(done == 0 && i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\\" {
+        i = i + 2
+      } else {
+        if ch == "\"" { done = 1 i = i + 1 } else { i = i + 1 }
+      }
+    }
+    return json.substring(idx, i) + "@" + me.i2s(i)
+  }
+
+  skip_string(json, idx) {
+    local i = idx + 1
+    local n = json.length()
+    local done = 0
+    loop(done == 0 && i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\\" { i = i + 2 }
+      else { if ch == "\"" { done = 1 i = i + 1 } else { i = i + 1 } }
+    }
+    return i
+  }
+
+  read_object(json, idx) {
+    local depth = 0
+    local i = idx
+    local n = json.length()
+    loop(i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\"" {
+        i = me.skip_string(json, i)
+      } else {
+        if ch == "{" { depth = depth + 1 }
+        else if ch == "}" {
+          depth = depth - 1
+          if depth == 0 { i = i + 1 break }
+        }
+        i = i + 1
+      }
+    }
+    return json.substring(idx, i) + "@" + me.i2s(i)
+  }
+
+  read_array(json, idx) {
+    local depth = 0
+    local i = idx
+    local n = json.length()
+    loop(i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\"" {
+        i = me.skip_string(json, i)
+      } else {
+        if ch == "[" { depth = depth + 1 }
+        else if ch == "]" {
+          depth = depth - 1
+          if depth == 0 { i = i + 1 break }
+        }
+        i = i + 1
+      }
+    }
+    return json.substring(idx, i) + "@" + me.i2s(i)
+  }
+
+  read_literal(json, idx) {
+    local n = json.length()
+    local i = idx
+    loop(i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "," || ch == "}" || ch == "]" { break }
+      i = i + 1
+    }
+    return json.substring(idx, i) + "@" + me.i2s(i)
+  }
+
+  index_of(s, start, pat) {
+    local n = s.length()
+    local m = pat.length()
+    if m == 0 { return start }
+    local i = start
+    loop(i + m <= n) {
+      local j = 0
+      local matched = 1
+      loop(j < m) {
+        if s.substring(i + j, i + j + 1) != pat.substring(j, j + 1) { matched = 0 break }
+        j = j + 1
+      }
+      if matched == 1 { return i }
+      i = i + 1
+    }
+    return -1
+  }
+
+  last_index_of(s, pat) {
+    local n = s.length()
+    local m = pat.length()
+    if m == 0 { return n }
+    local i = n - m
+    loop(i >= 0) {
+      local j = 0
+      local matched = 1
+      loop(j < m) {
+        if s.substring(i + j, i + j + 1) != pat.substring(j, j + 1) { matched = 0 break }
+        j = j + 1
+      }
+      if matched == 1 { return i }
+      i = i - 1
+    }
+    return -1
+  }
+
+  skip_ws(s, idx) {
+    local i = idx
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i + 1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1 } else { break }
+    }
+    return i
+  }
+
+  trim(s) {
+    if s == null { return "" }
+    local n = s.length()
+    local i = 0
+    loop(i < n && (s.substring(i, i + 1) == " " || s.substring(i, i + 1) == "\n" || s.substring(i, i + 1) == "\r" || s.substring(i, i + 1) == "\t")) { i = i + 1 }
+    local j = n
+    loop(j > i && (s.substring(j - 1, j) == " " || s.substring(j - 1, j) == "\n" || s.substring(j - 1, j) == "\r" || s.substring(j - 1, j) == "\t")) { j = j - 1 }
+    return s.substring(i, j)
+  }
+
+  join(parts) {
+    if parts == null { return "" }
+    local out = ""
+    local i = 0
+    local n = parts.length()
+    loop(i < n) {
+      local item = parts.get(i)
+      if i == 0 { out = out + item } else { out = out + "," + item }
+      i = i + 1
+    }
+    return out
+  }
+
+  quote(s) {
+    if s == null { s = "" }
+    return "\"" + me.escape_string(s) + "\""
+  }
+
+  escape_string(s) {
+    if s == null { return "" }
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i + 1)
+      if ch == "\\" { out = out + "\\\\" } else {
+        if ch == "\"" { out = out + "\\\"" } else {
+          if ch == "\n" { out = out + "\\n" } else {
+            if ch == "\r" { out = out + "\\r" } else {
+              if ch == "\t" { out = out + "\\t" } else { out = out + ch }
+            }
+          }
+        }
+      }
+      i = i + 1
+    }
+    return out
+  }
+
+  unescape_string(s) {
+    if s == null { return "" }
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i + 1)
+      if ch == "\\" && i + 1 < n {
+        local nx = s.substring(i + 1, i + 2)
+        if nx == "\"" {
+          out = out + "\""
+          i = i + 2
+        } else {
+          if nx == "\\" {
+            out = out + "\\"
+            i = i + 2
+          } else {
+            if nx == "n" {
+              out = out + "\n"
+              i = i + 2
+            } else {
+              if nx == "r" {
+                out = out + "\r"
+                i = i + 2
+              } else {
+                if nx == "t" {
+                  out = out + "\t"
+                  i = i + 2
+                } else {
+                  out = out + ch
+                  i = i + 1
+                }
+              }
+            }
+          }
+        }
+      } else {
+        out = out + ch
+        i = i + 1
+      }
+    }
+    return out
+  }
+
+  i2s(v) { return "" + v }
+}

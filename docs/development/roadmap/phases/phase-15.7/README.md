@@ -132,6 +132,40 @@ Hakoruneで実行器書く
 #### **P4: NYABI Kernel 下地の維持（未配線・既定OFF）**
 - 将来の拡張性のための下地準備（Phase 16以降で本格化）
 
+【2025-10-03 追記 — Core Kernel: TimerBox (P1)】
+- ねらい: ベンチ/待機/パリティ検証のための「最小の時刻API」をコアBoxで提供する。
+- Extern 仕様（最小）:
+  - nyrt.time.now_ms → i64（単調時刻; ms）
+  - LLVM: src/llvm_py/instructions/externcall.py にバインドを追加
+  - VM(Rust): extern_call("nyrt","time.now_ms") を実装（std::time::Instant ベース）
+  - WASM: JS の Date.now() で一時バインド（将来 Monotonic を検討）
+- Box 仕様（最小）:
+  - TimerBox.now_ms(): i64（上記 extern の薄ラップ）
+  - modules 登録: selfhost.core.timer = "apps/core/timer/TimerBox.hako"（配置は後追い）
+- 受け入れ（quick 最小スモーク）:
+  - tools/smokes/v2/profiles/quick/core/timer_now_ms_vm.sh（2回の now_ms の差 ≥ 0）
+  - tools/smokes/v2/profiles/quick/llvm/timer_now_ms_harness.sh（ハーネス時のみ; 無ければ SKIP）
+- 注意:
+  - まずは now_ms のみ（sleep_ms/async は別フェーズ）。
+  - 壁時計と混在しないよう「単調時刻」を明記（壁時計は ClockBox として将来導入）。
+
+【2025-10-03 実装完了メモ】
+- 実装:
+  - VM/LLVM/WASM へ `nyrt.time.now_ms` を配線。TimerBox は薄い導線（`apps/core/timer/TimerBox.hako`）。
+  - フロント（Builder）で `TimerBox.now_ms()`/`new TimerBox().now_ms()` を `ExternCall("nyrt.time","now_ms")` に正規化。
+- テスト:
+  - quick: `core/timer_now_ms_vm.sh` で Result 行を検証。
+  - quick/llvm: `llvm/timer_now_ms_harness.sh` はハーネス環境が無い場合 SKIP（Fail‑Fast設計）。
+- 付記:
+  - quick プロファイルでは LLVM/AOT の一部ケースを環境依存にしないため、ハーネス未検出・静的プラグイン未構成時は SKIP 方針に統一（詳細は各スモークスクリプト参照）。
+
+【Core Kernel 候補（検討メモ）】
+- ConsoleBox（既存）: log/print の最小API。現状維持。
+- TimerBox（本件 P1）: now_ms のみ。sleep_ms は P2 以降（協調スケジューラ設計後）。
+- RandomBox（候補）: seed(u64)/next_u64() のみ（テスト再現性目的）。導入は CI/シード方針が固まってから。
+- EnvBox（候補）: get(name)/set(name,value) の最小。既定OFF; 影響範囲が広いので Box 境界で隔離。
+- FSBox（候補）: read_file(path)/write_file(path,data) の最小。Runner/サンドボックス方針の下で将来。
+
 ## 🚀 **セルフホスティング実現への道筋**
 
 ### 📅 **推奨実装順序（並行開発戦略）**

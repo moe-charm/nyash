@@ -1,0 +1,6 @@
+static box Main {
+  main() {
+    print("Result: " + 42)
+    return 0
+  }
+}

@@ -5,15 +5,33 @@
 # set -eは使わない（個々のテストが失敗しても全体を続行するため）
 set -uo pipefail
 
+alias_env_prefixes() {
+  # Map HAKO_/HAKU_/HRN_ → NYASH_* when NYASH_* is unset (non-destructive)
+  while IFS='=' read -r k v; do
+    case "$k" in
+      HAKO_*|HAKU_*|HRN_*)
+        tail="${k#HAKO_}"; if [ "$tail" = "$k" ]; then tail="${k#HAKU_}"; fi; if [ "$tail" = "$k" ]; then tail="${k#HRN_}"; fi
+        ny="NYASH_${tail}"
+        if [ -z "${!ny:-}" ]; then export "$ny"="$v"; fi ;;
+    esac
+  done < <(env)
+}
+
 # ルート/バイナリ検出（CWDに依存しない実行を保証）
+alias_env_prefixes
 if [ -z "${NYASH_ROOT:-}" ]; then
   # Prefer HAKO_ROOT as an alias when present
   if [ -n "${HAKO_ROOT:-}" ]; then export NYASH_ROOT="$HAKO_ROOT"; else
     export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
   fi
 fi
-# Binary path (nyash remains the canonical binary name; alias 'hrn' may be available)
-export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
+# Binary path detection: prefer hakorune → hako → nyash unless NYASH_BIN is set
+if [ -z "${NYASH_BIN:-}" ]; then
+  for cand in "$NYASH_ROOT/target/release/hakorune" "$NYASH_ROOT/target/release/hako" "$NYASH_ROOT/target/release/nyash"; do
+    if [ -x "$cand" ]; then NYASH_BIN="$cand"; break; fi
+  done
+  export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
+fi
 
 # グローバル変数
 export SMOKES_V2_LIB_LOADED=1
@@ -106,9 +124,9 @@ require_env() {
         return 1
     fi
 
-    # Nyash実行ファイル確認
+    # 実行ファイル確認
     if [ ! -f "$NYASH_BIN" ]; then
-    log_error "Hakorune executable not found at $NYASH_BIN (binary name: nyash)"
+    log_error "Executable not found at $NYASH_BIN (tried hakorune/hako/nyash)"
     log_error "Please run 'cargo build --release' first (in $NYASH_ROOT)"
         return 1
     fi

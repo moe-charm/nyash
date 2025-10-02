@@ -1,6 +1,6 @@
 # Self‑Hosting Quickstart (Phase 15 — Resume)
 
-This note shows how to run the Nyash self‑host compiler MVP to emit MIR(JSON v0) and execute it with the current VM line. The flow keeps defaults unchanged and uses small, opt‑in flags for development.
+This note shows how to run the hakorune self‑host compiler MVP to emit AST JSON / MIR(JSON v0) and execute it with the current VM line. The flow keeps defaults unchanged and uses small, opt‑in flags for development.
 
 ## Layout
 - Compiler MVP: `apps/selfhost-compiler/compiler.hako`
@@ -12,14 +12,15 @@ Use the runner’s selfhost pipeline with parent→child ENV forwarding. Default
 
 Examples (safe, short, quiet):
 ```
-# Emit minimal AST JSON (header must contain {"version", "kind"})
+# Emit minimal AST JSON via pipeline v2 (header must contain {"version", "kind"})
 NYASH_DISABLE_PLUGINS=1 \
 NYASH_USE_NY_COMPILER=1 \
 NYASH_NY_COMPILER_MIN_JSON=1 \
+NYASH_NY_COMPILER_CHILD_ARGS="--pipeline-v2" \
 NYASH_NY_COMPILER_EMIT_ONLY=1 \
 NYASH_NY_COMPILER_SKIP_PY=1 \
 NYASH_JSON_ONLY=1 \
-timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako
+timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako
 
 # Emit minimal MIR(JSON v0) (const→ret)
 NYASH_DISABLE_PLUGINS=1 \
@@ -29,7 +30,7 @@ NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" \
 NYASH_NY_COMPILER_EMIT_ONLY=1 \
 NYASH_NY_COMPILER_SKIP_PY=1 \
 NYASH_JSON_ONLY=1 \
-timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako
+timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako
 ```
 
 Parent→child ENV mapping（official）
@@ -46,13 +47,13 @@ Parent→child ENV mapping（official）
 Direct run (dev only; requires allowing file using):
 ```
 timeout 5 \
-  NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude NYASH_JSON_ONLY=1 \
-  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json
+  NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 \
+  ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json
   
 # Optional: pipeline v2 (emit-only)
 timeout 5 \
   NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude NYASH_JSON_ONLY=1 \
-  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2
+  ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2
 ```
 
 ## Execute MIR(JSON v0)
@@ -60,30 +61,31 @@ Use the VM line (Rust) or PyVM harness as needed.
 
 Rust VM (default):
 ```
-./target/release/nyash --backend vm apps/examples/json_query/main.nyash
+./target/release/hakorune --backend vm apps/examples/json_query/main.hako
 ```
 
 PyVM reference (when verifying parity):
 ```
-NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/examples/json_query/main.nyash
+NYASH_VM_USE_PY=1 ./target/release/hakorune --backend vm apps/examples/json_query/main.hako
 ```
 
 LLVM harness (llvmlite):
 ```
-NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/examples/json_query/main.nyash
+NYASH_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm apps/examples/json_query/main.hako
 ```
 
 Notes:
 - For self‑host emitted JSON, route the file to your runner pipeline or a small loader script (dev only). Keep defaults unchanged in CI (no new jobs required).
 
 ## One‑shot dev smoke
-Run a minimal end‑to‑end smoke that tries to emit JSON (best‑effort) and verifies VM outputs match with Known rewrite ON/OFF:
+Run quick selfhost checks (JSON header, normalization shapes, VM/LLVM parity when available):
 
 ```
-tools/selfhost_smoke.sh
+tools/smokes/v2/run.sh --profile quick --filter '*selfhost*'
 ```
 
-It does not modify defaults and is safe to run locally.
+Notes on normalization
+- Emitter delegates to `JsonProgramBox` which ensures stable shapes for Return/If/Loop/Call/Compare/Logical and always appends `meta.usings`.
 
 ## Flags (dev)
 - Known rewrite default ON (userbox only, strict guards): `NYASH_REWRITE_KNOWN_DEFAULT=0|1`

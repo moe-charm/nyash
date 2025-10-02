@@ -206,7 +206,11 @@ fn link_executable(
     };
     let lib_nyash = nyrt_dir.join("libnyash_kernel.a");
     let lib_hako = nyrt_dir.join("libhako_kernel.a");
-    let libnyrt = if lib_nyash.exists() { &lib_nyash } else { &lib_hako };
+    let libnyrt = if lib_nyash.exists() {
+        &lib_nyash
+    } else {
+        &lib_hako
+    };
     if !libnyrt.exists() {
         bail!(
             "Kernel archive not found in {} (looked for libnyash_kernel.a, libhako_kernel.a). Use --nyrt to specify directory",

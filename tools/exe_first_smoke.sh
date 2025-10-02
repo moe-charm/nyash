@@ -29,7 +29,8 @@ echo "[4/4] Executing via bridge (pipe) to verify semantics ..."
 # Keep core minimal and deterministic
 export NYASH_DISABLE_PLUGINS=1
 set +e
-timeout -s KILL 60s bash -c 'cat dist/nyash_compiler/sample.json | ./target/release/nyash --ny-parser-pipe --backend vm >/dev/null'
+BIN="./target/release/hakorune"; [ -x "$BIN" ] || BIN="./target/release/hako"; [ -x "$BIN" ] || BIN="./target/release/nyash"
+timeout -s KILL 60s bash -c 'cat dist/nyash_compiler/sample.json | '"$BIN"' --ny-parser-pipe --backend vm >/dev/null'
 RC=$?
 set -e
 if [[ "$RC" -ne 7 ]]; then

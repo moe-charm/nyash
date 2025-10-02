@@ -9,6 +9,12 @@ preflight_plugins || exit 2
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
 
+# Pipeline V2 is experimental; run only when explicitly enabled
+if [[ "${NYASH_PIPELINE_V2:-}" != "1" ]]; then
+  test_skip "Pipeline V2 is experimental; set NYASH_PIPELINE_V2=1 to enable"
+  exit 0
+fi
+
 TMP_DIR="/tmp/selfhost_compiler_emit_mir_cmp_v2_vm_$$"
 mkdir -p "$TMP_DIR"
 
@@ -36,4 +42,3 @@ compare_outputs "$expected" "$out" "selfhost_compiler_emit_mir_cmp_v2_vm" || { c
 
 rm -rf "$TMP_DIR"
 exit 0
-

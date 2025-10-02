@@ -1,0 +1,26 @@
+using selfhost.core.timer as TimerBox
+
+static box Main {
+  main() {
+    local timer = new TimerBox()
+    local start = timer.now_ms()
+    local span = timer.now_ms() - start
+    if span < 0 {
+      print("Result: NEG")
+      return 1
+    }
+    // Sample again to ensure monotonic progression
+    local later = timer.now_ms()
+    if later - start < 0 {
+      print("Result: NEG")
+      return 1
+    }
+    // Guard against obvious bogus values (large negative wrap)
+    if later < 0 {
+      print("Result: NEG")
+      return 1
+    }
+    print("Result: OK")
+    return 0
+  }
+}

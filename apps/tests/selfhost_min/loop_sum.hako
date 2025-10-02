@@ -1,0 +1,12 @@
+static box Main {
+  main() {
+    local i = 1
+    local sum = 0
+    loop (i <= 5) {
+      sum = sum + i
+      i = i + 1
+    }
+    print("Result: " + sum)
+    return 0
+  }
+}

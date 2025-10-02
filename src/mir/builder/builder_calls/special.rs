@@ -57,7 +57,7 @@ impl MirBuilder {
     ) -> Option<Result<ValueId, String>> {
         let ASTNode::FieldAccess { object: env_obj, field: env_field, .. } = object else { return None; };
         if let ASTNode::Variable { name: env_name, .. } = env_obj.as_ref() {
-            if env_name != "env" { return None; }
+            if env_name != "env" && env_name != "nyrt" { return None; }
             // Build arguments once
             let mut arg_values = Vec::new();
             for arg in arguments {
@@ -75,13 +75,27 @@ impl MirBuilder {
                     Ok(void_id)
                 }
             };
-            // Use the new module for env method spec
-            if let Some((iface_name, method_name, effects, returns)) =
-                extern_calls::get_env_method_spec(iface, m)
-            {
-                return Some(extern_call(&iface_name, &method_name, effects, returns));
+            if env_name == "env" {
+                if let Some((iface_name, method_name, effects, returns)) =
+                    extern_calls::get_env_method_spec(iface, m)
+                {
+                    return Some(extern_call(&iface_name, &method_name, effects, returns));
+                }
+                return None;
             }
-            return None;
+            if env_name == "nyrt" {
+                match (iface, m) {
+                    ("time", "now_ms") => {
+                        return Some(extern_call(
+                            "nyrt.time",
+                            "now_ms",
+                            EffectMask::READ,
+                            true,
+                        ));
+                    }
+                    _ => return None,
+                }
+            }
         }
         None
     }

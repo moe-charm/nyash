@@ -98,6 +98,8 @@ def lower_externcall(
         "nyash.string.lastIndexOf_ss": (i64, [i8p, i8p]),
         # Boxing helpers
         "nyash.box.from_i8_string": (i64, [i8p]),
+        # Timer utilities
+        "nyrt.time.now_ms": (i64, []),
         # Console (string pointer expected)
         # Many call sites pass handles or pointers; we coerce below.
     }

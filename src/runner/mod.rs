@@ -305,8 +305,8 @@ impl NyashRunner {
     /// ARCHIVED: JIT/Cranelift functionality disabled for Phase 15
     fn run_file_jit_direct(&self, filename: &str) {
         eprintln!("❌ JIT-direct mode is archived for Phase 15. JIT/Cranelift moved to archive/jit-cranelift/");
-        eprintln!("   Use VM backend instead: nyash {}", filename);
-        eprintln!("   Or use LLVM backend: nyash --backend llvm {}", filename);
+        eprintln!("   Use VM backend instead: hakorune {}", filename);
+        eprintln!("   Or use LLVM backend: hakorune --backend llvm {}", filename);
         std::process::exit(1);
     }
 }

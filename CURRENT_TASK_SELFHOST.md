@@ -30,17 +30,23 @@ Notes
 - CLI naming: バイナリは `hako`。`nyash` は環境により互換で利用可能。
 - Entry smokes are gated via `SMOKES_ENABLE_ENTRY=1` by design.
 
-Next actions
-- [x] Add/update CURRENT_TASK for selfhost (this file)
-- [x] Append a short PHI `values` spec to reference docs
-- [x] Enable commit/push for selfhost branches (local hooks updated)
-- [x] PipelineV2: Apply LocalSSA.ensure_cond as final pass (fail‑safe)
-- [x] Add quick smokes for If(Compare) CFG and loop counter
-- [x] Verify Jump lowering and add docs pointers (quick/selfhost jump smokes; LLVM PHI harness smokes)
- - [x] v1→v0 downgrade extern fallback (harness‑only): unresolved Global → externcall when NYASH_LLVM_DOWNGRADE_V1=1
-   - Runner emit updated: src/runner/mir_json_emit.rs
-   - New smoke: tools/smokes/v2/profiles/quick/llvm/harness_v1_downgrade_global_extern_compile_ok.sh
-   - Fail‑Fast maintained for VM/AOT (unresolved Global → error)
+Next actions — Phase 15.9 front MVP (Ny→JSON v0)
+- [ ] Front pipeline MVP (const/binop/compare/if/loop/ret/call) emitting JSON v0 via ParserBox + emitter (fail-fast on unsupported forms)
+- [ ] CLI: `--emit-mir` and `--emit-exe` wiring on `hakorune` (ENV stays opt-in; document defaults)
+- [ ] Quick smokes (Result-line compare) for:
+  - selfhost_min_const_ret (VM/LLVM)
+  - selfhost_min_if_merge (VM/LLVM)
+  - selfhost_min_loop_sum (VM/LLVM)
+- [ ] CURRENT_TASK_SELFHOST + docs: keep timeline (Day 1/2 front MVP, Day 3/4 calls/boxcall, Day 5 CLI polish) in sync
+- [ ] Bench harness notes: ensure LLVM/WASM legs point to the same `NYASH_NY_LLVM_COMPILER` / `NYASH_EMIT_EXE_NYRT`
+
+Progress (2025‑10‑02)
+- [x] Added `JsonProgramBox` for AST JSON normalization + `meta.usings` injection.
+- [x] Emitter delegates to the normalization box; runner inline path updated accordingly.
+- [x] Quick smokes added:
+  - `selfhost_source_inline_min_json_vm` (Runner→child `--source-inline`)
+  - `selfhost_min_json_shape_if_vm` (If ノード存在)
+  - `selfhost_json_normalize_shapes` (If/Loop/Call/Return + meta.usings)
 
 Phase 15.7 — NyKernel (Option B) minimal AOT step
 - [x] Introduce `crates/hako_kernel` minimal static shim (C‑ABI stubs)
@@ -70,11 +76,39 @@ Addendum — 2025‑10‑01 (late)
 
 Addendum — 2025‑10‑02
 - Runner/Flow minimal box化（emit-only入口＆VM実行ヘルパ）
-  - Added: `apps/selfhost-compiler/pipeline_v2/flow_entry.hako` (FlowEntryBox) — emit‑only entry, v0 / v1→v0 互換
-  - Added: `apps/selfhost/vm/flow_runner.hako` (FlowRunner) — FlowEntry→Mini‑VM 実行の薄い箱
+  - Added: `apps/selfhost-compiler/pipeline_v2/flow_entry.hako` (FlowEntryBox) — emit-only entry, v0 / v1→v0 互換
+  - Added: `apps/selfhost/vm/flow_runner.hako` (FlowRunner) — FlowEntry→Mini-VM 実行の薄い箱
   - Mapped modules: `selfhost.compiler.pipeline_v2.flow_entry`, `selfhost.vm.flow_runner`（nyash.toml/hako.toml）
   - New smoke: `tools/smokes/v2/profiles/quick/selfhost/selfhost_flow_runner_return_int_vm.sh`（Return(Int 42)→exec=42）
 - LocalSSA 材化ポリシー整理（PHI直後に統一）
   - ensure_calls: 実装済（v0/v1のrecv/argsに対応）
   - ensure_cond: ブロック先頭→PHI直後に変更（copy位置を統一）
   - 既存 selfhost PipelineV2 smokesは NYASH_PIPELINE_V2=1 で回して緑を確認
+
+Plan snapshot — 2025‑10‑03 preview
+- **Day 1–2**: Front MVP
+  - Implement Ny→JSON v0 for const/binop/compare/if/loop/ret/call.
+  - Document interface expectations in `docs/development/selfhosting/front_mvp.md` (new).
+  - Add quick smokes comparing VM vs LLVM outputs (Result lines).
+- **Day 3–4**: Calls & BoxCall minimal
+  - Extend DP reuse for argument lowering; keep runtime defaults unchanged.
+  - Add extern quick cases (string len / concat parity).
+- **Day 5**: CLI / Docs polish
+  - Wire `--emit-mir` / `--emit-exe` to hakorune; minimize ENV surface.
+  - Refresh README & CURRENT_TASK, link bench harness instructions.
+
+Addendum — 2025‑10‑03 (TimerBox P1 + quick 緑化)
+- Core Kernel: TimerBox P1 実装（now_ms のみ、単調時刻ms）。
+  - VM/LLVM/WASM へ `nyrt.time.now_ms` を配線（WASM は MVP として `Date.now()`）。
+  - 薄い箱: `apps/core/timer/TimerBox.hako` を modules に登録（`selfhost.core.timer`）。
+  - Builder 正規化: `new TimerBox().now_ms()`/`TimerBox.now_ms()` → `ExternCall("nyrt.time","now_ms")`。
+  - Quick スモーク追加: `core/timer_now_ms_vm.sh`（VM）/ `llvm/timer_now_ms_harness.sh`（ハーネス有なら実行、無ければ SKIP）。
+
+- quick プロファイルの安定化（LLVM系）
+  - ハーネス未検出時は `run_nyash_llvm` ヘルパ経由で SKIP に変更（quick は高速/安定優先）。
+  - AOT で静的プラグインを要するケース（Array/Map）は未構成なら SKIP（`aot_array_push_len_exe.sh`, `aot_map_set_size_exe.sh`）。
+  - Selfhost Pipeline V2 の一部は `NYASH_PIPELINE_V2=1` で有効化（既定は SKIP）。
+
+- 現在の状態
+  - Quick プロファイル: 全緑（172/172 PASS）を確認。
+  - 追跡: modules 既定解決で `selfhost.core.timer` が常時拾えるかの最終化（現状はスモーク内で `NYASH_MODULES` により明示設定）。

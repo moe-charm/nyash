@@ -6,9 +6,9 @@ Scope
 
 Run (official runner path)
 - Minimal AST JSON (header):
-  - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako`
+  - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--pipeline-v2" NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
 - Minimal MIR(JSON v0) (const→ret / cmp→branch+jump→ret):
-  - `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako`
+  - `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
 
 Execution policy (Phase 15.7)
 - Default executor: Rust VM. PyVM is used only when explicitly requested by env.
@@ -18,7 +18,7 @@ Execution policy (Phase 15.7)
 
 Direct run (dev only)
 - Allow file using and AST merge when running the Ny compiler program directly (use timeout to prevent hangs):
-  - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
+  - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
 - Optional (emit-only pipeline v2): append `--pipeline-v2` to route via ExecutionPipelineBox
   - `... apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2`
 
@@ -39,6 +39,7 @@ Environment (selfhost pipeline)
 
 Acceptance (dev)
 - AST JSON: header must contain `{"version":..., "kind":...}` (non-empty).
+- AST JSON is normalized by `JsonProgramBox` to a stable key order and shapes for Return/If/Loop/Call/Compare/Logical, and `meta.usings` is always present (possibly empty array).
 - MIR JSON v0: contains a single main function.
   - Return(Int): single block `const`→`ret`.
   - Return(Compare(Int,Int)): 4 blocks CFG: entry(`const`×2→`compare`→`branch`), then(`const 1`→`jump`), else(`const 0`→`jump`), merge(`ret`).
@@ -46,7 +47,7 @@ Acceptance (dev)
 Notes
 - Core (`src/`) remains stable; compiler changes are scoped here and guarded by flags.
 - Quick/integration profiles must remain green; compiler acceptance is dev-gated initially.
- - LocalSSA (builder/ssa/local.nyash): for MIR input, ensures `branch(cond)` has an in-block materialized value by injecting a `copy` at the block head when needed (behavior-preserving).
+ - LocalSSA (builder/ssa/local.hako): for MIR input, ensures `branch(cond)` has an in-block materialized value by injecting a `copy` at the block head when needed (behavior-preserving).
 
 Failure policy (Fail‑Fast)
 - No silent fallbacks. Timeouts, parse errors, or malformed JSON v0 must terminate with a clear diagnostic.
@@ -59,7 +60,7 @@ Planned smokes (quick / lightweight)
 
 LocalSSA Trace (dev only)
 - Default OFF. Enable from Ny code:
-  - `using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA`
+  - `using "apps/selfhost-compiler/builder/ssa/local.hako" as LocalSSA`
   - `LocalSSA.trace_enable(1)`; then call `LocalSSA.ensure_cond(mir_json)`
   - Read stats via `LocalSSA.trace_get_map()` or `LocalSSA.trace_summary()`
 - Selfhost CLI toggle (emit MIR path only): add `--ssa-trace` together with `--compiler-track --emit-mir`.
@@ -76,3 +77,12 @@ Pipeline v2 (Box-First, emit-only)
 - Example (dev):
   - `using "apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako" as Px`
   - `local p = new Px()`; `p.run_source("return 0", 0)`
+
+Normalization box (meta/usings + shapes)
+- `apps/selfhost-compiler/boxes/json_program_box.hako` consolidates minimal JSON v0 normalization:
+  - Program header: ensures `version/kind/body` and appends `meta.usings`.
+  - Statements: `Return/If/Loop/Local/Expr` stabilized to a consistent key order and defaults.
+  - Expressions: `Int/Str/Bool/Var/Call/Method/Binary/Compare/Logical` normalized with defaults.
+- Emitter path delegates to this box; validate with quick smokes:
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_min_json_shape_if_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_json_normalize_shapes.sh`

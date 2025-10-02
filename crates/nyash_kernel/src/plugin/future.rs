@@ -112,8 +112,9 @@ pub extern "C" fn nyash_future_spawn_method_h(
     }
     // Prepare FutureBox and register handle
     let fut_box = std::sync::Arc::new(nyash_rust::boxes::future::FutureBox::new());
-    let handle =
-    nyash_rust::runtime::host_handles::to_handle_arc(fut_box.clone() as std::sync::Arc<dyn NyashBox>);
+    let handle = nyash_rust::runtime::host_handles::to_handle_arc(
+        fut_box.clone() as std::sync::Arc<dyn NyashBox>
+    );
     // Copy data for async task
     let cap: usize = 512;
     let tlv = buf.clone();
@@ -388,8 +389,9 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     }
     // Create Future and schedule async invoke
     let fut_box = std::sync::Arc::new(nyash_rust::boxes::future::FutureBox::new());
-    let handle =
-    nyash_rust::runtime::host_handles::to_handle_arc(fut_box.clone() as std::sync::Arc<dyn NyashBox>);
+    let handle = nyash_rust::runtime::host_handles::to_handle_arc(
+        fut_box.clone() as std::sync::Arc<dyn NyashBox>
+    );
     let tlv = buf.clone();
     nyash_rust::runtime::global_hooks::spawn_task(
         "nyash.future.spawn_instance3_i64",

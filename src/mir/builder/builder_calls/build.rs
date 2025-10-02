@@ -321,6 +321,9 @@ impl MirBuilder {
             let is_local_var = self.variable_map.contains_key(obj_name);
             // Phase 15.5: Treat unknown identifiers in receiver position as static type names
             if !is_local_var {
+                if obj_name == "TimerBox" && method == "now_ms" && arguments.is_empty() {
+                    return self.emit_timer_now_ms_call();
+                }
                 return self.handle_static_method_call(obj_name, &method, &arguments);
             }
         }
@@ -396,6 +399,17 @@ impl MirBuilder {
         // 4. Build object value for remaining cases
         let object_value = self.build_expression(object)?;
 
+        if method == "now_ms" && arguments.is_empty() {
+            if self
+                .value_origin_newbox
+                .get(&object_value)
+                .map(|name| name == "TimerBox")
+                .unwrap_or(false)
+            {
+                return self.emit_timer_now_ms_call();
+            }
+        }
+
         // 5. Handle TypeOp methods: value.is("Type") / value.as("Type")
         // Note: This was duplicated in original code - now unified!
         if let Some(type_name) = special_handlers::is_typeop_method(&method, &arguments) {
@@ -404,5 +418,17 @@ impl MirBuilder {
 
         // 6. Fallback: standard Box/Plugin method call
         self.handle_standard_method_call(object_value, method, &arguments)
+    }
+
+    fn emit_timer_now_ms_call(&mut self) -> Result<ValueId, String> {
+        let dst = self.value_gen.next();
+        self.emit_instruction(MirInstruction::ExternCall {
+            dst: Some(dst),
+            iface_name: "nyrt.time".to_string(),
+            method_name: "now_ms".to_string(),
+            args: vec![],
+            effects: EffectMask::READ,
+        })?;
+        Ok(dst)
     }
 }

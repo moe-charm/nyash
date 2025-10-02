@@ -210,7 +210,7 @@ P1（周辺の安定化・非破壊）
 - 効果マスク: ModuleFunction は既定で READ+ReadHeap（保守的）
   - src/mir/builder/calls/call_unified.rs:compute_call_effects
 - 検証: 直起動 selfhost（--min-json）が安定して最小ヘッダを出力
-  - 実行例: `NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 NYASH_MIR_CALL_MODULE_FN=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
+  - 実行例: `NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 NYASH_MIR_CALL_MODULE_FN=1 ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
   - 期待: 先頭1行 Program ヘッダ
 
 
@@ -252,10 +252,10 @@ WASM ライン（wasm-development）取り込み注意
     - 影響: 仕様不変・ログのみ抑制。再ビルドで反映。
 - 安全な実行手順（Rust VM固定・子経路推奨）:
   - 子経路（最小ヘッダのみ出力）
-    - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/examples/string_p0.hako`
+    - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
     - 期待出力: 先頭に `{ "version":0, "kind":"Program", ... }` の1行
   - 直接起動（診断用・timeout必須）
-    - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`  （互換: .nyash も受理）
+    - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`  （互換: .nyash も受理）
     - 期待出力: 同じく最小ヘッダ1行（固まり時はtimeoutで切断）
 - 受け入れ（dev 任意ゲート）:
   - `NYASH_JSON_ONLY=1` で最初の1行が JSON ヘッダ（version/kind 非空）であること。
@@ -273,7 +273,7 @@ WASM ライン（wasm-development）取り込み注意
   10) 子プロセスへ NYASH_QUIET を渡さない（emit-only の stdout を抑止しない）。
 - 運用メモ（固まり時の掃除）:
   - 一覧: `ps -eo pid,etimes,%cpu,comm,args | rg nyash`
-  - 強制終了: `pkill -9 -f 'target/release/nyash|apps/selfhost-compiler/compiler.hako|pyvm'`
+  - 強制終了: `pkill -9 -f 'target/release/hakorune|apps/selfhost-compiler/compiler.hako|pyvm'`
 
 ## ✅ Update — 2025-10-01（.hako 採用 — selfhost/resolver 優先化）
 

@@ -1,0 +1,61 @@
+// Mini-VM JSON cursor helpers (extracted)
+// One static box per file per using/include policy
+static box MiniJsonCur {
+  _is_digit(ch) { if ch == "0" { return 1 } if ch == "1" { return 1 } if ch == "2" { return 1 } if ch == "3" { return 1 } if ch == "4" { return 1 } if ch == "5" { return 1 } if ch == "6" { return 1 } if ch == "7" { return 1 } if ch == "8" { return 1 } if ch == "9" { return 1 } return 0 }
+  // Skip whitespace from pos; return first non-ws index or -1
+  next_non_ws(s, pos) {
+    local i = pos
+    local n = s.length()
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch != " " && ch != "\n" && ch != "\r" && ch != "\t" { return i }
+      i = i + 1
+    }
+    return -1
+  }
+  // Read a quoted string starting at pos '"'; returns decoded string (no state)
+  read_quoted_from(s, pos) {
+    local i = pos
+    if s.substring(i, i+1) != "\"" { return "" }
+    i = i + 1
+    local out = ""
+    local n = s.length()
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\"" { break }
+      if ch == "\\" {
+        i = i + 1
+        ch = s.substring(i, i+1)
+      }
+      out = out + ch
+      i = i + 1
+    }
+    return out
+  }
+  // Read consecutive digits from pos
+  read_digits_from(s, pos) {
+    local out = ""
+    local i = pos
+    // guard against invalid position (null/negative)
+    if i == null { return out }
+    if i < 0 { return out }
+    loop (true) {
+      local ch = s.substring(i, i+1)
+      if ch == "" { break }
+      // inline digit check to avoid same-box method dispatch
+      if ch == "0" { out = out + ch  i = i + 1  continue }
+      if ch == "1" { out = out + ch  i = i + 1  continue }
+      if ch == "2" { out = out + ch  i = i + 1  continue }
+      if ch == "3" { out = out + ch  i = i + 1  continue }
+      if ch == "4" { out = out + ch  i = i + 1  continue }
+      if ch == "5" { out = out + ch  i = i + 1  continue }
+      if ch == "6" { out = out + ch  i = i + 1  continue }
+      if ch == "7" { out = out + ch  i = i + 1  continue }
+      if ch == "8" { out = out + ch  i = i + 1  continue }
+      if ch == "9" { out = out + ch  i = i + 1  continue }
+      break
+    }
+    return out
+  }
+}
+

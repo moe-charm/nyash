@@ -69,6 +69,17 @@ Blocks and Control
 - `loop (cond) { ... }` — minimal loop form
 - `match (expr) { case ... }` — MVP (literals and simple type patterns)
 
+Sugar Syntax (Phase 12.7+)
+- Lambda: `fn(x, y) { x + y }` or `fn(x) { x * 2 }` (single expr, implicit return)
+  - Use in: `array.map(fn(x) { x * 2 })`, `sort(fn(a,b) { a - b })`
+- Result propagation: `data = readFile(path)?` — early return on error
+- Postfix handlers: `doWork() catch(e) { handle(e) } cleanup { always() }`
+- Match expression: `match ch { "0" => 0, "1" => 1, _ => -1 }`
+  - Prefer over if-chain for lookup/dispatch
+
+See also: docs/cookbook/quick-tips.md (practical examples)
+Advanced: docs/development/roadmap/language-evolution/ (full roadmap)
+
 Using / SSOT
 - Dev/CI: file‑based `using` allowed for convenience.
 - Prod: `hako.toml` only (compat: `nyash.toml`). Duplicate imports or alias rebinding is an error.

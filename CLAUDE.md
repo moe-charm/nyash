@@ -734,34 +734,10 @@ NYASH_SELFHOST_EXEC=1 ./target/release/nyash program.nyash
 
 **⚠️ PyVM使用制限**: [PyVM使用ガイドライン](docs/reference/pyvm-usage-guidelines.md)で適切な用途を確認
 
-### ✅ **using system完全実装完了！** (2025-09-24 ChatGPT実装完了確認済み)
+### ✅ **using system完全実装完了！** (2025-09-24)
 
-**🎉 歴史的快挙**: `using nyashstd`が完璧動作！環境変数なしでデフォルト有効！
-
-**✅ 実装完了内容**：
-- **ビルトイン名前空間解決**: `nyashstd` → `builtin:nyashstd`の自動解決
-- **自動コード生成**: nyashstdのstatic box群（string, integer, bool, array, console）を動的生成
-- **環境変数不要**: デフォルトで有効（--enable-using不要）
-
-**✅ 動作確認済み**：
-```bash
-# 基本using動作（環境変数・フラグ不要！）
-echo 'using nyashstd' > test.nyash
-echo 'console.log("Hello!")' >> test.nyash
-./target/release/nyash test.nyash
-# 出力: Hello!
-
-# 実装箇所
-src/runner/pipeline.rs       # builtin:nyashstd解決
-src/runner/modes/common_util/resolve/strip.rs  # コード生成
-```
-
-**📦 含まれるnyashstd機能**：
-- `string.create(text)`, `string.upper(str)`
-- `integer.create(value)`, `bool.create(value)`, `array.create()`
-- `console.log(message)`
-
-**🎯 完成状態**: ChatGPT実装で`using nyashstd`完全動作中！
+`using hakorune-std`が完全動作！環境変数不要・デフォルト有効。
+詳細: [using.md](docs/reference/language/using.md)
 
 ## 🧪 テストスクリプト参考集（既存のを活用しよう！）
 ```bash
