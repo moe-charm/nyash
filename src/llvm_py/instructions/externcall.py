@@ -105,14 +105,6 @@ def lower_externcall(
 
     # Dynamic extern registry (abstract spec) → derive LLVM symbol/ABI lazily
     _extern_specs: Dict[Tuple[str, str], Tuple[Any, List[Any], str]] = {}
-    _extern_specs_loaded = False
-
-    # Legacy fallback for environments that have not yet exported registry JSON
-    _legacy_specs: Dict[Tuple[str, str], Tuple[Any, List[Any], str]] = {
-        ("nyrt.time", "now_ms"): (i64, [], "nyrt.time.now_ms"),
-        ("nyrt.array", "size"): (i64, [i64], "nyrt.array.size"),
-        ("nyrt.map", "size"): (i64, [i64], "nyrt.map.size"),
-    }
 
     def _mk_symbol(iface: str, method: str) -> str:
         import os
@@ -124,7 +116,6 @@ def lower_externcall(
 
     def _load_extern_specs_from_env_once():
         import os, json
-        nonlocal _extern_specs_loaded
         p = os.environ.get('NYASH_EXTERN_SPEC_JSON')
         if not p:
             return
@@ -148,7 +139,6 @@ def lower_externcall(
                 arg_tys = [mir_to_abi(x) for x in params]
                 sym = _mk_symbol(iface, method)
                 _extern_specs[(iface, method)] = (ret_ty, arg_tys, sym)
-            _extern_specs_loaded = True
         except Exception:
             pass
 
@@ -168,23 +158,12 @@ def lower_externcall(
             break
     if not func:
         dyn = None
-        legacy = None
         if '.' in llvm_name:
             parts = llvm_name.rsplit('.', 1)
             key = (parts[0], parts[1])
             dyn = _extern_specs.get(key)
-            if dyn is None and not _extern_specs_loaded:
-                legacy = _legacy_specs.get(key)
         if dyn is not None:
             ret_ty, arg_tys, sym = dyn
-            llvm_name = sym
-            fnty = ir.FunctionType(ret_ty, arg_tys)
-            try:
-                func = ir.Function(module, fnty, name=llvm_name)
-            except DuplicatedNameError:
-                func = module.get_global(llvm_name)
-        elif legacy is not None:
-            ret_ty, arg_tys, sym = legacy
             llvm_name = sym
             fnty = ir.FunctionType(ret_ty, arg_tys)
             try:

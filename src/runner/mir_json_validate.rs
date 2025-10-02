@@ -61,6 +61,26 @@ pub fn validate_json_root(root: &Value) -> Result<(), String> {
                         ensure_field(inst, "method", name, bid, idx)?;
                         ensure_array(inst, "args", name, bid, idx)?;
                     }
+                    "call" => {
+                        ensure_non_null_u32(inst, "func", name, bid, idx)?;
+                        ensure_array(inst, "args", name, bid, idx)?;
+                        ensure_optional_u32(inst, "dst", name, bid, idx)?;
+                    }
+                    "branch" => {
+                        ensure_non_null_u32(inst, "cond", name, bid, idx)?;
+                        ensure_non_null_u32(inst, "then", name, bid, idx)?;
+                        ensure_non_null_u32(inst, "else", name, bid, idx)?;
+                    }
+                    "jump" => {
+                        ensure_non_null_u32(inst, "target", name, bid, idx)?;
+                    }
+                    "ret" => {
+                        ensure_optional_u32(inst, "value", name, bid, idx)?;
+                    }
+                    "copy" => {
+                        ensure_non_null_u32(inst, "dst", name, bid, idx)?;
+                        ensure_non_null_u32(inst, "src", name, bid, idx)?;
+                    }
                     _ => { /* tolerate others for now */ }
                 }
             }
@@ -87,5 +107,18 @@ fn ensure_array(inst: &Value, key: &str, fname: &str, bid: i64, idx: usize) -> R
         Some(v) if v.is_null() => Ok(()),
         Some(_) => Err(format!("function '{}' block {} inst#{} '{}' must be array", fname, bid, idx, key)),
         None => Err(format!("function '{}' block {} inst#{} missing '{}'", fname, bid, idx, key)),
+    }
+}
+
+fn ensure_optional_u32(inst: &Value, key: &str, fname: &str, bid: i64, idx: usize) -> Result<(), String> {
+    match inst.get(key) {
+        None => Ok(()),
+        Some(v) if v.is_null() => Ok(()),
+        Some(v) if v.is_u64() => Ok(()),
+        Some(v) if v.is_number() => Ok(()),
+        _ => Err(format!(
+            "function '{}' block {} inst#{} '{}' must be number (u32) or null",
+            fname, bid, idx, key
+        )),
     }
 }

@@ -36,7 +36,7 @@ Notes
 
 Harness‑First policy and env (Phase‑B)
 - Harness‑first is既定（smokes は LLVM を常にハーネス経由で実行）
-- Externs Registry JSON はランナーが自動出力し、`NYASH_EXTERN_SPEC_JSON` でハーネスに渡される
+- Externs Registry JSON はランナーが自動出力し、`NYASH_EXTERN_SPEC_JSON` でハーネスに渡される（欠落時は即 Fail-Fast）
 - 代表環境変数（開発用）
   - `NYASH_LLVM_USE_HARNESS=1`: ハーネス固定で実行
   - `NYASH_LLVM_DUMP_IR=tmp/file.ll`: 生成 IR のダンプ先

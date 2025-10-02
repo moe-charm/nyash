@@ -17,8 +17,8 @@ static box Main {
     local s1 = m.size()
     m.set("b", 2)
     local s2 = m.size()
-    print(s1.toString())
-    print(s2.toString())
+    print(s1)
+    print(s2)
   }
 }
 NYASH

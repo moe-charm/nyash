@@ -295,6 +295,20 @@ test_pass() { log_success "$1"; return 0; }
 test_fail() { log_error "$1 ${2:-}"; return 1; }
 test_skip() { log_warn "SKIP $1 ${2:-}"; return 0; }
 
+# Legacy helpers (compat with older smoke snippets)
+fail() {
+    local msg="${1:-test failed}"
+    local detail="${2:-}"
+    test_fail "$msg" "$detail"
+    exit 1
+}
+
+pass() {
+    local msg="${1:-test passed}"
+    test_pass "$msg"
+    exit 0
+}
+
 # 出力比較ヘルパー
 compare_outputs() {
     local expected="$1"

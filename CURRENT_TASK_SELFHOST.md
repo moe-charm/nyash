@@ -138,10 +138,10 @@ Addendum — Externs Registry（疎結合アーキテクチャへの導線）
 - 次のステップ（Phase‑B）: Registry を抽象 spec のみに縮退し、各 Backend に Adapter を新設（命名規則＋例外表）。LLVM は dev 時 JSON で spec を取得して参照。
   - 受け手: TimerBox.now_ms / ArrayBox.length|size / MapBox.size（READ/ゼロ引数）を Router=ON で直行化。
   - スモーク: `core/router_timer_now_ms_vm.sh`, `core/router_array_size_vm.sh`, `core/router_map_size_vm.sh` を追加（Router=ON で緑を維持）。
-  - LLVM externcall: `nyrt.time.now_ms` / `nyrt.array.size` / `nyrt.map.size` は JSON spec を優先し、JSON 未指定時のみ legacy シグネチャへフォールバック（Phase‑B 導線）。
+  - LLVM externcall: `nyrt.time.now_ms` / `nyrt.array.size` / `nyrt.map.size` は JSON spec を必須化（欠落時は Fail‑Fast）。
   - WASM: `WasmExternAdapterBox` を追加。`nyrt.*` import は Adapter が生成し、runtime/codegen の直書きを撤去済み。
   - LLVM（ハーネス第一）: Python 側の externcall は JSON Spec を優先し、既定はアンダースコア命名（`nyrt.time.now_ms` → `nyrt_time_now_ms`）。未知 extern は Fail‑Fast。
-  - Validator: MIR→JSON 直前に必須キー検証を追加（`src/runner/mir_json_validate.rs`）。unop/binop/compare/externcall の最小スキーマを確認。
+  - Validator: MIR→JSON 直前に必須キー検証を追加（`src/runner/mir_json_validate.rs`）。unop/binop/compare/externcall/typeop/newbox/boxcall/call/branch/jump/ret/copy をカバー。
 
 Next actions — Phase‑B（Externs Registry → Adapter 分離）
 - [x] Registry を ExternCallSpec（抽象）へリファクタ（wasm/llvm 名は削除）
@@ -152,5 +152,25 @@ Next actions — Phase‑B（Externs Registry → Adapter 分離）
 - [ ] Docs 更新（追加手順: Registry1行 + Adapter1行 + Smoke1本）。
 
 Open — LLVM harness issues to fix next
-- [ ] Duplicate symbol guard in externcall.py（関数が二重宣言される希なパスの対策）
-- [ ] AOTリンクでの `nyrt_*` 解決を安定化（必要なら Kernel のエクスポート記名を一覧化）
+  - [ ] Duplicate symbol guard in externcall.py（関数が二重宣言される希なパスの対策）
+  - [ ] AOTリンクでの `nyrt_*` 解決を安定化（必要なら Kernel のエクスポート記名を一覧化）
+
+Update — 2025‑10‑02 (Phase‑B 小結)
+- 完了:
+  - Legacy extern フォールバック（Timer/Array/Map）を撤去。Registry JSON を唯一の情報源に固定。
+  - MIR JSON Validator の対象拡大（call/branch/jump/ret/copy を追加）。
+  - Router 系スモーク（timer/array/map）を整備し、Router=ON で PASS を確認。
+- 残タスク:
+  - selfhost_mir_m2_multi_compare_gt_last_ret_vm の期待値ズレ（1→6）調査（比較連鎖の Lowering/実行系の食い違い）。
+  - 文字列/boxing 系の legacy sig_map を Registry+Adapter に段階移行（JSON spec 拡充とセット）。
+  - Validator の `safepoint/load/store` などへの拡張（登場時に段階導入）。
+
+Next — 直近の実施順（提案）
+1) スモーク緑化の仕上げ
+   - selfhost_m2_multi_compare の原因切り分け（MIR 出力 vs 実行器）。失敗再現→最小 repro 追加→修正。
+2) レガシー純化の継続
+   - externcall.py の sig_map（string/boxing 群）の段階削減（先に Registry へ spec を追加）。
+3) Adapter の拡充
+   - LLVM 側の JSON ローダ周辺の冪等性/重複宣言対策の磨き込み。
+4) Docs/Smokes 同期
+   - JSON スキーマの最小定義を docs に明記。該当スモークに SKIP 条件（環境未整備）を追加維持。

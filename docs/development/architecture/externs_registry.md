@@ -28,7 +28,7 @@ JSON エクスポート（Phase‑A 時点）
   - `params`: 文字列配列。`MirType` を人可読フォーマットに変換（例 `"Integer"`, `"Box:ArrayBox"`）
   - `returns`: 文字列。戻り値の `MirType`
   - `effects`: 文字列。`pure|read|mut|io|control` のビット表現（複数の場合は `|` で連結）
-- JSON が存在しない場合は LLVM 側で限定的なフォールバックシグネチャ（Timer/Array/Map を含む）を使用する。
+- JSON が存在しない場合は Fail-Fast（ハーネスが `Unknown extern` で停止）。Fallback シグネチャは撤去済み。
 - 将来的に Schema を `docs/json-schema/externs_registry_v1.json` として切り出す予定（Phase‑B）。
 
 Harness‑First と Fail‑Fast（更新）

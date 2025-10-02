@@ -17,8 +17,8 @@ static box Main {
     local len1 = arr.length()
     arr.push(2)
     local len2 = arr.size()
-    print(len1.toString())
-    print(len2.toString())
+    print(len1)
+    print(len2)
   }
 }
 NYASH
