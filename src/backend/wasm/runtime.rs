@@ -51,6 +51,14 @@ impl RuntimeImports {
             result: None,
         });
 
+        // nyrt.time.now_ms for monotonic millisecond timestamps
+        self.imports.push(ImportFunction {
+            module: "nyrt".to_string(),
+            name: "time_now_ms".to_string(),
+            params: vec![],
+            result: Some("i32".to_string()),
+        });
+
         // Phase 9.7: Box FFI/ABI imports per BID specifications
 
         // env.console_log for console.log(message) - (string_ptr, string_len)
@@ -217,6 +225,9 @@ impl RuntimeImports {
                         js.push_str("      const str = new TextDecoder().decode(new Uint8Array(memory.buffer, ptr, len));\n");
                         js.push_str("      console.log(str);\n");
                         js.push_str("    },\n");
+                    }
+                    "time_now_ms" => {
+                        js.push_str("    time_now_ms: () => (Date.now() >>> 0),\n");
                     }
                     "console_log" => {
                         js.push_str("    console_log: (ptr, len) => {\n");

@@ -68,6 +68,7 @@ pub fn is_builtin_function(name: &str) -> bool {
 /// Check if function name is an external/host function
 pub fn is_extern_function(name: &str) -> bool {
     name.starts_with("nyash.") ||
+    name.starts_with("nyrt.") ||
     name.starts_with("env.") ||
     name.starts_with("system.")
 }

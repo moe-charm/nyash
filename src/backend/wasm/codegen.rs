@@ -420,10 +420,11 @@ impl WasmCodegen {
                 effects: _,
             } => {
                 // Generate call to external function import
-                let call_target = match (iface_name.as_str(), method_name.as_str()) {
-                    ("env.console", "log") => "console_log",
-                    ("env.canvas", "fillRect") => "canvas_fillRect",
-                    ("env.canvas", "fillText") => "canvas_fillText",
+                let (call_target, returns_value) = match (iface_name.as_str(), method_name.as_str()) {
+                    ("env.console", "log") => ("console_log", false),
+                    ("env.canvas", "fillRect") => ("canvas_fillRect", false),
+                    ("env.canvas", "fillText") => ("canvas_fillText", false),
+                    ("nyrt.time", "now_ms") => ("time_now_ms", true),
                     _ => {
                         return Err(WasmError::UnsupportedInstruction(format!(
                             "Unsupported extern call: {}.{}",
@@ -442,10 +443,17 @@ impl WasmCodegen {
                 // Call the external function
                 instructions.push(format!("call ${}", call_target));
 
-                // Store result if destination is provided
-                if let Some(dst) = dst {
-                    // For void functions, we still need to provide a dummy value
-                    instructions.push("i32.const 0".to_string()); // Void result
+                if returns_value {
+                    if let Some(dst) = dst {
+                        instructions.push(format!(
+                            "local.set ${}",
+                            self.get_local_index(*dst)?
+                        ));
+                    } else {
+                        instructions.push("drop".to_string());
+                    }
+                } else if let Some(dst) = dst {
+                    instructions.push("i32.const 0".to_string());
                     instructions.push(format!("local.set ${}", self.get_local_index(*dst)?));
                 }
 

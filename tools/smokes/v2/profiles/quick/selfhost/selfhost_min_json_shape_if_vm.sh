@@ -11,6 +11,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'NY'
 using "apps/selfhost-compiler/boxes/parser_box.hako" as ParserBoxMod
+using "apps/selfhost-compiler/boxes/json_program_box.hako"
 using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
 
 static box Main {

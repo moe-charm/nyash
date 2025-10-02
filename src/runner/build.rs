@@ -85,7 +85,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
             cmd.args(["--target", t]);
         }
         println!(
-            "[build] nyash core ({}, features={})",
+            "[build] hakorune core ({}, features={})",
             profile,
             if aot == "llvm" {
                 "llvm"
@@ -97,7 +97,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
             .status()
             .map_err(|e| format!("spawn cargo (core): {}", e))?;
         if !status.success() {
-            return Err("nyash core build failed".into());
+            return Err("hakorune core build failed".into());
         }
     }
     // 5) Determine app entry
@@ -134,7 +134,7 @@ pub(super) fn run_build_mvp_impl(runner: &NyashRunner, cfg_path: &str) -> Result
         }
         walk(&cwd.join("apps"), &mut cand);
         let msg = if cand.is_empty() {
-            "no app specified (--app) and no apps/**/main.nyash found".to_string()
+            "no app specified (--app) and no apps/**/main.hako (or legacy main.nyash) found".to_string()
         } else {
             format!(
                 "no app specified (--app). Candidates:\n  - {}",

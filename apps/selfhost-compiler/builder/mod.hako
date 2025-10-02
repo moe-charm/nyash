@@ -1,0 +1,22 @@
+// builder/mod.hako — Aggregator for compiler-track passes (scaffold)
+
+using "apps/selfhost-compiler/builder/ssa/local.hako" as LocalSSA
+using "apps/selfhost-compiler/builder/ssa/loopssa.hako" as LoopSSA
+using "apps/selfhost-compiler/builder/rewrite/special.hako" as RewriteSpecial
+using "apps/selfhost-compiler/builder/rewrite/known.hako" as RewriteKnown
+
+static box CompilerBuilder {
+  // Apply passes in safe order; currently no-ops (behavior-neutral).
+  apply_all(stage1_json) {
+    local j = stage1_json
+    j = RewriteSpecial.apply(j)
+    j = RewriteKnown.try_apply(j)
+    j = LocalSSA.ensure_recv(j)
+    j = LocalSSA.ensure_args(j)
+    j = LocalSSA.ensure_cond(j)
+    j = LocalSSA.ensure_cmp(j)
+    j = LoopSSA.stabilize_merges(j)
+    return j
+  }
+}
+

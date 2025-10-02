@@ -1,4 +1,5 @@
 use super::*;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 impl MirInterpreter {
     pub(super) fn handle_extern_call(
@@ -83,6 +84,21 @@ impl MirInterpreter {
                             return Err(VMError::TypeError("await expects Future".into()));
                         }
                     }
+                }
+                Ok(())
+            }
+            ("nyrt.time", "now_ms") => {
+                let duration = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap_or_else(|_| Duration::from_millis(0));
+                let millis = duration.as_millis();
+                let clamped = if millis > i64::MAX as u128 {
+                    i64::MAX
+                } else {
+                    millis as i64
+                };
+                if let Some(d) = dst {
+                    self.regs.insert(d, VMValue::Integer(clamped));
                 }
                 Ok(())
             }

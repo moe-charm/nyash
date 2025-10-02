@@ -1,0 +1,10 @@
+// TimerBox — monotonic millisecond timestamp sourced from NyRT
+// Exposes now_ms() for minimal benchmarking and scheduling scaffolds.
+box TimerBox {
+  birth() { return 0 }
+
+  now_ms() {
+    // Runtime intercept replaces this body with extern call; fallback for dev builds
+    return 0
+  }
+}

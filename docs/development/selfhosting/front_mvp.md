@@ -17,7 +17,7 @@ Status: drafting (Phase 15.9 entry)
 | box | responsibility |
 | --- | --- |
 | `ParserBox` | Tokenize/parse Ny source into Stage-1 AST JSON. Already handles Stage-2 constructs; ensure Stage-3 gating by `stage3_enable`. |
-| `EmitterBox` | Convert Stage-1 AST JSON to JSON v0 Program. Must guarantee single-line output when `NYASH_JSON_ONLY=1`. |
+| `EmitterBox` | Convert Stage-1 AST JSON to JSON v0 Program. Delegates normalization/meta injection to `JsonProgramBox`. Must guarantee single-line output when `NYASH_JSON_ONLY=1`. |
 | `MirEmitterBox` | Out of scope for Day 1–2 (stub remains). |
 
 ### Contracts
@@ -32,11 +32,12 @@ Status: drafting (Phase 15.9 entry)
    - README snippet explaining how to run the front MVP via `hakorune` flags.
 2. **Code**
    - Extend `ParserBox` where gaps exist (Stage-3 gating, diagnostics).
-   - Implement JSON v0 normalization helpers (Box-first: `emit/json_program_box.hako` TBD).
-   - Optional: add `apps/selfhost-compiler/boxes/json_program_box.hako` as a thin aggregator to keep emitter lean.
+   - Add `apps/selfhost-compiler/boxes/json_program_box.hako` — normalization box for Program/Stmt/Expr + `meta.usings` injection.
+   - Keep `EmitterBox` thin by delegating to `JsonProgramBox`.
 3. **Tests**
-   - Quick smokes: `tools/smokes/v2/profiles/quick/selfhost/selfhost_min_const_ret_vm.sh` etc.
-   - Harness comparator: `tools/smokes/v2/run_selfhost_min.sh` to run VM/LLVM and diff `Result:` lines.
+   - Quick smokes: `tools/smokes/v2/profiles/quick/selfhost/selfhost_min_const_ret_vm.sh` など。
+   - Normalization shape: `tools/smokes/v2/profiles/quick/selfhost/selfhost_json_normalize_shapes.sh`（If/Loop/Call/Return, meta.usings 確認）。
+   - Harness comparator: `tools/smokes/v2/run.sh --profile quick` の `selfhost_front_min_vm_llvm.sh`（LLVM 環境があれば）
 
 ## Fail-Fast Checklist
 - Parser errors include position info (gpos) and stop compilation.
@@ -58,10 +59,11 @@ apps/selfhost-compiler/
 ```
 
 ## Execution Examples
-Emit-only (JSON header):
+Emit-only (JSON header, pipeline v2):
 ```
 NYASH_USE_NY_COMPILER=1 \
 NYASH_NY_COMPILER_MIN_JSON=1 \
+NYASH_NY_COMPILER_CHILD_ARGS="--pipeline-v2" \
 NYASH_NY_COMPILER_EMIT_ONLY=1 \
 NYASH_JSON_ONLY=1 \
 ./target/release/hakorune --backend vm apps/tests/selfhost_min/const_ret.hako

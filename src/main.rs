@@ -23,7 +23,7 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    
+
     use nyash_rust::box_trait::{NyashBox, StringBox};
 
     #[test]

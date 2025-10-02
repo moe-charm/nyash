@@ -15,4 +15,3 @@ fn main() {
     let runner = NyashRunner::new(config);
     runner.run();
 }
-

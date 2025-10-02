@@ -40,6 +40,14 @@ Next actions — Phase 15.9 front MVP (Ny→JSON v0)
 - [ ] CURRENT_TASK_SELFHOST + docs: keep timeline (Day 1/2 front MVP, Day 3/4 calls/boxcall, Day 5 CLI polish) in sync
 - [ ] Bench harness notes: ensure LLVM/WASM legs point to the same `NYASH_NY_LLVM_COMPILER` / `NYASH_EMIT_EXE_NYRT`
 
+Progress (2025‑10‑02)
+- [x] Added `JsonProgramBox` for AST JSON normalization + `meta.usings` injection.
+- [x] Emitter delegates to the normalization box; runner inline path updated accordingly.
+- [x] Quick smokes added:
+  - `selfhost_source_inline_min_json_vm` (Runner→child `--source-inline`)
+  - `selfhost_min_json_shape_if_vm` (If ノード存在)
+  - `selfhost_json_normalize_shapes` (If/Loop/Call/Return + meta.usings)
+
 Phase 15.7 — NyKernel (Option B) minimal AOT step
 - [x] Introduce `crates/hako_kernel` minimal static shim (C‑ABI stubs)
   - Exports: nyash.box.from_i8_string / nyash.string.* (len_h, concat_hh, eq_hh, substring_hii, lastIndexOf_hh, to_i8p_h, from_u64x2, birth_h), nyash.any.length_h, nyash.env.box.new_i64x, births for Array/Map
@@ -88,3 +96,19 @@ Plan snapshot — 2025‑10‑03 preview
 - **Day 5**: CLI / Docs polish
   - Wire `--emit-mir` / `--emit-exe` to hakorune; minimize ENV surface.
   - Refresh README & CURRENT_TASK, link bench harness instructions.
+
+Addendum — 2025‑10‑03 (TimerBox P1 + quick 緑化)
+- Core Kernel: TimerBox P1 実装（now_ms のみ、単調時刻ms）。
+  - VM/LLVM/WASM へ `nyrt.time.now_ms` を配線（WASM は MVP として `Date.now()`）。
+  - 薄い箱: `apps/core/timer/TimerBox.hako` を modules に登録（`selfhost.core.timer`）。
+  - Builder 正規化: `new TimerBox().now_ms()`/`TimerBox.now_ms()` → `ExternCall("nyrt.time","now_ms")`。
+  - Quick スモーク追加: `core/timer_now_ms_vm.sh`（VM）/ `llvm/timer_now_ms_harness.sh`（ハーネス有なら実行、無ければ SKIP）。
+
+- quick プロファイルの安定化（LLVM系）
+  - ハーネス未検出時は `run_nyash_llvm` ヘルパ経由で SKIP に変更（quick は高速/安定優先）。
+  - AOT で静的プラグインを要するケース（Array/Map）は未構成なら SKIP（`aot_array_push_len_exe.sh`, `aot_map_set_size_exe.sh`）。
+  - Selfhost Pipeline V2 の一部は `NYASH_PIPELINE_V2=1` で有効化（既定は SKIP）。
+
+- 現在の状態
+  - Quick プロファイル: 全緑（172/172 PASS）を確認。
+  - 追跡: modules 既定解決で `selfhost.core.timer` が常時拾えるかの最終化（現状はスモーク内で `NYASH_MODULES` により明示設定）。

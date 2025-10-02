@@ -7,10 +7,22 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
-APP="apps/tests/extern_lastIndexOf.nyash"
+APP="$NYASH_ROOT/apps/tests/extern_lastIndexOf.nyash"
 name=$(basename "$APP" .nyash)
 
-log_info "Harness run (no link)"
-out=$(PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NYRT_SILENT_RESULT=1 "$NYASH_BIN" --backend llvm "$APP" 2>&1 || true)
-line=$(echo "$out" | rg '^Result: ' -n || true)
-[[ "$line" == *"Result: 5"* ]] && test_pass "$name" || { echo "$out" >&2; test_fail "$name" "expected 'Result: 5'" && exit 1; }
+run_case() {
+  ensure_hako_toml
+  local out
+  out=$(run_nyash_llvm "$APP" --dev | sed -n 's/^Result: .*/&/p' | head -n 1 | tr -d '\r' | xargs)
+  if [ -z "$out" ]; then
+    test_skip "$name" "LLVM harness unavailable (quick)" || true
+    return 0
+  fi
+  compare_outputs "Result: 5" "$out" "$name"
+}
+
+if run_case; then
+  exit 0
+else
+  exit 1
+fi

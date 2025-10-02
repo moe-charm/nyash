@@ -233,7 +233,8 @@ pub extern "C" fn nyash_box_from_i64(val: i64) -> i64 {
 #[export_name = "nyash.env.box.new"]
 pub extern "C" fn nyash_env_box_new(type_name: *const i8) -> i64 {
     use nyash_rust::{
-        box_trait::NyashBox, runtime::host_handles as handles, runtime::box_registry::get_global_registry,
+        box_trait::NyashBox, runtime::box_registry::get_global_registry,
+        runtime::host_handles as handles,
     };
     use std::ffi::CStr;
     if type_name.is_null() {
@@ -282,8 +283,8 @@ pub extern "C" fn nyash_env_box_new_i64x(
 ) -> i64 {
     use nyash_rust::{
         box_trait::{IntegerBox, NyashBox},
-        runtime::host_handles as handles,
         runtime::box_registry::get_global_registry,
+        runtime::host_handles as handles,
     };
     use std::ffi::CStr;
     if type_name.is_null() {
@@ -667,12 +668,16 @@ pub extern "C" fn main() -> i32 {
         } else {
             let candidate = dir.join("nyash.toml");
             if candidate.exists() {
-                let _ = nyash_rust::runtime::init_global_plugin_host(candidate.to_string_lossy().as_ref());
+                let _ = nyash_rust::runtime::init_global_plugin_host(
+                    candidate.to_string_lossy().as_ref(),
+                );
                 inited = true;
             } else {
                 let alt = dir.join("hakorune.toml");
                 if alt.exists() {
-                    let _ = nyash_rust::runtime::init_global_plugin_host(alt.to_string_lossy().as_ref());
+                    let _ = nyash_rust::runtime::init_global_plugin_host(
+                        alt.to_string_lossy().as_ref(),
+                    );
                     inited = true;
                 }
             }
