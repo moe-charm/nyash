@@ -25,7 +25,7 @@ for f in "${found[@]:-}"; do
   # Profile gating: quick excludes heavier/slow cases by pattern
   if [[ "$PHI_PROFILE" == "quick" ]]; then
     case "$f" in
-      *delegation*|*stage3* ) continue;;
+      *stage3* ) continue;;
     esac
   fi
   cases+=("$f")
