@@ -47,6 +47,8 @@ Progress (2025‑10‑02)
   - `selfhost_source_inline_min_json_vm` (Runner→child `--source-inline`)
   - `selfhost_min_json_shape_if_vm` (If ノード存在)
   - `selfhost_json_normalize_shapes` (If/Loop/Call/Return + meta.usings)
+  - `selfhost_json_normalize_edges`（Loop body null→[]、Call args null→[]、Nullノード保持）
+- [x] JsonProgramBox 正規化を Local/Const/If/Loop/Return/Call まで拡張（キー順・既定値・空配列の扱いを固定）
 
 Phase 15.7 — NyKernel (Option B) minimal AOT step
 - [x] Introduce `crates/hako_kernel` minimal static shim (C‑ABI stubs)
@@ -111,4 +113,20 @@ Addendum — 2025‑10‑03 (TimerBox P1 + quick 緑化)
 
 - 現在の状態
   - Quick プロファイル: 全緑（172/172 PASS）を確認。
-  - 追跡: modules 既定解決で `selfhost.core.timer` が常時拾えるかの最終化（現状はスモーク内で `NYASH_MODULES` により明示設定）。
+- modules 既定解決: hako/nyash.toml の重複定義を解消し、`selfhost.core.timer` を含む modules 自動登録が安定（スモークから `NYASH_MODULES` 除去済み）。
+  - selfhost_min_* parity: `call_static` ケースを追加、LLVM ハーネス未検出時は SKIP 維持
+
+Addendum — Effects 決定の箱化（Phase‑in 最小）
+- 追加ドキュメント: docs/development/mir/effects-resolver.md
+- 実装（最小）:
+  - `src/mir/builder/effects/{mod.rs,resolver.rs}` を追加
+  - `NYASH_USE_EFFECT_RESOLVER=1` で Unified Call の効果決定をテーブル解決（extern/method）に委譲（未知は既存ロジックへフォールバック）
+  - `NYASH_EFFECT_TRACE=1` で解決ログを出力
+- 併走ガード（今回の目的）:
+  - `nyrt.time.now_ms` は常に READ（Unified/Legacy/nyrt.* の全経路）。
+  - 既存の `compute_extern_effects` へ `nyrt.time.now_ms` を追加（仕様不変の観点から二重に安全化）
+
+Addendum — Effects verifier / Origin tracker / Call router 骨格
+- `NYASH_VERIFY_EFFECTS=1`: Call/BoxCall/ExternCall に PURE 混入があった場合に警告（軽量 Verifier）。
+- OriginTrackerBox 導線: `src/mir/builder/origin/tracker.rs` を追加し、`MirBuilder::origin_register/get/propagate` を新設（value_origin_newbox の薄ラップ）。
+- CallRoutingBox 骨格: `src/mir/builder/router/call_router.rs` を追加。`NYASH_USE_CALL_ROUTER=1` で TimerBox.now_ms → `nyrt.time.now_ms` の直行経路を委譲（trace: `NYASH_CALL_ROUTER_TRACE=1`）。既定では従来処理のまま。

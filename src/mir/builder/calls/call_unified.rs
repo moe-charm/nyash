@@ -69,6 +69,10 @@ pub fn convert_target_to_callee(
 
 /// Compute effects for a call based on its callee
 pub fn compute_call_effects(callee: &Callee) -> EffectMask {
+    // Phase‑in: try resolver when enabled; fallback to legacy logic
+    if let Some(eff) = crate::mir::builder::effects::resolve_effects_for_callee(callee) {
+        return eff;
+    }
     match callee {
         Callee::Global(name) => {
             match name.as_str() {

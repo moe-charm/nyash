@@ -7,7 +7,7 @@ use nyash_rust::tokenizer::NyashTokenizer;
 
 pub(super) fn demo_basic_boxes() {
     println!("\n📦 1. Basic Box Creation:");
-    let string_box = StringBox::new("Hello, Nyash!".to_string());
+    let string_box = StringBox::new("Hello, Hakorune!".to_string());
     let int_box = IntegerBox::new(42);
     let bool_box = BoolBox::new(true);
     let void_box = VoidBox::new();
@@ -99,7 +99,7 @@ pub(super) fn demo_interpreter_system() {
 
 /// Run all demo sections (moved from runner/mod.rs)
 pub(super) fn run_all_demos() {
-    println!("🦀 Nyash Rust Implementation - Everything is Box! 🦀");
+    println!("🦀 Hakorune Runtime Demos - Everything is Box! 🦀");
     println!("====================================================");
     demo_basic_boxes();
     demo_box_operations();

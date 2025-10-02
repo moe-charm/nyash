@@ -151,6 +151,12 @@ pub fn is_env_interface(name: &str) -> bool {
 /// Determine effects for an external call
 pub fn compute_extern_effects(iface: &str, method: &str) -> EffectMask {
     match (iface, method) {
+        // Runtime time source: monotonic millisecond timestamp (read-only)
+        ("nyrt.time", "now_ms") => {
+            // Treat as a read effect to prevent CSE from assuming purity but
+            // still allow safe reordering against pure ops.
+            EffectMask::READ
+        }
         // Pure reads
         (_, m) if m.starts_with("get") || m == "argv" || m == "env" => {
             EffectMask::READ

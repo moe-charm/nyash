@@ -39,7 +39,7 @@ impl MirBuilder {
         // new MathBox()
         let math_recv = self.value_gen.next();
         if let Err(e) = self.emit_constructor_call(math_recv, "MathBox".to_string(), vec![]) { return Some(Err(e)); }
-        self.value_origin_newbox.insert(math_recv, "MathBox".to_string());
+        self.origin_register(math_recv, "MathBox".to_string());
         // birth()
         if let Err(e) = self.emit_method_call(None, math_recv, "birth".to_string(), vec![]) { return Some(Err(e)); }
         // call method

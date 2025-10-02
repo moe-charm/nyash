@@ -5,9 +5,6 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
-# Ensure TimerBox module resolves during smoke execution
-export NYASH_MODULES="selfhost.core.timer=apps/core/timer/TimerBox.hako"
-
 TEST_PATH="$NYASH_ROOT/apps/tests/core/timer_now_ms.hako"
 
 run_timer_now_ms_vm() {

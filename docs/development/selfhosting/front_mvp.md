@@ -12,6 +12,7 @@ Status: drafting (Phase 15.9 entry)
 - Statements: `return`, `local`, `assignment`, `if/else`, `loop` (while-style), `break`, `continue`.
 - Calls: direct function call (`foo()`), method call sugar (`obj.method()`), builtin boxes (Array/Map/String minimal) deferred to Day 3–4.
 - Metadata: `meta.usings` populated from `ParserBox.extract_usings` (already implemented).
+- JSON normalization: `JsonProgramBox` fixes key orderと既定値を整備（Local/Const/If/Loop/Return/Call、空配列は常に`[]`、null配列は[]に正規化）。
 
 ## Interfaces
 | box | responsibility |
@@ -36,7 +37,8 @@ Status: drafting (Phase 15.9 entry)
    - Keep `EmitterBox` thin by delegating to `JsonProgramBox`.
 3. **Tests**
    - Quick smokes: `tools/smokes/v2/profiles/quick/selfhost/selfhost_min_const_ret_vm.sh` など。
-   - Normalization shape: `tools/smokes/v2/profiles/quick/selfhost/selfhost_json_normalize_shapes.sh`（If/Loop/Call/Return, meta.usings 確認）。
+  - Normalization shape: `tools/smokes/v2/profiles/quick/selfhost/selfhost_json_normalize_shapes.sh`（If/Loop/Call/Return, meta.usings 確認）。
+  - Edge normalization: `tools/smokes/v2/profiles/quick/selfhost/selfhost_json_normalize_edges.sh`（Loop body null→[]、Call args null→[]、Null ノード維持）。
    - Harness comparator: `tools/smokes/v2/run.sh --profile quick` の `selfhost_front_min_vm_llvm.sh`（LLVM 環境があれば）
 
 ## Fail-Fast Checklist

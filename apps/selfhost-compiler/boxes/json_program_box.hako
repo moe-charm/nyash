@@ -43,6 +43,8 @@ static box JsonProgramBox {
   normalize_stmt_array(array_json) {
     if array_json == null { return "[]" }
     local trimmed = me.trim(array_json)
+    if trimmed.length() == 0 { return "[]" }
+    if trimmed == "null" { return "[]" }
     if trimmed.length() < 2 { return "[]" }
     if trimmed.substring(0, 1) != "[" { return trimmed }
     if trimmed == "[]" { return "[]" }
@@ -60,6 +62,12 @@ static box JsonProgramBox {
     return "[" + me.join(out) + "]"
   }
 
+  default_int_expr() { return "{\"type\":\"Int\",\"value\":0}" }
+
+  default_bool_expr() { return "{\"type\":\"Bool\",\"value\":false}" }
+
+  default_recv_expr() { return "{\"type\":\"Var\",\"name\":\"me\"}" }
+
   normalize_stmt(stmt_json) {
     if stmt_json == null { return "{}" }
     local trimmed = me.trim(stmt_json)
@@ -69,13 +77,13 @@ static box JsonProgramBox {
     if type_name == "Return" {
       local expr_raw = me.extract_value(trimmed, "expr")
       local expr_norm = me.normalize_expr(expr_raw)
-      if expr_norm == null { expr_norm = "{\"type\":\"Int\",\"value\":0}" }
+      if expr_norm == null { expr_norm = me.default_int_expr() }
       return "{\"type\":\"Return\",\"expr\":" + expr_norm + "}"
     }
     if type_name == "If" {
       local cond_raw = me.extract_value(trimmed, "cond")
       local cond_norm = me.normalize_expr(cond_raw)
-      if cond_norm == null { cond_norm = "{\"type\":\"Bool\",\"value\":false}" }
+      if cond_norm == null { cond_norm = me.default_bool_expr() }
       local then_raw = me.extract_value(trimmed, "then")
       local then_norm = me.normalize_stmt_array(then_raw)
       local else_raw = me.extract_value(trimmed, "else")
@@ -84,7 +92,7 @@ static box JsonProgramBox {
         local else_trim = me.trim(else_raw)
         if else_trim != "null" {
           local else_norm = me.normalize_stmt_array(else_trim)
-          if else_norm != "[]" { out = out + ",\"else\":" + else_norm }
+          out = out + ",\"else\":" + else_norm
         }
       }
       return out + "}"
@@ -92,22 +100,25 @@ static box JsonProgramBox {
     if type_name == "Loop" {
       local cond_raw2 = me.extract_value(trimmed, "cond")
       local cond_norm2 = me.normalize_expr(cond_raw2)
-      if cond_norm2 == null { cond_norm2 = "{\"type\":\"Bool\",\"value\":false}" }
+      if cond_norm2 == null { cond_norm2 = me.default_bool_expr() }
       local body_raw = me.extract_value(trimmed, "body")
       local body_norm = me.normalize_stmt_array(body_raw)
       return "{\"type\":\"Loop\",\"cond\":" + cond_norm2 + ",\"body\":" + body_norm + "}"
     }
-    if type_name == "Local" {
+    if type_name == "Local" || type_name == "Const" {
       local name = me.extract_string_value(trimmed, "name", "tmp")
       local expr_raw3 = me.extract_value(trimmed, "expr")
+      if expr_raw3 == null { expr_raw3 = me.extract_value(trimmed, "value") }
       local expr_norm3 = me.normalize_expr(expr_raw3)
-      if expr_norm3 == null { expr_norm3 = "{\"type\":\"Int\",\"value\":0}" }
-      return "{\"type\":\"Local\",\"name\":" + me.quote(name) + ",\"expr\":" + expr_norm3 + "}"
+      if expr_norm3 == null { expr_norm3 = me.default_int_expr() }
+      local tag = "Local"
+      if type_name == "Const" { tag = "Const" }
+      return "{\"type\":\"" + tag + "\",\"name\":" + me.quote(name) + ",\"expr\":" + expr_norm3 + "}"
     }
     if type_name == "Expr" {
       local expr_raw4 = me.extract_value(trimmed, "expr")
       local expr_norm4 = me.normalize_expr(expr_raw4)
-      if expr_norm4 == null { expr_norm4 = "{\"type\":\"Int\",\"value\":0}" }
+      if expr_norm4 == null { expr_norm4 = me.default_int_expr() }
       return "{\"type\":\"Expr\",\"expr\":" + expr_norm4 + "}"
     }
 
@@ -117,6 +128,8 @@ static box JsonProgramBox {
   normalize_expr_array(array_json) {
     if array_json == null { return "[]" }
     local trimmed = me.trim(array_json)
+    if trimmed.length() == 0 { return "[]" }
+    if trimmed == "null" { return "[]" }
     if trimmed.length() < 2 { return "[]" }
     if trimmed.substring(0, 1) != "[" { return trimmed }
     if trimmed == "[]" { return "[]" }
@@ -157,6 +170,9 @@ static box JsonProgramBox {
       if value_raw3 == null { value_raw3 = "false" }
       return "{\"type\":\"Bool\",\"value\":" + me.trim(value_raw3) + "}"
     }
+    if type_name == "Null" {
+      return "{\"type\":\"Null\"}"
+    }
     if type_name == "Var" {
       local name = me.extract_string_value(trimmed, "name", "")
       return "{\"type\":\"Var\",\"name\":" + me.quote(name) + "}"
@@ -170,7 +186,7 @@ static box JsonProgramBox {
     if type_name == "Method" {
       local recv_raw = me.extract_value(trimmed, "recv")
       local recv_norm = me.normalize_expr(recv_raw)
-      if recv_norm == null { recv_norm = "{\"type\":\"Var\",\"name\":\"me\"}" }
+      if recv_norm == null { recv_norm = me.default_recv_expr() }
       local method_name = me.extract_string_value(trimmed, "method", "")
       local args_raw2 = me.extract_value(trimmed, "args")
       local args_norm2 = me.normalize_expr_array(args_raw2)
@@ -181,9 +197,9 @@ static box JsonProgramBox {
       local lhs_raw = me.extract_value(trimmed, "lhs")
       local rhs_raw = me.extract_value(trimmed, "rhs")
       local lhs_norm = me.normalize_expr(lhs_raw)
-      if lhs_norm == null { lhs_norm = "{\"type\":\"Int\",\"value\":0}" }
+      if lhs_norm == null { lhs_norm = me.default_int_expr() }
       local rhs_norm = me.normalize_expr(rhs_raw)
-      if rhs_norm == null { rhs_norm = "{\"type\":\"Int\",\"value\":0}" }
+      if rhs_norm == null { rhs_norm = me.default_int_expr() }
       return "{\"type\":\"Binary\",\"op\":" + me.quote(op) + ",\"lhs\":" + lhs_norm + ",\"rhs\":" + rhs_norm + "}"
     }
     if type_name == "Compare" {
@@ -191,9 +207,9 @@ static box JsonProgramBox {
       local lhs_raw2 = me.extract_value(trimmed, "lhs")
       local rhs_raw2 = me.extract_value(trimmed, "rhs")
       local lhs_norm2 = me.normalize_expr(lhs_raw2)
-      if lhs_norm2 == null { lhs_norm2 = "{\"type\":\"Int\",\"value\":0}" }
+      if lhs_norm2 == null { lhs_norm2 = me.default_int_expr() }
       local rhs_norm2 = me.normalize_expr(rhs_raw2)
-      if rhs_norm2 == null { rhs_norm2 = "{\"type\":\"Int\",\"value\":0}" }
+      if rhs_norm2 == null { rhs_norm2 = me.default_int_expr() }
       return "{\"type\":\"Compare\",\"op\":" + me.quote(op2) + ",\"lhs\":" + lhs_norm2 + ",\"rhs\":" + rhs_norm2 + "}"
     }
     if type_name == "Logical" {
@@ -201,9 +217,9 @@ static box JsonProgramBox {
       local lhs_raw3 = me.extract_value(trimmed, "lhs")
       local rhs_raw3 = me.extract_value(trimmed, "rhs")
       local lhs_norm3 = me.normalize_expr(lhs_raw3)
-      if lhs_norm3 == null { lhs_norm3 = "{\"type\":\"Bool\",\"value\":false}" }
+      if lhs_norm3 == null { lhs_norm3 = me.default_bool_expr() }
       local rhs_norm3 = me.normalize_expr(rhs_raw3)
-      if rhs_norm3 == null { rhs_norm3 = "{\"type\":\"Bool\",\"value\":false}" }
+      if rhs_norm3 == null { rhs_norm3 = me.default_bool_expr() }
       return "{\"type\":\"Logical\",\"op\":" + me.quote(op3) + ",\"lhs\":" + lhs_norm3 + ",\"rhs\":" + rhs_norm3 + "}"
     }
 

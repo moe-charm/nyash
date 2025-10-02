@@ -13,6 +13,7 @@ use crate::ast::{ASTNode, LiteralValue};
 use crate::mir::builder::builder_calls::CallTarget;
 use std::collections::HashMap;
 use std::collections::HashSet;
+use std::sync::OnceLock;
 mod calls; // Call system modules (refactored from builder_calls)
 mod builder_calls;
 mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
@@ -53,6 +54,7 @@ mod infer; // ReceiverInferenceBox（受け手推定の一元化）
 mod indexes; // InstanceMethodIndexBox（(Box,method,arity)登録/照会）
 mod materialize; // MaterializeBox（Call直前の材化を一元化）
 mod verify; // CallOrderVerifyBox（dev-only 検証ラッパ）
+pub mod effects; // EffectResolverBox（効果決定の単一入口・既定OFF）
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -442,6 +444,35 @@ impl MirBuilder {
         Ok(value_id)
     }
 
+    fn origin_trace_enabled() -> bool {
+        static FLAG: OnceLock<bool> = OnceLock::new();
+        *FLAG.get_or_init(|| matches!(
+            std::env::var("NYASH_ORIGIN_TRACE").ok().as_deref(),
+            Some("1" | "true" | "on")
+        ))
+    }
+
+    pub fn origin_tracker(&mut self) -> crate::mir::builder::origin::tracker::OriginTrackerBox<'_> {
+        crate::mir::builder::origin::tracker::OriginTrackerBox::new(
+            &mut self.value_origin_newbox,
+            Self::origin_trace_enabled(),
+        )
+    }
+
+    pub fn origin_register<S: Into<String>>(&mut self, value_id: ValueId, class_name: S) {
+        let mut tracker = self.origin_tracker();
+        tracker.register_newbox(value_id, class_name.into());
+    }
+
+    pub fn origin_propagate(&mut self, from: ValueId, to: ValueId) {
+        let mut tracker = self.origin_tracker();
+        tracker.propagate(from, to);
+    }
+
+    pub fn origin_get(&self, value_id: ValueId) -> Option<&str> {
+        self.value_origin_newbox.get(&value_id).map(|s| s.as_str())
+    }
+
 
 
     /// Emit an instruction to the current basic block
@@ -510,6 +541,7 @@ impl MirBuilder {
                         }
                     );
                 }
+                crate::mir::builder::effects::verify_instruction_effects(&instruction);
                 block.add_instruction(instruction);
                 Ok(())
             } else {
