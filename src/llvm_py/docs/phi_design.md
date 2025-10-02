@@ -239,3 +239,25 @@ NYASH_LLVM_PHI_LENIENT=1
 **方針**: デッドコード削除→フェイルファスト化→vmap最適化
 
 ChatGPT Proの分析により、設計の強みと改善点が明確になりました。段階的に改善を進めます。
+
+---
+
+## 追補（2025‑10‑02）— PHI Hardening 方針と実装
+
+目的
+- PHI は常に「ブロック先頭にグルーピング」されるLLVM不変条件を、構造で担保する。
+
+変更点（要旨）
+- 占位の強化: block_lower が body 降下前に `block_phi_incomings[bid]` の全 dst について `ensure_phi(builder, bid, dst, bb)` を呼び、PHIプレースホルダを先頭に作成。
+- 局所合成の既定OFF: resolver によるローカルPHI合成は `NYASH_LLVM_SYNTH_LOCAL_PHI=1` の opt‑in のみ許可。通常は PhiHandler/ensure_phi で先頭に用意。
+- 検証強化: `verify_phi_cfg` に加えて `verify_phi_order` を導入し、PHIが非PHIより後に現れないことを検証。`NYASH_LLVM_PHI_VERIFY_STRICT=1` でFail‑Fast。
+
+実装参照
+- `src/llvm_py/builders/block_lower.py` — ensure_phi 呼び出しの追加（body 前占位）
+- `src/llvm_py/resolver.py` — ローカル合成PHIの既定OFF（環境変数でのみ許可）
+- `src/llvm_py/phi_wiring/verify.py` — `verify_phi_order` 追加
+- `src/llvm_py/builders/function_lower.py` — PHI順序検証の導入
+
+運用
+- bring‑up 時は `NYASH_LLVM_PHI_VERIFY=1`（既定ON）で軽量検証、`NYASH_LLVM_PHI_VERIFY_STRICT=1` でFail‑Fastに。
+- どうしても必要な実験時のみ `NYASH_LLVM_SYNTH_LOCAL_PHI=1` を使用（既定はOFF）。

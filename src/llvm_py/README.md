@@ -63,13 +63,18 @@ PHI 検証・合成・作成のガード
 - `NYASH_LLVM_PHI_VERIFY=1` … finalize 後に軽量 verify を実行（既定ON）。`=0` で無効化
 - `NYASH_LLVM_PHI_VERIFY_STRICT=1` … 問題発見時に即失敗（Fail‑Fast）
 - `NYASH_LLVM_PHI_STRICT=1` … PhiHandler は生成のみ（配線は finalize に一元化）
-- `NYASH_LLVM_SYNTH_LOCAL_PHI=1` … resolver のローカル合成 PHI を許可（既定OFF）
+- `NYASH_LLVM_SYNTH_LOCAL_PHI=1` … resolver のローカル合成 PHI を許可（既定OFF/開発用）
 - `NYASH_LLVM_PHI_ALLOW_CREATE=1` … finalize 中に PHI を新規作成を許可（既定OFF：wire‑only）
 
 PHI 統一方針（既定）
 - PHI は PhiHandler（block_head）で生成する。
 - finalize_phis は“配線のみ”。PHI を新規生成しない（`NYASH_LLVM_PHI_ALLOW_CREATE=1` でのみ許可）。
 - if-merge/loop のプリパスは既定OFF（必要時のみ開発者が明示ON）。
+
+PHI Hardening（2025‑10‑02）
+- Block先頭での占位を強化: block_lower が `block_phi_incomings` の (block,dst) すべてに対して `ensure_phi()` を呼び、PHIを必ずブロック先頭に作成してから本体を降下。
+- 局所合成PHIは既定OFF: resolver のローカルPHI合成は `NYASH_LLVM_SYNTH_LOCAL_PHI=1` のときのみ許可（通常は PhiHandler/ensure_phi で先頭に作る）。
+- 検証を強化: `verify_phi_cfg` に加えて `verify_phi_order` を導入し、PHIがブロック先頭にグルーピングされていることを検証。`NYASH_LLVM_PHI_VERIFY_STRICT=1` でFail‑Fast。
 
 関数境界の不変（関数ごとに初期化される状態）
 - `builder.vmap` / `builder.bb_map` は毎関数クリア
