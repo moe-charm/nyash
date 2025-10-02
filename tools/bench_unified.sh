@@ -12,10 +12,10 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # ベンチマークファイル定義
-BENCH_DIR="local_tests/bench"
+BENCH_DIR="apps/benchmarks"
 BENCHMARKS=(
     "01_counter.nyash:10:カウンター"
-    "02_fibonacci.nyash:55:フィボナッチ"
+    "02_fibonacci.nyash:89:フィボナッチ"
     "03_prime_check.nyash:1:素数判定"
 )
 

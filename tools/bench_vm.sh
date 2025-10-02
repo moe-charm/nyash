@@ -12,10 +12,10 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # ベンチマークファイル定義
-BENCH_DIR="local_tests/bench"
+BENCH_DIR="apps/benchmarks"
 BENCHMARKS=(
     "01_counter.nyash:10:カウンター"
-    "02_fibonacci.nyash:55:フィボナッチ"
+    "02_fibonacci.nyash:89:フィボナッチ"
     "03_prime_check.nyash:1:素数判定"
 )
 
@@ -67,7 +67,7 @@ for bench_entry in "${BENCHMARKS[@]}"; do
 
     for i in {1..5}; do
         start_ns=$(date +%s%N)
-        result=$(NYASH_QUIET=1 ./target/release/hako "$bench_path" 2>&1 | tail -1 | tr -d '\n')
+        result=$(NYASH_QUIET=1 ./target/release/hako "$bench_path" 2>&1 | grep "^Result:" | sed 's/Result: //' | tr -d '\n')
         end_ns=$(date +%s%N)
         elapsed_ms=$(( (end_ns - start_ns) / 1000000 ))
         vm_times+=($elapsed_ms)
