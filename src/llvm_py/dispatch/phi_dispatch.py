@@ -12,10 +12,12 @@ Notes:
 - This is a thin box to centralize the small but critical fallbacks that were
   previously scattered across compare/branch. It keeps behavior equivalent to
   the hardening patches while providing a single entry point.
+- 型変換は TypeCoercion 箱に統一（箱理論実践）
 """
 
 from typing import Any, Dict, Optional
 import llvmlite.ir as ir
+from dispatch.type_coercion import TypeCoercion
 
 
 class PhiDispatchPoint:
@@ -102,57 +104,15 @@ class PhiDispatchPoint:
     @staticmethod
     def _coerce_i64(builder: ir.IRBuilder, val: Any) -> ir.Value:
         """
-        i64正規化（SSA順序保証版）
+        i64正規化 - DEPRECATED: TypeCoercion.to_i64() への委譲
 
-        深い設計:
-        - i1→i64変換を使用地点で実施（SSA順序保証）
-        - 定義済みSSA値のみを変換（forward reference禁止）
-        - builderカーソル位置で変換挿入（順序保証）
-
-        箱理論:
-        - 「境界を作る」: 型変換の責務を明確化
-        - 「見える化」: 変換タイミングが自明
-        - 「Fail-Fast」: 未定義値は変換しない
+        箱理論による統一:
+        - 型変換ロジックを TypeCoercion 箱に分離
+        - このメソッドは後方互換性のためのラッパー
+        - 新規コードは TypeCoercion.to_i64() を直接使用してください
         """
-        i64 = ir.IntType(64)
-        i1 = ir.IntType(1)
-
-        if val is None:
-            return ir.Constant(i64, 0)
-
-        # i1→i64変換（最優先・SSA順序保証）
-        # 重要: builderのカーソル位置で変換を挿入
-        # → 使用地点での変換 = SSA順序自動保証！
-        if hasattr(val, 'type') and isinstance(val.type, ir.IntType):
-            if val.type.width == 1:
-                # i1 → i64変換（使用地点で実施）
-                # 定義済みi1値（icmp結果）を使用地点で変換
-                # SSA順序: icmp定義 → [他の命令] → 使用地点でzext ✅
-                try:
-                    # 名前付け: 元の値のdst番号を保持（デバッグ容易性）
-                    orig_name = getattr(val, 'name', '')
-                    if orig_name and orig_name.startswith('cmp_'):
-                        dst_num = orig_name[4:]  # "cmp_5" → "5"
-                        zext_name = f"i1_to_i64_{dst_num}"
-                    else:
-                        zext_name = f"i1_to_i64"
-                    return builder.zext(val, i64, name=zext_name)
-                except Exception:
-                    # フォールバック: 名前なしzext
-                    return builder.zext(val, i64)
-            elif val.type.width != 64:
-                # iN→i64変換（N≠1, N≠64）
-                return builder.zext(val, i64)
-
-        # Pointer→i64変換
-        if hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
-            return builder.ptrtoint(val, i64)
-
-        # 既にi64定数
-        if isinstance(val, ir.Constant) and val.type == i64:
-            return val
-
-        return val
+        # TypeCoercion 箱に完全委譲！
+        return TypeCoercion.to_i64(builder, val)
 
     @staticmethod
     def resolve_i64(builder: ir.IRBuilder,
