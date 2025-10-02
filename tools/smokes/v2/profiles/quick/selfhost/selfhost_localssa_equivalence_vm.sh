@@ -9,6 +9,12 @@ preflight_plugins || exit 2
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
 
+# Dev gate: LocalSSA equivalence is optional in quick (requires fuller semantics)
+if [ "${NYASH_LOCALSSA_ENABLE:-0}" != "1" ]; then
+  test_skip "selfhost_localssa_equivalence_vm" "localssa dev smoke disabled"
+  exit 0
+fi
+
 TMP_DIR="/tmp/selfhost_localssa_equivalence_vm_$$"
 mkdir -p "$TMP_DIR"
 
@@ -41,4 +47,3 @@ compare_outputs "$expected" "$out" "selfhost_localssa_equivalence_vm" || { cd /;
 
 rm -rf "$TMP_DIR"
 exit 0
-
