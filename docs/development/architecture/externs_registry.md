@@ -28,8 +28,41 @@ JSON エクスポート（Phase‑A 時点）
   - `params`: 文字列配列。`MirType` を人可読フォーマットに変換（例 `"Integer"`, `"Box:ArrayBox"`）
   - `returns`: 文字列。戻り値の `MirType`
   - `effects`: 文字列。`pure|read|mut|io|control` のビット表現（複数の場合は `|` で連結）
-- JSON が存在しない場合は Fail-Fast（ハーネスが `Unknown extern` で停止）。Fallback シグネチャは撤去済み。
+- JSON が存在しない場合は Fail‑Fast（ハーネスが `Unknown extern` で停止）。Fallback シグネチャは撤去済み。
 - 将来的に Schema を `docs/json-schema/externs_registry_v1.json` として切り出す予定（Phase‑B）。
+
+### JSON Spec（最小スキーマ）
+- 配列で Extern の仕様を列挙する（抽象情報のみ）。
+- 各要素のフィールド（最小）:
+  - `interface`: 例 `"nyrt.time"`
+  - `method`: 例 `"now_ms"`
+  - `params`: 例 `["Integer", "Box:ArrayBox"]`
+  - `returns`: 例 `"Integer"`
+  - `effects`: 例 `"read"`（複数は `"read|io"` のように `|` で連結）
+
+例:
+```
+[
+  {
+    "interface": "nyrt.time",
+    "method": "now_ms",
+    "params": [],
+    "returns": "Integer",
+    "effects": "read"
+  },
+  {
+    "interface": "nyrt.array",
+    "method": "size",
+    "params": ["Box:ArrayBox"],
+    "returns": "Integer",
+    "effects": "read"
+  }
+]
+```
+
+命名規則（LLVM）
+- 既定は dotted 形式（`iface.method` → `nyrt.time.now_ms`）。
+- `NYASH_LLVM_EXTERN_SYMBOL_STYLE=underscores` で `iface_method` も選択可（開発補助）。
 
 Harness‑First と Fail‑Fast（更新）
 - スモーク/実行は LLVM ハーネス（llvmlite）を第一にする（ネイティブLLVMは開発補助）。

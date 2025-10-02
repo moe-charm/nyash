@@ -201,7 +201,8 @@ static box LocalSSA {
         }
       }
       local new_id = me._max_dst_id(out) + 1
-      local copy_inst = "{\\\"op\\\":\\\"copy\\\",\\\"src\\\":" + digits + ",\\\"dst\\\":" + new_id + "},"
+      // Insert a plain JSON object (no extra escaping) to keep downstream scanners simple
+      local copy_inst = "{\"op\":\"copy\",\"src\":" + digits + ",\"dst\":" + new_id + "},"
       out = out.substring(0, insert_at) + copy_inst + out.substring(insert_at, out.length())
       t_copies = t_copies + 1
       // Rewrite branch cond to new_id within obj segment (adjust obj positions by insertion)

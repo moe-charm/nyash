@@ -51,17 +51,18 @@ static box MirVmMin {
           local present = 0
           // 一部環境では has が未実装のことがあるため try せず best‑effort に扱う
           present = regs.has(key)
-          // 分岐直後のブロックでは 0/1 をリテラル優先で扱う（簡易仕様）
-          if entered_from_cf == 1 {
-            if rid == 0 { return 0 }
-            if rid == 1 { return 1 }
-          }
+          // まずレジスタ値を優先
           if present == 1 {
             local val = regs.get(key)
             // 取り出し失敗時は 0（Fail‑Safe）
             if val == null { return 0 }
             return val
           } else {
+            // 分岐直後のブロックでは 0/1 の即値をフォールバック（簡易仕様）
+            if entered_from_cf == 1 {
+              if rid == 0 { return 0 }
+              if rid == 1 { return 1 }
+            }
             return 0
           }
         }
