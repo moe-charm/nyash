@@ -3,6 +3,7 @@
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
+export NYASH_DISABLE_PLUGINS=1
 require_env || exit 2
 preflight_plugins || exit 2
 
@@ -12,33 +13,39 @@ export NYASH_ALLOW_USING_FILE=1
 TMP_DIR="/tmp/selfhost_mir_m2_compare_large_vm_$$"
 mkdir -p "$TMP_DIR"
 
-ops=(Eq Ne Lt Le Gt Ge)
-# a=1000000000, b=1000000001 → Eq=0 Ne=1 Lt=1 Le=1 Gt=0 Ge=0
-expect=(0 1 1 1 0 0)
-
-for i in "${!ops[@]}"; do
-  op=${ops[$i]}
-  expected=${expect[$i]}
-  cat > "$TMP_DIR/driver.nyash" << EOF
+cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using selfhost.vm.mir_min as MirVmMin
 
 static box Main {
   main() {
-    local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
-    j = j + "{\\"op\\":\\"const\\",\\"dst\\":1,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":1000000000}},"
-    j = j + "{\\"op\\":\\"const\\",\\"dst\\":2,\\"value\\":{\\"type\\":\\"i64\\",\\"value\\":1000000001}},"
-    j = j + "{\\"op\\":\\"compare\\",\\"cmp\\":\\"${op}\\",\\"lhs\\":1,\\"rhs\\":2,\\"dst\\":3},"
-    j = j + "{\\"op\\":\\"ret\\",\\"value\\":3}] }]}]}"
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    // ops: Eq Ne Lt Le Gt Ge on a=1e9, b=1e9+1
+    local ops = new ArrayBox()
+    ops.push("Eq")
+    ops.push("Ne")
+    ops.push("Lt")
+    ops.push("Le")
+    ops.push("Gt")
+    ops.push("Ge")
+    local i = 0
+    local out = ""
+    loop (i < ops.length()) {
+      local op = ops.get(i)
+      local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":1000000000}},{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":1000000001}},{\"op\":\"compare\",\"cmp\":\"" + op + "\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"ret\",\"value\":3}]}]}]}"
+      local v = MirVmMin._run_min(j)
+      if i > 0 { out = out + " " }
+      out = out + MirVmMin._int_to_str(v)
+      i = i + 1
+    }
+    print(out)
     return 0
   }
 }
 EOF
-  out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | tail -n 1 | tr -d '\r' | xargs)
-  test_name="selfhost_mir_m2_compare_large_${op}_vm"
-  compare_outputs "$expected" "$out" "$test_name" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
-done
+
+out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | tail -n 1 | tr -d '\r' | xargs)
+expected_line="0 1 1 1 0 0"
+compare_outputs "$expected_line" "$out" "selfhost_mir_m2_compare_large_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0
+

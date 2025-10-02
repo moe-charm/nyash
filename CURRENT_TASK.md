@@ -214,6 +214,27 @@ P1（周辺の安定化・非破壊）
   - 期待: 先頭1行 Program ヘッダ
 
 
+## ✅ Update — 2025-10-02（PipelineV2: Extract箱の導入＋quick緑化）
+- 箱化（Extract）
+  - 追加: `apps/selfhost-compiler/pipeline_v2/compare_extract_box.hako`（Return/If Compare 抽出）
+  - 追加: `apps/selfhost-compiler/pipeline_v2/{call_extract_box,method_extract_box,new_extract_box}.hako`（整数引数のみ）
+  - Pipeline は ExtractBox を優先・失敗時は legacy Stage1ExtractFlow にフォールバック。
+- Emit（Return-only ルート）
+  - 追加: `emit_compare_ret(lhs,rhs,cmp,trace)`（prefer_cfg=0 で使用）
+- Mini‑VM 微修正
+  - 直列最適化（const/const/compare/ret）で key 検出をエスケープ/非エスケープ両対応に。
+- quick の安定化
+  - selfhost の比較系スモーク 3件を 1回出力（6オペ連結）に集約し、プラグインを明示OFF。
+  - 結果: quick=160/160 PASS。
+- Docs
+  - 追加: `apps/selfhost-compiler/pipeline_v2/README.md`（箱の契約/入出力/trace/フォールバック/wasm取込み方針）。
+
+WASM ライン（wasm-development）取り込み注意
+- wasm-development は独立ブランチ。Selfhost 側は共有仕様のドキュメント同期を主とし、実装取り込みは小粒・既定OFF・可逆で行う。
+- 仕様差分は adapter（例: MirJsonV1Adapter）で吸収。箱の API/入出力は変更しない。
+- 取り込み毎に quick/integration の代表スモークを走らせ、green を維持する。
+
+
 ## Docs — MIR Freeze / MirCall（done）
 - 更新: docs/reference/mir/INSTRUCTION_SET.md（凍結セット/非推奨/マッピング/診断を明記）
 - 追加: docs/reference/mir/call-unified.md（MirCall/Callee/Flags/Effects/Legacy→MirCall）

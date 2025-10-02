@@ -3,6 +3,25 @@ using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
 
 static box EmitCompareBox {
+  // Return-only variant (prefer_cfg = 0): emit compare → ret directly
+  emit_compare(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_ret(lhs, rhs, cmp, 0) }
+
+  emit_compare_ret(lhs, rhs, cmp, trace) {
+    // dev-trace（最小）
+    if trace == 1 { print("[emit] compare-ret lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp) }
+    // entry: const lhs/rhs; compare→r3; ret r3
+    local b = MirJsonBuilderMin.make()
+      |> MirJsonBuilderMin.start_module()
+      |> MirJsonBuilderMin.start_function("main")
+      |> MirJsonBuilderMin.start_block(0)
+      |> MirJsonBuilderMin.add_const(1, lhs)
+      |> MirJsonBuilderMin.add_const(2, rhs)
+      |> MirJsonBuilderMin.add_compare(cmp, 1, 2, 3)
+      |> MirJsonBuilderMin.add_ret(3)
+      |> MirJsonBuilderMin.end_all()
+    return MirJsonBuilderMin.to_string(b)
+  }
+
   emit_compare_cfg(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, 0) }
 
   emit_compare_cfg2(lhs, rhs, cmp, materialize) { return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, materialize, 0) }

@@ -147,6 +147,10 @@ static box Main {
           }
           local trace = 0
           if emit_trace == 1 { trace = 1 }
+          if trace == 1 {
+            // dev-only: dump stage-1 json used for lowering
+            print("[trace] ast_json=" + ast_json)
+          }
           local out = PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace)
           if out != null { print(out) } else { print("{}") }
           return 0

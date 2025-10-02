@@ -1,0 +1,51 @@
+// NewExtractBox — Stage‑1 JSON から Return(New class(args...)) を抽出（整数引数のみ）
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box NewExtractBox {
+  // Returns { class: String, args: [Int,...] } or null
+  extract_return_new_ints(ast_json) {
+    if ast_json == null { return null }
+    local rq = RegexFlow.find_from(ast_json, "\"type\":\"Return\"", 0)
+    if rq < 0 { return null }
+    local q = RegexFlow.find_from(ast_json, "\"type\":\"New\"", rq)
+    if q < 0 { return null }
+    // class name
+    local ck = RegexFlow.find_from(ast_json, "\"class\":\"", q)
+    if ck < 0 { return null }
+    local ck_end = RegexFlow.find_from(ast_json, "\"", ck + 9)
+    if ck_end < 0 { return null }
+    local cname = ast_json.substring(ck + 9, ck_end)
+    // args (Int only)
+    local ak = RegexFlow.find_from(ast_json, "\"args\":[", q)
+    local args = []
+    if ak >= 0 {
+      local lb = RegexFlow.find_from(ast_json, "[", ak)
+      local rb = ast_json.length()
+      if lb >= 0 {
+        local i2 = lb + 1
+        local depth = 1
+        loop(true) {
+          local ch = ast_json.substring(i2, i2+1)
+          if ch == "" { break }
+          if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
+          if depth == 0 { rb = i2  break }
+          i2 = i2 + 1
+        }
+      }
+      local i = ak
+      loop(true) {
+        local tpos = RegexFlow.find_from(ast_json, "\"type\":\"Int\"", i)
+        if tpos < 0 || tpos >= rb { break }
+        local vpos = RegexFlow.find_from(ast_json, "\"value\":", tpos)
+        if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
+        local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+        if ds != "" { args.push(RegexFlow.to_int(ds)) }
+        i = vpos + 8 + ds.length()
+      }
+    }
+    return { class: cname, args: args }
+  }
+}
+
+static box NewExtractStub { main(args) { return 0 } }
+
