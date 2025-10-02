@@ -201,15 +201,30 @@ Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを�
   - 「戻せる」: 既存の動作を壊さない（フォールスルー設計） ✅
   - 「見える化」: 5-tier解決順序が自明・デバッグ容易 ✅
 
+#### **第4弾: 型変換統一化（TypeCoercion箱新設）** 📦
+- ✅ **TypeCoercion箱実装完了**: 型変換ロジックを専用箱に集約（220行）
+  - StringTagPolicyと同じ設計パターン（Pure Functions・不変条件）
+  - to_i64(): Any → i64 統一変換（i1/iN/pointer対応）
+  - to_i1(): Any → i1 統一変換（条件式用Truthiness）
+- ✅ **PhiDispatchPoint統合**: _coerce_i64()をTypeCoercion.to_i64()に委譲
+  - 後方互換性維持（既存コードは動作し続ける）
+  - 型変換ロジックが単一の箱に統一
+- ✅ **SSA順序保証継続**: 使用地点変換で定義→使用の順序保証
+  - 冪等性: 同じ型への変換は何もしない（最適化）
+  - デバッグ容易性: 統一された命名規則
+- ✅ **動作確認**: phi_loop_simple テスト成功（Result: 9）
+- 🎯 **次のステップ**: boxcall.py 15箇所以上の個別変換を統一
+
 #### **成果サマリー**
-- **コード品質**: 50行削減＋保守性大幅向上＋5-tier resolution確立
-- **箱理論実践**: StringTagPolicy（不変条件・学習効果）＋値解決統一
+- **コード品質**: 50行削減＋保守性大幅向上＋5-tier resolution確立＋型変換統一箱（220行）
+- **箱理論実践**: StringTagPolicy＋値解決統一＋**TypeCoercion（3つ目の箱！）**
 - **SSA順序保証**: 使用地点変換で順序問題完全解消
 - **値可視性保証**: vmap直接参照層でスコープ問題解決
+- **型変換統一**: 散らばっていた変換ロジックを専用箱に集約
 - **診断精度向上**: ChatGPT誤診を箱理論で即座に修正！
-- **次のステップ**: 3つの箱化機会発見（値解決統一・TypeCoercion・ポリシー拡張）
+- **実装完了**: 優先度1（値解決統一）＋優先度2開始（TypeCoercion箱）
 
-📋 **詳細**: [phi_design.md](src/llvm_py/docs/phi_design.md) | [LoopForm論文](docs/private/papers-archive/paper-e-loop-signal-ir/main-paper-jp.md) | [StringTagPolicy](src/llvm_py/instructions/string_tag_policy.py) | [PhiDispatchPoint](src/llvm_py/dispatch/phi_dispatch.py)
+📋 **詳細**: [phi_design.md](src/llvm_py/docs/phi_design.md) | [LoopForm論文](docs/private/papers-archive/paper-e-loop-signal-ir/main-paper-jp.md) | [StringTagPolicy](src/llvm_py/instructions/string_tag_policy.py) | [PhiDispatchPoint](src/llvm_py/dispatch/phi_dispatch.py) | [TypeCoercion](src/llvm_py/dispatch/type_coercion.py)
 
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/hakorune_kernel` 完全移行
