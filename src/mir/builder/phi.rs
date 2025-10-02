@@ -9,11 +9,12 @@ impl MirBuilder {
     /// Merge all variables modified in then/else relative to pre_if_snapshot.
     /// In PHI-off mode inserts edge copies from branch exits to merge. In PHI-on mode emits Phi.
     /// `skip_var` allows skipping a variable already merged elsewhere (e.g., bound to an expression result).
+    /// `then_exit_block_opt` and `else_exit_block_opt` are None if the branch terminates (return/throw).
     pub(super) fn merge_modified_vars(
         &mut self,
         _then_block: super::BasicBlockId,
         else_block: super::BasicBlockId,
-        then_exit_block: super::BasicBlockId,
+        then_exit_block_opt: Option<super::BasicBlockId>,
         else_exit_block_opt: Option<super::BasicBlockId>,
         pre_if_snapshot: &std::collections::HashMap<String, super::ValueId>,
         then_map_end: &std::collections::HashMap<String, super::ValueId>,
@@ -40,12 +41,32 @@ impl MirBuilder {
                 .as_ref()
                 .and_then(|m| m.get(name.as_str()).copied())
                 .unwrap_or(pre);
-            // フェーズM: 常にPHI命令を使用（no_phi_mode撤廃）
-            // incoming の predecessor は "実際に merge に遷移してくる出口ブロック" を使用する
-            let then_pred = then_exit_block;
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
+            // Build inputs from reachable predecessors only
+            let mut inputs = Vec::new();
+            if let Some(then_pred) = then_exit_block_opt {
+                inputs.push((then_pred, then_v));
+            }
+            if let Some(else_pred) = else_exit_block_opt {
+                inputs.push((else_pred, else_v));
+            } else if then_exit_block_opt.is_none() {
+                // Both branches terminated, use else_block as fallback
+                inputs.push((else_block, else_v));
+            }
+
+            // Skip if no reachable predecessors
+            if inputs.is_empty() {
+                continue;
+            }
+
+            // Single predecessor: direct assignment, no PHI needed
+            if inputs.len() == 1 {
+                let (_, v) = inputs[0];
+                self.variable_map.insert(name.clone(), v);
+                continue;
+            }
+
+            // Multiple predecessors: emit PHI
             let merged = self.value_gen.next();
-            let inputs = vec![(then_pred, then_v), (else_pred, else_v)];
             if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
                 crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
             }
@@ -80,10 +101,29 @@ impl MirBuilder {
                 .as_ref()
                 .and_then(|m| m.get(pin_name.as_str()).copied())
                 .unwrap_or(*pre_val);
-            let then_pred = then_exit_block;
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
+
+            // Build inputs from reachable predecessors only
+            let mut inputs = Vec::new();
+            if let Some(then_pred) = then_exit_block_opt {
+                inputs.push((then_pred, then_v));
+            }
+            if let Some(else_pred) = else_exit_block_opt {
+                inputs.push((else_pred, else_v));
+            } else if then_exit_block_opt.is_none() {
+                inputs.push((else_block, else_v));
+            }
+
+            if inputs.is_empty() {
+                continue;
+            }
+
+            if inputs.len() == 1 {
+                let (_, v) = inputs[0];
+                self.variable_map.insert(pin_name.clone(), v);
+                continue;
+            }
+
             let merged = self.value_gen.next();
-            let inputs = vec![(then_pred, then_v), (else_pred, else_v)];
             if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
                 crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
             }
@@ -138,15 +178,25 @@ impl MirBuilder {
                 // Else doesn't assign: use pre-if value if available
                 pre_then_var_value.unwrap_or(else_value_raw)
             };
-            // predecessor を then/else の exit ブロックに揃える
-            let then_pred = then_exit_block_opt.unwrap_or(then_block);
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
-            // Emit Phi for the assigned variable and bind it
-            let inputs = vec![(then_pred, then_value_for_var), (else_pred, else_value_for_var)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            // Build inputs from reachable predecessors only
+            let mut inputs = Vec::new();
+            if let Some(then_pred) = then_exit_block_opt {
+                inputs.push((then_pred, then_value_for_var));
             }
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+            if let Some(else_pred) = else_exit_block_opt {
+                inputs.push((else_pred, else_value_for_var));
+            } else if then_exit_block_opt.is_none() {
+                // Both terminated: use else_block as fallback
+                inputs.push((else_block, else_value_for_var));
+            }
+
+            // Emit Phi only if there are reachable predecessors
+            if !inputs.is_empty() {
+                if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                    crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+                }
+                self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+            }
             self.variable_map = pre_if_var_map.clone();
             let bind_val = if let Some(fun) = self.current_function.as_ref() {
                 if fun.signature.name.starts_with("ParserBox.") && var_name != "me" {
@@ -163,13 +213,22 @@ impl MirBuilder {
             self.variable_map.insert(var_name, bind_val);
         } else {
             // No variable assignment pattern detected – just emit Phi for expression result
-            let then_pred = then_exit_block_opt.unwrap_or(then_block);
-            let else_pred = else_exit_block_opt.unwrap_or(else_block);
-            let inputs = vec![(then_pred, then_value_raw), (else_pred, else_value_raw)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+            let mut inputs = Vec::new();
+            if let Some(then_pred) = then_exit_block_opt {
+                inputs.push((then_pred, then_value_raw));
             }
-            self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+            if let Some(else_pred) = else_exit_block_opt {
+                inputs.push((else_pred, else_value_raw));
+            } else if then_exit_block_opt.is_none() {
+                inputs.push((else_block, else_value_raw));
+            }
+
+            if !inputs.is_empty() {
+                if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
+                    crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
+                }
+                self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+            }
             // Merge variable map conservatively to pre-if snapshot (no new bindings)
             self.variable_map = pre_if_var_map.clone();
         }

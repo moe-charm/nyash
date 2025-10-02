@@ -141,11 +141,23 @@ impl MirBuilder {
             .as_ref()
             .and_then(|name| pre_if_var_map.get(name).copied());
 
+        // Check if branches are terminated (return/throw) to exclude them from PHI predecessors
+        let then_pred_opt = if !self.is_block_terminated(then_exit_block) {
+            Some(then_exit_block)
+        } else {
+            None  // Branch terminated with return/throw, doesn't reach merge
+        };
+        let else_pred_opt = if !self.is_block_terminated(else_exit_block) {
+            Some(else_exit_block)
+        } else {
+            None
+        };
+
         let result_val = self.normalize_if_else_phi(
             then_block,
             else_block,
-            Some(then_exit_block),
-            Some(else_exit_block),
+            then_pred_opt,
+            else_pred_opt,
             then_value_raw,
             else_value_raw,
             &pre_if_var_map,
@@ -176,8 +188,8 @@ impl MirBuilder {
         self.merge_modified_vars(
             then_block,
             else_block,
-            then_exit_block,
-            Some(else_exit_block),
+            then_pred_opt,  // Use computed then_pred_opt (None if terminated)
+            else_pred_opt,  // Use computed else_pred_opt (None if terminated)
             &pre_if_var_map,
             &then_var_map_end,
             &else_var_map_end_opt,

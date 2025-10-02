@@ -355,11 +355,23 @@ impl super::MirBuilder {
         self.value_types.insert(result_val, MirType::Bool);
 
         // Merge modified vars from both branches back into current scope
+        // Check if branches are terminated
+        let then_pred_opt = if !self.is_block_terminated(then_exit_block) {
+            Some(then_exit_block)
+        } else {
+            None
+        };
+        let else_pred_opt = if !self.is_block_terminated(else_exit_block) {
+            Some(else_exit_block)
+        } else {
+            None
+        };
+
         self.merge_modified_vars(
             then_block,
             else_block,
-            then_exit_block,
-            Some(else_exit_block),
+            then_pred_opt,
+            else_pred_opt,
             &pre_if_var_map,
             &then_var_map_end,
             &Some(else_var_map_end),

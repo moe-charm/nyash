@@ -680,6 +680,16 @@ impl MirBuilder {
         false
     }
 
+    /// Check if a specific block is terminated (has return/jump/branch as final instruction)
+    pub(super) fn is_block_terminated(&self, block_id: super::BasicBlockId) -> bool {
+        if let Some(ref function) = self.current_function {
+            if let Some(block) = function.get_block(block_id) {
+                return block.is_terminated();
+            }
+        }
+        false
+    }
+
 
 
 
