@@ -315,6 +315,33 @@ Fail‑Fast / 環境（Env）
 
 ---
 
+### 同一ブロック可視性レイヤ（vmap直参照）と 5‑Tier 解決順序（追補）
+
+背景（診断の是正）
+- 以前の不一致（phi_loop_simple など）は「PHI配線のパリティ」ではなく、同一ブロック内の値可視性の欠落が主因。
+- 具体的には、同一ブロックで生成された i1（compare結果）や i64 値が vmap に存在しているのに、Resolver 経由に委譲して見逃す経路があった。
+
+対応（箱に導入）
+- PhiDispatchPoint.resolve_i64() の先頭に「同一ブロック vmap 直参照」レイヤを追加。
+- これにより、同一ブロックで定義済み SSA を最短経路で取得でき、比較/分岐/合流の順で IR の支配関係が自然に整う。
+
+5‑Tier 解決順序（LoopForm原則/箱理論の実装）
+1) 同一ブロック vmap 直参照（cast 不要の生値／i1 を含む）
+2) 同一ブロック alias 追跡（copy 連鎖の基底化；深さ既定8）
+3) Resolver.resolve_i64（支配関係/型正規化；PHIはRegistry優先で参照）
+4) 宣言PHI（PhiRegistry / block head の placeholder を唯一ソースとして採用）
+5) 構造的ヒント（直近 add; ループのインクリメントパターン）→ 最後に i64 正規化
+
+不変と安全
+- 同一ブロック直参照は cross‑block を跨がない（dominance を破らない）。
+- DispatchPoint は既定で PHI を新規作成しない（wire/参照のみ）。
+- 検証: `NYASH_LLVM_PHI_VERIFY(_STRICT)=1` で order/uniqueness/cfg、`NYASH_LLVM_SANITIZE_EMPTY_PHI=1` で空PHI除去。
+
+効果
+- phi_loop_simple などで Result が期待通りに一致（例: Result: 9）。
+- 「見える化」: 解決順序が箱内に集約され、デバッグが容易になった。
+
+
 ## 追補（2025‑10‑02）— PHI Hardening 方針と実装
 
 目的

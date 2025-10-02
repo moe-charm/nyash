@@ -181,13 +181,35 @@ Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを�
   - aot_extern_string_len_exe: PASS ✅
   - **3/3テスト成功！**
 
-#### **成果サマリー**
-- **コード品質**: 50行削減＋保守性大幅向上
-- **箱理論実践**: StringTagPolicy（不変条件・学習効果）
-- **SSA順序保証**: 使用地点変換で順序問題完全解消
-- **ChatGPT準備完了**: LLVM層が綺麗な状態で引き継ぎ可能！
+#### **第3弾: 値可視性問題の根本解決（箱理論の勝利）** 🎯
+- ✅ **vmap直接参照層の新設**: PhiDispatchPoint 5-tier resolution完成
+  - 問題: compare.py（i1値をvmapに格納） → branch.py（vmapを見ずにresolverに委譲） → 0を取得
+  - 解決: vmap直接参照層を最優先に追加（5行の追加のみ）
+  - **ChatGPTの誤診を修正**: 「PHI配線の問題」→正しくは「同一ブロック内の値可視性問題」
+- ✅ **5-tier resolution構造の確立**: スコープ優先順位の明確化
+  1. Direct vmap lookup（同一ブロック内・最優先）← 🆕 新設！
+  2. Strict resolver path（クロスブロック解決）
+  3. Declared PHI placeholder（マージポイント解決）
+  4. Last add in current block（インクリメントパターン）
+  5. Default zero（最終フォールバック）
+- ✅ **phi_loop_simple完全動作**: Result: 9（期待通り 1+3+5=9）
+  - LLVM IR: i1→i64変換が正しいタイミングで挿入
+  - branch命令が compare結果を確実に取得
+- ✅ **箱理論4原則の完璧な実践**:
+  - 「箱にする」: vmap直接参照を独立した層として分離 ✅
+  - 「境界を作る」: 同一ブロック vs クロスブロック の明確な区別 ✅
+  - 「戻せる」: 既存の動作を壊さない（フォールスルー設計） ✅
+  - 「見える化」: 5-tier解決順序が自明・デバッグ容易 ✅
 
-📋 **詳細**: [phi_design.md](src/llvm_py/docs/phi_design.md) | [LoopForm論文](docs/private/papers-archive/paper-e-loop-signal-ir/main-paper-jp.md) | [StringTagPolicy](src/llvm_py/instructions/string_tag_policy.py)
+#### **成果サマリー**
+- **コード品質**: 50行削減＋保守性大幅向上＋5-tier resolution確立
+- **箱理論実践**: StringTagPolicy（不変条件・学習効果）＋値解決統一
+- **SSA順序保証**: 使用地点変換で順序問題完全解消
+- **値可視性保証**: vmap直接参照層でスコープ問題解決
+- **診断精度向上**: ChatGPT誤診を箱理論で即座に修正！
+- **次のステップ**: 3つの箱化機会発見（値解決統一・TypeCoercion・ポリシー拡張）
+
+📋 **詳細**: [phi_design.md](src/llvm_py/docs/phi_design.md) | [LoopForm論文](docs/private/papers-archive/paper-e-loop-signal-ir/main-paper-jp.md) | [StringTagPolicy](src/llvm_py/instructions/string_tag_policy.py) | [PhiDispatchPoint](src/llvm_py/dispatch/phi_dispatch.py)
 
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/hakorune_kernel` 完全移行

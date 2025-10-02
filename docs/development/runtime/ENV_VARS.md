@@ -67,6 +67,8 @@ NYASH_PLUGIN_POLICY = "off"   # compat: NYASH_DISABLE_PLUGINS = "1"
 - NYASH_LLVM_OBJ_OUT: LLVM経路で生成する `.o` の出力パス（Runner/スクリプトが尊重）
 - NYASH_AOT_OBJECT_OUT: AOT パイプラインで使用する `.o` 出力ディレクトリ/パス
 - NYASH_LLVM_USE_HARNESS: "1" で llvmlite ハーネス経路を有効化（MIR(JSON)→Python→.ll→llc→.o）
+ - NYASH_NY_LLVM_COMPILER: ハーネス用 ny-llvmc のフルパス（未設定時は `target/release/ny-llvmc` を自動推定）
+ - NYASH_EMIT_EXE_NYRT: emit‑exe 時の nyrt ライブラリの探索ディレクトリ（例: `target/release`）
 
 ### LLVM Feature 詳細
 - **llvm** (デフォルト): llvmlite Python ハーネス使用、LLVM_SYS_180_PREFIX不要
@@ -77,6 +79,9 @@ NYASH_PLUGIN_POLICY = "off"   # compat: NYASH_DISABLE_PLUGINS = "1"
 - ドキュメント側: 本ファイルを単一索引にし、用途別に追加。
 - 設定ファイル: `nyash.toml` の `[env]` で標準化（ブランチ/CI での一括制御）。
 - 将来: `nyash env print/set` の CLI サブコマンドを追加し、実行前に `.env`/toml 反映と検証を行う。
+
+## 実行出力（整形 / ノイズ抑制）
+- NYASH_NYRT_SILENT_RESULT: 1 でランタイムの末尾出力を抑制し、`Result: <n>` のみに整形（比較用途）
 
 ## MIR Cleanup (Phase 11.8) 用トグル（段階導入）
 - NYASH_MIR_ARRAY_BOXCALL: ArrayGet/Set → BoxCall 変換を有効化

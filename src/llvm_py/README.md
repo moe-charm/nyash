@@ -85,8 +85,8 @@ VM と LLVM AOT 実行の `Result: <n>` 行を比較します。
 
 使い方
 ```bash
-# release/profile（省略可）
-APP_BIN_DIR=tmp ./tools/smokes/v2/run_phi.sh release
+# ハーネス有効で実行（推奨）
+NYASH_LLVM_USE_HARNESS=1 APP_BIN_DIR=tmp ./tools/smokes/v2/run_phi.sh release
 
 # フィルタ（部分一致）
 PHI_FILTER=nested ./tools/smokes/v2/run_phi.sh release
@@ -96,6 +96,26 @@ PHI_FILTER=nested ./tools/smokes/v2/run_phi.sh release
 - 事前に llvmlite ハーネスで .o を生成（`NYASH_LLVM_USE_HARNESS=1`）
 - リンク→実行→`Result:` 行のみ比較（NYRT は `NYASH_NYRT_SILENT_RESULT=1` 推奨）
 - タイムアウトは既定 15 秒（長いケースは `TIMEOUT=30` などで調整）
+
+補足（ビルド）
+- 環境 `NYASH_LLVM_USE_HARNESS=1` のとき、スモークランナーは nyash を `--features llvm` でビルドします。
+- ny-llvmc を事前ビルドしておくと AOT 実行系の動作が安定します。
+  - `cargo build --release -p nyash-llvm-compiler`
+
+## 🧪 Extern Quick（文字列系 / DP 経路）
+
+目的
+- 文字列API（len/concat/eq など）で DP の値解決と string‑ish タグ付けが安定していることを確認する。
+
+実行（ハーネス直実行 / リンク不要）
+```bash
+NYASH_LLVM_USE_HARNESS=1 ./tools/smokes/v2/run.sh --profile quick --filter "aot_extern_"
+```
+
+期待ケース（例）
+- `extern_string_len_h.nyash` → Result: 2
+- `extern_concat_then_plus_len.nyash` → Result: 3
+- `extern_eq_hh_true.nyash` → Result: 1
 
 ## 📦 PhiDispatchPoint（計画）
 
