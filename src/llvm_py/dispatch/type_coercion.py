@@ -207,6 +207,94 @@ class TypeCoercion:
         """
         return TypeCoercion.to_i1(builder, val, name_hint)
 
+    @staticmethod
+    def to_type(
+        builder: ir.IRBuilder,
+        val: Any,
+        target_type: ir.Type,
+        name_hint: str = ""
+    ) -> ir.Value:
+        """
+        任意の型への変換（return型マッチング用）
+
+        深い設計:
+        - pointer → int: ptrtoint
+        - int → pointer: inttoptr
+        - int → int: zext/trunc（幅調整）
+        - 既に同じ型: そのまま返す（冪等性）
+
+        Args:
+            builder: LLVM IR builder
+            val: 変換対象の値
+            target_type: 目標の型
+            name_hint: 命名ヒント
+
+        Returns:
+            target_type型のLLVM IR値
+
+        箱理論:
+        - 「境界を作る」: 型変換の責務を明確化
+        - 「戻せる」: 既存の型幅変換コードを置き換え可能
+        """
+        # None → デフォルト値
+        if val is None:
+            if isinstance(target_type, ir.IntType):
+                return ir.Constant(target_type, 0)
+            elif isinstance(target_type, ir.DoubleType):
+                return ir.Constant(target_type, 0.0)
+            elif isinstance(target_type, ir.PointerType):
+                return ir.Constant(target_type, None)
+            else:
+                return ir.Constant(target_type, 0)
+
+        # 既に同じ型: そのまま返す（冪等性）
+        if hasattr(val, 'type') and val.type == target_type:
+            return val
+
+        # Pointer → Int
+        if isinstance(target_type, ir.IntType) and hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
+            try:
+                name = f"p2i_{name_hint}" if name_hint else "p2i"
+                return builder.ptrtoint(val, target_type, name=name)
+            except Exception:
+                return builder.ptrtoint(val, target_type)
+
+        # Int → Pointer
+        if isinstance(target_type, ir.PointerType) and hasattr(val, 'type') and isinstance(val.type, ir.IntType):
+            try:
+                name = f"i2p_{name_hint}" if name_hint else "i2p"
+                return builder.inttoptr(val, target_type, name=name)
+            except Exception:
+                return builder.inttoptr(val, target_type)
+
+        # Int → Int（幅調整）
+        if isinstance(target_type, ir.IntType) and hasattr(val, 'type') and isinstance(val.type, ir.IntType):
+            if target_type.width < val.type.width:
+                # Truncate
+                try:
+                    name = f"trunc_to_i{target_type.width}_{name_hint}" if name_hint else f"trunc_to_i{target_type.width}"
+                    return builder.trunc(val, target_type, name=name)
+                except Exception:
+                    return builder.trunc(val, target_type)
+            elif target_type.width > val.type.width:
+                # Zero extend
+                try:
+                    name = f"zext_to_i{target_type.width}_{name_hint}" if name_hint else f"zext_to_i{target_type.width}"
+                    return builder.zext(val, target_type, name=name)
+                except Exception:
+                    return builder.zext(val, target_type)
+            else:
+                # 同じ幅: そのまま返す
+                return val
+
+        # その他: デフォルト値
+        if isinstance(target_type, ir.IntType):
+            return ir.Constant(target_type, 0)
+        elif isinstance(target_type, ir.DoubleType):
+            return ir.Constant(target_type, 0.0)
+        else:
+            return ir.Constant(target_type, None)
+
 
 # ========================================
 # Module-Level Convenience（後方互換）

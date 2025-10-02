@@ -7,6 +7,7 @@ import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
 from instructions.safepoint import insert_automatic_safepoint
 from dispatch import PhiDispatchPoint
+from dispatch.type_coercion import TypeCoercion
 
 def _declare(module: ir.Module, name: str, ret, args):
     for f in module.functions:
@@ -34,8 +35,8 @@ def _ensure_handle(builder: ir.IRBuilder, module: ir.Module, v: ir.Value) -> ir.
             callee = _declare(module, "nyash.box.from_i8_string", i64, [i8p])
             return builder.call(callee, [v], name="str_ptr2h")
         if isinstance(v.type, ir.IntType):
-            # extend/trunc to i64
-            return builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
+            # extend/trunc to i64 (TypeCoercion統一)
+            return TypeCoercion.to_i64(builder, v, "box_arg")
     return ir.Constant(i64, 0)
 
 def lower_boxcall(
@@ -174,11 +175,9 @@ def lower_boxcall(
                     pass
             else:
                 recv_p = ir.Constant(i8p, None)
-            # Coerce indices
-            if hasattr(s, 'type') and isinstance(s.type, ir.PointerType):
-                s = builder.ptrtoint(s, i64)
-            if hasattr(e, 'type') and isinstance(e.type, ir.PointerType):
-                e = builder.ptrtoint(e, i64)
+            # Coerce indices (TypeCoercion統一)
+            s = TypeCoercion.to_i64(builder, s, "substr_start")
+            e = TypeCoercion.to_i64(builder, e, "substr_end")
             callee = _declare(module, "nyash.string.substring_sii", i8p, [i8p, i64, i64])
             p = builder.call(callee, [recv_p, s, e], name="substring")
             conv = _declare(module, "nyash.box.from_i8_string", i64, [i8p])
@@ -241,11 +240,8 @@ def lower_boxcall(
         k = _res_i64(args[0]) if args else ir.Constant(i64, 0)
         if k is None:
             k = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
-        # Normalize key to i64
-        if hasattr(k, 'type') and isinstance(k.type, ir.PointerType):
-            k = builder.ptrtoint(k, i64)
-        elif hasattr(k, 'type') and isinstance(k.type, ir.IntType) and k.type.width != 64:
-            k = builder.zext(k, i64) if k.type.width < 64 else builder.trunc(k, i64)
+        # Normalize key to i64 (TypeCoercion統一)
+        k = TypeCoercion.to_i64(builder, k, "get_key")
         # Attempt Array.get_h(handle, idx)
         callee_arr = _declare(module, "nyash.array.get_h", i64, [i64, i64])
         v_arr = builder.call(callee_arr, [recv_h, k], name="arr_get_h")
@@ -270,7 +266,7 @@ def lower_boxcall(
         if hasattr(v0, 'type') and isinstance(v0.type, ir.PointerType):
             v0 = _ensure_handle(builder, module, v0)
         elif hasattr(v0, 'type') and isinstance(v0.type, ir.IntType) and v0.type.width != 64:
-            v0 = builder.zext(v0, i64) if v0.type.width < 64 else builder.trunc(v0, i64)
+            v0 = TypeCoercion.to_i64(builder, v0, "push_val")
         callee = _declare(module, "nyash.array.push_h", i64, [i64, i64])
         res = builder.call(callee, [recv_h, v0], name="arr_push_h")
         if dst_vid is not None:
@@ -289,12 +285,12 @@ def lower_boxcall(
         # Fallback coercion: pointer → handle, int → i64 width
         if hasattr(k, 'type') and isinstance(k.type, ir.PointerType):
             k = _ensure_handle(builder, module, k)
-        elif hasattr(k, 'type') and isinstance(k.type, ir.IntType) and k.type.width != 64:
-            k = builder.zext(k, i64) if k.type.width < 64 else builder.trunc(k, i64)
+        else:
+            k = TypeCoercion.to_i64(builder, k, "set_key")
         if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
             v = _ensure_handle(builder, module, v)
-        elif hasattr(v, 'type') and isinstance(v.type, ir.IntType) and v.type.width != 64:
-            v = builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
+        else:
+            v = TypeCoercion.to_i64(builder, v, "set_val")
         callee = _declare(module, "nyash.map.set_hh", i64, [i64, i64, i64])
         res = builder.call(callee, [recv_h, k, v], name="map_set_hh")
         if dst_vid is not None:
@@ -310,8 +306,8 @@ def lower_boxcall(
         # Fallback coercion: pointer → handle, int → i64 width
         if hasattr(k, 'type') and isinstance(k.type, ir.PointerType):
             k = _ensure_handle(builder, module, k)
-        elif hasattr(k, 'type') and isinstance(k.type, ir.IntType) and k.type.width != 64:
-            k = builder.zext(k, i64) if k.type.width < 64 else builder.trunc(k, i64)
+        else:
+            k = TypeCoercion.to_i64(builder, k, "has_key")
         callee = _declare(module, "nyash.map.has_hh", i64, [i64, i64])
         res = builder.call(callee, [recv_h, k], name="map_has_hh")
         if dst_vid is not None:
@@ -343,8 +339,7 @@ def lower_boxcall(
                 arg0 = ir.Constant(i64, 0)
             # If we have a handle (i64), convert to i8* via bridge and log via pointer API
             if hasattr(arg0, 'type') and isinstance(arg0.type, ir.IntType):
-                if arg0.type.width != 64:
-                    arg0 = builder.zext(arg0, i64)
+                arg0 = TypeCoercion.to_i64(builder, arg0, "log_arg")
                 bridge = _declare(module, "nyash.string.to_i8p_h", i8p, [i64])
                 p = builder.call(bridge, [arg0], name="str_h2p_for_log")
                 callee = _declare(module, "nyash.console.log", i64, [i8p])
@@ -399,9 +394,9 @@ def lower_boxcall(
                         aval = vmap.get(aid, ir.Constant(ir.IntType(64), 0))
                     if hasattr(aval, 'type') and isinstance(aval.type, ir.PointerType):
                         aval = _ensure_handle(builder, module, aval)
-                    elif hasattr(aval, 'type') and isinstance(aval.type, ir.IntType) and aval.type.width != 64:
-                        aval = builder.zext(aval, ir.IntType(64)) if aval.type.width < 64 else builder.trunc(aval, ir.IntType(64))
-                a.append(aval)
+                    else:
+                        aval = TypeCoercion.to_i64(builder, aval, f"call_arg{idx}")
+                    a.append(aval)
             res = builder.call(callee, a, name=f"call_self_{method_name}")
             if dst_vid is not None:
                 vmap[dst_vid] = res
@@ -445,15 +440,9 @@ def lower_boxcall(
     else:
         a1 = vmap.get(args[0], ir.Constant(i64, 0)) if len(args) >= 1 else ir.Constant(i64, 0)
         a2 = vmap.get(args[1], ir.Constant(i64, 0)) if len(args) >= 2 else ir.Constant(i64, 0)
-    if hasattr(a1, 'type') and isinstance(a1.type, ir.PointerType):
-        a1 = builder.ptrtoint(a1, i64)
-    if hasattr(a2, 'type') and isinstance(a2.type, ir.PointerType):
-        a2 = builder.ptrtoint(a2, i64)
-    # Ensure integer width is i64
-    if hasattr(a1, 'type') and isinstance(a1.type, ir.IntType) and a1.type.width != 64:
-        a1 = builder.zext(a1, i64) if a1.type.width < 64 else builder.trunc(a1, i64)
-    if hasattr(a2, 'type') and isinstance(a2.type, ir.IntType) and a2.type.width != 64:
-        a2 = builder.zext(a2, i64) if a2.type.width < 64 else builder.trunc(a2, i64)
+    # Normalize arguments to i64
+    a1 = TypeCoercion.to_i64(builder, a1, "invoke_arg1")
+    a2 = TypeCoercion.to_i64(builder, a2, "invoke_arg2")
 
     callee = _declare(module, "nyash.plugin.invoke_by_name_i64", i64, [i64, i8p, i64, i64, i64])
     result = builder.call(callee, [recv_h, mptr, argc, a1, a2], name="pinvoke_by_name")

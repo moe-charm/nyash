@@ -7,9 +7,9 @@ import llvmlite.ir as ir
 from typing import Dict, Optional, Any
 from utils.values import resolve_i64_strict
 from dispatch import PhiDispatchPoint
+from dispatch.type_coercion import TypeCoercion
 from typing import Optional
 from .compare import lower_compare
-import llvmlite.ir as ir
 
 def lower_binop(
     builder: ir.IRBuilder,
@@ -69,10 +69,8 @@ def lower_binop(
 
     # Convert i1 (boolean) to i64 if needed (from compare operations)
     i64 = ir.IntType(64)
-    if hasattr(lhs_val, 'type') and isinstance(lhs_val.type, ir.IntType) and lhs_val.type.width == 1:
-        lhs_val = builder.zext(lhs_val, i64, name=f'lhs_i64_{dst}')
-    if hasattr(rhs_val, 'type') and isinstance(rhs_val.type, ir.IntType) and rhs_val.type.width == 1:
-        rhs_val = builder.zext(rhs_val, i64, name=f'rhs_i64_{dst}')
+    lhs_val = TypeCoercion.to_i64(builder, lhs_val, f"lhs_{dst}")
+    rhs_val = TypeCoercion.to_i64(builder, rhs_val, f"rhs_{dst}")
     
     # Relational/equality operators delegate to compare
     if op in ('==','!=','<','>','<=','>='):
@@ -193,24 +191,12 @@ def lower_binop(
                     if to_i8p is None:
                         to_i8p = ir.Function(builder.module, ir.FunctionType(i8p, [i64]), name='nyash.string.to_i8p_h')
                     # Ensure we pass an i64 handle
-                    hv = val
-                    if hv is None:
-                        hv = ir.Constant(i64, 0)
-                    if hasattr(hv, 'type') and isinstance(hv.type, ir.PointerType):
-                        hv = builder.ptrtoint(hv, i64, name=f"bin_p2h_{tag}_{dst}")
-                    elif hasattr(hv, 'type') and isinstance(hv.type, ir.IntType) and hv.type.width != 64:
-                        hv = builder.zext(hv, i64, name=f"bin_zext_h_{tag}_{dst}")
+                    hv = TypeCoercion.to_i64(builder, val, f"bin_h_{tag}_{dst}")
                     return builder.call(to_i8p, [hv], name=f"bin_h2p_{tag}_{dst}")
 
                 # Resolve numeric side as i64 value
                 def as_i64(val):
-                    if val is None:
-                        return ir.Constant(i64, 0)
-                    if hasattr(val, 'type') and isinstance(val.type, ir.PointerType):
-                        return builder.ptrtoint(val, i64, name=f"bin_p2i_{dst}")
-                    if hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width != 64:
-                        return builder.zext(val, i64, name=f"bin_zext_i_{dst}")
-                    return val
+                    return TypeCoercion.to_i64(builder, val, f"bin_i64_{dst}")
 
                 if lhs_tag:
                     lp = to_i8p_from_vid(lhs, lhs_raw, lhs_val, 'l')
@@ -256,13 +242,8 @@ def lower_binop(
 
     # Ensure both are i64
     i64 = ir.IntType(64)
-    if hasattr(lhs_val, 'type') and lhs_val.type != i64:
-        # Type conversion if needed
-        if lhs_val.type.is_pointer:
-            lhs_val = builder.ptrtoint(lhs_val, i64, name=f"binop_lhs_p2i_{dst}")
-    if hasattr(rhs_val, 'type') and rhs_val.type != i64:
-        if rhs_val.type.is_pointer:
-            rhs_val = builder.ptrtoint(rhs_val, i64, name=f"binop_rhs_p2i_{dst}")
+    lhs_val = TypeCoercion.to_i64(builder, lhs_val, f"binop_lhs_{dst}")
+    rhs_val = TypeCoercion.to_i64(builder, rhs_val, f"binop_rhs_{dst}")
     
     # Perform operation
     if op == '+':
