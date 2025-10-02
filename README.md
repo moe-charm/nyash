@@ -4,6 +4,9 @@
 
 *[🇯🇵 日本語版はこちら / Japanese Version](README.ja.md)*
 
+Branding note
+- Preferred binary is `hakorune` (alias: `hako`). Legacy alias `nyash` remains available in many environments. Examples in this README use `hakorune`.
+
 [![Selfhost Minimal](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml/badge.svg?branch=selfhosting-dev)](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml)
 [![Core Smoke](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml/badge.svg)](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
@@ -38,7 +41,7 @@ Dev shortcuts (Operator Boxes & JSON smokes)
 - Details: `docs/guides/operator-boxes.md`
 
 Dev mode and defaults
-- `nyash --dev script.nyash` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal). The CLI alias `hrn` may be used equivalently.
+- `hakorune --dev script.nyash` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal). The CLI alias `hrn` may be used equivalently.
 - You can still use the dev shortcuts for a one‑command setup: `./tools/opbox-json.sh`, `./tools/opbox-quick.sh`.
 - Using guard: duplicate `using` of the same file (or alias rebind to a different file) now errors with a line number hint to avoid ambiguous resolution.
   - Example error: `using: duplicate import of '<canon_path>' at file.nyash:12 (previous alias 'X' first seen at line 5)`
@@ -51,6 +54,7 @@ Phase‑15 (2025‑09) update
 - 推奨トグル: `NYASH_LLVM_USE_HARNESS=1`, `NYASH_PARSER_TOKEN_CURSOR=1`, `NYASH_JSON_PROVIDER=ny`, `NYASH_SELFHOST_EXEC=1`。
 
 Developer quickstart: see `docs/guides/build/dev-quickstart.md`. Changelog highlights: `CHANGELOG.md`.
+LLVM quick guide: `docs/tools/llvm-build.md`.
 User Macros (Phase 2): `docs/guides/user-macros.md`
 Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
 ScopeBox & MIR hints: `docs/guides/scopebox.md`
@@ -134,7 +138,7 @@ Specs & Constraints
 <a id="self-hosting"></a>
 ## 🧪 Self‑Hosting (Dev Focus)
 - Guide: `docs/guides/how-to/self-hosting.md`
-- Minimal E2E: `./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- Minimal E2E: `./target/release/hakorune --backend vm apps/selfhost-minimal/main.nyash`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - JSON (Operator Boxes, dev): `./tools/opbox-json.sh` / `./tools/opbox-quick.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`

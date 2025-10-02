@@ -19,8 +19,8 @@ Scope
 - Minimal emit-only behaviors (header non-empty, branch/jump/ret generation).
 - Pipeline V2 lowering path sanity checks.
 - LocalSSA ensure_after_phis_copy representative cases.
+- Front-end Ny→JSON v0 parity (VM/LLVM Result line compare for const/if/loop) — see `selfhost_front_min_vm_llvm.sh`.
 
 Out-of-scope
 - Heavy integration or LLVM parity (move to integration/parity or quick/llvm).
 - Plugins-dependent flows (move to plugins suite).
-

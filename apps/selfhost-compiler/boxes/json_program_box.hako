@@ -1,0 +1,31 @@
+// JsonProgramBox — JSON v0 正規化の最小箱
+// 責務: Programヘッダの存在・meta.usingsの注入・キー順の安定化（version,kind,body,meta）
+// 仕様: 入力jsonが既に JSON v0 ならそのまま使い、末尾に meta.usings を付ける（EmitterBox互換）
+//       入力が空/不正なら最小の空Programを返す（Fail‑Fastのため上位でエラーにしてもよい）
+
+static box JsonProgramBox {
+  ensure_meta(json, usings_json) {
+    if json == null { return "{\"version\":0,\"kind\":\"Program\",\"body\":[],\"meta\":{\"usings\":[]}}" }
+    local payload = usings_json
+    if payload == null { payload = "[]" }
+    if payload.length() == 0 { payload = "[]" }
+    // 末尾の '}' の直前に meta を注入（EmitterBoxと同じ手法）
+    local n = json.lastIndexOf("}")
+    if n < 0 { return json }
+    local head = json.substring(0, n)
+    local tail = json.substring(n, json.length())
+    local needs_comma = 1
+    if head.length() == 0 { needs_comma = 0 } else {
+      local last = head.substring(head.length() - 1, head.length())
+      if last == "{" || last == "," { needs_comma = 0 }
+    }
+    if needs_comma == 1 { head = head + "," }
+    return head + "\"meta\":{\"usings\":" + payload + "}" + tail
+  }
+
+  normalize(json, usings_json) {
+    // 最小正規化: meta.usings 以外は触らない（構造は ParserBox の出力に委ねる）
+    return me.ensure_meta(json, usings_json)
+  }
+}
+

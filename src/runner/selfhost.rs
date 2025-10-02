@@ -10,6 +10,16 @@ use super::*;
 use nyash_rust::{mir::MirCompiler, parser::NyashParser};
 use std::fs;
 
+fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len() * 2);
+    for &b in bytes {
+        out.push(HEX[(b >> 4) as usize] as char);
+        out.push(HEX[(b & 0x0f) as usize] as char);
+    }
+    out
+}
+
 impl NyashRunner {
     /// Selfhost (Ny -> JSON v0) pipeline: EXE/VM/Python フォールバック含む
     pub(crate) fn try_run_selfhost_pipeline(&self, filename: &str) -> bool {
@@ -124,12 +134,13 @@ impl NyashRunner {
                 }
             }
         }
+        let inline_hex = encode_hex(code_ref.as_bytes());
         // Preferred: run Ny selfhost compiler program (apps/selfhost-compiler or apps/selfhost)
         // This avoids inline embedding pitfalls and supports Stage-3 gating via args.
         {
             use crate::runner::modes::common_util::selfhost::{child, json};
             let exe = std::env::current_exe()
-                .unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
+                .unwrap_or_else(|_| std::path::PathBuf::from("target/release/hakorune"));
             let parser_prog_hako = std::path::Path::new("apps/selfhost-compiler/compiler.hako");
             let parser_prog_nyash = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
             let parser_prog_legacy = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
@@ -159,6 +170,8 @@ impl NyashRunner {
                 if std::env::var("NYASH_LOOPFORM_NORMALIZE").ok().as_deref() == Some("1") {
                     extra_owned.push("--loopform".to_string());
                 }
+                extra_owned.push("--source-inline".to_string());
+                extra_owned.push(inline_hex.clone());
                 // Optional: developer-provided child args passthrough（新: NYASH_NY_COMPILER_CHILD_ARGS, 旧: NYASH_SELFHOST_CHILD_ARGS）
                 if let Some(raw) = crate::config::env::ny_compiler_child_args() {
                     for tok in raw.split_whitespace() { if !tok.is_empty() { extra_owned.push(tok.to_string()); } }
@@ -355,7 +368,7 @@ impl NyashRunner {
             if want_min_json || want_stage3 || want_read_tmp || child_args_env.is_some() {
                 use crate::runner::modes::common_util::selfhost::child::run_ny_program_capture_json;
                 let exe = std::env::current_exe()
-                    .unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
+                    .unwrap_or_else(|_| std::path::PathBuf::from("target/release/hakorune"));
                 let program = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
                 let mut extra: Vec<String> = Vec::new();
                 // Pass delimiter then args to child compiler
@@ -373,6 +386,8 @@ impl NyashRunner {
                 } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
                     extra.push("--prefer-cfg".to_string());
                 }
+                extra.push("--source-inline".to_string());
+                extra.push(inline_hex.clone());
                 if let Some(a) = child_args_env {
                     for tok in a.split_whitespace() { if !tok.is_empty() { extra.push(tok.to_string()); } }
                 }
@@ -443,8 +458,8 @@ impl NyashRunner {
                 eprintln!("[ny-compiler] write inline failed: {}", e);
                 return false;
             }
-            let exe = std::env::current_exe()
-                .unwrap_or_else(|_| std::path::PathBuf::from("target/release/nyash"));
+                let exe = std::env::current_exe()
+                    .unwrap_or_else(|_| std::path::PathBuf::from("target/release/hakorune"));
             let mut cmd = std::process::Command::new(exe);
             cmd.arg("--backend").arg("vm").arg(&inline_path);
             cmd.env_remove("NYASH_USE_NY_COMPILER");

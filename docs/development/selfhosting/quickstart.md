@@ -19,7 +19,7 @@ NYASH_NY_COMPILER_MIN_JSON=1 \
 NYASH_NY_COMPILER_EMIT_ONLY=1 \
 NYASH_NY_COMPILER_SKIP_PY=1 \
 NYASH_JSON_ONLY=1 \
-timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako
+timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako
 
 # Emit minimal MIR(JSON v0) (const→ret)
 NYASH_DISABLE_PLUGINS=1 \
@@ -29,7 +29,7 @@ NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" \
 NYASH_NY_COMPILER_EMIT_ONLY=1 \
 NYASH_NY_COMPILER_SKIP_PY=1 \
 NYASH_JSON_ONLY=1 \
-timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako
+timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako
 ```
 
 Parent→child ENV mapping（official）
@@ -47,12 +47,12 @@ Direct run (dev only; requires allowing file using):
 ```
 timeout 5 \
   NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude NYASH_JSON_ONLY=1 \
-  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json
+  ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json
   
 # Optional: pipeline v2 (emit-only)
 timeout 5 \
   NYASH_DISABLE_PLUGINS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_STRATEGY=prelude NYASH_JSON_ONLY=1 \
-  ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2
+  ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2
 ```
 
 ## Execute MIR(JSON v0)
@@ -60,17 +60,17 @@ Use the VM line (Rust) or PyVM harness as needed.
 
 Rust VM (default):
 ```
-./target/release/nyash --backend vm apps/examples/json_query/main.nyash
+./target/release/hakorune --backend vm apps/examples/json_query/main.nyash
 ```
 
 PyVM reference (when verifying parity):
 ```
-NYASH_VM_USE_PY=1 ./target/release/nyash --backend vm apps/examples/json_query/main.nyash
+NYASH_VM_USE_PY=1 ./target/release/hakorune --backend vm apps/examples/json_query/main.nyash
 ```
 
 LLVM harness (llvmlite):
 ```
-NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/examples/json_query/main.nyash
+NYASH_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm apps/examples/json_query/main.nyash
 ```
 
 Notes:

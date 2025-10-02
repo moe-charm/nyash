@@ -83,16 +83,16 @@ print("Length: " + len)  # 期待: 11, 実際: 0
 ./tools/plugin-tester/target/release/plugin-tester check --config nyash.toml
 
 # テスト実行
-NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 ./target/release/nyash test_stringbox.nyash
+NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 ./target/release/hakorune test_stringbox.nyash
 ```
 
 ### デバッグ情報収集
 ```bash
 # 詳細ログ
-NYASH_CLI_VERBOSE=1 ./target/release/nyash test_stringbox.nyash
+NYASH_CLI_VERBOSE=1 ./target/release/hakorune test_stringbox.nyash
 
 # MIRダンプ確認
-./target/release/nyash --dump-mir test_stringbox.nyash
+./target/release/hakorune --dump-mir test_stringbox.nyash
 
 # 具体的な問題箇所の確認
 rg "M_BIRTH" plugins/nyash-string-plugin/src/lib.rs  # 該当箇所を特定

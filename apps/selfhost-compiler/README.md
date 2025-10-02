@@ -6,9 +6,9 @@ Scope
 
 Run (official runner path)
 - Minimal AST JSON (header):
-  - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako`
+  - `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
 - Minimal MIR(JSON v0) (const→ret / cmp→branch+jump→ret):
-  - `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 timeout 5 ./target/release/nyash --backend vm apps/examples/string_p0.hako`
+  - `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
 
 Execution policy (Phase 15.7)
 - Default executor: Rust VM. PyVM is used only when explicitly requested by env.
@@ -18,7 +18,7 @@ Execution policy (Phase 15.7)
 
 Direct run (dev only)
 - Allow file using and AST merge when running the Ny compiler program directly (use timeout to prevent hangs):
-  - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/nyash --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
+  - `timeout 5s NYASH_DISABLE_PLUGINS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_JSON_ONLY=1 ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
 - Optional (emit-only pipeline v2): append `--pipeline-v2` to route via ExecutionPipelineBox
   - `... apps/selfhost-compiler/compiler.hako -- --min-json --pipeline-v2`
 

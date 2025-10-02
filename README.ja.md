@@ -78,7 +78,7 @@ Phase‑15（2025‑09）アップデート
 プロファイル（クイック）
 - `--profile dev` → マクロON（strict）、開発向け VM 既定（必要に応じて環境で上書き可）
 - `--profile lite` → マクロOFF の軽量実行
-  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/hakorune --profile dev --backend vm apps/tests/ternary_basic.nyash`
 
 ## 目次
 - [Self-Hosting（自己ホスト開発）](#self-hosting)
@@ -87,7 +87,7 @@ Phase‑15（2025‑09）アップデート
 <a id="self-hosting"></a>
 ## 🧪 Self-Hosting（自己ホスト開発）
 - ガイド: `docs/how-to/self-hosting.md`
-- 最小E2E: `./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash`
+- 最小E2E: `./target/release/hakorune --backend vm apps/selfhost-minimal/main.nyash`
 - スモーク: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
 

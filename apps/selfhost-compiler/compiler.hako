@@ -26,9 +26,81 @@ static box Main {
   }
   // ---- IO helper ----
   read_all(path) {
-    // Quick-profile friendly stub: avoid FileBox in fallback VM
-    // Return a safe sample source when file I/O is unavailable
+    if path == null { return "return 1+2*3" }
+    local fb = null
+    // FileBox lives behind the plugin boundary; guard against absence.
+    fb = new FileBox()
+    if fb != null {
+      local opened = fb.open(path, "r")
+      if opened == 1 {
+        local content = fb.read()
+        fb.close()
+        if content != null { return content }
+      } else {
+        // Ensure handle is closed even when open fails
+        fb.close()
+      }
+    }
+    // Fallback: keep legacy sample source (fail-fast path still returns valid Ny)
     return "return 1+2*3"
+  }
+
+  hex_digit(ch) {
+    if ch == "0" { return 0 }
+    if ch == "1" { return 1 }
+    if ch == "2" { return 2 }
+    if ch == "3" { return 3 }
+    if ch == "4" { return 4 }
+    if ch == "5" { return 5 }
+    if ch == "6" { return 6 }
+    if ch == "7" { return 7 }
+    if ch == "8" { return 8 }
+    if ch == "9" { return 9 }
+    if ch == "a" { return 10 }
+    if ch == "A" { return 10 }
+    if ch == "b" { return 11 }
+    if ch == "B" { return 11 }
+    if ch == "c" { return 12 }
+    if ch == "C" { return 12 }
+    if ch == "d" { return 13 }
+    if ch == "D" { return 13 }
+    if ch == "e" { return 14 }
+    if ch == "E" { return 14 }
+    if ch == "f" { return 15 }
+    if ch == "F" { return 15 }
+    return -1
+  }
+
+  byte_to_char(v) {
+    if v == 10 { return "\n" }
+    if v == 13 { return "\r" }
+    if v == 9 { return "\t" }
+    if v >= 32 && v <= 126 {
+      local ascii = " !\"#$%&'()*+,-./0123456789:;<=>?@ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`abcdefghijklmnopqrstuvwxyz{|}~"
+      local idx = v - 32
+      return ascii.substring(idx, idx + 1)
+    }
+    if v == 0 { return "" }
+    return null
+  }
+
+  decode_hex_inline(hex) {
+    if hex == null { return null }
+    local n = hex.length()
+    if n % 2 == 1 { return null }
+    local out = ""
+    local i = 0
+    loop(i < n) {
+      local hi = me.hex_digit(hex.substring(i, i + 1))
+      local lo = me.hex_digit(hex.substring(i + 1, i + 2))
+      if hi < 0 || lo < 0 { return null }
+      local value = hi * 16 + lo
+      local ch = me.byte_to_char(value)
+      if ch == null { return null }
+      out = out + ch
+      i = i + 2
+    }
+    return out
   }
 
   // ---- JSON helpers ----
@@ -69,26 +141,36 @@ static box Main {
     local read_tmp = 0
     local input_path = null
     local stage3_mode = 0
+    local inline_hex = null
     // Phase A: compiler-track/ssa-trace are not used (min-json only)
     if args != null {
       local alen = args.length()
       local i = 0
       loop(i < alen) {
         local a = args.get(i)
-        if a == "--read-tmp" {
+        if a == "--" {
+          // delimiter between runner args and child args
+        } else if a == "--read-tmp" {
           read_tmp = 1
         } else {
-          // (removed) compiler-track/ssa-trace
-          if a == "--min-json" {
-            /* handled later */
+          if a == "--source-inline" {
+            if i + 1 < alen {
+              inline_hex = args.get(i + 1)
+              i = i + 1
+            }
           } else {
-            if a == "--emit-mir" {
+            // (removed) compiler-track/ssa-trace
+            if a == "--min-json" {
               /* handled later */
             } else {
-              if a == "--stage3" {
-                stage3_mode = 1
+              if a == "--emit-mir" {
+                /* handled later */
               } else {
-                if input_path == null { input_path = a }
+                if a == "--stage3" {
+                  stage3_mode = 1
+                } else {
+                  if input_path == null { input_path = a }
+                }
               }
             }
           }
@@ -96,15 +178,21 @@ static box Main {
         i = i + 1
       }
     }
-    if input_path != null {
-      // Prefer explicit file when provided (requires FileBox plugin)
-      local s1 = me.read_all(input_path)
-      if s1 != null { src = s1 }
+    local inline_src = null
+    if inline_hex != null { inline_src = me.decode_hex_inline(inline_hex) }
+    if inline_src != null {
+      src = inline_src
     } else {
-      if read_tmp == 1 {
-        // Optional: read tmp/ny_parser_input.ny (requires FileBox plugin; do not use in CI)
-        local s2 = me.read_all("tmp/ny_parser_input.ny")
-        if s2 != null { src = s2 }
+      if input_path != null {
+        // Prefer explicit file when provided (requires FileBox plugin)
+        local s1 = me.read_all(input_path)
+        if s1 != null { src = s1 }
+      } else {
+        if read_tmp == 1 {
+          // Optional: read tmp/ny_parser_input.ny (requires FileBox plugin; do not use in CI)
+          local s2 = me.read_all("tmp/ny_parser_input.ny")
+          if s2 != null { src = s2 }
+        }
       }
     }
 

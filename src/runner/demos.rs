@@ -93,8 +93,8 @@ pub(super) fn demo_parser_system() {
 pub(super) fn demo_interpreter_system() {
     println!("\n🎭 7. Interpreter System:");
     println!("  ⚠️  Legacy interpreter removed - use VM or LLVM backends instead");
-    println!("  💡 Try: ./target/release/nyash --backend vm program.nyash");
-    println!("  💡 Try: ./target/release/nyash --backend llvm program.nyash");
+    println!("  💡 Try: ./target/release/hakorune --backend vm program.nyash");
+    println!("  💡 Try: ./target/release/hakorune --backend llvm program.nyash");
 }
 
 /// Run all demo sections (moved from runner/mod.rs)
