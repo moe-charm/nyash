@@ -40,7 +40,7 @@ def lower_copy(
         except Exception:
             pass
     # Prefer local SSA; resolve otherwise to preserve dominance
-    val = resolve_i64_strict(resolver, src, current_block, preds, block_end_values, vmap, bb_map)
+    val = resolve_i64_strict(resolver, src, current_block, preds, block_end_values, vmap, bb_map, builder=builder)
     if val is None:
         val = ir.Constant(ir.IntType(64), 0)
     vmap[dst] = val

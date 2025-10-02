@@ -421,7 +421,7 @@ fini = { method_id = 4294967295 }
 # ArrayBox Plugin (Core Box replacement)
 [libraries."libnyash_array_plugin.so"]
 boxes = ["ArrayBox"]
-path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
+path = "plugins/nyash-array-plugin/target/release/libnyash_array_plugin.so"
 
 [libraries."libnyash_array_plugin.so".ArrayBox]
 type_id = 10

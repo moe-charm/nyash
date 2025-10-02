@@ -1,0 +1,9 @@
+// Verify string equality via eq_hh mapping (==) returns 1
+static box Main {
+  main() {
+    local ok = ("a" == "a")
+    print("Result: " + ok)
+    return 0
+  }
+}
+

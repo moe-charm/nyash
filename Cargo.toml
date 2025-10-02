@@ -44,6 +44,9 @@ llvm = ["llvm-harness"]
 interpreter-legacy = []
 # PyVM bridge (off by default): gates Python VM runner integration paths
 pyvm-bridge = []
+# Stub historical feature to silence check-cfg warnings in archived code paths.
+# This feature is intentionally no-op and remains OFF by default.
+cranelift-jit = []
 # (removed) Optional modular MIR builder feature
 # cranelift-jit = [    # ARCHIVED: Moved to archive/jit-cranelift/ during Phase 15
 #   "dep:cranelift-codegen",
@@ -68,6 +71,15 @@ path = "src/main.rs"
 name = "hako"
 path = "src/bin/hako.rs"
 
+
+# Brand aliases for CLI (same main entry)
+[[bin]]
+name = "hako"
+path = "src/main.rs"
+
+[[bin]]
+name = "hakorune"
+path = "src/main.rs"
 
 # Test binary for multi-box plugin loader
 [[bin]]

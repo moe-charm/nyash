@@ -77,7 +77,7 @@ pub extern "C" fn nyash_plugin_invoke3_f64(
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
+        if let Some(obj) = nyash_rust::runtime::host_handles::get(a0 as u64) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 invoke = Some(p.inner.invoke_fn);
@@ -160,7 +160,7 @@ fn nyash_plugin_invoke_name_common_i64(method: &str, argc: i64, a0: i64, a1: i64
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
+        if let Some(obj) = nyash_rust::runtime::host_handles::get(a0 as u64) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 type_id = p.inner.type_id;
@@ -263,7 +263,7 @@ pub extern "C" fn nyash_plugin_invoke_by_name_i64(
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if recv_handle > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_handle) {
+        if let Some(obj) = nyash_rust::runtime::host_handles::get(recv_handle as u64) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 type_id = p.inner.type_id;
@@ -356,7 +356,7 @@ pub extern "C" fn nyash_plugin_invoke_by_name_i64(
                     );
                     let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
                         std::sync::Arc::new(pb);
-                    let h = nyash_rust::jit::rt::handles::to_handle(arc);
+                    let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
                     return h as i64;
                 }
             }
@@ -401,7 +401,7 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
+        if let Some(obj) = nyash_rust::runtime::host_handles::get(a0 as u64) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 instance_id = p.instance_id();
                 real_type_id = p.inner.type_id;
@@ -425,7 +425,7 @@ pub extern "C" fn nyash_plugin_invoke3_tagged_i64(
         }
         8 => {
             if val > 0 {
-                if let Some(obj) = nyash_rust::jit::rt::handles::get(val) {
+                if let Some(obj) = nyash_rust::runtime::host_handles::get(val as u64) {
                     if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                         nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
                             &mut buf,
@@ -503,7 +503,7 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
     let mut invoke: Option<
         unsafe extern "C" fn(u32, u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32,
     > = None;
-    if let Some(obj) = nyash_rust::jit::rt::handles::get(recv_h) {
+    if let Some(obj) = nyash_rust::runtime::host_handles::get(recv_h as u64) {
         if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
             instance_id = p.instance_id();
             real_type_id = p.inner.type_id;
@@ -534,7 +534,7 @@ pub extern "C" fn nyash_plugin_invoke_tagged_v_i64(
                 nyash_rust::runtime::plugin_ffi_common::encode::f64(&mut buf, f);
             }
             8 => {
-                if let Some(obj) = nyash_rust::jit::rt::handles::get(vals[i]) {
+                if let Some(obj) = nyash_rust::runtime::host_handles::get(vals[i] as u64) {
                     if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                         nyash_rust::runtime::plugin_ffi_common::encode::plugin_handle(
                             &mut buf,

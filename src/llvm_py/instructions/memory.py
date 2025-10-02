@@ -32,7 +32,7 @@ def lower_load(
     """
     # Resolve address value
     if resolver is not None and current_block is not None:
-        addr_val = resolve_i64_strict(resolver, addr, current_block, preds, block_end_values, vmap, bb_map)
+        addr_val = resolve_i64_strict(resolver, addr, current_block, preds, block_end_values, vmap, bb_map, builder=builder)
     else:
         addr_val = vmap.get(addr)
 
@@ -79,8 +79,8 @@ def lower_store(
     """
     # Resolve address and value
     if resolver is not None and current_block is not None:
-        addr_val = resolve_i64_strict(resolver, addr, current_block, preds, block_end_values, vmap, bb_map)
-        val = resolve_i64_strict(resolver, value, current_block, preds, block_end_values, vmap, bb_map)
+        addr_val = resolve_i64_strict(resolver, addr, current_block, preds, block_end_values, vmap, bb_map, builder=builder)
+        val = resolve_i64_strict(resolver, value, current_block, preds, block_end_values, vmap, bb_map, builder=builder)
     else:
         addr_val = vmap.get(addr)
         val = vmap.get(value)

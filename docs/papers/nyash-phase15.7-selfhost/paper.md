@@ -4,7 +4,7 @@
 We present a behavior-preserving consolidation of Nyash’s method-call pipeline and a Nyash-written Mini‑VM that executes a minimal MIR(JSON v0) subset. The unified call design (Known/Rewrite + RouterPolicy) reduces ambiguity without changing defaults, guarded by development-only diagnostics. Our Mini‑VM (MirVmMin) provides a precise, brace-balanced single-pass executor for const/binop/compare/branch/jump/ret, enabling tight, reproducible smoke tests. Quick profile passes 72/72, integration (llvmlite harness) is green, and a self-host compiler path (dev-only) reliably emits non-empty JSON headers. These foundations set a stable, incremental path towards full self-hosting.
 
 ## 1. Introduction
-Nyash is a language with multiple execution lines (Rust VM, LLVM/llvmlite harness, and a development PyVM), targeting practical self-hosting. During Phase 15.7 we found that stability and observability benefit from unifying how instance methods become function calls and from a minimal Nyash-written VM that validates MIR(JSON v0) control-flow.
+Nyash is a language with multiple execution lines (Rust VM and LLVM/llvmlite harness; a historical PyVM existed for development but is now withdrawn by default), targeting practical self-hosting. During Phase 15.7 we found that stability and observability benefit from unifying how instance methods become function calls and from a minimal Nyash-written VM that validates MIR(JSON v0) control-flow.
 
 ## 2. Background
 The builder emits MIR from Nyash source. Historically, instance calls could traverse heterogeneous paths, occasionally complicating materialization (LocalSSA) and PHI merges. Concurrently, a minimal Nyash Mini‑VM helps validate semantics and JSON segmentation independent from the Rust VM.
@@ -35,4 +35,3 @@ Remaining dev valves are default-OFF and slated for removal. Phase 16 will exten
 
 ## 9. Conclusion
 By unifying calls and validating control-flow via a Nyash Mini‑VM, we maintain green pipelines and establish a clean, incremental trajectory to self-hosting without altering default user semantics.
-

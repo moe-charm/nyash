@@ -1,9 +1,0 @@
-// string_p0 – minimal example for JIT smoke (.hako)
-static box Main {
-  init { }
-  main(args) {
-    // Placeholder: do nothing, return 0
-    return 0
-  }
-}
-

@@ -1,7 +1,7 @@
 Self‑Hosting Pilot — Quick Guide (Phase‑15)
 
 Overview
-- Goal: Run Ny→JSON v0 via the selfhost compiler path and execute with PyVM/LLVM.
+- Goal: Run Ny→JSON v0 via the selfhost compiler path and execute with VM/LLVM.
 - Default remains env‑gated for safety; CI runs smokes to build confidence.
 
 Recommended Flows
@@ -32,7 +32,7 @@ Useful Env Flags
 - `NYASH_SELFHOST_READ_TMP=1`: Child reads `tmp/ny_parser_input.ny` when supported.
 
 Troubleshooting (short)
-- No Python found: install `python3` (PyVM / harness).
+- No Python found: required only for LLVM harness; PyVM is deprecated and disabled by default.
 - No `llvm-config-18`: install LLVM 18 dev (see EXE‑first workflow).
 - llvmlite import error: `python3 -m pip install llvmlite`.
 - Parser child timeout: raise `NYASH_NY_COMPILER_TIMEOUT_MS`.
@@ -40,4 +40,4 @@ Troubleshooting (short)
 
 Notes
 - JSON v0 schema is stable but not yet versioned; validation is planned.
-- Default backend `vm` maps to PyVM unless legacy VM features are enabled.
+- Default backend `vm` maps to Rust VM. PyVM is compatibility‑only via `--features pyvm-bridge` + `NYASH_VM_USE_PY=1`.

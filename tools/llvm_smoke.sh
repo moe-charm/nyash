@@ -41,7 +41,7 @@ if [[ "${NYASH_LLVM_BITOPS_SMOKE:-0}" == "1" ]]; then
   NYASH_LLVM_OBJ_OUT="$OBJ_BIT" "$BIN" --backend llvm apps/tests/ny-llvm-bitops/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_BIT" ./tools/build_llvm.sh apps/tests/ny-llvm-bitops/main.nyash -o "$APP_BIN_DIR/app_bitops_llvm" >/dev/null || true
   echo "[llvm-smoke] running app_bitops_llvm ..." >&2
-  out_bit=$("$APP_BIN_DIR/app_bitops_llvm" || true)
+  out_bit=$(NYASH_NYRT_SILENT_RESULT=1 "$APP_BIN_DIR/app_bitops_llvm" || true)
   echo "[llvm-smoke] output: $out_bit" >&2
   if ! echo "$out_bit" | grep -q "Result: 48"; then
     echo "error: ny-llvm-bitops unexpected output: $out_bit" >&2
@@ -81,7 +81,11 @@ if [[ "${NYASH_LLVM_STAGE3_SMOKE:-0}" == "1" ]]; then
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_STAGE3" \
     ./tools/build_llvm.sh apps/tests/llvm_stage3_loop_only.nyash -o "$APP_BIN_DIR/app_stage3_loop" >/dev/null || true
   echo "[llvm-smoke] running app_stage3_loop ..." >&2
-  out_stage3=$("$APP_BIN_DIR/app_stage3_loop" || true)
+  if command -v timeout >/dev/null 2>&1; then
+    out_stage3=$(timeout 15s env NYASH_NYRT_SILENT_RESULT=1 "$APP_BIN_DIR/app_stage3_loop" || true)
+  else
+    out_stage3=$(NYASH_NYRT_SILENT_RESULT=1 "$APP_BIN_DIR/app_stage3_loop" || true)
+  fi
   echo "[llvm-smoke] output: $out_stage3" >&2
   if ! echo "$out_stage3" | grep -q "Result: 3"; then
     echo "error: stage3 loop smoke unexpected output: $out_stage3" >&2
@@ -101,7 +105,7 @@ if [[ "${NYASH_LLVM_ARRAY_SMOKE:-0}" == "1" ]]; then
   NYASH_LLVM_OBJ_OUT="$OBJ_ARRAY" "$BIN" --backend llvm apps/tests/ny-llvm-smoke/main.nyash >/dev/null || true
   NYASH_LLVM_SKIP_EMIT=1 NYASH_LLVM_OBJ_OUT="$OBJ_ARRAY" ./tools/build_llvm.sh apps/tests/ny-llvm-smoke/main.nyash -o "$APP_BIN_DIR/app_link" >/dev/null
   echo "[llvm-smoke] running app_link ..." >&2
-  out_smoke=$("$APP_BIN_DIR/app_link" || true)
+  out_smoke=$(NYASH_NYRT_SILENT_RESULT=1 "$APP_BIN_DIR/app_link" || true)
   echo "[llvm-smoke] output: $out_smoke" >&2
   if ! echo "$out_smoke" | grep -q "Result: 3"; then
     echo "error: ny-llvm-smoke unexpected output: $out_smoke" >&2

@@ -80,4 +80,4 @@ Selfhost Compiler (parent→child; official, default OFF)
 - NYASH_NY_COMPILER_TIMEOUT_MS: child timeout in milliseconds (default 2000).
 - NYASH_NY_COMPILER_EMIT_ONLY: default 1 (emit‑only); when 1, runner prints child JSON and returns handled.
 - NYASH_USE_NY_COMPILER_EXE=1: prefer external compiler EXE (optional; respects `NYASH_NY_COMPILER_EXE_PATH`).
-- NYASH_NY_COMPILER_SKIP_PY=1: skip Python MVP harness fallback.
+- NYASH_NY_COMPILER_SKIP_PY=1: skip Python MVP harness fallback（deprecated; PyVM is withdrawn by default）.

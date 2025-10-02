@@ -391,9 +391,12 @@ static box MirVmMin {
         if me._count_occurs(inst3, keyv) + me._count_occurs(inst3, keyv_esc) == 2 {
           // normalize key to the one actually present
           if inst3.indexOf(keyv) < 0 { keyv = keyv_esc }
-          // Find ret boundary within this block
+          // Find ret boundary within this block (escaped/unescaped tolerant)
           local pr = inst3.indexOf("\"op\":\"ret\"")
-          if pr < 0 { pr = inst3.length() }
+          if pr < 0 {
+            local pr2 = inst3.indexOf("\\\"op\\\":\\\"ret\\\"")
+            if pr2 >= 0 { pr = pr2 } else { pr = inst3.length() }
+          }
           // Find last two const values before ret
           local p2 = me._last_index_of_before(inst3, keyv, pr)
           if p2 >= 0 {
@@ -406,11 +409,22 @@ static box MirVmMin {
                 local b = me._str_to_int(d2)
                 // Track corresponding dst ids of these consts (nearest dst before each value)
                 local pdst2 = me._last_index_of_before(inst3, "\"dst\":", p2)
+                if pdst2 < 0 { pdst2 = me._last_index_of_before(inst3, "\\\"dst\\\":", p2) }
                 local dst2 = null
-                if pdst2 >= 0 { dst2 = me._find_int_in(inst3.substring(pdst2, inst3.length()), "\"dst\":") }
+                if pdst2 >= 0 {
+                  // choose normalized key for find
+                  local kdst = "\"dst\":"
+                  if inst3.indexOf("\\\"dst\\\":") >= 0 { kdst = "\\\"dst\\\":" }
+                  dst2 = me._find_int_in(inst3.substring(pdst2, inst3.length()), kdst)
+                }
                 local pdst1 = me._last_index_of_before(inst3, "\"dst\":", p1)
+                if pdst1 < 0 { pdst1 = me._last_index_of_before(inst3, "\\\"dst\\\":", p1) }
                 local dst1 = null
-                if pdst1 >= 0 { dst1 = me._find_int_in(inst3.substring(pdst1, inst3.length()), "\"dst\":") }
+                if pdst1 >= 0 {
+                  local kdst2 = "\"dst\":"
+                  if inst3.indexOf("\\\"dst\\\":") >= 0 { kdst2 = "\\\"dst\\\":" }
+                  dst1 = me._find_int_in(inst3.substring(pdst1, inst3.length()), kdst2)
+                }
                 // compare?
                 // Find compare nearest before 'ret' within this block
                 local pc = inst3.indexOf("\"op\":\"compare\"")

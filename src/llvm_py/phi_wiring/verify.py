@@ -7,7 +7,7 @@ in production via environment flags.
 """
 
 from __future__ import annotations
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Tuple
 
 import os
 import llvmlite.ir as ir
@@ -127,4 +127,83 @@ def verify_phi_cfg(builder, strict: bool | None = None) -> List[Dict[str, Any]]:
         trace({"phi": "verify_failed", "count": len(problems)})
     else:
         trace({"phi": "verify_ok"})
+    return problems
+
+
+def verify_phi_order(func: ir.Function) -> List[Dict[str, Any]]:
+    """Verify that PHI nodes are grouped at the start of each basic block.
+    Returns a list of problems with fields: {block, issue, detail}.
+    """
+    problems: List[Dict[str, Any]] = []
+    for bb in func.blocks:
+        seen_non_phi = False
+        idx = 0
+        for inst in bb.instructions:
+            is_phi = False
+            try:
+                is_phi = hasattr(inst, 'add_incoming')
+            except Exception:
+                is_phi = False
+            if not is_phi:
+                seen_non_phi = True
+            else:
+                if seen_non_phi:
+                    problems.append({
+                        "block": str(bb.name),
+                        "issue": "phi_not_at_head",
+                        "detail": f"PHI appears after a non-PHI at position {idx}",
+                    })
+                    break
+            idx += 1
+    return problems
+
+
+def verify_phi_uniqueness(builder) -> List[Dict[str, Any]]:
+    """Verify that there is at most one PHI per (block_id, dst_vid).
+
+    Heuristic mapping is used to associate PHI SSA names back to dst_vid:
+    names like 'phi_42' and 'phi_42.1' are considered the same dst=42.
+
+    Returns a list of problems; empty when OK.
+    """
+    problems: List[Dict[str, Any]] = []
+    # Build reverse map: basic block -> list of (dst_vid_guess, inst)
+    for bid, bb in (getattr(builder, 'bb_map', {}) or {}).items():
+        # Scan block head until first non-PHI
+        head: List[Tuple[int, Any]] = []
+        for inst in getattr(bb, 'instructions', []):
+            is_phi = False
+            try:
+                is_phi = hasattr(inst, 'add_incoming')
+            except Exception:
+                is_phi = False
+            if not is_phi:
+                break
+            # Guess dst from SSA name: 'phi_<num>' or 'phi_<num>.<n>'
+            dst_guess = None
+            try:
+                nm = str(getattr(inst, 'name', ''))
+                if nm.startswith('phi_'):
+                    tail = nm[4:]
+                    # strip optional suffix like '.1'
+                    tail = tail.split('.')[0]
+                    dst_guess = int(tail)
+            except Exception:
+                dst_guess = None
+            head.append((dst_guess, inst))
+        # Count by dst_guess
+        buckets: Dict[int, int] = {}
+        for (dg, _i) in head:
+            if dg is None:
+                # Skip anonymous PHIs (shouldn't happen with our naming)
+                continue
+            buckets[dg] = buckets.get(dg, 0) + 1
+        for dg, cnt in buckets.items():
+            if cnt > 1:
+                problems.append({
+                    'block': int(bid),
+                    'dst': int(dg),
+                    'issue': 'duplicate_phi',
+                    'detail': f'{cnt} PHIs named phi_{dg}* at block head',
+                })
     return problems

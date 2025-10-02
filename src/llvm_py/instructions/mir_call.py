@@ -194,7 +194,7 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
             return builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
         return v
 
-    # Resolve receiver and arguments
+    # Resolve to i64 with robust fallback: vmap → coerce (ptr→handle, int→i64)
     def _resolve_arg(vid: int):
         if resolver and hasattr(resolver, 'resolve_i64'):
             try:
@@ -202,7 +202,17 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
                                           owner.block_end_values, vmap, owner.bb_map)
             except:
                 pass
-        return vmap.get(vid)
+        val = vmap.get(vid)
+        if val is None:
+            return ir.Constant(i64, 0)
+        # Pointer → handle via boxer
+        if hasattr(val, 'type') and val.type.is_pointer:
+            callee = _declare("nyash.box.from_i8_string", i64, [i8p])
+            return builder.call(callee, [val], name="unified_ptr2h")
+        # Int → i64 width normalize
+        if hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width != 64:
+            return builder.zext(val, i64) if val.type.width < 64 else builder.trunc(val, i64)
+        return val
 
     recv_val = _resolve_arg(receiver)
     if recv_val is None:

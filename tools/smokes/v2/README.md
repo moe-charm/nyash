@@ -34,6 +34,23 @@
 ./run.sh --profile full --format json --jobs 4 --timeout 300
 ```
 
+### LLVM ハーネス系スモーク（更新）
+```bash
+# PHI ライン（VM vs LLVM 比較; Result 行一致）
+NYASH_LLVM_USE_HARNESS=1 APP_BIN_DIR=tmp ./run_phi.sh release
+
+# Extern Quick（文字列APIのDP/タグ確認; ハーネス直実行）
+NYASH_LLVM_USE_HARNESS=1 ./run.sh --profile quick --filter "aot_extern_"
+
+# Extended（heavy LLVM; opt-in）
+NYASH_LLVM_USE_HARNESS=1 APP_BIN_DIR=tmp ./run_llvm_extended.sh release
+```
+
+ビルドポリシー
+- `NYASH_LLVM_USE_HARNESS=1` のとき、内部で `cargo build --features llvm` を使用。
+- `ny-llvmc` を事前にビルドすると AOT 実行系が安定:
+  - `cargo build --release -p nyash-llvm-compiler`
+
 ### オプション
 ```bash
 --profile {quick|integration|full}  # 実行プロファイル

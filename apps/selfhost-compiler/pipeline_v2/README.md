@@ -1,62 +1,52 @@
-Selfhost Compiler — Pipeline v2 (Box-First Skeleton)
+Pipeline V2 — Box‑First Extract→Emit
 
 Scope
-- Thin, non-invasive box skeletons to express the pipeline structure in Nyash.
-- Emit-only focus: parsing and JSON emission are performed; execution remains with the parent Runner.
-- No new capabilities or extern calls are introduced in Phase 15.7 (spec invariant).
+- Selfhost compilerの emit‑only 経路（Stage‑1 JSON → MIR(JSON v0/v1)）を、箱の責務で明確化する。
+- Parser/Resolver/Runtime には影響しない。既定挙動は不変（devフラグ/引数でのみ起動）。
 
-Boxes
-- FlowEntryBox (emit-only): entry to PipelineV2. Accepts Stage‑1 JSON and returns MIR(JSON).
-- ExecutionPipelineBox: orchestrates ParserBox → EmitterBox; optional BackendBox tag only.
-- BackendBox (stub): records backend name ("vm"|"llvm"|"pyvm"); no execution.
-- MirBuilderBox (stub/IF): future lowering and optimization entry (not wired in Phase 15.7).
+Modules（責務）
+- compare_extract_box.hako
+  - 目的: Stage‑1 JSON から Compare(lhs, rhs, op) を堅牢に抽出（整数のみ）。
+  - API:
+    - extract_return_compare_ints(ast_json) -> {cmp,lhs,rhs} | null
+    - extract_if_compare_ints(ast_json) -> {cmp,lhs,rhs} | null
+  - 失敗時: null（呼び出し側でフォールバック）。
 
-Responsibilities
-- Parse: use existing ParserBox (apps/selfhost-compiler/boxes/parser_box.hako).
-- Emit（boxed）:
-  - EmitReturnBox: return(Int) の最小 JSON 生成
-  - EmitBinopBox: binop(lhs,rhs,kind)
-  - EmitCompareBox: compare/branch/jump/ret（materialize有り/無し）
-  - LocalSSABox: 材化（copy 挿入）ポリシーの集約
-  - 既存の emit_mir_flow.hako は段階的に委譲→削減（互換維持）
-  - Dev観測: `NYASH_EMIT_TRACE=1` を想定した最小トレース（現状は無条件1行出力。最終JSON行は変わらず）
-- Execute: delegated to Rust Runner (parent→child). This directory must NOT perform execution.
-  - Note: actual execution helper is provided under `apps/selfhost/vm/flow_runner.hako`.
+- emit_compare_box.hako
+  - 目的: Compare の MIR(JSON v0) 生成。
+  - API:
+    - emit_compare_ret(lhs,rhs,cmp,trace) -> JSON v0（compare→ret）
+    - emit_compare_cfg3(lhs,rhs,cmp,materialize,trace) -> JSON v0（branch/jump/ret; materialize=2でcopy材化想定）
+  - 失敗時: なし（入力は抽出済み前提）。
 
-Non-goals (Phase 15.7)
-- No extern/FFI invocations to call backends from Ny code.
-- No plugin or file I/O beyond what ParserBox already supports (keep emit path pure).
+- pipeline.hako（flow PipelineV2）
+  - 役割: Extract系→Emit系の配線。Call/Method/New/Compare/If(Compare) を段階的に対応。
+  - フラグ:
+    - prefer_cfg=0: Return‑only（compare→ret）
+    - prefer_cfg=1: CFG（branch/jump/ret）
+    - prefer_cfg=2: CFG+材化（将来の copy after PHI を想定; 現状は等価分岐）
+  - trace: 1で最小トレース（[trace]）を出力。既定は0（静音）。
 
-Usage (dev only, emit-only)
-- Create an ExecutionPipelineBox and call `run_source(src, stage3_flag)`.
-- The method prints a single JSON object to stdout and returns 0.
-- Quiet acceptance is ensured by `NYASH_JSON_ONLY=1` (parent runner sets it for child).
+I/O（最小仕様）
+- 入力: Stage‑1 JSON（Return/If/Call/Method/New の最小形）。負数/空白は RegexFlow で吸収。
+- 出力: MIR(JSON v0)。将来 v1(MirCall) への直出力は lower_stage1_to_mir_v1 を併設（dev用途）。
 
-Tracing (dev)
-- PipelineV2 flow exposes a trace-enabled entry:
-  - `PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg)` — default (trace=0)
-  - `PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace)` — when `trace==1`, emit boxes print a single-line `[emit] ...` before JSON.
-  - ExecutionPipelineBox は emit-only 経路であり、trace の布告は Runner 引数透過で後段導入予定（既定OFF）。
+Fail‑Fast & Fallback
+- 抽出箱は見つからない場合 null を返す。pipeline は legacy extractor（Stage1ExtractFlow）でフォールバックする。
+- 既定ONは変えない（dev引数でのみ有効）。
 
-JSON v1 (MirCall) — experimental
-- PipelineV2 provides an opt-in path to emit unified call form:
-  - `PipelineV2.lower_stage1_to_mir_v1(ast_json, prefer_cfg)` — emits op:`mir_call` with `callee` payload (Global/Method/Constructor) and `args` array.
-  - `PipelineV2.lower_stage1_to_mir_v1_compat(ast_json, prefer_cfg)` — emits v1 then adapts to legacy v0 (call/boxcall/newbox) via `selfhost.common.json.mir_v1_adapter`.
-- Notes
-  - Mini‑VM (MirVmMin) tolerates `op:"mir_call"` by treating its result as 0 (shape-only). Use the compat path to execute on MirVmMin.
-  - Default smokes remain on v0. Additional quick shape smokes exist under `tools/smokes/v2/profiles/quick/selfhost/*_v1_shape_vm.sh`.
+Testing
+- quick/selfhost に compare/binop/call/method/new の代表スモークがある。Compare系は Return‑only と CFG をそれぞれ確認。
+- Mini‑VM（apps/selfhost/vm/boxes/mir_vm_min.nyash）は最小仕様。算術/比較/CFGのみのスモークで品質を担保。
 
-Fail-Fast
-- If parsing returns null/empty, print an error to stderr and return non-zero.
-- Do not print non-JSON lines when `NYASH_JSON_ONLY=1`.
+Notes
+- 追加の Extract 箱（Call/Method/New）を段階導入し、Stage1ExtractFlow の責務を縮小する計画。
+- trace は既定OFF。--emit-trace 指定時のみ出力する。CI/quick は既定で静音。
 
-LAYER GUARD
-- This folder handles orchestration only.
-- It MUST NOT:
-  - perform runtime execution of MIR
-  - manipulate plugins or unified registry
-  - read files directly (allow the caller to pass source text)
-
-Future (post 15.7)
-- Wire MirBuilderBox for Ny→MIR(JSON v0) lowering with minimal op set.
-- Introduce Backend execution delegation behind explicit flags (externs), guarded and opt-in.
+WASM 開発ラインとの取り込み方針（注意）
+- wasm-development ブランチは独立開発ライン。Selfhost 側には以下のみ注意して取り込む。
+  - 共有仕様（MIR JSON 形状、PHI invariants、v1/v0 変換ポリシ）に関するドキュメントの同期。
+  - Python LLVM ハーネスの仕様更新点（値配線/PHI 正規化）を docs に反映し、実装取り込みは最小・可逆。
+  - Selfhost（本フォルダ）の箱 API/入出力は変更せず、adapter で吸収（MirJsonV1Adapter など）。
+  - 実装取り込みは小粒・局所・既定OFFのフラグ配下。quick が緑のままになる粒度で実施。
+  - 互換チェックは quick/integration の代表スモークで行い、重い検証は wasm ライン側で継続。

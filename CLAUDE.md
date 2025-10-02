@@ -336,6 +336,95 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 - vmap二重登録による重複回避
 - ultrathink調査手法の確立
 
+### 🌟 **Phase 15.8完了！LLVM PHI安定化 + LoopForm IR理論実証** (2025-10-02)
+
+#### **第1弾: PHI無限ループ解消 + LoopForm理論実証**
+- ✅ **PhiDispatchPoint実装完了**: 値解決統一（347行の簡潔実装）
+  - compare.py 43%削減（285→161行）
+  - branch.py PhiDispatchPoint統合
+  - Copy連鎖正規化（block_aliases）実装
+- ✅ **PHI無限ループ解消**: VM/LLVM Result一致達成
+  - phi_if_merge_ret: Result: 10 ✅
+  - phi_loop_nested_1: Result: 3（10秒内完走）✅
+- ✅ **LoopForm IR理論の実証**: 20分のたばこ思考💨が完全実現！
+  - PhiRegistry = loop.begin（先頭占位）
+  - instruction_lower = loop.iter（本体）
+  - lower_branch = loop.branch（分岐）
+  - finalize_phis = loop.end（配線）
+  - **ChatGPT実装が無意識に完璧なLoopForm準拠！**
+- ✅ **postfix catch発見**: tryキーワード不要の証明
+  - `operation() catch (e) { }` = Loop1 + Throw Signal
+  - Hakoruneは既にLoopForm IR実装！
+
+#### **第2弾: LLVM層リファクタリング完成（深く考えながら実装）** ✨
+- ✅ **SSA順序ズレ完全解消**: i1→i64変換の使用地点実施
+  - PhiDispatchPoint._coerce_i64() 強化（i1対応追加）
+  - 定義→使用の順序保証（SSA不変条件遵守）
+  - **eq_hh SKIP→PASS化成功！** (従来SKIP→完全動作)
+- ✅ **StringTagPolicy箱化**: タグポリシー一元化（155行の新箱）
+  - string_tag_policy.py 新規作成
+  - externcall.py 50行削減（タグロジック統一）
+  - 箱理論4原則の完璧な実践（不変条件・Fail-Fast・学習効果）
+- ✅ **PhiRegistry統合深化**: 重複削除＋学習効果機能
+  - _phi_from_decl() にPhiRegistry優先経路追加
+  - 発見したPHIを自動登録（次回は高速取得）
+  - 単一起点保証の強化
+- ✅ **テスト全PASS**: extern関連テスト完全動作
+  - aot_extern_eq_hh_exe: PASS ✅（SSA順序修正効果）
+  - aot_extern_concat_plus_len_exe: PASS ✅
+  - aot_extern_string_len_exe: PASS ✅
+  - **3/3テスト成功！**
+
+#### **第3弾: 値可視性問題の根本解決（箱理論の勝利）** 🎯
+- ✅ **vmap直接参照層の新設**: PhiDispatchPoint 5-tier resolution完成
+  - 問題: compare.py（i1値をvmapに格納） → branch.py（vmapを見ずにresolverに委譲） → 0を取得
+  - 解決: vmap直接参照層を最優先に追加（5行の追加のみ）
+  - **ChatGPTの誤診を修正**: 「PHI配線の問題」→正しくは「同一ブロック内の値可視性問題」
+- ✅ **5-tier resolution構造の確立**: スコープ優先順位の明確化
+  1. Direct vmap lookup（同一ブロック内・最優先）← 🆕 新設！
+  2. Strict resolver path（クロスブロック解決）
+  3. Declared PHI placeholder（マージポイント解決）
+  4. Last add in current block（インクリメントパターン）
+  5. Default zero（最終フォールバック）
+- ✅ **phi_loop_simple完全動作**: Result: 9（期待通り 1+3+5=9）
+  - LLVM IR: i1→i64変換が正しいタイミングで挿入
+  - branch命令が compare結果を確実に取得
+- ✅ **箱理論4原則の完璧な実践**:
+  - 「箱にする」: vmap直接参照を独立した層として分離 ✅
+  - 「境界を作る」: 同一ブロック vs クロスブロック の明確な区別 ✅
+  - 「戻せる」: 既存の動作を壊さない（フォールスルー設計） ✅
+  - 「見える化」: 5-tier解決順序が自明・デバッグ容易 ✅
+
+#### **第4弾: 型変換統一化（TypeCoercion箱新設）** 📦✅ **完了！**
+- ✅ **TypeCoercion箱実装完了**: 型変換ロジックを専用箱に集約（310行）
+  - StringTagPolicyと同じ設計パターン（Pure Functions・不変条件）
+  - to_i64(): Any → i64 統一変換（i1/iN/pointer対応）
+  - to_i1(): Any → i1 統一変換（条件式用Truthiness）
+  - to_type(): 任意型への柔軟変換（return型マッチング用）
+- ✅ **PhiDispatchPoint統合**: _coerce_i64()をTypeCoercion.to_i64()に委譲
+  - 後方互換性維持（既存コードは動作し続ける）
+  - 型変換ロジックが単一の箱に統一
+- ✅ **SSA順序保証継続**: 使用地点変換で定義→使用の順序保証
+  - 冪等性: 同じ型への変換は何もしない（最適化）
+  - デバッグ容易性: 統一された命名規則
+- ✅ **3ファイル完全統一**: 25+箇所の散在ロジック → TypeCoercion箱に集約
+  - boxcall.py: 14箇所統一（_ensure_handle/substring/Map系/console.log/invoke）
+  - binop.py: 8箇所統一（i1→i64/文字列連結helper/最終正規化）
+  - ret.py: 17行→1行圧縮（複雑な型幅調整→TypeCoercion.to_type()）
+- ✅ **動作確認**: phi_loop_simple テスト成功（Result: 9）
+- 🎊 **優先度2完了**: 型変換統一化達成！箱理論の完璧な実践！
+
+#### **成果サマリー**
+- **コード品質**: 125行削減＋保守性大幅向上＋5-tier resolution確立＋型変換統一箱（310行）
+- **箱理論実践**: StringTagPolicy＋値解決統一＋**TypeCoercion（3つ目の箱！完成！）**
+- **SSA順序保証**: 使用地点変換で順序問題完全解消
+- **値可視性保証**: vmap直接参照層でスコープ問題解決
+- **型変換統一**: 25+箇所の散在ロジック → TypeCoercion箱に完全集約
+- **診断精度向上**: ChatGPT誤診を箱理論で即座に修正！
+- **実装完了**: 優先度1（値解決統一）✅ ＋ 優先度2（TypeCoercion箱統一）✅
+
+📋 **詳細**: [phi_design.md](src/llvm_py/docs/phi_design.md) | [LoopForm論文](docs/private/papers-archive/paper-e-loop-signal-ir/main-paper-jp.md) | [StringTagPolicy](src/llvm_py/instructions/string_tag_policy.py) | [PhiDispatchPoint](src/llvm_py/dispatch/phi_dispatch.py) | [TypeCoercion](src/llvm_py/dispatch/type_coercion.py)
+
 ### 🎉 **Phase 2.4完了！NyRT→NyKernelアーキテクチャ革命**
 - ✅ **NyKernel化成功**: `crates/nyrt` → `crates/nyash_kernel` 完全移行
 - ✅ **42%削減達成**: `with_legacy_vm_args` 11箇所系統的削除完了

@@ -42,12 +42,13 @@ MIR 13命令の美しさを最大限に活かし、外部コンパイラ依存�
   - EXE化は任意の実験導線として維持（配布は Phase‑15 の外）。
   - PyVM は参照実行器として意味論検証に用い、パリティ監視を継続。
 
-### Phase 15.2: LLVM（llvmlite）安定化 + PyVM導入
+### [Historical] Phase 15.2: LLVM（llvmlite）安定化 + PyVM導入
+（注）2025‑10‑02 の撤退により PyVM は互換モードのみ。現行は LLVM/Rust VM を主経路に統一。
 - JIT/Cranelift は一時停止（古い/非対応）。Rust/inkwell は参照のみ。
 - 既定のコンパイル経路は **Python/llvmlite**（harness）のみ
   - MIR(JSON) → LLVM IR → .o → NyRTリンク → EXE
   - Resolver-only / Sealed SSA / 文字列ハンドル不変 を強化
-- 新規: **PyVM（Python MIR VM）** を導入し、2本目の実行経路を確保
+- 新規: **PyVM（Python MIR VM）** を導入し、2本目の実行経路を確保（現在は撤退済み・互換モードのみ）
   - 最小命令: const/binop/compare/phi/branch/jump/ret + 最小 boxcall（Console/File/Path/String）
   - ランナー統合: `NYASH_VM_USE_PY=1` で MIR(JSON) を PyVM に渡して実行
   - 代表スモーク（esc_dirname_smoke / dep_tree_min_string）で llvmlite とパリティ確認
@@ -160,7 +161,7 @@ Call { callee: Callee, args }
   - 代表スモーク: nested if / loop 累積 / 短絡 and/or と if/loop の交錯
 
 - Acceptance（15.3）
-  - Stage‑1: 代表サンプルで JSON v0 emit → Bridge → PyVM/llvmlite で一致（差分なし）
+  - Stage‑1: 代表サンプルで JSON v0 emit → Bridge → VM/llvmlite で一致（差分なし）
   - Bootstrap: `tools/bootstrap_selfhost_smoke.sh` で c0→c1→c1' が PASS（フォールバックは許容）
   - Docs: 文分離ポリシー（改行＋最小ASI）を公開（link: reference/language/statements.md）
 
@@ -169,7 +170,7 @@ Call { callee: Callee, args }
   - `tools/build_compiler_exe.sh`（Selfhost Parser のEXE化）
   - `tools/ny_stage2_bridge_smoke.sh`（算術/比較/短絡/ネストif）
   - `tools/ny_parser_stage2_phi_smoke.sh`（If/Loop の PHI 合流）
-  - `tools/parity.sh --lhs pyvm --rhs llvmlite <test.nyash>`（常時）
+  - `tools/parity.sh --lhs vm --rhs llvmlite <test.nyash>`（常時）
 
 Imports/Namespace plan（15.3‑late）
 - See: imports-namespace-plan.md — keep `nyash.toml` resolution in runner; accept `using` in Ny compiler as no‑op (no resolution) gated by `NYASH_USING=1` (compat: `NYASH_ENABLE_USING=1`).
