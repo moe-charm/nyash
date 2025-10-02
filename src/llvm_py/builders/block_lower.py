@@ -178,6 +178,28 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
                     # Fail-fast: raise immediately
                     raise RuntimeError(f"PHI processing failed at block {bb.name}") from e
 
+        # 追加: プレ宣言された PHI プレースホルダをブロック先頭に必ず用意する
+        # 目的:
+        #  - ループ/分岐で block_phi_incomings に登録された (block,dst) に対し、
+        #    後段の body 降下中に PHI 合成が発生しないよう、先に head で占位させる。
+        try:
+            from phi_wiring import ensure_phi as _ensure_phi
+            decls = getattr(builder, 'block_phi_incomings', {}) or {}
+            bdecl = decls.get(int(bid)) if decls is not None else None
+            if isinstance(bdecl, dict):
+                for _dst in list(bdecl.keys()):
+                    # 既に同一ブロックのPHIが存在するならスキップ
+                    cur = builder.vmap.get(int(_dst))
+                    same_block = False
+                    try:
+                        same_block = (cur is not None and hasattr(cur, 'add_incoming') and getattr(getattr(cur, 'basic_block', None), 'name', None) == bb.name)
+                    except Exception:
+                        same_block = False
+                    if not same_block:
+                        _ensure_phi(builder, int(bid), int(_dst), bb)
+        except Exception:
+            pass
+
         # Lower body ops
         for i_idx, inst in enumerate(body_ops):
             try:

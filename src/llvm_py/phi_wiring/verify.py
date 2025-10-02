@@ -128,3 +128,31 @@ def verify_phi_cfg(builder, strict: bool | None = None) -> List[Dict[str, Any]]:
     else:
         trace({"phi": "verify_ok"})
     return problems
+
+
+def verify_phi_order(func: ir.Function) -> List[Dict[str, Any]]:
+    """Verify that PHI nodes are grouped at the start of each basic block.
+    Returns a list of problems with fields: {block, issue, detail}.
+    """
+    problems: List[Dict[str, Any]] = []
+    for bb in func.blocks:
+        seen_non_phi = False
+        idx = 0
+        for inst in bb.instructions:
+            is_phi = False
+            try:
+                is_phi = hasattr(inst, 'add_incoming')
+            except Exception:
+                is_phi = False
+            if not is_phi:
+                seen_non_phi = True
+            else:
+                if seen_non_phi:
+                    problems.append({
+                        "block": str(bb.name),
+                        "issue": "phi_not_at_head",
+                        "detail": f"PHI appears after a non-PHI at position {idx}",
+                    })
+                    break
+            idx += 1
+    return problems

@@ -10,6 +10,7 @@ from phi_wiring import (
     build_succs as _build_succs,
 )
 from phi_wiring.verify import verify_phi_cfg as _verify_phi_cfg
+from phi_wiring.verify import verify_phi_order as _verify_phi_order
 
 
 def lower_function(builder, func_data: Dict[str, Any]):
@@ -337,6 +338,11 @@ def lower_function(builder, func_data: Dict[str, Any]):
                 # Summarize first few problems for quick diagnosis
                 summary = ", ".join([f"bb{p.get('block')} v{p.get('dst')}: {p.get('issue')}" for p in problems[:3]])
                 raise RuntimeError(f"PHI verification failed: {summary} (total {len(problems)})")
+            # Also enforce order: all PHIs must be grouped at block head
+            order_issues = _verify_phi_order(func)
+            if order_issues:
+                first = order_issues[0]
+                raise RuntimeError(f"PHI order invalid in block {first.get('block')}: {first.get('detail')} (total {len(order_issues)})")
     except Exception as _ve:
         # In bring-up, allow soft-fail when explicitly opted out
         if os.environ.get('NYASH_LLVM_PHI_VERIFY_STRICT') == '1':

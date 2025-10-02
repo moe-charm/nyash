@@ -234,13 +234,14 @@ class Resolver:
                 # No declared PHI and multi-pred: optionally synthesize a local PHI at the head of the block
                 # using end-of-block snapshots from predecessors.
                 # Gate by NYASH_LLVM_SYNTH_LOCAL_PHI (default off when NYASH_LLVM_PHI_STRICT=1).
-                allow_synth = True
+                # 既定はOFF（PHIは PhiHandler/ensure_phi で先頭に作成）。
+                # 明示 `NYASH_LLVM_SYNTH_LOCAL_PHI=1` でのみ局所合成を許可。
+                allow_synth = False
                 try:
-                    strict_env = os.environ.get('NYASH_LLVM_PHI_STRICT') == '1'
                     allow_env = os.environ.get('NYASH_LLVM_SYNTH_LOCAL_PHI')
-                    allow_synth = (allow_env == '1') if allow_env is not None else (not strict_env)
+                    allow_synth = (allow_env == '1')
                 except Exception:
-                    allow_synth = True
+                    allow_synth = False
                 if not allow_synth:
                     trace_phi(f"[resolve] skip synth local PHI (strict): bb{cur_bid} v{value_id}")
                     # Best-effort: use first predecessor end value or zero
