@@ -399,10 +399,20 @@ impl MirBuilder {
         // 4. Build object value for remaining cases
         let object_value = self.build_expression(object)?;
 
+        let router = crate::mir::builder::router::call_router::CallRoutingBox::new();
+        if let Some(route) = router.decide_method_route(self.origin_get(object_value), &method, arguments.len()) {
+            match route {
+                crate::mir::builder::router::call_router::CallRoute::DirectExtern { iface, method: ref m } => {
+                    if iface == "nyrt.time" && *m == "now_ms" && arguments.is_empty() {
+                        return self.emit_timer_now_ms_call();
+                    }
+                }
+            }
+        }
+
         if method == "now_ms" && arguments.is_empty() {
             if self
-                .value_origin_newbox
-                .get(&object_value)
+                .origin_get(object_value)
                 .map(|name| name == "TimerBox")
                 .unwrap_or(false)
             {

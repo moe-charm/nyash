@@ -6,7 +6,6 @@ require_env || exit 2
 preflight_plugins || exit 2
 
 export NYASH_LLVM_USE_HARNESS=1
-export NYASH_MODULES="selfhost.core.timer=apps/core/timer/TimerBox.hako"
 TEST_PATH="$NYASH_ROOT/apps/tests/core/timer_now_ms.hako"
 
 run_timer_now_ms_harness() {

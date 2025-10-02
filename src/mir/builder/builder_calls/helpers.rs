@@ -32,9 +32,9 @@ impl MirBuilder {
                 }
                 self.value_types.insert(dst, ret.clone());
                 if let MirType::Box(bx) = ret {
-                    self.value_origin_newbox.insert(dst, bx);
+                    self.origin_register(dst, bx);
                     if super::super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
-                        let bx = self.value_origin_newbox.get(&dst).cloned().unwrap_or_default();
+                        let bx = self.origin_get(dst).unwrap_or("-");
                         super::super::utils::builder_debug_log(&format!("annotate call dst={} from {} -> Box({})", dst.0, name, bx));
                     }
                 }
@@ -45,14 +45,14 @@ impl MirBuilder {
         if name == "JsonParser.parse/1" {
             let ret = MirType::Box("JsonNode".into());
             self.value_types.insert(dst, ret.clone());
-            if let MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if let MirType::Box(bx) = ret { self.origin_register(dst, bx); }
             if super::super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
                 super::super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonNode)", dst.0, name));
             }
         } else if name == "JsonParser.current_token/0" {
             let ret = MirType::Box("JsonToken".into());
             self.value_types.insert(dst, ret.clone());
-            if let MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if let MirType::Box(bx) = ret { self.origin_register(dst, bx); }
             if super::super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
                 super::super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonToken)", dst.0, name));
             }
@@ -60,7 +60,7 @@ impl MirBuilder {
             // Tokenize returns an ArrayBox of tokens
             let ret = MirType::Box("ArrayBox".into());
             self.value_types.insert(dst, ret.clone());
-            if let MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if let MirType::Box(bx) = ret { self.origin_register(dst, bx); }
             if super::super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
                 super::super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(ArrayBox)", dst.0, name));
             }
@@ -68,7 +68,7 @@ impl MirBuilder {
             // Fallback path for parser factory
             let ret = MirType::Box("JsonParser".into());
             self.value_types.insert(dst, ret.clone());
-            if let MirType::Box(bx) = ret { self.value_origin_newbox.insert(dst, bx); }
+            if let MirType::Box(bx) = ret { self.origin_register(dst, bx); }
             if super::super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
                 super::super::utils::builder_debug_log(&format!("annotate call (fallback) dst={} from {} -> Box(JsonParser)", dst.0, name));
             }

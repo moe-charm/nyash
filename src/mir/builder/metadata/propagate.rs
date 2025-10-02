@@ -10,8 +10,8 @@ pub fn propagate(builder: &mut MirBuilder, src: ValueId, dst: ValueId) {
     if let Some(t) = builder.value_types.get(&src).cloned() {
         builder.value_types.insert(dst, t);
     }
-    if let Some(cls) = builder.value_origin_newbox.get(&src).cloned() {
-        builder.value_origin_newbox.insert(dst, cls);
+    if let Some(cls) = builder.origin_get(src).map(|s| s.to_string()) {
+        builder.origin_register(dst, cls);
     }
 }
 
@@ -21,4 +21,3 @@ pub fn propagate(builder: &mut MirBuilder, src: ValueId, dst: ValueId) {
 pub fn propagate_with_override(builder: &mut MirBuilder, dst: ValueId, ty: MirType) {
     builder.value_types.insert(dst, ty);
 }
-

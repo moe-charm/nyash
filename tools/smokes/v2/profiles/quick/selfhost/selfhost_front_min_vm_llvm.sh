@@ -13,6 +13,7 @@ cases=(
   "const:apps/tests/selfhost_min/const_ret.hako:Result: 42"
   "if_merge:apps/tests/selfhost_min/if_merge.hako:Result: 10"
   "loop_sum:apps/tests/selfhost_min/loop_sum.hako:Result: 15"
+  "call_static:apps/tests/selfhost_min/call_static.hako:Result: 7"
 )
 
 run_case() {
@@ -23,7 +24,11 @@ run_case() {
   ensure_hako_toml
 
   local out_vm
-  out_vm=$(run_nyash_vm "$NYASH_ROOT/$path" --dev | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  if [ "$label" = "call_static" ]; then
+    out_vm=$(NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 run_nyash_vm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  else
+    out_vm=$(run_nyash_vm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  fi
   if [ -z "$out_vm" ]; then
     log_error "${label}: missing Result line (VM)"
     return 1
@@ -31,7 +36,11 @@ run_case() {
   compare_outputs "$expected" "$out_vm" "${label}_vm" || return 1
 
   local out_llvm
-  out_llvm=$(NYASH_LLVM_USE_HARNESS=1 run_nyash_llvm "$NYASH_ROOT/$path" --dev | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  if [ "$label" = "call_static" ]; then
+    out_llvm=$(NYASH_LLVM_USE_HARNESS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_EMIT_ONLY=0 run_nyash_llvm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  else
+    out_llvm=$(NYASH_LLVM_USE_HARNESS=1 run_nyash_llvm "$NYASH_ROOT/$path" | awk '/^Result:/{print $0}' | head -n 1 | tr -d '\r' | xargs)
+  fi
   if [ -z "$out_llvm" ]; then
     log_warn "${label}: LLVM harness unavailable (SKIP)"
   else

@@ -43,6 +43,7 @@ impl NyashRunner {
             use crate::runner::trace::log as tlog;
             if !crate::config::env::cli_quiet() {
                 tlog(format!("[using] ctx: paths={:?}", using_paths));
+                tlog(format!("[using] ctx: modules={:?}", pending_modules));
                 tlog(format!("[using] ctx: aliases={:?}", aliases));
                 tlog(format!("[using] ctx: packages={:?}", packages.keys().collect::<Vec<_>>()));
             }

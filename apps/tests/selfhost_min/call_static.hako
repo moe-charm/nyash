@@ -1,0 +1,13 @@
+static box Helper {
+  static add(a, b) {
+    return a + b
+  }
+}
+
+static box Main {
+  main() {
+    local res = Helper.add(2, 5)
+    print("Result: " + res)
+    return 0
+  }
+}
