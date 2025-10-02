@@ -1,0 +1,21 @@
+// Nested loops with inner continue/break; outer counter reaches 3.
+static box Main {
+  main() {
+    local i = 0
+    loop (true) {
+      // inner loop toggles once and exits
+      local j = 0
+      loop (true) {
+        j = j + 1
+        if j == 2 { continue }
+        break
+      }
+      i = i + 1
+      if i == 3 { break }
+      continue
+    }
+    print("Result: " + i)
+    return 0
+  }
+}
+

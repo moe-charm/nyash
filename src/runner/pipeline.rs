@@ -61,7 +61,7 @@ impl NyashRunner {
             }
         }
         if let Ok(p) = std::env::var("NYASH_USING_PATH") {
-            for s in p.split(':') {
+            for s in p.split(|c| c == ':' || c == ';') {
                 let s = s.trim();
                 if !s.is_empty() {
                     using_paths.push(s.to_string());
@@ -106,7 +106,7 @@ pub(super) fn suggest_in_base(base: &str, leaf: &str, out: &mut Vec<String>) {
                         return;
                     }
                 } else if let Some(ext) = path.extension().and_then(|s| s.to_str()) {
-                    if ext == "nyash" {
+                    if ext == "nyash" || ext == "hako" {
                         if let Some(stem) = path.file_stem().and_then(|s| s.to_str()) {
                             if stem == leaf {
                                 out.push(path.to_string_lossy().to_string());

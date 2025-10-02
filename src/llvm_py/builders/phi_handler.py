@@ -99,7 +99,7 @@ class PhiHandler:
         if not phi_ops:
             return True
 
-        # PHI命令は必ずブロックの先頭で処理
+        # PHI命令は必ずブロックの先頭で処理（PhiRegistry で単一起点化）
         phi_builder = ir.IRBuilder(block)
         try:
             phi_builder.position_at_start(block)
@@ -133,9 +133,21 @@ class PhiHandler:
                         print(f"[PhiHandler] PHI dst={dst} has no incoming, set to 0")
                     continue
 
-                # PHI命令をブロック先頭に作成
-                phi_type = ir.IntType(64)
-                phi = phi_builder.phi(phi_type, name=f"phi_{dst}")
+                # PHI命令オブジェクトを取得（既存なら再利用、無ければ作成）
+                try:
+                    from phi_wiring.registry import PhiRegistry
+                    cur_bid = _bid_of_block(block)
+                    if cur_bid is not None:
+                        phi = PhiRegistry.get(self.builder, int(cur_bid), int(dst))
+                    else:
+                        phi = None
+                    if phi is None:
+                        # Create via registry to guarantee single instance
+                        phi = PhiRegistry.ensure(self.builder, int(cur_bid if cur_bid is not None else 0), int(dst), block)
+                except Exception:
+                    # Fallback: local creation (should be rare; registry preferred)
+                    phi_type = ir.IntType(64)
+                    phi = phi_builder.phi(phi_type, name=f"phi_{dst}")
 
                 # strict モード: 生成のみ（配線は finalize_phis に一元化）。
                 if strict:
@@ -203,12 +215,20 @@ class PhiHandler:
                     if self.verbose:
                         print(f"[PhiHandler] PHI dst={dst} has {len(incomplete_edges)} incomplete edges")
 
-                # 箱理論: vmapに登録（二重登録が必要）
+                # 箱理論: vmapに登録（二重登録が必要）+ Registry登録
                 # 1. vmap（グローバル）: 他のブロックから参照可能にする
                 # 2. _current_vmap（ブロックローカル）: 現在のブロック内で即座に使用可能にする
                 self.builder.vmap[dst] = phi
                 if hasattr(self.builder, '_current_vmap'):
                     self.builder._current_vmap[dst] = phi
+                try:
+                    if cur_bid is None:
+                        cur_bid = _bid_of_block(block)
+                    if cur_bid is not None:
+                        from phi_wiring.registry import PhiRegistry
+                        PhiRegistry.register(self.builder, int(cur_bid), int(dst), phi)
+                except Exception:
+                    pass
                 success_count += 1
 
                 if self.verbose:

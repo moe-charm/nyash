@@ -2,14 +2,14 @@
 // Exported as: nyash_array_get_h(i64 handle, i64 idx) -> i64
 #[no_mangle]
 pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
-    use nyash_rust::{box_trait::IntegerBox, jit::rt::handles};
+    use nyash_rust::{box_trait::IntegerBox, runtime::host_handles as handles};
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
         eprintln!("[ARR] get_h(handle={}, idx={})", handle, idx);
     }
     if handle <= 0 || idx < 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle) {
+    if let Some(obj) = handles::get(handle as u64) {
         if let Some(arr) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
@@ -29,14 +29,14 @@ pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
 // Exported as: nyash_array_set_h(i64 handle, i64 idx, i64 val) -> i64
 #[no_mangle]
 pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
-    use nyash_rust::{box_trait::IntegerBox, jit::rt::handles};
+    use nyash_rust::{box_trait::IntegerBox, runtime::host_handles as handles};
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
         eprintln!("[ARR] set_h(handle={}, idx={}, val={})", handle, idx, val);
     }
     if handle <= 0 || idx < 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle) {
+    if let Some(obj) = handles::get(handle as u64) {
         if let Some(arr) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
@@ -67,7 +67,7 @@ pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
 pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
     use nyash_rust::{
         box_trait::{IntegerBox, NyashBox},
-        jit::rt::handles,
+        runtime::host_handles as handles,
     };
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
         eprintln!("[ARR] push_h(handle={}, val={})", handle, val);
@@ -75,14 +75,14 @@ pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle) {
+    if let Some(obj) = handles::get(handle as u64) {
         if let Some(arr) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
         {
             // If val is handle, try to use it; otherwise treat as integer
             let vbox: Box<dyn NyashBox> = if val > 0 {
-                if let Some(o) = handles::get(val) {
+                if let Some(o) = handles::get(val as u64) {
                     o.clone_box()
                 } else {
                     Box::new(IntegerBox::new(val))
@@ -104,11 +104,11 @@ pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
 // Exported as: nyash_array_length_h(i64 handle) -> i64
 #[no_mangle]
 pub extern "C" fn nyash_array_length_h(handle: i64) -> i64 {
-    use nyash_rust::jit::rt::handles;
+    use nyash_rust::runtime::host_handles as handles;
     if handle <= 0 {
         return 0;
     }
-    if let Some(obj) = handles::get(handle) {
+    if let Some(obj) = handles::get(handle as u64) {
         if let Some(arr) = obj
             .as_any()
             .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()

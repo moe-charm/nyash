@@ -8,7 +8,7 @@
 
 use super::*;
 use nyash_rust::{mir::MirCompiler, parser::NyashParser};
-use std::{fs, process};
+use std::fs;
 
 impl NyashRunner {
     /// Selfhost (Ny -> JSON v0) pipeline: EXE/VM/Python フォールバック含む

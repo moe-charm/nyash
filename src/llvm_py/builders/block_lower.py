@@ -115,6 +115,83 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
         block_data = block_by_id.get(bid, {})
         insts = block_data.get('instructions', []) or []
 
+        # Precompute simple i64 constant plan for this block to avoid "0 drop" when
+        # an argument uses a value defined later in the same block (out-of-order const/copy).
+        # We only plan numeric i64 constants and copy chains that resolve to them.
+        try:
+            if not hasattr(builder, 'block_i64_plan'):
+                builder.block_i64_plan = {}
+            plan_i64: dict[int, int] = {}
+            aliases: dict[int, int] = {}
+            # 1st pass: gather raw i64 consts and copy aliases
+            for _inst in insts:
+                try:
+                    if _inst.get('op') == 'const':
+                        v = _inst.get('value', {})
+                        if v == None:
+                            continue
+                        if (v.get('type') == 'i64') or (isinstance(v.get('type'), str) and v.get('type') == 'i64'):
+                            dst = _inst.get('dst')
+                            ival = int(v.get('value'))
+                            if isinstance(dst, int):
+                                plan_i64[dst] = ival
+                    elif _inst.get('op') == 'copy':
+                        dst = _inst.get('dst')
+                        src = _inst.get('src')
+                        if isinstance(dst, int) and isinstance(src, int):
+                            aliases[dst] = src
+                except Exception:
+                    pass
+            # 2nd pass: resolve aliases transitively to numbers
+            # Iterate a few times (depth small in practice)
+            for _ in range(8):
+                progressed = False
+                for d, s in list(aliases.items()):
+                    try:
+                        if d in plan_i64:
+                            continue
+                        # if source resolves to number directly or via alias chain, record
+                        cur = s
+                        seen = set()
+                        ok = False
+                        while True:
+                            if cur in plan_i64:
+                                plan_i64[d] = plan_i64[cur]
+                                ok = True
+                                break
+                            if cur not in aliases:
+                                break
+                            if cur in seen:
+                                break
+                            seen.add(cur)
+                            cur = aliases[cur]
+                        if ok:
+                            progressed = True
+                    except Exception:
+                        pass
+                if not progressed:
+                    break
+            builder.block_i64_plan[int(bid)] = plan_i64
+            # Share with resolver for easy access
+            try:
+                builder.resolver.block_i64_plan = builder.block_i64_plan
+            except Exception:
+                pass
+            # Expose raw alias chains (copy src/dst) for same-block value chasing (e.g., branch cond)
+            try:
+                if not hasattr(builder, 'block_aliases'):
+                    builder.block_aliases = {}
+                builder.block_aliases[int(bid)] = dict(aliases)
+                try:
+                    builder.resolver.block_aliases = builder.block_aliases
+                except Exception:
+                    pass
+            except Exception:
+                pass
+        except Exception:
+            # Non-fatal: plan is a bring-up optimization only
+            pass
+
         # 箱理論: PhiHandlerでPHI命令を分離
         import os
         phi_verbose = os.environ.get('NYASH_PHI_VERBOSE') == '1'
@@ -134,20 +211,11 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             else:
                 body_ops.append(inst)
         # Per-block SSA map（箱化: BlockVMap）
-        vmap_cur: Dict[int, ir.Value] = {}
-        try:
-            for _vid, _val in (builder.vmap or {}).items():
-                keep = True
-                try:
-                    if hasattr(_val, 'add_incoming'):
-                        bb_of = getattr(getattr(_val, 'basic_block', None), 'name', None)
-                        keep = (bb_of == bb.name)
-                except Exception:
-                    keep = False
-                if keep:
-                    vmap_cur[_vid] = _val
-        except Exception:
-            vmap_cur = dict(builder.vmap)
+        # Use a permissive local vmap that includes globals as-is.
+        # Rationale: PHI values defined in predecessor headers must be visible
+        # to successor blocks' body lowering (e.g., loop counters). Filtering to
+        # same-block-only would hide dominating PHIs and cause 0-fallbacks.
+        vmap_cur: Dict[int, ir.Value] = dict(builder.vmap)
         # Wrap local/global maps with BlockVMap for unified access
         bvm = BlockVMap(builder.vmap, vmap_cur)
         # Backward compat: expose dict view to existing lowering helpers
@@ -167,6 +235,17 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             try:
                 phi_handler.process_phi_instructions(phi_ops, bb, func)
                 trace_debug(f"[llvm-py] Processed {len(phi_ops)} PHI instructions at block head")
+                # Ensure PHIs created at block head are visible in the block-local map
+                # so that end-of-block snapshots include them for predecessor resolution.
+                try:
+                    for _p in phi_ops:
+                        _d = _p.get('dst')
+                        if isinstance(_d, int):
+                            _val = builder.vmap.get(int(_d))
+                            if _val is not None:
+                                bvm.set(int(_d), _val)
+                except Exception:
+                    pass
             except Exception as e:
                 # Fail-fast by default (箱理論: エラーは隠さず即座に失敗)
                 if os.environ.get('NYASH_LLVM_PHI_LENIENT') == '1':
@@ -212,24 +291,7 @@ def lower_blocks(builder, func: ir.Function, block_by_id: Dict[int, Dict[str, An
             except Exception:
                 pass
             ib.position_at_end(bb)
-            if inst.get('op') == 'copy':
-                src_i = inst.get('src')
-                skip_now = False
-                if isinstance(src_i, int):
-                    try:
-                        for _rest in body_ops[i_idx+1:]:
-                            try:
-                                if int(_rest.get('dst')) == int(src_i):
-                                    skip_now = True
-                                    break
-                            except Exception:
-                                pass
-                    except Exception:
-                        pass
-                if not skip_now:
-                    builder.lower_instruction(ib, inst, func)
-            else:
-                builder.lower_instruction(ib, inst, func)
+            builder.lower_instruction(ib, inst, func)
             try:
                 dst = inst.get("dst")
                 if isinstance(dst, int):

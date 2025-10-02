@@ -15,7 +15,7 @@ pub struct Receiver {
 pub fn resolve_receiver_for_a0(a0: i64) -> Option<Receiver> {
     // 1) Handle registry (preferred)
     if a0 > 0 {
-        if let Some(obj) = nyash_rust::jit::rt::handles::get(a0) {
+        if let Some(obj) = nyash_rust::runtime::host_handles::get(a0 as u64) {
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 return Some(Receiver {
                     instance_id: p.instance_id(),
@@ -113,7 +113,7 @@ pub fn decode_entry_to_i64(
             use nyash_rust::box_trait::{NyashBox, StringBox};
             let s = nyash_rust::runtime::plugin_ffi_common::decode::string(payload);
             let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
-            let h = nyash_rust::jit::rt::handles::to_handle(arc);
+            let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
             Some(h as i64)
         }
         8 => {
@@ -139,7 +139,7 @@ pub fn decode_entry_to_i64(
                 );
                 let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
                     std::sync::Arc::new(pb);
-                let h = nyash_rust::jit::rt::handles::to_handle(arc);
+                let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
                 return Some(h as i64);
             }
             None

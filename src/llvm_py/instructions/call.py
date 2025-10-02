@@ -7,6 +7,7 @@ import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
 from trace import debug as trace_debug
 from instructions.safepoint import insert_automatic_safepoint
+from dispatch import PhiDispatchPoint
 
 def lower_call(
     builder: ir.IRBuilder,
@@ -69,11 +70,12 @@ def lower_call(
 
     # Resolver helpers (prefer resolver when available)
     def _res_i64(vid: int):
+        # Use DispatchPoint to avoid 0-fallbacks (loop/merge safety)
         if r is not None and p is not None and bev is not None and bbm is not None:
             try:
-                return r.resolve_i64(vid, builder.block, p, bev, vmap, bbm)
+                return PhiDispatchPoint.resolve_i64(builder, r, int(vid), builder.block, p, bev, vmap, bbm)
             except Exception:
-                return None
+                pass
         return vmap.get(vid)
 
     def _res_ptr(vid: int):

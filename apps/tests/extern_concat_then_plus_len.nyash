@@ -1,0 +1,11 @@
+// Verify extern concat path(s) via '+' and length() chaining
+static box Main {
+  main() {
+    // Mixed concatenation using literals only (pointer path) and handle boxing
+    local s = "a" + "b"
+    local t = s + "c"
+    print("Result: " + t.length())
+    return 0
+  }
+}
+

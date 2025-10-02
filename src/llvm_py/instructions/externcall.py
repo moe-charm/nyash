@@ -6,6 +6,7 @@ Minimal mapping for NyRT-exported symbols (console/log family等)
 import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
 from instructions.safepoint import insert_automatic_safepoint
+from dispatch import PhiDispatchPoint
 
 def lower_externcall(
     builder: ir.IRBuilder,
@@ -95,6 +96,19 @@ def lower_externcall(
         # Many call sites pass handles or pointers; we coerce below.
     }
 
+    # Tag policy: which externs return string handles vs raw pointers
+    string_handle_returns = {
+        "nyash.string.concat_hh",
+        "nyash.string.substring_hii",
+        "nyash.box.from_i8_string",
+    }
+    string_pointer_returns = {
+        "nyash.string.concat_ss",
+        "nyash.string.concat_si",
+        "nyash.string.concat_is",
+        "nyash.string.substring_sii",
+    }
+
     # Find or declare function with appropriate prototype
     func = None
     for f in module.functions:
@@ -121,12 +135,14 @@ def lower_externcall(
         orig_arg_id = arg_id
         # Prefer resolver/ctx
         aval = None
+        # Use DispatchPoint for i64 path to avoid 0-drop（loop/merge safety）
+        # Pointer path keeps resolver.resolve_ptr (DP is i64-centric)。
         if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
             try:
                 if len(func.args) > i and isinstance(func.args[i].type, ir.PointerType):
                     aval = resolver.resolve_ptr(arg_id, builder.block, preds, block_end_values, vmap)
                 else:
-                    aval = resolver.resolve_i64(arg_id, builder.block, preds, block_end_values, vmap, bb_map)
+                    aval = PhiDispatchPoint.resolve_i64(builder, resolver, int(arg_id), builder.block, preds, block_end_values, vmap, bb_map)
             except Exception:
                 aval = None
         if aval is None:
@@ -220,6 +236,20 @@ def lower_externcall(
             vmap[dst_vid] = ir.Constant(i64, 0)
         else:
             vmap[dst_vid] = result
+            # Tag string-ish returns for downstream '+' and ret handling
+            try:
+                if resolver is not None:
+                    # i64 handle returns
+                    if llvm_name in string_handle_returns and hasattr(resolver, 'mark_string'):
+                        resolver.mark_string(int(dst_vid))
+                    # pointer returns
+                    if llvm_name in string_pointer_returns and hasattr(resolver, 'string_ptrs'):
+                        resolver.string_ptrs[int(dst_vid)] = result
+                        # Mark as string-ish too to keep '+' in string domain
+                        if hasattr(resolver, 'mark_string'):
+                            resolver.mark_string(int(dst_vid))
+            except Exception:
+                pass
     # Insert an automatic safepoint after externcall
     try:
         import os

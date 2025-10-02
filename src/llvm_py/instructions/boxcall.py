@@ -6,6 +6,7 @@ Core of Nyash's "Everything is Box" philosophy
 import llvmlite.ir as ir
 from typing import Dict, List, Optional, Any
 from instructions.safepoint import insert_automatic_safepoint
+from dispatch import PhiDispatchPoint
 
 def _declare(module: ir.Module, name: str, ret, args):
     for f in module.functions:
@@ -91,12 +92,17 @@ def lower_boxcall(
         except Exception:
             pass
     def _res_i64(vid: int):
-        if r is not None and p is not None and bev is not None and bbm is not None:
-            try:
-                return r.resolve_i64(vid, builder.block, p, bev, vmap, bbm)
-            except Exception:
-                return None
-        return vmap.get(vid)
+        # Unified dispatch resolution (strict→declared PHI→last add→coerce)
+        try:
+            if r is not None and p is not None and bev is not None and bbm is not None:
+                return PhiDispatchPoint.resolve_i64(builder, r, int(vid), builder.block, p, bev, vmap, bbm)
+        except Exception:
+            pass
+        # Fallback: local/global map
+        v = vmap.get(vid)
+        if v is None and r is not None and hasattr(r, 'global_vmap') and isinstance(r.global_vmap, dict):
+            v = r.global_vmap.get(vid)
+        return v
 
     # If BuildCtx is provided, prefer its maps for consistency.
     if ctx is not None:
@@ -230,14 +236,26 @@ def lower_boxcall(
             return
 
     if method_name == "get":
-        # ArrayBox.get(index) → nyash.array.get_h(handle, idx)
-        # MapBox.get(key) → nyash.map.get_hh(handle, key_any)
+        # Unified get for Array/Map: try Array.get_h first, then Map.get_hh; choose non-zero
         recv_h = _ensure_handle(builder, module, recv_val)
         k = _res_i64(args[0]) if args else ir.Constant(i64, 0)
         if k is None:
             k = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
+        # Normalize key to i64
+        if hasattr(k, 'type') and isinstance(k.type, ir.PointerType):
+            k = builder.ptrtoint(k, i64)
+        elif hasattr(k, 'type') and isinstance(k.type, ir.IntType) and k.type.width != 64:
+            k = builder.zext(k, i64) if k.type.width < 64 else builder.trunc(k, i64)
+        # Attempt Array.get_h(handle, idx)
+        callee_arr = _declare(module, "nyash.array.get_h", i64, [i64, i64])
+        v_arr = builder.call(callee_arr, [recv_h, k], name="arr_get_h")
+        # Fallback: Map.get_hh(handle, key_any)
         callee_map = _declare(module, "nyash.map.get_hh", i64, [i64, i64])
-        res = builder.call(callee_map, [recv_h, k], name="map_get_hh")
+        v_map = builder.call(callee_map, [recv_h, k], name="map_get_hh")
+        # Select non-zero result: (v_arr != 0) ? v_arr : v_map
+        i1 = ir.IntType(1)
+        cond = builder.icmp_signed("!=", v_arr, ir.Constant(i64, 0), name="is_arr_nonzero")
+        res = builder.select(cond, v_arr, v_map, name="get_unified")
         if dst_vid is not None:
             vmap[dst_vid] = res
         return
@@ -248,6 +266,11 @@ def lower_boxcall(
         v0 = _res_i64(args[0]) if args else ir.Constant(i64, 0)
         if v0 is None:
             v0 = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
+        # Fallback coercion: pointer → handle, int → i64 width
+        if hasattr(v0, 'type') and isinstance(v0.type, ir.PointerType):
+            v0 = _ensure_handle(builder, module, v0)
+        elif hasattr(v0, 'type') and isinstance(v0.type, ir.IntType) and v0.type.width != 64:
+            v0 = builder.zext(v0, i64) if v0.type.width < 64 else builder.trunc(v0, i64)
         callee = _declare(module, "nyash.array.push_h", i64, [i64, i64])
         res = builder.call(callee, [recv_h, v0], name="arr_push_h")
         if dst_vid is not None:
@@ -263,6 +286,15 @@ def lower_boxcall(
         v = _res_i64(args[1]) if len(args) > 1 else ir.Constant(i64, 0)
         if v is None:
             v = vmap.get(args[1], ir.Constant(i64, 0)) if len(args) > 1 else ir.Constant(i64, 0)
+        # Fallback coercion: pointer → handle, int → i64 width
+        if hasattr(k, 'type') and isinstance(k.type, ir.PointerType):
+            k = _ensure_handle(builder, module, k)
+        elif hasattr(k, 'type') and isinstance(k.type, ir.IntType) and k.type.width != 64:
+            k = builder.zext(k, i64) if k.type.width < 64 else builder.trunc(k, i64)
+        if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
+            v = _ensure_handle(builder, module, v)
+        elif hasattr(v, 'type') and isinstance(v.type, ir.IntType) and v.type.width != 64:
+            v = builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
         callee = _declare(module, "nyash.map.set_hh", i64, [i64, i64, i64])
         res = builder.call(callee, [recv_h, k, v], name="map_set_hh")
         if dst_vid is not None:
@@ -275,6 +307,11 @@ def lower_boxcall(
         k = _res_i64(args[0]) if args else ir.Constant(i64, 0)
         if k is None:
             k = vmap.get(args[0], ir.Constant(i64, 0)) if args else ir.Constant(i64, 0)
+        # Fallback coercion: pointer → handle, int → i64 width
+        if hasattr(k, 'type') and isinstance(k.type, ir.PointerType):
+            k = _ensure_handle(builder, module, k)
+        elif hasattr(k, 'type') and isinstance(k.type, ir.IntType) and k.type.width != 64:
+            k = builder.zext(k, i64) if k.type.width < 64 else builder.trunc(k, i64)
         callee = _declare(module, "nyash.map.has_hh", i64, [i64, i64])
         res = builder.call(callee, [recv_h, k], name="map_has_hh")
         if dst_vid is not None:
@@ -412,6 +449,11 @@ def lower_boxcall(
         a1 = builder.ptrtoint(a1, i64)
     if hasattr(a2, 'type') and isinstance(a2.type, ir.PointerType):
         a2 = builder.ptrtoint(a2, i64)
+    # Ensure integer width is i64
+    if hasattr(a1, 'type') and isinstance(a1.type, ir.IntType) and a1.type.width != 64:
+        a1 = builder.zext(a1, i64) if a1.type.width < 64 else builder.trunc(a1, i64)
+    if hasattr(a2, 'type') and isinstance(a2.type, ir.IntType) and a2.type.width != 64:
+        a2 = builder.zext(a2, i64) if a2.type.width < 64 else builder.trunc(a2, i64)
 
     callee = _declare(module, "nyash.plugin.invoke_by_name_i64", i64, [i64, i8p, i64, i64, i64])
     result = builder.call(callee, [recv_h, mptr, argc, a1, a2], name="pinvoke_by_name")

@@ -162,210 +162,33 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
 impl NyashRunner {
     /// Compile Nyash file to MIR and execute via selected VM engine (unified entry)
     pub(crate) fn execute_vm_engine(&self, filename: &str) {
-        use nyash_rust::parser::NyashParser;
-        use std::{fs, process};
+        use crate::runner::vm_pipeline;
+        use std::process;
 
-        let code = match fs::read_to_string(filename) {
-            Ok(s) => s,
-            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
-        };
-        // Using preprocessing with AST-prelude merge when enabled
-        let use_ast = crate::config::env::using_ast_enabled();
-        let mut code2 = code;
-        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
-        // Using + Alias (MVP): collect alias pairs, pre-parse preludes and rename their top symbols,
-        // then desugar alias field/call access on the combined AST.
-        let mut alias_names: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut alias_map: std::collections::HashMap<String, String> = std::collections::HashMap::new();
-        if crate::config::env::enable_using() {
-            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code2, filename) {
-                Ok((clean, paths, alias_pairs)) => {
-                    code2 = clean;
-                    for (alias, canon) in alias_pairs.iter() {
-                        alias_names.insert(alias.clone());
-                        alias_map.insert(canon.clone(), alias.clone());
-                    }
-                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
-                        if !alias_pairs.is_empty() {
-                            eprintln!("[using/alias] collected: {:?}", alias_pairs);
-                        }
-                    }
-                    if !paths.is_empty() && !use_ast {
-                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
-                        process::exit(1);
-                    }
-                    if use_ast && !paths.is_empty() {
-                        match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => {
-                                // Apply alias rename to prelude top symbols when present (collision-guarded)
-                                let mut used_prefixed: std::collections::HashSet<String> = std::collections::HashSet::new();
-                                for (path, ast) in v.into_iter() {
-                                    let canon = std::fs::canonicalize(&path)
-                                        .ok()
-                                        .map(|pb| pb.to_string_lossy().to_string())
-                                        .unwrap_or(path.clone());
-                                    if let Some(alias) = alias_map.get(&canon) {
-                                        match crate::runner::modes::common_util::resolve::alias_tools::rename_with_collision_guard(&ast, alias, &mut used_prefixed, &canon) {
-                                            Ok(renamed) => prelude_asts.push(renamed),
-                                            Err(e) => { eprintln!("❌ using: {}", e); process::exit(1); }
-                                        }
-                                    } else {
-                                        prelude_asts.push(ast);
-                                    }
-                                }
-                            }
-                            Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
-                        }
-                    }
-                }
-                Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
-            }
-        }
-        // Dev sugar and pre-lex normalization
-        code2 = crate::runner::modes::common_util::resolve::preexpand_at_local(&code2);
-        code2 = crate::runner::modes::common_util::prelex::prelex_normalize(&code2);
-        // Parse
-        let main_ast = match NyashParser::parse_from_string(&code2) {
-            Ok(ast) => ast,
-            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
-        };
-        // Merge preludes
-        let ast = if use_ast && !prelude_asts.is_empty() {
-            crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
-        } else { main_ast };
-        // Alias desugar: transform `Alias.X` to `Alias_X` (and call forms)
-        let ast = crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &alias_names, true);
-        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
-            // Dev trace: check if any alias variable remains in AST after desugar
-            fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
-                use nyash_rust::ast::ASTNode as N;
-                match n {
-                    N::Variable { name, .. } => aliases.contains(name),
-                    N::FieldAccess { object, .. } => contains_alias_var(object, aliases),
-                    N::MethodCall { object, arguments, .. } => contains_alias_var(object, aliases) || arguments.iter().any(|a| contains_alias_var(a, aliases)),
-                    N::FunctionCall { name, arguments, .. } => {
-                        // If name still starts with any alias prefix, report
-                        if aliases.iter().any(|a| name.starts_with(&format!("{}.", a))) { return true; }
-                        arguments.iter().any(|a| contains_alias_var(a, aliases))
-                    }
-                    N::Program { statements, .. } => statements.iter().any(|s| contains_alias_var(s, aliases)),
-                    N::Assignment { target, value, .. } => contains_alias_var(target, aliases) || contains_alias_var(value, aliases),
-                    _ => false,
-                }
-            }
-            if contains_alias_var(&ast, &alias_names) {
-                eprintln!("[using/alias] post-desugar: alias variable still present in AST");
-            } else {
-                eprintln!("[using/alias] post-desugar: no alias variable remains");
-            }
-        }
-        // Macro normalization (child-safe)
-        let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
-        // Register user-defined Boxes (inline factory) so NewBox for dev boxes works on fallback VM path
-        {
-            use nyash_rust::ast::ASTNode;
-            use std::sync::{Arc, RwLock};
-            // Collect non-static BoxDeclaration entries from AST (top-level only)
-            let mut nonstatic_decls: std::collections::HashMap<String, nyash_rust::core::model::BoxDeclaration> =
-                std::collections::HashMap::new();
-            let mut static_names: Vec<String> = Vec::new();
-            if let ASTNode::Program { statements, .. } = &ast {
-                for st in statements {
-                    if let ASTNode::BoxDeclaration {
-                        name,
-                        fields,
-                        public_fields,
-                        private_fields,
-                        methods,
-                        constructors,
-                        init_fields,
-                        weak_fields,
-                        is_interface,
-                        extends,
-                        implements,
-                        type_parameters,
-                        is_static,
-                        ..
-                    } = st {
-                        if *is_static {
-                            static_names.push(name.clone());
-                            continue;
-                        }
-                        let decl = nyash_rust::core::model::BoxDeclaration {
-                            name: name.clone(),
-                            fields: fields.clone(),
-                            public_fields: public_fields.clone(),
-                            private_fields: private_fields.clone(),
-                            methods: methods.clone(),
-                            constructors: constructors.clone(),
-                            init_fields: init_fields.clone(),
-                            weak_fields: weak_fields.clone(),
-                            is_interface: *is_interface,
-                            extends: extends.clone(),
-                            implements: implements.clone(),
-                            type_parameters: type_parameters.clone(),
-                        };
-                        nonstatic_decls.insert(name.clone(), decl);
-                    }
-                }
-            }
-            // Alias: map StaticName -> StaticNameInstance when both exist
-            let mut decls = nonstatic_decls.clone();
-            for s in static_names.into_iter() {
-                let inst = format!("{}Instance", s);
-                if let Some(d) = nonstatic_decls.get(&inst) {
-                    decls.insert(s, d.clone());
-                }
-            }
-            if !decls.is_empty() {
-                struct InlineUserBoxFactory {
-                    decls: Arc<RwLock<std::collections::HashMap<String, nyash_rust::core::model::BoxDeclaration>>>,
-                }
-                impl nyash_rust::box_factory::BoxFactory for InlineUserBoxFactory {
-                    fn create_box(
-                        &self,
-                        name: &str,
-                        args: &[Box<dyn nyash_rust::box_trait::NyashBox>],
-                    ) -> Result<Box<dyn nyash_rust::box_trait::NyashBox>, nyash_rust::box_factory::RuntimeError> {
-                        let opt = { self.decls.read().unwrap().get(name).cloned() };
-                        let decl = match opt {
-                            Some(d) => d,
-                            None => {
-                                return Err(nyash_rust::box_factory::RuntimeError::InvalidOperation {
-                                    message: format!("Unknown Box type: {}", name),
-                                })
-                            }
-                        };
-                        let mut inst = nyash_rust::instance_v2::InstanceBox::from_declaration(
-                            decl.name.clone(),
-                            decl.fields.clone(),
-                            decl.methods.clone(),
-                        );
-                        let _ = inst.init(args);
-                        Ok(Box::new(inst))
-                    }
-                    fn box_types(&self) -> Vec<&str> { vec![] }
-                    fn is_available(&self) -> bool { true }
-                    fn factory_type(&self) -> nyash_rust::box_factory::FactoryType { nyash_rust::box_factory::FactoryType::User }
-                }
-                let factory = InlineUserBoxFactory { decls: Arc::new(RwLock::new(decls)) };
-                nyash_rust::runtime::unified_registry::register_user_defined_factory(Arc::new(factory));
-            }
-        }
-        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("2") {
-            eprintln!("[ast-dump] {:?}", ast);
-        }
-        // Compile MIR
-        let mut mir_compiler = nyash_rust::mir::MirCompiler::with_options(!self.config.no_optimize);
-        let compile = match mir_compiler.compile(ast) {
-            Ok(c) => c,
-            Err(e) => { eprintln!("❌ MIR compilation error: {}", e); process::exit(1); }
-        };
-        // Execute via selected engine
-        let mut engine = crate::runner::modes::super_iface::vm_engine_from_env();
-        match engine.execute(&compile.module) {
-            Ok(code) => { process::exit(code); }
-            Err(e) => { eprintln!("❌ {}", e); process::exit(1); }
+        let result = (|| {
+            // Stage 1: Load and preprocess source
+            let source = vm_pipeline::load_and_preprocess_source(filename)?;
+
+            // Stage 2: Resolve `using` and preludes
+            let (source, preludes, aliases) =
+                vm_pipeline::resolve_preludes_and_aliases(self, &source, filename)?;
+
+            // Stage 3: Parse main source and merge with preludes
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes)?;
+
+            // Stage 4: Apply macros and desugar aliases
+            let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases)?;
+
+            // Stage 5: Register user-defined boxes from the AST
+            vm_pipeline::register_user_boxes_from_ast(&ast);
+
+            // Stage 6: Compile to MIR and execute
+            vm_pipeline::compile_and_execute_mir(ast, self.config.no_optimize)
+        })();
+
+        if let Err(e) = result {
+            eprintln!("❌ Pipeline error: {}", e);
+            process::exit(1);
         }
     }
     pub(crate) fn execute_mir_module(&self, module: &crate::mir::MirModule) {

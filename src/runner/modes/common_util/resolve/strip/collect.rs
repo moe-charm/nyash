@@ -76,9 +76,13 @@ pub fn collect_using_and_strip(
             if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
                 eprintln!("[using] alias-trace: using target='{}' alias={:?}", target, alias_name);
             }
+            let is_win_abs = target.len() >= 2
+                && target.as_bytes()[0].is_ascii_alphabetic()
+                && target.as_bytes()[1] == b':' ;
             let is_path = target.starts_with('"')
                 || target.starts_with("./")
                 || target.starts_with('/')
+                || is_win_abs
                 || target.ends_with(".hako")
                 || target.ends_with(".nyash");
             if is_path {

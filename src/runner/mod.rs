@@ -24,9 +24,9 @@ mod json_v0_bridge;
 mod mir_json_emit;
 pub mod modes;
 mod pipe_io;
-mod entry_resolve;
 mod pipeline;
 mod jit_direct;
+pub mod vm_pipeline;
 mod selfhost;
 mod tasks;
 mod trace;
@@ -214,7 +214,12 @@ impl NyashRunner {
                 }
                 // Late env overrides (paths/modules)
                 if let Ok(paths) = std::env::var("NYASH_USING_PATH") {
-                    for p in paths.split(':') { let p = p.trim(); if !p.is_empty() { using_ctx.using_paths.push(p.to_string()); } }
+                    for p in paths.split(|c| c == ':' || c == ';') {
+                        let p = p.trim();
+                        if !p.is_empty() {
+                            using_ctx.using_paths.push(p.to_string());
+                        }
+                    }
                 }
                 if let Ok(mods) = std::env::var("NYASH_MODULES") {
                     for ent in mods.split(',') {

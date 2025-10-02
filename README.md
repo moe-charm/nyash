@@ -71,6 +71,11 @@ ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall
   - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
   - Example: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
 
+### Branding and Aliases
+- CLI binaries: `nyash` is primary. Aliases `hako` and `hakorune` are available and map to the same entry point.
+- ENV prefixes: code continues to read `NYASH_*` variables. Brand aliases `HAKO_*`, `HAKU_*`, and `HRN_*` are accepted at process startup and copied to `NYASH_*` when unset (Rust runner and Python harness both do this).
+- Config files: `hako.toml` is preferred. `nyash.toml` and `hakorune.toml` remain compatible.
+
 ### DebugHub Quick Guide
 - Enable: `NYASH_DEBUG_ENABLE=1`
 - Select kinds: `NYASH_DEBUG_KINDS=resolve,ssa`

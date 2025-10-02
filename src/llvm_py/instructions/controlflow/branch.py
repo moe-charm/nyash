@@ -6,6 +6,7 @@ Conditional branch based on condition value
 import llvmlite.ir as ir
 from typing import Dict
 from utils.values import resolve_i64_strict
+from dispatch import PhiDispatchPoint
 
 def lower_branch(
     builder: ir.IRBuilder,
@@ -29,8 +30,8 @@ def lower_branch(
         vmap: Value map
         bb_map: Block map
     """
-    # Get condition value with preference to same-block SSA
-    cond = resolve_i64_strict(resolver, cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
+    # Resolve condition via DispatchPoint（統一フォールバック経路）
+    cond = PhiDispatchPoint.resolve_i64(builder, resolver, cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
     if cond is None:
         # Default to false if missing
         cond = ir.Constant(ir.IntType(1), 0)

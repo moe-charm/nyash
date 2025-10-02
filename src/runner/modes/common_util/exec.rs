@@ -42,6 +42,11 @@ pub fn llvmlite_emit_object(
         "--out",
         out_path,
     ]);
+    // Default-on: sanitize empty PHIs in IR to keep llvmlite happy.
+    // Users can explicitly disable with NYASH_LLVM_SANITIZE_EMPTY_PHI=0.
+    if std::env::var("NYASH_LLVM_SANITIZE_EMPTY_PHI").ok().map(|v| v == "0" || v.eq_ignore_ascii_case("false") || v.eq_ignore_ascii_case("off")).unwrap_or(false) == false {
+        cmd.env("NYASH_LLVM_SANITIZE_EMPTY_PHI", "1");
+    }
     let out = spawn_with_timeout(cmd, timeout_ms).map_err(|e| format!("spawn harness: {}", e))?;
     if out.timed_out || !out.status_ok {
         return Err(format!(

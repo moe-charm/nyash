@@ -14,7 +14,7 @@ pub extern "C" fn nyash_box_birth_h_export(type_id: i64) -> i64 {
             if let Ok(b) = host_g.create_box(&meta.box_type, &[]) {
                 let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
                     std::sync::Arc::from(b);
-                let h = nyash_rust::jit::rt::handles::to_handle(arc);
+                let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
                 if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                     println!(
                         "nyrt: birth_h {} (type_id={}) -> handle={}",
@@ -58,12 +58,12 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
     let method_id: u32 = 0; // birth
     let instance_id: u32 = 0; // static
                               // Build TLV args
-    use nyash_rust::jit::rt::handles;
+    use nyash_rust::runtime::host_handles as handles;
     let nargs = argc.max(0) as usize;
     let mut buf = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(nargs as u16);
     let mut encode_handle = |h: i64| {
         if h > 0 {
-            if let Some(obj) = handles::get(h) {
+            if let Some(obj) = handles::get(h as u64) {
                 if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                     let host = nyash_rust::runtime::get_global_plugin_host();
                     if let Ok(hg) = host.read() {
@@ -159,7 +159,7 @@ pub extern "C" fn nyash_box_birth_i64_export(type_id: i64, argc: i64, a1: i64, a
                 invoke_fn,
             );
             let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::new(pb);
-            let h = nyash_rust::jit::rt::handles::to_handle(arc);
+            let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                 println!(
                     "nyrt: birth_i64 {} (type_id={}) argc={} -> handle={}",

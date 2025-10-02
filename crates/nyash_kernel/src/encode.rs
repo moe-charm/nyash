@@ -10,10 +10,10 @@ pub(crate) fn nyrt_encode_from_legacy_at(_buf: &mut Vec<u8>, _pos: usize) {
 
 /// Simplified encoding for Plugin-First architecture (replaces legacy encoding)
 pub(crate) fn nyrt_encode_arg_or_legacy(buf: &mut Vec<u8>, val: i64, _pos: usize) {
-    use nyash_rust::jit::rt::handles;
+    use nyash_rust::runtime::host_handles as handles;
     // Handle direct values and plugin objects, bypass legacy VM fallback
     if val > 0 {
-        if let Some(obj) = handles::get(val) {
+        if let Some(obj) = handles::get(val as u64) {
             if let Some(bufbox) = obj
                 .as_any()
                 .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()

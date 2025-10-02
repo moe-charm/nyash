@@ -118,6 +118,9 @@ test_*.txt
 *_output.txt
 *_results.txt
 
+# Temp artifacts (WSL/local runs)
+/tmp/
+
 # Local test files
 local_tests/
 

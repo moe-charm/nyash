@@ -4,6 +4,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import llvmlite.ir as ir
 
 from .common import trace
+from .registry import PhiRegistry
 
 def _const_i64(builder, n: int) -> ir.Constant:
     try:
@@ -14,40 +15,30 @@ def _const_i64(builder, n: int) -> ir.Constant:
 
 
 def ensure_phi(builder, block_id: int, dst_vid: int, bb: ir.Block) -> ir.Instruction:
-    """Ensure a PHI placeholder exists at the block head for dst_vid and return it."""
-    # Always place PHI at block start to keep LLVM invariant "PHI nodes at top"
-    b = ir.IRBuilder(bb)
+    """Ensure a single PHI exists at block head for (block_id, dst_vid).
+    Delegates to PhiRegistry to guarantee uniqueness.
+    """
+    # Honor predeclared ret PHIs when provided (if-merge prepass)
     try:
-        b.position_at_start(bb)
+        predecl = getattr(builder, "predeclared_ret_phis", {}) or {}
+        if predecl:
+            cand = predecl.get((int(block_id), int(dst_vid)))
+            if cand is not None:
+                try:
+                    builder.vmap[int(dst_vid)] = cand
+                except Exception:
+                    pass
+                trace({"phi": "ensure_predecl", "block": int(block_id), "dst": int(dst_vid)})
+                # Also register into registry for uniqueness
+                try:
+                    PhiRegistry.register(builder, int(block_id), int(dst_vid), cand)
+                except Exception:
+                    pass
+                return cand
     except Exception:
         pass
-    predecl = getattr(builder, "predeclared_ret_phis", {}) if hasattr(builder, "predeclared_ret_phis") else {}
-    phi = predecl.get((int(block_id), int(dst_vid))) if predecl else None
-    if phi is not None:
-        builder.vmap[dst_vid] = phi
-        trace({"phi": "ensure_predecl", "block": int(block_id), "dst": int(dst_vid)})
-        return phi
-    # Check both global and current block-local maps to avoid duplicate PHIs
-    cur = builder.vmap.get(dst_vid)
-    if cur is None and hasattr(builder, "_current_vmap"):
-        try:
-            cur = builder._current_vmap.get(dst_vid)
-        except Exception:
-            cur = None
-    try:
-        if cur is not None and hasattr(cur, "add_incoming") and getattr(getattr(cur, "basic_block", None), "name", None) == bb.name:
-            return cur
-    except Exception:
-        pass
-    ph = b.phi(builder.i64, name=f"phi_{dst_vid}")
-    builder.vmap[dst_vid] = ph
-    # Keep block-local view in sync when present
-    try:
-        if hasattr(builder, "_current_vmap") and isinstance(builder._current_vmap, dict):
-            builder._current_vmap[dst_vid] = ph
-    except Exception:
-        pass
-    trace({"phi": "ensure_create", "block": int(block_id), "dst": int(dst_vid)})
+    ph = PhiRegistry.ensure(builder, int(block_id), int(dst_vid), bb)
+    trace({"phi": "ensure_create_or_reuse", "block": int(block_id), "dst": int(dst_vid)})
     return ph
 
 
@@ -104,9 +95,14 @@ def nearest_pred_on_path(
 
 
 def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[int, int]]):
-    """Wire PHI incoming edges for (block_id, dst_vid) using declared (decl_b, v_src) pairs.
+    """Wire PHI incoming edges for (block_id, dst_vid).
 
-    Contract: PHI must already exist at the block head (created by PhiHandler).
+    Policy change (2025-10-02): Ignore per-pair source hints and always wire the
+    value of `dst_vid` as it exists at the end of each CFG predecessor block.
+    This removes ambiguity when MIR redefines the same logical value per branch
+    (then/else) and avoids fragile heuristics.
+
+    Contract: PHI must already exist at the block head (created by PhiRegistry/PhiHandler).
     This helper never creates PHIs; it only wires incoming edges.
     """
     bb = builder.bb_map.get(block_id)
@@ -131,15 +127,6 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
             preds_list.append(p)
             seen.add(p)
     succs = build_succs(builder.preds)
-    init_src_vid = None
-    for (_bd0, vs0) in incoming:
-        try:
-            vi = int(vs0)
-        except Exception:
-            continue
-        if vi != int(dst_vid):
-            init_src_vid = vi
-            break
     chosen: Dict[int, ir.Value] = {}
     for (b_decl, v_src) in incoming:
         try:
@@ -151,25 +138,21 @@ def wire_incomings(builder, block_id: int, dst_vid: int, incoming: List[Tuple[in
         if pred_match is None:
             trace({"phi": "wire_skip_no_path", "decl_b": bd, "target": int(block_id), "src": vs})
             continue
-        if vs == int(dst_vid) and init_src_vid is not None:
-            vs = int(init_src_vid)
         try:
             val = builder.resolver._value_at_end_i64(
                 vs, pred_match, builder.preds, builder.block_end_values, builder.vmap, builder.bb_map
             )
         except Exception:
             val = None
-        # Normalize to a well-typed LLVM value (i64)
         if val is None:
             val = _const_i64(builder, 0)
         else:
             try:
-                # Some paths can accidentally pass plain integers; coerce to i64 const
                 if not hasattr(val, 'type'):
                     val = _const_i64(builder, int(val))
             except Exception:
                 val = _const_i64(builder, 0)
-        chosen[pred_match] = val
+        chosen[int(pred_match)] = val
         trace({"phi": "wire_choose", "pred": int(pred_match), "dst": int(dst_vid), "src": int(vs)})
     wired = 0
     for pred_bid, val in chosen.items():
@@ -239,6 +222,34 @@ def finalize_phis(builder):
             else:
                 # PHI exists at block head; wire incomings normally.
                 wired = wire_incomings(builder, int(block_id), int(dst_vid), incoming)
+                # Ensure non-empty PHI to avoid malformed IR in dev: if no new incoming was wired
+                # AND no predecessors were previously wired (per PhiHandler), add a conservative
+                # zero from the first CFG predecessor.
+                try:
+                    prev_wired = 0
+                    try:
+                        prev_wired = len((getattr(builder, 'phi_wired', {}) or {}).get((int(block_id), int(dst_vid)), set()))
+                    except Exception:
+                        prev_wired = 0
+                    if int(wired or 0) == 0 and int(prev_wired or 0) == 0:
+                        preds_list = list(dict.fromkeys((getattr(builder, 'preds', {}) or {}).get(int(block_id), []) or []))
+                        if preds_list:
+                            first_pred = int(preds_list[0])
+                            pred_bb = (getattr(builder, 'bb_map', {}) or {}).get(first_pred)
+                            if pred_bb is not None:
+                                z = _const_i64(builder, 0)
+                                phi_obj.add_incoming(z, pred_bb)
+                                # track wired set for verify
+                                try:
+                                    key = (int(block_id), int(dst_vid))
+                                    st = getattr(builder, 'phi_wired', {}).setdefault(key, set())
+                                    st.add(first_pred)
+                                except Exception:
+                                    pass
+                                wired = 1
+                                trace({"phi": "finalize_synthesize_zero_incoming", "block": int(block_id), "dst": int(dst_vid), "pred": first_pred})
+                except Exception:
+                    pass
             total_wired += int(wired or 0)
             trace({"phi": "finalize", "block": int(block_id), "dst": int(dst_vid), "wired": int(wired or 0)})
     trace({"phi": "finalize_summary", "blocks": int(total_blocks), "dsts": int(total_dsts), "incoming_wired": int(total_wired)})

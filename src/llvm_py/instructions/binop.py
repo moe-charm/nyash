@@ -6,6 +6,8 @@ Handles +, -, *, /, %, &, |, ^, <<, >>
 import llvmlite.ir as ir
 from typing import Dict, Optional, Any
 from utils.values import resolve_i64_strict
+from dispatch import PhiDispatchPoint
+from typing import Optional
 from .compare import lower_compare
 import llvmlite.ir as ir
 
@@ -23,6 +25,7 @@ def lower_binop(
     bb_map=None,
     *,
     dst_type: Optional[Any] = None,
+    inst_ctx: Optional[Any] = None,
 ) -> None:
     """
     Lower MIR BinOp instruction
@@ -37,14 +40,32 @@ def lower_binop(
         vmap: Value map
         current_block: Current basic block
     """
-    # Resolve operands as i64 (using resolver when available)
-    # For now, simple vmap lookup
-    lhs_val = resolve_i64_strict(resolver, lhs, current_block, preds, block_end_values, vmap, bb_map)
-    rhs_val = resolve_i64_strict(resolver, rhs, current_block, preds, block_end_values, vmap, bb_map)
+    # Resolve operands via DispatchPoint（統一フォールバック経路）。
+    # 数値系の binop では DP の i64 正規化を採用し、文字列系（'+' の混在）では raw も参照する。
+    lhs_val = PhiDispatchPoint.resolve_i64(builder, resolver, lhs, current_block, preds, block_end_values, vmap, bb_map)
+    rhs_val = PhiDispatchPoint.resolve_i64(builder, resolver, rhs, current_block, preds, block_end_values, vmap, bb_map)
+
+    # DP 側で PHI/同ブロックalias/直近add のフォールバックを行っているため、
+    # ここでの追加ヒューリスティックは不要。
     if lhs_val is None:
         lhs_val = ir.Constant(ir.IntType(64), 0)
     if rhs_val is None:
         rhs_val = ir.Constant(ir.IntType(64), 0)
+
+    # 旧: pred/decl の走査フォールバックは DP に委譲済み。
+
+    try:
+        p = _phi_from_decl(lhs) or _phi_from_pred(lhs)
+        if p is not None:
+            lhs_val = p
+    except Exception:
+        pass
+    try:
+        p = _phi_from_decl(rhs) or _phi_from_pred(rhs)
+        if p is not None:
+            rhs_val = p
+    except Exception:
+        pass
 
     # Convert i1 (boolean) to i64 if needed (from compare operations)
     i64 = ir.IntType(64)

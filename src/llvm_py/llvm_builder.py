@@ -7,6 +7,12 @@ Following the design principles in docs/development/design/legacy/LLVM_LAYER_OVE
 import json
 import sys
 import os
+# Apply brand env aliases early when run as a script (e.g., via Python)
+try:
+    from utils.brand import alias_prefixes_bootstrap as _brand_alias
+    _brand_alias()
+except Exception:
+    pass
 from typing import Dict, Any, Optional, List, Tuple
 import llvmlite.ir as ir
 import llvmlite.binding as llvm

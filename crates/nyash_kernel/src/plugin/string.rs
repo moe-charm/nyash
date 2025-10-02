@@ -143,7 +143,7 @@ pub extern "C" fn nyash_string_lastindexof_ss(s: *const i8, needle: *const i8) -
 // Exported as: nyash.string.to_i8p_h(i64 handle) -> i8*
 #[export_name = "nyash.string.to_i8p_h"]
 pub extern "C" fn nyash_string_to_i8p_h(handle: i64) -> *mut i8 {
-    use nyash_rust::jit::rt::handles;
+    use nyash_rust::runtime::host_handles as handles;
     if handle <= 0 {
         // return "0" for consistency with existing fallback behavior
         let s = handle.to_string();
@@ -153,7 +153,7 @@ pub extern "C" fn nyash_string_to_i8p_h(handle: i64) -> *mut i8 {
         let raw = Box::into_raw(boxed) as *mut u8;
         return raw as *mut i8;
     }
-    if let Some(obj) = handles::get(handle) {
+    if let Some(obj) = handles::get(handle as u64) {
         let s = obj.to_string_box().value;
         let mut bytes = s.into_bytes();
         bytes.push(0);

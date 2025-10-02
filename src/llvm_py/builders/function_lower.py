@@ -11,6 +11,8 @@ from phi_wiring import (
 )
 from phi_wiring.verify import verify_phi_cfg as _verify_phi_cfg
 from phi_wiring.verify import verify_phi_order as _verify_phi_order
+from phi_wiring.verify import verify_phi_uniqueness as _verify_phi_uniqueness
+from phi_wiring.lifecycle import PhiLifecycle
 
 
 def lower_function(builder, func_data: Dict[str, Any]):
@@ -61,6 +63,11 @@ def lower_function(builder, func_data: Dict[str, Any]):
         builder.resolver.i64_cache.clear()
         builder.resolver.ptr_cache.clear()
         builder.resolver.f64_cache.clear()
+        # Expose owner (NyashLLVMBuilder) to resolver for registry access
+        try:
+            builder.resolver._owner_builder = builder
+        except Exception:
+            pass
         if hasattr(builder.resolver, '_end_i64_cache'):
             builder.resolver._end_i64_cache.clear()
         if hasattr(builder.resolver, 'string_ids'):
@@ -193,6 +200,12 @@ def lower_function(builder, func_data: Dict[str, Any]):
 
     # Prepass: collect PHI metadata and placeholders
     _setup_phi_placeholders(builder, blocks)
+    # Lifecycle.create: pre-create PHIs declared by metadata so that body lowering
+    # can always see the placeholder via vmap/registry (単一起点化を前倒し)
+    try:
+        PhiLifecycle(builder).create_phase()
+    except Exception:
+        pass
 
     # Optional: if-merge prepass (gate NYASH_LLVM_PREPASS_IFMERGE)
     try:
@@ -338,6 +351,11 @@ def lower_function(builder, func_data: Dict[str, Any]):
                 # Summarize first few problems for quick diagnosis
                 summary = ", ".join([f"bb{p.get('block')} v{p.get('dst')}: {p.get('issue')}" for p in problems[:3]])
                 raise RuntimeError(f"PHI verification failed: {summary} (total {len(problems)})")
+            # Uniqueness: single PHI per (block,dst)
+            dup = _verify_phi_uniqueness(builder)
+            if dup:
+                first = dup[0]
+                raise RuntimeError(f"PHI duplicate at bb{first.get('block')} v{first.get('dst')}: {first.get('detail')} (total {len(dup)})")
             # Also enforce order: all PHIs must be grouped at block head
             order_issues = _verify_phi_order(func)
             if order_issues:
