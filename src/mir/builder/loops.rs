@@ -27,6 +27,7 @@ pub(crate) fn pop_loop_context(builder: &mut super::MirBuilder) {
 }
 
 /// Peek current loop header block id
+/// 📦 Kept for future use: loop optimization/analysis may need header block access
 #[allow(dead_code)]
 pub(crate) fn current_header(builder: &super::MirBuilder) -> Option<BasicBlockId> {
     builder.loop_header_stack.last().copied()
@@ -38,12 +39,14 @@ pub(crate) fn current_exit(builder: &super::MirBuilder) -> Option<BasicBlockId> 
 }
 
 /// Returns true if the builder is currently inside at least one loop context.
+/// 📦 Kept for future use: control-flow validation and loop-specific code generation
 #[allow(dead_code)]
 pub(crate) fn in_loop(builder: &super::MirBuilder) -> bool {
     !builder.loop_header_stack.is_empty()
 }
 
 /// Current loop nesting depth (0 means not in a loop).
+/// 📦 Kept for future use: nested loop optimization and complexity analysis
 #[allow(dead_code)]
 pub(crate) fn depth(builder: &super::MirBuilder) -> usize {
     builder.loop_header_stack.len()

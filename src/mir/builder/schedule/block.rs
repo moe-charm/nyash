@@ -1,37 +1,11 @@
 use crate::mir::builder::MirBuilder;
-use crate::mir::{MirInstruction, ValueId};
+use crate::mir::{MirInstruction};
 
 /// BlockScheduleBox — manage physical insertion points within a block.
 /// Contract: PHI group → materialize group (Copy/Id) → body (Call etc.)
 pub struct BlockScheduleBox;
 
 impl BlockScheduleBox {
-    /// Insert a Copy immediately after PHI nodes. Returns the local value id.
-    pub fn ensure_after_phis_copy(builder: &mut MirBuilder, src: ValueId) -> Result<ValueId, String> {
-        if let Some(bb) = builder.current_block {
-            if let Some(&cached) = builder.schedule_mat_map.get(&(bb, src)) {
-                return Ok(cached);
-            }
-            let dst = builder.value_gen.next();
-            builder.insert_copy_after_phis(dst, src)?;
-            builder.schedule_mat_map.insert((bb, src), dst);
-            return Ok(dst);
-        }
-        Err("No current block".into())
-    }
-
-    /// Emit a Copy right before the next emitted instruction (best-effort):
-    /// place it at the tail of the current block. Returns the local value id.
-    pub fn emit_before_call_copy(builder: &mut MirBuilder, src: ValueId) -> Result<ValueId, String> {
-        // Prefer to reuse the after-phis materialized id for this src in this block
-        let base = Self::ensure_after_phis_copy(builder, src)?;
-        let dst = builder.value_gen.next();
-        builder.emit_instruction(MirInstruction::Copy { dst, src: base })?;
-        // Propagate metadata to keep dst consistent with base
-        crate::mir::builder::metadata::propagate::propagate(builder, base, dst);
-        Ok(dst)
-    }
-
     /// Dev-only: verify simple block order invariants.
     /// - PHI group must be at the block head (no PHI after first non-PHI)
     /// - If a Copy immediately precedes a Call-like instruction, prefer that Copy's src

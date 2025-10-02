@@ -57,29 +57,6 @@ pub fn parse_type_name_to_mir(name: &str) -> MirType {
     }
 }
 
-/// Check if a value is a numeric literal or numeric Box constructor
-pub fn is_numeric_value(node: &ASTNode) -> bool {
-    match node {
-        ASTNode::Literal { value: LiteralValue::Integer(_), .. } => true,
-        ASTNode::Literal { value: LiteralValue::Float(_), .. } => true,
-        ASTNode::New { class, arguments, .. } => {
-            (class == "IntegerBox" || class == "FloatBox") && arguments.len() == 1
-        }
-        _ => false,
-    }
-}
-
-/// Extract numeric type from AST node
-pub fn extract_numeric_type(node: &ASTNode) -> Option<MirType> {
-    match node {
-        ASTNode::Literal { value: LiteralValue::Integer(_), .. } => Some(MirType::Integer),
-        ASTNode::Literal { value: LiteralValue::Float(_), .. } => Some(MirType::Float),
-        ASTNode::New { class, .. } if class == "IntegerBox" => Some(MirType::Integer),
-        ASTNode::New { class, .. } if class == "FloatBox" => Some(MirType::Float),
-        _ => None,
-    }
-}
-
 /// Check if an AST node contains a return statement with value
 pub fn contains_value_return(nodes: &[ASTNode]) -> bool {
     fn node_has_value_return(node: &ASTNode) -> bool {
@@ -116,25 +93,3 @@ pub fn contains_value_return(nodes: &[ASTNode]) -> bool {
     nodes.iter().any(node_has_value_return)
 }
 
-/// Generate canonical function name with arity
-pub fn make_function_name_with_arity(base_name: &str, arity: usize) -> String {
-    format!("{}/{}", base_name, arity)
-}
-
-/// Check if a name is a reserved/special function
-pub fn is_reserved_function(name: &str) -> bool {
-    matches!(name,
-        "birth" | "me" | "this" | "super" | "from" |
-        "new" | "delete" | "typeof" | "instanceof"
-    )
-}
-
-/// Suggest alternative for reserved function names
-pub fn suggest_alternative_for_reserved(name: &str) -> String {
-    match name {
-        "birth" => "Use 'new BoxType()' to create instances".to_string(),
-        "me" | "this" => "Use 'me' to reference current instance in methods".to_string(),
-        "from" => "Use 'from Parent.method()' syntax for delegation".to_string(),
-        _ => format!("'{}' is a reserved keyword", name),
-    }
-}

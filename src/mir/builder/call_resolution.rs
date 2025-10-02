@@ -46,6 +46,7 @@ pub fn suggest_resolution(name: &str) -> String {
 
 /// Check if a method name is commonly shadowed by global functions
 /// Used for generating warnings about potential self-recursion
+/// 📦 Kept for future use: diagnostic system for ambiguous method/function resolution
 pub fn is_commonly_shadowed_method(method: &str) -> bool {
     matches!(
         method,
@@ -57,6 +58,7 @@ pub fn is_commonly_shadowed_method(method: &str) -> bool {
 }
 
 /// Generate warning message for potential self-recursion
+/// 📦 Kept for future use: developer-friendly error messages for resolution conflicts
 pub fn generate_self_recursion_warning(box_name: &str, method: &str) -> String {
     format!(
         "Warning: Potential self-recursion detected in {}.{}(). \

@@ -141,14 +141,6 @@ pub fn parse_extern_name(name: &str) -> (String, String) {
     }
 }
 
-/// Check if a name refers to an environment interface
-pub fn is_env_interface(name: &str) -> bool {
-    matches!(name,
-        "env" | "env.console" | "env.fs" | "env.net" |
-        "env.canvas" | "env.task" | "env.future" | "env.process"
-    )
-}
-
 /// Determine effects for an external call
 pub fn compute_extern_effects(iface: &str, method: &str) -> EffectMask {
     if let Some(eff) = extreg::effects_for(iface, method) {

@@ -333,6 +333,7 @@ impl super::MirBuilder {
     }
 
     /// Insert a Copy immediately after PHI nodes in the current block (position-stable).
+    /// 📦 Kept for future use: SSA transformation optimizations requiring precise instruction ordering
     pub(crate) fn insert_copy_after_phis(&mut self, dst: super::ValueId, src: super::ValueId) -> Result<(), String> {
         if let (Some(ref mut function), Some(bb)) = (&mut self.current_function, self.current_block) {
             if let Some(block) = function.get_block_mut(bb) {
@@ -348,6 +349,7 @@ impl super::MirBuilder {
 
     /// Ensure a value is safe to use in the current block by slotifying (pinning) it.
     /// Currently correctness-first: always pin to get a block-local def and PHI participation.
+    /// 📦 Kept for future use: memory management and slot allocation strategies
     pub(crate) fn ensure_slotified_for_use(&mut self, v: super::ValueId, hint: &str) -> Result<super::ValueId, String> {
         self.pin_to_slot(v, hint)
     }
