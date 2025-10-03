@@ -596,22 +596,50 @@ apps/benchmarks/wasm/
 - **回避策**: 手書きMIR JSON（数値演算のみ）で7/7ベンチマーク成功
 - **対処**: selfhostブランチ（ChatGPT）に報告予定
 
-**📊 WASM対応状況**:
-- ✅ 基本演算・比較・制御フロー・PHI命令（完全動作）
-- ✅ i32範囲整数（動作確認済み）
-- ❌ 関数呼び出し（call命令未実装）
-- ❌ StringBox/文字列操作（未実装）
-- ⚠️ i64オーバーフロー（i32として扱われる）
+**📊 WASM対応状況（MIR18命令）**:
+
+**✅ 実装済み（8/18命令）**:
+1. const（定数）
+2. binop（二項演算）
+3. compare（比較演算）
+4. branch（条件分岐）
+5. jump（無条件ジャンプ）
+6. ret（戻り値）
+7. phi（値合流：if/loop両対応）
+8. copy（値コピー）
+
+**❌ 未実装（10/18命令）**:
+9. **call**（関数呼び出し） ← Hakoベンチマークで必須
+10. **boxcall**（メソッド呼び出し）
+11. **newbox**（インスタンス生成）
+12. **load/store**（メモリ操作）
+13. **externcall**（外部関数）- 一部のみ実装（fd_write, proc_exit）
+14. **typeop**（型演算）
+15. **safepoint**（GC同期点）
+16. **barrier**（メモリバリア）
+17. **loopform**（ループ最適化）
+18. **unop**（単項演算）
+
+**⚠️ 制限事項**:
+- i64オーバーフロー（i32として扱われる）
+- StringBox操作未対応（externcall未実装のため）
 
 **🎉 手書きベンチマーク成功例**:
 - factorial_12: 479,001,600 ✅
 - power_2_30: 1,073,741,824 ✅（2^30）
 - sum_10k: 49,995,000 ✅（sum(0..9999)）
 
-**📋 次のステップ**:
-- Hakoコンパイラの不正PHI生成修正（selfhost側で対処）
-- call命令実装（関数呼び出し対応）
-- StringBox対応（Hakoベンチマーク完全動作へ）
+**📋 次のステップ（Phase 3.5以降）**:
+- ✅ ~~Hakoコンパイラの不正PHI生成修正~~ → selfhostマージ完了！
+- **Phase 3.5: call命令実装**（最優先）
+  - 関数呼び出し機構（function_table, call indirect）
+  - Hakoベンチマーク（factorial/fibonacci）動作へ
+- **Phase 3.6: externcall拡充**
+  - StringBox操作（to_i8p_h, concat, from_i8_string）
+  - WASI import整備
+- **Phase 3.7: boxcall/newbox実装**
+  - メソッド呼び出し
+  - インスタンス生成
 
 ---
 

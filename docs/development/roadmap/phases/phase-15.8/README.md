@@ -198,7 +198,29 @@ WASM Binary (.wasm)
 2. ⏸️ test_phi_nested.json作成
 3. ⏸️ WASM実行成功確認（0→1→2→...→10）
 
-#### Phase 3.4: ベンチマークシステム構築
+#### Phase 3.4: ベンチマークシステム構築 ✅ **完了！** (2025-10-03)
+
+**✅ 達成事項**:
+1. **Hakoベンチマーク作成**: apps/benchmarks/wasm/basic/{factorial,fibonacci,sum_loop}.hako
+2. **実行スクリプト**: tools/run_wasm_benchmarks.sh（Hako→MIR→WASM完全パイプライン）
+3. **手書きベンチマーク**: 7/7テストPASS（i32範囲内で安定動作）
+4. **ベンチマークガイド**: docs/guides/wasm-benchmarks.md
+
+**🚨 Hakoコンパイラバグ発見**:
+- **問題**: 不正なPHI命令生成（到達不能ブロックがPHI predecessorに含まれる）
+- **再現**: tmp/phi_bug_minimal.{hako,json,ll}
+- **対処**: ✅ selfhostブランチでがちがちに修正完了 → マージ完了！
+
+**📊 WASM対応状況（MIR18命令）**:
+- ✅ **実装済み（8/18）**: const, binop, compare, branch, jump, ret, phi, copy
+- ❌ **未実装（10/18）**: call, boxcall, newbox, load/store, externcall（一部）, typeop, safepoint, barrier, loopform, unop
+- ⚠️ **制限**: i64オーバーフロー、StringBox操作未対応
+
+**🎉 手書きベンチマーク成功**: factorial_12/power_2_30/sum_10k全PASS
+
+---
+
+#### Phase 3.4（当初計画）
 **ディレクトリ構造**:
 ```
 apps/benchmarks/
@@ -267,7 +289,51 @@ node tools/wasm_runner.js /tmp/factorial.wasm
 
 ---
 
-### **Week 4: WASM最終統合** (2025-10-09 ~ 10-15)
+### **Week 3総括** (2025-10-03完了) 🎉
+
+**達成事項**:
+- 🏆 **selfhostブランチ統合**: PHI生成バグがちがちに修正
+- 🏆 **ベンチマークシステム構築完了**: 手書きMIR JSON 7/7 PASS
+- 🏆 **Hakoベンチマーク作成**: factorial/fibonacci/sum_loop.hako
+- 🏆 **ガイドドキュメント完成**: docs/guides/wasm-benchmarks.md
+- 📝 **バグ再現コード**: tmp/phi_bug_minimal.{hako,json,ll}
+
+**重要発見**:
+- ✅ PHI修正完璧（到達不能predecessor除外）
+- ⚠️ **MIR18命令対応は8/18のみ**（call/boxcall/newbox等未実装）
+- ⚠️ Hakoベンチマークは**call命令実装待ち**
+
+**技術革新**:
+- PhiMergeHelper箱化（112行）
+- is_block_terminated()ヘルパー
+- 単一predecessor時PHI最適化（直接代入）
+
+---
+
+### **Phase 3.5以降の計画** 🚀
+
+#### **Phase 3.5: call命令実装**（最優先）
+**目標**: 関数呼び出し機構WASM対応
+- function_table構築
+- call indirect実装
+- Hakoベンチマーク（factorial/fibonacci）動作確認
+
+#### **Phase 3.6: externcall拡充**
+**目標**: StringBox操作WASM対応
+- nyash.string.to_i8p_h実装
+- nyash.string.concat_hh実装
+- nyash.box.from_i8_string実装
+- WASI import整備
+
+#### **Phase 3.7: boxcall/newbox実装**
+**目標**: メソッド呼び出し・インスタンス生成対応
+- boxcall命令WASM実装
+- newbox命令WASM実装
+- vtable機構構築
+
+---
+
+### **Week 4: WASM最終統合**（延期） (2025-10-09 ~ 10-15)
 #### 目標
 - WASM専用スモークプロファイル完成
 - ドキュメント完全整備
