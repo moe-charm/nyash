@@ -29,15 +29,17 @@ impl PhiMergeHelper {
         then_exit_block: BasicBlockId,
         else_exit_block: BasicBlockId,
     ) -> (Option<BasicBlockId>, Option<BasicBlockId>) {
-        let then_pred = if !builder.is_block_terminated(then_exit_block) {
-            Some(then_exit_block)
+        // ⚠️ CRITICAL FIX: check for return/throw, NOT just any terminator!
+        // Jump is a normal terminator and should be included in predecessors.
+        let then_pred = if builder.is_block_ends_with_return_or_throw(then_exit_block) {
+            None  // terminated with return/throw → unreachable
         } else {
-            None
+            Some(then_exit_block)  // has jump or no terminator → reachable
         };
-        let else_pred = if !builder.is_block_terminated(else_exit_block) {
-            Some(else_exit_block)
-        } else {
+        let else_pred = if builder.is_block_ends_with_return_or_throw(else_exit_block) {
             None
+        } else {
+            Some(else_exit_block)
         };
         (then_pred, else_pred)
     }

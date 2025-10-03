@@ -691,9 +691,15 @@ impl MirBuilder {
         false
     }
 
-
-
-
+    /// Check if block ends with return or throw (unreachable from merge point)
+    pub(super) fn is_block_ends_with_return_or_throw(&self, block_id: super::BasicBlockId) -> bool {
+        if let Some(ref function) = self.current_function {
+            if let Some(block) = function.get_block(block_id) {
+                return block.ends_with_return() || matches!(block.terminator, Some(MirInstruction::Throw { .. }));
+            }
+        }
+        false
+    }
 
 }
 

@@ -12,34 +12,35 @@
 - **戦略**: llvm_py拡張（既存800行活用）+ WASI runtime連携
 - **計画書**: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
 
-### 🎉 **Week 4完了！ExternCall Registry革命**
-- ✅ ExternCallRegistry 2層分離アーキテクチャ実装完了
-- ✅ CSE Fail-Fast根本修正（TimerBox CSEバグ解決）
-- ✅ call命令完全動作（add_two(10) = 12n）
-- ✅ ベンチマーク7/7テストPASS
+### 🎉 **Phase 3.4完了！統合ベンチマークシステム実装** (2025-10-03)
+- ✅ **bench_unified.sh完全書き直し**（420行、2フェーズ分離設計）
+- ✅ **ChatGPT Pro設計準拠**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)
+- ✅ **VMベンチマーク完全動作**（カウンター: 2ms、フィボナッチ: 2ms、素数判定: 3ms）
+- ✅ **LLVM/WASMビルド成功**（Phase 1: Preparation完了）
+- ⚠️ **LLVM Phase 2実行問題**（Warmup後ハング、調査中）
 
-### 📊 **WASM対応状況**（MIR18命令）
-**✅ 実装済み（8/18命令）**:
-1. const（定数）
-2. binop（二項演算）
-3. compare（比較演算）
-4. branch（条件分岐）
-5. jump（無条件ジャンプ）
-6. ret（戻り値）
-7. phi（値合流：if/loop両対応）
-8. copy（値コピー）
-9. **call**（関数呼び出し）← Phase 3.5完了！
+### 📊 **WASM対応状況**（MIR凍結セット16命令基準）
+**✅ 実装済み（16/16命令 - 完全対応！）**:
+1. **基本演算(5)**: Const, UnaryOp, BinOp, Compare, TypeOp
+2. **メモリ(2)**: Load, Store
+3. **制御(4)**: Branch, Jump, Return, Phi（if/loop両対応）
+4. **呼び出し(1)**: Call/MirCall（統一Call実装済み）
+5. **GC(2)**: Barrier, Safepoint
+6. **構造(2)**: Copy, Nop
 
-**❌ 未実装（9/18命令）**:
-- boxcall, newbox, load/store, externcall拡充, typeop, safepoint, barrier, loopform, unop
+**🎉 完全実装済み！**
+- ExternCall, BoxCall, NewBox も動作確認済み
+- LoopForm実験的実装あり
+- 詳細: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
 
 **🚨 発見された問題**:
 - Hakoコンパイラ: 不正PHI命令生成バグ（到達不能ブロックがPHI predecessorに含まれる）
 
 ### 📚 **重要リソース**
 - **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
-- **現在のタスク**: [CURRENT_TASK.md](CURRENT_TASK.md)
+- **現在のタスク**: [CURRENT_TASK_WASM.md](CURRENT_TASK_WASM.md) ⭐ここを見る！
 - **Phase 15.8詳細**: [docs/development/roadmap/phases/phase-15.8/](docs/development/roadmap/phases/phase-15.8/)
+- **MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md) ⭐正式仕様
 
 ---
 
@@ -252,6 +253,32 @@ NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
 bash tools/run_wasm_smoke_tests.sh
 ```
 
+### 📊 ベンチマークシステム（Phase 15.8）
+**設計**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md) - ChatGPT Pro設計
+**重要原則**: 準備フェーズと測定フェーズの分離！
+
+#### 🔨 ビルド方法（準備フェーズ）
+```bash
+# LLVM実行ファイル生成（~700ms、1回のみ）
+bash tools/build_llvm.sh <program.nyash> -o <output_exe>
+
+# WASM生成（1回のみ）
+bash tools/build_wasm.sh <mir.json> -o <output.wasm>
+
+# VM: 準備不要（インタープリタ）
+```
+
+#### ⏱️ ベンチマーク実行（測定フェーズ）
+```bash
+# 統合ベンチマーク（3バックエンド）
+bash tools/bench_unified.sh --backend all --warmup 10 --repeat 50
+bash tools/bench_unified.sh --backend vm --warmup 2 --repeat 3  # クイック
+bash tools/bench_unified.sh --backend llvm --warmup 10 --repeat 50
+bash tools/bench_unified.sh --backend wasm --warmup 10 --repeat 50
+```
+
+**詳細**: [apps/benchmarks/README.md](apps/benchmarks/README.md)
+
 ### 🐛 デバッグ用環境変数
 ```bash
 # 詳細診断
@@ -316,7 +343,7 @@ jq '.functions[0].blocks' mir.json  # ブロック構造確認
 ### 🏗️ Everything is Box
 - すべての値がBox（StringBox, IntegerBox, BoolBox等）
 - ユーザー定義Box: `box ClassName { field1: TypeBox field2: TypeBox }`
-- **MIR命令**: 18個の命令で全機能実現！
+- **MIR凍結セット**: 16命令で全機能実現！（詳細: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)）
 
 ### 🌟 完全明示デリゲーション
 ```nyash
