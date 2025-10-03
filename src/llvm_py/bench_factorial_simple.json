@@ -1,0 +1,44 @@
+{
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 1}, "comment": "i = 1"},
+            {"op": "const", "dst": 2, "value": {"type": "i64", "value": 1}, "comment": "result = 1"},
+            {"op": "const", "dst": 3, "value": {"type": "i64", "value": 12}, "comment": "n = 12"},
+            {"op": "jump", "target": 1}
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {"op": "phi", "dst": 10, "values": [{"block": 0, "value": 1}, {"block": 2, "value": 13}], "comment": "i PHI"},
+            {"op": "phi", "dst": 11, "values": [{"block": 0, "value": 2}, {"block": 2, "value": 14}], "comment": "result PHI"},
+            {"op": "compare", "dst": 12, "operation": "<=", "lhs": 10, "rhs": 3, "comment": "i <= n"},
+            {"op": "branch", "cond": 12, "then": 2, "else": 3}
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {"op": "binop", "dst": 14, "operation": "*", "lhs": 11, "rhs": 10, "comment": "result *= i"},
+            {"op": "const", "dst": 20, "value": {"type": "i64", "value": 1}},
+            {"op": "binop", "dst": 13, "operation": "+", "lhs": 10, "rhs": 20, "comment": "i++"},
+            {"op": "jump", "target": 1}
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {"op": "phi", "dst": 30, "values": [{"block": 1, "value": 11}], "comment": "final result"},
+            {"op": "ret", "value": 30}
+          ]
+        }
+      ]
+    }
+  ]
+}

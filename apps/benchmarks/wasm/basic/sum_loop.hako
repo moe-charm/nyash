@@ -1,0 +1,27 @@
+// Sum Loop Benchmark - Loop PHI Performance Test
+// Calculates sum(1..100000) to test loop performance
+
+static box Main {
+    sum_range(limit) {
+        local i
+        local sum
+        local cond
+
+        i = 0
+        sum = 0
+
+        // Loop: sum all numbers from 0 to limit
+        loop(i < limit) {
+            sum = sum + i
+            i = i + 1
+        }
+
+        return sum
+    }
+
+    main() {
+        local result
+        result = me.sum_range(100000)
+        return result
+    }
+}

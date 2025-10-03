@@ -99,9 +99,34 @@ const importObject = {
       }
     },
 
+    // Boxing helpers (Phase 15.8: stub implementation)
+    'nyash.box.from_i8_string': (ptr) => {
+      // Convert i8* string to Box handle (stub: just return a dummy handle)
+      return 42n; // Dummy StringBox handle
+    },
+
+    'nyash.string.len_h': (handle) => {
+      // Return length of string (stub)
+      return 0n;
+    },
+
+    'nyash.string.concat_hh': (h1, h2) => {
+      // Concat two string handles (stub)
+      return h1; // Just return first handle
+    },
+
     // Safepoint stub (no-op for now)
     ny_check_safepoint: () => {
       // No-op: GC safepoint check
+    }
+  },
+
+  // NyRT extern calls (Phase 15.8: Registry integration)
+  nyrt: {
+    // nyrt.time.now_ms: () -> i64
+    'time_now_ms': () => {
+      // Return milliseconds since UNIX epoch
+      return BigInt(Date.now());
     }
   }
 };
