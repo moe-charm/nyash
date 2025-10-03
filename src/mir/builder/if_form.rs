@@ -142,16 +142,8 @@ impl MirBuilder {
             .and_then(|name| pre_if_var_map.get(name).copied());
 
         // Check if branches are terminated (return/throw) to exclude them from PHI predecessors
-        let then_pred_opt = if !self.is_block_terminated(then_exit_block) {
-            Some(then_exit_block)
-        } else {
-            None  // Branch terminated with return/throw, doesn't reach merge
-        };
-        let else_pred_opt = if !self.is_block_terminated(else_exit_block) {
-            Some(else_exit_block)
-        } else {
-            None
-        };
+        let (then_pred_opt, else_pred_opt) =
+            super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
 
         let result_val = self.normalize_if_else_phi(
             then_block,

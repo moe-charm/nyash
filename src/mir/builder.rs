@@ -30,6 +30,7 @@ mod fields; // field access/assignment lowering split
 pub(crate) mod loops;
 mod ops;
 mod phi;
+mod phi_merge_helper; // PHI生成とマージの統一処理（箱理論実践）
 mod if_form;
 mod control_flow; // thin wrappers to centralize control-flow entrypoints
 mod lifecycle; // prepare/lower_root/finalize split

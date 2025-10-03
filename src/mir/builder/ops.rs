@@ -356,16 +356,8 @@ impl super::MirBuilder {
 
         // Merge modified vars from both branches back into current scope
         // Check if branches are terminated
-        let then_pred_opt = if !self.is_block_terminated(then_exit_block) {
-            Some(then_exit_block)
-        } else {
-            None
-        };
-        let else_pred_opt = if !self.is_block_terminated(else_exit_block) {
-            Some(else_exit_block)
-        } else {
-            None
-        };
+        let (then_pred_opt, else_pred_opt) =
+            super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
 
         self.merge_modified_vars(
             then_block,
