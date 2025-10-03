@@ -30,6 +30,7 @@ mod fields; // field access/assignment lowering split
 pub(crate) mod loops;
 mod ops;
 mod phi;
+mod phi_merge_helper; // PHI生成とマージの統一処理（箱理論実践）
 mod if_form;
 mod control_flow; // thin wrappers to centralize control-flow entrypoints
 mod lifecycle; // prepare/lower_root/finalize split
@@ -673,6 +674,16 @@ impl MirBuilder {
     /// Check if the current basic block is terminated
     fn is_current_block_terminated(&self) -> bool {
         if let (Some(block_id), Some(ref function)) = (self.current_block, &self.current_function) {
+            if let Some(block) = function.get_block(block_id) {
+                return block.is_terminated();
+            }
+        }
+        false
+    }
+
+    /// Check if a specific block is terminated (has return/jump/branch as final instruction)
+    pub(super) fn is_block_terminated(&self, block_id: super::BasicBlockId) -> bool {
+        if let Some(ref function) = self.current_function {
             if let Some(block) = function.get_block(block_id) {
                 return block.is_terminated();
             }

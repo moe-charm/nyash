@@ -81,6 +81,18 @@ pub fn validate_json_root(root: &Value) -> Result<(), String> {
                         ensure_non_null_u32(inst, "dst", name, bid, idx)?;
                         ensure_non_null_u32(inst, "src", name, bid, idx)?;
                     }
+                    // Future ops (accept with minimal checks; expanded later)
+                    "safepoint" => { /* no required fields for MVP */ }
+                    "load" => {
+                        // tolerate minimal forms: dst/addr present when emitted
+                        let _ = inst.get("dst");
+                        let _ = inst.get("addr");
+                    }
+                    "store" => {
+                        // tolerate minimal forms: addr/value present when emitted
+                        let _ = inst.get("addr");
+                        let _ = inst.get("value");
+                    }
                     _ => { /* tolerate others for now */ }
                 }
             }

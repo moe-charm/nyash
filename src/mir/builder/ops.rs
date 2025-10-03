@@ -355,11 +355,15 @@ impl super::MirBuilder {
         self.value_types.insert(result_val, MirType::Bool);
 
         // Merge modified vars from both branches back into current scope
+        // Check if branches are terminated
+        let (then_pred_opt, else_pred_opt) =
+            super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
+
         self.merge_modified_vars(
             then_block,
             else_block,
-            then_exit_block,
-            Some(else_exit_block),
+            then_pred_opt,
+            else_pred_opt,
             &pre_if_var_map,
             &then_var_map_end,
             &Some(else_var_map_end),

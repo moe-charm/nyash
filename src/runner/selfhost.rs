@@ -82,12 +82,12 @@ impl NyashRunner {
                     // Compile to MIR and execute (respect VM/PyVM policy similar to vm mode)
                     let mut mir_compiler = MirCompiler::with_options(true);
                     match mir_compiler.compile(ast) {
-                        Ok(result) => {
+                        Ok(_result) => {
                             let prefer_pyvm = crate::config::env::vm_use_py();
                             if prefer_pyvm {
                                 #[cfg(feature = "pyvm-bridge")]
                                 {
-                                    if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&result.module, "selfhost-preexpand") {
+                                    if let Ok(code) = crate::runner::modes::common_util::pyvm::run_pyvm_harness_lib(&_result.module, "selfhost-preexpand") {
                                         println!("Result: {}", code);
                                         std::process::exit(code);
                                     } else {

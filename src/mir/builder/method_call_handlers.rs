@@ -126,6 +126,7 @@ impl MirBuilder {
     }
 
     /// Check if this is a TypeOp method call
+    /// 📦 Kept for future use: type system extensions (runtime type checking/casting)
     pub(super) fn is_typeop_method(method: &str, arguments: &[ASTNode]) -> Option<String> {
         if (method == "is" || method == "as") && arguments.len() == 1 {
             Self::extract_string_literal(&arguments[0])

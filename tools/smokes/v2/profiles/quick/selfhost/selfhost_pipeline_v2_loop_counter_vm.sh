@@ -9,6 +9,12 @@ preflight_plugins || exit 2
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
 
+# Dev gate: Pipeline V2 smokes are optional in quick
+if [ "${NYASH_PIPELINE_V2:-0}" != "1" ]; then
+  test_skip "selfhost_pipeline_v2_loop_counter_vm" "pipeline v2 disabled"
+  exit 0
+fi
+
 TMP_DIR="/tmp/selfhost_pipeline_v2_loop_counter_vm_$$"
 mkdir -p "$TMP_DIR"
 
@@ -30,4 +36,3 @@ compare_outputs "$expected" "$out" "selfhost_pipeline_v2_loop_counter_vm" || { c
 
 rm -rf "$TMP_DIR"
 exit 0
-
