@@ -30,6 +30,9 @@ fn build_adapter() -> VmExternAdapterBox {
         } else {
             millis as i64
         };
+        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[vm.extern] nyrt.time.now_ms -> {}", clamped);
+        }
         Ok(VMValue::Integer(clamped))
     });
 

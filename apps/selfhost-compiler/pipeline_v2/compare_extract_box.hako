@@ -1,8 +1,37 @@
 // CompareExtractBox — Stage‑1 JSON から Compare(lhs,rhs,op) を堅牢に抽出（整数のみ）
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/pipeline_v2/normalizer_box.hako" as NormalizerBox
 
 static box CompareExtractBox {
-  // Returns { cmp: String, lhs: Int, rhs: Int } or null when not found
+  // --- internal helpers (range & safe find) ---
+  _find_brace_range(s, around_pos) {
+    // Find object range that contains around_pos: search '{' backwards, then match '}' by depth
+    if around_pos < 0 { return null }
+    local start = around_pos
+    loop (start >= 0) {
+      local ch = s.substring(start, start+1)
+      if ch == "{" { break }
+      start = start - 1
+    }
+    if start < 0 { return null }
+    local i = start
+    local depth = 0
+    loop(true) {
+      local ch2 = s.substring(i, i+1)
+      if ch2 == "" { break }
+      if ch2 == "{" { depth = depth + 1 } else { if ch2 == "}" { depth = depth - 1 } }
+      if depth == 0 { return { "from": start, "to": i + 1 } }
+      i = i + 1
+    }
+    return null
+  }
+  _find_in_range(s, needle, start, endp) {
+    local p = RegexFlow.find_from(s, needle, start)
+    if p < 0 { return -1 }
+    if p >= endp { return -1 }
+    return p
+  }
+  // Returns MapBox {"cmp": String, "lhs": Int, "rhs": Int } or null when not found
   extract_return_compare_ints(ast_json) {
     if ast_json == null { return null }
     // Find Return then Compare (whitespace耐性は RegexFlow に委譲)
@@ -37,10 +66,19 @@ static box CompareExtractBox {
       }
     }
     if lv < 0 || rv < 0 { return null }
-    return { cmp: cmp, lhs: lv, rhs: rv }
+    // Normalize (string/int) and fix keys
+    local raw = new MapBox()
+    raw.set("cmp", cmp)
+    raw.set("lhs", lv)
+    raw.set("rhs", rv)
+    print("DBG:raw.has cmp=" + (raw.has("cmp") ? "1" : "0"))
+    local n = NormalizerBox.normalize_cmp(raw)
+    if n == null { print("DBG:norm=NULL")  return null }
+    print("DBG:norm.has cmp=" + (n.has("cmp") ? "1" : "0"))
+    return n
   }
 
-  // If(cond=Compare(lhs,rhs,op), then=[Return(Int 1)], else=[Return(Int 0)]) → {cmp,lhs,rhs} or null
+  // If(cond=Compare(lhs,rhs,op), then=[Return(Int 1)], else=[Return(Int 0)]) → MapBox {cmp,lhs,rhs} or null
   extract_if_compare_ints(ast_json) {
     if ast_json == null { return null }
     // Find If first
@@ -49,34 +87,44 @@ static box CompareExtractBox {
     // Find Compare after If
     local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", ip)
     if cq < 0 { return null }
+    // Restrict to the Compare object range to avoid accidental matches
+    local range = me._find_brace_range(ast_json, cq)
+    if range == null { return null }
+    local rs = range.get("from")
+    local re = range.get("to")
+    // TEMP debug
+    print("DBG:cmp-range=" + ast_json.substring(rs, re))
     // op
-    local opk_pos = RegexFlow.find_from(ast_json, "\"op\":\"", cq)
+    local opk_pos = me._find_in_range(ast_json, "\"op\":\"", rs, re)
     if opk_pos < 0 { return null }
-    local opk_end = RegexFlow.find_from(ast_json, "\"", opk_pos + 6)
+    local opv_start = opk_pos + 6
+    local opk_end = me._find_in_range(ast_json, "\"", opv_start, re)
     if opk_end < 0 { return null }
-    local cmp = ast_json.substring(opk_pos + 6, opk_end)
-    // lhs/rhs
-    local lhsp = RegexFlow.find_from(ast_json, "\"lhs\"", cq)
-    local rhsp = RegexFlow.find_from(ast_json, "\"rhs\"", cq)
-    if lhsp < 0 || rhsp < 0 { return null }
-    local lv = -1
-    local rv = -1
-    {
-      local vpos = RegexFlow.find_from(ast_json, "\"value\":", lhsp)
-      if vpos >= 0 {
-        local ds = RegexFlow.digits_from(ast_json, vpos + 8)
-        if ds != "" { lv = RegexFlow.to_int(ds) }
-      }
-    }
-    {
-      local vpos2 = RegexFlow.find_from(ast_json, "\"value\":", rhsp)
-      if vpos2 >= 0 {
-        local ds2 = RegexFlow.digits_from(ast_json, vpos2 + 8)
-        if ds2 != "" { rv = RegexFlow.to_int(ds2) }
-      }
-    }
-    if lv < 0 || rv < 0 { return null }
-    return { cmp: cmp, lhs: lv, rhs: rv }
+    local cmp = ast_json.substring(opv_start, opk_end)
+    print("DBG:cmp-op=" + cmp)
+    // lhs
+    local lhsp = me._find_in_range(ast_json, "\"lhs\"", rs, re)
+    if lhsp < 0 { return null }
+    local vpos = me._find_in_range(ast_json, "\"value\":", lhsp, re)
+    if vpos < 0 { return null }
+    local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+    if ds == "" { return null }
+    local lv = RegexFlow.to_int(ds)
+    print("DBG:lhs=" + (""+lv))
+    // rhs
+    local rhsp = me._find_in_range(ast_json, "\"rhs\"", rs, re)
+    if rhsp < 0 { return null }
+    local vpos2 = me._find_in_range(ast_json, "\"value\":", rhsp, re)
+    if vpos2 < 0 { return null }
+    local ds2 = RegexFlow.digits_from(ast_json, vpos2 + 8)
+    if ds2 == "" { return null }
+    local rv = RegexFlow.to_int(ds2)
+    print("DBG:rhs=" + (""+rv))
+    local raw = new MapBox()
+    raw.set("cmp", cmp)
+    raw.set("lhs", lv)
+    raw.set("rhs", rv)
+    return NormalizerBox.normalize_cmp(raw)
   }
 }
 

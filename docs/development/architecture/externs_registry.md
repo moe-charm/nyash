@@ -74,6 +74,15 @@ Harness‑First と Fail‑Fast（更新）
   - `NYASH_LLVM_EXTERN_SYMBOL_STYLE=underscores` で `iface_method` スタイルを選択可能。
   - どちらの形式でも一意に解決されるよう、ハーネスは既存シンボルを再利用（重複宣言を回避）。
 
+### Effects と最適化（CSE/DCE）
+- 効果は Registry が唯一の情報源。
+- `READ` は「純粋（PURE）」ではない。従って CSE の対象外（再利用不可）。並べ替えは `read_only` の範囲でのみ許可。
+- ExternCall は「外部境界」扱いで、CSE は常に除外する（安全弁）。
+- 実装メモ:
+  - Builder は `TimerBox.now_ms()` を常に `ExternCall(nyrt.time, now_ms)` に正規化。
+  - VM は ExternAdapter で `nyrt.time.now_ms` を直接処理（SystemTime→i64）。
+  - quick スモークは `TimerBox.now_ms()` を静的呼び出しで確認（プラグイン/using に依存しない）。
+
 WASM Adapter（Phase‑B 着手）
 - `WasmExternAdapterBox` を導入し、`registry` の Spec から import 名・ABI（i32 固定）を生成。
 - 規則: `interface = nyrt.time`, `method = now_ms` → module=`nyrt`, name=`time_now_ms`。必要に応じて overrides を定義。

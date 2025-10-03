@@ -10,6 +10,8 @@ using "apps/selfhost-compiler/pipeline_v2/emit_newbox_box.hako" as EmitNewBoxBox
 using "apps/selfhost-compiler/pipeline_v2/mir_call_box.hako" as MirCallBox
 using selfhost.common.json.mir_v1_adapter as MirJsonV1Adapter
 using "apps/selfhost-compiler/pipeline_v2/compare_extract_box.hako" as CompareExtractBox
+using "apps/selfhost-compiler/pipeline_v2/normalizer_box.hako" as NormalizerBox
+using "apps/selfhost-compiler/pipeline_v2/map_helpers_box.hako" as MapHelpersBox
 using "apps/selfhost-compiler/pipeline_v2/call_extract_box.hako" as CallExtractBox
 using "apps/selfhost-compiler/pipeline_v2/method_extract_box.hako" as MethodExtractBox
 using "apps/selfhost-compiler/pipeline_v2/new_extract_box.hako" as NewExtractBox
@@ -29,12 +31,17 @@ flow PipelineV2 {
       if kq >= 0 {
         local kc = CallExtractBox.extract_return_call_ints(ast_json)
         if kc != null {
-          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(kc.get("name"), kc.get("args")))
+          // Normalize to fix key/types at entry
+          local kn = NormalizerBox.normalize_call_ints(kc)
+          if kn == null { return null }
+          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(kn.get("name"), kn.get("args")))
         }
         // Fallback legacy
         local k = Stage1ExtractFlow.extract_return_call(ast_json)
         if k != null {
-          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(k.get("name"), k.get("args")))
+          local kn2 = NormalizerBox.normalize_call_ints(k)
+          if kn2 == null { return null }
+          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(kn2.get("name"), kn2.get("args")))
         }
       }
     }
@@ -44,11 +51,15 @@ flow PipelineV2 {
       if mq >= 0 {
         local mb = MethodExtractBox.extract_return_method_ints(ast_json)
         if mb != null {
-          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(mb.get("method"), 0, mb.get("args")))
+          local mn = NormalizerBox.normalize_method_ints(mb)
+          if mn == null { return null }
+          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(mn.get("method"), 0, mn.get("args")))
         }
         local m = Stage1ExtractFlow.extract_return_method(ast_json)
         if m != null {
-          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(m.get("method"), 0, m.get("args")))
+          local mn2 = NormalizerBox.normalize_method_ints(m)
+          if mn2 == null { return null }
+          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(mn2.get("method"), 0, mn2.get("args")))
         }
       }
     }
@@ -58,11 +69,15 @@ flow PipelineV2 {
       if nq >= 0 {
         local nb = NewExtractBox.extract_return_new_ints(ast_json)
         if nb != null {
-          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(nb.get("class"), nb.get("args")))
+          local nn = NormalizerBox.normalize_new_ints(nb)
+          if nn == null { return null }
+          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(nn.get("class"), nn.get("args")))
         }
         local n = Stage1ExtractFlow.extract_return_new(ast_json)
         if n != null {
-          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(n.get("class"), n.get("args")))
+          local nn2 = NormalizerBox.normalize_new_ints(n)
+          if nn2 == null { return null }
+          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(nn2.get("class"), nn2.get("args")))
         }
       }
     }
@@ -78,24 +93,100 @@ flow PipelineV2 {
 
   lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace) {
     if ast_json == null { return EmitReturnBox.emit_return_int2(0, trace) }
+    // Early fast-path: any Compare in program (Int-only) → direct emit (materialize=prefer_cfg>=2)
+    {
+      local cq0 = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
+      if cq0 >= 0 {
+        local opk_pos0 = RegexFlow.find_from(ast_json, "\"op\":\"", cq0)
+        local cmp0 = ""
+        if opk_pos0 >= 0 {
+          local opk_end0 = RegexFlow.find_from(ast_json, "\"", opk_pos0 + 6)
+          if opk_end0 >= 0 { cmp0 = ast_json.substring(opk_pos0 + 6, opk_end0) }
+        }
+        local lhsp0 = RegexFlow.find_from(ast_json, "\"lhs\"", cq0)
+        local rhsp0 = RegexFlow.find_from(ast_json, "\"rhs\"", cq0)
+        if lhsp0 >= 0 && rhsp0 >= 0 {
+          local lv0 = 0
+          local rv0 = 0
+          local vpos0 = RegexFlow.find_from(ast_json, "\"value\":", lhsp0)
+          if vpos0 >= 0 {
+            local ds0 = RegexFlow.digits_from(ast_json, vpos0 + 8)
+            if ds0 != "" { lv0 = RegexFlow.to_int(ds0) }
+          }
+          local vpos02 = RegexFlow.find_from(ast_json, "\"value\":", rhsp0)
+          if vpos02 >= 0 {
+            local ds02 = RegexFlow.digits_from(ast_json, vpos02 + 8)
+            if ds02 != "" { rv0 = RegexFlow.to_int(ds02) }
+          }
+          local mat0 = 0
+          if prefer_cfg >= 2 { mat0 = 1 }
+          if cmp0 == null || cmp0 == "" { cmp0 = "Gt" }
+          if trace == 1 { print("[pipe] any-fast cmp=" + cmp0 + " lhs=" + (""+lv0) + " rhs=" + (""+rv0) + " mat=" + (""+mat0)) }
+          local jfast0 = EmitCompareBox.emit_compare_cfg3(lv0, rv0, cmp0, mat0, trace)
+          return LocalSSA.ensure_cond(jfast0)
+        }
+      }
+    }
     // If(...) pattern (prefer CFG form)
     {
       local iq = RegexFlow.find_from(ast_json, "\"type\":\"If\"", 0)
       if iq >= 0 {
+        // Fast-path: directly parse Compare within If for primitives (Int-only)
+        {
+          local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", iq)
+          if cq >= 0 {
+            local opk_pos = RegexFlow.find_from(ast_json, "\"op\":\"", cq)
+            local cmp = ""
+            if opk_pos >= 0 {
+              local opk_end = RegexFlow.find_from(ast_json, "\"", opk_pos + 6)
+              if opk_end >= 0 { cmp = ast_json.substring(opk_pos + 6, opk_end) }
+            }
+            local lhsp = RegexFlow.find_from(ast_json, "\"lhs\"", cq)
+            local rhsp = RegexFlow.find_from(ast_json, "\"rhs\"", cq)
+            if lhsp >= 0 && rhsp >= 0 {
+              local lv = 0
+              local rv = 0
+              local vpos = RegexFlow.find_from(ast_json, "\"value\":", lhsp)
+              if vpos >= 0 {
+                local ds = RegexFlow.digits_from(ast_json, vpos + 8)
+                if ds != "" { lv = RegexFlow.to_int(ds) }
+              }
+              local vpos2 = RegexFlow.find_from(ast_json, "\"value\":", rhsp)
+              if vpos2 >= 0 {
+                local ds2 = RegexFlow.digits_from(ast_json, vpos2 + 8)
+                if ds2 != "" { rv = RegexFlow.to_int(ds2) }
+              }
+              local mat = 0
+              if prefer_cfg >= 2 { mat = 1 }
+              if cmp == null || cmp == "" { cmp = "Gt" }
+              if trace == 1 { print("[pipe] if-fast cmp=" + cmp + " lhs=" + (""+lv) + " rhs=" + (""+rv)) }
+              local jfast = EmitCompareBox.emit_compare_cfg3(lv, rv, cmp, mat, trace)
+              return LocalSSA.ensure_cond(jfast)
+            }
+          }
+        }
         // Prefer robust extractor box
         local icb = CompareExtractBox.extract_if_compare_ints(ast_json)
         if icb != null {
+          // Use extractor outputs as primitives
+          local l = icb.get("lhs") + 0
+          local r = icb.get("rhs") + 0
+          local c = "" + icb.get("cmp")
           local mat = 0
           if prefer_cfg >= 2 { mat = 1 }
-          local j0 = EmitCompareBox.emit_compare_cfg3(icb.get("lhs"), icb.get("rhs"), icb.get("cmp"), mat, trace)
+          local j0 = EmitCompareBox.emit_compare_cfg3(l, r, c, mat, trace)
           return LocalSSA.ensure_cond(j0)
         }
         // Fallback legacy extractor
         local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
         if ic != null {
+          local l2 = ic.get("lhs") + 0
+          local r2 = ic.get("rhs") + 0
+          local c2 = "" + ic.get("cmp")
           local mat = 0
           if prefer_cfg >= 2 { mat = 1 }
-          local j0 = EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), mat, trace)
+          if c2 == null || c2 == "" { c2 = "Gt" }
+          local j0 = EmitCompareBox.emit_compare_cfg3(l2, r2, c2, mat, trace)
           return LocalSSA.ensure_cond(j0)
         }
       }
@@ -106,12 +197,16 @@ flow PipelineV2 {
       if kq >= 0 {
         local kc = CallExtractBox.extract_return_call_ints(ast_json)
         if kc != null {
-          local j4 = EmitCallBox.emit_call_int_args(kc.get("name"), kc.get("args"))
+          local kn = NormalizerBox.normalize_call_ints(kc)
+          if kn == null { return null }
+          local j4 = EmitCallBox.emit_call_int_args(kn.get("name"), kn.get("args"))
           return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
         }
         local k = Stage1ExtractFlow.extract_return_call(ast_json)
         if k != null {
-          local j4 = EmitCallBox.emit_call_int_args(k.get("name"), k.get("args"))
+          local kn2 = NormalizerBox.normalize_call_ints(k)
+          if kn2 == null { return null }
+          local j4 = EmitCallBox.emit_call_int_args(kn2.get("name"), kn2.get("args"))
           return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
         }
       }
@@ -122,12 +217,16 @@ flow PipelineV2 {
       if mq >= 0 {
         local mb = MethodExtractBox.extract_return_method_ints(ast_json)
         if mb != null {
-          local j5 = EmitMethodBox.emit_method_int_args(mb.get("method"), 0, mb.get("args"))
+          local mn = NormalizerBox.normalize_method_ints(mb)
+          if mn == null { return null }
+          local j5 = EmitMethodBox.emit_method_int_args(mn.get("method"), 0, mn.get("args"))
           return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5))
         }
         local m = Stage1ExtractFlow.extract_return_method(ast_json)
         if m != null {
-          local j5 = EmitMethodBox.emit_method_int_args(m.get("method"), 0, m.get("args"))
+          local mn2 = NormalizerBox.normalize_method_ints(m)
+          if mn2 == null { return null }
+          local j5 = EmitMethodBox.emit_method_int_args(mn2.get("method"), 0, mn2.get("args"))
           return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j5))
         }
       }
@@ -138,12 +237,16 @@ flow PipelineV2 {
       if nq >= 0 {
         local nb = NewExtractBox.extract_return_new_ints(ast_json)
         if nb != null {
-          local j6 = EmitNewBoxBox.emit_newbox_int_args(nb.get("class"), nb.get("args"))
+          local nn = NormalizerBox.normalize_new_ints(nb)
+          if nn == null { return null }
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(nn.get("class"), nn.get("args"))
           return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
         }
         local n = Stage1ExtractFlow.extract_return_new(ast_json)
         if n != null {
-          local j6 = EmitNewBoxBox.emit_newbox_int_args(n.get("class"), n.get("args"))
+          local nn2 = NormalizerBox.normalize_new_ints(n)
+          if nn2 == null { return null }
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(nn2.get("class"), nn2.get("args"))
           return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
         }
       }
@@ -163,10 +266,23 @@ flow PipelineV2 {
           if prefer_cfg >= 1 {
             local mat = 0
             if prefer_cfg >= 2 { mat = 1 }
-            local j1 = EmitCompareBox.emit_compare_cfg3(final_lhs, final_rhs, cmp, mat, trace)
+            // Normalize first
+            local raw = new MapBox()
+            raw.set("cmp", cmp)
+            raw.set("lhs", final_lhs)
+            raw.set("rhs", final_rhs)
+            local nn = NormalizerBox.normalize_cmp(raw)
+            if nn == null { return null }
+            local j1 = EmitCompareBox.emit_compare_cfg3(MapHelpersBox.expect_i64(nn, "lhs"), MapHelpersBox.expect_i64(nn, "rhs"), MapHelpersBox.expect_str(nn, "cmp"), mat, trace)
             return LocalSSA.ensure_cond(j1)
           } else {
-            local j0 = EmitCompareBox.emit_compare_ret(final_lhs, final_rhs, cmp, trace)
+            local raw2 = new MapBox()
+            raw2.set("cmp", cmp)
+            raw2.set("lhs", final_lhs)
+            raw2.set("rhs", final_rhs)
+            local nn2 = NormalizerBox.normalize_cmp(raw2)
+            if nn2 == null { return null }
+            local j0 = EmitCompareBox.emit_compare_ret(MapHelpersBox.expect_i64(nn2, "lhs"), MapHelpersBox.expect_i64(nn2, "rhs"), MapHelpersBox.expect_str(nn2, "cmp"), trace)
             return LocalSSA.ensure_cond(j0)
           }
         }
@@ -180,10 +296,22 @@ flow PipelineV2 {
           if prefer_cfg >= 1 {
             local mat = 0
             if prefer_cfg >= 2 { mat = 1 }
-            local j1 = EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp2, mat, trace)
+            local raw3 = new MapBox()
+            raw3.set("cmp", cmp2)
+            raw3.set("lhs", lhs)
+            raw3.set("rhs", rhs)
+            local nn3 = NormalizerBox.normalize_cmp(raw3)
+            if nn3 == null { return null }
+            local j1 = EmitCompareBox.emit_compare_cfg3(nn3.get("lhs"), nn3.get("rhs"), nn3.get("cmp"), mat, trace)
             return LocalSSA.ensure_cond(j1)
           } else {
-            local j0 = EmitCompareBox.emit_compare_ret(lhs, rhs, cmp2, trace)
+            local raw4 = new MapBox()
+            raw4.set("cmp", cmp2)
+            raw4.set("lhs", lhs)
+            raw4.set("rhs", rhs)
+            local nn4 = NormalizerBox.normalize_cmp(raw4)
+            if nn4 == null { return null }
+            local j0 = EmitCompareBox.emit_compare_ret(nn4.get("lhs"), nn4.get("rhs"), nn4.get("cmp"), trace)
             return LocalSSA.ensure_cond(j0)
           }
         }

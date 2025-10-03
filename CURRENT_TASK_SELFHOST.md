@@ -174,3 +174,41 @@ Next — 直近の実施順（提案）
    - LLVM 側の JSON ローダ周辺の冪等性/重複宣言対策の磨き込み。
 4) Docs/Smokes 同期
    - JSON スキーマの最小定義を docs に明記。該当スモークに SKIP 条件（環境未整備）を追加維持。
+
+---
+
+Now — 切り分けと当面の作業（2025‑10‑03）
+
+- 問題切り分け
+  - Rust VM 層: TimerBox.now_ms の CSE 混入疑い（ExternCall の EffectMask 判定が散在）
+  - Self‑Host(.hako): LocalSSA.ensure_cond の文字列手術が壊れやすい（エスケープ/カンマ/境界）
+
+- 根治方針（構造→ドキュメント→テスト→コード）
+  1) 構造: EffectResolver を“唯一の効果決定点”に収束（now_ms は READ 固定）。CSE は READ を再利用不可に明示。
+  2) Docs: externs_registry.md に Fail‑Fast と命名規則（dotted/underscores）＋ effects と最適化の関係を追記。
+  3) テスト（新規スモーク）
+     - quick/selfhost/selfhost_localssa_copy_plain_vm.sh（LocalSSA 出力に素の `{"op":"copy"}` が入る）
+     - quick/core/timer_now_ms_nocse_vm.sh（now_ms の 2 回呼びで `delta>0` を保証。0 の場合は RED）
+  4) コード（点修正）
+     - VM CSE: READ を抑止条件に追加（ExternCall は既定 PURE 不可）。
+     - LocalSSA: pipeline_v2 は LocalSSABox の配列ベース挿入を優先。builder の文字列手術は最小修正に留める。
+
+- 受け入れ条件（この段階）
+  - 上記 2 本のスモークが quick で PASS（環境未整備時は SKIP）。
+  - 既存 quick が常緑（Router/LLVM は現行の SKIP 方針維持）。
+
+Delta — 本コミットの変更点（2025‑10‑03 午前）
+- Quick スモークの「コア常在ルール」寄せ（using/new 依存の縮小・ok/ng 判定・プラグイン無効化）
+  - core/router_timer_now_ms_vm.sh: using/new を排し、静的 TimerBox.now_ms の単調性を in‑program 判定（ok/ng）に変更。NYASH_DISABLE_PLUGINS=1 を追加。
+  - core/router_array_size_vm.sh, core/router_map_size_vm.sh: プラグイン無効化＋ok/ng 判定化。Router/Adapter 経路が不在の環境では SKIP（事前プローブで判定）。
+  - core/basic_print.sh: プラグイン無効化を追加（print の純粋性を担保）。
+- EffectResolver 一元化の導線強化
+  - builder/calls/extern_calls.rs: `compute_extern_effects` が NYASH_USE_EFFECT_RESOLVER=1 のとき Resolver を優先参照 → Registry → 既存ヒューリスティック の順に統一。
+  - 既存の挙動は不変（既定OFF）。段階的にヒューリスティックの削減を予定。
+- LocalSSA 拡張（設計のみ・次手）
+  - pipeline_v2 は既に LocalSSABox を導入済み。次段で ensure_cond を LocalSSABox.ensure_after_phis_copy に寄せ、配列ベース挿入へ一体化する（挙動不変のまま）。
+
+次の一手（この順で進める）
+1) ルータ系スモークの追加寄せ（flow/basic などの using/new 依存を削減）。
+2) EffectResolver の既定ON 準備（ログとトレースを整え、重複ヒューリスティックを削る）。
+3) LocalSSA.ensure_cond を LocalSSABox に接続（配列ベース挿入を既定に）。Validator の `{op,src,dst}` Fail‑Fast を強化。

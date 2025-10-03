@@ -10,6 +10,8 @@ require_env || exit 2
 
 # プラグイン整合性チェック（必須）
 preflight_plugins || exit 2
+# コア常在ルール: プラグインは無効化
+export NYASH_DISABLE_PLUGINS=1
 
 # テスト実装
 test_basic_print() {

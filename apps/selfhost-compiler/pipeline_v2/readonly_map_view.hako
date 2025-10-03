@@ -1,0 +1,30 @@
+// readonly_map_view.hako — 読み取り専用ビュー（誤更新防止用）
+
+static box ReadOnlyMapView {
+  _m
+
+  of(m) {
+    local v = new ReadOnlyMapView()
+    v._m = m
+    return v
+  }
+
+  has(key) { return me._m.has(key) }
+  get(key) { return me._m.get(key) }
+
+  set(key, val) {
+    print("[ReadOnlyMapView] set forbidden: key=" + (""+key))
+    return 0
+  }
+  delete(key) {
+    print("[ReadOnlyMapView] delete forbidden: key=" + (""+key))
+    return 0
+  }
+  clear() {
+    print("[ReadOnlyMapView] clear forbidden")
+    return 0
+  }
+}
+
+static box ReadOnlyMapViewStub { main(args) { return 0 } }
+

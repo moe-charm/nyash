@@ -114,8 +114,21 @@ impl Clone for BoxProvider {
 // グローバルレジストリインスタンス
 use once_cell::sync::Lazy;
 
-static GLOBAL_REGISTRY: Lazy<Arc<BoxFactoryRegistry>> =
-    Lazy::new(|| Arc::new(BoxFactoryRegistry::new()));
+// ---- Core builtins (minimal, plugin-overrideable) ----
+fn register_core_builtins(reg: &BoxFactoryRegistry) {
+    // TimerBox: provide builtin constructor so `new TimerBox()` works without plugins.
+    // Plugin 設定が適用されると上書きされる（Plugin-First 原則を維持）。
+    reg.register_builtin("TimerBox", |_args: &[Box<dyn NyashBox>]| {
+        Ok(Box::new(crate::boxes::time_box::TimerBox::new()))
+    });
+}
+
+static GLOBAL_REGISTRY: Lazy<Arc<BoxFactoryRegistry>> = Lazy::new(|| {
+    let reg = Arc::new(BoxFactoryRegistry::new());
+    // Register minimal core builtins (can be overridden by plugins later)
+    register_core_builtins(&reg);
+    reg
+});
 
 /// グローバルレジストリを取得
 pub fn get_global_registry() -> Arc<BoxFactoryRegistry> {

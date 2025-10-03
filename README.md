@@ -489,6 +489,16 @@ abi = "unified"        # Both ABIs supported!
 
 **Key Innovation**: TypeBox enables cross-plugin Box creation without circular dependencies. MapBox can now return ArrayBox seamlessly!
 
+### MapBox — Developer Debug Aids (opt-in)
+
+- Trace (env): set `HAKO_MAP_TRACE=1` to log `set/get` calls (hit/miss). Enable `HAKO_MAP_SUGGEST=1` to suggest nearest keys on `get` miss.
+- Introspection APIs:
+  - `map.dump()` → pretty-printed JSON (best-effort)
+  - `map.verify()` → checks empty keys/whitespace/control chars
+  - `map.stats()` → size/avg key length/value-type histogram
+
+These are dev-only aids (no behavior change unless env enabled or methods are called).
+
 📚 **[Full TypeBox Documentation](docs/development/roadmap/phases/phase-12/)**
 
 ---
