@@ -158,7 +158,6 @@ WebAssembly.instantiate(wasmBuffer, importObject)
       console.log('\nCalling ny_main()...');
       try {
         const result = exports.ny_main();
-        console.log(`[DEBUG] result type: ${typeof result}, value: ${result}`);
         // Convert BigInt to Number if needed
         const exitCode = typeof result === 'bigint' ? Number(result) : result;
         console.log(`✅ ny_main() returned: ${exitCode}`);

@@ -172,7 +172,9 @@ def lower_call(
                 ]):
                     resolver.mark_string(dst_vid)
             # Additionally, create a pointer view via bridge for println pointer-API
-            if resolver is not None and hasattr(resolver, 'string_ptrs'):
+            # ⚠️ WASM Note: Skip this for WASM targets as pointer bridges are unstable
+            is_wasm = hasattr(module, 'triple') and module.triple.startswith('wasm')
+            if not is_wasm and resolver is not None and hasattr(resolver, 'string_ptrs'):
                 i64 = ir.IntType(64)
                 i8p = ir.IntType(8).as_pointer()
                 if hasattr(result, 'type') and isinstance(result.type, ir.IntType) and result.type.width == 64:

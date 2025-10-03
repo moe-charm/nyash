@@ -25,6 +25,162 @@ def write_name(name):
     name_bytes = name.encode('utf-8')
     return write_varuint(len(name_bytes)) + name_bytes
 
+def parse_linking_section(wasm_data):
+    """
+    Parse linking section to extract function names and indices
+
+    Returns:
+        dict mapping function name to index
+    """
+    offset = 8  # Skip magic + version
+    func_names = {}
+
+    while offset < len(wasm_data):
+        if offset >= len(wasm_data):
+            break
+
+        section_id = wasm_data[offset]
+        offset += 1
+
+        # Read section size (varuint)
+        size = 0
+        shift = 0
+        while offset < len(wasm_data):
+            byte = wasm_data[offset]
+            offset += 1
+            size |= (byte & 0x7F) << shift
+            if (byte & 0x80) == 0:
+                break
+            shift += 7
+
+        # Check if this is custom section (0)
+        if section_id == 0:
+            section_start = offset
+            # Read section name
+            name_len = 0
+            shift = 0
+            while offset < len(wasm_data):
+                byte = wasm_data[offset]
+                offset += 1
+                name_len |= (byte & 0x7F) << shift
+                if (byte & 0x80) == 0:
+                    break
+                shift += 7
+
+            if offset + name_len <= len(wasm_data):
+                section_name = wasm_data[offset:offset+name_len].decode('utf-8', errors='ignore')
+                offset += name_len
+
+                # Check if this is "linking" section
+                if section_name == "linking":
+                    # Parse linking section content
+                    section_end = section_start + size
+
+                    # Read linking version (usually 2)
+                    if offset < section_end:
+                        linking_version = wasm_data[offset]
+                        offset += 1
+
+                    while offset < section_end:
+                        if offset >= section_end:
+                            break
+
+                        # Read subsection type
+                        subsection_type = wasm_data[offset]
+                        offset += 1
+
+                        # Read subsection size
+                        subsection_size = 0
+                        shift = 0
+                        while offset < section_end:
+                            byte = wasm_data[offset]
+                            offset += 1
+                            subsection_size |= (byte & 0x7F) << shift
+                            if (byte & 0x80) == 0:
+                                break
+                            shift += 7
+
+                        subsection_start = offset
+                        subsection_end = offset + subsection_size
+
+                        # Type 8 = WASM_SYMBOL_TABLE
+                        if subsection_type == 8 and subsection_end <= section_end:
+                            # Read count
+                            count = 0
+                            shift = 0
+                            while offset < subsection_end:
+                                byte = wasm_data[offset]
+                                offset += 1
+                                count |= (byte & 0x7F) << shift
+                                if (byte & 0x80) == 0:
+                                    break
+                                shift += 7
+
+                            # Read symbols
+                            for _ in range(count):
+                                if offset >= subsection_end:
+                                    break
+
+                                # Read symbol kind
+                                symbol_kind = wasm_data[offset]
+                                offset += 1
+
+                                # Read symbol flags (varuint)
+                                flags = 0
+                                shift = 0
+                                while offset < subsection_end:
+                                    byte = wasm_data[offset]
+                                    offset += 1
+                                    flags |= (byte & 0x7F) << shift
+                                    if (byte & 0x80) == 0:
+                                        break
+                                    shift += 7
+
+                                # If symbol is a function (kind 0)
+                                if symbol_kind == 0:
+                                    # Read function index
+                                    func_index = 0
+                                    shift = 0
+                                    while offset < subsection_end:
+                                        byte = wasm_data[offset]
+                                        offset += 1
+                                        func_index |= (byte & 0x7F) << shift
+                                        if (byte & 0x80) == 0:
+                                            break
+                                        shift += 7
+
+                                    # Read function name
+                                    name_len = 0
+                                    shift = 0
+                                    while offset < subsection_end:
+                                        byte = wasm_data[offset]
+                                        offset += 1
+                                        name_len |= (byte & 0x7F) << shift
+                                        if (byte & 0x80) == 0:
+                                            break
+                                        shift += 7
+
+                                    if offset + name_len <= subsection_end:
+                                        func_name = wasm_data[offset:offset+name_len].decode('utf-8', errors='ignore')
+                                        offset += name_len
+                                        func_names[func_name] = func_index
+                                else:
+                                    # Skip to next subsection
+                                    offset = subsection_end
+                                    break
+
+                        offset = subsection_end
+
+                    break  # Found linking section, stop parsing
+                else:
+                    offset = section_start + size
+            else:
+                offset = section_start + size
+        else:
+            offset += size
+
+    return func_names
+
 def add_export_section(wasm_data, exports):
     """
     Add export section to WASM binary
@@ -33,6 +189,7 @@ def add_export_section(wasm_data, exports):
         wasm_data: Original WASM binary
         exports: List of (name, kind, index) tuples
                  kind: 0=func, 1=table, 2=mem, 3=global
+                 index: can be "auto" for automatic detection
 
     Returns:
         Modified WASM binary with export section
@@ -41,11 +198,32 @@ def add_export_section(wasm_data, exports):
     if wasm_data[0:4] != b'\x00asm':
         raise ValueError("Invalid WASM magic")
 
+    # Parse linking section to get function names
+    func_names = parse_linking_section(wasm_data)
+
+    # Debug: print found functions
+    if func_names:
+        print(f"  Found functions in linking section: {list(func_names.keys())}")
+    else:
+        print(f"  No functions found in linking section")
+
+    # Resolve "auto" indices
+    resolved_exports = []
+    for name, kind, index in exports:
+        if index == "auto" and kind == 0:  # func
+            if name in func_names:
+                index = func_names[name]
+                print(f"  → Auto-resolved '{name}' to index {index}")
+            else:
+                print(f"  ⚠️  Warning: '{name}' not found in linking section, using index 0")
+                index = 0
+        resolved_exports.append((name, kind, index))
+
     # Build export section
     export_entries = bytearray()
-    export_entries.extend(write_varuint(len(exports)))  # count
+    export_entries.extend(write_varuint(len(resolved_exports)))  # count
 
-    for name, kind, index in exports:
+    for name, kind, index in resolved_exports:
         export_entries.extend(write_name(name))
         export_entries.append(kind)
         export_entries.extend(write_varuint(index))
@@ -106,11 +284,14 @@ def main():
         print("Usage: wasm_add_export.py <input.wasm> <output.wasm> [exports]")
         print()
         print("Examples:")
-        print("  # Export ny_main function (index 0)")
-        print("  wasm_add_export.py in.wasm out.wasm ny_main:func:0")
+        print("  # Export ny_main function (auto-detect index from linking section)")
+        print("  wasm_add_export.py in.wasm out.wasm ny_main:func:auto")
+        print()
+        print("  # Export ny_main with explicit index")
+        print("  wasm_add_export.py in.wasm out.wasm ny_main:func:1")
         print()
         print("  # Export multiple")
-        print("  wasm_add_export.py in.wasm out.wasm ny_main:func:0 memory:mem:0")
+        print("  wasm_add_export.py in.wasm out.wasm ny_main:func:auto memory:mem:0")
         sys.exit(1)
 
     input_file = sys.argv[1]
@@ -129,7 +310,13 @@ def main():
 
             name = parts[0]
             kind_str = parts[1]
-            index = int(parts[2])
+            index_str = parts[2]
+
+            # Support "auto" for automatic index resolution
+            if index_str == "auto":
+                index = "auto"
+            else:
+                index = int(index_str)
 
             kind_map = {"func": 0, "table": 1, "mem": 2, "global": 3}
             if kind_str not in kind_map:
@@ -138,8 +325,8 @@ def main():
 
             exports.append((name, kind_map[kind_str], index))
     else:
-        # Default: export ny_main function at index 0
-        exports = [("ny_main", 0, 0)]
+        # Default: export ny_main function with auto index detection
+        exports = [("ny_main", 0, "auto")]
 
     # Read input
     with open(input_file, 'rb') as f:
