@@ -642,6 +642,37 @@ apps/benchmarks/wasm/
 
 ---
 
+#### 🧱 **箱理論実践：WASM Target判定箱化** (2025-10-03)
+
+**PHI層と同じパターンでWASM実装を箱化！**
+
+**🔥 問題発見**:
+```python
+# call.py で直接判定（境界が漏れている！）
+is_wasm = hasattr(module, 'triple') and module.triple.startswith('wasm')
+```
+
+**箱化実装** (PHI層のInstructionContextパターン):
+1. **InstructionContext拡張**: `target`フィールド追加
+2. **境界メソッド実装**: `is_wasm()`でtarget判定をカプセル化
+3. **箱越し判定**: `inst_ctx.is_wasm()`で明確な境界
+4. **後方互換性**: fallback実装で段階的移行可能
+
+**📊 箱理論の4原則実践**:
+- ✅ **箱にする**: target情報をInstructionContextに統一
+- ✅ **境界を作る**: is_wasm()メソッドで判定ロジック隠蔽
+- ✅ **差し替え可能**: target判定の実装変更が容易
+- ✅ **戻せる**: fallback実装で従来コードも動作
+
+**修正ファイル**:
+- `builders/instruction_context.py`: target注入、is_wasm()実装 (+30行)
+- `instructions/call.py`: 箱越し判定に変更 (+1行)
+- `tools/build_wasm.sh`: func:auto対応 (1行修正)
+
+**テスト結果**: ✅ add_two(10) = 12 完全動作
+
+---
+
 #### 🎉 **Phase 3.5完了！call命令完全動作** (2025-10-03)
 
 **🔥 問題発見から解決までの軌跡**:

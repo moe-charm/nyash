@@ -36,6 +36,7 @@ class InstructionContext:
     # Optional components
     resolver: Optional[Any] = None      # Type resolver
     ctx: Optional[Any] = None           # Additional context
+    target: Optional[Any] = None        # Target configuration (箱理論: target情報の境界)
 
     # Metadata
     def_blocks: Optional[Dict[int, set]] = None  # Value definition blocks
@@ -70,6 +71,7 @@ class InstructionContext:
             current_block=current_block,
             resolver=owner.resolver,
             ctx=getattr(owner, 'ctx', None),
+            target=getattr(owner, 'target_obj', None),  # 箱理論: BaseTarget箱の注入
             def_blocks=owner.def_blocks
         )
 
@@ -93,6 +95,29 @@ class InstructionContext:
         """Get value at end of block"""
         snap = self.block_end_values.get(bid, {})
         return snap.get(vid)
+
+    def is_wasm(self) -> bool:
+        """
+        箱理論: target判定の境界
+
+        WASMターゲットかどうかを判定
+        内部実装を隠蔽し、呼び出し側はtargetの詳細を知らない
+
+        Returns:
+            True if WASM target, False otherwise
+        """
+        # 優先順位1: targetオブジェクトが存在する場合
+        if self.target is not None:
+            # BaseTargetインターフェース経由で判定
+            triple = self.target.get_triple()
+            return triple.startswith('wasm')
+
+        # 優先順位2: module.tripleから判定（fallback）
+        if hasattr(self.module, 'triple'):
+            return self.module.triple.startswith('wasm')
+
+        # デフォルト: Native
+        return False
 
     def record_definition(self, vid: int, bid: int):
         """Record value definition in block"""

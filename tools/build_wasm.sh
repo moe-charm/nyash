@@ -142,7 +142,7 @@ echo "2.5. Adding export section..."
 TEMP_WASM="${OUTPUT_WASM}.tmp"
 mv "$OUTPUT_WASM" "$TEMP_WASM"
 
-python3 "$PROJECT_ROOT/tools/wasm_add_export.py" "$TEMP_WASM" "$OUTPUT_WASM" ny_main:func:0 2>&1 | grep -E "(✓|Input|Output)" || true
+python3 "$PROJECT_ROOT/tools/wasm_add_export.py" "$TEMP_WASM" "$OUTPUT_WASM" ny_main:func:auto 2>&1 | grep -E "(✓|Input|Output|Auto-resolved|Found)" || true
 rm "$TEMP_WASM"
 
 if [[ ! -f "$OUTPUT_WASM" ]]; then
