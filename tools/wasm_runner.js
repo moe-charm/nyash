@@ -156,11 +156,18 @@ WebAssembly.instantiate(wasmBuffer, importObject)
     // Try to call ny_main
     if (exports.ny_main) {
       console.log('\nCalling ny_main()...');
-      const result = exports.ny_main();
-      // Convert BigInt to Number if needed
-      const exitCode = typeof result === 'bigint' ? Number(result) : result;
-      console.log(`✅ ny_main() returned: ${exitCode}`);
-      process.exit(exitCode);
+      try {
+        const result = exports.ny_main();
+        console.log(`[DEBUG] result type: ${typeof result}, value: ${result}`);
+        // Convert BigInt to Number if needed
+        const exitCode = typeof result === 'bigint' ? Number(result) : result;
+        console.log(`✅ ny_main() returned: ${exitCode}`);
+        process.exit(exitCode || 0);
+      } catch (e) {
+        console.error('❌ Error calling ny_main():', e.message);
+        console.error('Stack:', e.stack);
+        process.exit(1);
+      }
     } else {
       console.log('\n⚠️  ny_main not found in exports');
       process.exit(0);
