@@ -115,6 +115,12 @@ const importObject = {
       return h1; // Just return first handle
     },
 
+    'nyash.string.to_i8p_h': (handle) => {
+      // Convert string handle to i8* pointer (stub)
+      // For now, just return a dummy pointer value
+      return 0; // Null pointer (safe for stub)
+    },
+
     // Safepoint stub (no-op for now)
     ny_check_safepoint: () => {
       // No-op: GC safepoint check

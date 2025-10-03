@@ -28,8 +28,8 @@ def lower_function(builder, func_data: Dict[str, Any]):
 
     # Determine function signature
     if name == "ny_main":
-        # Special case: ny_main returns i32
-        func_ty = ir.FunctionType(builder.i32, [])
+        # Special case: ny_main returns i64 (changed from i32 for WASM compatibility)
+        func_ty = ir.FunctionType(builder.i64, [])
     else:
         # Default: i64(i64, ...) signature; derive arity from '/N' suffix when params missing
         m = re.search(r"/(\d+)$", name)
