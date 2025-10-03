@@ -1,0 +1,195 @@
+// mir_builder2.hako — Instance builder（引数渡しバグ回避のため、非staticで内部状態を保持）
+
+box MirJsonBuilder2 {
+  st: MapBox
+
+  // ---- lifecycle ----
+  setup() {
+    me.st = new MapBox()
+    me.st.set("buf", "")
+    me.st.set("phase", 0)
+    me.st.set("first_inst", 1)
+    me.st.set("blocks", new ArrayBox())
+    me.st.set("cur_block_index", -1)
+    me.st.set("fn_name", "")
+  }
+
+  // ---- internal helpers ----
+  _get_buf() { return me.st.get("buf") }
+  _set_buf(s) { me.st.set("buf", s) }
+  _append(s) { local b = me._get_buf()  me._set_buf(b + s) }
+  _int_to_str(n) {
+    // 数値/数値っぽい文字列を i64 に正規化してから出力
+    local s = "" + n
+    local i = 0
+    local neg = 0
+    if s.substring(0,1) == "-" { neg = 1  i = 1 }
+    local acc = 0
+    local digits = "0123456789"
+    loop (i < s.length()) {
+      local ch = s.substring(i, i+1)
+      local d = digits.indexOf(ch)
+      if d < 0 { break }
+      acc = acc * 10 + d
+      i = i + 1
+    }
+    if neg == 1 { acc = 0 - acc }
+    // stringify back
+    if acc == 0 { return "0" }
+    local out = ""
+    local v = acc
+    if v < 0 { return "-" + me._int_to_str(0 - v) }
+    loop (v > 0) {
+      local d = v % 10
+      local ch = digits.substring(d, d+1)
+      out = ch + out
+      v = v / 10
+    }
+    return out
+  }
+  _quote(s) {
+    local t = "" + s
+    local out = ""
+    local i = 0
+    loop (i < t.length()) {
+      local ch = t.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" }
+      else { if ch == "\"" { out = out + "\\\"" } else {
+        if ch == "\n" { out = out + "\\n" } else {
+          if ch == "\r" { out = out + "\\r" } else {
+            if ch == "\t" { out = out + "\\t" } else { out = out + ch }
+          }
+        }
+      }}
+      i = i + 1
+    }
+    return "\"" + out + "\""
+  }
+  _cur_insts() {
+    local blks = me.st.get("blocks")
+    if blks == null || blks.size == null { return null }
+    local n = blks.size()
+    if n <= 0 { return null }
+    local idx = me.st.get("cur_block_index")
+    if idx == null || idx < 0 || idx >= n { idx = n - 1 }
+    local blk = blks.get(idx)
+    return blk.get("instructions")
+  }
+  _comma_if_needed() {
+    local first = me.st.get("first_inst")
+    if first == 1 { me.st.set("first_inst", 0) return }
+    me._append(",")
+  }
+
+  // ---- building API（インスタンスメソッド）----
+  start_module() { me.st.set("phase", 1) me._append("{\"functions\":[") }
+  start_function(name) {
+    me.st.set("phase", 2)
+    me.st.set("fn_name", name)
+    me.st.set("blocks", new ArrayBox())
+    me.st.set("cur_block_index", -1)
+    me._append("{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":[")
+  }
+  start_block(id) {
+    me.st.set("phase", 3)
+    me.st.set("first_inst", 1)
+    // 配列側
+    local blk = new MapBox()
+    blk.set("id", id)
+    blk.set("instructions", new ArrayBox())
+    local blks = me.st.get("blocks")
+    blks.push(blk)
+    me.st.set("cur_block_index", blks.size() - 1)
+    // 文字列側
+    me._append("{\"id\":" + me._int_to_str(id) + ",\"instructions\":[")
+  }
+  end_block_continue() { me._append("]},") }
+  end_all() { me.st.set("phase", 5) me._append("]}]}]}") }
+
+  add_const(dst, val) {
+    me._comma_if_needed()
+    // 構造
+    local node = { op:"const", dst:dst, value:{ type:"i64", value:val } }
+    local insts = me._cur_insts()
+    if insts != null && insts.push != null { insts.push(node) }
+    // テキスト
+    me._append("{\"op\":\"const\",\"dst\":" + me._int_to_str(dst) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(val) + "}}")
+  }
+  add_compare(kind, lhs, rhs, dst) {
+    me._comma_if_needed()
+    local node = { op:"compare", cmp:kind, lhs:lhs, rhs:rhs, dst:dst }
+    local insts = me._cur_insts()
+    if insts != null && insts.push != null { insts.push(node) }
+    me._append("{\"op\":\"compare\",\"cmp\":" + me._quote(kind) + ",\"lhs\":" + me._int_to_str(lhs) + ",\"rhs\":" + me._int_to_str(rhs) + ",\"dst\":" + me._int_to_str(dst) + "}")
+  }
+  add_copy(dst, src) {
+    me._comma_if_needed()
+    local node = { op:"copy", dst:dst, src:src }
+    local insts = me._cur_insts()
+    if insts != null && insts.push != null { insts.push(node) }
+    me._append("{\"op\":\"copy\",\"dst\":" + me._int_to_str(dst) + ",\"src\":" + me._int_to_str(src) + "}")
+  }
+  add_branch(cond, then_id, else_id) {
+    me._comma_if_needed()
+    local node = { op:"branch", cond:cond, then:then_id, else_id:else_id }
+    local insts = me._cur_insts()
+    if insts != null && insts.push != null { insts.push(node) }
+    me._append("{\"op\":\"branch\",\"cond\":" + me._int_to_str(cond) + ",\"then\":" + me._int_to_str(then_id) + ",\"else\":" + me._int_to_str(else_id) + "}")
+  }
+  add_jump(target) {
+    me._comma_if_needed()
+    local node = { op:"jump", target:target }
+    local insts = me._cur_insts()
+    if insts != null && insts.push != null { insts.push(node) }
+    me._append("{\"op\":\"jump\",\"target\":" + me._int_to_str(target) + "}")
+  }
+  add_ret(val) {
+    me._comma_if_needed()
+    local node = { op:"ret", value:val }
+    local insts = me._cur_insts()
+    if insts != null && insts.push != null { insts.push(node) }
+    me._append("{\"op\":\"ret\",\"value\":" + me._int_to_str(val) + "}")
+  }
+
+  // ---- outputs ----
+  to_string() { return me._get_buf() }
+  to_string_rebuild() {
+    // 構造（blocks → instructions）を正として再構築
+    local name = me.st.get("fn_name")
+    local blks = me.st.get("blocks")
+    local out = "{\"functions\":[{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
+    local n = 0
+    if blks != null && blks.size != null { n = blks.size() }
+    local i = 0
+    loop (i < n) {
+      if i > 0 { out = out + "," }
+      local blk = blks.get(i)
+      local bid = blk.get("id")
+      out = out + "{\"id\":" + me._int_to_str(bid) + ",\"instructions\":["
+      local insts = blk.get("instructions")
+      local m = 0
+      if insts != null && insts.size != null { m = insts.size() }
+      local j = 0
+      loop (j < m) {
+        if j > 0 { out = out + "," }
+        // 最小 stringify（必要な op のみ）
+        local node = insts.get(j)
+        local op = node.get("op")
+        if op == "const" { out = out + "{\"op\":\"const\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(node.get("value").get("value")) + "}}" }
+        else { if op == "compare" { out = out + "{\"op\":\"compare\",\"cmp\":" + me._quote(node.get("cmp")) + ",\"lhs\":" + me._int_to_str(node.get("lhs")) + ",\"rhs\":" + me._int_to_str(node.get("rhs")) + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" }
+        else { if op == "copy" { out = out + "{\"op\":\"copy\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"src\":" + me._int_to_str(node.get("src")) + "}" }
+        else { if op == "branch" { out = out + "{\"op\":\"branch\",\"cond\":" + me._int_to_str(node.get("cond")) + ",\"then\":" + me._int_to_str(node.get("then")) + ",\"else\":" + me._int_to_str(node.get("else_id")) + "}" }
+        else { if op == "jump" { out = out + "{\"op\":\"jump\",\"target\":" + me._int_to_str(node.get("target")) + "}" }
+        else { if op == "ret" { out = out + "{\"op\":\"ret\",\"value\":" + me._int_to_str(node.get("value")) + "}" }
+        else { out = out + "{}" }}}}}}
+        j = j + 1
+      }
+      out = out + "]}"
+      i = i + 1
+    }
+    out = out + "]}]}"
+    return out
+  }
+}
+
+static box MirJsonBuilder2Stub { main(args) { return 0 } }

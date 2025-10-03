@@ -55,9 +55,26 @@ impl NyashParser {
             if self.match_token(&TokenType::DOT) {
                 self.advance(); // consume '.'
 
-                if let TokenType::IDENTIFIER(method_name) = &self.current_token().token_type {
-                    let method_name = method_name.clone();
-                    self.advance();
+                // Accept IDENTIFIER or reserved 'birth' as method name
+                let method_name = match &self.current_token().token_type {
+                    TokenType::IDENTIFIER(s) => {
+                        let v = s.clone();
+                        self.advance();
+                        v
+                    }
+                    TokenType::BIRTH => {
+                        self.advance();
+                        "birth".to_string()
+                    }
+                    _ => {
+                        let line = self.current_token().line;
+                        return Err(ParseError::UnexpectedToken {
+                            found: self.current_token().token_type.clone(),
+                            expected: "identifier".to_string(),
+                            line,
+                        });
+                    }
+                };
 
                     if self.match_token(&TokenType::LPAREN) {
                         // メソッド呼び出し: obj.method(args)
@@ -94,14 +111,6 @@ impl NyashParser {
                             span: Span::unknown(),
                         };
                     }
-                } else {
-                    let line = self.current_token().line;
-                    return Err(ParseError::UnexpectedToken {
-                        found: self.current_token().token_type.clone(),
-                        expected: "identifier".to_string(),
-                        line,
-                    });
-                }
             } else if self.match_token(&TokenType::QmarkDot) {
                 if !is_sugar_enabled() {
                     let line = self.current_token().line;

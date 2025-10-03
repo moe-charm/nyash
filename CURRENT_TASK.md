@@ -2,6 +2,157 @@
 
 このファイルは“今の開発状況だけ”を素早く把握できるよう簡潔に保ちます。詳細な履歴は削除し、必要に応じて git 履歴を参照してください（過去の全ログは commit 履歴に残っています）。
 
+## Update — 2025‑10‑03（Self‑Host .hako 統一 / Mini‑VM 走査バグ / すけすけ）
+- Self‑Host .hako 統一（参照切替＋重複 .nyash を削除済み）
+  - hako.toml/nyash.toml の [modules] を .hako に切替（mir_min/binop/compare）
+  - apps/selfhost/{common,vm/boxes} 配下の .nyash 重複を削除（.hako 実体は残存）
+- Rust VM の観測性を強化（既定OFF）
+  - 1命令/1行トレース: `HAKO|NYASH_VM_TRACE="op=…;regs=1;block=*"`
+  - ステッパ: `HAKO|NYASH_VM_STEP=1`（`…_ALLOW_BLOCK=1` で対話）
+  - 引数観測: `NYASH_VM_CALL_ARG_TRACE=1`
+- スモークのDevログゲートを追加
+  - `SMOKES_DEV_LOG=1` で run_nyash_vm の全出力（[mirvm] ログ）を確認可能
+- Mini‑VM（mir_vm_min.hako）
+  - compare/ret のキー抽出を“ゆる検索”化、フォールバック強化（dev向け）
+  - 既知バグ: ブロック内オブジェクト走査が2個目以降に進まず、moved==0 で早期終了（Eq true が 0 になる）
+
+### Next（箱化で根治）
+- InstructionScannerBox（新規）: instructions→1オブジェクトずつ（深さ走査/区切り吸収、pos前進のみ）
+- OpHandlers（新規）: const/compare/ret の抽出と適用（“ゆる検索”一元化）
+- mir_vm_min.hako は最小ループに縮小（scanner/handlers に委譲）→ true スモーク緑化 → LLVM直結で parity 確認
+
+### Update — 2025‑10‑03（Fail‑Fast ガード＋箱化計画の固定）
+- Dev実行の無限ループ対策（Fail‑Fast）を追加（仕様不変・既定OFFの開発用）
+  - `--dev` 時、未設定/空の場合に限り VM 燃料を自動設定
+    - `NYASH_VM_MAX_INSTRUCTIONS = debug_fuel(既定 100000)`
+    - `NYASH_VM_MAX_BLOCK_EXEC = 200000`
+  - 実装: src/cli/args.rs（空文字も未設定扱いに正規化）
+  - 目的: 既存の無限ループを素早く Fail‑Fast で切る（根治は箱化で行う）
+- selfhost_mir_m2_* スモークの抽出ルールを堅牢化
+  - 末尾の数値行のみ採用（devログ混入の影響を排除）
+  - eq_true はタイムアウトを設定（デフォ 12s）
+
+#### 実装テンプレ（Box‑First）
+```markdown
+## 実装内容
+Mini‑VM の走査・判定（index_of_from 系）を InstructionScannerBox と OpHandlers に分離し、mir_vm_min から依存注入。テスト可能な純関数境界を用意。
+
+## 構造設計
+- [x] 新規フォルダ/ファイルが必要か → apps/selfhost/vm/boxes/{instruction_scanner.hako, op_handlers.hako}
+- [x] 各層のREADME.md更新が必要か → apps/selfhost/vm/boxes/README に責務境界
+- [x] インターフェース定義が必要か → scanner: next(), reset(), pos(); handlers: match_const/compare/ret
+- [x] テストで仕様固定できるか → quick smoke + Ny 単体（JSON最小ケース）
+
+## 責務確認
+- この実装はどの層の責務か: runtime/selfhost.vm（Mini‑VM）
+- 他層への影響: minimal（mir_vm_min の内部依存差替のみ）
+
+## 将来の拡張性
+- 同様の問題が起きた時の対処: 走査と命令抽出の箱側で修正（呼び出し元はノータッチ）
+```
+
+#### スモーク（プレースホルダ）
+- 追加: `tools/smokes/v2/profiles/quick/selfhost/selfhost_mir_m2_scanner_step_vm.sh`（現在は SKIP; 箱実装後に有効化）
+
+### Update — 2025‑10‑05（Box Lifecycle — auto‑birth ポリシーの方針確定）
+- 目的: 「new したら使える」を言語全体で統一し、迷いと誤用を撲滅する。
+- 決定（厳格・一貫）
+  - 既定は auto‑birth: `new TypeBox(args)` は内部で `birth(args)` を自動実行（プラグイン含む全 Box 対象）。
+  - 上級者向けに `unborn()` を提供: `TypeBox.unborn().withXxx(...).birth(...)` のみ auto‑birth を抑止。
+  - `birth()` は冪等＋Result（2回目は no‑op; 失敗は new 式のエラーに伝播）。
+  - Verifier/Lint: unborn のまま操作（set/get/call）は即エラー（dev は詳細、prod は簡潔）。
+- 実装ロードマップ（小粒）
+  1) Lowering: Builder で `NewBox` 直後に `birth` を付加（unborn 経路は除外）。
+  2) PluginLoader: birth 未実装プラグインへ no‑op birth を合成（移行期のみ警告→のち静音）。
+  3) Verifier: unborn 操作を Fail‑Fast（dev で観測強化）。
+  4) Docs: `docs/guides/box-lifecycle.md` を追加し README からリンク。
+
+### Update — 2025‑10‑06（実装進捗: auto‑birth 全経路 + unborn 最小 + プラグイン no‑op birth）
+- Builder: `new`→`birth(args...)` を一律挿入（StringBox 例外維持）。Copy(alias) 経由の birth も Dev Verify で許容。
+- JSON Bridge: `ExprV0::New/array.of/map.of/me` ダミーに対しても NewBox 直後に birth 付与。
+- PluginLoader: `birth` 未実装プラグインは no‑op で成功扱い（1リリース情報ログ→`NYASH_WARN_PLUGIN_NO_BIRTH=0` で抑止）。contracts 上も born 済み記録。
+- unborn（MVP）: `Type.unborn()` を Builder 特別扱い（NewBox のみ／auto‑birth抑止）。
+- Fail‑Fast（unborn 操作）: ユーザー InstanceBox に対し、birth 前操作をエラー（VM/Method 経路の両方にガード）。
+
+Next（小粒）
+- [ ] unborn 表面構文の整備（Parser の最小受理、Doc 追記）。
+- [x] mir_vm_min.hako の箱化適用（InstructionScannerBox/OpHandlersBox）と selfhost_mir_m2_* 緑化の準備（スキャン/演算委譲）。
+- [ ] PluginLoader の no‑op birth 通知を 1 リリースで静音化（警告→info→無）。
+
+### Update — 2025‑10‑06（selfhost m2/m3 最小セットの緑化 + [modules] 追加E2E）
+- Mini‑VM 修正（apps/selfhost/vm/boxes/mir_vm_min.hako）
+  - const 値のネスト抽出を安定化（value:{type,i64,value:N} を確実に取得）。
+  - branch/jump を安定実行。ret の分岐直後フォールバック（entered_from_cf 即値）を撤去し誤判定を抑止。
+  - dev ログ: `ret inspect` 追加（一時、開発用観測）。
+- selfhost スモーク（quick）
+  - 有効化: m2 Eq true/false、m3 branch(true/false)、jump（全PASS）。
+  - 補足: `selfhost_mir_m2_handlers_compare_vm.sh` は箱単体の cmp 解析を今後に回すため一旦 SKIP（m2 Eq のE2Eが同等経路をカバー）。
+- Plugin 系スモーク
+  - 既存は auto‑birth 前提で PASS（明示 birth 依存の古い形は無しを確認）。
+- [modules] Resolver E2E を 1 本追加（広げすぎ防止）
+  - 追加: `tools/smokes/v2/profiles/quick/core/using_modules_alias2_vm.sh`（`selfhost.vm.handlers` → `OpHandlersBox.handle_const` が動作）。
+
+Next（この後）
+- [ ] selfhost m2/m3 の段階的 UN‑SKIP を継続（compare→branch/jump の周辺ケース）。
+- [ ] PluginLoader の no‑op birth テストを追加（dev フィクスチャで確認）。
+- [ ] Parser の unborn 構文整理と Verifier メッセージの磨き込み。
+
+### Update — 2025‑10‑06（追加スモークとログ整備）
+- 追加スモーク: `tools/smokes/v2/profiles/quick/core/plugin_no_birth_noop_vm.sh`
+  - dev フィクスチャ（birth 未定義プラグイン）が無ければ SKIP。存在時は birth が no‑op であることを確認。
+- mir_vm_min の開発用ログを削除/静音化
+  - スモーク出力に混ざらないよう `[mirvm] ...` ログを除去（ガードは今後 ENV に集約予定）。
+- [ ] JSON Bridge のユニット最小化（`array.of`/`map.of`）と tail unique ルールのdocリンク整備。
+
+### Update — 2025‑10‑07（mir_vm_min 箱化・無限ループ対策）
+- mir_vm_min.hako: 手書きの区切り走査を廃止し、`InstructionScannerBox.next` に差し替え。無限ループ防止のため pos 前進と step ガードを明確化。
+- OpHandlersBox 適用: `const`/`compare` は `OpHandlersBox.handle_*` に委譲。`ret/branch/jump/phi` は最小実装を維持。
+- 期待効果: `selfhost_mir_m2_eq_true_vm.sh` の無限ループ解消と安定 1 出力。
+- 次アクション: selfhost_mir_m2_* の一部を段階的に UN‑SKIP（まず eq_true/eq_false）。
+
+### Findings — Box-level investigation vs VM（string/concat/null まわりの怪しい挙動）
+- MapBox/Scanner/Handlers 単体はほぼ妥当。だが VM 側で以下の症状を観測:
+  - `substring(0,55)` の戻り文字列は `length()==55` だが、`"prefix" + piece` の連結で表示が空になることがある（`print(piece)` 単体は表示される）。
+  - 関数が `return null` しても、呼び側で `if x != null` が真になり、`""+x` が `"null"` を返すケースがある（null 等値判定の非整合）。
+  - `index_of_from` 系のループが短い文字列でも VM 命令上限に達する（停止条件/比較の不一致疑い）。
+- 暫定結論: 箱実装ではなく Rust VM の String/Null/Eq/連結あたりに根因がある可能性が高い。
+- 次のステップ（VM 側）:
+  - StringBox: `substring` の戻り値の連結/表示差（`print(piece)` はOK、`"x"+piece` が空）再現テストを追加。
+
+### Update — 2025‑10‑08（Box lifecycle 安定化・Fail‑Fast 統一・json_lint 緑化）
+- VM: `birth()` の取り扱いを構造で統一し、unborn ガードと競合しないよう調整。
+  - BoxCall 入口で `method=="birth"` を早期観測（born 記録）し、後続の実装内操作で unborn ガードを踏まないようにした。
+  - Plugin 未実装 `birth` は no‑op（既存）に加え、Builtin（非プラグイン）Box でも `birth()` を no‑op として許容（移行期互換）。
+  - ユーザー InstanceBox で `birth()` が未定義の場合も no‑op を許容（Builder が一律で挿入するため致命にならないようにする）。
+  - Legacy 関数経路（例: `MyBox.birth/1` に直接解決）の場合は、関数本体実行前に born を記録（内部での set/get が Fail‑Fast しない）。
+- Fail‑Fast（unborn 操作）の統一:
+  - ModuleFunction（`Class.method/Arity`）と Legacy 呼び（`Legacy:Class.method/Arity`）の両経路で unborn ガードを常時有効化（`method!="birth"`）。
+  - Policy: `User Instance BoxCall disallowed in prod` は `birth` を例外として許可（Builder の自動挿入を阻害しない）。
+- Dev 自動 birth の見直し:
+  - `NYASH_DEV_FALLBACK` では New 後の自動 birth を行わない（unborn スモークが誤って通過するのを防ぐ）。
+  - 自動 birth は明示 `NYASH_VM_AUTO_BIRTH_DEV=1` のみ有効。
+- スモーク結果（quick）:
+  - `apps/json_lint_vm` 緑化（以前の unborn/birth レース解消）。
+  - `userbox_unborn_failfast_vm` / `userbox_unborn_then_birth_ok_vm` PASS（Fail‑Fast 一貫）。
+  - LLVM ハーネス `timer_now_ms_harness` PASS（TimerBox.birth を builtin no‑op 化）。
+  - 残り: selfhost m3 の 1 本のみ不一致（`branch_cmp_true` が 0）。別タスクで調査予定。
+
+Next（小粒）
+- [ ] integration / plugins プロファイルを回してメッセージ統一の回帰を確認。
+- [ ] selfhost m3 `branch_cmp_true` の差分確認（InstructionScanner/OpHandlers の境界入力を重点）。
+- [ ] `docs/guides/box-lifecycle.md` に今回の運用（builtin/plugin/user の birth 取扱い差）を追記。
+  - Null 判定: `return null` → 呼び側の `== null` が偽になる事象の最小再現を追加。
+  - `index_of_from` の停止条件検証（<=/</limit の境界と pos 前進）。
+
+### Update — 2025‑10‑08（JSON v0 Bridge: PHI到達判定の最小統一・レガシー化）
+- 方針: 自己ホスト優先のため、json_v0_bridge は最小修正のみ（統合なし）。
+- 追加: `is_block_ends_with_return_or_throw(f, bb)` を lowering/merge.rs に実装し、
+  - merge_values(): 到達不能predの入力を除外（両方不可→左値fallback）。
+  - match_expr: then/else の phi_inputs 追加前に到達判定して除外。
+- ドキュメント: json_v0_bridge はレガシー経路。自己ホスト完了までの暫定運用（既定OFF）。
+- スモーク: `json_v0_match_throw_phi_vm.sh`（match片側が Throw→PHI入力除外→Result: else値）。
+
+
 ## At-a-Glance（現状要約）
 - Branding: 設定は hako.toml 最優先（互換: nyash/hakorune）
 - JSON: JSON.stringify(any) を第一級APIに昇格（.toJSON 併存・同一出力）
@@ -76,6 +227,17 @@
 - 宣言的MIR/JSON の実運用（Map/Array + JSON.stringify の標準化）
 - Using/Alias/Resolver の Fail‑Fast とログ健全化（devのみ詳細）
 - Self‑Hosting 小粒強化（LocalSSA ensure_cond の代表ケース）
+
+### Critical — Static box first-arg loss
+- 概要: static box のメソッドで第1引数が消失。pipe (`|>`) の左辺注入も働かず、引数配列が空に近い状態になる。
+- 影響: Builder/emit 系が全滅（st=null）。Mini‑VM には壊れた JSON が渡り常に 0。
+- Docs: docs/development/issues/2025-10-static-box-first-arg-loss.md
+- 次のステップ:
+  1) quick/core に最小スモーク4本（static/pipe × id/add）を追加
+  2) VM 側の引数マーシャリングを修正（通常: [a,b,...]／pipe: [lhs,...args]／static: receiver混入禁止）
+  3) dev trace で argc/先頭２引数を一時観測 → 緑で削除
+  4) quick 全緑確認
+− 回避: インスタンスBuilder（apps/selfhost/common/json/mir_builder2.hako）を暫定使用
 
 ## Next Actions（小粒・優先順）
 P0（任意・おすすめの改善）
@@ -1844,3 +2006,21 @@ Updates — 2025-09-28 (P6 incremental)
   - Phase B: CLI `--entry` 追加（Runner 配線）
   - Phase C: VM/LLVM/PyVM/子プロセスのエントリ選択を EntryResolveBox に置換
   - Phase D: 旧便宜フラグの撤廃（既定 OFF → 削除）
+
+
+### Update — 2025‑10‑08（Selfhost Mini‑VM: compare/branch 安定化・スモーク緑化）
+- Mini‑VM（apps/selfhost/vm/boxes/mir_vm_min.hako）を強化
+  - branch(cond) で直前 compare の結果を優先的に利用。見つからない場合は直前/最後の compare を再評価して確定。
+  - ret(value=rid) 時も同様に compare の再評価で確定値を返す（last_cmp キャッシュとあわせて冪等化）。
+  - copy 命令（op:"copy"）を追加実装（OpHandlersBox.handle_copy）。
+  - 誤検知になりがちだった「2 const → Eq 短絡」ショートカットは削除（マルチcompare対応のため）。
+- Emit 側（apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako）
+  - materialize=1 の場合、JSON に copy を含めつつ、branch は compare の dst を参照する形に調整（実行互換とJSON検証の両立）。
+- 総合結果
+  - quick: 自己ホスト m2/m3 の compare/branch/jump 系は緑化。json_lint_vm も PASS のまま。
+  - integration/plugins: 全PASS。
+  - 残タスク: emit_compare_cfg3_copy の JSON 抽出まわり（スモークの拾い方と to_string()/to_string_rebuild の整合）を微調整中（実行値はOK）。
+
+Next（Mini‑VM/Emit 小粒）
+- [ ] mir_builder2.hako の to_string_rebuild における blocks 再構築の安定化（空配列になるケースを解消）。
+- [ ] emit_compare_cfg3 の最終形（materialize=1: copy を保持、branch は cond を安定参照）を docs に記録。

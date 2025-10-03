@@ -60,6 +60,15 @@ impl<'a> VarScope for MapVars<'a> {
                         box_type: env.me_class.clone(),
                         args: vec![],
                     });
+                    // Auto-birth for JSON bridge (uniform with Builder)
+                    bb.add_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: dst,
+                        method: "birth".into(),
+                        method_id: None,
+                        args: vec![],
+                        effects: EffectMask::READ,
+                    });
                 }
                 self.vars.insert(name.to_string(), dst);
                 Ok(Some(dst))
@@ -277,6 +286,15 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                         box_type: "ArrayBox".into(),
                         args: vec![],
                     });
+                    // Auto-birth for array.of
+                    bb.add_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: arr,
+                        method: "birth".into(),
+                        method_id: None,
+                        args: vec![],
+                        effects: EffectMask::READ,
+                    });
                 }
                 let mut cur = cur_bb;
                 for e in args {
@@ -303,6 +321,15 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                         dst: mapv,
                         box_type: "MapBox".into(),
                         args: vec![],
+                    });
+                    // Auto-birth for map.of
+                    bb.add_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: mapv,
+                        method: "birth".into(),
+                        method_id: None,
+                        args: vec![],
+                        effects: EffectMask::READ,
                     });
                 }
                 let mut cur = cur_bb;
@@ -382,7 +409,16 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
             let (arg_ids, cur) = lower_args_with_scope(env, f, cur_bb, args, vars)?;
             let dst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur) {
-                bb.add_instruction(MirInstruction::NewBox { dst, box_type: class.clone(), args: arg_ids });
+                bb.add_instruction(MirInstruction::NewBox { dst, box_type: class.clone(), args: arg_ids.clone() });
+                // Auto-birth for JSON bridge: call birth(dst, args...)
+                bb.add_instruction(MirInstruction::BoxCall {
+                    dst: None,
+                    box_val: dst,
+                    method: "birth".into(),
+                    method_id: None,
+                    args: arg_ids,
+                    effects: EffectMask::READ,
+                });
             }
             Ok((dst, cur))
         }

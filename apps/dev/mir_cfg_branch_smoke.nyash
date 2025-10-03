@@ -1,5 +1,5 @@
-using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterMod
-using "apps/selfhost/vm/boxes/mir_vm_min.nyash" as MirVmMinMod
+using "apps/selfhost-compiler/boxes/mir_emitter_box.hako" as MirEmitterMod
+using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMinMod
 
 static box Main {
   main() {
@@ -10,4 +10,3 @@ static box Main {
     return MirVmMin.run(mir)
   }
 }
-

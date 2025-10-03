@@ -16,6 +16,16 @@ impl MirBuilder {
         method: &str,
         arguments: &[ASTNode],
     ) -> Result<ValueId, String> {
+        // Special: unborn constructor — create instance without auto-birth
+        if method == "unborn" {
+            let mut arg_values = Vec::new();
+            for arg in arguments { arg_values.push(self.build_expression(arg.clone())?); }
+            let dst = self.value_gen.next();
+            self.emit_instruction(MirInstruction::NewBox { dst, box_type: box_name.to_string(), args: arg_values })?;
+            // Origin register for downstream routing/debug
+            self.origin_register(dst, box_name.to_string());
+            return Ok(dst);
+        }
         // Build argument values
         let mut arg_values = Vec::new();
         for arg in arguments {

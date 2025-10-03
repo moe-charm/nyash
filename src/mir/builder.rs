@@ -644,26 +644,19 @@ impl MirBuilder {
                 argv.extend(arg_values.iter().copied());
                 self.emit_legacy_call(None, CallTarget::Global(lowered), argv)?;
             } else {
-                // Fallback policy:
-                // - For user-defined boxes (no explicit constructor), do NOT emit BoxCall("birth").
-                //   VM will treat plain NewBox as constructed; dev verify warns if needed.
-                // - For builtins/plugins, keep BoxCall("birth") fallback to preserve legacy init.
-                let is_user_box = self.user_defined_boxes.contains(&class);
-                // Dev safety: allow disabling birth() injection for builtins to avoid
-                // unified-call method dispatch issues while migrating. Off by default unless explicitly enabled.
-                let allow_builtin_birth = std::env::var("NYASH_DEV_BIRTH_INJECT_BUILTINS").ok().as_deref() == Some("1");
-                if !is_user_box && allow_builtin_birth {
-                    let birt_mid = resolve_slot_by_type_name(&class, "birth");
-                    self.emit_box_or_plugin_call(
-                        None,
-                        dst,
-                        "birth".to_string(),
-                        birt_mid,
-                        arg_values,
-                        EffectMask::READ.add(Effect::ReadHeap),
-                        false,
-                    )?;
-                }
+                // Auto-birth policy (strict, uniform): always emit birth() for all boxes
+                // when a lowered global constructor is not available.
+                // This covers user-defined, builtin, and plugin boxes uniformly.
+                let birt_mid = resolve_slot_by_type_name(&class, "birth");
+                self.emit_box_or_plugin_call(
+                    None,
+                    dst,
+                    "birth".to_string(),
+                    birt_mid,
+                    arg_values,
+                    EffectMask::READ.add(Effect::ReadHeap),
+                    false,
+                )?;
             }
         }
 
@@ -691,7 +684,16 @@ impl MirBuilder {
         false
     }
 
-
+    /// Check if a specific block ends with return or throw (not jump/branch)
+    /// Used for PHI predecessor判定: jump is reachable, return/throw is unreachable
+    pub(super) fn is_block_ends_with_return_or_throw(&self, block_id: super::BasicBlockId) -> bool {
+        if let Some(ref function) = self.current_function {
+            if let Some(block) = function.get_block(block_id) {
+                return block.ends_with_return() || matches!(block.terminator, Some(super::MirInstruction::Throw { .. }));
+            }
+        }
+        false
+    }
 
 
 

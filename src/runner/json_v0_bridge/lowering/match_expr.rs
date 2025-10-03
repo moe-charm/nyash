@@ -1,6 +1,6 @@
 //! Match/expr-block lowering for JSON v0 bridge.
 
-use super::merge::new_block;
+use super::merge::{new_block, is_block_ends_with_return_or_throw};
 use super::BridgeEnv;
 use crate::mir::{BasicBlockId, CompareOp, ConstValue, MirFunction, MirInstruction, ValueId};
 use super::super::ast::{ExprV0, MatchArmV0};
@@ -53,7 +53,10 @@ pub(super) fn lower_match_expr_with_scope<S: VarScope>(
                 bb.set_terminator(MirInstruction::Jump { target: merge_bb });
             }
         }
-        phi_inputs.push((tend, tval));
+        // Skip PHI input if the arm ends with return/throw (unreachable to merge)
+        if !is_block_ends_with_return_or_throw(f, tend) {
+            phi_inputs.push((tend, tval));
+        }
 
         cur_dispatch = fall_bb;
     }
@@ -65,7 +68,9 @@ pub(super) fn lower_match_expr_with_scope<S: VarScope>(
             bb.set_terminator(MirInstruction::Jump { target: merge_bb });
         }
     }
-    phi_inputs.push((eend, eval));
+    if !is_block_ends_with_return_or_throw(f, eend) {
+        phi_inputs.push((eend, eval));
+    }
 
     // Merge result
     let out = f.next_value_id();

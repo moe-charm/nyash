@@ -44,6 +44,8 @@ selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.hako"
 selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.hako"
 selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.hako"
 selfhost.vm.flow_runner = "apps/selfhost/vm/flow_runner.hako"
+selfhost.vm.scanner = "apps/selfhost/vm/boxes/instruction_scanner.hako"
+selfhost.vm.handlers = "apps/selfhost/vm/boxes/op_handlers.hako"
 selfhost.core.timer = "apps/core/timer/TimerBox.hako"
 selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
 
@@ -53,8 +55,8 @@ selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 # Temporary alias keys (migration aid; keys kept stable)
 selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
 selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
-selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.nyash"
-selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.nyash"
+selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
+selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]

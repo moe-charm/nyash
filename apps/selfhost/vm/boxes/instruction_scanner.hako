@@ -1,0 +1,107 @@
+// instruction_scanner.hako — InstructionScannerBox
+// Minimal JSON v0 instruction object scanner with tolerant parsing.
+
+static box InstructionScannerBox {
+  _tprint(msg) { print(msg) }
+
+  index_of_from(hay, needle, pos) {
+    if pos < 0 { pos = 0 }
+    local n = hay.length()
+    if pos >= n { return -1 }
+    local m = needle.length()
+    if m <= 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop (i <= limit) {
+      if hay.substring(i, i+m) == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+
+  find_balanced_object_end(json, idx) {
+    if json.substring(idx, idx+1) != "{" { return -1 }
+    local n = json.length()
+    local depth = 0
+    local i = idx
+    local in_str = 0
+    loop (i < n) {
+      local ch = json.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0  i = i + 1  continue }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
+      i = i + 1
+    }
+    return -1
+  }
+
+  normalize_delimiters(seg) {
+    if seg == null { return "" }
+    local out = ""
+    local i = 0
+    local n = seg.length()
+    loop (i < n) {
+      local ch = seg.substring(i, i+1)
+      if i+2 <= n {
+        local two = seg.substring(i, i+2)
+        if two == "}," {
+          if i+2 < n && seg.substring(i+2, i+3) == "{" { out = out + "}|{"  i = i + 3  continue }
+        }
+      }
+      out = out + ch
+      i = i + 1
+    }
+    return out
+  }
+
+  _extract_op(obj) {
+    local k1 = "\"op\":\""
+    local p1 = obj.indexOf(k1)
+    if p1 >= 0 { local i = p1 + k1.length() local j = obj.indexOf("\"", i) if j > i { return obj.substring(i, j) } }
+    // v1 style
+    local kk = "\"kind\":\""
+    local pk = obj.indexOf(kk)
+    if pk >= 0 {
+      local i2 = pk + kk.length()
+      local j2 = obj.indexOf("\"", i2)
+      if j2 > i2 {
+        local k = obj.substring(i2, j2)
+        if k == "Const" { return "const" }
+        if k == "Ret" { return "ret" }
+        if k == "Compare" { return "compare" }
+        if k == "Branch" { return "branch" }
+        if k == "Jump" { return "jump" }
+      }
+    }
+    // compare v1 shorthand
+    local ko = "\"operation\":\""
+    local po = obj.indexOf(ko)
+    if po >= 0 { return "compare" }
+    return ""
+  }
+
+  // Return a map {start,end,op} for next object starting at/after pos, or null if none
+  next(seg, pos) {
+    if seg == null { return null }
+    if pos < 0 { pos = 0 }
+    local start = me.index_of_from(seg, "{", pos)
+    if start < 0 { return null }
+    local endp = me.find_balanced_object_end(seg, start)
+    if endp < 0 { return null }
+    endp = endp + 1
+    local obj = seg.substring(start, endp)
+    local op = me._extract_op(obj)
+    local m = new MapBox()
+    m.set("start", start)
+    m.set("end", endp)
+    m.set("op", op)
+    return m
+  }
+}
+

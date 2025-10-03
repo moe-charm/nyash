@@ -37,8 +37,7 @@ impl MirInterpreter {
         // Guarded by NYASH_VM_AUTO_BIRTH_DEV=1. In production, builders must
         // materialize explicit birth calls.
         let auto_birth =
-            std::env::var("NYASH_VM_AUTO_BIRTH_DEV").ok().as_deref() == Some("1") ||
-            std::env::var("NYASH_DEV_FALLBACK").ok().as_deref() == Some("1");
+            std::env::var("NYASH_VM_AUTO_BIRTH_DEV").ok().as_deref() == Some("1");
         if auto_birth {
             // Dev: call birth with the same args that were provided to NewBox
             // This covers user-defined boxes that rely on birth parameters

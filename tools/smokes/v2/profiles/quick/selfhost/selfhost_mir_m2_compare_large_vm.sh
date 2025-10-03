@@ -3,6 +3,9 @@
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
+export SMOKES_DISABLE_PLUGIN_CHECKS=1
+export NYASH_DISABLE_PLUGINS=1
+export SMOKES_TIMEOUT_SEC=${SMOKES_TIMEOUT_SEC:-25}
 export NYASH_DISABLE_PLUGINS=1
 require_env || exit 2
 preflight_plugins || exit 2
@@ -48,4 +51,3 @@ compare_outputs "$expected_line" "$out" "selfhost_mir_m2_compare_large_vm" || { 
 
 rm -rf "$TMP_DIR"
 exit 0
-

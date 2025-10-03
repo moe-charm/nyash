@@ -259,10 +259,16 @@ pub fn plugin_meta() -> bool {
 pub fn trace_effects() -> bool {
     std::env::var("NYASH_TRACE_EFFECTS").ok().as_deref() == Some("1")
 }
-/// Development-only: check plugin contracts and log violations.
-/// Default: OFF. Enable with NYASH_CHECK_CONTRACTS=1
+/// Development-time contracts checks (unborn guard instrumentation, arity logs).
+/// Default: ON. Disable explicitly with NYASH_CHECK_CONTRACTS=0|false|off
 pub fn check_contracts() -> bool {
-    std::env::var("NYASH_CHECK_CONTRACTS").ok().as_deref() == Some("1")
+    match std::env::var("NYASH_CHECK_CONTRACTS").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
 }
 /// Enforce capability declarations for plugin methods (dev/ci only).
 /// Default: OFF. Enable with NYASH_PLUGIN_CAPS_ENFORCE=1

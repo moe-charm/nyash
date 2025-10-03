@@ -364,6 +364,22 @@ local hero = new GameCharacter("ネコ")
 hero.learnSkill("火魔法").learnSkill("回復")
 ```
 
+### Box ライフサイクル（auto‑birth）
+Hakorune は「new したらすぐ使える」が既定です。`new` は内部で `birth(...)` を自動呼び出しします（明示的に `unborn()` を使った場合を除く）。
+
+```nyash
+// 既定：auto‑birth（推奨）
+local regs = new MapBox()     // 内部的に MapBox.birth()
+regs.set("x", 1)
+
+// 詳細設定が必要な場合
+local cfg = MapBox.unborn()
+    .withPolicy(:deterministic)
+    .birth()?           // Result を返す。冪等。
+```
+
+詳細: docs/guides/box-lifecycle.md を参照してください。
+
 ### モダンなAsync/Await
 ```nyash
 // シンプルな並行処理

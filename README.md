@@ -31,9 +31,11 @@ Quick pointers
 - Run VM: `./target/release/hakorune --backend vm apps/APP/main.nyash` (aliases `hako`/`nyash` also available).
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
  - VM engine toggle: `NYASH_VM_ENGINE={fallback|full}` (default: fallback). See `docs/guides/runtime-architecture.md`.
- - Using/Plugins (ENV quick):
-   - Using: `NYASH_USING=0|1` (default=1), `NYASH_USING_STRATEGY={resolver|prelude}` (alias: `NYASH_USING_IMPL`)
-   - Plugins: `NYASH_PLUGIN_POLICY={auto|off|force}` (default=auto)
+- Using/Plugins (ENV quick):
+  - Using: `NYASH_USING=0|1` (default=1), `NYASH_USING_STRATEGY={resolver|prelude}` (alias: `NYASH_USING_IMPL`)
+  - Plugins: `NYASH_PLUGIN_POLICY={auto|off|force}` (default=auto)
+  - VM fuel (opt‑in): `NYASH_VM_MAX_INSTRUCTIONS=<N>` aborts VM after `<N>` MIR instructions (compat alias: `HAKO_VM_MAX_INSTRUCTIONS`).
+  - VM block cap (opt‑in): `NYASH_VM_MAX_BLOCK_EXEC=<N>` aborts when a basic block executes more than `<N>` times (compat alias: `HAKO_VM_MAX_BLOCK_EXEC`).
 
 Dev shortcuts (Operator Boxes & JSON smokes)
 - One‑shot JSON verification (dev, Operator Boxes ON): `./tools/opbox-json.sh`
@@ -636,3 +638,18 @@ MIT License - Use freely in your projects!
 **🚀 Nyash - Where Everything is a Box, and Boxes Compile to Native Code!**
 
 *Built with ❤️, 🤖 AI collaboration, and the belief that programming languages can be created at the speed of thought*
+### Box Lifecycle (auto‑birth)
+In Hakorune, “new means usable.” Object creation automatically calls `birth(...)` unless you explicitly opt into the `unborn()` path.
+
+```nyash
+// Default: auto‑birth (recommended)
+local regs = new MapBox()     // internally: MapBox.birth()
+regs.set("x", 1)
+
+// Advanced: configure before birth
+local cfg = MapBox.unborn()
+    .withPolicy(:deterministic)
+    .birth()?           // Result-returning; idempotent
+```
+
+Details: see docs/guides/box-lifecycle.md

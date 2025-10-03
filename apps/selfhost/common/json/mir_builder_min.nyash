@@ -103,15 +103,22 @@ static box MirJsonBuilderMin {
 
   // Public builder steps (pipeline-friendly: first arg is state)
   start_module(st) {
+    local has_buf = "no"
+    if st != null && st.has != null && st.has("buf") { has_buf = "yes" }
+    print("[DEBUG start_module] st.has(buf)=" + has_buf)
     st.set("phase", 1)
     return me._append(st, "{\"functions\":[")
   }
   start_function(st, name) {
+    local has_fn = "no"
+    if st != null && st.has != null && st.has("fn_name") { has_fn = "yes" }
+    print("[DEBUG start_function] name=" + name + " st.has(fn_name)=" + has_fn)
     st.set("phase", 2)
     // Dual API: record function name and reset blocks
     st.set("fn_name", name)
     st.set("blocks", new ArrayBox())
     st.set("cur_block_index", -1)
+    print("[DEBUG start_function] after set, st.get(fn_name)=" + st.get("fn_name"))
     // We support a single function in minimal builder
     local b = "{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
     return me._append(st, b)
@@ -265,7 +272,7 @@ static box MirJsonBuilderMin {
     local blks = st.get("blocks")
     if blks == null { return null }
     local n = 0
-    if blks.size { n = blks.size() } else { return null }
+    if blks != null && blks.size != null { n = blks.size() } else { return null }
     if n <= 0 { return null }
     // Prefer explicit cur_block_index to avoid ambiguity
     local idx = -1
@@ -365,9 +372,13 @@ static box MirJsonBuilderMin {
     // Serialize single-function module from blocks structure
     local name = st.get("fn_name")
     local blks = me.get_blocks_array(st)
+    local blks_size_str = "null"
+    if blks != null && blks.size != null { blks_size_str = me._int_to_str(blks.size()) }
+    print("[DEBUG rebuild] fn_name=" + name + " blks.size()=" + blks_size_str)
     local out = "{\"functions\":[{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
     local n = 0
     if blks != null && blks.size != null { n = blks.size() }
+    print("[DEBUG rebuild] n=" + me._int_to_str(n))
     local i = 0
     loop (i < n) {
       if i > 0 { out = out + "," }

@@ -17,6 +17,81 @@ using "apps/selfhost-compiler/pipeline_v2/method_extract_box.hako" as MethodExtr
 using "apps/selfhost-compiler/pipeline_v2/new_extract_box.hako" as NewExtractBox
 
 flow PipelineV2 {
+  _parse_int_at(s, idx) {
+    if s == null { return null }
+    local i = idx
+    loop(true) {
+      local ch = s.substring(i, i+1)
+      if ch == "" { return null }
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      break
+    }
+    local neg = 0
+    local ch = s.substring(i, i+1)
+    if ch == "-" { neg = 1  i = i + 1 }
+    local acc = 0
+    local matched = 0
+    loop(true) {
+      ch = s.substring(i, i+1)
+      if ch == "" { break }
+      local digit_idx = "0123456789".indexOf(ch)
+      if digit_idx >= 0 {
+        matched = 1
+        acc = acc * 10 + digit_idx
+        i = i + 1
+      } else { break }
+    }
+    if matched == 0 { return null }
+    if neg == 1 { acc = 0 - acc }
+    return acc
+  }
+
+  _parse_int_after_prefix(s, prefix, search_pos) {
+    local p = RegexFlow.find_from(s, prefix, search_pos)
+    if p < 0 { return null }
+    local res = PipelineV2._parse_int_at(s, p + prefix.length())
+    return res
+  }
+
+  _parse_compare_values(ast_json, start_pos) {
+    if ast_json == null { return null }
+    local op_pos = RegexFlow.find_from(ast_json, "\"op\":\"", start_pos)
+    if op_pos < 0 { return null }
+    local cmp_start = op_pos + 6
+    local cmp_end = RegexFlow.find_from(ast_json, "\"", cmp_start)
+    if cmp_end < 0 { return null }
+    local cmp = ast_json.substring(cmp_start, cmp_end)
+    local lhs_val = PipelineV2._parse_int_after_prefix(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", start_pos)
+    if lhs_val == null { return null }
+    local rhs_val = PipelineV2._parse_int_after_prefix(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", start_pos)
+    if rhs_val == null { return null }
+    local arr = new ArrayBox()
+    arr.push(lhs_val)
+    arr.push(rhs_val)
+    arr.push(cmp)
+    return arr
+  }
+
+  _to_i64(v) {
+    if v == null { return 0 }
+    local s = "" + v
+    local i = 0
+    local neg = 0
+    if s.substring(0,1) == "-" { neg = 1  i = 1 }
+    local n = s.length()
+    if i >= n { return 0 }
+    local acc = 0
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      local d = "0123456789".indexOf(ch)
+      if d < 0 { break }
+      acc = acc * 10 + d
+      i = i + 1
+    }
+    if neg == 1 { return 0 - acc }
+    return acc
+  }
+
   lower_stage1_to_mir(ast_json, prefer_cfg) {
     // Backward-compatible entry (trace=0)
     return PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, 0)
@@ -92,7 +167,9 @@ flow PipelineV2 {
   }
 
   lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace) {
+    local prefer = PipelineV2._to_i64(prefer_cfg)
     if ast_json == null { return EmitReturnBox.emit_return_int2(0, trace) }
+    if trace == 1 { print("[pipe] prefer_cfg=" + prefer_cfg + " prefer=" + prefer) }
     // Early fast-path: any Compare in program (Int-only) → direct emit (materialize=prefer_cfg>=2)
     {
       local cq0 = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
@@ -119,7 +196,7 @@ flow PipelineV2 {
             if ds02 != "" { rv0 = RegexFlow.to_int(ds02) }
           }
           local mat0 = 0
-          if prefer_cfg >= 2 { mat0 = 1 }
+          if prefer >= 2 { mat0 = 1 }
           if cmp0 == null || cmp0 == "" { cmp0 = "Gt" }
           if trace == 1 { print("[pipe] any-fast cmp=" + cmp0 + " lhs=" + (""+lv0) + " rhs=" + (""+rv0) + " mat=" + (""+mat0)) }
           local jfast0 = EmitCompareBox.emit_compare_cfg3(lv0, rv0, cmp0, mat0, trace)
@@ -133,58 +210,37 @@ flow PipelineV2 {
       if iq >= 0 {
         // Fast-path: directly parse Compare within If for primitives (Int-only)
         {
-          local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", iq)
-          if cq >= 0 {
-            local opk_pos = RegexFlow.find_from(ast_json, "\"op\":\"", cq)
-            local cmp = ""
-            if opk_pos >= 0 {
-              local opk_end = RegexFlow.find_from(ast_json, "\"", opk_pos + 6)
-              if opk_end >= 0 { cmp = ast_json.substring(opk_pos + 6, opk_end) }
-            }
-            local lhsp = RegexFlow.find_from(ast_json, "\"lhs\"", cq)
-            local rhsp = RegexFlow.find_from(ast_json, "\"rhs\"", cq)
-            if lhsp >= 0 && rhsp >= 0 {
-              local lv = 0
-              local rv = 0
-              local vpos = RegexFlow.find_from(ast_json, "\"value\":", lhsp)
-              if vpos >= 0 {
-                local ds = RegexFlow.digits_from(ast_json, vpos + 8)
-                if ds != "" { lv = RegexFlow.to_int(ds) }
-              }
-              local vpos2 = RegexFlow.find_from(ast_json, "\"value\":", rhsp)
-              if vpos2 >= 0 {
-                local ds2 = RegexFlow.digits_from(ast_json, vpos2 + 8)
-                if ds2 != "" { rv = RegexFlow.to_int(ds2) }
-              }
-              local mat = 0
-              if prefer_cfg >= 2 { mat = 1 }
-              if cmp == null || cmp == "" { cmp = "Gt" }
-              if trace == 1 { print("[pipe] if-fast cmp=" + cmp + " lhs=" + (""+lv) + " rhs=" + (""+rv)) }
-              local jfast = EmitCompareBox.emit_compare_cfg3(lv, rv, cmp, mat, trace)
-              return LocalSSA.ensure_cond(jfast)
-            }
+          local cv = PipelineV2._parse_compare_values(ast_json, iq)
+          if cv != null {
+            local mat = 1
+            local lfast = cv.get(0)
+            local rfast = cv.get(1)
+            local cmpfast = cv.get(2)
+            if cmpfast == null || cmpfast == "" { cmpfast = "Gt" }
+            if trace == 1 { print("[pipe] if-fast cmp=" + cmpfast + " lhs=" + (""+lfast) + " rhs=" + (""+rfast) + " mat=" + (""+mat)) }
+            local jfast = EmitCompareBox.emit_compare_cfg3(lfast, rfast, cmpfast, mat, trace)
+            return LocalSSA.ensure_cond(jfast)
           }
         }
         // Prefer robust extractor box
         local icb = CompareExtractBox.extract_if_compare_ints(ast_json)
         if icb != null {
-          // Use extractor outputs as primitives
-          local l = icb.get("lhs") + 0
-          local r = icb.get("rhs") + 0
-          local c = "" + icb.get("cmp")
           local mat = 0
-          if prefer_cfg >= 2 { mat = 1 }
+          if prefer >= 2 { mat = 1 }
+          local l = icb.get(0)
+          local r = icb.get(1)
+          local c = icb.get(2)
           local j0 = EmitCompareBox.emit_compare_cfg3(l, r, c, mat, trace)
           return LocalSSA.ensure_cond(j0)
         }
         // Fallback legacy extractor
         local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
         if ic != null {
+          local mat = 0
+          if prefer >= 2 { mat = 1 }
           local l2 = ic.get("lhs") + 0
           local r2 = ic.get("rhs") + 0
           local c2 = "" + ic.get("cmp")
-          local mat = 0
-          if prefer_cfg >= 2 { mat = 1 }
           if c2 == null || c2 == "" { c2 = "Gt" }
           local j0 = EmitCompareBox.emit_compare_cfg3(l2, r2, c2, mat, trace)
           return LocalSSA.ensure_cond(j0)
@@ -256,33 +312,22 @@ flow PipelineV2 {
     {
       local cq = RegexFlow.find_from(ast_json, "\"type\":\"Compare\"", 0)
       if cq >= 0 {
-        // Prefer robust extractor box
+        // Prefer robust extractor box (returns ArrayBox [lv, rv, cmp])
         local ce = CompareExtractBox.extract_return_compare_ints(ast_json)
         if ce != null {
-          local final_lhs = ce.get("lhs")
-          local final_rhs = ce.get("rhs")
-          local cmp = ce.get("cmp")
+          local final_lhs = ce.get(0)  // ArrayBox: lhs at index 0
+          local final_rhs = ce.get(1)  // ArrayBox: rhs at index 1
+          local cmp = ce.get(2)        // ArrayBox: cmp at index 2
           if trace == 1 { print("[trace] compare via box lhs=" + final_lhs + " rhs=" + final_rhs + " cmp=" + cmp) }
           if prefer_cfg >= 1 {
             local mat = 0
-            if prefer_cfg >= 2 { mat = 1 }
-            // Normalize first
-            local raw = new MapBox()
-            raw.set("cmp", cmp)
-            raw.set("lhs", final_lhs)
-            raw.set("rhs", final_rhs)
-            local nn = NormalizerBox.normalize_cmp(raw)
-            if nn == null { return null }
-            local j1 = EmitCompareBox.emit_compare_cfg3(MapHelpersBox.expect_i64(nn, "lhs"), MapHelpersBox.expect_i64(nn, "rhs"), MapHelpersBox.expect_str(nn, "cmp"), mat, trace)
+            if prefer >= 2 { mat = 1 }
+            // Direct emit (no MapBox/Normalizer needed - values already normalized)
+            local j1 = EmitCompareBox.emit_compare_cfg3(final_lhs, final_rhs, cmp, mat, trace)
             return LocalSSA.ensure_cond(j1)
           } else {
-            local raw2 = new MapBox()
-            raw2.set("cmp", cmp)
-            raw2.set("lhs", final_lhs)
-            raw2.set("rhs", final_rhs)
-            local nn2 = NormalizerBox.normalize_cmp(raw2)
-            if nn2 == null { return null }
-            local j0 = EmitCompareBox.emit_compare_ret(MapHelpersBox.expect_i64(nn2, "lhs"), MapHelpersBox.expect_i64(nn2, "rhs"), MapHelpersBox.expect_str(nn2, "cmp"), trace)
+            // Direct emit (no MapBox/Normalizer needed - values already normalized)
+            local j0 = EmitCompareBox.emit_compare_ret(final_lhs, final_rhs, cmp, trace)
             return LocalSSA.ensure_cond(j0)
           }
         }
@@ -294,8 +339,8 @@ flow PipelineV2 {
           local cmp2 = c.get("cmp")
           if trace == 1 { print("[trace] compare via legacy lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp2) }
           if prefer_cfg >= 1 {
-            local mat = 0
-            if prefer_cfg >= 2 { mat = 1 }
+          local mat = 0
+          if prefer >= 2 { mat = 1 }
             local raw3 = new MapBox()
             raw3.set("cmp", cmp2)
             raw3.set("lhs", lhs)

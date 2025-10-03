@@ -33,6 +33,40 @@ impl MirInterpreter {
         if let Some(r) = self.try_dev_json_stringify_bridge_global(func_name, args) { return r; }
         let label = format!("Global:{}", func_name);
         self.emit_call_trace_label(&label, args.len(), None);
+        // Dev-only: detailed arg trace for diagnosing arg marshalling (static/global)
+        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+            let mut kinds: Vec<String> = Vec::new();
+            let mut preview: Vec<String> = Vec::new();
+            for (i, a) in args.iter().enumerate().take(2) {
+                match self.reg_load(*a) {
+                    Ok(v) => {
+                        kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
+                        preview.push(match v {
+                            VMValue::Integer(n) => format!("i64:{}", n),
+                            VMValue::Float(f) => format!("f64:{:.3}", f),
+                            VMValue::Bool(b) => format!("bool:{}", b),
+                            VMValue::String(ref s) => format!("str:'{}'", s),
+                            VMValue::Void => "void".into(),
+                            VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
+                            VMValue::Future(_) => "future".into(),
+                        });
+                    }
+                    Err(e) => {
+                        kinds.push("<err>".into());
+                        preview.push(format!("err:{:?}", e));
+                    }
+                }
+            }
+            eprintln!(
+                "[vm-args] callee=Global:{} argc={} a0={:?} a1={:?} kind0={} kind1={}",
+                func_name,
+                args.len(),
+                preview.get(0),
+                preview.get(1),
+                kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
+                kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
+            );
+        }
         self.execute_global_function(func_name, args)
     }
 
@@ -163,8 +197,62 @@ impl MirInterpreter {
         name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+        // Fail-Fast: if this ModuleFunction is actually an instance method form
+        // like "Class.method" and the first arg is an unborn InstanceBox, forbid.
+        if let Some((_, method)) = name.split_once('.') {
+            if method != "birth" {
+                if let Some(first) = args.get(0) {
+                    let recv = self.reg_load(*first)?;
+                    if let VMValue::BoxRef(b) = recv {
+                        if b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                            let key = self.object_key_for(*first);
+                            let seen_new = self.contracts_new.contains(&key);
+                            let seen_birth = self.contracts_born.contains(&key);
+                            if seen_new && !seen_birth {
+                                return Err(VMError::InvalidInstruction(
+                                    "operation on unborn instance (call birth() first)".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
         let label = format!("ModuleFn:{}", name);
         self.emit_call_trace_label(&label, args.len(), None);
+        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+            let mut kinds: Vec<String> = Vec::new();
+            let mut preview: Vec<String> = Vec::new();
+            for (i, a) in args.iter().enumerate().take(2) {
+                match self.reg_load(*a) {
+                    Ok(v) => {
+                        kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
+                        preview.push(match v {
+                            VMValue::Integer(n) => format!("i64:{}", n),
+                            VMValue::Float(f) => format!("f64:{:.3}", f),
+                            VMValue::Bool(b) => format!("bool:{}", b),
+                            VMValue::String(ref s) => format!("str:'{}'", s),
+                            VMValue::Void => "void".into(),
+                            VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
+                            VMValue::Future(_) => "future".into(),
+                        });
+                    }
+                    Err(e) => {
+                        kinds.push("<err>".into());
+                        preview.push(format!("err:{:?}", e));
+                    }
+                }
+            }
+            eprintln!(
+                "[vm-args] callee=ModuleFn:{} argc={} a0={:?} a1={:?} kind0={} kind1={}",
+                name,
+                args.len(),
+                preview.get(0),
+                preview.get(1),
+                kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
+                kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
+            );
+        }
 
         // Normalize name: ensure canonical "/arity" suffix
         let want_name = if name.contains('/') {

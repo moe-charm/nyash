@@ -10,7 +10,15 @@ using "../utils/string.nyash" as StringUtils
 // 🎯 高精度JSON構文解析器（Everything is Box）
 static box JsonParserModule {
     create_parser() {
-        return new JsonParser()
+        // Factory returns a fully initialized parser (auto-birth policy)
+        // Prefer explicit birth to be robust under contracts=ON and legacy callers.
+        // Equivalent to `new JsonParser()` when Builder inserts auto-birth, but
+        // keeping this explicit makes factory semantics clear and future-proof.
+        local p = new JsonParser()
+        // Defensive: if runtime ever skipped auto-birth on this path, call it explicitly.
+        // birth() is idempotent by policy.
+        p.birth()
+        return p
     }
 }
 

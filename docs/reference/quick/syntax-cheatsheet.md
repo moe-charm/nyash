@@ -184,9 +184,11 @@ box Life {
     Life(args) { }      # Box名形式（非推奨）
 }
 
-# birthが定義されていればbirthが呼ばれる
-obj = new Life("Alice")
+# birthが定義されていれば自動呼び出しされる（auto-birth）
+obj = new Life("Alice")  # 内部で birth("Alice") が自動実行
 ```
+
+**詳細**: [Box Lifecycle (auto-birth)](../guides/box-lifecycle.md) 参照
 
 ## 🚨 よくある間違い
 

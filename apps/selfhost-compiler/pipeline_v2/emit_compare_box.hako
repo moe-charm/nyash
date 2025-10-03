@@ -1,5 +1,5 @@
 // EmitCompareBox — compare/branch/jump/ret の最小 MIR(JSON v0) 生成（Builder版）
-using "apps/selfhost/common/json/mir_builder_min.nyash" as MirJsonBuilderMin
+using "apps/selfhost/common/json/mir_builder2.hako" as MirJsonBuilder2
 using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
 
 static box EmitCompareBox {
@@ -27,36 +27,45 @@ static box EmitCompareBox {
   emit_compare_cfg2(lhs, rhs, cmp, materialize) { return EmitCompareBox.emit_compare_cfg3(lhs, rhs, cmp, materialize, 0) }
 
   emit_compare_cfg3(lhs, rhs, cmp, materialize, trace) {
-    // dev-trace (minimal, env-gate想定)
     if trace == 1 { print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize) }
-    // entry: const lhs/rhs; compare→r3; (optional copy r4 after last def of r3); branch r{3|4} then:1 else:2
-    // Safety: cmp 空文字の防御（抽出失敗時の最小フォールバック）
     if cmp == null { cmp = "Gt" } else { if cmp == "" { cmp = "Gt" } }
-    // then: const 1→r6; jump 3 | else: const 0→r6; jump 3 | merge: ret r6
-    // 安定の文字列出力（Builderを介さず明示的に構築）
-    // Coerce numbers reliably via builder helpers
-    local i = MirJsonBuilderMin._int_to_str(lhs)
-    local j = MirJsonBuilderMin._int_to_str(rhs)
-    local s = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":["
-    // Block 0
-    s = s + "{\"id\":0,\"instructions\":["
-    s = s + "{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":" + i + "}}"
-    s = s + ",{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":" + j + "}}"
-    s = s + ",{\"op\":\"compare\",\"cmp\":" + MirJsonBuilderMin._quote(cmp) + ",\"lhs\":1,\"rhs\":2,\"dst\":3}"
+    // Build via instance builder (arg-loss 回避)
+    local b = new MirJsonBuilder2()
+    b.setup()
+    b.start_module()
+    b.start_function("main")
+    b.start_block(0)
+    b.add_const(1, lhs)
+    b.add_const(2, rhs)
+    b.add_compare(cmp, 1, 2, 3)
     if materialize == 1 {
-      s = s + ",{\"op\":\"copy\",\"dst\":4,\"src\":3}"
-      s = s + ",{\"op\":\"branch\",\"cond\":4,\"then\":1,\"else\":2}"
+      b.add_copy(4, 3)
+      b.add_branch(3, 1, 2)
     } else {
-      s = s + ",{\"op\":\"branch\",\"cond\":3,\"then\":1,\"else\":2}"
+      b.add_branch(3, 1, 2)
     }
-    s = s + "]},"
-    // Block 1 (then)
-    s = s + "{\"id\":1,\"instructions\":[{\"op\":\"const\",\"dst\":6,\"value\":{\"type\":\"i64\",\"value\":1}},{\"op\":\"jump\",\"target\":3}]},"
-    // Block 2 (else)
-    s = s + "{\"id\":2,\"instructions\":[{\"op\":\"const\",\"dst\":6,\"value\":{\"type\":\"i64\",\"value\":0}},{\"op\":\"jump\",\"target\":3}]},"
-    // Block 3 (merge)
-    s = s + "{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":6}]}] }]}"
-    return s
+    }
+    }
+    b.end_block_continue()
+    b.start_block(1)
+    b.add_const(6, 1)
+    b.add_jump(3)
+    b.end_block_continue()
+    b.start_block(2)
+    b.add_const(6, 0)
+    b.add_jump(3)
+    b.end_block_continue()
+    b.start_block(3)
+    b.add_ret(6)
+    b.end_all()
+    local result_rebuild = b.to_string_rebuild()
+    local result_string = b.to_string()
+    print("[DEBUG] to_string:")
+    print(result_string)
+    print("")
+    print("[DEBUG] to_string_rebuild:")
+    print(result_rebuild)
+    return result_string
   }
 }
 

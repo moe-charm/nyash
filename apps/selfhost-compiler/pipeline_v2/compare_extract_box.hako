@@ -1,6 +1,5 @@
 // CompareExtractBox — Stage‑1 JSON から Compare(lhs,rhs,op) を堅牢に抽出（整数のみ）
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
-using "apps/selfhost-compiler/pipeline_v2/normalizer_box.hako" as NormalizerBox
 
 static box CompareExtractBox {
   // --- internal helpers (range & safe find) ---
@@ -66,16 +65,12 @@ static box CompareExtractBox {
       }
     }
     if lv < 0 || rv < 0 { return null }
-    // Normalize (string/int) and fix keys
-    local raw = new MapBox()
-    raw.set("cmp", cmp)
-    raw.set("lhs", lv)
-    raw.set("rhs", rv)
-    print("DBG:raw.has cmp=" + (raw.has("cmp") ? "1" : "0"))
-    local n = NormalizerBox.normalize_cmp(raw)
-    if n == null { print("DBG:norm=NULL")  return null }
-    print("DBG:norm.has cmp=" + (n.has("cmp") ? "1" : "0"))
-    return n
+    // Pack cmp/lhs/rhs into ArrayBox [cmp, lhs, rhs]
+    local out = new ArrayBox()
+    out.push(lv)
+    out.push(rv)
+    out.push(cmp)
+    return out
   }
 
   // If(cond=Compare(lhs,rhs,op), then=[Return(Int 1)], else=[Return(Int 0)]) → MapBox {cmp,lhs,rhs} or null
@@ -120,11 +115,11 @@ static box CompareExtractBox {
     if ds2 == "" { return null }
     local rv = RegexFlow.to_int(ds2)
     print("DBG:rhs=" + (""+rv))
-    local raw = new MapBox()
-    raw.set("cmp", cmp)
-    raw.set("lhs", lv)
-    raw.set("rhs", rv)
-    return NormalizerBox.normalize_cmp(raw)
+    local out = new ArrayBox()
+    out.push(lv)
+    out.push(rv)
+    out.push(cmp)
+    return out
   }
 }
 

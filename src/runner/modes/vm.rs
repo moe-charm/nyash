@@ -117,7 +117,7 @@ impl NyashRunner {
                         }
                     }
                     if !paths.is_empty() && !use_ast {
-                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        eprintln!("❌ Pipeline error: `using` resolution error: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         process::exit(1);
                     }
                     if use_ast && !paths.is_empty() {

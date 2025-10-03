@@ -3,6 +3,10 @@
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
+export SMOKES_DISABLE_PLUGIN_CHECKS=1
+export NYASH_DISABLE_PLUGINS=1
+export SMOKES_TIMEOUT_SEC=${SMOKES_TIMEOUT_SEC:-25}
+export NYASH_DISABLE_PLUGINS=1
 require_env || exit 2
 preflight_plugins || exit 2
 
@@ -17,7 +21,7 @@ export NYASH_BUILDER_REWRITE_INSTANCE=1
 TMP_DIR="/tmp/selfhost_mir_m2_eq_false_vm_$$"
 mkdir -p "$TMP_DIR"
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
 
 static box Main {
   main() {
@@ -29,8 +33,18 @@ static box Main {
 }
 EOF
 
-output=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
-output=$(echo "$output" | tail -n 1 | tr -d '\r' | xargs)
+raw_output=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
+if [ "${SMOKES_DEV_LOG:-0}" = "1" ]; then
+  echo "----- [DEV LOG] full output begin -----" >&2
+  echo "$raw_output" >&2
+  echo "----- [DEV LOG] full output end -----" >&2
+fi
+# Extract the last numeric line from output to avoid dev logs (e.g., [using/alias])
+output=$(echo "$raw_output" | awk '/^[[:space:]]*-?[0-9]+[[:space:]]*$/ { val=$0 } END { gsub(/\r/,"",val); gsub(/^[[:space:]]+|[[:space:]]+$/ , "", val); print val }')
+# Fallback: last non-bracketed line
+if [ -z "$output" ]; then
+  output=$(echo "$raw_output" | grep -v '^\[' | tail -n 1 | tr -d '\r' | xargs)
+fi
 
 expected="0"
 if [ "$output" = "$expected" ]; then

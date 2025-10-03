@@ -10,6 +10,12 @@ NyashのBoxには「ユーザー定義Box」「ビルトインBox」「プラグ
 - `local` 変数のスコープを抜けると、そのスコープで生成されたインスタンスは解放対象
 - 明示的に `fini()` が呼ばれた場合も同様に後処理を実施
 
+### birth 方針（2025‑10, auto‑birth）
+- 既定は auto‑birth: `new TypeBox(args)` 直後に自動で `birth(args)` が呼ばれ、生成物は直ちに利用可能。
+- 上級者は `TypeBox.unborn().withXxx(...).birth(...)` を選択可能（`birth()` は冪等）。
+- プラグイン Box に `birth` が未実装の場合、移行期間はローダが no‑op `birth` を合成（1 リリース警告→既定静音）。
+- 詳細: docs/guides/box-lifecycle.md 参照。
+
 補足:
 - これらは Nyash のスコープトラッカにより実施されます
 - 解放順は生成の逆順（LIFO）で、カスケード `fini` を保証します
@@ -46,7 +52,11 @@ singleton = true
 - プラグインBox
   - シングルトン化が望ましい長寿命資源（サーバ、デバイス）に `singleton = true`
   - 複数スコープで共有される可能性がある値は、スコープ終了時に自動 `fini` されないことを前提に設計
-  - 終了前に `shutdown_plugins_v2()` を呼ぶと単一箇所で確実に `fini` を実行可能
+- 終了前に `shutdown_plugins_v2()` を呼ぶと単一箇所で確実に `fini` を実行可能
+
+### 移行メモ（プラグイン）
+- `birth()` の実装がない既存プラグインは、当面はローダの no‑op 合成で動作します。
+- 将来の互換性のため、`birth()` 実装を推奨（冪等にしてください）。
 
 ## 実装参照
 - スコープ追跡: `src/scope_tracker.rs`（スコープ終了時の `fini` 呼出し、プラグインBox自動 `fini` 回避）

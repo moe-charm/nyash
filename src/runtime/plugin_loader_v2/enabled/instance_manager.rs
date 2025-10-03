@@ -18,47 +18,53 @@ impl PluginLoaderV2 {
     ) -> BidResult<Box<dyn NyashBox>> {
         // Non-recursive: directly call plugin 'birth' and construct PluginBoxV2
 
-        // Resolve type_id, birth_id, and fini_id
-        let (type_id, birth_id, fini_id) = resolve_box_ids(self, box_type)?;
+        // Resolve type_id, birth_id (optional), and fini_id
+        let (type_id, birth_id_opt, fini_id) = resolve_box_ids_optional(self, box_type)?;
 
         // Get loaded plugin invoke
         let _plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
 
-        // Call birth (no args TLV) and read returned instance id (little-endian u32 in bytes 0..4)
-        if dbg_on() {
-            eprintln!(
-                "[PluginLoaderV2] invoking birth: box_type={} type_id={} birth_id={}",
-                box_type, type_id, birth_id
-            );
-        }
-
-        let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
-        let (code, out_len, out_buf) = super::host_bridge::invoke_alloc(
-            super::super::nyash_plugin_invoke_v2_shim,
-            type_id,
-            birth_id,
-            0,
-            &tlv,
-        );
-
-        if dbg_on() {
-            eprintln!(
-                "[PluginLoaderV2] create_box: box_type={} type_id={} birth_id={} code={} out_len={}",
-                box_type, type_id, birth_id, code, out_len
-            );
-            if out_len > 0 {
+        // Call birth when available; otherwise synthesize no-op instance id (0)
+        let mut instance_id: u32 = 0;
+        if let Some(birth_id) = birth_id_opt {
+            if dbg_on() {
                 eprintln!(
-                    "[PluginLoaderV2] create_box: out[0..min(8)]={:02x?}",
-                    &out_buf[..out_len.min(8)]
+                    "[PluginLoaderV2] invoking birth: box_type={} type_id={} birth_id={}",
+                    box_type, type_id, birth_id
                 );
             }
+            let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
+            let (code, out_len, out_buf) = super::host_bridge::invoke_alloc(
+                super::super::nyash_plugin_invoke_v2_shim,
+                type_id,
+                birth_id,
+                0,
+                &tlv,
+            );
+            if dbg_on() {
+                eprintln!(
+                    "[PluginLoaderV2] create_box: box_type={} type_id={} birth_id={} code={} out_len={}",
+                    box_type, type_id, birth_id, code, out_len
+                );
+                if out_len > 0 {
+                    eprintln!(
+                        "[PluginLoaderV2] create_box: out[0..min(8)]={:02x?}",
+                        &out_buf[..out_len.min(8)]
+                    );
+                }
+            }
+            if code != 0 || out_len < 4 {
+                return Err(BidError::PluginError);
+            }
+            instance_id = u32::from_le_bytes([out_buf[0], out_buf[1], out_buf[2], out_buf[3]]);
+        } else {
+            // No birth provided: synthesize no-op (migration window)
+            let warn = std::env::var("NYASH_WARN_PLUGIN_NO_BIRTH").ok().map(|v| v != "0").unwrap_or(false);
+            if warn || dbg_on() {
+                eprintln!("[PluginLoaderV2] info: box_type='{}' has no birth(); treating as no-op", box_type);
+            }
+            instance_id = 0;
         }
-
-        if code != 0 || out_len < 4 {
-            return Err(BidError::PluginError);
-        }
-
-        let instance_id = u32::from_le_bytes([out_buf[0], out_buf[1], out_buf[2], out_buf[3]]);
 
         let bx = PluginBoxV2 {
             box_type: box_type.to_string(),
@@ -142,4 +148,30 @@ fn resolve_box_ids(
     let birth_id = birth_id_opt.ok_or(BidError::InvalidMethod)?;
 
     Ok((type_id, birth_id, fini_id))
+}
+
+/// Optional-birth resolver: returns birth_id as Option
+fn resolve_box_ids_optional(
+    loader: &PluginLoaderV2,
+    box_type: &str,
+) -> BidResult<(u32, Option<u32>, Option<u32>)> {
+    let (type_id, birth_id, fini_id) = resolve_box_ids(loader, box_type)
+        .or_else(|_| {
+            // Fallback path when birth is missing: resolve type_id even if birth_id is absent
+            let (mut ty_opt, mut fi_opt) = (None, None);
+            if let Some(cfg) = loader.config.as_ref() {
+                if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
+                    if let Some(toml_value) = loader.cached_toml.clone() {
+                        if let Some(box_conf) = cfg.get_box_config(lib_name, box_type, &toml_value) {
+                            ty_opt = Some(box_conf.type_id);
+                            fi_opt = box_conf.methods.get("fini").map(|m| m.method_id);
+                        }
+                    }
+                }
+            }
+            let ty = ty_opt.ok_or(BidError::InvalidType)?;
+            Ok((ty, 0u32, fi_opt))
+        })?;
+    if birth_id == 0 { return Ok((type_id, None, fini_id)); }
+    Ok((type_id, Some(birth_id), fini_id))
 }

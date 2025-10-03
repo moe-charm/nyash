@@ -5,11 +5,11 @@ use super::super::*;
 impl MirInterpreter {
     /// Observe NewBox lifecycle events in a single place (contracts + traces).
     pub(crate) fn lifecycle_observe_new(&mut self, dst: ValueId, box_type: &str, argc: usize) {
-        // Contracts observation: record NewBox event (dev-only)
+        // Contracts observation: record NewBox event (always record; log gated)
+        let key = self.object_key_for(dst);
+        self.contracts_new.insert(key);
+        self.contracts_new_argv.insert(key, argc);
         if crate::config::env::check_contracts() {
-            let key = self.object_key_for(dst);
-            self.contracts_new.insert(key);
-            self.contracts_new_argv.insert(key, argc);
             eprintln!(
                 r#"{{"kind":"contracts_newbox","class":"{}","argc":{},"key":{}}}"#,
                 box_type,
@@ -52,19 +52,20 @@ impl MirInterpreter {
 
     /// Record and emit birth contracts info.
     pub(crate) fn lifecycle_contracts_birth(&mut self, recv_val: ValueId, argc_birth: usize) {
-        if !crate::config::env::check_contracts() { return; }
         let key = self.object_key_for(recv_val);
         let seen_new = self.contracts_new.contains(&key);
         let duplicate = !self.contracts_born.insert(key);
         let argc_new = self.contracts_new_argv.get(&key).cloned().unwrap_or(0);
-        eprintln!(
-            r#"{{"kind":"contracts_birth","seen_new":{},"duplicate":{},"argc_new":{},"argc_birth":{},"argc_match":{},"key":{}}}"#,
-            if seen_new { 1 } else { 0 },
-            if duplicate { 1 } else { 0 },
-            argc_new,
-            argc_birth,
-            if argc_new == argc_birth { 1 } else { 0 },
-            key
-        );
+        if crate::config::env::check_contracts() {
+            eprintln!(
+                r#"{{"kind":"contracts_birth","seen_new":{},"duplicate":{},"argc_new":{},"argc_birth":{},"argc_match":{},"key":{}}}"#,
+                if seen_new { 1 } else { 0 },
+                if duplicate { 1 } else { 0 },
+                argc_new,
+                argc_birth,
+                if argc_new == argc_birth { 1 } else { 0 },
+                key
+            );
+        }
     }
 }

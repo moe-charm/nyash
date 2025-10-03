@@ -333,8 +333,8 @@ impl MirInterpreter {
         } else { (a4.clone(), b4.clone()) };
 
         let result = match (op, &a5, &b5) {
-            (Eq, _, _) => eq_vm(&a2, &b2),
-            (Ne, _, _) => !eq_vm(&a2, &b2),
+            (Eq, _, _) => eq_vm(&a5, &b5),
+            (Ne, _, _) => !eq_vm(&a5, &b5),
             (Lt, Integer(x), Integer(y)) => x < y,
             (Le, Integer(x), Integer(y)) => x <= y,
             (Gt, Integer(x), Integer(y)) => x > y,
