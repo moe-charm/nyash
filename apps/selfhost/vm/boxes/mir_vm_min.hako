@@ -155,9 +155,7 @@ static box MirVmMin {
           // 3) Otherwise, emit error and return -1 (explicit error marker)
           local v = JsonFragBox.get_int(seg, "value")
           if v == null { me._tprint("[ERROR] Undefined ret value field") return -1 }
-          // Debug: observe ret inputs (v, regs.has(v), last_cmp_dst)
-          local has = me._is_numeric_str(""+regs.get(""+v))
-          me._tprint("[minivm] retdbg v="+me._int_to_str(v)+" has="+me._int_to_str(has)+" last="+me._int_to_str(last_cmp_dst))
+          // Debug removed
           if v == last_cmp_dst { return last_cmp_val }
           // Consider a register "defined" only if it holds a numeric string
           local sval = "" + regs.get(""+v)
