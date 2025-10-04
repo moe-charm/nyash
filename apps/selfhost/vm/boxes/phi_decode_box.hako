@@ -7,6 +7,12 @@
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 
 static box PhiDecodeBox {
+  // tiny helpers to avoid raw quote/backslash sequences in source (prelude‑safe)
+  _dq() { return "\"" }
+  _lb() { return "{" }
+  _rb() { return "}" }
+  _lsq() { return "[" }
+  _rsq() { return "]" }
   // Decode single incoming (legacy/simple form): {"op":"phi","dst":D,"pred":P,"value":V}
   _decode_single(seg) {
     local dst = JsonFragBox.get_int(seg, "dst")
@@ -23,7 +29,7 @@ static box PhiDecodeBox {
   // Decode array incoming form: {"op":"phi","dst":D, "values":[ {"pred":P,"value":V}, ... ]}
   _decode_array(seg, prev_bb) {
     // Find start of values array
-    local key = "\"values\":["
+    local key = me._dq()+"values"+me._dq()+":"+me._lsq()
     local p = seg.indexOf(key)
     if p < 0 { return null }
     local i = p + key.length()
@@ -35,7 +41,7 @@ static box PhiDecodeBox {
     local fallback_v = null
     loop(i < n) {
       // seek next object
-      local ob = seg.indexOf("{\"pred\":", i)
+      local ob = seg.indexOf(me._lb()+me._dq()+"pred"+me._dq()+":", i)
       if ob < 0 { break }
       // read pred
       local pred = JsonFragBox.get_int(seg.substring(ob, n), "pred")
@@ -45,7 +51,7 @@ static box PhiDecodeBox {
         if pred != null && prev_bb != null && pred == prev_bb { chosen_v = vin  break }
       }
       // advance past this object conservatively
-      local nx = seg.indexOf("}", ob)
+      local nx = seg.indexOf(me._rb(), ob)
       if nx < 0 { break }
       i = nx + 1
     }
