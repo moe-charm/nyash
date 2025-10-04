@@ -83,6 +83,21 @@ node tools/wasm_runner.js /tmp/test.wasm
 bash tools/run_wasm_smoke_tests.sh
 ```
 
+### 📚 実行モード詳細ガイド
+
+**🎯 実行方法がわからなくなったら**: [実行モード完全ガイド](docs/guides/execution-modes-guide.md) ⭐必読
+
+Hakoruneには**4つの実行モード**があります：
+
+| モード | 用途 | コマンド例 |
+|--------|------|-----------|
+| **VM** | 開発・デバッグ | `./hako program.nyash` |
+| **LLVM CLI** | 本番・最適化 | `NYASH_LLVM_USE_HARNESS=1 ./hako --backend llvm program.nyash` |
+| **LLVM AOT** | スタンドアロンEXE | `./program.exe` (事前ビルド必要) |
+| **WASM** | Web実行 | `node wasm_runner.js program.wasm` |
+
+詳細な使い分け・トラブルシューティングは [実行モードガイド](docs/guides/execution-modes-guide.md) 参照。
+
 ---
 
 ## 📊 環境変数（主要なもの）
