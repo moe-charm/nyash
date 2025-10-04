@@ -211,14 +211,18 @@ static box Main {
 | 言語        | Backend       | Ops/sec      | 相対速度       | 対C比 | 備考 |
 |-------------|---------------|--------------|----------------|-------|------|
 | C           | gcc -O3       | 58,012,004   | 1.00x (基準)   | 100% | ネイティブコンパイル最適化 |
+| **Nyash**   | **LLVM (harness)** | **39,383,058** | **0.68x** | **68%** | **llvmlite + libhako_kernel.a** ✨ |
 | Python      | CPython 3.x   | 17,915,223   | 0.31x          | 31%  | C層委譲戦略 |
 | **Ruby**    | **YARV 3.2**  | **11,178,680** | **0.19x**    | **19%** | すべてオブジェクト思想 |
 | Nyash       | Rust VM       | 351,263      | 0.006x         | 0.6% | インタープリター妥当 |
-| Nyash       | LLVM (harness)| N/A          | **失敗***      | -    | シンボル不足 |
+
+**🎉 Nyash LLVM驚異的成果**:
+- **C言語の68%の速度を実現！** (39.4M ops/sec)
+- **Pythonの2.2倍、Rubyの3.5倍高速！**
+- **Rust VMの112倍の速度！**
+- llvmliteだけでここまで達成（LLVMツールチェーン不要）
 
 **Ruby vs Python**: Rubyの方が62%の速度（命令数は少ないが1命令が重い）
-
-**\*LLVM失敗原因**: `libhako_kernel.a`に`nyash.console.log`/`nyash.string.concat_si`シンボルが存在しないため、リンク失敗。
 
 ### 重要な発見
 
@@ -232,12 +236,13 @@ static box Main {
   - インタープリターとして妥当なオーバーヘッド
   - ループごとに`timer.now_ms()`呼び出しコストを含む
 
-**LLVM実行問題**:
-- **現象**: `print()` + 文字列連結ありの`sum_loop_bench.hako`はリンク失敗
-- **原因**: `libhako_kernel.a`に`nyash.console.log`/`nyash.string.concat_si`が未実装
-- **回避策**: `print()`なし版（`sum_loop_bench_noprint.hako`）なら実行可能 ✅
-  - ただし結果表示できないため、速度測定には使えない
-  - `exit=0`で正常終了のみ確認可能
+**LLVM実行完全成功** (2025-10-04):
+- ✅ **シンボル追加完了**: `libhako_kernel.a`に以下を実装
+  - `nyash.console.log(i8*) -> i64` - 文字列出力
+  - `nyash.string.concat_si(i8*, i64) -> i8*` - 文字列+整数連結
+- ✅ **NYASH_HAKO_MIN_SEM=1で完全動作**
+- ✅ **驚異的速度**: 39.4M ops/sec（C言語の68%、VM版の112倍！）
+- 📝 **実装**: `crates/hako_kernel/src/lib.rs:462-505`
 
 ### ベンチマーク仕様
 

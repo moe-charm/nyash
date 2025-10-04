@@ -85,8 +85,10 @@
   - Python: 18命令/ループ、3.2億命令/秒（1命令≈9 CPU）
   - 原因: Rubyは「すべてオブジェクト」思想（Time.nowも重い）
 - ✅ Nyash VM妥当なインタープリターオーバーヘッド（ただしBoxCall重い）
-- ⚠️ **LLVM版の制限**: print()なしなら動作（`sum_loop_bench_noprint.hako`）、ただし結果表示不可
-  - 原因: `libhako_kernel.a`に`nyash.console.log`/`nyash.string.concat_si`未実装
+- 🎉 **LLVM版完全成功！** (2025-10-04)
+  - **39.4M ops/sec** - C言語の68%、VM版の112倍！
+  - シンボル追加完了: `nyash.console.log`, `nyash.string.concat_si`
+  - Python (31%) / Ruby (19%) を大幅に超える速度を実現！
 
 **実行方法**: `bash benchmarks/run_language_shootout.sh`
 

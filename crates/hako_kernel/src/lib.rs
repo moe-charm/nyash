@@ -459,6 +459,51 @@ pub extern "C" fn nyash_map_get_hh(map_h: i64, key_h: i64) -> i64 {
     0
 }
 
+// nyash.string.concat_si(str_p, int_val) -> i8*
+// String pointer + Integer concatenation (returns C string pointer)
+#[export_name = "nyash.string.concat_si"]
+pub extern "C" fn nyash_string_concat_si(str_p: *const i8, int_val: i64) -> *const i8 {
+    if !min_sem_enabled() {
+        return ptr::null();
+    }
+    unsafe {
+        if str_p.is_null() {
+            return ptr::null();
+        }
+        let s_rust = match CStr::from_ptr(str_p).to_str() {
+            Ok(s) => s,
+            Err(_) => return ptr::null(),
+        };
+        let result = format!("{}{}", s_rust, int_val);
+        let h = arena().alloc(Obj::Str(result));
+        // Get or create CString for this handle
+        arena().str_ptr(h)
+    }
+}
+
+// nyash.console.log(str_p) -> i64
+// Print string to stdout (takes C string pointer)
+#[export_name = "nyash.console.log"]
+pub extern "C" fn nyash_console_log(str_p: *const i8) -> i64 {
+    if !min_sem_enabled() {
+        return 0;
+    }
+    unsafe {
+        if str_p.is_null() {
+            return 0;
+        }
+        match CStr::from_ptr(str_p).to_str() {
+            Ok(s) => {
+                println!("{}", s);
+                use std::io::Write as _;
+                let _ = std::io::stdout().flush();
+                0
+            }
+            Err(_) => 0,
+        }
+    }
+}
+
 // --- Safepoints (no-op stubs) ---
 #[export_name = "ny_check_safepoint"]
 pub extern "C" fn ny_check_safepoint() { /* no-op */
