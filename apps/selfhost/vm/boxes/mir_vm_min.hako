@@ -141,12 +141,16 @@ static box MirVmMin {
           break
         }
         else if op == "phi" {
-          // Decode via box, then apply when ok
-          local pair = PhiDecodeBox.decode(seg, prev_bb)
+          // Decode: prefer boxed decoder for values[], fallback to single-form inline
           local dst = null
           local vin = null
-          if pair != null { dst = pair.get(0)  vin = pair.get(1) }
-          me._tprint("[ERROR] phi pair pre dst="+ (pair==null?"null":me._int_to_str(pair.get(0))) +" vin="+ (pair==null?"null":me._int_to_str(pair.get(1))))
+          if seg.indexOf(""values":[") >= 0 {
+            local pair = PhiDecodeBox.decode(seg, prev_bb)
+            if pair != null { dst = pair.get(0)  vin = pair.get(1) }
+          } else {
+            dst = JsonFragBox.get_int(seg, "dst")
+            vin = JsonFragBox.get_int(seg, "value")
+          }
           local res = null
           if vin != null {
             local p2 = new ArrayBox()
@@ -158,9 +162,9 @@ static box MirVmMin {
           }
           if res.is_ok() == 1 {
             local pr = res.value()
-            me._tprint("[ERROR] phi dst="+me._int_to_str(pr.get(0))+" vin="+me._int_to_str(pr.get(1)))
             PhiApplyBox.apply(pr.get(0), pr.get(1), regs)
           }
+        }
         }
         else if op == "ret" {
           // Return resolution (Fail‑Fast policy)
