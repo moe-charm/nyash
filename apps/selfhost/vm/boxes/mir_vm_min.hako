@@ -6,8 +6,6 @@ using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
 using "apps/selfhost/vm/boxes/guard_box.hako" as GuardBox
 using "apps/selfhost/vm/boxes/result_box.hako" as Result
-using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
-using "apps/selfhost/vm/boxes/guard_box.hako" as GuardBox
 
 static box MirVmMin {
   _tprint(msg) {
