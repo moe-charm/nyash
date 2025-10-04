@@ -12,15 +12,15 @@ VM Runtime (dev‑only toggles; default OFF)
 - NYASH_VM_USER_INSTANCE_BOXCALL: allow user Instance BoxCall at runtime (dev/ci only). Default 1 in dev scripts, 0 in prod.
 
 Using / AST merge
-- NYASH_USING=0|1（既定 1）: using システムの有効化（互換: NYASH_ENABLE_USING; 非推奨）
-- NYASH_USING_STRATEGY={resolver|prelude}（互換: NYASH_USING_IMPL; フォールバック: NYASH_USING_AST）
+- HAKO_USING=0|1（互換: NYASH_USING）（既定 1）: using システムの有効化（互換: NYASH_ENABLE_USING（非推奨）; 非推奨）
+- HAKO_USING_STRATEGY（互換: NYASH_USING_STRATEGY）={resolver|prelude}（互換: NYASH_USING_IMPL（非推奨）; フォールバック: NYASH_USING_AST（互換、将来撤退予定））
   - resolver: 名前解決のみ（AST prelude なし）
   - prelude: AST prelude マージ（dev/ci 既定ON・prod 既定OFF）
-- NYASH_ALLOW_USING_FILE=0|1: ファイル経路 using の許可
+- HAKO_ALLOW_USING_FILE（互換: NYASH_ALLOW_USING_FILE）=0|1: ファイル経路 using の許可
   - 既定: dev/ci は ON、prod は OFF（SSOT: nyash.toml を優先。必要時のみ明示許可）
 
 Plugins
-- NYASH_PLUGIN_POLICY={auto|off|force} (default auto)
+- HAKO_PLUGIN_POLICY（互換: NYASH_PLUGIN_POLICY）={auto|off|force} (default auto)
   - off: disable external plugins (compat: NYASH_DISABLE_PLUGINS=1)
   - force: plugin-only execution (compat: NYASH_PLUGIN_ONLY=1)
 
@@ -33,7 +33,7 @@ Syntax sugar (default ON)
   - これらは SYNTAX_SUGAR_LEVEL に統合。verbose時に非推奨ログを出力。
 
 Flow（stateless namespace）
-- Default ON（disable with NYASH_ENABLE_FLOW=0|false|off）。
+- Default ON（disable with HAKO_ENABLE_FLOW（互換: NYASH_ENABLE_FLOW）=0|false|off）。
 - Lowering: `Name.method(a,b)` → `Name.method/2`（グローバル関数）。BoxCallなし。
 
 Plugin ABI (Final; experimental, default OFF)
