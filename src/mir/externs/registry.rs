@@ -120,7 +120,7 @@ pub fn export_json<P: AsRef<std::path::Path>>(path: P) -> Result<(), String> {
         let (iface, method) = (&k.0, &k.1);
         out.push(ExternSpecJson {
             interface: iface,
-            method: method,
+            method,
             params: v.args.iter().map(mir_type_to_string).collect(),
             returns: mir_type_to_string(&v.returns),
             effects: effects_to_string(v.effects),

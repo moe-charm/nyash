@@ -1,0 +1,256 @@
+// MirEmitterBox — Minimal MIR JSON v0 emitter (M2 MVP)
+// Scope: Return(Int) only (const + ret). Safe default to 0 when not found.
+// Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
+
+using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "apps/lib/json_native/stringify.nyash" as JSON
+
+static box MirEmitterBox {
+  _index_of(hay, needle) { return hay.indexOf(needle) }
+  _index_of_from(hay, needle, pos) {
+    if pos < 0 { pos = 0 }
+    local n = hay.length()
+    if pos >= n { return -1 }
+    local m = needle.length()
+    if m <= 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop (i <= limit) {
+      local seg = hay.substring(i, i + m)
+      if seg == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+  _read_digits(text, pos) {
+    local out = ""
+    local i = pos
+    loop(true) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch >= "0" && ch <= "9" { out = out + ch i = i + 1 } else { break }
+    }
+    return out
+  }
+  _str_to_int(s) {
+    local i = 0
+    local n = s.length()
+    local acc = 0
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      local d = match ch {
+        "0" => 0, "1" => 1, "2" => 2, "3" => 3,
+        "4" => 4, "5" => 5, "6" => 6, "7" => 7,
+        "8" => 8, "9" => 9,
+        _ => -1
+      }
+      if d < 0 { break }
+      acc = acc * 10 + d
+      i = i + 1
+      continue
+    }
+    return acc
+  }
+
+  _map_binop(op) {
+    if op == "Add" || op == "+" { return "Add" }
+    if op == "Sub" || op == "-" { return "Sub" }
+    if op == "Mul" || op == "*" { return "Mul" }
+    if op == "Div" || op == "/" { return "Div" }
+    if op == "Mod" || op == "%" { return "Mod" }
+    return ""
+  }
+  _map_cmp(op) {
+    if op == "Eq" || op == "==" { return "Eq" }
+    if op == "Ne" || op == "!=" { return "Ne" }
+    if op == "Lt" || op == "<" { return "Lt" }
+    if op == "Le" || op == "<=" { return "Le" }
+    if op == "Gt" || op == ">" { return "Gt" }
+    if op == "Ge" || op == ">=" { return "Ge" }
+    return ""
+  }
+
+  // Try to synthesize MIR from a tiny subset of Stage‑1 JSON patterns.
+  // Supported (best-effort): Return(BinOp(Int,Int)), Return(Compare(Int,Int))
+  // Note: Compare emits minimal control-flow (branch/jump) to exercise CFG.
+  _emit_from_stage1_try(ast_json) {
+    if ast_json == null { return null }
+    // Return(BinOp(...))
+    local p = me._index_of(ast_json, "\"type\":\"Return\"")
+    if p >= 0 {
+      local q = me._index_of_from(ast_json, "\"type\":\"BinOp\"", p)
+      if q >= 0 {
+        // op
+        local opk_pos = me._index_of_from(ast_json, "\"op\":\"", q)
+        if opk_pos >= 0 {
+          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 6)
+          local opk = ast_json.substring(opk_pos + 6, opk_end)
+          local kind = me._map_binop(opk)
+          if kind != "" {
+            // lhs/rhs int (seek dynamic start after '"value":')
+            local lhsp = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
+            local rhsp = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
+            if lhsp >= 0 && rhsp >= 0 {
+              local lval = me._index_of_from(ast_json, "\"value\":", lhsp)
+              local rval = me._index_of_from(ast_json, "\"value\":", rhsp)
+              if lval >= 0 && rval >= 0 {
+                local lhs_digits = me._read_digits(ast_json, lval + 8)
+                local rhs_digits = me._read_digits(ast_json, rval + 8)
+              if lhs_digits != "" && rhs_digits != "" {
+                local a = me._str_to_int(lhs_digits)
+                local b = me._str_to_int(rhs_digits)
+                // MIR via builder: const a -> 1, const b -> 2, binop kind 1,2 -> 3, ret 3
+                local j = MirJsonBuilderMin.make()
+                  |> MirJsonBuilderMin.start_module()
+                  |> MirJsonBuilderMin.start_function("main")
+                  |> MirJsonBuilderMin.start_block(0)
+                  |> MirJsonBuilderMin.add_const(1, a)
+                  |> MirJsonBuilderMin.add_const(2, b)
+                  |> MirJsonBuilderMin.add_binop(kind, 1, 2, 3)
+                  |> MirJsonBuilderMin.add_ret(3)
+                  |> MirJsonBuilderMin.end_all()
+                  |> MirJsonBuilderMin.to_string()
+                return j
+              }
+            }
+          }
+        }
+      }
+      // Return(Compare(...)) → CFG (entry→then/else→merge)
+      q = me._index_of_from(ast_json, "\"type\":\"Compare\"", p)
+      if q >= 0 {
+        local opk_pos = me._index_of_from(ast_json, "\"op\":\"", q)
+        if opk_pos >= 0 {
+          local opk_end = me._index_of_from(ast_json, "\"", opk_pos + 6)
+          local opk = ast_json.substring(opk_pos + 6, opk_end)
+          local kind = me._map_cmp(opk)
+          if kind != "" {
+            local lhsp = me._index_of_from(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", q)
+            local rhsp = me._index_of_from(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", q)
+            if lhsp >= 0 && rhsp >= 0 {
+              local lval = me._index_of_from(ast_json, "\"value\":", lhsp)
+              local rval = me._index_of_from(ast_json, "\"value\":", rhsp)
+              if lval >= 0 && rval >= 0 {
+                local lhs_digits = me._read_digits(ast_json, lval + 8)
+                local rhs_digits = me._read_digits(ast_json, rval + 8)
+              if lhs_digits != "" && rhs_digits != "" {
+                local a = me._str_to_int(lhs_digits)
+                local b = me._str_to_int(rhs_digits)
+                // MIR CFG via declarative Map/Array + stringify
+                local mir = {
+                  functions: [{
+                    name: "main",
+                    params: [],
+                    blocks: [
+                      { id: 0, instructions: [
+                          { op:"const", dst:1, value:{ type:"i64", value:a } },
+                          { op:"const", dst:2, value:{ type:"i64", value:b } },
+                          { op:"compare", cmp: kind, lhs:1, rhs:2, dst:3 },
+                          { op:"branch", cond:3, "then":1, "else":2 }
+                        ]
+                      },
+                      { id: 1, instructions: [
+                          { op:"const", dst:6, value:{ type:"i64", value:1 } },
+                          { op:"jump", target:3 }
+                        ]
+                      },
+                      { id: 2, instructions: [
+                          { op:"const", dst:6, value:{ type:"i64", value:0 } },
+                          { op:"jump", target:3 }
+                        ]
+                      },
+                      { id: 3, instructions: [ { op:"ret", value:6 } ] }
+                    ]
+                  }]
+                }
+                return JSON.stringify_map(mir)
+              }
+              }
+            }
+        }
+      }
+      }
+    }
+    return null
+  }
+  // Extract first Return(Int) value from Stage-1 JSON (very small string scan)
+  _extract_return_int(ast_json) {
+    if ast_json == null { return 0 }
+    // Look for '"type":"Return"'
+    local p = ast_json.lastIndexOf("\"type\":\"Return\"")
+    if p < 0 { p = ast_json.indexOf("\"type\":\"Return\"") }
+    if p < 0 { return 0 }
+    // From there, search for '"type":"Int","value":'
+    local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
+    if q < 0 { return 0 }
+    q = q + 23 // length of the marker
+    // Read consecutive digits (optional minus not handled in Stage-1 yet)
+    local n = ast_json.length()
+    local i = q
+    local s = ""
+    loop(i < n) {
+      local ch = ast_json.substring(i, i+1)
+      if ch >= "0" && ch <= "9" { s = s + ch i = i + 1 } else { break }
+    }
+    if s.length() == 0 { return 0 }
+    // String to int via addition loop
+    local val = 0
+    local k = 0
+    local m = s.length()
+    loop(k < m) {
+      local d = s.substring(k, k+1)
+      local dv = match d {
+        "0" => 0, "1" => 1, "2" => 2, "3" => 3,
+        "4" => 4, "5" => 5, "6" => 6, "7" => 7,
+        "8" => 8, "9" => 9,
+        _ => -1
+      }
+      if dv < 0 { break }
+      val = val * 10 + dv
+      k = k + 1
+    }
+    return val
+  }
+
+  // Build minimal MIR JSON v0: main with const -> ret
+  emit_mir_min(ast_json) {
+    // Try richer patterns first; fallback to Return(Int)
+    local try_rich = me._emit_from_stage1_try(ast_json)
+    if try_rich != null { return try_rich }
+    // Inline minimal Return(Int) extraction to avoid nested call issues in some parsers
+    local retv = 0
+    if ast_json != null {
+      local p = ast_json.lastIndexOf("\"type\":\"Return\"")
+      if p < 0 { p = ast_json.indexOf("\"type\":\"Return\"") }
+      if p >= 0 {
+        local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
+        if q >= 0 {
+          q = q + 23
+          local n = ast_json.length()
+          local i = q
+          local s = ""
+          loop(i < n) {
+            local ch = ast_json.substring(i, i+1)
+            if ch >= "0" && ch <= "9" { s = s + ch i = i + 1 } else { break }
+          }
+          if s.length() > 0 { retv = me._str_to_int(s) }
+        }
+      }
+    }
+    // Declarative: Map/Array リテラル + JSON.stringify（読みやすさ優先・挙動同一）
+    local mir = {
+      functions: [{
+        name: "main",
+        params: [],
+        blocks: [{
+          id: 0,
+          instructions: [
+            { op: "const", dst: 1, value: { type: "i64", value: retv } },
+            { op: "ret", value: 1 }
+          ]
+        }]
+      }]
+    }
+    return JSON.stringify_map(mir)
+  }
+}

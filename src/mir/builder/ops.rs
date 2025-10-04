@@ -140,63 +140,38 @@ impl super::MirBuilder {
             }
             // Comparison operations
             BinaryOpType::Comparison(op) => {
-                // Dev: Lower 比較 を演算子ボックス呼び出しに置換（既定OFF）
-                let in_cmp_op = self
-                    .current_function
-                    .as_ref()
-                    .map(|f| f.signature.name.starts_with("CompareOperator.apply/"))
-                    .unwrap_or(false);
-                if !in_cmp_op
-                    && (all_call || std::env::var("NYASH_BUILDER_OPERATOR_BOX_COMPARE_CALL").ok().as_deref() == Some("1")) {
-                    // op名の文字列化
-                    let opname = match op {
-                        CompareOp::Eq => "Eq",
-                        CompareOp::Ne => "Ne",
-                        CompareOp::Lt => "Lt",
-                        CompareOp::Le => "Le",
-                        CompareOp::Gt => "Gt",
-                        CompareOp::Ge => "Ge",
-                    };
-                    let op_const = crate::mir::builder::emission::constant::emit_string(self, opname);
-                    // そのまま値を渡す（型変換/slot化は演算子内orVMで行う）
-                    let name = "CompareOperator.apply/3".to_string();
-                    self.emit_legacy_call(Some(dst), super::builder_calls::CallTarget::Global(name), vec![op_const, lhs, rhs])?;
-                    self.value_types.insert(dst, MirType::Bool);
-                } else {
-                    // 既存の比較経路（安全のための型注釈/slot化含む）
-                    let (lhs2_raw, rhs2_raw) = if self
-                        .origin_get(lhs)
+                // Root-fix: always use native compare path (no operator-box lowering)
+                let (lhs2_raw, rhs2_raw) = if self
+                    .origin_get(lhs)
+                    .map(|s| s == "IntegerBox")
+                    .unwrap_or(false)
+                    && self
+                        .origin_get(rhs)
                         .map(|s| s == "IntegerBox")
                         .unwrap_or(false)
-                        && self
-                            .origin_get(rhs)
-                            .map(|s| s == "IntegerBox")
-                            .unwrap_or(false)
-                    {
-                        let li = self.value_gen.next();
-                        let ri = self.value_gen.next();
-                        self.emit_instruction(MirInstruction::TypeOp {
-                            dst: li,
-                            op: TypeOpKind::Cast,
-                            value: lhs,
-                            ty: MirType::Integer,
-                        })?;
-                        self.emit_instruction(MirInstruction::TypeOp {
-                            dst: ri,
-                            op: TypeOpKind::Cast,
-                            value: rhs,
-                            ty: MirType::Integer,
-                        })?;
-                        (li, ri)
-                    } else {
-                        (lhs, rhs)
-                    };
-                    // Finalize compare operands in current block via LocalSSA
-                    let mut lhs2 = lhs2_raw;
-                    let mut rhs2 = rhs2_raw;
-                    crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs2, &mut rhs2);
-                    crate::mir::builder::emission::compare::emit_to(self, dst, op, lhs2, rhs2)?;
-                }
+                {
+                    let li = self.value_gen.next();
+                    let ri = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::TypeOp {
+                        dst: li,
+                        op: TypeOpKind::Cast,
+                        value: lhs,
+                        ty: MirType::Integer,
+                    })?;
+                    self.emit_instruction(MirInstruction::TypeOp {
+                        dst: ri,
+                        op: TypeOpKind::Cast,
+                        value: rhs,
+                        ty: MirType::Integer,
+                    })?;
+                    (li, ri)
+                } else {
+                    (lhs, rhs)
+                };
+                let mut lhs2 = lhs2_raw;
+                let mut rhs2 = rhs2_raw;
+                crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs2, &mut rhs2);
+                crate::mir::builder::emission::compare::emit_to(self, dst, op, lhs2, rhs2)?;
             }
         }
 

@@ -10,6 +10,7 @@ export SMOKES_TIMEOUT_SEC=${SMOKES_TIMEOUT_SEC:-25}
 require_env || exit 2
 preflight_plugins || exit 2
 
+
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
 

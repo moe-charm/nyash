@@ -1,9 +1,10 @@
 // op_handlers.hako — OpHandlersBox
 // Minimal handlers for const/compare/ret etc. with loose JSON key parsing.
+using "apps/selfhost/vm/boxes/arithmetic.hako" as ArithmeticBox
+using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 // Prefer logical module names to avoid file-path using in strict profiles
 static box OpHandlersBox {
-  _tprint(msg) { print(msg) }
-
+  _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
   _is_numeric_str(s) {
     if s == null { return 0 }
     local n = s.length()
@@ -30,6 +31,8 @@ static box OpHandlersBox {
     if neg == 1 { return 0 - acc }
     return acc
   }
+
+  // --- Safe decimal arithmetic on strings (non-negative integers only) ---
 
   _find_int_in(seg, keypat) {
     local p = seg.indexOf(keypat)
@@ -116,14 +119,14 @@ static box OpHandlersBox {
 
   handle_compare(seg, regs) {
     local kind = JsonFragBox.get_str(seg, "cmp")
-    if kind == "" { kind = me._map_cmp_symbol(JsonFragBox.get_str(seg, "operation")) }
+    if kind == "" { kind = CompareOpsBox.map_symbol(JsonFragBox.get_str(seg, "operation")) }
     local lhs = JsonFragBox.get_int(seg, "lhs")
     local rhs = JsonFragBox.get_int(seg, "rhs")
     local dst = JsonFragBox.get_int(seg, "dst")
     if lhs == null || rhs == null { return }
     local a = me._load_reg(regs, lhs)
     local b = me._load_reg(regs, rhs)
-    local r = me._eval_cmp(kind, a, b)
+    local r = CompareOpsBox.eval(kind, a, b)
     regs.set("" + dst, r)
   }
 
@@ -136,12 +139,10 @@ static box OpHandlersBox {
     if lhs == null || rhs == null || dst == null { return }
     local a = me._load_reg(regs, lhs)
     local b = me._load_reg(regs, rhs)
-    local out = 0
-    if kind == "Add" { out = a + b }
-    else if kind == "Sub" { out = a - b }
-    else if kind == "Mul" { out = a * b }
-    else if kind == "Div" { if b == 0 { out = 0 } else { out = a / b } }
-    else if kind == "Mod" { if b == 0 { out = 0 } else { out = a % b } }
-    regs.set("" + dst, out)
+    if kind == "Add" { regs.set(""+dst, ArithmeticBox.add_i64(a, b)) }
+    else if kind == "Sub" { regs.set(""+dst, ArithmeticBox.sub_i64(a, b)) }
+    else if kind == "Mul" { regs.set(""+dst, ArithmeticBox.mul_i64(a, b)) }
+    else if kind == "Div" { if b == 0 { regs.set(""+dst, 0) } else { regs.set(""+dst, a / b) } }
+    else if kind == "Mod" { if b == 0 { regs.set(""+dst, 0) } else { regs.set(""+dst, a % b) } }
   }
 }

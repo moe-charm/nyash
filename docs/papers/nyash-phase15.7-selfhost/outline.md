@@ -13,6 +13,7 @@ What We Did
 
 Results
 - Quick profile: 72/72 PASS; Integration: PASS (llvmlite harness).
+- Mini‑VM returns -1 with an [ERROR] line on undefined ret to keep fail‑fast visible and distinct from false(0).
 - Self-host compiler (dev-only): JSON head non-empty via `NYASH_JSON_ONLY=1` gate.
 
 Next

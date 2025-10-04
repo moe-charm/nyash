@@ -188,8 +188,8 @@ pub fn await_max_ms() -> u64 {
 /// Default: PHI-ON (Phase 15 direction), override with NYASH_MIR_NO_PHI=1
 pub fn mir_no_phi() -> bool {
     match std::env::var("NYASH_MIR_NO_PHI").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false, // フェーズM.2: デフォルトPHI-ON統一
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true, // フェーズM.2: デフォルトPHI-ON統一
     }
 }
 
@@ -445,7 +445,7 @@ pub fn operator_box_compare_adopt() -> bool {
     match std::env::var("NYASH_OPERATOR_BOX_COMPARE_ADOPT").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
         Some(ref s) if s == "0" || s == "false" || s == "off" => false,
         Some(ref s) if s == "1" || s == "true" || s == "on" => true,
-        _ => true, // default ON
+        _ => false, // default OFF (avoid reentry until VM hook parity is ensured)
     }
 }
 /// AddOperator.apply adopt: default OFF（順次昇格のため）
@@ -498,7 +498,11 @@ pub fn cli_quiet() -> bool {
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
     // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
-    match std::env::var("NYASH_USING").ok().or_else(|| std::env::var("NYASH_ENABLE_USING").ok()).as_deref() {
+    let alias = std::env::var("NYASH_ENABLE_USING").ok();
+    if alias.is_some() && crate::config::env::cli_verbose() {
+        eprintln!("[env] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead");
+    }
+    match std::env::var("NYASH_USING").ok().or(alias).as_deref() {
         Some("0") | Some("false") | Some("off") => false,
         _ => true, // デフォルト: ON
     }
@@ -517,8 +521,8 @@ pub fn allow_using_file() -> bool {
     // SSOT 徹底: 全プロファイルで既定禁止（nyash.toml を唯一の真実に）
     // 明示オーバーライドでのみ許可（開発用緊急時）
     match std::env::var("NYASH_ALLOW_USING_FILE").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false,
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
     }
 }
 /// Determine whether AST prelude merge for `using` is enabled.
@@ -570,30 +574,30 @@ pub fn vm_use_dispatch() -> bool {
 /// Default: OFF. Enable with NYASH_VM_BOXCALL_PLUGIN_FIRST=1 (dev/experiments only).
 pub fn vm_boxcall_plugin_first() -> bool {
     match std::env::var("NYASH_VM_BOXCALL_PLUGIN_FIRST").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false,
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
     }
 }
 
 /// Phase C scaffold: prefer plugin path for ArrayBox (default OFF)
 pub fn vm_plugin_prefer_array() -> bool {
     match std::env::var("NYASH_VM_PLUGIN_PREFER_ARRAY").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false,
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
     }
 }
 /// Phase C scaffold: prefer plugin path for StringBox (default OFF)
 pub fn vm_plugin_prefer_string() -> bool {
     match std::env::var("NYASH_VM_PLUGIN_PREFER_STRING").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false,
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
     }
 }
 /// Phase C scaffold: prefer plugin path for MapBox (default OFF)
 pub fn vm_plugin_prefer_map() -> bool {
     match std::env::var("NYASH_VM_PLUGIN_PREFER_MAP").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false,
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
     }
 }
 
@@ -726,20 +730,3 @@ pub fn ny_compiler_use_tmp_only() -> bool {
         == Some("1")
 }
 
-/// Enable PHI unification in JSON v0 bridge using shared phi_core helpers.
-/// Default: ON (staged rollout complete). Disable with NYASH_JSONV0_PHI_UNIFY=0
-pub fn jsonv0_phi_unify() -> bool {
-    match std::env::var("NYASH_JSONV0_PHI_UNIFY").ok().as_deref() {
-        Some("0") | Some("false") | Some("off") => false,
-        _ => true,
-    }
-}
-
-/// Use MirBuilder for JSON v0 lowering end-to-end (ProgramV0 → ASTNode → MirBuilder).
-/// Default: OFF. Enable with NYASH_JSONV0_USE_BUILDER=1
-pub fn jsonv0_use_builder() -> bool {
-    match std::env::var("NYASH_JSONV0_USE_BUILDER").ok().as_deref() {
-        Some("1") | Some("true") | Some("on") => true,
-        _ => false,
-    }
-}

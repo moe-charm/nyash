@@ -18,11 +18,11 @@ using selfhost.vm.mir_min as MirVmMin
 static box Main {
   main() {
     // bb0: const 2 -> 1; const 5 -> 2; compare Gt 1,2 -> 3; branch(cond=3, then=1, else=2)
-    // bb1: ret 1; bb2: ret 0
+    // bb1: ret 1; bb2: ret 3 (compare result=0)
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":["
     j = j + "{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":2}},{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":5}},{\"op\":\"compare\",\"cmp\":\"Gt\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"branch\",\"cond\":3,\"then\":1,\"else\":2}]},"
     j = j + "{\"id\":1,\"instructions\":[{\"op\":\"ret\",\"value\":1}]},"
-    j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":0}]}]}]}"
+    j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":3}]}]}]}"
     local v = MirVmMin._run_min(j)
     print(MirVmMin._int_to_str(v))
     return 0

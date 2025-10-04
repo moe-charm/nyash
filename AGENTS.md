@@ -340,7 +340,7 @@ Notes
   - `NYASH_SELFHOST_READ_TMP=1`    → 子に `-- --read-tmp`（`tmp/ny_parser_input.ny` を FileBox で読み込む。CIでは未使用）
   - `NYASH_NY_COMPILER_STAGE3=1`   → 子に `-- --stage3`（Stage‑3 構文受理: Break/Continue/Throw/Try）
   - `NYASH_NY_COMPILER_CHILD_ARGS` → スペース区切りで子にそのまま渡す
-- 子側（apps/selfhost-compiler/compiler.nyash）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
+- 子側（apps/selfhost-compiler/compiler.hako）は `--read-tmp` を受理して `tmp/ny_parser_input.ny` を読む（plugins 必要）。
 
 ## PyVM Scope & Policy（互換モード）
 - 目的: 互換確認のための限定的な実行器（既定OFF）。プロダクション/CIでは使用しない。
@@ -405,9 +405,9 @@ Notes
 - Build (LLVM AOT / harness-first):
   - `cargo build --release -p nyash-llvm-compiler` (ny-llvmc builder)
   - `cargo build --release --features llvm`
-  - Run via harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
-- Quick VM run: `./target/release/nyash --backend vm apps/APP/main.nyash`
-- Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.nyash -o app`
+  - Run via harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.hako`
+- Quick VM run: `./target/release/nyash --backend vm apps/APP/main.hako`
+- Emit + link (LLVM): `tools/build_llvm.sh apps/APP/main.hako -o app`
 - Smokes (v2):
   - Single entry: `tools/smokes/v2/run.sh --profile quick`
   - Profiles: `quick|integration|full`（`--filter <glob>` で絞り込み）
@@ -457,16 +457,16 @@ Notes
 
 - using/namespace の解決
   - using は Runner 側で解決（Phase‑15）。`nyash.toml` の `[using]`（paths / <name> / aliases）を参照。
-  - include は廃止。`using "./path/file.nyash" as Name` を推奨。
+  - include は廃止。`using "./path/file.hako" as Name` を推奨。
 
 - スモーク/検証の方針
   - 既定の開発確認は Rust VM ラインで行い、LLVM ラインは AOT/ハーネスの代表スモークでカバー。
   - v2 ランナーは実行系を切り替え可能（環境変数・引数で VM/LLVM）。PyVM は `pyvm-bridge` 有効時の互換に限定。
 
 - 実行例（目安）
-  - Rust VM（既定）: `./target/release/nyash apps/APP/main.nyash`
-  - LLVM Harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.nyash`
-  - AOT ビルド: `tools/build_llvm.sh apps/APP/main.nyash -o app`
+  - Rust VM（既定）: `./target/release/nyash apps/APP/main.hako`
+  - LLVM Harness: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/APP/main.hako`
+  - AOT ビルド: `tools/build_llvm.sh apps/APP/main.hako -o app`
 
 - セルフホスティング指針
   - 本方針（Rust VM=主、LLVM=AOT）はそのまま自己ホストの軸にする。
@@ -512,7 +512,7 @@ Flags
 
 - How to run harness
   - Build: `cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm`
-  - Run: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.nyash`
+  - Run: `NYASH_LLVM_USE_HARNESS=1 ./target/release/nyash --backend llvm apps/tests/peek_expr_block.hako`
   - IR dump: `NYASH_LLVM_DUMP_IR=tmp/nyash_harness.ll ...`
   - PHI trace: `NYASH_LLVM_TRACE_PHI=1 ...` (JSON lines output via `phi_wiring.common.trace`)
 
@@ -540,7 +540,7 @@ Flags
 ## Testing Guidelines
 - Rust tests: `cargo test` (add targeted unit tests near code).
 - Smoke scripts validate end‑to‑end AOT/JIT (`tools/llvm_smoke.sh`).
-- Test naming: prefer `*_test.rs` for Rust and descriptive `.nyash` files under `apps/` or `tests/`.
+- Test naming: prefer `*_test.rs` for Rust and descriptive `.hako` files under `apps/` or `tests/`.
 - For LLVM tests, ensure Python llvmlite is available and `ny-llvmc` is built.
 - Build (harness): `cargo build --release -p nyash-llvm-compiler && cargo build --release --features llvm`
 
@@ -591,7 +591,7 @@ Recommended defaults（未設定時の挙動）
   - `NYASH_LLVM_PREPASS_LOOP=1` – enable simple while prepass (loopform synthesis).
   - `NYASH_CLI_VERBOSE=1` – extra trace from builder.
 - Smokes:
-  - Empty PHI guard: `tools/test/smoke/llvm/ir_phi_empty_check.sh <file.nyash>`
+  - Empty PHI guard: `tools/test/smoke/llvm/ir_phi_empty_check.sh <file.hako>`
   - Batch run: `tools/test/smoke/llvm/ir_phi_empty_check_all.sh`
 
 > 補足: 「仕様不変」の再定義

@@ -23,6 +23,7 @@ mod handlers;
 mod helpers;
 mod method_router;
 mod extern_adapter;
+mod operator_guard;
 
 pub struct MirInterpreter {
     pub(super) regs: HashMap<ValueId, VMValue>,

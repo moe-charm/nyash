@@ -1,60 +1,28 @@
 // minivm_probe.hako — Mini‑VM JSON v0 の a/b/r を観測する軽量プローブ
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/vm/boxes/instruction_scanner.hako" as InstructionScannerBox
+using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 
 static box MiniVmProbe {
   probe_compare(mjson) {
     local regs = new MapBox()
     local seg = JsonFragBox.block0_segment(mjson)
+    if seg.length() == 0 { return new MapBox() }
     local pos = 0
     loop(true) {
       if pos >= seg.length() { break }
-      local s = seg.indexOf("{", pos)
-      if s < 0 { break }
-      // find object end (簡易)
-      local i = s
-      local depth = 0
-      loop(true) {
-        local ch = seg.substring(i, i+1)
-        if ch == "" { break }
-        if ch == "{" { depth = depth + 1 } else { if ch == "}" { depth = depth - 1 } }
-        if depth == 0 { i = i + 1  break }
-        i = i + 1
-      }
+      // Use escape-aware scanner to get next instruction object
+      local mm = InstructionScannerBox.next(seg, pos)
+      if mm == null { break }
+      local s = mm.get("start")
+      local i = mm.get("end")
       local obj = seg.substring(s, i)
       local op = JsonFragBox.get_str(obj, "op")
       if op == "const" {
-        local dst = JsonFragBox.get_int(obj, "dst")
-        // ネスト value → 数字を拾う
-        local pat = ""value":{"type":"i64","value":"
-        local p = obj.indexOf(pat)
-        local val = 0
-        if p >= 0 {
-          local i2 = p + pat.length()
-          local ds = ""
-          loop(true) {
-            local ch2 = obj.substring(i2, i2+1)
-            if ch2 == "" { break }
-            if ch2 >= "0" && ch2 <= "9" { ds = ds + ch2  i2 = i2 + 1 } else { break }
-          }
-          if ds != "" { val = JsonFragBox._str_to_int(ds) }
-        }
-        regs.set(""+dst, val)
+        OpHandlersBox.handle_const(obj, regs)
       } else if op == "binop" {
-        local kind = JsonFragBox.get_str(obj, "op_kind")
-        local lhs = JsonFragBox.get_int(obj, "lhs")
-        local rhs = JsonFragBox.get_int(obj, "rhs")
-        local dst = JsonFragBox.get_int(obj, "dst")
-        local as = "" + regs.get(""+lhs)
-        local bs = "" + regs.get(""+rhs)
-        local a = JsonFragBox._str_to_int(as)
-        local b = JsonFragBox._str_to_int(bs)
-        local out = 0
-        if kind == "Add" { out = a + b }
-        else if kind == "Sub" { out = a - b }
-        else if kind == "Mul" { out = a * b }
-        else if kind == "Div" { if b == 0 { out = 0 } else { out = a / b } }
-        else if kind == "Mod" { if b == 0 { out = 0 } else { out = a % b } }
-        regs.set(""+dst, out)
+        OpHandlersBox.handle_binop(obj, regs)
       } else if op == "compare" {
         local kind = JsonFragBox.get_str(obj, "cmp")
         local lhs = JsonFragBox.get_int(obj, "lhs")

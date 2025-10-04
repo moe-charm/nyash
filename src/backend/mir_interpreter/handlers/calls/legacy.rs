@@ -440,10 +440,11 @@ impl MirInterpreter {
                 eprintln!("[vm-trace] call {}", fname);
             }
         }
-        // Dev trace: emit a synthetic "call" event for global function calls
-        // so operator boxes (e.g., CompareOperator.apply/3) are observable with
-        // argument kinds. This produces a JSON line on stderr, filtered by
-        // NYASH_BOX_TRACE_FILTER like other box traces.
+        // Dev trace: emit a synthetic "call" event for global function calls.
+        // NOTE (Operator Guard): 観測は「非再入のイベント」で行うのが原則。
+        // OperatorBoxGuard が exec_function_inner の入口で採用/遮断を一本化しているため、
+        // ここで観測目的の追加呼び出し（再入）を行わないこと（Guardポリシー）。
+        // 目的はあくまでイベント発火のみ（NYASH_BOX_TRACE_FILTER でフィルタ可能）。
         if Self::box_trace_enabled() {
             // Render class/method from canonical fname like "Class.method/Arity"
             let (class_name, method_name) = if let Some((cls, rest)) = fname.split_once('.') {

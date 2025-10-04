@@ -13,6 +13,9 @@ impl MirInterpreter {
         func: &MirFunction,
         arg_vals: Option<&[VMValue]>,
     ) -> Result<VMValue, VMError> {
+        // Centralized OperatorBox guard: intercept before any frame setup
+        if let Some(r) = self.operator_guard_intercept_entry(func.signature.name.as_str(), arg_vals) { return r; }
+
         // Phase 1: delegate cross-class reroute / narrow fallbacks to method_router
         if let Some(r) = super::method_router::pre_exec_reroute(self, func, arg_vals) { return r; }
         let saved_regs = mem::take(&mut self.regs);
@@ -22,7 +25,15 @@ impl MirInterpreter {
         if let Some(args) = arg_vals {
             for (i, pid) in func.params.iter().enumerate() {
                 let v = args.get(i).cloned().unwrap_or(VMValue::Void);
-                self.regs.insert(*pid, v);
+                self.regs.insert(*pid, v.clone());
+            }
+            if std::env::var("NYASH_VM_PARAM_TRACE").ok().as_deref() == Some("1") {
+                let mut pairs = Vec::new();
+                for (i, pid) in func.params.iter().enumerate() {
+                    let vi = self.regs.get(pid).cloned().unwrap_or(VMValue::Void);
+                    pairs.append(&mut vec![format!("p{}=%{:?}:{:?}", i, pid, vi)]);
+                }
+                eprintln!("[vm-params] fn={} {}", func.signature.name, pairs.join(" "));
             }
         }
 
@@ -112,6 +123,16 @@ impl MirInterpreter {
                             }
                         };
                         self.regs.insert(dst_id, v);
+                        if std::env::var("NYASH_VM_PHI_TRACE").ok().as_deref() == Some("1") {
+                            eprintln!(
+                                "[vm-phi] fn={} bb={} dst=v%{} pred={} val=v%{}",
+                                self.cur_fn.as_deref().unwrap_or("") ,
+                                block.id.as_u32(),
+                                dst_id.as_u32(),
+                                pred.as_u32(),
+                                val.as_u32()
+                            );
+                        }
                         if Self::trace_enabled() {
                             eprintln!(
                                 "[vm-trace] phi dst={:?} take pred={:?} val={:?}",
@@ -134,6 +155,15 @@ impl MirInterpreter {
                         }
                     };
                     self.regs.insert(dst_id, v);
+                    if std::env::var("NYASH_VM_PHI_TRACE").ok().as_deref() == Some("1") {
+                        eprintln!(
+                            "[vm-phi] fn={} bb={} dst=v%{} pred=<default> val=v%{}",
+                            self.cur_fn.as_deref().unwrap_or("") ,
+                            block.id.as_u32(),
+                            dst_id.as_u32(),
+                            val.as_u32()
+                        );
+                    }
                     if Self::trace_enabled() {
                         eprintln!(
                             "[vm-trace] phi dst={:?} take default val={:?}",
@@ -194,6 +224,15 @@ impl MirInterpreter {
                 } else {
                     VMValue::Void
                 };
+                if std::env::var("NYASH_VM_RET_TRACE").ok().as_deref() == Some("1") {
+                    let kind = crate::backend::abi_util::tag_of_vm(&result);
+                    eprintln!(
+                        "[vm-ret] fn={} kind={} bb={}",
+                        self.cur_fn.as_deref().unwrap_or("") ,
+                        kind,
+                        block.id.as_u32()
+                    );
+                }
                 Ok(BlockOutcome::Return(result))
             }
             Some(MirInstruction::Jump { target }) => Ok(BlockOutcome::Next {
@@ -335,7 +374,7 @@ impl TraceCfg {
         s
     }
 
-    fn render_after(&self, m: &MirInterpreter, bb: BasicBlockId, idx: usize, inst: &crate::mir::MirInstruction) -> Option<String> {
+    fn render_after(&self, m: &MirInterpreter, _bb: BasicBlockId, _idx: usize, inst: &crate::mir::MirInstruction) -> Option<String> {
         if !self.regs { return None; }
         if let Some(dst) = crate::mir::instruction_kinds::CallLikeInst::from_mir(inst).and_then(|c| c.dst()) {
             if let Some(v) = m.regs.get(&dst) {
@@ -421,7 +460,7 @@ fn maybe_stepper_prompt(bb: BasicBlockId, idx: usize, inst: &crate::mir::MirInst
     };
     eprintln!("> {}", line);
     eprint!("[n]ext/[c]ontinue/[r]egisters/[q]uit? ");
-    use std::io::{Read, Write};
+    use std::io::Write;
     let mut auto = true;
     if StepperCfg::allow_block() {
         auto = false;

@@ -37,7 +37,7 @@ impl MirInterpreter {
         if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
-            for (i, a) in args.iter().enumerate().take(2) {
+            for (_i, a) in args.iter().enumerate().take(2) {
                 match self.reg_load(*a) {
                     Ok(v) => {
                         kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
@@ -197,6 +197,7 @@ impl MirInterpreter {
         name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+
         // Fail-Fast: if this ModuleFunction is actually an instance method form
         // like "Class.method" and the first arg is an unborn InstanceBox, forbid.
         if let Some((_, method)) = name.split_once('.') {
@@ -223,7 +224,7 @@ impl MirInterpreter {
         if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
-            for (i, a) in args.iter().enumerate().take(2) {
+            for (_i, a) in args.iter().enumerate().take(2) {
                 match self.reg_load(*a) {
                     Ok(v) => {
                         kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
