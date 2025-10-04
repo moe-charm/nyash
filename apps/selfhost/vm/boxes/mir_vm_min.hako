@@ -174,8 +174,18 @@ static box MirVmMin {
             }
             // Wrap into Result and apply if ok
             local res = null
-            if vin != null { local pair = new ArrayBox(); pair.push(dst); pair.push(vin); res = Result.ok(pair) } else { res = Result.err("phi:no_incoming") }
-            if res.is_ok() == 1 { local pr = res.value(); PhiApplyBox.apply(pr.get(0), pr.get(1), regs) }
+            if vin != null {
+              local pair = new ArrayBox()
+              pair.push(dst)
+              pair.push(vin)
+              res = Result.ok(pair)
+            } else {
+              res = Result.err("phi:no_incoming")
+            }
+            if res.is_ok() == 1 {
+              local pr = res.value()
+              PhiApplyBox.apply(pr.get(0), pr.get(1), regs)
+            }
           }
         }
         else if op == "ret" {
