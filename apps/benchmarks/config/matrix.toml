@@ -1,0 +1,176 @@
+# Benchmark Configuration Matrix - ChatGPT Pro設計準拠
+#
+# このファイルは apps/benchmarks/DESIGN.md Phase 1実装に基づいています
+# ターゲット（VM/LLVM/WASM）× フラグの組み合わせを定義
+
+# ========================================
+# ターゲット定義
+# ========================================
+
+[[targets]]
+name = "vm"
+description = "Rust VM（開発・デバッグ用）"
+backend = "vm"
+optimization = "default"  # VMには最適化レベルなし
+jit = false
+
+[[targets]]
+name = "llvm-O0"
+description = "LLVM 最適化なし（デバッグ用）"
+backend = "llvm"
+optimization = "O0"
+jit = false
+
+[[targets]]
+name = "llvm-O2"
+description = "LLVM 標準最適化（推奨）"
+backend = "llvm"
+optimization = "O2"
+jit = false
+
+[[targets]]
+name = "llvm-O3"
+description = "LLVM 最大最適化"
+backend = "llvm"
+optimization = "O3"
+jit = false
+
+[[targets]]
+name = "wasm"
+description = "WASM JIT（実験的）"
+backend = "wasm"
+optimization = "O2"
+jit = true
+
+# ========================================
+# フラグ定義
+# ========================================
+
+[flags]
+# 決定性フラグ
+deterministic = false  # デフォルトOFF（本番環境）
+
+# Effects検証
+effects_mode = "warn"  # 選択肢: "warn", "enforce", "off"
+
+# Contracts検証
+contracts_mode = "warn"  # 選択肢: "warn", "enforce", "off"
+
+# PHI検証
+phi_verify = false  # デフォルトOFF（パフォーマンス優先）
+
+# Result表示抑制（ベンチマーク用）
+silent_result = true  # NYASH_NYRT_SILENT_RESULT=1
+
+# ========================================
+# ベンチマーク設定
+# ========================================
+
+[benchmark]
+# warmup回数（デフォルト）
+warmup = 10
+
+# 計測回数（デフォルト）
+repeat = 50
+
+# タイムアウト（秒、0=無制限）
+timeout = 300
+
+# 計測モード: "fixed_iterations" または "fixed_duration"
+mode = "fixed_iterations"
+
+# 固定時間モード用（秒）
+duration = 10
+
+# ========================================
+# 組み合わせプリセット
+# ========================================
+
+# 開発用クイックチェック
+[[presets]]
+name = "quick"
+targets = ["vm"]
+warmup = 2
+repeat = 3
+
+# 標準ベンチマーク
+[[presets]]
+name = "standard"
+targets = ["vm", "llvm-O2", "wasm"]
+warmup = 10
+repeat = 50
+
+# 完全比較（すべてのターゲット）
+[[presets]]
+name = "full"
+targets = ["vm", "llvm-O0", "llvm-O2", "llvm-O3", "wasm"]
+warmup = 10
+repeat = 50
+
+# 最適化レベル比較（LLVM専用）
+[[presets]]
+name = "llvm-opt"
+targets = ["llvm-O0", "llvm-O2", "llvm-O3"]
+warmup = 10
+repeat = 50
+
+# ========================================
+# 回帰判定しきい値
+# ========================================
+
+[thresholds]
+# 警告しきい値（パフォーマンス劣化%）
+warning = 10.0
+
+# 失敗しきい値（パフォーマンス劣化%）
+failure = 25.0
+
+# 改善しきい値（パフォーマンス改善%、通知用）
+improvement = 15.0
+
+# ========================================
+# 出力設定
+# ========================================
+
+[output]
+# 結果保存先
+results_dir = "apps/benchmarks/results"
+
+# 最新結果ファイル
+latest = "latest.json"
+
+# 履歴ファイル（JSONL形式）
+history = "history.jsonl"
+
+# JSON出力フォーマット
+json_format = "pretty"  # "pretty" または "compact"
+
+# ========================================
+# 環境情報記録
+# ========================================
+
+[environment]
+# CPU情報を記録するか
+record_cpu = true
+
+# OS情報を記録するか
+record_os = true
+
+# Gitコミットハッシュを記録するか
+record_commit = true
+
+# ========================================
+# 使用例
+# ========================================
+#
+# # クイックチェック（開発時）
+# hako bench run --preset quick apps/benchmarks/01_counter.nyash
+#
+# # 標準ベンチマーク（CI）
+# hako bench run --preset standard apps/benchmarks/01_counter.nyash
+#
+# # カスタム設定
+# hako bench run --target vm --warmup 5 --repeat 20 apps/benchmarks/01_counter.nyash
+#
+# # LLVM最適化レベル比較
+# hako bench run --preset llvm-opt apps/benchmarks/01_counter.nyash

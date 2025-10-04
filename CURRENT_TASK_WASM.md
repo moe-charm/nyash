@@ -1,28 +1,57 @@
-# Current Task — Phase 15.8: LLVM→WASM実装 (2025-10-01 ~)
+# CURRENT_TASK_WASM — wasm-development ブランチの現在タスク
 
-## 🎉🎉🎉 **E2Eパイプライン完全動作成功！** (2025-10-01 NEW!)
-
-**Nyash/Hakorune → Rust VM → MIR JSON → WASM → Node.js**
-
-✅ **完全なツールチェーン確立！**
-- ソースコード: `local_tests/wasm_e2e_simple.nyash` (15 + 27)
-- Rust VM → MIR JSON: `--dump-mir --emit-mir-json`
-- Python llvm_builder.py → WASM binary (wasm32-unknown-wasi)
-- Export section追加 → ny_main()実行可能
-- Node.js実行 → **42返却成功！** ✅
-
-**ワンライナー実行**:
-```bash
-./tools/test_wasm_e2e.sh  # 完全E2Eテスト自動実行
-```
+**最終更新**: 2025-10-04
 
 ---
 
-## 🎯 現在の状況（一目でわかる）
+## 🎯 いまここ！（現在進行中）
 
-**Phase 3.4完了！** (2025-10-03) 🎉🎉🎉
-**統合ベンチマークシステム完全実装！** (2025-10-03 NEW!) 🚀
-**2フェーズ分離設計完全準拠！** (ChatGPT Pro設計) ✅
+### ✅ **Result表示修正完了** (2025-10-04) 🎉
+
+**問題**: VM/LLVM AOT実行時に Result 出力が表示されない
+
+**解決策**: Leaf-levelでのResult表示＋stdout flush実装
+
+**修正ファイル** (3ファイル):
+1. **crates/hako_kernel/src/lib.rs** (lines 475-489)
+   - AOT main stubでResult表示＋flush
+   - `NYASH_NYRT_SILENT_RESULT=1` サポート
+
+2. **src/runner/vm_pipeline.rs** (lines 1-10, 228-236)
+   - `use std::io::Write` 追加
+   - Result表示責任の明確化コメント
+
+3. **src/runner/modes/vm.rs** (line 10, 397)
+   - `use std::io::Write` 追加
+   - stdout flush実装済み
+
+**テスト結果**:
+```bash
+# テストファイル: /tmp/mini_ret.hako
+static box Main {
+  main() {
+    return 7
+  }
+}
+
+# 実行結果
+./target/release/hako /tmp/mini_ret.hako
+# stdout: Result: 7
+# stderr: [UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst...
+# Exit: 7
+```
+
+**コミット**: `0edaaffa` - "feat(vm): Result表示完全修正 - VM/LLVM AOT両対応 ✅"
+
+**詳細ドキュメント**: hakorune-selfhost の `docs/guides/result-printing.md` 参照
+
+---
+
+## 🚀 **Phase 15.8: ベンチマーク整備** (2025-10-04 開始)
+
+**目標**: ChatGPT Pro設計に基づく商用レベルベンチマークシステム構築
+
+**設計書**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)
 
 ✅ **Phase 3.4完了内容** (2025-10-03):
 - **🏗️ bench_unified.sh完全書き直し** (420行) 🎉

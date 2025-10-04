@@ -12,6 +12,18 @@
 - **戦略**: llvm_py拡張（既存800行活用）+ WASI runtime連携
 - **計画書**: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
 
+### 🎉 **Result表示修正完了！VM/LLVM AOT両対応** (2025-10-04)
+- ✅ **Leaf-level Result表示**: VM/LLVM AOT両方で完全動作
+- ✅ **selfhostブランチ統合**: Result表示修正を完全移植
+- ✅ **3ファイル修正**:
+  - `crates/hako_kernel/src/lib.rs`: AOT main stub Result表示＋flush
+  - `src/runner/vm_pipeline.rs`: Result表示責任明確化
+  - `src/runner/modes/vm.rs`: stdout flush実装
+- ✅ **環境変数対応**: `NYASH_NYRT_SILENT_RESULT=1` でベンチマーク用出力抑制
+- ✅ **テスト確認**: `/tmp/mini_ret.hako` → `Result: 7` 完全動作
+- ✅ **コミット**: `0edaaffa` - "feat(vm): Result表示完全修正"
+- 📖 **詳細**: hakorune-selfhost の `docs/guides/result-printing.md`
+
 ### 🎉 **Phase 3.4完了！統合ベンチマークシステム実装** (2025-10-03)
 - ✅ **bench_unified.sh完全書き直し**（420行、2フェーズ分離設計）
 - ✅ **ChatGPT Pro設計準拠**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)

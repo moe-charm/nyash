@@ -1,0 +1,213 @@
+// Benchmark Runner Box - ChatGPT Pro設計準拠（DESIGN.md Phase 1最小実装）
+//
+// 目的: apps/benchmarks/DESIGN.mdに基づく商用レベルベンチマークシステム
+// Phase 1実装: Timer/Stats/Runner Boxの最小セット
+
+// ========================================
+// Timer Box - Monotonic clock (モノトニック時計)
+// ========================================
+box TimerBox {
+    birth() {
+        // 初期化処理なし（ExternCall経由でシステム時計使用）
+    }
+
+    now_ms() {
+        // 現在時刻（ミリ秒）を返す
+        // 注: ExternCall("nyrt.time.now_ms")が必要
+        // 暫定: 0返却（実装予定）
+        return 0
+    }
+}
+
+// ========================================
+// Stats Box - 統計計算
+// ========================================
+box StatsBox {
+    samples: ArrayBox
+
+    birth() {
+        me.samples = new ArrayBox()
+    }
+
+    push(value: IntegerBox) {
+        me.samples.push(value)
+    }
+
+    length() {
+        return me.samples.length()
+    }
+
+    // 平均値計算
+    mean() {
+        local sum, count, i
+        sum = 0
+        count = me.samples.length()
+
+        if count == 0 {
+            return 0
+        }
+
+        i = 0
+        loop(i < count) {
+            sum = sum + me.samples.at(i)
+            i = i + 1
+        }
+
+        return sum / count
+    }
+
+    // 中央値計算
+    median() {
+        local count, sorted, mid
+        count = me.samples.length()
+
+        if count == 0 {
+            return 0
+        }
+
+        // 注: ArrayBox.sort()が必要
+        // 暫定: meanを返す（実装予定）
+        return me.mean()
+    }
+
+    // 95パーセンタイル
+    p95() {
+        local count, idx
+        count = me.samples.length()
+
+        if count == 0 {
+            return 0
+        }
+
+        // 注: ArrayBox.sort()が必要
+        // 暫定: meanを返す（実装予定）
+        return me.mean()
+    }
+
+    // 最小値
+    min() {
+        local count, i, current_min
+        count = me.samples.length()
+
+        if count == 0 {
+            return 0
+        }
+
+        current_min = me.samples.at(0)
+        i = 1
+        loop(i < count) {
+            local val
+            val = me.samples.at(i)
+            if val < current_min {
+                current_min = val
+            }
+            i = i + 1
+        }
+
+        return current_min
+    }
+
+    // 最大値
+    max() {
+        local count, i, current_max
+        count = me.samples.length()
+
+        if count == 0 {
+            return 0
+        }
+
+        current_max = me.samples.at(0)
+        i = 1
+        loop(i < count) {
+            local val
+            val = me.samples.at(i)
+            if val > current_max {
+                current_max = val
+            }
+            i = i + 1
+        }
+
+        return current_max
+    }
+}
+
+// ========================================
+// Runner Box - ベンチマーク実行（最小実装）
+// ========================================
+box RunnerBox {
+    target: StringBox
+    timer: TimerBox
+
+    birth(target: StringBox) {
+        me.target = target
+        me.timer = new TimerBox()
+    }
+
+    // 単一実行（時間計測）
+    // 注: 実際のベンチマーク実行はexecで実装予定
+    run_once(file: StringBox) {
+        local t0, t1
+
+        t0 = me.timer.now_ms()
+
+        // 注: ExecBox::run(file)実装予定
+        // 暫定: 固定値返却
+
+        t1 = me.timer.now_ms()
+
+        return t1 - t0
+    }
+
+    // ベンチマーク実行（warmup + 計測）
+    run(file: StringBox, warmup: IntegerBox, repeat: IntegerBox) {
+        local i, stats
+
+        // Warmupフェーズ（計測しない）
+        print("Warmup...")
+        i = 0
+        loop(i < warmup) {
+            me.run_once(file)
+            i = i + 1
+        }
+
+        // 計測フェーズ
+        print("Measuring...")
+        stats = new StatsBox()
+        i = 0
+        loop(i < repeat) {
+            local elapsed
+            elapsed = me.run_once(file)
+            stats.push(elapsed)
+            i = i + 1
+        }
+
+        return stats
+    }
+}
+
+// ========================================
+// Main Entry Point
+// ========================================
+static box Main {
+    main(args) {
+        local console
+        console = new ConsoleBox()
+
+        // Phase 1最小実装: 動作確認用
+        console.log("=== Benchmark Runner - Phase 1 Minimum Implementation ===")
+
+        local runner, stats
+        runner = new RunnerBox("vm")
+
+        // テスト実行（仮）
+        stats = runner.run("apps/benchmarks/01_counter.nyash", 2, 5)
+
+        console.log("Benchmark completed:")
+        console.log("  Samples: " + str(stats.length()))
+        console.log("  Mean: " + str(stats.mean()) + " ms")
+        console.log("  Min: " + str(stats.min()) + " ms")
+        console.log("  Max: " + str(stats.max()) + " ms")
+
+        return 0
+    }
+}
