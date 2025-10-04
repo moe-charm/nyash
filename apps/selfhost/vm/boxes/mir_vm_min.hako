@@ -146,6 +146,7 @@ static box MirVmMin {
           local dst = null
           local vin = null
           if pair != null { dst = pair.get(0)  vin = pair.get(1) }
+          me._tprint("[ERROR] phi pair pre dst="+ (pair==null?"null":me._int_to_str(pair.get(0))) +" vin="+ (pair==null?"null":me._int_to_str(pair.get(1))))
           local res = null
           if vin != null {
             local p2 = new ArrayBox()
