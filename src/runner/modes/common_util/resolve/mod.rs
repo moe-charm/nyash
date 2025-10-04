@@ -19,6 +19,7 @@
 pub mod strip;
 pub mod seam;
 pub mod alias_tools;
+pub mod register;
 
 // Public re-exports to preserve existing call sites
 pub use strip::{
@@ -28,3 +29,6 @@ pub use strip::{
     parse_preludes_to_asts,
     merge_prelude_asts_with_main,
 };
+
+// Re-export registration helpers
+pub use register::register_aliases_in_modules_registry;

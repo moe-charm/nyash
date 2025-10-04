@@ -112,6 +112,7 @@ impl NyashRunner {
                     code_ref = clean;
                     // Always record alias names for later desugaring of `Alias.X` in main AST.
                     for (alias, _canon) in alias_pairs.iter() { alias_names.insert(alias.clone()); }
+                    crate::runner::modes::common_util::resolve::register_aliases_in_modules_registry(&alias_pairs);
                     if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
                         if !alias_pairs.is_empty() {
                             eprintln!("[using/alias] collected: {:?}", alias_pairs.iter().map(|(a, _)| a.clone()).collect::<Vec<_>>());
