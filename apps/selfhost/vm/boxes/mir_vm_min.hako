@@ -171,7 +171,7 @@ static box MirVmMin {
               }
               // Fallback: if no match found, try first "value" in array region
               if vin == null {
-                local vp = seg.indexOf(""value":", arr_br)
+                local vp = seg.indexOf("\\\"value\\\":", arr_br)
                 if vp >= 0 && vp < n {
                   local vv2 = JsonFragBox.get_int(seg.substring(vp, n), "value")
                   if vv2 != null { vin = vv2 }
