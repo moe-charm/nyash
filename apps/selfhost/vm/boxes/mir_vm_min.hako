@@ -170,9 +170,11 @@ static box MirVmMin {
                 if vv != null {
                   if pred != null && pred == prev_bb { vin = vv  break }
                   if vin == null { vin = vv }
+                me._tprint("[ERROR] phi vp="+me._int_to_str(vp))
                 }
                 local nx = seg.indexOf("}", ob)
                 if nx < 0 { break }
+                  me._tprint("[ERROR] phi fallback vv2="+me._int_to_str(vv2))
                 if nx + 1 <= i { i = i + 1 } else { i = nx + 1 }
               }
               // Fallback: if no match found, try first "value" in array region
