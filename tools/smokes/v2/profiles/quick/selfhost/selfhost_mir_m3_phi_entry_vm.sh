@@ -24,7 +24,7 @@ static box Main {
     // bb1: phi dst 3 = { pred 0 -> 1 }; ret 3
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[" +
       "{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":7}},{\"op\":\"jump\",\"target\":1}]}," +
-      "{\"id\":1,\"instructions\":[{\"op\":\"phi\",\"dst\":3,\"values\":[{\"pred\":0,\"value\":1}]},{\"op\":\"ret\",\"value\":3}]}]}]}"
+      "{\"id\":1,\"instructions\":[{\"op\":\"phi\",\"dst\":3,\"pred\":0,\"value\":1},{\"op\":\"ret\",\"value\":3}]}]}]}"
     local v = MirVmMin._run_min(j)
     print(MirVmMin._int_to_str(v))
     return 0
