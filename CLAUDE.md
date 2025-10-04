@@ -98,6 +98,10 @@ Hakoruneには**4つの実行モード**があります：
 
 詳細な使い分け・トラブルシューティングは [実行モードガイド](docs/guides/execution-modes-guide.md) 参照。
 
+**🔍 内部実装を理解したい**: [技術詳解: 関数解決の仕組み](docs/guides/execution-modes-technical-deep-dive.md)
+- LLVM CLIがHakoruneの実行ファイル（libhakorune_kernel.a）で関数を解決する仕組み
+- 各モードの関数解決マトリックス・デバッグ方法
+
 ---
 
 ## 📊 環境変数（主要なもの）

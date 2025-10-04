@@ -395,6 +395,11 @@ HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm program.hkr
 
 ## 🔗 関連ドキュメント
 
+- **[技術詳解: 関数解決の仕組み](execution-modes-technical-deep-dive.md)** ⭐内部実装理解
+  - LLVM CLIがどのように関数を解決するか
+  - libhakorune_kernel.aの役割
+  - 各モードの関数解決マトリックス
+  - デバッグ方法・新機能追加ガイド
 - **[CLAUDE.md](../../CLAUDE.md)** - 開発者入口
 - **[README.md](../../README.md)** - プロジェクト概要
 - **[スモークテストガイド](../../tools/smokes/README.md)** - テスト実行方法
