@@ -123,6 +123,34 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
                 pass
         return vmap.get(vid)
 
+    # Special mapping for built-in globals (print → nyash.console.log)
+    if func_name == 'print':
+        from llvmlite import ir
+        i64 = ir.IntType(64)
+        i8 = ir.IntType(8)
+        i8p = i8.as_pointer()
+        # Resolve first argument to i64 handle
+        if len(args) >= 1:
+            vid0 = args[0]
+            val0 = resolver.resolve_i64(vid0, builder.block, owner.preds, owner.block_end_values, vmap, owner.bb_map) if resolver else vmap.get(vid0)
+        else:
+            val0 = ir.Constant(i64, 0)
+        if val0 is None:
+            val0 = ir.Constant(i64, 0)
+        # Declare helpers
+        def _declare(name: str, ret, args_types):
+            for f in owner.module.functions:
+                if f.name == name:
+                    return f
+            fnty = ir.FunctionType(ret, args_types)
+            return ir.Function(owner.module, fnty, name=name)
+        to_cstr = _declare('nyash.string.to_i8p_h', i8p, [i64])
+        log_fn = _declare('nyash.console.log', i64, [i8p])
+        cstr = builder.call(to_cstr, [val0], name='print_to_cstr')
+        result = builder.call(log_fn, [cstr], name='print_log')
+        if dst_vid is not None:
+            vmap[dst_vid] = result
+        return
     # Look up function in module
     func = None
     for f in module.functions:

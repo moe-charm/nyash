@@ -374,7 +374,11 @@ impl NyashRunner {
                 // Pass delimiter then args to child compiler
                 extra.push("--".to_string());
                 if want_read_tmp { extra.push("--read-tmp".to_string()); }
-                if want_min_json { extra.push("--min-json".to_string()); }
+                if want_min_json { extra.push("--min-json".to_string());
+                    if std::env::var("NYASH_MINJSON_USE_HEADER_BOX").ok().as_deref() == Some("1") {
+                        extra.push("--emit-header-box".to_string());
+                    }
+                }
                 if want_stage3 { extra.push("--stage3".to_string()); }
                 // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace
                 if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {

@@ -842,6 +842,8 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
 - Stop here: no provider wiring in box by default; keep core surface minimal.
 - Next (when unfreezing): remove box fallback, switch to extern route, add timeout/env plumbing, and wire providers (mock/wasm).
 ## Current Focus
+- Env: NYASH_MINJSON_USE_HEADER_BOX=1 (selfhost early header via HeaderEmitBox)
+- Using: alias→modules registry commonized (VM/LLVM/fallback)
 - Mini-VM φ decode hardening: DONE (error taxonomy, skip malformed, empty-array handling).
 - Mini-VM log noise: DONE (default errors-only; NYASH_MINIVM_DEBUG=1 to enable debug).
 - Guide updated: scanning-policy staged boundaries (seek→substring→Frag).

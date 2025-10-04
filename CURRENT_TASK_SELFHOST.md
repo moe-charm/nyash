@@ -226,3 +226,11 @@ Self‑host next (small, safe)
 - Parser finish (static calls): unify expr/stmt boxes to call scan/utils statically (no large refactor)
 - Using/Modules E2E: add one more alias case (SKIP if env not ready)
 - Later: move early header back to HeaderEmitBox after AST prelude is stable
+
+
+Update — 2025‑10‑04 (header emit flag / alias commonization)
+- Added env `NYASH_MINJSON_USE_HEADER_BOX=1` to prefer HeaderEmitBox for compiler --min-json early path.
+  - Parent runner passes `--emit-header-box` to child when set. Default remains local emit.
+- Using aliases: added common helper to register alias→canonical path in modules registry.
+  - Applied in VM/LLVM/VM-fallback modes to persist aliases even in quiet child pipelines.
+- Next: consider making the flag default ON after stability, then retire local emit.

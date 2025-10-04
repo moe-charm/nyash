@@ -155,7 +155,8 @@ for bench_entry in "${BENCHMARKS[@]}"; do
     if [[ "$BACKEND" == "all" || "$BACKEND" == "llvm" ]]; then
         echo -n "  [LLVM] Building $bench_name... "
         TMP_LLVM_EXE="$TMP_DIR/${bench_stem}_llvm"
-        if bash tools/build_llvm.sh "$bench_path" -o "$TMP_LLVM_EXE" >/dev/null 2>&1; then
+        if env NYASH_MIR_UNIFIED_CALL=1 NYASH_LLVM_AUTO_SAFEPOINT=${NYASH_LLVM_AUTO_SAFEPOINT:-0} \
+             bash tools/build_llvm.sh "$bench_path" -o "$TMP_LLVM_EXE" >/dev/null 2>&1; then
             LLVM_EXES["$bench_file"]="$TMP_LLVM_EXE"
             echo -e "${GREEN}✓${NC} ($(stat -c%s "$TMP_LLVM_EXE" | numfmt --to=iec))"
         else
