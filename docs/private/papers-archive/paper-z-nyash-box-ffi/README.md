@@ -82,6 +82,6 @@ API/ABI 設計指針（最小）
 
 関連文書
 - ScopeBox/LoopForm（制御構造の正規化構想）：docs/guides/loopform.md
-- Nyash LLVM/LlvmPy 概要：docs/design/LLVM_LAYER_OVERVIEW.md
+- Nyash LLVM/LlvmPy 概要：docs/archive/design/legacy-2025-09/LLVM_LAYER_OVERVIEW.md
 - Seam‑aware JSON Unification（前処理と決定論実装）：papers/paper-y-seam-aware-json-unification/README.md
 
