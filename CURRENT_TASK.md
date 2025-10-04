@@ -547,3 +547,9 @@ Next（Mini‑VM/Emit 小粒）
   1) mir_vm_min.hako から埋め込みのスキャナ/ハンドラを撤去し、`using` で `apps/selfhost/vm/boxes/{instruction_scanner,op_handlers}.hako` に委譲。
   2) 代表 3 本（Gt/Ne/Lt, 片面 materialize=1）を `NYASH_MODULES=selfhost.vm.mir_min=...` 指定で回して観測。
   3) まだ NG なら Rust VM の compare ハンドラに軽いトレースを入れてパリティ比較→原因摘出。
+
+### 2025-10-04 — Mini‑VM neg-binop compare (Lt) investigation
+- Probe present: `apps/selfhost/vm/boxes/minivm_probe.hako`.
+- Implemented Mini‑VM supplementation before compare (materialize last binop dst) and inlined compare evaluation.
+- Quick smoke `selfhost_mir_m2_compare_neg_binop_vm.sh` still fails on Lt (expected 1, got 0).
+- Likely root area: block‑local value propagation vs JSON segment scanning; next step is a focused probe-run smoke to print `a/b/r` and adjust handlers accordingly.

@@ -6,11 +6,29 @@ static box OpHandlersBox {
 
   _is_numeric_str(s) {
     if s == null { return 0 }
-    local n = s.length()
-    if n == 0 { return 0 }
-    local i = 0
-    if s.substring(0,1) == "-" { if n == 1 { return 0 } i = 1 }
-    loop(i < n) { local ch = s.substring(i, i+1) if ch < "0" || ch > "9" { return 0 } i = i + 1 }
+    // Trim minimal leading/trailing spaces
+    local left = 0
+    local right = s.length()
+    loop(left < right) {
+      local ch = s.substring(left, left+1)
+      if ch == " " || ch == "	" || ch == "
+" || ch == "" { left = left + 1 } else { break }
+    }
+    loop(right > left) {
+      local ch = s.substring(right-1, right)
+      if ch == " " || ch == "	" || ch == "
+" || ch == "" { right = right - 1 } else { break }
+    }
+    if right <= left { return 0 }
+    local i = left
+    // Accept ASCII '-' and Unicode minus (U+2212)
+    local first = s.substring(i, i+1)
+    if first == "-" || first == "−" { i = i + 1  if i >= right { return 0 } }
+    loop(i < right) {
+      local ch = s.substring(i, i+1)
+      if ch < "0" || ch > "9" { return 0 }
+      i = i + 1
+    }
     return 1
   }
 
