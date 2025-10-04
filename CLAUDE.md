@@ -40,6 +40,8 @@
 - **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 - **現在のタスク**: [CURRENT_TASK_WASM.md](CURRENT_TASK_WASM.md) ⭐ここを見る！
 - **Phase 15.8詳細**: [docs/development/roadmap/phases/phase-15.8/](docs/development/roadmap/phases/phase-15.8/)
+- **ベンチマーク設計図**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md) ⭐ChatGPT Pro設計
+- **WASMベンチマークガイド**: [docs/guides/wasm-benchmarks.md](docs/guides/wasm-benchmarks.md)
 - **MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md) ⭐正式仕様
 
 ---

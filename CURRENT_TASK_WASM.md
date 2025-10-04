@@ -76,8 +76,19 @@
      - bench_unified.sh内：❌ Warmupループでハング
      - デバッグログ：TMP_LLVM_EXE正しく設定、WARMUP=1確認済み
      - 推測原因：バッファリング？stdin/stdout問題？
-2. **LLVM Phase 2 (Measurement) Warmup問題解決** 🎯 ← **現在ここ**
-3. **WASM Phase 2 (Measurement)テスト**
+
+2. ✅ **selfhostブランチマージ完了！** (2025-10-04) 🎉
+   - ✅ PHI問題修正統合（OperatorBoxGuard、JsonScan統一、DCE修正）
+   - ✅ P0ベンチマーク（factorial/fibonacci/sum_loop.hako）コンパイル成功確認
+   - ⚠️ **新しい問題発見**：P0ベンチマーク実行時に出力なし
+     - MIR JSON生成：✅ 成功（3/3ファイル）
+     - VM実行：❌ 出力取得できず（タイムアウト or プラグインエラー？）
+     - 調査必要：プラグインなしでの実行確認、MIR検証
+
+3. **現在のタスク** 🎯 ← **いまここ！**
+   - P0ベンチマーク実行問題の調査・修正
+   - LLVM Phase 2 (Measurement) Warmup問題解決
+   - P0ベンチマーク動作確認後、P1/P2実装検討
 4. **3バックエンド比較ベンチマーク完成**
 
 ---
