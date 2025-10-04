@@ -2,10 +2,10 @@
 // 責務: トークン列をJsonNodeに変換、構文エラー検出、ネスト構造処理
 
 // NOTE: use paths relative to this file to work under nyash.toml alias packaging
-using "../lexer/tokenizer.nyash" as JsonTokenizer
-using "../lexer/token.nyash" as TokenType
-using "../core/node.nyash" as JsonNode
-using "../utils/string.nyash" as StringUtils
+using "../lexer/tokenizer.hako" as JsonTokenizer
+using "../lexer/token.hako" as TokenType
+using "../core/node.hako" as JsonNode
+using "../utils/string.hako" as StringUtils
 
 // 🎯 高精度JSON構文解析器（Everything is Box）
 static box JsonParserModule {

@@ -1,0 +1,413 @@
+// JsonTokenizer — 精度重視の字句解析器（yyjson相当精度）
+// 責務: 文字列をトークン列に変換、エラー検出、位置情報管理
+
+// NOTE: relative paths to support alias packaging (nyash.toml)
+using "./scanner.nyash" as JsonScanner
+using "./token.nyash" as JsonToken
+using "../utils/escape.nyash" as EscapeUtils
+// Removed other dependencies - using self-contained methods
+
+// 🎯 高精度JSONトークナイザー（Everything is Box）
+box JsonTokenizer {
+    scanner: JsonScanner   // 文字スキャナー
+    tokens: ArrayBox       // 生成されたトークン配列
+    errors: ArrayBox       // エラー情報配列
+    
+    birth(input_text) {
+        // Avoid static module wrapper to ensure constructor args are preserved on VM path
+        // (create_scanner(...) lost the argument under VM fallback in some cases)
+        me.scanner = new JsonScanner("")
+        me.scanner.reset_text(input_text)
+        me.tokens = new ArrayBox()
+        me.errors = new ArrayBox()
+    }
+    
+    // ===== メイン解析メソッド =====
+    
+    // 全文字列をトークン化
+    tokenize() {
+        // 初期化
+        me.tokens = new ArrayBox()
+        me.errors = new ArrayBox()
+        
+        // メインループ
+        loop(not me.scanner.is_eof()) {
+            local token = me.next_token()
+            
+            if token != null {
+                me.tokens.push(token)
+                
+                // エラートークンがあれば記録
+                if token.is_error() {
+                    me.errors.push(token)
+                }
+                
+                // EOFに到達したら終了
+                if token.is_eof() {
+                    break
+                }
+            } else {
+                // トークン生成失敗（内部エラー）
+                local error_token = me.make_token("ERROR", "Internal tokenizer error", me.scanner.get_position(), me.scanner.get_position() + 1)
+                me.tokens.push(error_token)
+                me.errors.push(error_token)
+                break
+            }
+        }
+        
+        // 最終的にEOFトークンを追加（まだ追加されていない場合）
+        if me.tokens.length() == 0 or not me.tokens.get(me.tokens.length() - 1).is_eof() {
+            me.tokens.push(me.make_token("EOF", "", me.scanner.get_position(), me.scanner.get_position()))
+        }
+        
+        return me.tokens
+    }
+
+    // Explicitly set input text (guards against constructor-arg loss)
+    set_input(input_text) {
+        if me.scanner == null {
+            me.scanner = new JsonScanner("")
+        }
+        me.scanner.reset_text(input_text)
+    }
+    
+    // 次のトークンを1つ取得
+    next_token() {
+        // 空白をスキップ
+        me.scanner.skip_whitespace()
+        
+        // EOF チェック
+        if me.scanner.is_eof() {
+            return me.make_token("EOF", "", me.scanner.get_position(), me.scanner.get_position()).set_line_column(me.scanner.get_line(), me.scanner.get_column())
+        }
+        
+        local start_pos = me.scanner.get_position()
+        local start_line = me.scanner.get_line()
+        local start_col = me.scanner.get_column()
+        local ch = me.scanner.current()
+        
+        // 文字列リテラル
+        // print("DBG ch=" + ch)
+        if ch == "\"" {
+            // print("BR string")
+            return me.tokenize_string().set_line_column(start_line, start_col)
+        }
+        
+        // 数値リテラル
+        if me.is_number_start_char(ch) {
+            // print("BR number")
+            return me.tokenize_number().set_line_column(start_line, start_col)
+        }
+        
+        // キーワード（null, true, false）
+        if me.is_alpha_char(ch) {
+            // print("BR alpha-t")
+            return me.tokenize_keyword().set_line_column(start_line, start_col)
+        }
+        // Fallback（堅牢化）: スキャナー側の is_alpha_char が true の場合はキーワードとして扱う
+        if me.scanner.is_alpha_char != null and me.scanner.is_alpha_char(ch) {
+            // print("BR alpha-fallback")
+            return me.tokenize_keyword().set_line_column(start_line, start_col)
+        }
+        
+        // 構造文字（単一文字） — 最後に評価（誤検知回避）
+        local structural_type = me.char_to_token_type(ch)
+        if structural_type != null {
+            // Dev trace (default commented): uncomment to debug structural tokens
+            // print("[JsonTokenizer] structural '" + ch + "' => " + structural_type + " at pos=" + start_pos)
+            me.scanner.advance()
+            return this.create_structural_token(structural_type, start_pos).set_line_column(start_line, start_col)
+        }
+        
+        // print("BR error")
+        // 不明な文字（エラー）
+        me.scanner.advance()
+        return me.make_token("ERROR", "Unexpected character: '" + ch + "'", start_pos, me.scanner.get_position()).set_line_column(start_line, start_col)
+    }
+    
+    // ===== 専用トークナイザーメソッド =====
+    
+    // 文字列トークン化
+    tokenize_string() {
+        local start_pos = me.scanner.get_position()
+        local literal = me.scanner.read_string_literal()
+        
+        // Robust guard: require quoted literal ("…")
+        if literal == null or literal.length() < 2 or not (literal.substring(0, 1) == "\"") {
+            return me.make_token("ERROR", "Unterminated string literal", start_pos, me.scanner.get_position())
+        }
+        
+        // クォート除去 → エスケープ解除
+        local unquoted = this.unquote_string(literal)
+        local unescaped = EscapeUtils.unescape_string(unquoted)
+        
+        // 文字列妥当性検証
+        if not me.validate_string(unescaped) {
+            return me.make_token("ERROR", "Invalid string content", start_pos, me.scanner.get_position())
+        }
+        
+        return me.make_token("STRING", unescaped, start_pos, me.scanner.get_position())
+    }
+    
+    // 数値トークン化
+    tokenize_number() {
+        local start_pos = me.scanner.get_position()
+        local number_str = me.scanner.read_number()
+        
+        if number_str == null {
+            return me.make_token("ERROR", "Invalid number format", start_pos, me.scanner.get_position())
+        }
+        
+        // 数値の妥当性を再チェック
+        if not me.validate_number_format(number_str) {
+            return me.make_token("ERROR", "Malformed number: " + number_str, start_pos, me.scanner.get_position())
+        }
+        
+        return me.make_token("NUMBER", number_str, start_pos, me.scanner.get_position())
+    }
+    
+    // キーワードトークン化
+    tokenize_keyword() {
+        local start_pos = me.scanner.get_position()
+        
+        // アルファベット/数字/下線を読み取り（関数参照を避ける安全版）
+        local keyword = me.scanner.read_identifier()
+        
+        // キーワード判定
+        local token_type = me.keyword_to_token_type(keyword)
+        if token_type != null {
+            return me.make_token(token_type, keyword, start_pos, me.scanner.get_position())
+        }
+        
+        // 不明なキーワード（エラー）
+        return me.make_token("ERROR", "Unknown keyword: " + keyword, start_pos, me.scanner.get_position())
+    }
+    
+    // ===== ヘルパーメソッド =====
+    
+    // 構造トークン作成
+    create_structural_token(token_type, start_pos) {
+        return me.make_token(token_type, this.token_type_to_char(token_type), start_pos, start_pos + 1)
+    }
+    
+    // トークンタイプから文字を取得
+    token_type_to_char(token_type) {
+        if token_type == "LBRACE" {
+            return "{"
+        } else {
+            if token_type == "RBRACE" {
+                return "}"
+            } else {
+                if token_type == "LBRACKET" {
+                    return "["
+                } else {
+                    if token_type == "RBRACKET" {
+                        return "]"
+                    } else {
+                        if token_type == "COMMA" {
+                            return ","
+                        } else {
+                            if token_type == "COLON" {
+                                return ":"
+                            } else {
+                                return ""
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+
+    
+    // 数値形式の妥当性検証
+    validate_number_format(num_str) {
+        // 基本的な数値パターンチェック
+        if num_str.length() == 0 {
+            return false
+        }
+        
+        // JSON数値の厳密な検証
+        // 先頭ゼロの禁止（"0"以外で"0"で始まる整数は無効）
+        if num_str.length() > 1 and num_str.substring(0, 1) == "0" {
+            local second_char = num_str.substring(1, 2)
+            if me.is_digit_char(second_char) {
+                return false  // "01", "02" などは無効
+            }
+        }
+        
+        // マイナス符号の後に数字があるかチェック
+        if me.starts_with(num_str, "-") {
+            if num_str.length() == 1 {
+                return false  // "-" だけは無効
+            }
+            local after_minus = num_str.substring(1, 2)
+            if not me.is_digit_char(after_minus) {
+                return false
+            }
+        }
+        
+        return true
+    }
+    
+    // ===== 結果取得メソッド =====
+    
+    get_tokens() {
+        return me.tokens
+    }
+    
+    get_errors() {
+        return me.errors
+    }
+    
+    has_errors() {
+        return me.errors.length() > 0
+    }
+    
+    get_error_count() {
+        return me.errors.length()
+    }
+    
+    // ===== デバッグ・分析メソッド =====
+    
+    print_tokens() {
+        print("🔍 Tokenization Results:")
+        print("Total tokens: " + me.tokens.length())
+        print("Errors: " + me.errors.length())
+        
+        if me.has_errors() {
+            print("\n❌ Errors found:")
+            local i = 0
+            loop(i < me.errors.length()) {
+                local error = me.errors.get(i)
+                print("  " + error.to_debug_string())
+                i = i + 1
+            }
+        }
+        
+        print("\n📋 Token list:")
+        local i = 0
+        loop(i < me.tokens.length()) {
+            local token = me.tokens.get(i)
+            local prefix = "  "
+            if token.is_error() {
+                prefix = "❌ "
+            }
+            print(prefix + token.to_string())
+            i = i + 1
+        }
+    }
+    
+    get_statistics() {
+        local stats = new MapBox()
+        
+        // 基本統計
+        stats.set("total_tokens", me.tokens.length())
+        stats.set("error_count", me.errors.length())
+        stats.set("success_rate", (me.tokens.length() - me.errors.length()) / me.tokens.length())
+        
+        // トークンタイプ別統計
+        local type_counts = new MapBox()
+        local i = 0
+        loop(i < me.tokens.length()) {
+            local token = me.tokens.get(i)
+            local type = token.get_type()
+            
+            if type_counts.has(type) {
+                type_counts.set(type, type_counts.get(type) + 1)
+            } else {
+                type_counts.set(type, 1)
+            }
+            i = i + 1
+        }
+        stats.set("type_distribution", type_counts)
+        
+        return stats
+    }
+    
+    // ===== 内蔵ユーティリティメソッド =====
+    
+    // アルファベット判定
+    is_alpha_char(ch) {
+        return (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z")
+    }
+    
+    // 数字文字判定
+    is_digit_char(ch) {
+        return ch >= "0" and ch <= "9"
+    }
+    
+    // 英数字判定
+    is_alphanumeric_char(ch) {
+        return me.is_alpha_char(ch) or me.is_digit_char(ch)
+    }
+    
+    // 文字列先頭判定
+    starts_with(str, prefix) {
+        if prefix.length() > str.length() {
+            return false
+        }
+        return str.substring(0, prefix.length()) == prefix
+    }
+    
+    // 簡易文字列アンクオート
+    unquote_string(quoted_str) {
+        if quoted_str.length() < 2 {
+            return quoted_str
+        }
+        if quoted_str.substring(0, 1) == "\"" and quoted_str.substring(quoted_str.length() - 1, quoted_str.length()) == "\"" {
+            return quoted_str.substring(1, quoted_str.length() - 1)
+        }
+        return quoted_str
+    }
+    
+    // 簡易文字列検証
+    validate_string(str) {
+        // 簡易実装 - 実際のJSONエスケープ検証は複雑
+        return str.length() >= 0  // 基本的な存在チェックのみ
+    }
+    
+    // 文字からトークンタイプを判定（環境依存の indexOf を使わず、直接比較）
+    char_to_token_type(ch) {
+        if ch == null { return null }
+        if ch.length() != 1 { return null }
+        if ch == "{" { return "LBRACE" }
+        if ch == "}" { return "RBRACE" }
+        if ch == "[" { return "LBRACKET" }
+        if ch == "]" { return "RBRACKET" }
+        if ch == "," { return "COMMA" }
+        if ch == ":" { return "COLON" }
+        return null
+    }
+    
+    // 数値開始文字判定
+    is_number_start_char(ch) {
+        return ch == "-" or me.is_digit_char(ch)
+    }
+    
+    // キーワードからトークンタイプを判定
+    keyword_to_token_type(keyword) {
+        return match keyword {
+            "null" => "NULL",
+            "true" => "TRUE",
+            "false" => "FALSE",
+            _ => null
+        }
+    }
+
+    // ===== 安全トークン生成（birthに依存しない） =====
+    make_token(t, v, s, e) {
+        // 明示初期化で birth 依存を回避
+        local tok = new JsonToken()
+        tok.setup(t, v, s, e)
+        return tok
+    }
+}
+
+// 🎯 Static Box - Nyashインクルードシステム要件
+static box JsonTokenizerModule {
+    create_tokenizer(input_text) {
+        return new JsonTokenizer(input_text)
+    }
+}
