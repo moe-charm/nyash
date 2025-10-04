@@ -14,6 +14,7 @@ use std::sync::{
     Mutex, OnceLock,
 };
 
+
 fn min_sem_enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var("NYASH_HAKO_MIN_SEM").ok().as_deref() == Some("1"))
@@ -90,6 +91,14 @@ impl Arena {
 struct ObjRef<'a> {
     _guard: std::sync::MutexGuard<'a, HashMap<i64, Obj>>,
     obj: Option<&'a Obj>,
+}
+
+
+// Global buffer pool for functions that must return i8* (C string pointers)
+// Lifetime: process-wide (we keep CStrings to keep pointers valid)
+fn cpool() -> &'static std::sync::Mutex<Vec<CString>> {
+    static POOL: OnceLock<std::sync::Mutex<Vec<CString>>> = OnceLock::new();
+    POOL.get_or_init(|| std::sync::Mutex::new(Vec::new()))
 }
 
 fn arena() -> &'static Arena {
@@ -223,6 +232,40 @@ pub extern "C" fn nyash_string_concat_hh(a: i64, b: i64) -> i64 {
         _ => String::new(),
     };
     arena().alloc(Obj::Str(format!("{}{}", sa, sb)))
+}
+
+// nyash.string.concat_ss(lhs_ptr, rhs_ptr) -> i8*
+#[export_name = "nyash.string.concat_ss"]
+pub extern "C" fn nyash_string_concat_ss(lp: *const i8, rp: *const i8) -> *const i8 {
+    if lp.is_null() && rp.is_null() {
+        return std::ptr::null();
+    }
+    let ls = if lp.is_null() { "".into() } else { unsafe { CStr::from_ptr(lp) }.to_string_lossy().to_string() };
+    let rs = if rp.is_null() { "".into() } else { unsafe { CStr::from_ptr(rp) }.to_string_lossy().to_string() };
+    let cs = CString::new(format!("{}{}", ls, rs)).unwrap_or_else(|_| CString::new("").unwrap());
+    let p = cs.as_ptr();
+    cpool().lock().unwrap().push(cs);
+    p
+}
+
+// nyash.string.concat_si(lhs_ptr, rhs_i64) -> i8*
+#[export_name = "nyash.string.concat_si"]
+pub extern "C" fn nyash_string_concat_si(lp: *const i8, ri: i64) -> *const i8 {
+    let ls = if lp.is_null() { "".into() } else { unsafe { CStr::from_ptr(lp) }.to_string_lossy().to_string() };
+    let cs = CString::new(format!("{}{}", ls, ri)).unwrap_or_else(|_| CString::new("").unwrap());
+    let p = cs.as_ptr();
+    cpool().lock().unwrap().push(cs);
+    p
+}
+
+// nyash.string.concat_is(lhs_i64, rhs_ptr) -> i8*
+#[export_name = "nyash.string.concat_is"]
+pub extern "C" fn nyash_string_concat_is(li: i64, rp: *const i8) -> *const i8 {
+    let rs = if rp.is_null() { "".into() } else { unsafe { CStr::from_ptr(rp) }.to_string_lossy().to_string() };
+    let cs = CString::new(format!("{}{}", li, rs)).unwrap_or_else(|_| CString::new("").unwrap());
+    let p = cs.as_ptr();
+    cpool().lock().unwrap().push(cs);
+    p
 }
 
 // nyash.string.eq_hh(lhs_h, rhs_h) -> i64 (0/1)
@@ -502,6 +545,66 @@ pub extern "C" fn nyash_console_log(str_p: *const i8) -> i64 {
             Err(_) => 0,
         }
     }
+}
+
+// --- Console (handle-based) ---
+// nyash.console.log_handle(h) -> i64
+#[export_name = "nyash.console.log_handle"]
+pub extern "C" fn nyash_console_log_handle(h: i64) -> i64 {
+    if min_sem_enabled() {
+        if h > 0 {
+            if let Some(ObjRef { obj: Some(Obj::Str(s)), .. }) = arena().get(h) {
+                println!("{}", s);
+            } else {
+                println!("{}", h);
+            }
+        } else {
+            println!("null");
+        }
+    }
+    0
+}
+
+#[export_name = "nyash.console.warn_handle"]
+pub extern "C" fn nyash_console_warn_handle(h: i64) -> i64 {
+    if min_sem_enabled() {
+        if h > 0 {
+            if let Some(ObjRef { obj: Some(Obj::Str(s)), .. }) = arena().get(h) {
+                eprintln!("[warn] {}", s);
+            } else {
+                eprintln!("[warn] {}", h);
+            }
+        } else {
+            eprintln!("[warn] null");
+        }
+    }
+    0
+}
+
+#[export_name = "nyash.console.error_handle"]
+pub extern "C" fn nyash_console_error_handle(h: i64) -> i64 {
+    if min_sem_enabled() {
+        if h > 0 {
+            if let Some(ObjRef { obj: Some(Obj::Str(s)), .. }) = arena().get(h) {
+                eprintln!("[error] {}", s);
+            } else {
+                eprintln!("[error] {}", h);
+            }
+        } else {
+            eprintln!("[error] null");
+        }
+    }
+    0
+}
+
+// nyash.console.readline() -> i8*
+#[export_name = "nyash.console.readline"]
+pub extern "C" fn nyash_console_readline() -> *const i8 {
+    // Minimal stub: return empty string
+    let cs = CString::new("").unwrap();
+    let p = cs.as_ptr();
+    cpool().lock().unwrap().push(cs);
+    p
 }
 
 // --- Safepoints (no-op stubs) ---

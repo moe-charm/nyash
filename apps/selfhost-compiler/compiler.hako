@@ -3,15 +3,31 @@
 // Components are split under boxes/ and included here.
 
 // Prefer using for module declaration (Runner strips and registers)
-using "apps/selfhost-compiler/boxes/parser_box.hako" as ParserBoxMod
+using "apps/selfhost-compiler/boxes/parser/parser_box.hako" as ParserBoxMod
+// Parser dependencies (Phase 2 refactoring: hierarchical structure)
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_utils_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_ident_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_number_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/using/using_collector_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_expr_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_peek_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_literal_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_stmt_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_control_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_exception_box.hako"
 using "apps/selfhost-compiler/boxes/json_program_box.hako"
 using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
 // Pipeline v2 (emit-only; Box-First architecture; --pipeline-v2)
 using "apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako" as PipelineMod
 using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "apps/selfhost-compiler/pipeline_v2/header_emit_box.hako" as HeaderEmitBox
 // Note (Phase 15.7): keep includes minimal for --min-json path
 
 // (removed) Transitional duplicate using lines to avoid resolver duplicate-import error
+
+// Local helper box: minimal Stage​‑1 header emitter (prelude​‑free)
+// (removed) Local helper was replaced by pipeline_v2/HeaderEmitBox
 
 static box Main {
   // ---- Arg helper ----
@@ -130,6 +146,18 @@ static box Main {
   }
 
   main(args) {
+    // Early exit: when --min-json is requested, emit a minimal JSON header and return.
+    // This avoids touching using/prelude and keeps child pipelines stable.
+    local early_min = 0
+    if args != null {
+      local alen = args.length()
+      local i = 0
+      loop(i < alen) { if args.get(i) == "--min-json" { early_min = 1 } i = i + 1 }
+    }
+    if early_min == 1 {
+      print("{\"version\":0,\"kind\":\"Program\"}")
+      return 0
+    }
     // Debug setup (dev-only; avoid DebugBox dependency in fallback VM)
     // me.dbg = new DebugBox()
     // me.dbg.set_enabled(0)

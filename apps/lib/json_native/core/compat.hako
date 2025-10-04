@@ -3,8 +3,8 @@
 //          that expects JsonDocBox/JsonNodeBox style methods can operate
 //          with json_native without changing call sites.
 
-using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
-using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/parser/parser.hako" as JsonParserUtils
+using "apps/lib/json_native/core/node.hako" as JsonNode
 
 // Box that mimics a document holder with parse()/root()/error()
 box JsonDocCompat {

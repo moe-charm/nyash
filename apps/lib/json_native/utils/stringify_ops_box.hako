@@ -1,0 +1,64 @@
+// StringifyOpsBox — JSON stringify helpers for JsonNode
+using "./escape.hako" as EscUtils
+using "./string.hako" as StringUtils
+
+static box StringifyOpsBox {
+  quote(s) { return EscUtils.quote_string(s) }
+
+  stringify_primitive(kind, value) {
+    if kind == "null" { return "null" }
+    if kind == "bool" { if value { return "true" } else { return "false" } }
+    if kind == "int" { return "" + value }
+    if kind == "float" { return value }
+    if kind == "string" { return EscUtils.quote_string(value) }
+    return "null"
+  }
+
+  stringify_array(arr) {
+    if arr == null { return "[]" }
+    local parts = new ArrayBox()
+    local i = 0
+    local n = arr.length()
+    loop(i < n) {
+      local e = arr.get(i)
+      parts.push(e.stringify())
+      i = i + 1
+    }
+    return "[" + StringUtils.join(parts, ",") + "]"
+  }
+
+  stringify_object(map) {
+    if map == null { return "{}" }
+    local keys = map.keys()
+    // simple bubble sort for stable order
+    local n = keys.length()
+    local i = 0
+    loop(i < n) {
+      local j = 0
+      loop(j + 1 < n) {
+        local a = keys.get(j)
+        local b = keys.get(j + 1)
+        if a > b { keys.set(j, b) keys.set(j + 1, a) }
+        j = j + 1
+      }
+      i = i + 1
+    }
+    local parts = new ArrayBox()
+    local k = 0
+    loop(k < keys.length()) {
+      local key = keys.get(k)
+      local val = map.get(key)
+      local pair = EscUtils.quote_string(key) + ":" + val.stringify()
+      parts.push(pair)
+      k = k + 1
+    }
+    return "{" + StringUtils.join(parts, ",") + "}"
+  }
+
+  stringify_instance(node) {
+    if node == null { return "null" }
+    if node.kind == "array" { return me.stringify_array(node.value) }
+    if node.kind == "object" { return me.stringify_object(node.value) }
+    return me.stringify_primitive(node.kind, node.value)
+  }
+}

@@ -50,6 +50,14 @@ impl ExternCallRegistryBox {
             returns: MirType::Integer,
             effects: EffectMask::READ,
         });
+        // Rune.eval (skeleton)
+        self.register(ExternCallSpec {
+            interface: "nyrt.rune".into(),
+            method: "eval".into(),
+            args: vec![MirType::String],
+            returns: MirType::Integer, // skeleton mock returns integer
+            effects: EffectMask::READ,
+        });
         // 今後: env.console.log などを必要に応じて追記
     }
 

@@ -164,6 +164,27 @@ class NyashLLVMBuilder:
             except Exception:
                 pass
         
+        # Run standard optimization passes (-O3 equivalent)
+        try:
+            llvm.initialize()
+            pmb = llvm.PassManagerBuilder()
+            pmb.opt_level = 3
+            # Function-level + Module-level passes
+            fpm = llvm.FunctionPassManager(self.module)
+            pmb.populate(fpm)
+            mpm = llvm.ModulePassManager()
+            pmb.populate(mpm)
+            # JIT-style run over all functions
+            fpm.initialize()
+            for fn in self.module.functions:
+                fpm.run(fn)
+            fpm.finalize()
+            mpm.run(self.module)
+        except Exception as _e:
+            try:
+                trace_debug(f"[Python LLVM] optimization setup failed: {_e}")
+            except Exception:
+                pass
         ir_text = str(self.module)
         # Optional IR dump to file for debugging
         try:
@@ -416,6 +437,27 @@ class NyashLLVMBuilder:
         target_machine = target.create_target_machine()
 
         # Compile
+        # Run standard optimization passes (-O3 equivalent)
+        try:
+            llvm.initialize()
+            pmb = llvm.PassManagerBuilder()
+            pmb.opt_level = 3
+            # Function-level + Module-level passes
+            fpm = llvm.FunctionPassManager(self.module)
+            pmb.populate(fpm)
+            mpm = llvm.ModulePassManager()
+            pmb.populate(mpm)
+            # JIT-style run over all functions
+            fpm.initialize()
+            for fn in self.module.functions:
+                fpm.run(fn)
+            fpm.finalize()
+            mpm.run(self.module)
+        except Exception as _e:
+            try:
+                trace_debug(f"[Python LLVM] optimization setup failed: {_e}")
+            except Exception:
+                pass
         ir_text = str(self.module)
 
         # Debug: Always dump IR for debugging

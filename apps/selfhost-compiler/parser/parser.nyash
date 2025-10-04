@@ -1,5 +1,0 @@
-static box Parser {
-  // scaffold for future implementation
-  main(args) { return 0 }
-}
-

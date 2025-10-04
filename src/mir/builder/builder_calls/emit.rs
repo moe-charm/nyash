@@ -334,6 +334,23 @@ impl MirBuilder {
                 })
             },
             CallTarget::Global(name) => {
+                // Prefer direct ModuleFunction when available in current module (avoids legacy string callee)
+                if let Some(ref module) = self.current_module {
+                    if module.functions.contains_key(&name) {
+                        let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
+                        let mut args = args;
+                        crate::mir::builder::ssa::local::finalize_args(self, &mut args);
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(actual_dst),
+                            func: ValueId::new(0),
+                            callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name.clone())),
+                            args,
+                            effects: EffectMask::IO,
+                        })?;
+                        self.annotate_call_result_from_func_name(actual_dst, &name);
+                        return Ok(());
+                    }
+                }
                 // First-class: JSON.stringify(any) → arg0.toJSON() (arity 1→0)
                 if name == "JSON.stringify/1" || name.starts_with("JSON.stringify") {
                     if let Some(recv) = args.get(0).cloned() {

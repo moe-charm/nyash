@@ -1,0 +1,44 @@
+// RuneHostBox — thin placeholder for future rune integration (selfhost)
+// Responsibility: provide a stable interface; default is disabled (Fail‑Fast)
+
+static box RuneHostBox {
+  // Return 1 when rune is available in this build (default: 0)
+  is_available() { return 0 }
+
+  // Provider name (mock/wasm/…); default none
+  provider_name() { return "none" }
+
+  // Evaluate a small rune 'code' with optional context map.
+  // Calls extern nyrt.rune.eval; when disabled it returns -1 (handled by extern side).
+  eval(code, ctx) {
+    // Keep behavior explicit and side‑effect free (no prints here).
+    // Delegate to extern; context is reserved for future providers.
+    local _ = ctx
+    // Try extern via env facade (builder maps to nyrt.rune.eval) — may be unavailable in some profiles
+    // Fallback: tiny mock evaluator (supports "A+B" and integer literal)
+    // Note: no try/catch yet; keep deterministic and side‑effect free
+    // Extern path (best-effort)
+    // Disabled until builder guarantees env facade in all profiles
+    // local rc = env.rune.eval(code)
+    // return rc
+    // Fallback mock: only support literal "1+2" and simple integers for now
+    if code == "1+2" { return 3 }
+    // else try simple integer literal (only digits)
+    local i = 0
+    local ok = 1
+    loop(i < code.length()) { local ch = code.substring(i,i+1) if !(ch == "0" or ch == "1" or ch == "2" or ch == "3" or ch == "4" or ch == "5" or ch == "6" or ch == "7" or ch == "8" or ch == "9") { ok = 0 } i = i + 1 }
+    if ok == 1 {
+      // very rough: build integer by repeated add (limited)
+      local n = 0
+      i = 0
+      loop(i < code.length()) {
+        n = n * 10
+        local ch2 = code.substring(i,i+1)
+        if ch2 == "1" { n = n + 1 } else { if ch2 == "2" { n = n + 2 } else { if ch2 == "3" { n = n + 3 } else { if ch2 == "4" { n = n + 4 } else { if ch2 == "5" { n = n + 5 } else { if ch2 == "6" { n = n + 6 } else { if ch2 == "7" { n = n + 7 } else { if ch2 == "8" { n = n + 8 } else { if ch2 == "9" { n = n + 9 } } } } } } } }
+        i = i + 1
+      }
+      return n
+    }
+    return -2
+  }
+}

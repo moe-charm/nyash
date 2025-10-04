@@ -1,8 +1,0 @@
-// JSON v0 emitter (MVP placeholder)
-static box JsonV0Emitter {
-  // Emit a minimal Program{return 0}
-  program_return0() {
-    return "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
-  }
-}
-

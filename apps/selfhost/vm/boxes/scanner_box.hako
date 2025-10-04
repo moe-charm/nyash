@@ -1,0 +1,39 @@
+// scanner_box.hako — ScannerBox
+// 責務: 文字列の安全な逐次走査（境界チェックと前進保証のカプセル化）
+// 非責務: JSON構文解析や高レベルのトークナイズ（上位箱に委譲）
+
+box ScannerBox {
+  _src: StringBox
+  _pos: IntegerBox
+  _max: IntegerBox
+
+  birth(source) {
+    me._src = source
+    me._pos = 0
+    me._max = 0
+    if source != null { me._max = source.length() }
+  }
+
+  at_end() {
+    if me._pos >= me._max { return 1 }
+    return 0
+  }
+
+  pos() { return me._pos }
+
+  // 先読み（前進しない）。末尾なら null
+  peek() {
+    if me._pos >= me._max { return null }
+    return me._src.substring(me._pos, me._pos + 1)
+  }
+
+  // 1文字進めて、直前の文字を返す。末尾なら null（Fail‑Fastは呼び出し側で制御）
+  advance() {
+    if me._pos >= me._max { return null }
+    local old = me._pos
+    me._pos = me._pos + 1
+    if me._pos <= old { return null }
+    return me._src.substring(old, old + 1)
+  }
+}
+

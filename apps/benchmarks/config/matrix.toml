@@ -1,176 +1,113 @@
-# Benchmark Configuration Matrix - ChatGPT Pro設計準拠
+# Benchmark Matrix Configuration
+# Defines target backends, optimization levels, and runtime modes
 #
-# このファイルは apps/benchmarks/DESIGN.md Phase 1実装に基づいています
-# ターゲット（VM/LLVM/WASM）× フラグの組み合わせを定義
+# Reference: apps/benchmarks/DESIGN.md
+# Author: ChatGPT Pro (Phase 1 design)
+# Updated: 2025-10-04
 
-# ========================================
-# ターゲット定義
-# ========================================
+# =============================================================================
+# Target Backends
+# =============================================================================
 
 [[targets]]
 name = "vm"
-description = "Rust VM（開発・デバッグ用）"
 backend = "vm"
-optimization = "default"  # VMには最適化レベルなし
-jit = false
+description = "Rust VM (fast development/debug)"
+enabled = true
 
 [[targets]]
-name = "llvm-O0"
-description = "LLVM 最適化なし（デバッグ用）"
+name = "llvm_O0"
 backend = "llvm"
 optimization = "O0"
-jit = false
+description = "LLVM no optimization (baseline)"
+enabled = false  # Enable when LLVM backend is stable
 
 [[targets]]
-name = "llvm-O2"
-description = "LLVM 標準最適化（推奨）"
+name = "llvm_O2"
 backend = "llvm"
 optimization = "O2"
-jit = false
+description = "LLVM standard optimization"
+enabled = false  # Enable when LLVM backend is stable
 
 [[targets]]
-name = "llvm-O3"
-description = "LLVM 最大最適化"
+name = "llvm_O3"
 backend = "llvm"
 optimization = "O3"
-jit = false
+description = "LLVM aggressive optimization"
+enabled = false  # Enable when LLVM backend is stable
 
 [[targets]]
-name = "wasm"
-description = "WASM JIT（実験的）"
+name = "wasm_aot"
 backend = "wasm"
-optimization = "O2"
-jit = true
+mode = "aot"
+description = "WASM Ahead-of-Time compilation"
+enabled = false  # Future: Phase 6
 
-# ========================================
-# フラグ定義
-# ========================================
+[[targets]]
+name = "wasm_jit"
+backend = "wasm"
+mode = "jit"
+description = "WASM Just-in-Time compilation"
+enabled = false  # Future: Phase 6
 
-[flags]
-# 決定性フラグ
-deterministic = false  # デフォルトOFF（本番環境）
+# =============================================================================
+# Runtime Modes
+# =============================================================================
 
-# Effects検証
-effects_mode = "warn"  # 選択肢: "warn", "enforce", "off"
+[modes]
+# Deterministic mode: Fixed seed, reproducible results
+deterministic = false
 
-# Contracts検証
-contracts_mode = "warn"  # 選択肢: "warn", "enforce", "off"
+# Effects mode: warn | enforce | off
+# Controls runtime effect tracking and validation
+effects = "warn"
 
-# PHI検証
-phi_verify = false  # デフォルトOFF（パフォーマンス優先）
+# Contracts mode: warn | enforce | off
+# Controls pre/post condition checking
+contracts = "warn"
 
-# Result表示抑制（ベンチマーク用）
-silent_result = true  # NYASH_NYRT_SILENT_RESULT=1
+# =============================================================================
+# Measurement Configuration
+# =============================================================================
 
-# ========================================
-# ベンチマーク設定
-# ========================================
-
-[benchmark]
-# warmup回数（デフォルト）
+[measurement]
+# Warmup iterations (discarded before measurement)
 warmup = 10
 
-# 計測回数（デフォルト）
+# Measurement iterations
 repeat = 50
 
-# タイムアウト（秒、0=無制限）
-timeout = 300
-
-# 計測モード: "fixed_iterations" または "fixed_duration"
+# Measurement mode: "fixed_iterations" | "fixed_time"
 mode = "fixed_iterations"
 
-# 固定時間モード用（秒）
-duration = 10
+# Fixed-time mode: duration in seconds (future enhancement)
+duration_sec = 10
 
-# ========================================
-# 組み合わせプリセット
-# ========================================
-
-# 開発用クイックチェック
-[[presets]]
-name = "quick"
-targets = ["vm"]
-warmup = 2
-repeat = 3
-
-# 標準ベンチマーク
-[[presets]]
-name = "standard"
-targets = ["vm", "llvm-O2", "wasm"]
-warmup = 10
-repeat = 50
-
-# 完全比較（すべてのターゲット）
-[[presets]]
-name = "full"
-targets = ["vm", "llvm-O0", "llvm-O2", "llvm-O3", "wasm"]
-warmup = 10
-repeat = 50
-
-# 最適化レベル比較（LLVM専用）
-[[presets]]
-name = "llvm-opt"
-targets = ["llvm-O0", "llvm-O2", "llvm-O3"]
-warmup = 10
-repeat = 50
-
-# ========================================
-# 回帰判定しきい値
-# ========================================
+# =============================================================================
+# Regression Thresholds
+# =============================================================================
 
 [thresholds]
-# 警告しきい値（パフォーマンス劣化%）
-warning = 10.0
+# Performance regression detection
+# +10% slowdown triggers warning
+warn_percent = 10
 
-# 失敗しきい値（パフォーマンス劣化%）
-failure = 25.0
+# +20% slowdown triggers failure
+fail_percent = 20
 
-# 改善しきい値（パフォーマンス改善%、通知用）
-improvement = 15.0
-
-# ========================================
-# 出力設定
-# ========================================
+# =============================================================================
+# Output Configuration
+# =============================================================================
 
 [output]
-# 結果保存先
-results_dir = "apps/benchmarks/results"
+# JSON output path
+results_path = "apps/benchmarks/results/latest.json"
 
-# 最新結果ファイル
-latest = "latest.json"
+# Append to history log (JSONL format)
+history_path = "apps/benchmarks/results/history.jsonl"
 
-# 履歴ファイル（JSONL形式）
-history = "history.jsonl"
+# Enable detailed statistics (mean, median, stddev, p95, p99)
+detailed_stats = true
 
-# JSON出力フォーマット
-json_format = "pretty"  # "pretty" または "compact"
-
-# ========================================
-# 環境情報記録
-# ========================================
-
-[environment]
-# CPU情報を記録するか
-record_cpu = true
-
-# OS情報を記録するか
-record_os = true
-
-# Gitコミットハッシュを記録するか
-record_commit = true
-
-# ========================================
-# 使用例
-# ========================================
-#
-# # クイックチェック（開発時）
-# hako bench run --preset quick apps/benchmarks/01_counter.nyash
-#
-# # 標準ベンチマーク（CI）
-# hako bench run --preset standard apps/benchmarks/01_counter.nyash
-#
-# # カスタム設定
-# hako bench run --target vm --warmup 5 --repeat 20 apps/benchmarks/01_counter.nyash
-#
-# # LLVM最適化レベル比較
-# hako bench run --preset llvm-opt apps/benchmarks/01_counter.nyash
+# Enable environment recording (CPU, OS, commit hash)
+record_env = true

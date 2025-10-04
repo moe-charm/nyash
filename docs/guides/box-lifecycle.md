@@ -14,6 +14,7 @@ Policy (Strict, Uniform)
 Implementation Roadmap (small, reversible steps)
 1) Lowering: Builder emits `birth` immediately after `NewBox` (except `unborn()` path).
 2) Plugin Loader: synthesize a no‑op `birth` for legacy plugins lacking it (warn for one release, then silent).
+   - Migration flag: set `NYASH_WARN_PLUGIN_NO_BIRTH=1` to emit a one‑time info about synthesized no‑op; default is silent (`0`).
 3) Verifier: enforce unborn-forbid rules (dev: detailed diagnostics; prod: concise).
 4) Docs: keep this guide as the single source of truth, link from README.
 

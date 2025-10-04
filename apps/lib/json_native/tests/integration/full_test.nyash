@@ -1,6 +1,6 @@
 // 完全統合テスト - 美しいモジュラー設計の動作確認
 
-using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/core/node.hako" as JsonNode
 
 print("🎨 Nyash JSON Native 統合テスト開始")
 print("美しいモジュラー設計 vs yyjson巨大ファイル")

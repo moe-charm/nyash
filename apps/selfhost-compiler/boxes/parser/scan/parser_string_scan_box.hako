@@ -1,0 +1,48 @@
+// ParserStringScanBox — string literal scanner (escape-aware)
+// Responsibility: read a Ny string literal starting at index i (i points to '"').
+// Returns: "<content>@<pos>" where <pos> is the index after the closing quote.
+// Notes: pure string scanning; no external deps.
+
+static box ParserStringScanBox {
+  _i2s(v) { return "" + v }
+
+  scan(src, i) {
+    if src == null { return "@" + me._i2s(i) }
+    local n = src.length()
+    local j = i
+    if j >= n || src.substring(j, j+1) != "\"" { return "@" + me._i2s(i) }
+    j = j + 1
+    local out = ""
+    local guard = 0
+    local max = 200000
+    loop(j < n) {
+      if guard > max { break } else { guard = guard + 1 }
+      local ch = src.substring(j, j+1)
+      if ch == "\"" {
+        j = j + 1
+        return out + "@" + me._i2s(j)
+      }
+      if ch == "\\" && j + 1 < n {
+        local nx = src.substring(j+1, j+2)
+        if nx == "\"" { out = out + "\"" j = j + 2 }
+        else {
+          if nx == "\\" { out = out + "\\" j = j + 2 } else {
+            if nx == "n" { out = out + "\n" j = j + 2 } else {
+              if nx == "r" { out = out + "\n" j = j + 2 } else {
+                if nx == "t" { out = out + "\t" j = j + 2 } else {
+                  if nx == "u" && j + 5 < n { out = out + src.substring(j, j+6) j = j + 6 }
+                  else { out = out + nx j = j + 2 }
+                }
+              }
+            }
+          }
+        }
+      } else {
+        out = out + ch
+        j = j + 1
+      }
+    }
+    // if unterminated, return what we have and the last pos to avoid infinite loops
+    return out + "@" + me._i2s(j)
+  }
+}

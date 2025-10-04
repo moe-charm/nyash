@@ -8,6 +8,54 @@ Branch Note (selfhost)
 
 **「Hakorune で Hakorune をコンパイルする」完全なセルフホスティングの実現**
 
+
+## 🛣️ 実行ルート（道）— 小さく進めて確実に緑にする
+
+この順で小粒に進めると、常に quick 緑を維持しながらセルフホスティングへ到達できるよ。
+
+1) パーサ仕上げ（prelude安全・静的化）
+- ObjectParseBox を prelude 安全に（_dq/_bs ヘルパで直文字回避）
+- expr/stmt 側も utils を静的呼び出しに統一（new排除）
+- 受け入れ: json_native 簡易 roundtrip 緑
+
+2) Stage‑1 JSON の早期経路固定（quiet/--min-json）
+- quiet/--min-json では AST プレリュードマージをスキップ容認（エラーにしない）
+- main(args) に CLI script args を渡す（-- の後を JSON 経由で注入）
+- 受け入れ: selfhost_min_json_header_vm PASS（緑）
+
+3) MIR ローアの段階実装（最小→分岐/PHI）
+- Return/Const → BinOp → Compare → Branch/Jump → PHI の順に有効化
+- JSON v0 Bridge の到達不能 pred 除外を統一（return/throw）
+- 受け入れ: selfhost_mir_m2_*（eq_true/eq_false/compare）を順に UN‑SKIP→緑
+
+4) Mini‑VM 箱化ラインの安定化
+- InstructionScannerBox/OpHandlersBox に一本化（無限ループ対策・観測の集約）
+- Arithmetic/Compare の委譲（小さな共通箱へ移譲）
+- 受け入れ: m2/m3 代表（branch/jump/phi）緑
+
+5) using/[modules] のE2E（AST OFFでも登録維持）
+- modules 登録は quiet でも常時維持（AST マージはスキップ可）
+- 受け入れ: using_modules_alias_vm / using_modules_rune_host_vm PASS
+
+6) LLVM 連結ラインの最小安定化（AOT/ハーネス）
+- hako_kernel に最小シンボルを追加（string.concat_{ss,si,is} / console.* / readline）
+- 最小セマンティクスはフラグ NYASH_HAKO_MIN_SEM=1 でON（既定OFF）
+- 受け入れ: 代表ベンチのリンク成功・終了コード一致（ハーネス or AOT）
+
+7) スモーク整備（quick → integration）
+- selfhost_min_json_header_vm / selfhost_mir_m2_* / pipeline_v2_* / json_native roundtrip を quick に集約
+- 受け入れ: quick 全緑、integration 代表緑
+
+8) 性能・回収（ホット箇所のみ）
+- Mini‑VM の compare/binop ホットパス最小化（ログ削減・必要なら inlining）
+- LLVM の concat/console 経路の cpool 最適化
+- 受け入れ: ベンチ中央値で説明可能な改善（仕様不変）
+
+### よく使うコマンド（抜粋）
+- ビルド: `cargo build --release`
+- quiet ヘッダ確認: `NYASH_USING=1 NYASH_USING_AST=0 NYASH_JSON_ONLY=1 ./target/release/hakorune --backend vm apps/selfhost-compiler/compiler.hako -- --min-json`
+- LLVM ハーネス: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/hakorune --backend llvm apps/APP/main.hako`
+- AOT最小セマンティクス: `NYASH_HAKO_MIN_SEM=1 NYASH_NYRT_SILENT_RESULT=1 ./app`
 ### 📊 **現状分析（2025-09-30）**
 
 #### ✅ **既に実装済み（堅固な基盤）**

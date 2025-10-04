@@ -60,6 +60,12 @@ Acceptance（このラウンド）
 
 
 
+
+### Update — Using quiet/min-json pipeline (2025-10-04)
+- vm_pipeline: allow skipping AST prelude merge when NYASH_JSON_ONLY=1 or script args include "--min-json".
+- VM argv: pass CLI script args (NYASH_SCRIPT_ARGS_JSON) to main(args) as Array<String>.
+- Result: selfhost_min_json_header_vm passes; quiet child pipeline no longer trips on using-prelude when emitting header.
+
 ## Today
 - Quick → Integration 緑化まで完了（JSON v0 / selfhost Mini‑VM / using）
 - スモーク修正: cond_copy 検出を plain/escaped 両対応に（quick/core/selfhost_localssa_cond_copy_vm.sh）
@@ -181,6 +187,19 @@ Acceptance（このラウンド）
 - CURRENT_TASK は 64KB ローテーションスクリプトで維持（tools/maint/current_task_rotate.sh）。
 
 ## Recent Log (carryover)
+Update — 2025-10-04 (Mini‑VM φ decode box化・安定化)
+- φ の再導入を安全版で実施（Box‑First）
+  - MirVmMin: φ decode を Result.ok/err で包み、GuardBox で values[] 走査を上限化。適用は PhiApplyBox.apply に委譲。
+  - values[] は bracket 範囲に限定し、単調前進＋512ガードで Fail‑Fast。pred 不一致時は先頭 value を fallback 採用。
+  - スモーク（dev gate）: selfhost_mir_m3_phi_entry_vm, selfhost_mir_m3_phi_diamond_vm（PASS）
+- 新規ユーティリティ箱
+  - ScannerBox: 安全な逐次スキャン（peek/advance/at_end）。
+  - GuardBox: 反復上限ガード（tick）。
+  - Result/ResultBox: 統一結果（ok/err, unwrap_or）。
+- 次の段階
+  - φ decode を PhiDecodeBox（decode_result）へ本配線する（準備済み）。当面は inline 安定経路を維持し、回帰が無いタイミングで切り替え。
+  - docs/guides に「スキャンは箱経由・前進保証・ガード義務化」を追記。
+
 Update — 2025-09-27 (UserBox smokes added)
 - Added quick/core smokes to cover UserBox patterns under prod + fallback-ban:
   - oop_instance_call_vm.sh — PASS
@@ -693,3 +712,146 @@ Next
 - using のENV整理：
   - `NYASH_USING` を正、`NYASH_ENABLE_USING` は互換（非推奨）。verbose 時に警告。
   - スモーク既定は `NYASH_USING=1`（alias 未指定時）。
+
+
+### VM Result printing — leaf-level centralization
+- Change: Print `Result: <code>` inside VM engine leaf (`FallbackVmEngine::execute`) with stdout + flush. Suppressed duplicate prints in `vm_pipeline`.
+- Why: Upstream layers sometimes buffered or exited early; centralizing at the engine ensures visibility across paths.
+- Impact: CLI now consistently shows a single `Result:` line for VM runs (unless program prints its own). No behavior change to exit code.
+
+
+### AOT NYRT stub — Result printing
+- Implemented leaf-level print in `crates/hako_kernel/src/lib.rs` main(): prints `Result: <code>` and flushes; respects `NYASH_NYRT_SILENT_RESULT=1`.
+- Verified AOT smokes (aot_const_ret_exe, aot_compare_branch_exe) show Result lines and correct exit codes.
+- Verified benchmarks under LLVM: tools/build_llvm.sh apps/benchmarks/01_counter.nyash → exe prints program “Result: 10”; NYRT stub can be silenced for clean comparison with `NYASH_NYRT_SILENT_RESULT=1`.
+
+
+### Selfhost-compiler: .hako参照へ切替（Phase 1 T1-T2）
+- hako.toml の [modules] を .hako に統一:
+  - selfhost.compiler.debug = apps/selfhost-compiler/boxes/debug_box.hako
+  - selfhost.compiler.mir   = apps/selfhost-compiler/boxes/mir_emitter_box.hako
+- 互換: nyash.toml は既に .hako を指しており、両者で整合。
+- 動作確認: quick/core/using_modules_alias_vm.sh → PASS（エイリアス解決OK）
+- 未着手: .nyash 本体の削除は保留（1リリース分は並行維持）。
+
+
+### json_native .hako 収束（Phase 1 T3）
+- 参照切替:
+  - stringify.hako → utils/escape.hako を参照
+  - core/compat.hako → parser/parser.hako, core/node.hako を参照
+  - core/node.hako → utils/string.hako を参照
+- hako.toml の [using] を .hako に統一:
+  - json_native.main = parser/parser.hako
+  - string_utils.path = utils/string.hako
+  - json_node.path = core/node.hako
+- 衝突解消:
+  - StringUtils の二重エクスポート回避のため、nyash.toml の [using.aliases] から StringUtils を削除
+  - apps/examples/json_lint/main.nyash は `using string_utils`（別名なし）に変更
+- スモーク:
+  - apps/json_lint_vm.sh → PASS（ノイズフィルタで Result: 行を除去）
+  - core/json_stringify_standard_vm.sh → PASS
+- ランナー・フィルタ更新:
+  - tools/smokes/v2/lib/test_runner.sh: filter_noise に `^Result: ` の除去を追加
+
+
+### Selfhost-compiler 重複解消（Phase 1-B 完了）
+- 削除 (.nyash → .hako移行の完了):
+  - parser/{lexer,parser,ast}.nyash
+  - builder/ssa/{local,loopssa}.nyash
+  - builder/rewrite/{known,special}.nyash
+  - builder/mod.nyash
+  - mir/{builder,optimizer}.nyash
+  - boxes/{debug_box,mir_emitter_box}.nyash
+  - emitter/json_v0.nyash
+  - interfaces.nyash（ドキュメントは interfaces.hako に集約）
+- スモーク更新:
+  - selfhost_localssa_* 系の using を .hako に切替
+- 指標（verify_current_state.sh）:
+  - .nyash: 0 / 箱化率: 100% / 重複: 0組 → 達成
+  - 残課題: 巨大ファイルの分割（Phase 2）
+
+
+### Phase 2 — 巨大ファイル分割（Step 1）
+- ParserBox から `using` 抽出処理を分離し、UsingCollectorBox を新設。
+  - 追加: apps/selfhost-compiler/boxes/using_collector_box.hako
+  - ParserBox.extract_usings() は UsingCollectorBox.collect(src) へ委譲
+- 文字列リテラル読取の分離（安全な薄い導入）
+  - 追加: apps/selfhost-compiler/boxes/parser_string_scan_box.hako（read_string_lit 相当）
+  - ParserBox.read_string_lit() は ParserStringScanBox.scan() へ委譲（戻りは "content@pos"）
+- スモーク（代表）
+  - apps/json_lint_vm: OK（出力比較はノイズフィルタ適用後）
+- 次の候補（提案）
+  - ParserStringUtilsBox: is_digit/is_space/is_alpha/starts_with/index_of/trim/i2s を抜き出し
+  - json_native/core/node.hako の stringify/parse ユーティリティの分割（StringifyOpsBox/ParseOpsBox）
+
+
+### Phase 2 — 巨大ファイル分割（Step 2）
+- ParserStringUtilsBox を新設（i2s/is_digit/is_space/is_alpha/starts_with/index_of/trim）
+  - 追加: apps/selfhost-compiler/boxes/parser_string_utils_box.hako
+  - ParserBox 側は各ヘルパーを当箱に委譲（インターフェース不変）
+- 代表スモーク: json_lint_vm OK（ログのみ、比較は問題なし）
+- 次候補: json_native/core/node.hako の stringify 機能を StringifyOpsBox へ抽出
+
+
+### Phase 2 — 巨大ファイル分割（Step 3）
+- json_native/core/node.hako の stringify を StringifyOpsBox に委譲
+  - 追加: apps/lib/json_native/utils/stringify_ops_box.hako
+  - JsonNodeInstance.stringify() は StringifyOpsBox.stringify_instance(me) を呼ぶ
+  - インポート追記: using "../utils/stringify_ops_box.hako" as StringifyOpsBox
+- 代表スモーク: json_stringify_standard_vm OK（ノイズのみ、失敗なし）
+
+
+### Phase 2 — 巨大ファイル分割（Step 4）
+- json_native/core/node.hako の primitive parse を ParseOpsBox に委譲
+  - 追加: apps/lib/json_native/utils/parse_ops_box.hako
+  - JsonNode.parse() の先頭部（null/bool/int/float/string）は ParseOpsBox.parse_primitive(text) に一括委譲
+- 代表スモーク: json_lint_vm OK（ノイズのみ）、json_stringify_standard_vm OK
+
+
+### Phase 2 — 巨大ファイル分割（Step 5）
+- ParserNumberScanBox を追加し、整数スキャンを箱化
+  - 追加: apps/selfhost-compiler/boxes/parser_number_scan_box.hako
+  - ParserBox.parse_number2() は ParserNumberScanBox.scan_int() に委譲（"json@pos" 形式）
+- スモーク: json_lint_vm 変化なし（ノイズのみ）
+- 注意: ObjectParseBox はプリミティブ限定の実装を用意したが、prelude 段階のクオート解釈が厳格なため一旦無効化（委譲は元に戻し、箱は温存）
+
+
+### Phase 2 — 巨大ファイル分割（Step 6）
+- ParserIdentScanBox を追加し、識別子スキャンを箱化
+  - 追加: apps/selfhost-compiler/boxes/parser_ident_scan_box.hako
+  - ParserBox.read_ident2() は ParserIdentScanBox.scan_ident() に委譲（"name@pos" 互換）
+- スモーク: json_lint_vm 問題なし（ノイズのみ）。
+- 次: ObjectParseBox の再導入は prelude のクオート厳格性を考慮して安全な表現に刷新後に再挑戦。
+
+
+## Rune Host (skeleton) added
+- Added apps/selfhost/vm/boxes/rune_host.hako: thin box, default disabled (eval returns -1).
+- Wired module key: selfhost.vm.rune_host in hako.toml.
+- Docs: docs/guides/rune-host.md (responsibility, env plan, usage).
+- Smoke: tools/smokes/v2/profiles/quick/selfhost/rune_host_disabled_vm.sh (PASS) — ensures disabled path is explicit.
+
+Rationale: keep a minimal, box-first entry point for future rune integration without touching runner/VM core, aligned with phase freeze.
+
+
+## Rune (Minimal Bridge) — decision to pause
+- Facade added: apps/selfhost/vm/boxes/rune_host.hako (eval/is_available/provider_name). Default OFF, fail-fast; tiny fallback for stability.
+- Rust extern prepared: nyrt.rune.eval in VM ExternAdapter; registry entry present. Not enforced by default.
+- Smokes:
+  - quick/selfhost/rune_host_disabled_vm.sh → PASS
+  - quick/selfhost/rune_host_mock_vm.sh → PASS (ENV: HAKO_RUNE_ENABLE=1, HAKO_RUNE_PROVIDER=mock)
+- Stop here: no provider wiring in box by default; keep core surface minimal.
+- Next (when unfreezing): remove box fallback, switch to extern route, add timeout/env plumbing, and wire providers (mock/wasm).
+## Current Focus
+- Mini-VM φ decode hardening: DONE (error taxonomy, skip malformed, empty-array handling).
+- Mini-VM log noise: DONE (default errors-only; NYASH_MINIVM_DEBUG=1 to enable debug).
+- Guide updated: scanning-policy staged boundaries (seek→substring→Frag).
+- Smokes: 1 always-on (values), extras gated via SMOKES_ENABLE_PHI_DECODE_EXTRA=1.
+
+### Next Small Steps
+- Builder: static factory auto-birth now emits lowered `Class.birth/Arity` even if instance box is lowered later (static-first order).
+- Mini‑VM: Throw terminator implemented (returns -2, error-only log).
+- Selfhost header emit unified: pipeline_v2/HeaderEmitBox kept for orchestration; compiler early --min-json emits locally to avoid AST-prelude dependency.
+- φ diamond smoke is now always-on in quick.
+- Optionally expand phi error variants if new malformed shapes appear.
+- Keep quick lean (1 phi test), run extras via filter/ENV when diagnosing.
+- Proceed to remaining m3 validation (branch_false/cond_prev_block/jump_chain) once needed.

@@ -7,6 +7,7 @@
  */
 
 use crate::{backend::MirInterpreter, mir::MirModule};
+use std::io::Write;
 
 /// Unified VM engine trait
 pub trait VmEngine {
@@ -32,6 +33,13 @@ impl VmEngine for FallbackVmEngine {
                 // Integer/Bool → code, others → 0.
                 let code_i64 = crate::runtime::semantics::coerce_to_i64(ret.as_ref()).unwrap_or(0);
                 let code = (code_i64 as i32) & 0xFF;
+
+                // Leaf-level result printing
+                let quiet = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1");
+                if !quiet {
+                    println!("Result: {}", code);
+                    let _ = std::io::stdout().flush();
+                }
                 Ok(code)
             }
             Err(e) => Err(format!("VM fallback error: {}", e)),

@@ -1,0 +1,24 @@
+// ParserIdentScanBox — scan identifier [A-Za-z_][A-Za-z0-9_]* starting at i
+// Returns: "<name>@<pos>"; when not starting with alpha/_ returns "@<i>"
+
+static box ParserIdentScanBox {
+  _i2s(v) { return "" + v }
+  _is_alpha(ch) { return (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch == "_" }
+  _is_digit(ch) { return ch >= "0" && ch <= "9" }
+
+  scan_ident(src, i) {
+    if src == null { return "@" + me._i2s(i) }
+    local n = src.length()
+    local j = i
+    if j >= n { return "@" + me._i2s(i) }
+    local ch = src.substring(j, j+1)
+    if me._is_alpha(ch) == 0 { return "@" + me._i2s(i) }
+    j = j + 1
+    loop(j < n) {
+      local c = src.substring(j, j+1)
+      if me._is_alpha(c) || me._is_digit(c) { j = j + 1 } else { break }
+    }
+    local name = src.substring(i, j)
+    return name + "@" + me._i2s(j)
+  }
+}

@@ -10,9 +10,9 @@ test_selfhost_min_json_header_vm() {
   # Use runner with selfhost child; emit-only and quiet
   local out
   out=$(NYASH_DISABLE_PLUGINS=1 \
-        NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_ALLOW_USING_FILE=1 NYASH_ENABLE_USING=1 \
-        NYASH_JSON_ONLY=1 \
-        timeout 5 "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" -- --min-json 2>/dev/null | \
+        NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING=1 NYASH_USING_AST=0 \
+        NYASH_JSON_ONLY=0 \
+        run_nyash_vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" -- --min-json | \
         awk 'match($0,/^\{/) {print; exit}')
 
   # Expect header to contain version/kind keys

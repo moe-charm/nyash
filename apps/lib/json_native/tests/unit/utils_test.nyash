@@ -1,7 +1,7 @@
 // Utils層テスト - StringUtils & EscapeUtilsの動作確認
 
-using "apps/lib/json_native/utils/string.nyash" as StringUtils
-using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+using "apps/lib/json_native/utils/string.hako" as StringUtils
+using "apps/lib/json_native/utils/escape.hako" as EscapeUtils
 
 print("🧪 Utils層テスト開始")
 

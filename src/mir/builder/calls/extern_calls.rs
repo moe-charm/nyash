@@ -106,6 +106,15 @@ pub fn get_env_method_spec(
             true,
         )),
 
+        // Rune (selfhost placeholder)
+        ("rune", "eval") => Some((
+            // Route env.rune.eval → nyrt.rune.eval (adapter handles provider/env)
+            "nyrt.rune".to_string(),
+            "eval".to_string(),
+            EffectMask::READ,
+            true,
+        )),
+
         // Process/system
         ("process", "exit") => Some((
             "env.process".to_string(),

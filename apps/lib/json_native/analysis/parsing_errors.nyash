@@ -1,7 +1,7 @@
 // 簡単なNyashスクリプトJSON解析の「ずれ」問題分析
 // yyjsonが必要になった理由と最小限の解決要件
 
-using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/core/node.hako" as JsonNode
 
 static box ParsingErrorAnalysis {
     

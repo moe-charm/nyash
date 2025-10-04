@@ -1,0 +1,33 @@
+// result_box.hako — Result / ResultBox
+// 責務: 処理結果の統一表現（成功値 or エラーメッセージ）
+// 使い方: Result.ok(val) / Result.err(msg) → ResultBox
+
+box ResultBox {
+  _val: Box
+  _err: StringBox
+  _ok: IntegerBox  // 1=ok, 0=err（BoolBox 非依存）
+
+  birth() { me._val = null  me._err = ""  me._ok = 0 }
+
+  is_ok() { return me._ok }
+  value() { return me._val }
+  error() { return me._err }
+
+  unwrap_or(def) { if me._ok == 1 { return me._val } return def }
+}
+
+static box Result {
+  ok(v) {
+    local r = new ResultBox()
+    r._val = v
+    r._ok = 1
+    return r
+  }
+  err(msg) {
+    local r = new ResultBox()
+    r._err = msg
+    r._ok = 0
+    return r
+  }
+}
+

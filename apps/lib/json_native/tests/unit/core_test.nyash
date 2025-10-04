@@ -1,6 +1,6 @@
 // JsonNode基本動作テスト - 80%の動く基盤を確認
 
-using "apps/lib/json_native/core/node.nyash" as JsonNode
+using "apps/lib/json_native/core/node.hako" as JsonNode
 
 // ===== 基本値テスト =====
 
