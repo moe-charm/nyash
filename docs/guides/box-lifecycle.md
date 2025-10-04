@@ -47,3 +47,13 @@ Testing Notes
   - `tools/smokes/v2/profiles/quick/core/userbox_unborn_failfast_vm.sh`
   - `tools/smokes/v2/profiles/quick/core/userbox_unborn_then_birth_ok_vm.sh`
   - `tools/smokes/v2/profiles/quick/core/plugin_no_birth_noop_vm.sh` (dev fixture; skips if missing)
+
+## Auto‑Birth と unborn
+- 既定は auto‑birth（ が自動で  を呼ぶ）。
+- 上級者向けに  を許可。
+-  は冪等（多重呼び出しは no‑op）。
+
+## Auto‑Birth と unborn
+- 既定は auto‑birth（`new` が自動で `birth` を呼ぶ）。
+- 上級者向けに `TypeBox.unborn().withXxx(...).birth()` を許可。
+- `birth()` は冪等（多重呼び出しは no‑op）。

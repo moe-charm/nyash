@@ -17,10 +17,19 @@ impl MirInstruction {
             return eff;
         }
         match self {
-            // Pure operations
-            MirInstruction::Const { .. }
-            | MirInstruction::BinOp { .. }
-            | MirInstruction::UnaryOp { .. }
+            // Pure operations (with refined exceptions below)
+            MirInstruction::Const { .. } => EffectMask::PURE,
+            // Binary operations are generally pure, but some variants may panic at runtime
+            // (e.g., division/modulo by zero). Mark such ops as having Panic effect so that
+            // passes like DCE do not eliminate them even if their result is unused.
+            MirInstruction::BinOp { op, .. } => {
+                use crate::mir::types::BinaryOp;
+                match op {
+                    BinaryOp::Div | BinaryOp::Mod => EffectMask::PURE.add(Effect::Panic),
+                    _ => EffectMask::PURE,
+                }
+            }
+            MirInstruction::UnaryOp { .. }
             | MirInstruction::Compare { .. }
             | MirInstruction::Cast { .. }
             | MirInstruction::TypeOp { .. }

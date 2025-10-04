@@ -90,7 +90,12 @@ impl BinOpInst {
 }
 
 impl InstructionMeta for BinOpInst {
-    fn effects(&self) -> EffectMask { EffectMask::PURE }
+    fn effects(&self) -> EffectMask {
+        match self.op {
+            MirBinOp::Div | MirBinOp::Mod => EffectMask::PURE.add(Effect::Panic),
+            _ => EffectMask::PURE,
+        }
+    }
     fn dst(&self) -> Option<ValueId> { Some(self.dst) }
     fn used(&self) -> Vec<ValueId> { vec![self.lhs, self.rhs] }
 }
@@ -308,7 +313,9 @@ inst_meta! {
     pub struct UnaryOpInst { dst: ValueId, operand: ValueId }
     => {
         from_mir = |i| match i { MirInstruction::UnaryOp { dst, operand, .. } => Some(UnaryOpInst { dst: *dst, operand: *operand }), _ => None };
-        effects = |_: &Self| EffectMask::PURE;
+        // Unary ops may raise type errors at runtime (e.g., neg on non-number).
+        // Mark as potential Panic to prevent DCE from eliminating them when results are unused.
+        effects = |_: &Self| EffectMask::PURE.add(Effect::Panic);
         dst = |s: &Self| Some(s.dst);
         used = |s: &Self| vec![s.operand];
     }

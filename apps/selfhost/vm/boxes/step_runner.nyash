@@ -1,6 +1,7 @@
 // step_runner.nyash — JSON v0 compare→branch を静的評価（Mini‑VM非依存）
 
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 
 static box StepRunnerBox {
   // ブロック0の const 値を dst 指定で抽出（i64 前提の最小）
@@ -39,38 +40,10 @@ static box StepRunnerBox {
     local cond = JsonFragBox.get_int(seg, "cond")
     if dst == null || cond == null { return 0 }
     if cond != dst { return 0 }
-        // 評価（単純な if/else で分岐）
-    local r = 0
-    if kind == "Eq" { if iv1 == iv2 { r = 1 } else { r = 0 } }
-    else if kind == "Ne" { if iv1 != iv2 { r = 1 } else { r = 0 } }
-    else if kind == "Lt" { if iv1 < iv2 { r = 1 } else { r = 0 } }
-    else if kind == "Le" { if iv1 <= iv2 { r = 1 } else { r = 0 } }
-    else if kind == "Gt" {
-      // Robust Gt without relying on direct '>' operator
-      print("PATH Gt")
-      // fast path attempt
-      if iv1 > iv2 { r = 1 } else { r = 0 }
-      // fallback: increment from iv2 to iv1 with a step cap
-      if r == 0 {
-        local t = iv2
-        local cap = 0
-        loop(true) {
-          cap = cap + 1
-          if cap > 100000 { break }
-          t = t + 1
-          if t == iv1 { r = 1 break }
-          // stop early if we clearly passed iv1 by simple guard
-          if t == iv2 { break }
-        }
-      }
-    }
-    else if kind == "Ge" { if iv1 >= iv2 { r = 1 } else { r = 0 } }
-    print("DBG kind=" + kind)
-    print("DBG v1=" + (""+iv1))
-    print("DBG v2=" + (""+iv2))
-    print("DBG dst=" + (""+dst))
-    print("DBG cond=" + (""+cond))
-    print("DBG r=" + (""+r))
+        // 評価は共通ハンドラに委譲（OpHandlersBox）
+    local r = OpHandlersBox._eval_cmp(kind, iv1, iv2)
+    // Debug lines trimmed to avoid noise in smokes
+
 return r
   }
 

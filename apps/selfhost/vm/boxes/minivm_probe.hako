@@ -8,27 +8,7 @@ static box MiniVmProbe {
   probe_compare(mjson) {
     local regs = new MapBox()
     local seg = JsonFragBox.block0_segment(mjson)
-    if seg.length() == 0 {
-      // debug indices on full JSON
-      local pf = mjson.indexOf("\"functions\"")
-      local pb = mjson.indexOf("\"blocks\"")
-      local pi = mjson.indexOf("\"instructions\":")
-      print("[probe] pf="+(""+pf)+" pb="+(""+pb)+" pi="+(""+pi))
-      // Fallback: use JsonScanBox for robust array end detection
-      local key = "\"instructions\":["
-      local k = mjson.indexOf(key)
-      print("[probe] k="+(""+k))
-      if k >= 0 {
-        local bracket_pos = k + key.length() - 1  // position of '['
-        local endp = JsonScanBox.seek_array_end(mjson, bracket_pos)
-        print("[probe] bracket_pos="+(""+bracket_pos)+" endp="+(""+endp))
-        if endp >= 0 {
-          seg = mjson.substring(bracket_pos + 1, endp)  // content inside [ ... ]
-        }
-      }
-    }
-    // debug
-    print("[probe] seglen="+(""+seg.length()))
+    if seg.length() == 0 { return new MapBox() }
     local pos = 0
     loop(true) {
       if pos >= seg.length() { break }

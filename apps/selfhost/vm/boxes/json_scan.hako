@@ -4,6 +4,8 @@
 using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
 
 static box JsonScanBox {
+  // minimal string→int
+  _str_to_int(s) { local i = 0 local n = s.length() local acc = 0 local neg = 0 if s.substring(0,1) == "-" { neg = 1  i = 1 } loop (i < n) { local ch = s.substring(i, i+1) local d = match ch { "0"=>0,"1"=>1,"2"=>2,"3"=>3,"4"=>4,"5"=>5,"6"=>6,"7"=>7,"8"=>8,"9"=>9, _=>-1 } if d < 0 { break } acc = acc*10 + d i = i + 1 } if neg == 1 { return 0 - acc } return acc }
   // Seek the end index (inclusive) of an object starting at `start` (must be '{').
   seek_obj_end(text, start) {
     if text == null { return -1 }
@@ -30,29 +32,34 @@ static box JsonScanBox {
   }
 
   // Seek the end index (inclusive) of an array starting at `start` (must be '[').
-  seek_array_end(text, start) {
-    if text == null { return -1 }
-    if start < 0 || start >= text.length() { return -1 }
-    if text.substring(start, start+1) != "[" { return -1 }
-    local n = text.length()
-    local depth = 0
-    local i = start
-    local in_str = 0
-    loop (i < n) {
-      local ch = text.substring(i, i+1)
-      if in_str == 1 {
-        if ch == "\\" { i = i + 2  continue }
-        if ch == "\"" { in_str = 0  i = i + 1  continue }
+    seek_array_end(text, start) {
+      if text == null { return -1 }
+      // Normalize start to integer (defensive against stringified input)
+      local start_s = "" + start
+      local start_i = me._str_to_int(start_s)
+      local n = text.length()
+      if start_i < 0 || start_i >= n { return -1 }
+      local first_ch = text.substring(start_i, start_i+1)
+      if first_ch != "[" { return -1 }
+      // main loop (escape-aware)
+      local depth = 0
+      local i = start_i
+      local in_str = 0
+      loop (i < n) {
+        local ch = text.substring(i, i+1)
+        if in_str == 1 {
+          if ch == "\\" { i = i + 2  continue }
+          if ch == "\"" { in_str = 0  i = i + 1  continue }
+          i = i + 1
+          continue
+        }
+        if ch == "\"" { in_str = 1  i = i + 1  continue }
+        if ch == "[" { depth = depth + 1 }
+        if ch == "]" { depth = depth - 1  if depth == 0 { return i } }
         i = i + 1
-        continue
       }
-      if ch == "\"" { in_str = 1  i = i + 1  continue }
-      if ch == "[" { depth = depth + 1 }
-      if ch == "]" { depth = depth - 1  if depth == 0 { return i } }
-      i = i + 1
+      return -1
     }
-    return -1
-  }
 
   // Search for either plain or escaped key pattern starting at `pos`.
   find_key_dual(text, plain, escaped, pos) {
@@ -63,4 +70,3 @@ static box JsonScanBox {
     return text.indexOf(escaped, pos)
   }
 }
-

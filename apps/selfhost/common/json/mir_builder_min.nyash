@@ -105,20 +105,20 @@ static box MirJsonBuilderMin {
   start_module(st) {
     local has_buf = "no"
     if st != null && st.has != null && st.has("buf") { has_buf = "yes" }
-    print("[DEBUG start_module] st.has(buf)=" + has_buf)
+    if me._trace_enabled(st) { print("[DEBUG start_module] st.has(buf)=" + has_buf) }
     st.set("phase", 1)
     return me._append(st, "{\"functions\":[")
   }
   start_function(st, name) {
     local has_fn = "no"
     if st != null && st.has != null && st.has("fn_name") { has_fn = "yes" }
-    print("[DEBUG start_function] name=" + name + " st.has(fn_name)=" + has_fn)
+    if me._trace_enabled(st) { print("[DEBUG start_function] name=" + name + " st.has(fn_name)=" + has_fn) }
     st.set("phase", 2)
     // Dual API: record function name and reset blocks
     st.set("fn_name", name)
     st.set("blocks", new ArrayBox())
     st.set("cur_block_index", -1)
-    print("[DEBUG start_function] after set, st.get(fn_name)=" + st.get("fn_name"))
+    if me._trace_enabled(st) { print("[DEBUG start_function] after set, st.get(fn_name)=" + st.get("fn_name")) }
     // We support a single function in minimal builder
     local b = "{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
     return me._append(st, b)

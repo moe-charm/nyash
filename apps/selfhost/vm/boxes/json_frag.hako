@@ -3,11 +3,12 @@
 // 非責務: 実行・評価（構造検査やVM実行は他箱に委譲）。
 
 using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
+using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
 
 static box JsonFragBox {
   // 基本ヘルパ
   index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() local m = needle.length() if pos > n { return -1 } if m <= 0 { return pos } local i = pos local limit = n - m loop(i <= limit) { local ok = 1 local j = 0 loop(j < m) { local ch = hay.substring(i+j, i+j+1) local nh = needle.substring(j, j+1) if ch != nh { ok = 0 break } j = j + 1 } if ok == 1 { return i } i = i + 1 } return -1 }
-  read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
+  read_digits(text, pos) { local out = "" local i = pos loop(i < text.length()) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
   _str_to_int(s) { local i = 0 local n = s.length() local acc = 0 local neg = 0 if s.substring(0,1) == "-" { neg = 1  i = 1 } loop (i < n) { local ch = s.substring(i, i+1) local d = match ch { "0"=>0,"1"=>1,"2"=>2,"3"=>3,"4"=>4,"5"=>5,"6"=>6,"7"=>7,"8"=>8,"9"=>9, _=>-1 } if d < 0 { break } acc = acc*10 + d i = i + 1 } if neg == 1 { return 0 - acc } return acc }
 
   // key に続く数値（最初の一致）を返す。見つからなければ null。
@@ -36,30 +37,15 @@ static box JsonFragBox {
   // ブロック0の instructions を丸ごと返す（配列の中身のみ返す）。
   block0_segment(mjson) {
     if mjson == null { return "" }
-    // id:0 を見つけた後で "instructions":[ を探す（プレーンJSONを前提）
-    local p = mjson.indexOf("\"id\":0")
-    if p < 0 { return "" }
-    local k = mjson.indexOf("\"instructions\":[", p)
-    if k < 0 { return "" }
-    local i = k + 16  // length of ""instructions":["
-    // 対応する ']' をエスケープ対応で探索
-    local depth = 1
-    local endp = i
-    local in_str = 0
-    loop(true) {
-      local ch = mjson.substring(endp, endp+1)
-      if ch == "" { break }
-      if in_str == 1 {
-        if ch == "\\" { endp = endp + 2  continue }
-        if ch == "\"" { in_str = 0  endp = endp + 1  continue }
-        endp = endp + 1
-        continue
-      }
-      if ch == "\"" { in_str = 1  endp = endp + 1  continue }
-      if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
-      if depth == 0 { break }
-      endp = endp + 1
-    }
-    return mjson.substring(i, endp)
+    // Find the instructions array start reliably
+    local key = "\"instructions\":["
+    local pk = mjson.indexOf(key)
+    if pk < 0 { return "" }
+    // '[' position
+    local arr_bracket = pk + key.length() - 1
+    // Use escape-aware scanner to find matching ']'
+    local endp = JsonScanBox.seek_array_end(mjson, arr_bracket)
+    if endp < 0 { return "" }
+    return mjson.substring(arr_bracket + 1, endp)
   }
 }

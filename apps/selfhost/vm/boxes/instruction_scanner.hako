@@ -5,7 +5,7 @@ using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
 using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
 
 static box InstructionScannerBox {
-  _tprint(msg) { print(msg) }
+  _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
 
   index_of_from(hay, needle, pos) {
     if pos < 0 { pos = 0 }

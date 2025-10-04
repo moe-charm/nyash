@@ -197,6 +197,7 @@ impl MirInterpreter {
         name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+
         // Fail-Fast: if this ModuleFunction is actually an instance method form
         // like "Class.method" and the first arg is an unborn InstanceBox, forbid.
         if let Some((_, method)) = name.split_once('.') {

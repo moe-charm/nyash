@@ -3,6 +3,7 @@ Selfhost Pipeline v2 (Box-First, Emit-Only)
 Goal
 - Make the selfhost compiler pipeline explicit in Nyash code without changing Core behavior.
 - Keep execution in the parent Runner; Ny boxes handle parse→emit and print one JSON line.
+- JSON v0 lowering is unified via MirBuilder; the legacy bridge path has been removed.
 
 Boxes
 - ExecutionPipelineBox: orchestrates ParserBox and EmitterBox; optional backend tag.

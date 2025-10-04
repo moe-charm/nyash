@@ -3,6 +3,8 @@
 Nyashプログラミング言語の利用者向けガイドとチュートリアルです。
 
 Quick Links
+- Mini‑VM（自己ホスト最小実行器の設計）: minivm.md
+- Operator Guard（演算子ボックスの境界・採用方針）: operator-guard.md
 - Docsの書き方（小さく・リンク駆動・3層）: contributing-docs.md
 
 ## 🚀 はじめに
