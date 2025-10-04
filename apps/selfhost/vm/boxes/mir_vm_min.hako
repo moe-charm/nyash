@@ -193,7 +193,11 @@ static box MirVmMin {
             }
             if res.is_ok() == 1 {
               local pr = res.value()
+              me._tprint("[ERROR] phi apply dst="+me._int_to_str(pr.get(0))+" vin="+me._int_to_str(pr.get(1)))
               PhiApplyBox.apply(pr.get(0), pr.get(1), regs)
+              me._tprint("[ERROR] phi after r"+me._int_to_str(pr.get(0))+"="+(""+regs.get(""+pr.get(0))))
+            } else {
+              me._tprint("[ERROR] phi no_incoming")
             }
           }
         }
