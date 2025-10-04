@@ -142,7 +142,8 @@ static box MirVmMin {
         }
         else if op == "phi" {
           local dst = JsonFragBox.get_int(seg, "dst")
-          if dst == null { /* malformed */ } else {
+          if dst == null { // malformed
+          } else {
             local vin = null
             local key = "\"values\":["
             local p = seg.indexOf(key)
