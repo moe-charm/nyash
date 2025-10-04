@@ -105,7 +105,7 @@ impl NyashRunner {
         // Alias symbols collected from `using ... as Alias` (always collected regardless of AST merge)
         let mut alias_names: std::collections::HashSet<String> = std::collections::HashSet::new();
         let use_ast = crate::config::env::using_ast_enabled();
-        if crate::config::env::enable_using() {
+        if crate::config::env::enable_using() && !quiet_pipe {
             match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(self, &code, filename) {
                 Ok((clean, paths, alias_pairs)) => {
                     code_ref = clean;
@@ -117,8 +117,12 @@ impl NyashRunner {
                         }
                     }
                     if !paths.is_empty() && !use_ast {
-                        eprintln!("❌ Pipeline error: `using` resolution error: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
-                        process::exit(1);
+                        // In quiet JSON-only child pipelines, allow skipping AST prelude merge without error.
+                        if !quiet_pipe {
+                            eprintln!("❌ Pipeline error: `using` resolution error: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                            process::exit(1);
+                        }
+                        // quiet_pipe: proceed without AST merge (modules/aliases still recorded above)
                     }
                     if use_ast && !paths.is_empty() {
                         match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {

@@ -6,7 +6,6 @@ use crate::ast::ASTNode;
 use crate::runner::NyashRunner;
 use std::collections::{HashMap, HashSet};
 use std::{fs, process};
-use std::io::Write;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -46,6 +45,16 @@ pub fn resolve_preludes_and_aliases(
     }
 
     let use_ast = crate::config::env::using_ast_enabled();
+    // Quiet child-pipeline mode (e.g., JSON-only emit for selfhost compiler)
+    // In this mode, we allow skipping AST prelude merge without treating it as an error.
+    let quiet_pipe = std::env::var("NYASH_JSON_ONLY").ok().as_deref() == Some("1");
+    // Also allow skipping when script args include "--min-json" (selfhost header path)
+    let min_json_req = std::env::var("NYASH_SCRIPT_ARGS_JSON")
+        .ok()
+        .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
+        .and_then(|v| v.as_array().cloned())
+        .map(|arr| arr.iter().any(|x| x.as_str() == Some("--min-json")))
+        .unwrap_or(false);
     let mut prelude_asts: Vec<ASTNode> = Vec::new();
     let mut alias_names: HashSet<String> = HashSet::new();
     let mut alias_map: HashMap<String, String> = HashMap::new();
@@ -62,9 +71,17 @@ pub fn resolve_preludes_and_aliases(
     }
 
     if !paths.is_empty() && !use_ast {
-        return Err(PipelineError::UsingResolution(
-            "AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.".to_string(),
-        ));
+        if quiet_pipe || min_json_req {
+            // Quiet pipeline: proceed without AST merge.
+            // Aliases were already collected above; module registration is handled by the runner preprocessor.
+            if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                crate::runner::trace::log("[using] AST merge disabled but quiet pipeline active — skipping prelude merge".to_string());
+            }
+        } else {
+            return Err(PipelineError::UsingResolution(
+                "AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.".to_string(),
+            ));
+        }
     }
 
     if use_ast && !paths.is_empty() {

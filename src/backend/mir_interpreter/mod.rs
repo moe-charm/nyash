@@ -127,9 +127,36 @@ impl MirInterpreter {
             .get(entry_name)
             .ok_or_else(|| VMError::InvalidInstruction(format!("entry not found: {}", entry_name)))?;
 
-        // If the entry expects at least one parameter, pass an empty ArrayBox as argv
+        // If the entry expects at least one parameter, pass argv from CLI script args (JSON),
+        // falling back to an empty ArrayBox when unavailable.
         let ret = if pass_argv && !func.params.is_empty() {
-            let argv = VMValue::from_nyash_box(Box::new(ArrayBox::new()));
+            let argv = {
+                // Build argv from NYASH_SCRIPT_ARGS_JSON when present (array of strings)
+                if let Ok(raw) = std::env::var("NYASH_SCRIPT_ARGS_JSON") {
+                    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+                        if let Some(arr) = v.as_array() {
+                            let mut ab = ArrayBox::new();
+                            for item in arr {
+                                if let Some(s) = item.as_str() {
+                                    let sb = crate::box_trait::StringBox::new(s.to_string());
+                                    let _ = ab.push(Box::new(sb));
+                                } else {
+                                    // Non-string items are stringified conservatively
+                                    let sb = crate::box_trait::StringBox::new(item.to_string());
+                                    let _ = ab.push(Box::new(sb));
+                                }
+                            }
+                            VMValue::from_nyash_box(Box::new(ab))
+                        } else {
+                            VMValue::from_nyash_box(Box::new(ArrayBox::new()))
+                        }
+                    } else {
+                        VMValue::from_nyash_box(Box::new(ArrayBox::new()))
+                    }
+                } else {
+                    VMValue::from_nyash_box(Box::new(ArrayBox::new()))
+                }
+            };
             let args: [VMValue; 1] = [argv];
             self.exec_function_inner(func, Some(&args))?
         } else {

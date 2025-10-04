@@ -142,6 +142,18 @@ static box Main {
   }
 
   main(args) {
+    // Early exit: when --min-json is requested, emit a minimal JSON header and return.
+    // This avoids touching using/prelude and keeps child pipelines stable.
+    local early_min = 0
+    if args != null {
+      local alen = args.length()
+      local i = 0
+      loop(i < alen) { if args.get(i) == "--min-json" { early_min = 1 } i = i + 1 }
+    }
+    if early_min == 1 {
+      print("{\"version\":0,\"kind\":\"Program\"}")
+      return 0
+    }
     // Debug setup (dev-only; avoid DebugBox dependency in fallback VM)
     // me.dbg = new DebugBox()
     // me.dbg.set_enabled(0)

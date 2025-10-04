@@ -6,6 +6,7 @@
 // - Pure string scan（依存ゼロ）。Fail‑Fastはせず、安全にスキップでループを進める
 
 static box UsingCollectorBox {
+  _dq() { return "\"" }
   // Lightweight helpers (local scope)
   _starts_with(src, i, pat) {
     local n = src.length()
@@ -69,7 +70,7 @@ static box UsingCollectorBox {
         // path or namespace
         local is_path = 0
         if target.length() > 0 {
-          if me._starts_with(target, 0, """) == 1 { is_path = 1 }
+          if me._starts_with(target, 0, me._dq()) == 1 { is_path = 1 }
           if me._starts_with(target, 0, "./") == 1 { is_path = 1 }
           if me._starts_with(target, 0, "/") == 1 { is_path = 1 }
           if target.length() >= 5 && me._starts_with(target, target.length()-5, ".hako") == 1 { is_path = 1 }
@@ -79,9 +80,9 @@ static box UsingCollectorBox {
         local path = null
         if is_path == 1 {
           // strip quotes
-          if me._starts_with(target, 0, """) == 1 {
+          if me._starts_with(target, 0, me._dq()) == 1 {
             target = target.substring(1, target.length())
-            if target.length() > 0 && target.substring(target.length()-1, target.length()) == """ { target = target.substring(0, target.length()-1) }
+            if target.length() > 0 && target.substring(target.length()-1, target.length()) == me._dq() { target = target.substring(0, target.length()-1) }
           }
           path = target
           if alias != null { name = alias } else {
@@ -101,8 +102,8 @@ static box UsingCollectorBox {
         }
         // append entry
         if first == 0 { out = out + "," } else { first = 0 }
-        out = out + "{"name":"" + me._esc_json(name) + """
-        if path != null { out = out + ","path":"" + me._esc_json(path) + """ }
+        out = out + "{" + me._dq() + "name" + me._dq() + ":" + me._dq() + me._esc_json(name) + me._dq()
+        if path != null { out = out + "," + me._dq() + "path" + me._dq() + ":" + me._dq() + me._esc_json(path) + me._dq() }
         out = out + "}"
       }
       i = j + 1

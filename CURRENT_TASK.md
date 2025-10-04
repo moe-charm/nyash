@@ -60,6 +60,12 @@ Acceptance（このラウンド）
 
 
 
+
+### Update — Using quiet/min-json pipeline (2025-10-04)
+- vm_pipeline: allow skipping AST prelude merge when NYASH_JSON_ONLY=1 or script args include "--min-json".
+- VM argv: pass CLI script args (NYASH_SCRIPT_ARGS_JSON) to main(args) as Array<String>.
+- Result: selfhost_min_json_header_vm passes; quiet child pipeline no longer trips on using-prelude when emitting header.
+
 ## Today
 - Quick → Integration 緑化まで完了（JSON v0 / selfhost Mini‑VM / using）
 - スモーク修正: cond_copy 検出を plain/escaped 両対応に（quick/core/selfhost_localssa_cond_copy_vm.sh）

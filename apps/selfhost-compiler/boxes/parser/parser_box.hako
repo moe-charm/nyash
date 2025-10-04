@@ -53,65 +53,31 @@ box ParserBox {
   }
 
   // === Delegation to ParserStringUtilsBox ===
-  is_digit(ch) {
-    local u = new ParserStringUtilsBox()
-    return u.is_digit(ch)
-  }
+  is_digit(ch) { return ParserStringUtilsBox.is_digit(ch) }
 
-  is_space(ch) {
-    local u = new ParserStringUtilsBox()
-    return u.is_space(ch)
-  }
+  is_space(ch) { return ParserStringUtilsBox.is_space(ch) }
 
-  is_alpha(ch) {
-    local u = new ParserStringUtilsBox()
-    return u.is_alpha(ch)
-  }
+  is_alpha(ch) { return ParserStringUtilsBox.is_alpha(ch) }
 
-  starts_with(src, i, pat) {
-    local u = new ParserStringUtilsBox()
-    return u.starts_with(src, i, pat)
-  }
+  starts_with(src, i, pat) { return ParserStringUtilsBox.starts_with(src, i, pat) }
 
-  index_of(src, i, pat) {
-    local u = new ParserStringUtilsBox()
-    return u.index_of(src, i, pat)
-  }
+  index_of(src, i, pat) { return ParserStringUtilsBox.index_of(src, i, pat) }
 
-  trim(s) {
-    local u = new ParserStringUtilsBox()
-    return u.trim(s)
-  }
+  trim(s) { return ParserStringUtilsBox.trim(s) }
 
-  starts_with_kw(src, i, kw) {
-    local u = new ParserStringUtilsBox()
-    return u.starts_with_kw(src, i, kw)
-  }
+  starts_with_kw(src, i, kw) { return ParserStringUtilsBox.starts_with_kw(src, i, kw) }
 
-  i2s(v) {
-    local u = new ParserStringUtilsBox()
-    return u.i2s(v)
-  }
+  i2s(v) { return ParserStringUtilsBox.i2s(v) }
 
-  to_int(s) {
-    local u = new ParserStringUtilsBox()
-    return u.to_int(s)
-  }
+  to_int(s) { return ParserStringUtilsBox.to_int(s) }
 
-  skip_ws(src, i) {
-    local u = new ParserStringUtilsBox()
-    return u.skip_ws(src, i)
-  }
+  skip_ws(src, i) { return ParserStringUtilsBox.skip_ws(src, i) }
 
   // === Delegation to scanner boxes ===
-  read_ident2(src, i) {
-    local scan = new ParserIdentScanBox()
-    return scan.scan_ident(src, i)
-  }
+  read_ident2(src, i) { return ParserIdentScanBox.scan_ident(src, i) }
 
   read_string_lit(src, i) {
-    local scanner = new ParserStringScanBox()
-    local pair = scanner.scan(src, i)
+    local pair = ParserStringScanBox.scan(src, i)
     local at = pair.lastIndexOf("@")
     local content = pair.substring(0, at)
     local pos = 0
@@ -177,8 +143,7 @@ box ParserBox {
   }
 
   extract_usings(src) {
-    local uc = new UsingCollectorBox()
-    me.usings_json = uc.collect(src)
+    me.usings_json = UsingCollectorBox.collect(src)
     return 0
   }
 

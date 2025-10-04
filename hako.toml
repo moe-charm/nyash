@@ -30,7 +30,7 @@ path = "apps/lib/json_native/core/node.hako"
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
-selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
+selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.nyash"
