@@ -47,20 +47,20 @@ static box PhiDecodeBox {
     loop(i < n) {
       guard = guard + 1
       if guard > 512 { break }
-      // seek next object
-      local ob = seg.indexOf(me._lb()+me._dq()+"pred"+me._dq()+":", i)
-      if ob < 0 { break }
-      // read pred
-      local pred = JsonFragBox.get_int(seg.substring(ob, n), "pred")
-      local vin = JsonFragBox.get_int(seg.substring(ob, n), "value")
+      // seek next object head '{'
+      local ob = seg.indexOf(me._lb(), i)
+      if ob < 0 || ob >= n { break }
+      local ob_end = JsonScanBox.seek_obj_end(seg, ob)
+      if ob_end < 0 || ob_end > n { break }
+      local obj = seg.substring(ob, ob_end+1)
+      // read pred/value from object segment
+      local pred = JsonFragBox.get_int(obj, "pred")
+      local vin  = JsonFragBox.get_int(obj, "value")
       if vin != null {
         if fallback_v == null { fallback_v = vin }
-        if pred != null && prev_bb != null && pred == prev_bb { chosen_v = vin  break }
+        if pred != null && prev_bb != null && pred == prev_bb { chosen_v = vin  i = ob_end + 1  break }
       }
-      // advance past this object conservatively
-      local nx = seg.indexOf(me._rb(), ob)
-      if nx < 0 { break }
-      i = nx + 1
+      i = ob_end + 1
     }
     local vin2 = chosen_v
     if vin2 == null { vin2 = fallback_v }
