@@ -1,5 +1,0 @@
-static box MirBuilder {
-  // placeholder
-  main(args) { return 0 }
-}
-

@@ -20,7 +20,7 @@ TMP_DIR="/tmp/selfhost_localssa_phi_head_copy_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA
+using "apps/selfhost-compiler/builder/ssa/local.hako" as LocalSSA
 
 static box Main {
   main() {

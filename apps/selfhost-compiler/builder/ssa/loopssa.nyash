@@ -1,8 +1,0 @@
-// builder/ssa/loopssa.nyash — Loop SSA scaffold (no-op)
-
-static box LoopSSA {
-  // Guard PHI-like merges at loop headers/exits (future work).
-  // For now, pass-through to keep behavior unchanged.
-  stabilize_merges(stage1_json) { return stage1_json }
-}
-

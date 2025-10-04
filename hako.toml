@@ -13,27 +13,26 @@ paths = ["apps", "lib", "."]
 # Optional package-style entries (opt-in via using resolver)
 [using.json_native]
 path = "apps/lib/json_native/"
-main = "parser/parser.nyash"
+main = "parser/parser.hako"
 
 # JSON Native – String utilities as a standalone package (single-file)
 [using.string_utils]
-path = "apps/lib/json_native/utils/string.nyash"
+path = "apps/lib/json_native/utils/string.hako"
 
 [using.aliases]
 # Resolve `using json as ...` to json_native when desired
 json = "json_native"
-StringUtils = "string_utils"
 JsonNode = "json_node"
 
 [using.json_node]
-path = "apps/lib/json_native/core/node.nyash"
+path = "apps/lib/json_native/core/node.hako"
 
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
-selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.nyash"
+selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
-selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.nyash"
 selfhost.compiler.pipeline_v2.emit_compare = "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako"
 selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.hako"
@@ -50,6 +49,13 @@ selfhost.vm.scanner = "apps/selfhost/vm/boxes/instruction_scanner.hako"
 selfhost.vm.handlers = "apps/selfhost/vm/boxes/op_handlers.hako"
 selfhost.core.timer = "apps/core/timer/TimerBox.hako"
 selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
+selfhost.vm.rune_host = "apps/selfhost/vm/boxes/rune_host.hako"
+
+# json_native utility boxes (for resolver-friendly module references)
+selfhost.json.utils.stringify_ops = "apps/lib/json_native/utils/stringify_ops_box.hako"
+selfhost.json.utils.parse_ops = "apps/lib/json_native/utils/parse_ops_box.hako"
+selfhost.json.utils.object_parse = "apps/lib/json_native/utils/object_parse_box.hako"
+selfhost.json.utils.array_parse = "apps/lib/json_native/utils/array_parse_box.hako"
 
 # Selfhost compiler main module (avoid file-path using in dev wrappers)
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"

@@ -6,6 +6,7 @@ use crate::ast::ASTNode;
 use crate::runner::NyashRunner;
 use std::collections::{HashMap, HashSet};
 use std::{fs, process};
+use std::io::Write;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -227,7 +228,10 @@ pub fn compile_and_execute_mir(ast: ASTNode, no_optimize: bool) -> Result<()> {
 
     let mut engine = crate::runner::modes::super_iface::vm_engine_from_env();
     match engine.execute(&compile.module) {
-        Ok(code) => process::exit(code),
+        Ok(code) => {
+            // Result printing is handled in the VM engine leaf for robustness.
+            process::exit(code)
+        },
         Err(e) => Err(PipelineError::VmExecution(e.to_string())),
     }
 }

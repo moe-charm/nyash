@@ -1,5 +1,5 @@
 // JSON.stringify for MapBox/ArrayBox (Ny implementation)
-using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+using "apps/lib/json_native/utils/escape.hako" as EscapeUtils
 
 static box JSON {
   // Public minimal API

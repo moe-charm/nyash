@@ -3,16 +3,16 @@
 // Components are split under boxes/ and included here.
 
 // Prefer using for module declaration (Runner strips and registers)
-using "apps/selfhost-compiler/boxes/debug_box.nyash" as DebugBoxMod
-using "apps/selfhost-compiler/boxes/parser_box.nyash" as ParserBoxMod
-using "apps/selfhost-compiler/boxes/emitter_box.nyash" as EmitterBoxMod
-using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash" as MirEmitterBoxMod
+using "apps/archive/selfhost-legacy/boxes/debug_box.nyash" as DebugBoxMod
+using "apps/archive/selfhost-legacy/boxes/parser_box.nyash" as ParserBoxMod
+using "apps/archive/selfhost-legacy/boxes/emitter_box.nyash" as EmitterBoxMod
+using "apps/archive/selfhost-legacy/boxes/mir_emitter_box.nyash" as MirEmitterBoxMod
 
 // Transitional: keep include for Phase-15 compatibility
-using "apps/selfhost-compiler/boxes/debug_box.nyash"
-using "apps/selfhost-compiler/boxes/parser_box.nyash"
-using "apps/selfhost-compiler/boxes/emitter_box.nyash"
-using "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+using "apps/archive/selfhost-legacy/boxes/debug_box.nyash"
+using "apps/archive/selfhost-legacy/boxes/parser_box.nyash"
+using "apps/archive/selfhost-legacy/boxes/emitter_box.nyash"
+using "apps/archive/selfhost-legacy/boxes/mir_emitter_box.nyash"
 // Prepass libs (ScopeBox/LoopForm)
 using "apps/lib/scopebox_inject.nyash"
 using "apps/lib/loopform_normalize.nyash"

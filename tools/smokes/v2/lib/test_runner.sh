@@ -110,6 +110,7 @@ filter_noise() {
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
   | grep -v '^\{"kind":"contracts_' \
+  | grep -v '^Result: ' \
   | grep -v "plugins/nyash-array-plugin" \
   | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \

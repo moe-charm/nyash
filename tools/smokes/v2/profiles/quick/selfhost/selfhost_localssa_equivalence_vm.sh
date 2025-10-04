@@ -20,7 +20,7 @@ TMP_DIR="/tmp/selfhost_localssa_equivalence_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSA
+using "apps/selfhost-compiler/builder/ssa/local.hako" as LocalSSA
 using selfhost.vm.mir_min as MirVmMin
 
 static box Main {

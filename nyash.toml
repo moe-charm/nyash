@@ -20,7 +20,6 @@ path = "apps/lib/json_native/utils/string.hako"
 [using.aliases]
 # Resolve `using json as ...` to json_native when desired
 json = "json_native"
-StringUtils = "string_utils"
 JsonNode = "json_node"
 
 [using.json_node]

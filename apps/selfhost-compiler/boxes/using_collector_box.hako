@@ -1,0 +1,113 @@
+// UsingCollectorBox — line-based `using` extractor (Path/Namespace → JSON array)
+// Responsibility: Parse source text line-by-line and produce a JSON array
+//   [{"name":"AliasOrBase","path":"path/if/any"}, ...]
+// Notes:
+// - ParserBox.extract_usings delegates to this box (Phase 2 split)
+// - Pure string scan（依存ゼロ）。Fail‑Fastはせず、安全にスキップでループを進める
+
+static box UsingCollectorBox {
+  // Lightweight helpers (local scope)
+  _starts_with(src, i, pat) {
+    local n = src.length()
+    local m = pat.length()
+    if i + m > n { return 0 }
+    local k = 0
+    loop(k < m) { if src.substring(i + k, i + k + 1) != pat.substring(k, k + 1) { return 0 } k = k + 1 }
+    return 1
+  }
+  _index_of(src, i, pat) {
+    local n = src.length()
+    local m = pat.length()
+    if m == 0 { return i }
+    local j = i
+    loop(j + m <= n) { if me._starts_with(src, j, pat) { return j } j = j + 1 }
+    return -1
+  }
+  _trim(s) {
+    local i = 0
+    local n = s.length()
+    loop(i < n && (s.substring(i,i+1) == " " || s.substring(i,i+1) == "	")) { i = i + 1 }
+    local j = n
+    loop(j > i && (s.substring(j-1,j) == " " || s.substring(j-1,j) == "	" || s.substring(j-1,j) == ";")) { j = j - 1 }
+    return s.substring(i, j)
+  }
+  _esc_json(s) {
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop(i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\" { out = out + "\\" } else { if ch == """ { out = out + "\"" } else { out = out + ch } }
+      i = i + 1
+    }
+    return out
+  }
+
+  // Public API: collect line-based using declarations to JSON array string
+  collect(src) {
+    if src == null { return "[]" }
+    local n = src.length()
+    local i = 0
+    local first = 1
+    local out = "["
+    loop(i < n) {
+      // line slice [i, j)
+      local j = i
+      loop(j < n && src.substring(j, j+1) != "
+") { j = j + 1 }
+      local line = src.substring(i, j)
+      // trim left spaces/tabs
+      local k = 0
+      loop(k < line.length() && (line.substring(k,k+1) == " " || line.substring(k,k+1) == "	")) { k = k + 1 }
+      if me._starts_with(line, k, "using ") == 1 {
+        local rest = me._trim(line.substring(k + 6, line.length()))
+        // split on ' as '
+        local as_pos = me._index_of(rest, 0, " as ")
+        local target = rest
+        local alias = null
+        if as_pos >= 0 { target = me._trim(rest.substring(0, as_pos)) alias = me._trim(rest.substring(as_pos + 4, rest.length())) }
+        // path or namespace
+        local is_path = 0
+        if target.length() > 0 {
+          if me._starts_with(target, 0, """) == 1 { is_path = 1 }
+          if me._starts_with(target, 0, "./") == 1 { is_path = 1 }
+          if me._starts_with(target, 0, "/") == 1 { is_path = 1 }
+          if target.length() >= 5 && me._starts_with(target, target.length()-5, ".hako") == 1 { is_path = 1 }
+          if target.length() >= 6 && me._starts_with(target, target.length()-6, ".nyash") == 1 { is_path = 1 }
+        }
+        local name = ""
+        local path = null
+        if is_path == 1 {
+          // strip quotes
+          if me._starts_with(target, 0, """) == 1 {
+            target = target.substring(1, target.length())
+            if target.length() > 0 && target.substring(target.length()-1, target.length()) == """ { target = target.substring(0, target.length()-1) }
+          }
+          path = target
+          if alias != null { name = alias } else {
+            // basename
+            local p = target
+            local idx = -1
+            local t = 0
+            loop(t < p.length()) { if p.substring(t,t+1) == "/" { idx = t } t = t + 1 }
+            if idx >= 0 { p = p.substring(idx+1, p.length()) }
+            // strip extension
+            if p.length() > 5 && me._starts_with(p, p.length()-5, ".hako") == 1 { p = p.substring(0, p.length()-5) }
+            else { if p.length() > 6 && me._starts_with(p, p.length()-6, ".nyash") == 1 { p = p.substring(0, p.length()-6) } }
+            name = p
+          }
+        } else {
+          name = target
+        }
+        // append entry
+        if first == 0 { out = out + "," } else { first = 0 }
+        out = out + "{"name":"" + me._esc_json(name) + """
+        if path != null { out = out + ","path":"" + me._esc_json(path) + """ }
+        out = out + "}"
+      }
+      i = j + 1
+    }
+    out = out + "]"
+    return out
+  }
+}

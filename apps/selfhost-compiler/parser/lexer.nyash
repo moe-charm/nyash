@@ -1,5 +1,0 @@
-static box Lexer {
-  // scaffold for future implementation
-  main(args) { return 0 }
-}
-

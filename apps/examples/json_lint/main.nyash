@@ -1,5 +1,5 @@
 using json as JsonParserModule
-using string_utils as StringUtils
+using string_utils
 
 static box Main {
   main() {

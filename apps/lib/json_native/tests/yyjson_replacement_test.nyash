@@ -1,6 +1,6 @@
 // yyjson置き換えテスト - 既存APIとの互換性確認
 
-using "apps/lib/json_native/parser/parser.nyash" as JsonParserUtils
+using "apps/lib/json_native/parser/parser.hako" as JsonParserUtils
 
 // 🔄 既存JsonDocBox API互換テスト
 static box JsonDocBoxCompatTest {

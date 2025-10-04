@@ -1,5 +1,0 @@
-static box AST {
-  // scaffold for future AST node constructors
-  main(args) { return 0 }
-}
-
