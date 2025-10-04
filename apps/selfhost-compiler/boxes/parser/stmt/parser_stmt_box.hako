@@ -1,0 +1,206 @@
+// ParserStmtBox — statement parser coordinator
+// Responsibility: Parse statements and delegate to specialized boxes
+// API: parse(src, i, ctx) -> JSON
+
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_control_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_exception_box.hako"
+
+static box ParserStmtBox {
+  parse(src, i, ctx) {
+    local j = ctx.skip_ws(src, i)
+    local stmt_start = j
+
+    // using statement
+    if ctx.starts_with_kw(src, j, "using") == 1 {
+      return me.parse_using(src, j, stmt_start, ctx)
+    }
+
+    // assignment: IDENT '=' expr
+    if j < src.length() && ctx.is_alpha(src.substring(j, j+1)) {
+      local idp0 = ctx.read_ident2(src, j)
+      local at0 = idp0.lastIndexOf("@")
+      if at0 > 0 {
+        local name0 = idp0.substring(0, at0)
+        local k0 = ctx.to_int(idp0.substring(at0+1, idp0.length()))
+        k0 = ctx.skip_ws(src, k0)
+        if k0 < src.length() && src.substring(k0, k0+1) == "=" {
+          local eq_two = "="
+          if k0 + 1 < src.length() { eq_two = src.substring(k0, k0+2) }
+          if eq_two != "==" {
+            k0 = k0 + 1
+            k0 = ctx.skip_ws(src, k0)
+            local default_local = "{\"type\":\"Int\",\"value\":0}"
+            local expr_json0 = default_local
+            local end_pos0 = k0
+            if k0 < src.length() {
+              local ahead = src.substring(k0, k0+1)
+              if ahead != "}" && ahead != ";" {
+                expr_json0 = ctx.parse_expr2(src, k0)
+                end_pos0 = ctx.gpos_get()
+              }
+            }
+            k0 = end_pos0
+            if k0 <= stmt_start {
+              if k0 < src.length() { k0 = k0 + 1 } else { k0 = src.length() }
+            }
+            ctx.gpos_set(k0)
+            return "{\"type\":\"Local\",\"name\":\"" + name0 + "\",\"expr\":" + expr_json0 + "}"
+          }
+        }
+      }
+    }
+
+    // return statement
+    if ctx.starts_with_kw(src, j, "return") == 1 {
+      j = j + 6
+      j = ctx.skip_ws(src, j)
+      local default_ret = "{\"type\":\"Int\",\"value\":0}"
+      local expr_json_ret = default_ret
+      local end_pos_ret = j
+      if j < src.length() {
+        local ahead_ret = src.substring(j, j+1)
+        if ahead_ret != "}" && ahead_ret != ";" {
+          expr_json_ret = ctx.parse_expr2(src, j)
+          end_pos_ret = ctx.gpos_get()
+        }
+      }
+      j = end_pos_ret
+      if j <= stmt_start {
+        if j < src.length() { j = j + 1 } else { j = src.length() }
+      }
+      ctx.gpos_set(j)
+      return "{\"type\":\"Return\",\"expr\":" + expr_json_ret + "}"
+    }
+
+    // local declaration
+    if ctx.starts_with_kw(src, j, "local") == 1 {
+      j = j + 5
+      j = ctx.skip_ws(src, j)
+      local idp = ctx.read_ident2(src, j)
+      local at = idp.lastIndexOf("@")
+      local name = idp.substring(0, at)
+      j = ctx.to_int(idp.substring(at+1, idp.length()))
+      j = ctx.skip_ws(src, j)
+      if j < src.length() && src.substring(j, j+1) == "=" { j = j + 1 }
+      j = ctx.skip_ws(src, j)
+      local default_local = "{\"type\":\"Int\",\"value\":0}"
+      local expr_json_local = default_local
+      local end_pos_local = j
+      if j < src.length() {
+        local ahead_local = src.substring(j, j+1)
+        if ahead_local != "}" && ahead_local != ";" {
+          expr_json_local = ctx.parse_expr2(src, j)
+          end_pos_local = ctx.gpos_get()
+        }
+      }
+      j = end_pos_local
+      if j <= stmt_start {
+        if j < src.length() { j = j + 1 } else { j = src.length() }
+      }
+      ctx.gpos_set(j)
+      return "{\"type\":\"Local\",\"name\":\"" + name + "\",\"expr\":" + expr_json_local + "}"
+    }
+
+    // Delegate to specialized boxes
+    if ctx.starts_with_kw(src, j, "if") == 1 {
+      local ctrl = new ParserControlBox()
+      return ctrl.parse_if(src, j, stmt_start, ctx)
+    }
+
+    if ctx.starts_with_kw(src, j, "loop") == 1 {
+      local ctrl = new ParserControlBox()
+      return ctrl.parse_loop(src, j, stmt_start, ctx)
+    }
+
+    if ctx.starts_with_kw(src, j, "break") == 1 {
+      local ctrl = new ParserControlBox()
+      return ctrl.parse_break(src, j, stmt_start, ctx)
+    }
+
+    if ctx.starts_with_kw(src, j, "continue") == 1 {
+      local ctrl = new ParserControlBox()
+      return ctrl.parse_continue(src, j, stmt_start, ctx)
+    }
+
+    if ctx.starts_with_kw(src, j, "throw") == 1 {
+      local exc = new ParserExceptionBox()
+      return exc.parse_throw(src, j, stmt_start, ctx)
+    }
+
+    if ctx.starts_with_kw(src, j, "try") == 1 {
+      local exc = new ParserExceptionBox()
+      return exc.parse_try(src, j, stmt_start, ctx)
+    }
+
+    // Fallback: expression or unknown token
+    local expr_start = j
+    local e = ctx.parse_expr2(src, j)
+    j = ctx.gpos_get()
+    if j <= expr_start {
+      if j < src.length() { j = j + 1 } else { j = src.length() }
+    }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Expr\",\"expr\":" + e + "}"
+  }
+
+  // Parse using statement
+  parse_using(src, i, stmt_start, ctx) {
+    local j = i + 5  // skip "using"
+    j = ctx.skip_ws(src, j)
+
+    if src.substring(j, j+1) == "\"" {
+      local p = ctx.read_string_lit(src, j)
+      j = ctx.gpos_get()
+      j = ctx.skip_ws(src, j)
+      local alias = null
+      if ctx.starts_with_kw(src, j, "as") == 1 {
+        j = j + 2
+        j = ctx.skip_ws(src, j)
+        local idp = ctx.read_ident2(src, j)
+        local at = idp.lastIndexOf("@")
+        alias = idp.substring(0, at)
+        j = ctx.to_int(idp.substring(at+1, idp.length()))
+      }
+      ctx.add_using("path", p, alias)
+    } else {
+      if ctx.is_alpha(src.substring(j, j+1)) {
+        local idp = ctx.read_ident2(src, j)
+        local at = idp.lastIndexOf("@")
+        local name = idp.substring(0, at)
+        j = ctx.to_int(idp.substring(at+1, idp.length()))
+        local cont = 1
+        loop(cont == 1) {
+          j = ctx.skip_ws(src, j)
+          if src.substring(j, j+1) == "." {
+            j = j + 1
+            j = ctx.skip_ws(src, j)
+            idp = ctx.read_ident2(src, j)
+            at = idp.lastIndexOf("@")
+            name = name + "." + idp.substring(0, at)
+            j = ctx.to_int(idp.substring(at+1, idp.length()))
+          } else {
+            cont = 0
+          }
+        }
+        j = ctx.skip_ws(src, j)
+        local alias2 = null
+        if ctx.starts_with_kw(src, j, "as") == 1 {
+          j = j + 2
+          j = ctx.skip_ws(src, j)
+          idp = ctx.read_ident2(src, j)
+          at = idp.lastIndexOf("@")
+          alias2 = idp.substring(0, at)
+          j = ctx.to_int(idp.substring(at+1, idp.length()))
+        }
+        ctx.add_using("ns", name, alias2)
+      }
+    }
+
+    // ensure progress
+    if j <= stmt_start {
+      if j < src.length() { j = j + 1 } else { j = src.length() }
+    }
+    ctx.gpos_set(j)
+    return ""
+  }
+}

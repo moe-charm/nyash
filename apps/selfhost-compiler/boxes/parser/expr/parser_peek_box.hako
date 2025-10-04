@@ -1,0 +1,102 @@
+// ParserPeekBox — peek expression parser (peek <expr> { "label" => <expr>, ..., else => <expr> })
+// Responsibility: Parse peek expressions (pattern-matching syntax)
+// API: parse(src, i, ctx) -> JSON string
+
+static box ParserPeekBox {
+  parse(src, i, ctx) {
+    // ctx is ParserBox for delegation
+    local j = i
+    local n = src.length()
+
+    // Parse scrutinee expression
+    local scr = ctx.parse_expr2(src, j)
+    j = ctx.gpos_get()
+    j = ctx.skip_ws(src, j)
+
+    // Enter arms block
+    if src.substring(j, j+1) == "{" { j = j + 1 }
+    j = ctx.skip_ws(src, j)
+
+    local arms_json = "["
+    local first_arm = 1
+    local else_json = null
+    local contp = 1
+    local guardp = 0
+    local maxp = 400000
+
+    loop(contp == 1) {
+      if guardp > maxp { contp = 0 } else { guardp = guardp + 1 }
+      j = ctx.skip_ws(src, j)
+
+      if j >= n {
+        contp = 0
+      } else {
+        if src.substring(j, j+1) == "}" {
+          j = j + 1
+          contp = 0
+        } else {
+          // else arm or labeled arm
+          if ctx.starts_with_kw(src, j, "else") == 1 {
+            j = j + 4
+            j = ctx.skip_ws(src, j)
+            if src.substring(j, j+2) == "=>" { j = j + 2 }
+            j = ctx.skip_ws(src, j)
+
+            // else body may be a block or bare expr
+            if src.substring(j, j+1) == "{" {
+              j = j + 1
+              j = ctx.skip_ws(src, j)
+              else_json = ctx.parse_expr2(src, j)
+              j = ctx.gpos_get()
+              j = ctx.skip_ws(src, j)
+              if src.substring(j, j+1) == "}" { j = j + 1 }
+            } else {
+              else_json = ctx.parse_expr2(src, j)
+              j = ctx.gpos_get()
+            }
+          } else {
+            // labeled arm: string literal label
+            if src.substring(j, j+1) != "\"" {
+              // degrade safely to avoid infinite loop
+              j = j + 1
+              continue
+            }
+
+            local label_raw = ctx.read_string_lit(src, j)
+            j = ctx.gpos_get()
+            j = ctx.skip_ws(src, j)
+            if src.substring(j, j+2) == "=>" { j = j + 2 }
+            j = ctx.skip_ws(src, j)
+
+            // arm expr: block or bare expr
+            local expr_json = "{\"type\":\"Int\",\"value\":0}"
+            if src.substring(j, j+1) == "{" {
+              j = j + 1
+              j = ctx.skip_ws(src, j)
+              expr_json = ctx.parse_expr2(src, j)
+              j = ctx.gpos_get()
+              j = ctx.skip_ws(src, j)
+              if src.substring(j, j+1) == "}" { j = j + 1 }
+            } else {
+              expr_json = ctx.parse_expr2(src, j)
+              j = ctx.gpos_get()
+            }
+
+            local arm_json = "{\"label\":\"" + ctx.esc_json(label_raw) + "\",\"expr\":" + expr_json + "}"
+            if first_arm == 1 {
+              arms_json = arms_json + arm_json
+              first_arm = 0
+            } else {
+              arms_json = arms_json + "," + arm_json
+            }
+          }
+        }
+      }
+    }
+
+    arms_json = arms_json + "]"
+    if else_json == null { else_json = "{\"type\":\"Null\"}" }
+    ctx.gpos_set(j)
+    return "{\"type\":\"Peek\",\"scrutinee\":" + scr + ",\"arms\":" + arms_json + ",\"else\":" + else_json + "}"
+  }
+}

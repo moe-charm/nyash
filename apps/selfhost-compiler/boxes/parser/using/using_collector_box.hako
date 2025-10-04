@@ -37,7 +37,7 @@ static box UsingCollectorBox {
     local n = s.length()
     loop(i < n) {
       local ch = s.substring(i, i+1)
-      if ch == "\" { out = out + "\\" } else { if ch == """ { out = out + "\"" } else { out = out + ch } }
+      if ch == "\\" { out = out + "\\\\" } else { if ch == "\"" { out = out + "\\\"" } else { out = out + ch } }
       i = i + 1
     }
     return out

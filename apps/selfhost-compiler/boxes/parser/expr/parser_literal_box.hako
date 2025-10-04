@@ -1,0 +1,117 @@
+// ParserLiteralBox — Map/Array literal parser
+// Responsibility: Parse Map {"k": v, ...} and Array [e1, e2, ...] literals
+// API: parse_map(src, i, ctx) -> JSON, parse_array(src, i, ctx) -> JSON
+
+static box ParserLiteralBox {
+  // Map literal: {"k": v, ...} (string keys only) → Call{name:"map.of", args:[Str(k1), v1, Str(k2), v2, ...]}
+  parse_map(src, i, ctx) {
+    local n = src.length()
+    local j = i + 1  // skip opening '{'
+    local out = "["
+    local first = 1
+    local cont = 1
+    local guard = 0
+    local max = 400000
+
+    loop(cont == 1) {
+      if guard > max { cont = 0 } else { guard = guard + 1 }
+      j = ctx.skip_ws(src, j)
+
+      if j >= n {
+        cont = 0
+      } else {
+        if src.substring(j, j+1) == "}" {
+          j = j + 1
+          cont = 0
+        } else {
+          // key (string only for Stage-2)
+          if src.substring(j, j+1) != "\"" {
+            // degrade by skipping one char to avoid infinite loop
+            j = j + 1
+            continue
+          }
+
+          local key_raw = ctx.read_string_lit(src, j)
+          j = ctx.gpos_get()
+          j = ctx.skip_ws(src, j)
+          if src.substring(j, j+1) == ":" { j = j + 1 }
+          j = ctx.skip_ws(src, j)
+          local val_json = ctx.parse_expr2(src, j)
+          j = ctx.gpos_get()
+          local key_json = "{\"type\":\"Str\",\"value\":\"" + ctx.esc_json(key_raw) + "\"}"
+
+          if first == 1 {
+            out = out + key_json + "," + val_json
+            first = 0
+          } else {
+            out = out + "," + key_json + "," + val_json
+          }
+
+          // optional comma
+          local before2 = j
+          j = ctx.skip_ws(src, j)
+          if j < n && src.substring(j, j+1) == "," { j = j + 1 }
+
+          // progress guard (in case of malformed input)
+          if j <= before2 {
+            if j < n { j = j + 1 } else { j = n }
+          }
+        }
+      }
+    }
+
+    out = out + "]"
+    ctx.gpos_set(j)
+    return "{\"type\":\"Call\",\"name\":\"map.of\",\"args\":" + out + "}"
+  }
+
+  // Array literal: [e1, e2, ...] → Call{name:"array.of", args:[...]}
+  parse_array(src, i, ctx) {
+    local n = src.length()
+    local j = i + 1  // skip opening '['
+    local out = "["
+    local first = 1
+    local cont = 1
+    local guard = 0
+    local max = 400000
+
+    loop(cont == 1) {
+      if guard > max { cont = 0 } else { guard = guard + 1 }
+      j = ctx.skip_ws(src, j)
+
+      if j >= n {
+        cont = 0
+      } else {
+        if src.substring(j, j+1) == "]" {
+          j = j + 1
+          cont = 0
+        } else {
+          local before = j
+          local ej = ctx.parse_expr2(src, j)
+          j = ctx.gpos_get()
+
+          if first == 1 {
+            out = out + ej
+            first = 0
+          } else {
+            out = out + "," + ej
+          }
+
+          // optional comma+whitespace
+          local before2 = j
+          j = ctx.skip_ws(src, j)
+          if j < n && src.substring(j, j+1) == "," { j = j + 1 }
+
+          // progress guard
+          if j <= before {
+            if j < n { j = j + 1 } else { j = n }
+          }
+        }
+      }
+    }
+
+    out = out + "]"
+    ctx.gpos_set(j)
+    return "{\"type\":\"Call\",\"name\":\"array.of\",\"args\":" + out + "}"
+  }
+}

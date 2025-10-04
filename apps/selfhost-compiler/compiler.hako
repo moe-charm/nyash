@@ -3,7 +3,19 @@
 // Components are split under boxes/ and included here.
 
 // Prefer using for module declaration (Runner strips and registers)
-using "apps/selfhost-compiler/boxes/parser_box.hako" as ParserBoxMod
+using "apps/selfhost-compiler/boxes/parser/parser_box.hako" as ParserBoxMod
+// Parser dependencies (Phase 2 refactoring: hierarchical structure)
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_utils_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_ident_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_number_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/scan/parser_string_scan_box.hako"
+using "apps/selfhost-compiler/boxes/parser/using/using_collector_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_expr_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_peek_box.hako"
+using "apps/selfhost-compiler/boxes/parser/expr/parser_literal_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_stmt_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_control_box.hako"
+using "apps/selfhost-compiler/boxes/parser/stmt/parser_exception_box.hako"
 using "apps/selfhost-compiler/boxes/json_program_box.hako"
 using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
 // Pipeline v2 (emit-only; Box-First architecture; --pipeline-v2)
