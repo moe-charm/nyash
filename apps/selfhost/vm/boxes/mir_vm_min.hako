@@ -197,7 +197,6 @@ static box MirVmMin {
             }
           }
         }
-        }
         else if op == "ret" {
           // Return resolution (Fail‑Fast policy)
           // 1) Compare result takes precedence when ret value equals last compare dst
