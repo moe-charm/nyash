@@ -635,9 +635,13 @@ impl MirBuilder {
                 "birth",
                 arity,
             );
+            // Prefer lowered global function for user-defined boxes even if not yet materialized.
+            // Rationale: static factories may be lowered before instance boxes; the function will
+            // be added later in the same module, so we can safely emit the call now.
+            let is_user_box = self.user_defined_boxes.contains(&class);
             let use_lowered = if let Some(ref module) = self.current_module {
-                module.functions.contains_key(&lowered)
-            } else { false };
+                module.functions.contains_key(&lowered) || is_user_box
+            } else { is_user_box };
             if use_lowered {
                 // Call Global("Class.birth/Arity") with argv = [me, args...]
                 let mut argv: Vec<ValueId> = Vec::with_capacity(1 + arity);

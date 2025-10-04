@@ -1,0 +1,113 @@
+# Benchmark Matrix Configuration
+# Defines target backends, optimization levels, and runtime modes
+#
+# Reference: apps/benchmarks/DESIGN.md
+# Author: ChatGPT Pro (Phase 1 design)
+# Updated: 2025-10-04
+
+# =============================================================================
+# Target Backends
+# =============================================================================
+
+[[targets]]
+name = "vm"
+backend = "vm"
+description = "Rust VM (fast development/debug)"
+enabled = true
+
+[[targets]]
+name = "llvm_O0"
+backend = "llvm"
+optimization = "O0"
+description = "LLVM no optimization (baseline)"
+enabled = false  # Enable when LLVM backend is stable
+
+[[targets]]
+name = "llvm_O2"
+backend = "llvm"
+optimization = "O2"
+description = "LLVM standard optimization"
+enabled = false  # Enable when LLVM backend is stable
+
+[[targets]]
+name = "llvm_O3"
+backend = "llvm"
+optimization = "O3"
+description = "LLVM aggressive optimization"
+enabled = false  # Enable when LLVM backend is stable
+
+[[targets]]
+name = "wasm_aot"
+backend = "wasm"
+mode = "aot"
+description = "WASM Ahead-of-Time compilation"
+enabled = false  # Future: Phase 6
+
+[[targets]]
+name = "wasm_jit"
+backend = "wasm"
+mode = "jit"
+description = "WASM Just-in-Time compilation"
+enabled = false  # Future: Phase 6
+
+# =============================================================================
+# Runtime Modes
+# =============================================================================
+
+[modes]
+# Deterministic mode: Fixed seed, reproducible results
+deterministic = false
+
+# Effects mode: warn | enforce | off
+# Controls runtime effect tracking and validation
+effects = "warn"
+
+# Contracts mode: warn | enforce | off
+# Controls pre/post condition checking
+contracts = "warn"
+
+# =============================================================================
+# Measurement Configuration
+# =============================================================================
+
+[measurement]
+# Warmup iterations (discarded before measurement)
+warmup = 10
+
+# Measurement iterations
+repeat = 50
+
+# Measurement mode: "fixed_iterations" | "fixed_time"
+mode = "fixed_iterations"
+
+# Fixed-time mode: duration in seconds (future enhancement)
+duration_sec = 10
+
+# =============================================================================
+# Regression Thresholds
+# =============================================================================
+
+[thresholds]
+# Performance regression detection
+# +10% slowdown triggers warning
+warn_percent = 10
+
+# +20% slowdown triggers failure
+fail_percent = 20
+
+# =============================================================================
+# Output Configuration
+# =============================================================================
+
+[output]
+# JSON output path
+results_path = "apps/benchmarks/results/latest.json"
+
+# Append to history log (JSONL format)
+history_path = "apps/benchmarks/results/history.jsonl"
+
+# Enable detailed statistics (mean, median, stddev, p95, p99)
+detailed_stats = true
+
+# Enable environment recording (CPU, OS, commit hash)
+record_env = true

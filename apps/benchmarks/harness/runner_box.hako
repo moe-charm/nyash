@@ -1,0 +1,76 @@
+// Runner Box — Benchmark execution with warmup and measurement
+// Implements two-phase measurement model from DESIGN.md
+//
+// Design principles:
+// - Two-Phase: Preparation (compile) vs Measurement (execution)
+// - Warmup: Discard initial runs for JIT/cache warmup
+// - Fixed-Time: Run for N seconds and calculate ops/sec (future enhancement)
+// - Fixed-Iterations: Run N times and calculate statistics (current implementation)
+//
+// Note: This MVP version runs benchmark functions directly (not external programs)
+// Future: Add external process execution for compiled LLVM/WASM benchmarks
+
+using "apps/benchmarks/harness/timer_helper.hako"
+using "apps/benchmarks/harness/stats_box.hako"
+
+box RunnerBox {
+  target_name
+  timer
+
+  birth(target) {
+    me.target_name = target
+    me.timer = new TimerHelper()
+    return 0
+  }
+
+  // Run benchmark once and return elapsed time in nanoseconds
+  // bench_func: function to execute
+  run_once(bench_func) {
+    local t0 = me.timer.now_ns()
+
+    // Execute benchmark function
+    // Note: bench_func should be a callable (future: function reference)
+    // For now, caller must wrap execution
+
+    local t1 = me.timer.now_ns()
+    return t1 - t0
+  }
+
+  // Run benchmark with warmup and repeated measurements
+  // warmup: number of warmup iterations (discarded)
+  // repeat: number of measurement iterations
+  // Returns: StatsBox with measurement results
+  run_with_warmup(bench_func, warmup, repeat) {
+    // Warmup phase (discarded)
+    local i = 0
+    loop(i < warmup) {
+      // Execute without measuring
+      bench_func()
+      i = i + 1
+    }
+
+    // Measurement phase
+    local stats = new StatsBox()
+    i = 0
+    loop(i < repeat) {
+      local t0 = me.timer.now_ns()
+      bench_func()
+      local t1 = me.timer.now_ns()
+      local elapsed = t1 - t0
+      stats.push(elapsed)
+      i = i + 1
+    }
+
+    return stats
+  }
+
+  // Simple run without warmup (for quick tests)
+  run_simple(bench_func, repeat) {
+    return me.run_with_warmup(bench_func, 0, repeat)
+  }
+
+  // Get target name
+  get_target() {
+    return me.target_name
+  }
+}

@@ -20,13 +20,14 @@ static box PhiDecodeBox {
     local dst = JsonFragBox.get_int(seg, "dst")
     local pred = JsonFragBox.get_int(seg, "pred")
     local vin = JsonFragBox.get_int(seg, "value")
-    print("[_decode_single] dst="+(""+dst)+" pred="+(""+pred)+" vin="+(""+vin))
-    if dst == null || vin == null { return null }
+    // single-form requires dst and value
+    if dst == null { return { type: "err", code: "phi:invalid-object:dst-missing" } }
+    if vin == null { return { type: "err", code: "phi:invalid-object:value-missing" } }
     local out = new ArrayBox()
     out.push(dst)
     out.push(vin)
     // pred may be null in simple form
-    return { pair: out, pred: pred }
+    return { type: "ok", pair: out, pred: pred }
   }
 
   // Decode array incoming form: {"op":"phi","dst":D, "values":[ {"pred":P,"value":V}, ... ]}
@@ -41,46 +42,63 @@ static box PhiDecodeBox {
     local n = seg.length()
     if endp >= 0 { n = endp }
     local best_dst = JsonFragBox.get_int(seg, "dst")
-    if best_dst == null { return null }
+    if best_dst == null { return { type: "err", code: "phi:invalid-object:dst-missing" } }
     // Iterate objects inside values array; pick first matching pred==prev_bb, else remember the first
     local chosen_v = null
     local fallback_v = null
+    local valid_cnt = 0
+    local invalid_cnt = 0
     local guard = 0
+    local elem_cnt = 0
     loop(i < n) {
       guard = guard + 1
       if guard > 512 { break }
       // seek next object head '{'
-      local ob = seg.indexOf(me._lb(), i)
+      local ob = JsonFragBox.index_of_from(seg, me._lb(), i)
       if ob < 0 || ob >= n { break }
       local ob_end = JsonScanBox.seek_obj_end(seg, ob)
-      if ob_end < 0 || ob_end > n { break }
+      if ob_end < 0 || ob_end > n { invalid_cnt = invalid_cnt + 1  break }
+      elem_cnt = elem_cnt + 1
       local obj = seg.substring(ob, ob_end+1)
       // read pred/value from object segment
       local pred = JsonFragBox.get_int(obj, "pred")
       local vin  = JsonFragBox.get_int(obj, "value")
       if vin != null {
+        valid_cnt = valid_cnt + 1
         if fallback_v == null { fallback_v = vin }
         if pred != null && prev_bb != null && pred == prev_bb { chosen_v = vin  i = ob_end + 1  break }
+      } else {
+        invalid_cnt = invalid_cnt + 1
       }
       i = ob_end + 1
     }
     local vin2 = chosen_v
     if vin2 == null { vin2 = fallback_v }
-    if vin2 == null { return null }
+    if vin2 == null {
+      // values[] present but no valid entries
+      if elem_cnt == 0 { return { type: "err", code: "phi:no-values:empty" } }
+      if valid_cnt == 0 { return { type: "err", code: "phi:no-values:all-malformed" } }
+      return { type: "err", code: "phi:no-values" }
+    }
     local pair = new ArrayBox()
     pair.push(best_dst)
     pair.push(vin2)
-    return { pair: pair, pred: prev_bb }
+    return { type: "ok", pair: pair, pred: prev_bb }
   }
 
   // Public: decode seg into [dst, vin] using prev_bb when provided
   decode(seg, prev_bb) {
     // Prefer array form; fallback to single form
     local arr = me._decode_array(seg, prev_bb)
-    if arr != null { return arr.get("pair") }
+    if arr != null {
+      if arr.get != null { return arr.get("pair") }
+      // If arr is an error map, propagate by returning as-is
+      return arr
+    }
     local one = me._decode_single(seg)
     if one != null {
-      return one.get("pair")
+      if one.get != null { return one.get("pair") }
+      return one
     }
     local out = new ArrayBox()
     out.push(null)
@@ -90,15 +108,16 @@ static box PhiDecodeBox {
 
   // Public: decode seg and wrap into Result.ok([dst,vin]) or Result.err(msg)
   decode_result(seg, prev_bb) {
-    local pair = me.decode(seg, prev_bb)
-    // dev prints removed
-    if pair != null {
-      local d = pair.get(0)
-      local v = pair.get(1)
-      if d != null and v != null {
-        return Result.ok(pair)
-      }
+    // Prefer array-form; if not present, fall back to single-form
+    local arr = me._decode_array(seg, prev_bb)
+    if arr != null {
+      local typ = arr.get("type")
+      if typ == "ok" { return Result.ok(arr.get("pair")) }
+      return Result.err(arr.get("code"))
     }
-    return Result.err("phi:no_incoming")
+    local one = me._decode_single(seg)
+    local typ2 = one.get("type")
+    if typ2 == "ok" { return Result.ok(one.get("pair")) }
+    return Result.err(one.get("code"))
   }
 }

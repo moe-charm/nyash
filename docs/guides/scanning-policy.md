@@ -11,6 +11,12 @@
 - 生クオート/バックスラッシュ直比較は避ける（ヘルパで表現 or JsonScanBox に委譲）。
 - Map のフィールド参照は `box.get("key")` を使う（ドットはメソッド呼び出し用）。
 
+段階的境界（seek → substring → Frag）
+- まず構造の外形を決める: `seek_array_end` / `seek_obj_end` で安全な範囲を確定する。
+- 次に部分文字列を切り出す: 走査対象を substring で局所化し、外側の括弧に干渉しないようにする。
+- 最後に値を抽出する: `JsonFragBox.get_int/get_str` でキー単位に最小限の取得だけ行う。
+- これにより「範囲外参照」「未終端」「括弧崩れ」に強くなり、Fail‑Fast の位置特定が容易になる。
+
 実装パターン（例: PHI values[]）
 1) `key = "\"values\":["` を探す → `arr_br = p + key.length() - 1`
 2) `end = JsonScanBox.seek_array_end(text, arr_br)` で配列終端を取得
@@ -33,3 +39,10 @@ Fail‑Fast
 - [ ] Map フィールド参照で `get("key")` を使っているか
 - [ ] 失敗パスで Result を返しているか（静かなフォールバック禁止）
 
+
+Error taxonomy (phi decode)
+- phi:invalid-object:dst-missing — dst not found in segment.
+- phi:invalid-object:value-missing — single-form missing value.
+- phi:no-values:empty — values[] present but empty.
+- phi:no-values:all-malformed — values[] present but none contain a value.
+- phi:no-values — fallback when no incoming could be chosen.

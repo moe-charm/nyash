@@ -10,7 +10,7 @@ using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
 
 static box MirVmMin {
   _tprint(msg) {
-    // Only emit hard errors by default; suppress debug noise in smokes
+    // Only emit hard errors by default; avoid env dependencies in Mini‑VM
     if msg.indexOf("[ERROR]") >= 0 { print(msg) }
   }
   run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
@@ -148,7 +148,12 @@ static box MirVmMin {
             PhiApplyBox.apply(pair.get(0), pair.get(1), regs)
           }
         }
-        else if op == "ret" {
+                else if op == "throw" {
+          // Minimal throw terminator: emit error and return distinct code
+          me._tprint("[ERROR] Throw terminator encountered")
+          return -2
+        }
+else if op == "ret" {
           // Return resolution (Fail‑Fast policy)
           // 1) Compare result takes precedence when ret value equals last compare dst
           // 2) If the register has a defined value, return it

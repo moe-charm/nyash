@@ -21,14 +21,13 @@ using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
 // Pipeline v2 (emit-only; Box-First architecture; --pipeline-v2)
 using "apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako" as PipelineMod
 using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "apps/selfhost-compiler/pipeline_v2/header_emit_box.hako" as HeaderEmitBox
 // Note (Phase 15.7): keep includes minimal for --min-json path
 
 // (removed) Transitional duplicate using lines to avoid resolver duplicate-import error
 
 // Local helper box: minimal Stage​‑1 header emitter (prelude​‑free)
-static box MinHeaderBox {
-  emit() { print("{\"version\":0,\"kind\":\"Program\"}") return 0 }
-}
+// (removed) Local helper was replaced by pipeline_v2/HeaderEmitBox
 
 static box Main {
   // ---- Arg helper ----
@@ -156,7 +155,7 @@ static box Main {
       loop(i < alen) { if args.get(i) == "--min-json" { early_min = 1 } i = i + 1 }
     }
     if early_min == 1 {
-      MinHeaderBox.emit()
+      print("{\"version\":0,\"kind\":\"Program\"}")
       return 0
     }
     // Debug setup (dev-only; avoid DebugBox dependency in fallback VM)

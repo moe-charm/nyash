@@ -1,0 +1,42 @@
+// PHI Stress Test: If-Else Chain (incoming=8)
+// Measures PHI merge point efficiency with 8-way branching
+//
+// Design: apps/benchmarks/DESIGN.md (ChatGPT Pro)
+// Purpose: Validate PHI optimization in VM vs LLVM backends
+//
+// Expected behavior:
+// - Creates PHI merge point with 8 incoming edges
+// - Each iteration updates 'x' through one of 8 branches
+// - Loop iterates 10,000 times to stress PHI handling
+//
+// MIR validation:
+// - Should generate single PHI node with 8 incoming values
+// - VM: Fallback to simple merge
+// - LLVM: Optimized PHI with efficient register allocation
+//
+// Expected result: x = 45000
+// Calculation: sum of (1+2+3+4+5+6+7+8) * 1250 iterations each
+
+static box Main {
+  main(args) {
+    local x = 0
+    local i = 0
+
+    loop(i < 10000) {
+      // 8-way branch: creates PHI merge point with 8 incoming edges
+      if i % 8 == 0 { x = x + 1 }
+      else if i % 8 == 1 { x = x + 2 }
+      else if i % 8 == 2 { x = x + 3 }
+      else if i % 8 == 3 { x = x + 4 }
+      else if i % 8 == 4 { x = x + 5 }
+      else if i % 8 == 5 { x = x + 6 }
+      else if i % 8 == 6 { x = x + 7 }
+      else { x = x + 8 }
+
+      i = i + 1
+    }
+
+    print("Result: " + x)
+    return 0
+  }
+}

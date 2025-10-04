@@ -1,0 +1,167 @@
+// Fixed-Time Benchmark Suite (5 seconds per benchmark)
+// Unified measurement for fair comparison across all languages
+
+static box BenchSuite {
+  // Benchmark 1: Fibonacci(12) - recursion
+  fib(n) {
+    if n <= 1 { return n }
+    return me.fib(n - 1) + me.fib(n - 2)
+  }
+
+  bench_fibonacci() {
+    return me.fib(12)
+  }
+
+  // Benchmark 2: PHI Stress If - 8-way branch
+  bench_phi_if() {
+    local x = 0
+    local i = 0
+
+    loop(i < 10000) {
+      if i % 8 == 0 { x = x + 1 }
+      else if i % 8 == 1 { x = x + 2 }
+      else if i % 8 == 2 { x = x + 3 }
+      else if i % 8 == 3 { x = x + 4 }
+      else if i % 8 == 4 { x = x + 5 }
+      else if i % 8 == 5 { x = x + 6 }
+      else if i % 8 == 6 { x = x + 7 }
+      else { x = x + 8 }
+
+      i = i + 1
+    }
+
+    return x
+  }
+
+  // Benchmark 3: PHI Stress Loop - nested depth=3
+  bench_phi_loop() {
+    local sum = 0
+    local i = 0
+
+    loop(i < 50) {
+      local j = 0
+
+      loop(j < 50) {
+        local k = 0
+
+        loop(k < 50) {
+          sum = sum + 1
+          k = k + 1
+        }
+
+        j = j + 1
+      }
+
+      i = i + 1
+    }
+
+    return sum
+  }
+}
+
+static box Main {
+  main(args) {
+    print("================================================================================")
+    print("Hakorune Benchmark Suite (Fixed-Time: 5 seconds each)")
+    print("================================================================================")
+    print("")
+
+    // Benchmark 1: Fibonacci(12)
+    me.bench_fibonacci()
+
+    // Benchmark 2: PHI Stress If
+    me.bench_phi_if()
+
+    // Benchmark 3: PHI Stress Loop
+    me.bench_phi_loop()
+
+    print("================================================================================")
+    print("Complete!")
+    print("================================================================================")
+
+    return 0
+  }
+
+  // Benchmark 1: Fibonacci(12)
+  bench_fibonacci() {
+    print("Fibonacci(12)")
+
+    // Warmup 1 second
+    local start_warmup = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start_warmup < 1000) {
+      BenchSuite.bench_fibonacci()
+    }
+
+    // Measurement 5 seconds
+    local iterations = 0
+    local start = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start < 5000) {
+      BenchSuite.bench_fibonacci()
+      iterations = iterations + 1
+    }
+    local elapsed_ms = TimerBox.now_ms() - start
+
+    me.print_stats(iterations, elapsed_ms)
+    return 0
+  }
+
+  // Benchmark 2: PHI Stress If
+  bench_phi_if() {
+    print("PHI Stress If")
+
+    // Warmup 1 second
+    local start_warmup = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start_warmup < 1000) {
+      BenchSuite.bench_phi_if()
+    }
+
+    // Measurement 5 seconds
+    local iterations = 0
+    local start = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start < 5000) {
+      BenchSuite.bench_phi_if()
+      iterations = iterations + 1
+    }
+    local elapsed_ms = TimerBox.now_ms() - start
+
+    me.print_stats(iterations, elapsed_ms)
+    return 0
+  }
+
+  // Benchmark 3: PHI Stress Loop
+  bench_phi_loop() {
+    print("PHI Stress Loop")
+
+    // Warmup 1 second
+    local start_warmup = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start_warmup < 1000) {
+      BenchSuite.bench_phi_loop()
+    }
+
+    // Measurement 5 seconds
+    local iterations = 0
+    local start = TimerBox.now_ms()
+    loop(TimerBox.now_ms() - start < 5000) {
+      BenchSuite.bench_phi_loop()
+      iterations = iterations + 1
+    }
+    local elapsed_ms = TimerBox.now_ms() - start
+
+    me.print_stats(iterations, elapsed_ms)
+    return 0
+  }
+
+  // Helper: print statistics
+  print_stats(iterations, elapsed_ms) {
+    local elapsed_s = elapsed_ms / 1000
+    local us_per_op = (elapsed_ms * 1000) / iterations
+    local ops_per_sec = (iterations * 1000) / elapsed_ms
+
+    print("  Iterations: " + iterations + " in " + elapsed_s + "s")
+    print("  µs/op: " + us_per_op)
+    print("  ops/sec: " + ops_per_sec)
+    print("")
+
+    return 0
+  }
+}

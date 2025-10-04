@@ -1,27 +1,27 @@
 #!/bin/bash
-# selfhost_phi_decode_single_vm.sh — PhiDecodeBox single-form decode smoke
+# selfhost_phi_decode_values_skip_malformed_vm.sh — skip malformed entry then use later valid entry
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 # Run only when explicitly enabled; keep quick suite lean
 if [ "${SMOKES_ENABLE_PHI_DECODE_EXTRA:-0}" != "1" ]; then
-  echo "[SKIP] extra phi decode (single)" >&2
+  echo "[SKIP] extra phi decode (skip-malformed)" >&2
   exit 0
 fi
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-TMP_DIR="/tmp/selfhost_phi_decode_single_vm_$$"
+TMP_DIR="/tmp/selfhost_phi_decode_values_skip_malformed_vm_$$"
 mkdir -p "$TMP_DIR"
 
-cat > "$TMP_DIR/driver.nyash" << 'EOF'
+cat > "$TMP_DIR/driver.nyash" << 'NYEOF'
 using selfhost.vm.boxes.phi_decode_box as PhiDecodeBox
 
 static box Main {
   main() {
-    // single-form: {"op":"phi","dst":3,"pred":0,"value":1}
-    local seg = "{\"op\":\"phi\",\"dst\":3,\"pred\":0,\"value\":1}"
-    local res = PhiDecodeBox.decode_result(seg, 0)
+    // First element malformed (no value), second valid with pred match
+    local seg = "{\"op\":\"phi\",\"dst\":3,\"values\":[{\"pred\":0},{\"pred\":9,\"value\":7}]}"
+    local res = PhiDecodeBox.decode_result(seg, 9)
     if res.is_ok() == 1 {
       local p = res.value()
       print("dst=" + (""+p.get(0)) + ",v=" + (""+p.get(1)))
@@ -31,12 +31,11 @@ static box Main {
     return 0
   }
 }
-EOF
+NYEOF
 
 out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | tail -n 1 | tr -d '\r' | xargs)
-expected="dst=3,v=1"
-compare_outputs "$expected" "$out" "selfhost_phi_decode_single_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
+expected="dst=3,v=7"
+compare_outputs "$expected" "$out" "selfhost_phi_decode_values_skip_malformed_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0
-

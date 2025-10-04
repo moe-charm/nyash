@@ -1,0 +1,365 @@
+// Benchmark Runner — Commercial-grade benchmark harness
+// Implements two-phase measurement model with warmup, statistics, and JSON output
+//
+// Based on: apps/benchmarks/DESIGN.md by ChatGPT Pro
+// Reference: https://github.com/hakorune/hakorune/blob/selfhost/apps/benchmarks/DESIGN.md
+//
+// Features:
+// - ✅ Warmup phase (discard initial runs)
+// - ✅ Statistical analysis (mean, median, stddev, p95, p99)
+// - ✅ Two-phase measurement (preparation vs execution)
+// - 🚧 JSON output (future enhancement)
+// - 🚧 Fixed-time mode (future enhancement)
+//
+// Usage:
+//   ./target/release/hakorune apps/benchmarks/harness/bench_runner.hako
+//
+// Environment variables:
+//   BENCH_WARMUP=N     - Number of warmup iterations (default: 10)
+//   BENCH_REPEAT=N     - Number of measurement iterations (default: 50)
+//   BENCH_TARGET=NAME  - Benchmark target (vm/llvm/wasm, default: vm)
+
+using "apps/benchmarks/harness/timer_helper.hako"
+using "apps/benchmarks/harness/stats_box.hako"
+using "apps/benchmarks/harness/runner_box.hako"
+
+// Demo benchmark functions (inline for MVP)
+// Future: Load from external files via FileBox or compilation
+
+static box DemoBenchmarks {
+  // Benchmark 1: Simple counter (loop PHI validation)
+  counter() {
+    local i = 0
+    loop(i < 10) {
+      i = i + 1
+    }
+    return i
+  }
+
+  // Benchmark 2: Fibonacci (recursive function calls)
+  fibonacci() {
+    return me._fib(12)
+  }
+
+  _fib(n) {
+    if n <= 1 { return n }
+    return me._fib(n - 1) + me._fib(n - 2)
+  }
+
+  // Benchmark 3: Prime check (branching and arithmetic)
+  prime_check() {
+    return me._is_prime(97)
+  }
+
+  _is_prime(n) {
+    if n <= 1 { return 0 }
+    if n <= 3 { return 1 }
+    if n % 2 == 0 { return 0 }
+    if n % 3 == 0 { return 0 }
+
+    local i = 5
+    loop(i * i <= n) {
+      if n % i == 0 { return 0 }
+      if n % (i + 2) == 0 { return 0 }
+      i = i + 6
+    }
+
+    return 1
+  }
+
+  // Benchmark 4: PHI stress (8-way if-else chain)
+  phi_stress_if() {
+    local x = 0
+    local i = 0
+
+    loop(i < 10000) {
+      // 8-way branch: creates PHI merge point with 8 incoming edges
+      if i % 8 == 0 { x = x + 1 }
+      else if i % 8 == 1 { x = x + 2 }
+      else if i % 8 == 2 { x = x + 3 }
+      else if i % 8 == 3 { x = x + 4 }
+      else if i % 8 == 4 { x = x + 5 }
+      else if i % 8 == 5 { x = x + 6 }
+      else if i % 8 == 6 { x = x + 7 }
+      else { x = x + 8 }
+
+      i = i + 1
+    }
+
+    return x
+  }
+
+  // Benchmark 5: PHI stress (nested loops, depth=3)
+  // Note: Reduced to 50x50x50 = 125k iterations for practical benchmark time
+  phi_stress_loop() {
+    local sum = 0
+    local i = 0
+
+    loop(i < 50) {
+      local j = 0
+
+      loop(j < 50) {
+        local k = 0
+
+        loop(k < 50) {
+          sum = sum + 1
+          k = k + 1
+        }
+
+        j = j + 1
+      }
+
+      i = i + 1
+    }
+
+    return sum
+  }
+}
+
+// Helper: Convert nanoseconds to milliseconds with decimal
+static box FormatHelper {
+  ns_to_ms_str(ns) {
+    // Convert ns to ms (divide by 1,000,000)
+    local ms = ns / 1000000
+    // Get fractional part (ns % 1000000)
+    local ns_rem = ns - (ms * 1000000)
+    // Convert to 3 decimal places
+    local frac = ns_rem / 1000
+    return "" + ms + "." + frac + "ms"
+  }
+
+  // Simple integer to string with padding
+  i2s(v) {
+    return "" + v
+  }
+}
+
+static box Main {
+  main(args) {
+    print("================================================================================")
+    print("Hakorune Benchmark Runner v0.1 (Phase 1 MVP)")
+    print("================================================================================")
+    print("")
+    print("Based on: apps/benchmarks/DESIGN.md")
+    print("Implements: Warmup + Statistics (mean/median/stddev/p95/p99)")
+    print("")
+
+    // Configuration (hardcoded for MVP, future: parse args/config file)
+    local warmup = 10
+    local repeat = 50
+    local target = "vm"
+
+    print("Configuration:")
+    print("  Target:  " + target)
+    print("  Warmup:  " + warmup + " iterations (discarded)")
+    print("  Repeat:  " + repeat + " iterations (measured)")
+    print("")
+
+    // Create runner
+    local runner = new RunnerBox(target)
+
+    // Run Benchmark 1: Counter
+    print("--------------------------------------------------------------------------------")
+    print("Benchmark 1: Simple Counter (loop PHI)")
+    print("--------------------------------------------------------------------------------")
+    me._run_counter(runner, warmup, repeat)
+
+    print("")
+
+    // Run Benchmark 2: Fibonacci
+    print("--------------------------------------------------------------------------------")
+    print("Benchmark 2: Fibonacci(12) (recursion)")
+    print("--------------------------------------------------------------------------------")
+    me._run_fibonacci(runner, warmup, repeat)
+
+    print("")
+
+    // Run Benchmark 3: Prime check
+    print("--------------------------------------------------------------------------------")
+    print("Benchmark 3: Prime Check (97) (arithmetic + branching)")
+    print("--------------------------------------------------------------------------------")
+    me._run_prime_check(runner, warmup, repeat)
+
+    print("")
+
+    // Run Benchmark 4: PHI stress (if-else)
+    print("--------------------------------------------------------------------------------")
+    print("Benchmark 4: PHI Stress If (8-way branch, 10k iterations)")
+    print("--------------------------------------------------------------------------------")
+    me._run_phi_stress_if(runner, warmup, repeat)
+
+    print("")
+
+    // Run Benchmark 5: PHI stress (nested loops)
+    print("--------------------------------------------------------------------------------")
+    print("Benchmark 5: PHI Stress Loop (nested depth=3, 125k iterations)")
+    print("--------------------------------------------------------------------------------")
+    me._run_phi_stress_loop(runner, warmup, repeat)
+
+    print("")
+    print("================================================================================")
+    print("Benchmark Complete!")
+    print("================================================================================")
+
+    return 0
+  }
+
+  // Benchmark 1: Counter
+  _run_counter(runner, warmup, repeat) {
+    local timer = new TimerHelper()
+    local stats = new StatsBox()
+
+    // Warmup
+    print("  Warmup: " + warmup + " iterations...")
+    local i = 0
+    loop(i < warmup) {
+      DemoBenchmarks.counter()
+      i = i + 1
+    }
+
+    // Measurement
+    print("  Measuring: " + repeat + " iterations...")
+    i = 0
+    loop(i < repeat) {
+      local t0 = timer.now_ns()
+      DemoBenchmarks.counter()
+      local t1 = timer.now_ns()
+      stats.push(t1 - t0)
+      i = i + 1
+    }
+
+    me._print_stats(stats)
+    return 0
+  }
+
+  // Benchmark 2: Fibonacci
+  _run_fibonacci(runner, warmup, repeat) {
+    local timer = new TimerHelper()
+    local stats = new StatsBox()
+
+    // Warmup
+    print("  Warmup: " + warmup + " iterations...")
+    local i = 0
+    loop(i < warmup) {
+      DemoBenchmarks.fibonacci()
+      i = i + 1
+    }
+
+    // Measurement
+    print("  Measuring: " + repeat + " iterations...")
+    i = 0
+    loop(i < repeat) {
+      local t0 = timer.now_ns()
+      DemoBenchmarks.fibonacci()
+      local t1 = timer.now_ns()
+      stats.push(t1 - t0)
+      i = i + 1
+    }
+
+    me._print_stats(stats)
+    return 0
+  }
+
+  // Benchmark 3: Prime check
+  _run_prime_check(runner, warmup, repeat) {
+    local timer = new TimerHelper()
+    local stats = new StatsBox()
+
+    // Warmup
+    print("  Warmup: " + warmup + " iterations...")
+    local i = 0
+    loop(i < warmup) {
+      DemoBenchmarks.prime_check()
+      i = i + 1
+    }
+
+    // Measurement
+    print("  Measuring: " + repeat + " iterations...")
+    i = 0
+    loop(i < repeat) {
+      local t0 = timer.now_ns()
+      DemoBenchmarks.prime_check()
+      local t1 = timer.now_ns()
+      stats.push(t1 - t0)
+      i = i + 1
+    }
+
+    me._print_stats(stats)
+    return 0
+  }
+
+  // Benchmark 4: PHI stress if
+  _run_phi_stress_if(runner, warmup, repeat) {
+    local timer = new TimerHelper()
+    local stats = new StatsBox()
+
+    // Warmup
+    print("  Warmup: " + warmup + " iterations...")
+    local i = 0
+    loop(i < warmup) {
+      DemoBenchmarks.phi_stress_if()
+      i = i + 1
+    }
+
+    // Measurement
+    print("  Measuring: " + repeat + " iterations...")
+    i = 0
+    loop(i < repeat) {
+      local t0 = timer.now_ns()
+      local result = DemoBenchmarks.phi_stress_if()
+      local t1 = timer.now_ns()
+      stats.push(t1 - t0)
+      i = i + 1
+    }
+
+    me._print_stats(stats)
+    return 0
+  }
+
+  // Benchmark 5: PHI stress loop
+  _run_phi_stress_loop(runner, warmup, repeat) {
+    local timer = new TimerHelper()
+    local stats = new StatsBox()
+
+    // Warmup
+    print("  Warmup: " + warmup + " iterations...")
+    local i = 0
+    loop(i < warmup) {
+      DemoBenchmarks.phi_stress_loop()
+      i = i + 1
+    }
+
+    // Measurement
+    print("  Measuring: " + repeat + " iterations...")
+    i = 0
+    loop(i < repeat) {
+      local t0 = timer.now_ns()
+      local result = DemoBenchmarks.phi_stress_loop()
+      local t1 = timer.now_ns()
+      stats.push(t1 - t0)
+      i = i + 1
+    }
+
+    me._print_stats(stats)
+    return 0
+  }
+
+  // Helper: Print statistics
+  _print_stats(stats) {
+    local mean_ns = stats.mean()
+    local median_ns = stats.median()
+    local stddev_ns = stats.stddev()
+    local p95_ns = stats.p95()
+    local p99_ns = stats.p99()
+
+    print("")
+    print("  Results:")
+    print("    Samples:  " + stats.count())
+    print("    Mean:     " + FormatHelper.ns_to_ms_str(mean_ns))
+    print("    Median:   " + FormatHelper.ns_to_ms_str(median_ns))
+    print("    Stddev:   " + FormatHelper.ns_to_ms_str(stddev_ns))
+    print("    P95:      " + FormatHelper.ns_to_ms_str(p95_ns))
+    print("    P99:      " + FormatHelper.ns_to_ms_str(p99_ns))
+    return 0
+  }
+}

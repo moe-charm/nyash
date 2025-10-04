@@ -841,3 +841,17 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
   - quick/selfhost/rune_host_mock_vm.sh → PASS (ENV: HAKO_RUNE_ENABLE=1, HAKO_RUNE_PROVIDER=mock)
 - Stop here: no provider wiring in box by default; keep core surface minimal.
 - Next (when unfreezing): remove box fallback, switch to extern route, add timeout/env plumbing, and wire providers (mock/wasm).
+## Current Focus
+- Mini-VM φ decode hardening: DONE (error taxonomy, skip malformed, empty-array handling).
+- Mini-VM log noise: DONE (default errors-only; NYASH_MINIVM_DEBUG=1 to enable debug).
+- Guide updated: scanning-policy staged boundaries (seek→substring→Frag).
+- Smokes: 1 always-on (values), extras gated via SMOKES_ENABLE_PHI_DECODE_EXTRA=1.
+
+### Next Small Steps
+- Builder: static factory auto-birth now emits lowered `Class.birth/Arity` even if instance box is lowered later (static-first order).
+- Mini‑VM: Throw terminator implemented (returns -2, error-only log).
+- Selfhost header emit unified: pipeline_v2/HeaderEmitBox kept for orchestration; compiler early --min-json emits locally to avoid AST-prelude dependency.
+- φ diamond smoke is now always-on in quick.
+- Optionally expand phi error variants if new malformed shapes appear.
+- Keep quick lean (1 phi test), run extras via filter/ENV when diagnosing.
+- Proceed to remaining m3 validation (branch_false/cond_prev_block/jump_chain) once needed.

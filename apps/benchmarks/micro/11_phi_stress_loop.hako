@@ -1,0 +1,60 @@
+// PHI Stress Test: Nested Loops (self-referential PHI, depth=3)
+// Measures PHI handling efficiency in nested loop scenarios
+//
+// Design: apps/benchmarks/DESIGN.md (ChatGPT Pro)
+// Purpose: Validate self-referential PHI optimization in nested structures
+//
+// Expected behavior:
+// - Creates 3 levels of nested loops
+// - Each loop has self-referential PHI nodes (loop counter)
+// - Inner accumulator also creates PHI merge points
+//
+// MIR validation:
+// - Should generate PHI nodes for each loop counter (i, j, k)
+// - Should generate PHI for accumulator (sum) with cross-loop updates
+// - VM: Multiple PHI handling without optimization
+// - LLVM: Optimized PHI coalescing and register allocation
+//
+// Expected result: sum = 125000
+// Calculation: 50 * 50 * 50 = 125,000 iterations
+// Note: Reduced from 100x100x100 for practical benchmark time
+//
+// Performance notes:
+// - Deeper nesting stresses PHI verifier
+// - LLVM should show significant optimization over VM
+// - Useful for measuring loop optimization effectiveness
+
+static box Main {
+  main(args) {
+    local sum = 0
+    local i = 0
+
+    // Outer loop (50 iterations)
+    loop(i < 50) {
+      local j = 0
+
+      // Middle loop (50 iterations)
+      loop(j < 50) {
+        local k = 0
+
+        // Inner loop (50 iterations)
+        loop(k < 50) {
+          // Accumulator update (creates PHI merge)
+          sum = sum + 1
+
+          // Inner loop counter (self-referential PHI)
+          k = k + 1
+        }
+
+        // Middle loop counter (self-referential PHI)
+        j = j + 1
+      }
+
+      // Outer loop counter (self-referential PHI)
+      i = i + 1
+    }
+
+    print("Result: " + sum)
+    return 0
+  }
+}
