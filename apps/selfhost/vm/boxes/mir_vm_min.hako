@@ -168,6 +168,14 @@ static box MirVmMin {
                 if nx < 0 { break }
                 if nx + 1 <= i { i = i + 1 } else { i = nx + 1 }
               }
+              // Fallback: if no match found, try first "value" in array region
+              if vin == null {
+                local vp = seg.indexOf("\"value\":", arr_br)
+                if vp >= 0 && vp < n {
+                  local vv2 = JsonFragBox.get_int(seg.substring(vp, n), "value")
+                  if vv2 != null { vin = vv2 }
+                }
+              }
             } else {
               // Single form: {"pred":P,"value":V}
               vin = JsonFragBox.get_int(seg, "value")
