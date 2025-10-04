@@ -11,6 +11,7 @@ preflight_plugins || exit 2
 
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
+export NYASH_VM_MAX_INSTRUCTIONS=10000000
 
 TMP_DIR="/tmp/selfhost_mir_m2_compare_neg_probe_vm_$$"
 mkdir -p "$TMP_DIR"
@@ -21,15 +22,8 @@ using apps/selfhost/vm/boxes/minivm_probe.hako as MiniVmProbe
 
 static box Main {
   main() {
-    // Build JSON without escape sequences using a quoted-char variable
-    local q = """
-    local j = "{" + q + "functions" + q + ":[{" + q + "name" + q + ":" + q + "main" + q + "," + q + "params" + q + ":[] ," + q + "blocks" + q + ":[{" + q + "id" + q + ":0," + q + "instructions" + q + ":["
-    j = j + "{" + q + "op" + q + ":" + q + "const" + q + "," + q + "dst" + q + ":1," + q + "value" + q + ":{" + q + "type" + q + ":" + q + "i64" + q + "," + q + "value" + q + ":3}},"
-    j = j + "{" + q + "op" + q + ":" + q + "const" + q + "," + q + "dst" + q + ":2," + q + "value" + q + ":{" + q + "type" + q + ":" + q + "i64" + q + "," + q + "value" + q + ":7}},"
-    j = j + "{" + q + "op" + q + ":" + q + "binop" + q + "," + q + "op_kind" + q + ":" + q + "Sub" + q + "," + q + "lhs" + q + ":1," + q + "rhs" + q + ":2," + q + "dst" + q + ":3},"
-    j = j + "{" + q + "op" + q + ":" + q + "const" + q + "," + q + "dst" + q + ":4," + q + "value" + q + ":{" + q + "type" + q + ":" + q + "i64" + q + "," + q + "value" + q + ":0}},"
-    j = j + "{" + q + "op" + q + ":" + q + "compare" + q + "," + q + "cmp" + q + ":" + q + "Lt" + q + "," + q + "lhs" + q + ":3," + q + "rhs" + q + ":4," + q + "dst" + q + ":5},"
-    j = j + "{" + q + "op" + q + ":" + q + "ret" + q + "," + q + "value" + q + ":5}] }]}]}"
+    // Build JSON using raw string literal (Rust-style r#"..."#)
+    local j = r#"{"functions":[{"name":"main","params":[],"blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":3}},{"op":"const","dst":2,"value":{"type":"i64","value":7}},{"op":"binop","op_kind":"Sub","lhs":1,"rhs":2,"dst":3},{"op":"const","dst":4,"value":{"type":"i64","value":0}},{"op":"compare","cmp":"Lt","lhs":3,"rhs":4,"dst":5},{"op":"ret","value":5}]}]}]}"#
     local m = MiniVmProbe.probe_compare(j)
     local a = m.get("a")
     local b = m.get("b")
@@ -47,9 +41,9 @@ out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | tail -n 3 | tr -d '
 ')
 
 # 値抽出
-A=$(echo "$out" | grep '^A=' | sed -E 's/^A=//')
-B=$(echo "$out" | grep '^B=' | sed -E 's/^B=//')
-R=$(echo "$out" | grep '^R=' | sed -E 's/^R=//')
+A=$(echo "$out" | sed -nE 's/.*A=([-0-9]+).*/\1/p')
+B=$(echo "$out" | sed -nE 's/.*B=([-0-9]+).*/\1/p')
+R=$(echo "$out" | sed -nE 's/.*R=([-0-9]+).*/\1/p')
 
 # 強制表示モード
 if [ "${SMOKES_FORCE_SHOW:-0}" = "1" ]; then

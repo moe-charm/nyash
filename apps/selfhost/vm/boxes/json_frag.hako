@@ -33,19 +33,29 @@ static box JsonFragBox {
     return ""
   }
 
-  // ブロック0の instructions を丸ごと返す（最小用）
+  // ブロック0の instructions を丸ごと返す（配列の中身のみ返す）。
   block0_segment(mjson) {
-    local p = me.index_of_from(mjson, "\"id\":0", 0)
+    if mjson == null { return "" }
+    // id:0 を見つけた後で "instructions":[ を探す（プレーンJSONを前提）
+    local p = mjson.indexOf("\"id\":0")
     if p < 0 { return "" }
-    local k = me.index_of_from(mjson, "\"instructions\":[", p)
+    local k = mjson.indexOf("\"instructions\":[", p)
     if k < 0 { return "" }
-    local i = k + 16
-    // 対応する ']' を簡易に探す
+    local i = k + 16  // length of ""instructions":["
+    // 対応する ']' をエスケープ対応で探索
     local depth = 1
     local endp = i
+    local in_str = 0
     loop(true) {
       local ch = mjson.substring(endp, endp+1)
       if ch == "" { break }
+      if in_str == 1 {
+        if ch == "\\" { endp = endp + 2  continue }
+        if ch == "\"" { in_str = 0  endp = endp + 1  continue }
+        endp = endp + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  endp = endp + 1  continue }
       if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
       if depth == 0 { break }
       endp = endp + 1

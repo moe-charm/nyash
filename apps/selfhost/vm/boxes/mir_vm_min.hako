@@ -35,10 +35,13 @@ static box MirVmMin {
       steps = steps + 1
       if steps > max_steps { return 0 }
       local start = me._block_insts_start(mjson, bb)
+      me._tprint("[minivm] start="+me._int_to_str(start))
       if start < 0 { return 0 }
       local endp = me._block_insts_end(mjson, start)
+      me._tprint("[minivm] endp="+me._int_to_str(endp))
       if endp <= start { return 0 }
       local inst_seg = mjson.substring(start, endp)
+      me._tprint("[minivm] seglen="+me._int_to_str(inst_seg.length()))
       // scan objects in this block
       local scan_pos = 0
       local inst_count = 0
@@ -52,6 +55,7 @@ static box MirVmMin {
         local seg = inst_seg.substring(obj_start, obj_end)
         // derive op from seg contents
         local op = JsonFragBox.get_str(seg, "op")
+        me._tprint("[minivm] op="+op)
         if op == "" {
           // Detect binop before generic lhs/rhs (to avoid misclassification)
           if seg.indexOf("\"op_kind\"") >= 0 { op = "binop" } else {
@@ -83,53 +87,7 @@ static box MirVmMin {
             regs.set(""+crhs, last_binop_val)
           }
 
-          // Fallback: lightweight back-scan to ensure lhs/rhs definitions within this block
-          // Find nearest prior definition of clhs/crhs ("dst":id) before current object and evaluate once
-          local __cur_pos = inst_seg.indexOf(seg)
-          if clhs != null && me._load_reg(regs, clhs) == 0 && clhs != 0 {
-            local __search = 0
-            local __last = -1
-            local __key = "\"dst\":" + me._int_to_str(clhs)
-            loop(true) {
-              local pdef = me.index_of_from(inst_seg, __key, __search)
-              if pdef < 0 || pdef >= __cur_pos { break }
-              __last = pdef
-              __search = pdef + 1
-            }
-            if __last >= 0 {
-              // Expand to object bounds and evaluate minimal op
-              // Find object start
-              local __s = __last
-              loop(__s > 0) { if inst_seg.substring(__s, __s+1) == "{" { break } __s = __s - 1 }
-              local __e = me._seek_obj_end(inst_seg, __s)
-              if __e > __s {
-                local __seg = inst_seg.substring(__s, __e)
-                if __seg.indexOf("\"op_kind\"") >= 0 { OpHandlersBox.handle_binop(__seg, regs) }
-                else { OpHandlersBox.handle_const(__seg, regs) }
-            } }
-          }
-          if crhs != null && me._load_reg(regs, crhs) == 0 && crhs != 0 {
-            local __search2 = 0
-            local __last2 = -1
-            local __key2 = "\"dst\":" + me._int_to_str(crhs)
-            loop(true) {
-              local pdef2 = me.index_of_from(inst_seg, __key2, __search2)
-              if pdef2 < 0 || pdef2 >= __cur_pos { break }
-              __last2 = pdef2
-              __search2 = pdef2 + 1
-            }
-            if __last2 >= 0 {
-              local __s2 = __last2
-              loop(__s2 > 0) { if inst_seg.substring(__s2, __s2+1) == "{" { break } __s2 = __s2 - 1 }
-              local __e2 = me._seek_obj_end(inst_seg, __s2)
-              if __e2 > __s2 {
-                local __seg2 = inst_seg.substring(__s2, __e2)
-                if __seg2.indexOf("\"op_kind\"") >= 0 { OpHandlersBox.handle_binop(__seg2, regs) }
-                else { OpHandlersBox.handle_const(__seg2, regs) }
-              }
-            }
-          }
-          // Inline compare evaluation to avoid any handler ambiguity
+// Inline compare evaluation to avoid any handler ambiguity
           local kind = JsonFragBox.get_str(seg, "cmp")
           if kind == "" { kind = JsonFragBox.get_str(seg, "operation") }
           local a = 0
