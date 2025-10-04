@@ -6,9 +6,9 @@ using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
 
 static box MirVmMin {
-  _tprint(msg) {
+  _tif msg.indexOf("[ERROR]") >= 0 { print(msg) } {
     // Only emit hard errors by default; suppress debug noise in smokes
-    print(msg)
+    if msg.indexOf("[ERROR]") >= 0 { print(msg) }
   }
   run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
   // Thin-mode runner (ret resolution simplified)
@@ -136,6 +136,18 @@ static box MirVmMin {
           moved = 1
           scan_pos = obj_end
           break
+        }
+        else if op == "phi" {
+          // Decode and apply PHI using a small dedicated box
+          local pair = PhiDecodeBox.decode(seg, prev_bb)
+          if pair != null {
+            local dst = pair.get(0)
+            local vin = pair.get(1)
+            if dst != null and vin != null {
+              local vv = me._load_reg(regs, vin)
+              regs.set(""+dst, vv)
+            }
+          }
         }
         else if op == "ret" {
           // Return resolution (Fail‑Fast policy)

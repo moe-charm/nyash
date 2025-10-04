@@ -127,7 +127,6 @@ static box OpHandlersBox {
     local a = me._load_reg(regs, lhs)
     local b = me._load_reg(regs, rhs)
     local r = CompareOpsBox.eval(kind, a, b)
-    print("[minivm] cmp kind=" + kind + " dst=" + (""+dst) + " a=" + (""+a) + " b=" + (""+b) + " r=" + (""+r))
     regs.set("" + dst, r)
   }
 
