@@ -6,6 +6,7 @@
 
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
 
 static box PhiDecodeBox {
   // tiny helpers to avoid raw quote/backslash sequences in source (prelude‑safe)
@@ -84,5 +85,18 @@ static box PhiDecodeBox {
     out.push(null)
     out.push(null)
     return out
+  }
+
+  // Public: decode seg and wrap into Result.ok([dst,vin]) or Result.err(msg)
+  decode_result(seg, prev_bb) {
+    local pair = me.decode(seg, prev_bb)
+    if pair != null {
+      local d = pair.get(0)
+      local v = pair.get(1)
+      if d != null and v != null {
+        return Result.ok(pair)
+      }
+    }
+    return Result.err("phi:no_incoming")
   }
 }
