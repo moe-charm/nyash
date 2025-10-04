@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_compare_eq_boundary_vm.sh — a=b equality boundary (Eq/Ne/Lt/Le/Gt/Ge)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_binop_ops_vm.sh — Minimal binop ops (Add/Sub/Mul/Div/Mod)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

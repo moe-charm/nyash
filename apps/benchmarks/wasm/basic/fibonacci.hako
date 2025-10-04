@@ -1,0 +1,33 @@
+// Fibonacci Benchmark - Recursive Implementation
+// Calculates fibonacci(30) to test exponential recursion
+
+static box Main {
+    fibonacci(n) {
+        local cond
+        local n_1
+        local n_2
+        local fib_1
+        local fib_2
+        local result
+
+        // Base case: n <= 1
+        cond = n <= 1
+        if cond {
+            return n
+        }
+
+        // Recursive case: fib(n-1) + fib(n-2)
+        n_1 = n - 1
+        n_2 = n - 2
+        fib_1 = me.fibonacci(n_1)
+        fib_2 = me.fibonacci(n_2)
+        result = fib_1 + fib_2
+        return result
+    }
+
+    main() {
+        local result
+        result = me.fibonacci(30)
+        return result
+    }
+}

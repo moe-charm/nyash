@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_localssa_trace_vm.sh — Verify LocalSSA trace API reports copy insertions
+# tags: selfhost,trace
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

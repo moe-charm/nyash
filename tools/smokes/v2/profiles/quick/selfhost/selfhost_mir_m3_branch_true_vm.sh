@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m3_branch_true_vm.sh — branch(cond) selects then-path
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

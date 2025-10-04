@@ -1,0 +1,22 @@
+// ベンチマーク2: フィボナッチ数列（ループ版）
+// 期待値: 55
+
+local n
+local a
+local b
+local temp
+local i
+
+n = 10
+a = 0
+b = 1
+i = 0
+
+loop(i < n) {
+    temp = a + b
+    a = b
+    b = temp
+    i = i + 1
+}
+
+print("Result: " + b)

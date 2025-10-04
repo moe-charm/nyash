@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_eq_true_vm.sh — MirVmMin M2 compare(Eq) true → prints 1
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

@@ -1,0 +1,15 @@
+// Loop Counter Benchmark
+// Counts from 0 to 9 and returns 10
+
+static box Main {
+    main() {
+        local i
+        i = 0
+
+        loop(i < 10) {
+            i = i + 1
+        }
+
+        return i
+    }
+}

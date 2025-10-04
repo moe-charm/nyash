@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_binop_vm.sh — Ny製の最小MIR(JSON v0) 実行器スモーク（binop Add → ret）
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

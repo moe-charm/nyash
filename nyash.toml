@@ -53,6 +53,9 @@ selfhost.vm.probe = "apps/selfhost/vm/boxes/minivm_probe.hako"
 selfhost.core.timer = "apps/core/timer/TimerBox.hako"
 selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
 
+# WASM target (dev only; refer in smokes)
+targets.wasm.driver = "apps/targets/wasm/wasm_driver_box.hako"
+
 # Selfhost compiler main module (avoid file-path using in dev wrappers)
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 

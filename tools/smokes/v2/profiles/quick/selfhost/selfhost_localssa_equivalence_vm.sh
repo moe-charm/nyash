@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_localssa_equivalence_vm.sh — ensure LocalSSA.ensure_cond preserves semantics (equivalence)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

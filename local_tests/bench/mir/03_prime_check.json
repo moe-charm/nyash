@@ -1,0 +1,64 @@
+{
+  "schema_version": "0.1.0",
+  "capabilities": ["unified_call", "phi", "effects", "callee_typing"],
+  "metadata": {},
+  "functions": [
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 97}},
+            {"op": "const", "dst": 2, "value": {"type": "i64", "value": 2}},
+            {"op": "jump", "target": 1}
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {"op": "phi", "dst": 3, "incoming": [
+              {"block": 0, "value": 2},
+              {"block": 3, "value": 9}
+            ]},
+            {"op": "binop", "operation": "*", "lhs": 3, "rhs": 3, "dst": 4},
+            {"op": "compare", "operation": ">", "lhs": 4, "rhs": 1, "dst": 5},
+            {"op": "branch", "cond": 5, "then": 5, "else": 2}
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {"op": "binop", "operation": "%", "lhs": 1, "rhs": 3, "dst": 6},
+            {"op": "const", "dst": 7, "value": {"type": "i64", "value": 0}},
+            {"op": "compare", "operation": "==", "lhs": 6, "rhs": 7, "dst": 8},
+            {"op": "branch", "cond": 8, "then": 4, "else": 3}
+          ]
+        },
+        {
+          "id": 3,
+          "instructions": [
+            {"op": "const", "dst": 10, "value": {"type": "i64", "value": 1}},
+            {"op": "binop", "operation": "+", "lhs": 3, "rhs": 10, "dst": 9},
+            {"op": "jump", "target": 1}
+          ]
+        },
+        {
+          "id": 4,
+          "instructions": [
+            {"op": "const", "dst": 11, "value": {"type": "i64", "value": 0}},
+            {"op": "ret", "value": 11}
+          ]
+        },
+        {
+          "id": 5,
+          "instructions": [
+            {"op": "const", "dst": 12, "value": {"type": "i64", "value": 1}},
+            {"op": "ret", "value": 12}
+          ]
+        }
+      ]
+    }
+  ]
+}

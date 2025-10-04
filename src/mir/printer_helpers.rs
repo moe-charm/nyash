@@ -121,6 +121,9 @@ pub fn format_instruction(
                     super::Callee::Extern(extern_name) => {
                         format!("call_extern {}({})", extern_name, args_str)
                     }
+                    super::Callee::ModuleFunction(name) => {
+                        format!("call_module_fn {}({})", name, args_str)
+                    }
                 }
             } else {
                 // LEGACY: 従来の表示（後方互換性）

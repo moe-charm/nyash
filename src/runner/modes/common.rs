@@ -27,7 +27,7 @@ impl NyashRunner {
         module: &nyash_rust::mir::MirModule,
         tag: &str,
     ) -> Result<i32, String> {
-        super::common_util::pyvm::run_pyvm_harness(module, tag)
+        super::common_util::pyvm::run_pyvm_harness(module, tag, self.config.as_groups().input.entry.as_deref())
     }
     #[cfg(not(feature = "pyvm-bridge"))]
     fn run_pyvm_harness(

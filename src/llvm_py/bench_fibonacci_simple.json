@@ -1,0 +1,54 @@
+{
+  "functions": [
+    {
+      "name": "fibonacci",
+      "params": [0],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 1}},
+            {"op": "compare", "dst": 2, "operation": "<=", "lhs": 0, "rhs": 1},
+            {"op": "branch", "cond": 2, "then": 1, "else": 2}
+          ]
+        },
+        {
+          "id": 1,
+          "instructions": [
+            {"op": "ret", "value": 0}
+          ]
+        },
+        {
+          "id": 2,
+          "instructions": [
+            {"op": "const", "dst": 10, "value": {"type": "i64", "value": 1}},
+            {"op": "binop", "dst": 11, "operation": "-", "lhs": 0, "rhs": 10},
+            {"op": "const", "dst": 12, "value": {"type": "i64", "value": 2}},
+            {"op": "binop", "dst": 13, "operation": "-", "lhs": 0, "rhs": 12},
+            {"op": "call", "dst": 14, "func": 100, "args": [11], "comment": "fib(n-1)"},
+            {"op": "call", "dst": 15, "func": 100, "args": [13], "comment": "fib(n-2)"},
+            {"op": "binop", "dst": 16, "operation": "+", "lhs": 14, "rhs": 15},
+            {"op": "ret", "value": 16}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "ny_main",
+      "params": [],
+      "blocks": [
+        {
+          "id": 0,
+          "instructions": [
+            {"op": "const", "dst": 1, "value": {"type": "i64", "value": 30}, "comment": "n = 30"},
+            {"op": "call", "dst": 2, "func": 100, "args": [1], "comment": "result = fibonacci(30)"},
+            {"op": "ret", "value": 2}
+          ]
+        }
+      ]
+    }
+  ],
+  "function_table": {
+    "100": "fibonacci"
+  }
+}

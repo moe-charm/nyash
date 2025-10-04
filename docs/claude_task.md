@@ -204,3 +204,226 @@ bb9:
 **作業者**: Claude Code
 **日時**: 2025-10-03
 **所要時間**: 約1時間
+
+---
+---
+
+# Claude作業記録 (2025-10-04)
+
+## 📋 セッション概要
+
+**開始**: selfhostブランチマージ後の継続セッション
+**タスク**: LLVM実行ハング問題の調査・修正（bench_unified.sh）
+**結果**: ⭐ **Phase 1完全成功！** Cargo lock問題解決 + Phase 2問題発見
+
+## ✅ 完了した作業
+
+### 1. **selfhostブランチマージ完了** ✅
+
+#### マージ内容
+- **ブランチ**: `origin/selfhost` → `wasm-development`
+- **コンフリクト解消**: CLAUDE.md, src/mir/builder.rs
+- **統合された主な変更**:
+  - Birth rule auto-call実装（JSON v0 Bridge）
+  - PHI統一化（phi_adapter.rs新規追加）
+  - Rust VM すけすけトレース（MVP実装済み）
+  - MIR Builder2実装（static box引数消失バグ回避）
+  - 大量のスモークテスト追加（json_v0_*, selfhost_*, vm_*系）
+
+#### コミット
+- コミットID: 93053e64
+- 変更統計: 212ファイル変更
+
+---
+
+### 2. **LLVM実行ハング問題の根本原因特定** 🎯
+
+#### 問題発見プロセス
+1. **初期症状**: `bench_unified.sh --backend llvm` がタイムアウト
+2. **手動実行**: ✅ 単体では正常動作（`Result: 10`）
+3. **推測1**: プラグインロード遅延 → ❌ 違った
+4. **推測2**: hako.toml読み込み → ❌ 違った
+5. **真の原因発見**: ⭐ **Cargo lock競合**
+
+#### 根本原因1: trap cleanup EXIT
+- **問題**: `trap cleanup EXIT` がサブシェル（`build_llvm.sh`）終了時にも発火
+- **影響**: fibonacci ビルド中に counter用の `/tmp/hakorune_bench_*/` が削除される
+- **修正**: trap削除 + Phase 2完了後に明示的cleanup
+
+#### 根本原因2: Cargo build競合
+- **問題**: `build_llvm.sh`が毎回 `cargo build` を実行
+  - カウンター → `cargo build` (48秒)
+  - フィボナッチ → `cargo build` (31秒) ← **Cargoロックで待機！**
+- **Cargoの制限**: 同じプロジェクトを複数プロセスで同時にビルド不可
+- **解決策**: bench_unified.shで1回だけpre-buildし、build_llvm.shをスキップ
+
+#### 根本原因3: Nyash Kernel build競合
+- **問題**: `NYASH_BENCH_SKIP_NYASH_BUILD=1` でnyashビルドはスキップしたが
+  - `[3/4] Building Nyash Kernel` でもcargoが走る
+  - これもCargo lock競合の原因
+- **解決**: NYASH_BENCH_SKIP_NYASH_BUILD=1時はKernelビルドも自動スキップ
+
+---
+
+### 3. **bench_unified.sh完全修正** ✅
+
+#### 修正内容（3ファイル）
+
+**1. tools/bench_unified.sh**（3箇所修正）:
+```bash
+# 修正1: trap cleanup EXIT削除（行73-74）
+- trap cleanup EXIT
++ # NOTE: trap cleanup EXIT removed to prevent premature cleanup during Phase 1 builds
++ # cleanup is now called explicitly after Phase 1 and at script end
+
+# 修正2: Pre-build追加（行113-135）
++ if [[ "$BACKEND" == "all" || "$BACKEND" == "llvm" ]]; then
++     echo "🔧 Pre-building nyash with LLVM features..."
++     cargo build --release -j 24 -p nyash-rust --features llvm
++     echo "🔧 Pre-building Nyash Kernel..."
++     ( cd crates/nyash_kernel && cargo build --release -j 24 )
++     export NYASH_BENCH_SKIP_NYASH_BUILD=1
++ fi
+
+# 修正3: NYASH_DISABLE_PLUGINS=1追加（行293, 302）
+- env NYASH_NYRT_SILENT_RESULT=1 "$TMP_LLVM_EXE" ...
++ env NYASH_DISABLE_PLUGINS=1 NYASH_NYRT_SILENT_RESULT=1 "$TMP_LLVM_EXE" ...
+
+# 修正4: cleanup明示呼び出し（行424）
++ # 一時ディレクトリクリーンアップ（Phase 2完了後）
++ cleanup
+```
+
+**2. tools/build_llvm.sh**（2箇所修正）:
+```bash
+# 修正1: nyash buildスキップ機能（行47-63）
++ if [[ "${NYASH_BENCH_SKIP_NYASH_BUILD:-0}" == "1" ]]; then
++   echo "    Skipping nyash build (NYASH_BENCH_SKIP_NYASH_BUILD=1)"
++ else
+    cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE"
++ fi
+
+# 修正2: Kernel build自動スキップ（行137-140）
++ # Auto-skip if NYASH_BENCH_SKIP_NYASH_BUILD=1 (avoid Cargo lock in bench_unified.sh)
++ if [[ "${NYASH_BENCH_SKIP_NYASH_BUILD:-0}" == "1" ]]; then
++   export NYASH_LLVM_SKIP_NYRT_BUILD=1
++ fi
+```
+
+**3. CURRENT_TASK_WASM.md**（進捗更新）
+
+---
+
+### 4. **Phase 1完全成功** 🎉
+
+#### テスト結果
+```bash
+$ bash tools/bench_unified.sh --backend llvm --warmup 1 --repeat 1
+
+🔧 Pre-building nyash with LLVM features...
+  ✓ nyash binary ready
+🔧 Pre-building Nyash Kernel...
+  ✓ Nyash Kernel ready
+
+📦 Phase 1: Preparation (build once, NOT measured)
+
+  [LLVM] Building カウンター... ✓ (13M)
+  [LLVM] Building フィボナッチ... ✓ (13M)
+  [LLVM] Building 素数判定... ✓ (13M)
+```
+
+**成果**:
+- ✅ 3ベンチマーク全ビルド成功
+- ✅ Cargo lock競合完全解消
+- ✅ Pre-build方式でビルド時間大幅短縮
+
+---
+
+## 🚨 未解決の問題
+
+### Phase 2 Warmup実行ハング
+
+#### 症状
+```bash
+⏱  Phase 2: Measurement (run N times, MEASURED)
+
+📊 ベンチマーク: カウンター (01_counter.nyash)
+
+  [2/3] LLVM (pre-built executable)
+    Warmup... ← ここでハング
+```
+
+#### 調査結果
+- ✅ TMP_LLVM_EXE正しく設定: `/tmp/hakorune_bench_*/01_counter_llvm`
+- ✅ WARMUP値確認: `WARMUP=1`
+- ✅ 手動実行成功: `env NYASH_DISABLE_PLUGINS=1 NYASH_NYRT_SILENT_RESULT=1 /tmp/hakorune_bench_*/01_counter_llvm`
+- ✅ ループ単体成功: `for i in {1..5}; do ... done` 正常動作
+- ❌ bench_unified.sh内でのみハング
+
+#### 推測原因
+- バッファリング問題？
+- stdin/stdout問題？
+- シェルスクリプトのパイプライン？
+- 環境変数の伝播？
+
+---
+
+## 📊 修正統計
+
+### ファイル修正
+- **修正ファイル数**: 3ファイル
+- **修正箇所数**: 9箇所
+- **新規追加行数**: +45行
+
+| ファイル | 修正内容 | 行数 |
+|---------|---------|------|
+| `tools/bench_unified.sh` | Pre-build + cleanup削除 + DISABLE_PLUGINS | +30行 |
+| `tools/build_llvm.sh` | Skip flags追加 | +15行 |
+| `CURRENT_TASK_WASM.md` | 進捗更新 | N/A |
+
+---
+
+## 🎯 成果まとめ
+
+### 🎉 **Phase 1完全成功！**
+
+**解決した問題**:
+1. ✅ **trap cleanup EXIT問題**: サブシェル誤発火 → 削除+明示的cleanup
+2. ✅ **Cargo lock競合**: Pre-build方式で完全解消
+3. ✅ **Kernel build競合**: 自動スキップ機能追加
+
+**達成事項**:
+- 🏆 3ベンチマーク全ビルド成功（カウンター/フィボナッチ/素数判定）
+- 🏆 ビルド時間短縮（重複ビルド削除）
+- 🏆 Cargoロック問題完全解消
+
+**技術的発見**:
+- Cargoは同じプロジェクトを複数プロセスで同時ビルド不可
+- `trap cleanup EXIT` はサブシェルでも発火する
+- Pre-build戦略でビルド競合を回避可能
+
+---
+
+## 📝 備考
+
+- Phase 1は完全に機能している（3ベンチマーク全ビルド成功）
+- Phase 2 Warmupのハングは新しい問題（Phase 1とは独立）
+- 手動実行は成功するため、スクリプト環境特有の問題の可能性
+
+---
+
+## 🔜 次のアクション
+
+1. **Phase 2 Warmupハング問題の深掘り調査**
+   - strace でシステムコール監視
+   - バックグラウンド実行 + プロセスアタッチ
+   - バッファリング無効化試行
+2. **成功したらPhase 2完全動作確認**
+3. **3バックエンド比較ベンチマーク完成**
+
+---
+
+**作業者**: Claude Code
+**日時**: 2025-10-04
+**所要時間**: 約2時間
+**状態**: Phase 1完了、Phase 2調査中

@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_compiler_emit_mir_cmp_vm.sh — Selfhost compiler emits MIR for Compare and Mini‑VM prints 1
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

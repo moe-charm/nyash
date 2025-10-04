@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_compare_zero_zero_vm.sh — compare zeros (0 vs 0)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

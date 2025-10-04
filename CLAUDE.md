@@ -4,97 +4,129 @@
 
 ---
 
-## 🚀 **Claude Sonnet 4.5リリース！** (2025-09-30)
+## 🔄 **現在の開発状況** (2025-10-03)
 
-### 🎉 **革命的進化のポイント**
-- **30時間以上の自律作業**（従来の4.3倍！）
-- **世界最高のコーディング能力**（SWE-bench 82.0%）
-- **エラー率0%のコード編集**
-- **並列ツール実行**（複数Bashコマンド同時実行）
-- **価格据え置き**（$3/$15 per million tokens）
+### 🎯 **Phase 15.8: WASM実装進行中**
+- **ブランチ**: `wasm-development` (← `selfhost`からfork)
+- **目標**: MIR18命令 → WASM変換、ブラウザ/エッジ環境対応
+- **戦略**: llvm_py拡張（既存800行活用）+ WASI runtime連携
+- **計画書**: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
 
-### 🔄 **現在の開発状況** (2025-09-30)
+### 🎉 **Phase 3.4完了！統合ベンチマークシステム実装** (2025-10-03)
+- ✅ **bench_unified.sh完全書き直し**（420行、2フェーズ分離設計）
+- ✅ **ChatGPT Pro設計準拠**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)
+- ✅ **VMベンチマーク完全動作**（カウンター: 2ms、フィボナッチ: 2ms、素数判定: 3ms）
+- ✅ **LLVM/WASMビルド成功**（Phase 1: Preparation完了）
+- ⚠️ **LLVM Phase 2実行問題**（Warmup後ハング、調査中）
 
-#### 🎯 **Phase 15: セルフホスティング実行器統一化**
-- **Rust VM + LLVM 2本柱体制**で開発中
-- **Core Box統一化**: 3-tier → 2-tier 統一完了
-- **MIR Callee型革新**: 型安全な関数解決システム実装済み
+### 📊 **WASM対応状況**（MIR凍結セット16命令基準）
+**✅ 実装済み（16/16命令 - 完全対応！）**:
+1. **基本演算(5)**: Const, UnaryOp, BinOp, Compare, TypeOp
+2. **メモリ(2)**: Load, Store
+3. **制御(4)**: Branch, Jump, Return, Phi（if/loop両対応）
+4. **呼び出し(1)**: Call/MirCall（統一Call実装済み）
+5. **GC(2)**: Barrier, Safepoint
+6. **構造(2)**: Copy, Nop
 
-#### 🤝 **AI協働開発体制 - 新時代突入！**
-```
-Claude Sonnet 4.5: 実装・実行・長時間作業の天才
-ChatGPT: 設計・戦略・深い推論の専門家
+**🎉 完全実装済み！**
+- ExternCall, BoxCall, NewBox も動作確認済み
+- LoopForm実験的実装あり
+- 詳細: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
 
-新たな協働レベル:
-✅ 30時間連続作業で大規模実装可能
-✅ チェックポイント機能で安全な実験
-✅ 並列処理でビルド・テスト同時実行
-✅ Phase 15セルフホスティング加速！
-```
+**🚨 発見された問題**:
+- Hakoコンパイラ: 不正PHI命令生成バグ（到達不能ブロックがPHI predecessorに含まれる）
 
 ### 📚 **重要リソース**
 - **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
-- **現在のタスク**: [CURRENT_TASK.md](CURRENT_TASK.md)
-- **Phase 15詳細**: [docs/development/roadmap/phases/phase-15/](docs/development/roadmap/phases/phase-15/)
-- **🆕 Phase 15.7 Pipeline v2設計**: [docs/development/selfhosting/pipeline_v2.md](docs/development/selfhosting/pipeline_v2.md)
-- **🆕 Pipeline v2実装**: [apps/selfhost-compiler/pipeline_v2/](apps/selfhost-compiler/pipeline_v2/) | [INTERFACES.md](apps/selfhost-compiler/INTERFACES.md)
+- **現在のタスク**: [CURRENT_TASK_WASM.md](CURRENT_TASK_WASM.md) ⭐ここを見る！
+- **Phase 15.8詳細**: [docs/development/roadmap/phases/phase-15.8/](docs/development/roadmap/phases/phase-15.8/)
+- **MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md) ⭐正式仕様
 
 ---
 
-## 🚨 重要：スモークテストはv2構造を使う！
-- 📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
-- 📁 **v2詳細ドキュメント**: [tools/smokes/v2/README.md](tools/smokes/v2/README.md)
+## 🔧 ビルド・実行方法
 
-### 🎯 2つのベースライン（Two Baselines）
-
-#### 📦 VM ライン（Rust VM - 既定）
+### 🚀 基本ビルド
 ```bash
-# ビルド
+# 標準ビルド（Rust VM）
 cargo build --release
 
-# 一括スモークテスト
+# LLVM機能付きビルド
+cargo build --release --features llvm
+```
+
+### ⚡ 基本実行（hakoコマンド推奨）
+```bash
+# 基本実行
+./target/release/hako program.nyash
+
+# VM実行（明示的）
+./target/release/hako --backend vm program.nyash
+
+# LLVM実行（最適化）
+./target/release/hako --backend llvm program.nyash
+
+# クリーンな出力（デバッグメッセージ抑制）
+NYASH_QUIET=1 ./target/release/hako program.nyash
+```
+
+### 🌐 WASM実行（Phase 15.8）
+```bash
+# WASMベンチマークスイート実行
+bash tools/run_wasm_benchmark_suite.sh
+
+# 個別WASM生成＆実行
+bash tools/build_wasm.sh src/llvm_py/test_arithmetic_smoke.json -o /tmp/test.wasm
+node tools/wasm_runner.js /tmp/test.wasm
+
+# WASMスモークテスト
+bash tools/run_wasm_smoke_tests.sh
+```
+
+---
+
+## 📊 環境変数（主要なもの）
+
+**🎯 よく使う環境変数**:
+- `NYASH_QUIET=1`: 出力抑制（スモークテスト・CI）
+- `NYASH_CLI_VERBOSE=1`: 詳細診断（デバッグ時）
+- `NYASH_LLVM_USE_HARNESS=1`: LLVM/llvmliteハーネス有効化
+- `NYASH_DISABLE_PLUGINS=1`: プラグイン無効化
+
+**🔧 デバッグ用**:
+```bash
+# MIR出力（重要！）
+NYASH_DUMP_MIR=1 ./target/release/hako program.nyash
+./target/release/hako --dump-mir program.nyash  # フラグ版
+
+# JSON IR出力
+./target/release/hako --emit-mir-json output.json program.nyash
+```
+
+📖 **完全ガイド**: [環境変数完全ガイド](docs/reference/environment-variables.md)
+
+---
+
+## 🧪 スモークテスト
+
+### 推奨テストコマンド
+```bash
+# VM ライン（開発・デバッグ）
 tools/smokes/v2/run.sh --profile quick
 
-# 個別スモークテスト（フィルタ指定）
-tools/smokes/v2/run.sh --profile quick --filter "<glob>"
-# 例: --filter "userbox_*"  # User Box関連のみ
-# 例: --filter "json_*"     # JSON関連のみ
-
-# 単発スクリプト実行
-bash tools/smokes/v2/profiles/quick/core/selfhost_mir_m3_jump_vm.sh
-
-# 単発実行（参考）
-./target/release/hakorune --backend vm apps/APP/main.hkr
-```
-
-#### ⚡ llvmlite ライン（LLVMハーネス）
-```bash
-# 前提: Python3 + llvmlite
-# 未導入なら: pip install llvmlite
-
-# 一括スモークテスト（そのまま実行）
+# llvmlite ライン（本番・最適化）
 tools/smokes/v2/run.sh --profile integration
 
-# 警告低減版（ビルド後に実行・推奨）
-cargo build --release -p hakorune-llvm-compiler && cargo build --release --features llvm
-tools/smokes/v2/run.sh --profile integration
+# WASMテスト
+bash tools/run_wasm_smoke_tests.sh
 
-# 個別スモークテスト（フィルタ指定）
-tools/smokes/v2/run.sh --profile integration --filter "<glob>"
-# 例: --filter "json_*"     # JSON関連のみ
-# 例: --filter "vm_llvm_*"  # VM/LLVM比較系のみ
-
-# 単発実行
-HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm apps/tests/peek_expr_block.hkr
-
-# 有効化確認
-./target/release/hakorune --version | rg -i 'features.*llvm'
+# PHI関連テスト
+bash tools/smokes/v2/run_phi.sh
 ```
 
-**💡 ポイント**:
-- **VM ライン**: 開発・デバッグ・検証用（高速・型安全）
-- **llvmlite ライン**: 本番・最適化・配布用（実証済み安定性）
-- 両方のテストが通ることで品質保証！
+📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
+
+---
 
 ## Start Here (必ずここから)
 - 現在のタスク: [CURRENT_TASK.md](CURRENT_TASK.md)
@@ -103,42 +135,43 @@ HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm apps/tests/peek
   - 📁 **Self**: [docs/development/current/self_current_task/](docs/development/current/self_current_task/)
 - ドキュメントハブ: [README.md](README.md)
 - 🚀 **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
- - 📊 **JIT統計JSONスキーマ(v1)**: [jit_stats_json_v1.md](docs/reference/jit/jit_stats_json_v1.md)
 
 ## 🧱 先頭原則: 「箱理論（Box-First）」で足場を積む
-Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
 
-- 基本姿勢: 「まず箱に切り出す」→「境界をはっきりさせる」→「差し替え可能にする」
-  - 環境依存や一時的なフラグは、可能な限り「箱経由」に集約（例: JitConfigBox）
-  - VM/JIT/GC/スケジューラは箱化されたAPI越しに連携（直参照・直結合を避ける）
-- いつでも戻せる: 機能フラグ・スコープ限定・デフォルトオフを活用し、破壊的変更を避ける
-  - 「限定スコープの足場」を先に立ててから最適化（戻りやすい積み木）
-- AI補助時の注意: 「力づく最適化」を抑え、まず箱で境界を確立→小さく通す→可視化→次の一手
-- **Fail-Fast原則**: フォールバック処理は原則禁止。エラーは早期に明示的に失敗させる。過去に何度も分岐ミスでエラーの発見が遅れたため、特にChatGPTが入れがちなフォールバック処理には要注意
+Nyashは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
 
-実践テンプレート（開発時の合言葉）
+### 実践テンプレート（開発時の合言葉）
 - 「箱にする」: 設定・状態・橋渡しはBox化（例: JitConfigBox, HandleRegistry）
 - 「境界を作る」: 変換は境界1箇所で（VMValue↔JitValue, Handle↔Arc）
 - 「戻せる」: フラグ・feature・env/Boxで切替。panic→フォールバック経路を常設
 - 「見える化」: ダンプ/JSON/DOTで可視化、回帰テストを最小構成で先に入れる
 - 「Fail-Fast」: エラーは隠さず即座に失敗。フォールバックより明示的エラー
 
+---
+
 ## 🤖 **Claude×Copilot×ChatGPT協調開発**
-### 📋 **開発マスタープラン - 全フェーズの統合ロードマップ**
+
+### 📋 **開発マスタープラン**
 **すべてはここに書いてある！** → [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
 
-**現在のフェーズ：Phase 15 (Hakoruneセルフホスティング実行器統一化 - Rust VM + LLVM 2本柱体制)**
+**現在のフェーズ：Phase 15.8 (WASM実装)**
 
 ### 🎊 **最新成果（2025-10-03）**
 - ✅ **Phase 15.5-15.8完了**: Core Box統一・MIR命令安定化・LLVM PHI安定化・型変換統一化
 - ✅ **MIR Builder2実装**: static box引数消失バグ回避（インスタンス版）
 - ✅ **Rust VMすけすけトレース実装**: 1命令/1行観測＋ステッパ機能
+- ✅ **VM Bug修正完了**: PHI predecessor判定バグ修正（3つのバグが1つの根本原因から）
 
 ### 🚀 **Phase 15戦略: Rust VM + LLVM 2本柱**
-- **Rust VM**: 開発・デバッグ・検証用（高速・型安全）
-- **LLVM**: 本番・最適化・配布用（Python/llvmlite、実証済み）
+```
+【Rust VM】  開発・デバッグ・検証用（高速・型安全）
+【LLVM】     本番・最適化・配布用（Python/llvmlite、実証済み）
+【WASM】     Phase 15.8実験的（llvm_py拡張、call命令完全動作済み）
+```
 
 📋 **詳細**: [Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md) | [CURRENT_TASK.md](CURRENT_TASK.md)
+
+---
 
 ## 🏃 開発の基本方針: 80/20ルール - 完璧より進捗
 
@@ -153,181 +186,64 @@ Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを�
 2. **改善アイデアは `docs/development/proposals/ideas/` フォルダに記録**（20%）
 3. **優先度に応じて後から改善**
 
+---
+
 ## 🚀 クイックスタート
 
 ### 🎯 **2本柱実行方式** (推奨!)
 ```bash
 # 🔧 開発・デバッグ・検証用 (Rust VM)
-./target/release/hakorune program.hkr
-./target/release/hakorune --backend vm program.hkr
+./target/release/hako program.nyash
+./target/release/hako --backend vm program.nyash
 
 # ⚡ 本番・最適化・配布用 (LLVM)
-./target/release/hakorune --backend llvm program.hkr
+./target/release/hako --backend llvm program.nyash
 
 # 🛡️ プラグインエラー対策
-HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
+NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
 
 # 🔍 詳細診断
-HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
+NYASH_CLI_VERBOSE=1 ./target/release/hako program.nyash
 ```
 
-### 🚀 **Phase 15 セルフホスティング専用**
+### 🌐 **WASMライン**（Phase 15.8実験的）
 ```bash
-# JSON v0ブリッジ（PyVM特殊用途）
-HAKO_SELFHOST_EXEC=1 ./target/release/hakorune program.hkr
+# WASMベンチマークスイート実行
+bash tools/run_wasm_benchmark_suite.sh
 
-# using処理確認
-./target/release/hakorune --enable-using program_with_using.hkr
-
-# ラウンドトリップテスト
-./tools/ny_roundtrip_smoke.sh
+# 個別WASM生成＆実行
+bash tools/build_wasm.sh src/llvm_py/test_arithmetic_smoke.json -o /tmp/test.wasm
+node tools/wasm_runner.js /tmp/test.wasm
 ```
 
-### 🐧 Linux/WSL版
-```bash
-# 標準ビルド（2本柱対応）
-cargo build --release
+---
 
-# 開発・デバッグ実行（Rust VM）
-./target/release/hakorune program.hkr
-
-# 本番・最適化実行（LLVM）
-./target/release/hakorune --backend llvm program.hkr
-```
-
-### 🪟 Windows版
-```bash
-# Windows実行ファイル生成
-cargo build --release --target x86_64-pc-windows-msvc
-
-# 生成された実行ファイル
-target/x86_64-pc-windows-msvc/release/hakorune.exe
-```
-
-### 🌐 **WASM/AOT版**（開発中）
-```bash
-# ⚠️ WASM機能: レガシーインタープリター削除により一時無効
-# TODO: VM/LLVMベースのWASM実装に移行予定
-
-# LLVM AOTコンパイル（実験的）
-./target/release/hakorune --backend llvm program.hkr  # 実行時最適化
-```
-
-### 🎯 **2本柱ビルド方法** (2025-09-28更新)
-
-#### 🔨 **標準ビルド**（推奨）
-```bash
-# 標準ビルド（2本柱対応）
-cargo build --release
-
-# LLVM（llvmliteハーネス）付きビルド（本番用）
-cargo build --release --features llvm
-```
-
-#### 📝 **2本柱テスト実行**
-```bash
-# 1. Rust VM実行 ✅（開発・デバッグ用）
-cargo build --release
-./target/release/hakorune program.hkr
-
-# 2. LLVM実行 ✅（本番・最適化用, llvmliteハーネス）
-cargo build --release --features llvm
-HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune --backend llvm program.hkr
-
-# 3. プラグインテスト実証済み ✅
-# CounterBox
-echo 'local c = new CounterBox(); c.inc(); c.inc(); print(c.get())' > test.hkr
-./target/release/hakorune --backend llvm test.hkr
-
-# StringBox
-echo 'local s = new StringBox(); print(s.concat("Hello"))' > test.hkr
-./target/release/hakorune test.hkr
-
-```
-
-⚠️ **ビルド時間の注意**:
-- 標準ビルド: 1-2分（高速）
-- LLVMビルド: 3-5分（時間がかかる）
-- 必ず十分な時間設定で実行してください
-
-## 🚨 **Claude迷子防止ガイド** - 基本的な使い方で悩む君へ！
-
-### 😵 **迷ったらこれ！**（Claude Code専用）
-
-```bash
-# 🎯 基本実行（まずこれ）- Rust VM
-./target/release/hakorune program.hkr
-
-# ⚡ 本番・最適化実行 - LLVM
-./target/release/hakorune --backend llvm program.hkr
-
-# 🛡️ プラグインエラー対策（緊急時のみ）
-HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
-
-# 🔍 詳細診断情報
-HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
-
-# ⚠️ PyVM特殊用途（JSON v0ブリッジ・セルフホスト専用）
-HAKO_SELFHOST_EXEC=1 ./target/release/hakorune program.hkr
-```
-
-### 🚨 **Phase 15戦略確定**
-- ✅ **Rust VM + LLVM 2本柱体制**（開発集中）
-- ✅ **PyVM特化保持**（JSON v0ブリッジ・using処理のみ）
-- ✅ **レガシーインタープリター削除完了**（~350行削除済み）
-- 🎯 **基本はRust VM、本番はLLVM、特殊用途のみPyVM**
-
-### 📊 **環境変数優先度マトリックス**（Phase 15戦略版）
-
-| 環境変数 | 必須度 | 用途 | 使用タイミング |
-|---------|-------|-----|-------------|
-| `HAKO_CLI_VERBOSE=1` | ⭐⭐⭐ | 詳細診断 | デバッグ時 |
-| `HAKO_DISABLE_PLUGINS=1` | ⭐⭐ | エラー対策 | プラグインエラー時 |
-| `HAKO_SELFHOST_EXEC=1` | ⭐ | セルフホスト | JSON v0ブリッジ専用 |
-| ~~`HAKO_VM_USE_PY=1`~~ | ⚠️ | PyVM特殊用途 | ~~開発者明示のみ~~ |
-| ~~`HAKO_ENABLE_USING=1`~~ | ✅ | using処理 | ~~デフォルト化済み~~ |
-
-**💡 2本柱戦略**：基本は`./target/release/hakorune`（Rust VM）、本番は`--backend llvm`！
-
-**⚠️ PyVM使用制限**: [PyVM使用ガイドライン](docs/reference/pyvm-usage-guidelines.md)で適切な用途を確認
-
-### ✅ **using system完全実装完了！** (2025-09-24)
-
-`using hakorune-std`が完全動作！環境変数不要・デフォルト有効。
-詳細: [using.md](docs/reference/language/using.md)
-
-## 🧪 テストスクリプト参考集（既存のを活用しよう！）
+## 🧪 テストスクリプト参考集
 ```bash
 # 基本的なテスト
-./target/release/hakorune local_tests/hello.hkr              # Hello World
-./target/release/hakorune local_tests/test_array_simple.hkr  # ArrayBox
-./target/release/hakorune apps/tests/string_ops_basic.hkr    # StringBox
+./target/release/hako local_tests/hello.nyash              # Hello World
+./target/release/hako local_tests/test_array_simple.nyash  # ArrayBox
+./target/release/hako apps/tests/string_ops_basic.nyash    # StringBox
 
 # MIR確認用テスト
-./target/release/hakorune --dump-mir apps/tests/loop_min_while.hkr
-./target/release/hakorune --dump-mir apps/tests/esc_dirname_smoke.hkr
-
-# 統一Call テスト（Phase A完成！）
-HAKO_MIR_UNIFIED_CALL=1 ./target/release/hakorune --dump-mir test_simple_call.hkr
-HAKO_MIR_UNIFIED_CALL=1 ./target/release/hakorune --emit-mir-json test.json test.hkr
+./target/release/hako --dump-mir apps/tests/loop_min_while.nyash
 ```
 
-## 🚀 よく使う実行コマンド（忘れやすい）
+---
+
+## 🚀 よく使う実行コマンド
 
 ### 🎯 基本実行方法
 ```bash
 # VMバックエンド（デフォルト、高速）
-./target/release/hakorune program.hkr
-./target/release/hakorune --backend vm program.hkr
+./target/release/hako program.nyash
+./target/release/hako --backend vm program.nyash
 
 # LLVMバックエンド（最適化済み）
-./target/release/hakorune --backend llvm program.hkr
-
-# プラグインテスト（LLVM）
-./target/release/hakorune --backend llvm program.hkr
+./target/release/hako --backend llvm program.nyash
 
 # プラグイン無効（デバッグ用）
-HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
+NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
 ```
 
 ### 🔧 テスト・スモークテスト
@@ -341,54 +257,59 @@ HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
 # ラウンドトリップテスト
 ./tools/ny_roundtrip_smoke.sh
 
-# Stage-2 PHIスモーク（If/Loop PHI合流）
-./tools/ny_parser_stage2_phi_smoke.sh
-
-# Stage-2 Bridgeスモーク（算術/比較/短絡/if）
-./tools/ny_stage2_bridge_smoke.sh
-
-# プラグインスモーク（オプション）
-HAKO_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
-
-# using/namespace E2E（要--enable-using）
-./tools/using_e2e_smoke.sh
+# WASMスモーク
+bash tools/run_wasm_smoke_tests.sh
 ```
+
+### 📊 ベンチマークシステム（Phase 15.8）
+**設計**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md) - ChatGPT Pro設計
+**重要原則**: 準備フェーズと測定フェーズの分離！
+
+#### 🔨 ビルド方法（準備フェーズ）
+```bash
+# LLVM実行ファイル生成（~700ms、1回のみ）
+bash tools/build_llvm.sh <program.nyash> -o <output_exe>
+
+# WASM生成（1回のみ）
+bash tools/build_wasm.sh <mir.json> -o <output.wasm>
+
+# VM: 準備不要（インタープリタ）
+```
+
+#### ⏱️ ベンチマーク実行（測定フェーズ）
+```bash
+# 統合ベンチマーク（3バックエンド）
+bash tools/bench_unified.sh --backend all --warmup 10 --repeat 50
+bash tools/bench_unified.sh --backend vm --warmup 2 --repeat 3  # クイック
+bash tools/bench_unified.sh --backend llvm --warmup 10 --repeat 50
+bash tools/bench_unified.sh --backend wasm --warmup 10 --repeat 50
+```
+
+**詳細**: [apps/benchmarks/README.md](apps/benchmarks/README.md)
 
 ### 🐛 デバッグ用環境変数
 ```bash
 # 詳細診断
-HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
+NYASH_CLI_VERBOSE=1 ./target/release/hako program.nyash
 
 # JSON IR出力
-HAKO_DUMP_JSON_IR=1 ./target/release/hakorune program.hkr
+NYASH_DUMP_JSON_IR=1 ./target/release/hako program.nyash
 
 # MIR出力（重要！）
-HAKO_DUMP_MIR=1 ./target/release/hakorune program.hkr
-HAKO_VM_DUMP_MIR=1 ./target/release/hakorune program.hkr  # VM実行時
-./target/release/hakorune --dump-mir program.hkr            # フラグ版
-
-# PyVMデバッグ
-HAKO_PYVM_DEBUG=1 ./target/release/hakorune program.hkr
+NYASH_DUMP_MIR=1 ./target/release/hako program.nyash
+./target/release/hako --dump-mir program.nyash  # フラグ版
 
 # パーサー無限ループ対策
-./target/release/hakorune --debug-fuel 1000 program.hkr
+./target/release/hako --debug-fuel 1000 program.nyash
 
 # プラグインなし実行
-HAKO_DISABLE_PLUGINS=1 ./target/release/hakorune program.hkr
+NYASH_DISABLE_PLUGINS=1 ./target/release/hako program.nyash
 
-# LLVMプラグイン実行（method_id使用）
-./target/release/hakorune --backend llvm program.hkr
-
-# Python/llvmliteハーネス使用（開発中）
-HAKO_LLVM_USE_HARNESS=1 ./target/release/hakorune program.hkr
-
-# 🚀 **Phase 15.5統一Call完全動作確認済み設定** (2025-09-24)
-# ❌ モックルート回避 - 実際のLLVMハーネス使用
-HAKO_MIR_UNIFIED_CALL=1 HAKO_DISABLE_PLUGINS=1 HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_LLVM_USE_HARNESS=1 HAKO_LLVM_OBJ_OUT=/tmp/output.o ./target/release/hakorune --backend llvm program.hkr
-
-# 🔧 Python側で統一Call処理（llvmlite直接実行）
-cd src/llvm_py && HAKO_MIR_UNIFIED_CALL=1 ./venv/bin/python llvm_builder.py input.json -o output.o
+# Python/llvmliteハーネス使用
+NYASH_LLVM_USE_HARNESS=1 ./target/release/hako --backend llvm program.nyash
 ```
+
+---
 
 ## 🔬 **Rust VM すけすけトレース（MVP実装済み！）** ⭐NEW
 
@@ -478,162 +399,154 @@ export NYASH_DISABLE_PLUGINS=1
   - 別物！
 ```
 
+---
+
 ## 🔍 MIRデバッグ出力完全ガイド（必読！）
 
 ### 🎯 **確実にMIRを出力する方法**（優先順）
 
 ```bash
 # 1️⃣ 最も確実: CLIフラグ使用
-./target/release/hakorune --dump-mir program.hkr
-./target/release/hakorune --dump-mir --mir-verbose program.hkr  # 詳細版
+./target/release/hako --dump-mir program.nyash
+./target/release/hako --dump-mir --mir-verbose program.nyash  # 詳細版
 
 # 2️⃣ VM実行時のMIR出力
-HAKO_VM_DUMP_MIR=1 ./target/release/hakorune program.hkr
+NYASH_VM_DUMP_MIR=1 ./target/release/hako program.nyash
 
 # 3️⃣ JSON形式でファイル出力
-./target/release/hakorune --emit-mir-json debug.json program.hkr
+./target/release/hako --emit-mir-json debug.json program.nyash
 cat debug.json | jq .  # 整形表示
-
-# 4️⃣ PyVM用JSON（自動生成）
-HAKO_VM_USE_PY=1 ./target/release/hakorune program.hkr
-cat tmp/hakorune_pyvm_mir.json | jq .
 ```
-
-### 📋 **MIR関連環境変数一覧**
-
-| 環境変数 | 用途 | 出力先 |
-|---------|-----|-------|
-| `HAKO_VM_DUMP_MIR=1` | VM実行前MIR出力 | stderr |
-| `HAKO_DUMP_JSON_IR=1` | JSON IR出力 | stdout |
-| `HAKO_CLI_VERBOSE=1` | 詳細診断（MIR含む） | stderr |
-| `HAKO_DEBUG_MIR_PRINTER=1` | MIRプリンターデバッグ | stderr |
-
-### 🚨 **MIRが出力されない時のチェックリスト**
-1. ✅ `--dump-mir` フラグを使用（最も確実）
-2. ✅ `--backend vm` を明示的に指定
-3. ✅ `HAKO_DISABLE_PLUGINS=1` でプラグイン干渉を排除
-4. ✅ `HAKO_CLI_VERBOSE=1` で詳細情報取得
 
 ### 💡 **実用的デバッグフロー**
 ```bash
 # Step 1: 基本MIR確認
-./target/release/hakorune --dump-mir gemini_test_case.hkr
+./target/release/hako --dump-mir test_case.nyash
 
 # Step 2: 詳細MIR + エフェクト情報
-./target/release/hakorune --dump-mir --mir-verbose --mir-verbose-effects gemini_test_case.hkr
+./target/release/hako --dump-mir --mir-verbose --mir-verbose-effects test_case.nyash
 
 # Step 3: VM実行時の挙動確認
-HAKO_VM_DUMP_MIR=1 HAKO_CLI_VERBOSE=1 ./target/release/hakorune gemini_test_case.hkr
+NYASH_VM_DUMP_MIR=1 NYASH_CLI_VERBOSE=1 ./target/release/hako test_case.nyash
 
 # Step 4: JSON形式で詳細解析
-./target/release/hakorune --emit-mir-json mir.json gemini_test_case.hkr
+./target/release/hako --emit-mir-json mir.json test_case.nyash
 jq '.functions[0].blocks' mir.json  # ブロック構造確認
 ```
+
+---
 
 ## ⚡ 重要な設計原則
 
 ### 🏗️ Everything is Box
 - すべての値がBox（StringBox, IntegerBox, BoolBox等）
 - ユーザー定義Box: `box ClassName { field1: TypeBox field2: TypeBox }`
-- **MIR14命令**: たった14個の命令で全機能実現！
-  - 基本演算(5): Const, UnaryOp, BinOp, Compare, TypeOp
-  - メモリ(2): Load, Store
-  - 制御(4): Branch, Jump, Return, Phi
-  - Box(2): NewBox, BoxCall
-  - 外部(1): ExternCall
+- **MIR凍結セット**: 16命令で全機能実現！（詳細: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)）
+
+### 🌟 完全明示デリゲーション
+```nyash
+// デリゲーション構文（すべてのBoxで統一的に使える！）
+box Child from Parent {
+    birth(args) {  // コンストラクタは「birth」に統一
+        from Parent.birth(args)  // 親の初期化
+    }
+
+    override method() {  // 明示的オーバーライド必須
+        from Parent.method()  // 親メソッド呼び出し
+    }
+}
+```
 
 ### 🔄 統一ループ構文
-```hakorune
+```nyash
 // ✅ 唯一の正しい形式
 loop(condition) { }
 
 // ❌ 削除済み構文
 while condition { }  // 使用不可
-loop() { }          // 使用不可
 ```
 
-### 🌟 birth構文 - 生命をBoxに与える
-```hakorune
-// 🌟 「Boxに生命を与える」直感的コンストラクタ
-box Life {
-    name: StringBox
-    energy: IntegerBox
+### 🎯 正統派Nyashスタイル
+```nyash
+// 🚀 Static Box Main パターン - エントリーポイントの統一スタイル
+static box Main {
+    console: ConsoleBox
+    result: IntegerBox
 
-    birth(lifeName) {  // ← Everything is Box哲学を体現！
-        me.name = lifeName
-        me.energy = 100
-        print("🌟 " + lifeName + " が誕生しました！")
+    main() {
+        me.console = new ConsoleBox()
+        me.console.log("🎉 Everything is Box!")
+
+        local temp
+        temp = 42
+        me.result = temp
+
+        return "Revolution completed!"
     }
 }
-
-// ✅ birth統一: すべてのBoxでbirthを使用
-local alice = new Life("Alice")  // birthが使われる
 ```
 
 ### 📝 変数宣言厳密化システム
-```hakorune
-// 🔥 すべての変数は明示宣言必須！（メモリ安全性・非同期安全性保証）
+```nyash
+// 🔥 すべての変数は明示宣言必須！
 
 // ✅ static box内のフィールド
 static box Calculator {
-    result: IntegerBox     // 明示宣言
+    result: IntegerBox
     memory: ArrayBox
 
     calculate() {
-        me.result = 42  // ✅ フィールドアクセス
+        me.result = 42
 
-        local temp     // ✅ local変数宣言
+        local temp
         temp = me.result * 2
     }
 }
 
 // ❌ 未宣言変数への代入はエラー
-x = 42  // Runtime Error: 未宣言変数 + 修正提案
+x = 42  // Runtime Error: 未宣言変数
 ```
 
-### 🎯 match式（パターンマッチング）
-```hakorune
-// 値を返す式として使用
-local dv = match d {
-    "0" => 0,
-    "1" => 1,
-    "2" => 2,
-    _ => 0
-}
+---
 
-// ブロックで複雑な処理も可能
-local result = match status {
-    "success" => { log("OK"); 200 }
-    "error" => { log("NG"); 500 }
-    _ => 404
-}
+## 🏗️ アーキテクチャ決定事項
 
-// 文として使用（値を捨てる）
-match action {
-    "save" => save_data()
-    "load" => load_data()
-    _ => print("Unknown")
-}
+### **ExternCall Registry 2層分離アーキテクチャ** (2025-10-03)
+```
+ExternCallRegistryBox (共通・抽象)
+    interface: "nyrt.time"
+    method: "now_ms"
+    effects: READ
+    ↓
+┌───┼───┐
+↓   ↓   ↓
+WASM VM LLVM Adapters (各Backend・具体)
 ```
 
-### 🏗️ アーキテクチャ決定事項（2025-09-11）
-**Box/ExternCall境界設計の最終決定**:
+**設計原則**:
+- **Registry**: 抽象仕様のみ（interface/method/effects）
+- **Adapter**: バックエンド固有実装（WASM=i32, VM=SystemTime, LLVM=JSON）
+- **Fail-Fast**: 未知extern → RuntimeError（フォールバック禁止）
+- **疎結合**: 各Backendが独立開発可能
+
+詳細: [Externs Registry](docs/development/architecture/externs_registry.md)
+
+### **Box/ExternCall境界設計** (2025-09-11)
 - **基本Box**: nyrt内蔵（String/Integer/Array/Map/Bool）
 - **拡張Box**: プラグイン（File/Net/User定義）
-- **ExternCall**: 最小5関数のみ（print/error/panic/exit/now）
+- **ExternCall**: Registry管理（timer/array.size/map.size等）
 - **統一原則**: すべてのBoxはBoxCall経由（特別扱いなし）
-- **表現統一**: Box=ハンドル(i64)、i8*は橋渡しのみ
 
 詳細: [Box/ExternCall設計](docs/development/architecture/box-externcall-design.md)
+
+---
 
 ## 📚 ドキュメント構造
 
 ### 🎯 最重要ドキュメント（開発者向け）
-- **[Phase 15 セルフホスティング計画](docs/development/roadmap/phases/phase-15/self-hosting-plan.txt)** - Hakoruneセルフホスティング実現
-- **[Phase 15 ROADMAP](docs/development/roadmap/phases/phase-15/ROADMAP.md)** - 現在の進捗チェックリスト
-- **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)** - 入口の統合
 - **[CURRENT_TASK.md](CURRENT_TASK.md)** - 現在進行状況詳細
-- **[native-plan/README.md](docs/development/roadmap/native-plan/README.md)** - ネイティブビルド計画
+- **[00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)** - 開発マスタープラン
+- **[Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)** - WASM実装計画
 
 ### 📖 利用者向けドキュメント
 - 入口: [docs/README.md](docs/README.md)
@@ -643,12 +556,13 @@ match action {
 
 ### 🎯 リファレンス
 - **言語**:
-  - [Quick Reference](docs/reference/language/quick-reference.md) ⭐最優先 - 1ページ実用ガイド
+  - [Quick Reference](docs/reference/language/quick-reference.md) ⭐最優先
   - [LANGUAGE_REFERENCE_2025.md](docs/reference/language/LANGUAGE_REFERENCE_2025.md) - 完全仕様
 - **MIR**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
 - **API**: [boxes-system/](docs/reference/boxes-system/)
 - **プラグイン**: [plugin-system/](docs/reference/plugin-system/)
 
+---
 
 ## 📖 ドキュメントファースト開発（重要！）
 
@@ -662,84 +576,48 @@ match action {
 ### 🎯 最重要ドキュメント（2つの核心）
 
 #### 🔤 言語仕様
-- **[クイックリファレンス](docs/reference/language/quick-reference.md)** ⭐最優先 - 1ページ実用ガイド（ASI・Truthiness・演算子・型ルール）
-- **[構文早見表](docs/reference/quick/syntax-cheatsheet.md)** - 基本構文・よくある間違い
+- **[クイックリファレンス](docs/reference/language/quick-reference.md)** ⭐最優先
+- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)** - 基本構文・よくある間違い
 - **[完全リファレンス](docs/reference/language/LANGUAGE_REFERENCE_2025.md)** - 言語仕様詳細
 
 #### 📦 主要BOXのAPI
 - **[Box/プラグイン関連](docs/reference/boxes-system/)** - APIと設計
 
-### ⚡ API確認の実践例
-```bash
-# ❌ 悪い例：いきなりソース読む
-Read src/boxes/p2p_box.rs  # 直接ソース参照
-
-# ✅ 良い例：ドキュメント優先
-Read docs/reference/  # まずドキュメント（API/言語仕様の入口）
-# → 古い/不足 → ドキュメント更新
-# → それでも不明 → ソース確認
-```
+---
 
 ## 🔧 重要設計書（迷子防止ガイド）
 
-**設計書がすぐ見つからない問題を解決！**
-
 ### 🏗️ **アーキテクチャ核心**
-- **[名前空間・using system](docs/reference/language/using.md)** ⭐超重要 - ドット記法・スコープ演算子・Phase 15.5計画
-- **[MIR Callee革新](docs/development/architecture/mir-callee-revolution.md)** - 関数呼び出し型安全化・シャドウイング解決
-- **[構文早見表](docs/reference/quick/syntax-cheatsheet.md)** - 基本構文・よくある間違い
+- **[名前空間・using system](docs/reference/language/using.md)** ⭐超重要
+- **[MIR Callee革新](docs/development/architecture/mir-callee-revolution.md)**
+- **[構文早見表](docs/quick-reference/syntax-cheatsheet.md)**
 
-### 📋 **Phase 15.5重要資料**
-- **[Core Box統一計画](docs/development/roadmap/phases/phase-15.5/README.md)** - builtin vs plugin問題
-- **[Box Factory設計](docs/reference/architecture/box-factory-design.md)** - 優先順位問題・解決策
-- **[Callee実装ロードマップ](docs/development/roadmap/phases/phase-15/mir-callee-implementation-roadmap.md)**
+### 📋 **Phase 15関連資料**
+- **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)**
+- **[Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)**
 
 ### 📖 **完全リファレンス**
-- **[言語仕様](docs/reference/language/LANGUAGE_REFERENCE_2025.md)** - 全構文・セマンティクス
-- **[プラグインシステム](docs/reference/plugin-system/)** - プラグイン開発ガイド
-- **[Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md)** - 現在進捗
+- **[言語仕様](docs/reference/language/LANGUAGE_REFERENCE_2025.md)**
+- **[プラグインシステム](docs/reference/plugin-system/)**
+
+---
 
 ## 🔧 開発サポート
 
-### 🎛️ 重要フラグ一覧（Phase 15）
+### 🎛️ 重要フラグ一覧
 ```bash
 # プラグイン制御
-HAKO_DISABLE_PLUGINS=1     # Core経路安定化（CI常時）
-HAKO_LOAD_NY_PLUGINS=1     # nyash.tomlのny_pluginsを読み込む
-
-# 言語機能
---enable-using              # using/namespace有効化
-HAKO_ENABLE_USING=1        # 環境変数版
-
-# パーサー選択
---parser ny                 # Nyパーサーを使用
-HAKO_USE_NY_PARSER=1       # 環境変数版
-HAKO_USE_NY_COMPILER=1     # NyコンパイラMVP経路
+NYASH_DISABLE_PLUGINS=1
 
 # デバッグ
-HAKO_CLI_VERBOSE=1         # 詳細診断
-HAKO_DUMP_JSON_IR=1        # JSON IR出力
-```
-
-### 🤖 AI相談
-```bash
-# Gemini CLIで相談
-gemini -p "Hakoruneの実装で困っています..."
-
-# Codex実行
-codex exec "質問内容"
+NYASH_CLI_VERBOSE=1
+NYASH_DUMP_JSON_IR=1
 ```
 
 ### 🐍 Python LLVM バックエンド (実用レベル到達！)
 **場所**: `/src/llvm_py/`
 
 llvmliteベースのLLVMバックエンド実装。箱理論により650行→100行の簡略化を実現！
-Rust/inkwellの複雑さを回避して、シンプルに2000行程度でMIR14→LLVM変換を実現。
-
-⚠️ **重要**: **JIT/Craneliftは現在まともに動作しません！**
-- ビルドは可能（`cargo build --release --features cranelift-jit`）
-- 実行は不可（内部実装が未完成）
-- **Python LLVMルートとPyVMのみが現在の開発対象です**
 
 #### 実行方法
 ```bash
@@ -752,29 +630,11 @@ python3 -m venv venv
 #### 実装済み命令
 - ✅ const, binop, jump, branch, ret, compare
 - ✅ phi, call, boxcall, externcall
-- ✅ typeop, newbox, safepoint, barrier
-- ✅ loopform (実験的)
+- ✅ typeop, newbox, safepoint, barrier, loopform
 
-**利点**: シンプル、高速プロトタイピング、llvmliteの安定性
-**用途**: PHI/SSA検証、LoopForm実験、LLVM IR生成テスト
+---
 
-### 🔄 Codex非同期ワークフロー（並列作業）
-```bash
-# 基本実行（同期）
-./tools/codex-async-notify.sh "タスク内容" codex
-
-# デタッチ実行（即座に戻る）
-CODEX_ASYNC_DETACH=1 ./tools/codex-async-notify.sh "タスク" codex
-
-# 並列制御（最大2つ、重複排除）
-CODEX_MAX_CONCURRENT=2 CODEX_DEDUP=1 CODEX_ASYNC_DETACH=1 \
-  ./tools/codex-async-notify.sh "Phase 15タスク" codex
-
-# 実行中のタスク確認
-pgrep -af 'codex.*exec'
-```
-
-### 💡 アイデア管理（docs/development/proposals/ideas/ フォルダ）
+## 💡 アイデア管理
 
 **80/20ルールの「残り20%」を整理して管理**
 
@@ -785,39 +645,7 @@ docs/development/proposals/ideas/
 └── other/           # その他すべて（調査、メモ、設計案）
 ```
 
-### 🧪 テスト実行
-
-**詳細**: [テスト実行ガイド](docs/guides/testing-guide.md)
-
-#### Phase 15 推奨スモークテスト
-```bash
-# コアスモーク（プラグイン無効）
-./tools/jit_smoke.sh
-
-# ラウンドトリップテスト
-./tools/ny_roundtrip_smoke.sh
-
-# プラグインスモーク（オプション）
-HAKO_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
-
-# using/namespace E2E（要--enable-using）
-./tools/using_e2e_smoke.sh
-```
-
-**ルート汚染防止**: `local_tests/`ディレクトリを使う！
-
-
-### 🐛 デバッグ
-
-#### パーサー無限ループ対策
-```bash
-# 🔥 デバッグ燃料でパーサー制御
-./target/release/hakorune --debug-fuel 1000 program.hkr      # 1000回制限
-./target/release/hakorune --debug-fuel unlimited program.hkr  # 無制限
-./target/release/hakorune program.hkr                        # デフォルト10万回
-```
-
-**対応状況**: must_advance!マクロでパーサー制御完全実装済み✅
+---
 
 ## 🤝 プロアクティブ開発方針
 
@@ -830,15 +658,7 @@ HAKO_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 
 詳細: [開発プラクティス](docs/guides/development-practices.md)
 
-## 🎆 面白事件ログ（爆速開発の記録）
-
-### 世界記録級の事件たち：
-- **JIT1日完成事件**: 2週間予定が1日で完成（8/27伝説の日）
-- **プラグインBox事件**: 「こらー！」でシングルトン拒否
-- **AIが人間に相談**: ChatGPTが「助けて」と言った瞬間
-- **危険センサー発動**: 「なんか変だにゃ」がAIを救う
-
-詳細は[開発事件簿](docs/private/papers/paper-k-explosive-incidents/)へ！
+---
 
 ## ⚠️ Claude実行環境の既知のバグ
 
@@ -848,33 +668,11 @@ HAKO_SKIP_TOML_ENV=1 ./tools/smoke_plugins.sh
 
 ```bash
 # ❌ 失敗するパターン
-ls *.md | wc -l          # エラー: "ls: 'glob' にアクセスできません"
+ls *.md | wc -l
 
-# ✅ 回避策1: bash -c でラップ
+# ✅ 回避策: bash -c でラップ
 bash -c 'ls *.md | wc -l'
-
-# ✅ 回避策2: findコマンドを使う
-find . -name "*.md" -exec wc -l {} \;
 ```
-
-## 🌐 **Phase 15.8 WASM開発** ✅ E2E成功！
-
-**📋 現状**: MIR JSON → WASM E2Eパイプライン完全動作（Result: 42確認済み）
-
-### 基本実行コマンド
-```bash
-# WASM生成 & 実行
-cd src/llvm_py
-python3 llvm_builder.py --target wasm32 input.json -o test.wasm
-python3 tools/wasm_add_export.py test.wasm fixed.wasm "Main.main" 0
-node tools/wasm_runner.js fixed.wasm
-```
-
-### 既知の問題
-- **branch命令のWASM変換不具合**: 条件分岐が常にfalse（fibonacci動作せず）
-- **LLVM Mockルート**: `cargo build --release --features llvm` が必須
-
-📖 詳細: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
 
 ---
 
@@ -882,9 +680,13 @@ node tools/wasm_runner.js fixed.wasm
 
 ---
 
-Notes:
+**Notes**:
 - ここから先の導線は README.md に集約
 - 詳細情報は各docsファイルへのリンクから辿る
-- このファイルは500行以内が目安（あくまで目安であり、必要に応じて増減可）
-- Phase 15セルフホスティング実装中！詳細は[Phase 15](docs/development/roadmap/phases/phase-15/)へ
-- **Phase 15.8 WASM開発**: wasm-developmentブランチで進行中
+- Phase 15.8 WASM実装中！詳細は[Phase 15.8](docs/development/roadmap/phases/phase-15.8/)へ
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.

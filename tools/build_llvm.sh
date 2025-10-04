@@ -44,17 +44,22 @@ if ! command -v llvm-config-18 >/dev/null 2>&1; then
 fi
 
 echo "[1/4] Building nyash (feature selectable) ..."
-# Select LLVM feature: default harness (llvm), or legacy inkwell when NYASH_LLVM_FEATURE=llvm-inkwell-legacy
-LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
-# Use 24 threads for parallel build
-if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
-  # Legacy inkwell需要LLVM_SYS_180_PREFIX
-  _LLVMPREFIX=$(llvm-config-18 --prefix)
-  LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
-    CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
+# Skip if already built (for bench_unified.sh to avoid Cargo lock conflicts)
+if [[ "${NYASH_BENCH_SKIP_NYASH_BUILD:-0}" == "1" ]]; then
+  echo "    Skipping nyash build (NYASH_BENCH_SKIP_NYASH_BUILD=1)"
 else
-  # llvm-harness（デフォルト）はLLVM_SYS_180_PREFIX不要
-  CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
+  # Select LLVM feature: default harness (llvm), or legacy inkwell when NYASH_LLVM_FEATURE=llvm-inkwell-legacy
+  LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+  # Use 24 threads for parallel build
+  if [[ "$LLVM_FEATURE" == "llvm-inkwell-legacy" ]]; then
+    # Legacy inkwell需要LLVM_SYS_180_PREFIX
+    _LLVMPREFIX=$(llvm-config-18 --prefix)
+    LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+      CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
+  else
+    # llvm-harness（デフォルト）はLLVM_SYS_180_PREFIX不要
+    CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null
+  fi
 fi
 
 echo "[2/4] Emitting object (.o) via LLVM backend ..."
@@ -129,6 +134,10 @@ if [[ "${NYASH_LLVM_ONLY_OBJ:-0}" == "1" ]]; then
 fi
 
 echo "[3/4] Building Nyash Kernel static runtime ..."
+# Auto-skip if NYASH_BENCH_SKIP_NYASH_BUILD=1 (avoid Cargo lock in bench_unified.sh)
+if [[ "${NYASH_BENCH_SKIP_NYASH_BUILD:-0}" == "1" ]]; then
+  export NYASH_LLVM_SKIP_NYRT_BUILD=1
+fi
 if [[ "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" == "1" ]]; then
   echo "    Skipping Nyash Kernel build (NYASH_LLVM_SKIP_NYRT_BUILD=1)"
 else

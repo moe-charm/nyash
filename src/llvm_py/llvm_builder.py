@@ -137,7 +137,7 @@ class NyashLLVMBuilder:
             else:
                 arity = int(m.group(1)) if m else len(params_list)
             if name == "ny_main":
-                fty = ir.FunctionType(self.i32, [])
+                fty = ir.FunctionType(self.i64, [])
             else:
                 fty = ir.FunctionType(self.i64, [self.i64] * arity)
             exists = False

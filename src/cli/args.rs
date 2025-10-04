@@ -29,6 +29,7 @@ pub fn build_command() -> Command {
         .about("🦀 Nyash Programming Language - Everything is Box in Rust! 🦀")
         .arg(Arg::new("dev").long("dev").help("Enable development defaults (AST using ON; Operator Boxes observe; safe diagnostics)").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("file").help("Nyash file to execute").value_name("FILE").index(1))
+        .arg(Arg::new("entry").long("entry").value_name("NAME").help("Specify entry function (e.g., Main.main)"))
         .arg(Arg::new("macro-expand-child").long("macro-expand-child").value_name("FILE").help("Macro sandbox child: read AST JSON v0 from stdin, expand using Nyash macro file, write AST JSON v0 to stdout (PoC)"))
         .arg(Arg::new("dump-ast").long("dump-ast").help("Dump parsed AST and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-preexpand").long("macro-preexpand").help("Enable selfhost macro pre-expand").action(clap::ArgAction::SetTrue))
@@ -217,9 +218,7 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         std::env::set_var("NYASH_USING_AST", "1");
         // Using grammar is mainline; keep explicit enable for clarity (default is ON; this makes intent obvious in dev)
         std::env::set_var("NYASH_ENABLE_USING", "1");
-        // Allow top-level main resolution in dev for convenience (prod default remains OFF)
-        std::env::set_var("NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN", "1");
-        // Ensure project root is available for prelude injection
+        // Allow top-level main resolution in dev for convenience (prod default remains OFF)                // Ensure project root is available for prelude injection
         if std::env::var("NYASH_ROOT").is_err() {
             if let Ok(cwd) = std::env::current_dir() {
                 std::env::set_var("NYASH_ROOT", cwd.display().to_string());

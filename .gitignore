@@ -122,7 +122,8 @@ test_*.txt
 /tmp/
 
 # Local test files
-local_tests/
+local_tests/*
+!local_tests/bench/
 
 # Windows build artifacts
 *.pdb

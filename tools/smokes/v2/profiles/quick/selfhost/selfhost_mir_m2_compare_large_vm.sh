@@ -1,5 +1,6 @@
 #!/bin/bash
 # selfhost_mir_m2_compare_large_vm.sh — compare large numbers (a=1e9, b=1e9+1)
+# tags: selfhost
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
