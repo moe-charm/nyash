@@ -3,11 +3,12 @@ using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
 
 static box MirVmMin {
   _tprint(msg) {
     // Only emit hard errors by default; suppress debug noise in smokes
-    if msg.indexOf("[ERROR]") >= 0 { print(msg) }
+    print(msg)
   }
   run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
   // Thin-mode runner (ret resolution simplified)
@@ -106,38 +107,12 @@ static box MirVmMin {
           OpHandlersBox.handle_binop(seg, regs)
           // Record last binop destination and its materialized value for same-block compares
           local bdst = JsonFragBox.get_int(seg, "dst")
-          if bdst != null { last_binop_dst = bdst  last_binop_val = me._load_reg(regs, bdst)
-          }
+          if bdst != null { last_binop_dst = bdst  last_binop_val = me._load_reg(regs, bdst) }
         }
         else if op == "compare" {
-          // Minimal lhs/rhs supplementation: if this compare immediately follows a binop
-          // that wrote the lhs/rhs, ensure the register is materialized once.
-          local clhs = JsonFragBox.get_int(seg, "lhs")
-          local crhs = JsonFragBox.get_int(seg, "rhs")
-          if clhs != null and clhs == last_binop_dst {
-            regs.set(""+clhs, last_binop_val)
-          }
-          if crhs != null and crhs == last_binop_dst {
-            regs.set(""+crhs, last_binop_val)
-          }
-
-// Inline compare evaluation to avoid any handler ambiguity
-          local kind = JsonFragBox.get_str(seg, "cmp")
-          if kind == "" { kind = CompareOpsBox.map_symbol(JsonFragBox.get_str(seg, "operation")) }
-          local a = 0
-          local b = 0
-          if clhs != null { a = me._load_reg(regs, clhs) }
-          if crhs != null { b = me._load_reg(regs, crhs) }
-          // Fallback: if lhs matches last binop dst but failed to materialize (0), reuse last_binop_val
-          if clhs != null and clhs == last_binop_dst { a = last_binop_val }
-          me._tprint("[minivm] compare kind="+kind+" a="+me._int_to_str(a)+" b="+me._int_to_str(b))
-          local r = CompareOpsBox.eval(kind, a, b)
-          if op_adopt == 1 {
-            local r2 = OperatorBox.compare(kind, a, b)
-            if r2 != r { me._tprint("[ERROR] opbox!=native: kind="+kind+" a="+me._int_to_str(a)+" b="+me._int_to_str(b)+" native="+me._int_to_str(r)+" opbox="+me._int_to_str(r2)) }
-          }
+          OpHandlersBox.handle_compare(seg, regs)
           local kdst = JsonFragBox.get_int(seg, "dst")
-          if kdst != null { regs.set(""+kdst, r)  last_cmp_dst = kdst  last_cmp_val = r }
+          if kdst != null { last_cmp_dst = kdst  last_cmp_val = me._load_reg(regs, kdst) }
         }
         else if op == "branch" {
           local c = JsonFragBox.get_int(seg, "cond")
@@ -162,20 +137,7 @@ static box MirVmMin {
           scan_pos = obj_end
           break
         }
-                else if op == "phi" {
-          // Minimal PHI: support single incoming pair {pred:<bb>, value:<reg>} and set dst
-          // Note: For multiple incomings, this simplified decoder should be extended to select by prev_bb.
-          local dst = JsonFragBox.get_int(seg, "dst")
-          local pred = JsonFragBox.get_int(seg, "pred")
-          local vin = JsonFragBox.get_int(seg, "value")
-          if dst != null and vin != null {
-            if pred == null || pred == prev_bb || pred == 0 || prev_bb == -1 {
-              local vv = me._load_reg(regs, vin)
-              regs.set(""+dst, vv)
-            }
-          }
-        }
-else if op == "ret" {
+        else if op == "ret" {
           // Return resolution (Fail‑Fast policy)
           // 1) Compare result takes precedence when ret value equals last compare dst
           // 2) If the register has a defined value, return it
