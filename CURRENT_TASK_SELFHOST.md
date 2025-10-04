@@ -212,3 +212,17 @@ Delta — 本コミットの変更点（2025‑10‑03 午前）
 1) ルータ系スモークの追加寄せ（flow/basic などの using/new 依存を削減）。
 2) EffectResolver の既定ON 準備（ログとトレースを整え、重複ヒューリスティックを削る）。
 3) LocalSSA.ensure_cond を LocalSSABox に接続（配列ベース挿入を既定に）。Validator の `{op,src,dst}` Fail‑Fast を強化。
+
+
+---
+
+Update — 2025‑10‑04 (direct calls / -O3 / Mini‑VM polish)
+- Builder: prefer direct ModuleFunction when resolvable (avoid legacy string callees)
+- LLVM harness: enable -O3 pass pipeline via llvmlite (DCE/inline/const fold)
+- Mini‑VM: φ decode hardened (empty / all‑malformed) and Throw terminator (-2) added
+- Header emit: compiler’s early --min-json path emits locally (prelude‑free); pipeline_v2 HeaderEmitBox kept for later unification
+
+Self‑host next (small, safe)
+- Parser finish (static calls): unify expr/stmt boxes to call scan/utils statically (no large refactor)
+- Using/Modules E2E: add one more alias case (SKIP if env not ready)
+- Later: move early header back to HeaderEmitBox after AST prelude is stable
