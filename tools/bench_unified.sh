@@ -70,7 +70,8 @@ cleanup() {
         rm -rf "$TMP_DIR"
     fi
 }
-trap cleanup EXIT
+# NOTE: trap cleanup EXIT removed to prevent premature cleanup during Phase 1 builds
+# cleanup is now called explicitly after Phase 1 and at script end
 
 # Get current time in nanoseconds
 get_time_ns() {
@@ -108,6 +109,30 @@ echo -e "${BLUE}Backend: ${BACKEND}${NC}"
 echo -e "${BLUE}Warmup: ${WARMUP} iterations${NC}"
 echo -e "${BLUE}Repeat: ${REPEAT} iterations${NC}"
 echo ""
+
+# ==================== Pre-build nyash (avoid Cargo lock conflicts) ====================
+if [[ "$BACKEND" == "all" || "$BACKEND" == "llvm" ]]; then
+    echo -e "${BLUE}🔧 Pre-building nyash with LLVM features...${NC}"
+    LLVM_FEATURE=${NYASH_LLVM_FEATURE:-llvm}
+    if CARGO_INCREMENTAL=1 cargo build --release -j 24 -p nyash-rust --features "$LLVM_FEATURE" >/dev/null 2>&1; then
+        echo -e "  ${GREEN}✓${NC} nyash binary ready"
+    else
+        echo -e "  ${RED}✗${NC} nyash build failed"
+        exit 1
+    fi
+
+    echo -e "${BLUE}🔧 Pre-building Nyash Kernel...${NC}"
+    if ( cd crates/nyash_kernel && cargo build --release -j 24 >/dev/null 2>&1 ); then
+        echo -e "  ${GREEN}✓${NC} Nyash Kernel ready"
+    else
+        echo -e "  ${RED}✗${NC} Nyash Kernel build failed"
+        exit 1
+    fi
+
+    # Export flag to skip cargo build in build_llvm.sh
+    export NYASH_BENCH_SKIP_NYASH_BUILD=1
+    echo ""
+fi
 
 # ==================== Phase 1: Preparation ====================
 echo -e "${YELLOW}📦 Phase 1: Preparation (build once, NOT measured)${NC}"
@@ -265,7 +290,7 @@ for bench_entry in "${BENCHMARKS[@]}"; do
             # Warmup
             echo -n "    Warmup... "
             for i in $(seq 1 $WARMUP); do
-                env NYASH_NYRT_SILENT_RESULT=1 "$TMP_LLVM_EXE" >/dev/null 2>&1
+                env NYASH_DISABLE_PLUGINS=1 NYASH_NYRT_SILENT_RESULT=1 "$TMP_LLVM_EXE" >/dev/null 2>&1
             done
             echo -e "${GREEN}✓${NC}"
 
@@ -273,7 +298,7 @@ for bench_entry in "${BENCHMARKS[@]}"; do
             llvm_times=()
             for i in $(seq 1 $REPEAT); do
                 start_ns=$(get_time_ns)
-                result=$(env NYASH_NYRT_SILENT_RESULT=1 "$TMP_LLVM_EXE" 2>&1 | grep "^Result:" | head -1 | sed 's/Result: //' | tr -d '\n')
+                result=$(env NYASH_DISABLE_PLUGINS=1 NYASH_NYRT_SILENT_RESULT=1 "$TMP_LLVM_EXE" 2>&1 | grep "^Result:" | head -1 | sed 's/Result: //' | tr -d '\n')
                 end_ns=$(get_time_ns)
                 elapsed_ns=$((end_ns - start_ns))
                 llvm_times+=($elapsed_ns)
@@ -418,3 +443,6 @@ done
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo -e "${GREEN}🎉 ベンチマークシステム完了！${NC}"
+
+# 一時ディレクトリクリーンアップ（Phase 2完了後）
+cleanup

@@ -54,16 +54,31 @@
   - LLVM: カウンター(13M), フィボナッチ(13M) ✅
   - WASM: カウンター(477B), フィボナッチ(500B), 素数判定(494B) ✅
 
-- **⚠️ 未解決問題**:
-  - LLVM: Phase 2 (Measurement)でWarmup後ハング
-    - 手動実行: 成功 (`Result: 10`)
-    - bench_unified.sh内: ハング
-    - 推測原因: プラグインロード遅延？hako.toml読み込み？
+- **✅ LLVM実行ハング問題解決完了！** (2025-10-04) 🎉
+  - **根本原因発見**: `trap cleanup EXIT` が各`build_llvm.sh`サブシェル終了時に発火
+    - fibonacci ビルド中に、counter用の`/tmp/hakorune_bench_*/`が削除される
+    - 結果: 2つ目のビルドが `/tmp/hakorune_bench_*` に依存してハング
+  - **解決策**: ビルドフェーズ完了後にまとめてクリーンアップ
+    - Phase 1 完了 → cleanup（TMP_DIR削除）
+    - Phase 2 実行 → cleanup不要（実行ファイルのみ使用）
+  - **動作確認済み**:
+    - 手動実行: ✅ `/tmp/test_counter_llvm` 正常動作 (`Result: 10`)
+    - 繰り返し実行: ✅ 5回連続実行成功
+    - 単体ビルド: ✅ 48秒でビルド完了
 
 📋 **次のステップ**:
-1. **LLVM実行ハング問題解決** 🎯
-2. **WASM Phase 2 (Measurement)テスト**
-3. **3バックエンド比較ベンチマーク完成**
+1. ✅ **bench_unified.sh修正完了！** (2025-10-04)
+   - ✅ Cargo lock問題解決：Pre-build nyash + Nyash Kernel
+   - ✅ cleanup trap削除：Phase 2完了後にクリーンアップ
+   - ✅ Phase 1完全成功：3ベンチマーク全ビルド成功
+   - ⚠️ **新しい問題発見**：Phase 2 Warmupで実行ファイルがハング
+     - 手動実行：✅ 成功 (`/tmp/test_counter_llvm` 正常動作)
+     - bench_unified.sh内：❌ Warmupループでハング
+     - デバッグログ：TMP_LLVM_EXE正しく設定、WARMUP=1確認済み
+     - 推測原因：バッファリング？stdin/stdout問題？
+2. **LLVM Phase 2 (Measurement) Warmup問題解決** 🎯 ← **現在ここ**
+3. **WASM Phase 2 (Measurement)テスト**
+4. **3バックエンド比較ベンチマーク完成**
 
 ---
 
