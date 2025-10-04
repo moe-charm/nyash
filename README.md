@@ -28,7 +28,7 @@ Execution Status (Feature Additions Pause)
 Quick pointers
 - Preferred config is `hako.toml` (compat: `nyash.toml` is still accepted).
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
-- Run VM: `./target/release/hakorune --backend vm apps/APP/main.nyash` (aliases `hako`/`nyash` also available).
+- Run VM: `./target/release/hakorune --backend vm apps/APP/main.hako` (aliases `hako`/`nyash` also available).
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.
  - VM engine toggle: `NYASH_VM_ENGINE={fallback|full}` (default: fallback). See `docs/guides/runtime-architecture.md`.
 - Using/Plugins (ENV quick):
@@ -43,7 +43,7 @@ Dev shortcuts (Operator Boxes & JSON smokes)
 - Details: `docs/guides/operator-boxes.md`
 
 Dev mode and defaults
-- `hakorune --dev script.nyash` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal). The CLI alias `hrn` may be used equivalently.
+- `hakorune --dev script.hako` turns on safe development defaults (AST using ON, Operator Boxes observe, diagnostics minimal). The CLI alias `hrn` may be used equivalently.
 - You can still use the dev shortcuts for a one‑command setup: `./tools/opbox-json.sh`, `./tools/opbox-quick.sh`.
 - Using guard: duplicate `using` of the same file (or alias rebind to a different file) now errors with a line number hint to avoid ambiguous resolution.
   - Example error: `using: duplicate import of '<canon_path>' at file.nyash:12 (previous alias 'X' first seen at line 5)`
@@ -70,12 +70,12 @@ ExternCall (env.*) and println normalization: `docs/reference/runtime/externcall
 
 ### Minimal ENV (VM vs LLVM harness)
 - VM: no extra environment needed for typical runs.
-  - Example: `./target/release/hakorune --backend vm apps/tests/ternary_basic.nyash`
+  - Example: `./target/release/hakorune --backend vm apps/tests/ternary_basic.hako`
 - LLVM harness: set three variables so the runner finds the harness and runtime.
   - `NYASH_LLVM_USE_HARNESS=1`
   - `NYASH_NY_LLVM_COMPILER=$NYASH_ROOT/target/release/ny-llvmc`
   - `NYASH_EMIT_EXE_NYRT=$NYASH_ROOT/target/release`
-  - Example: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - Example: `NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc NYASH_EMIT_EXE_NYRT=target/release ./target/release/hakorune --backend llvm apps/ny-llvm-smoke/main.hako`
 
 ### Branding and Aliases
 - CLI binaries: `hakorune` is preferred (alias `hako`). Legacy `nyash` remains available and maps to the same entry.
@@ -122,7 +122,7 @@ Layer guard (one-way deps: origin→observe→rewrite)
 Profiles (quick)
 - `--profile dev` → Macros ON (strict)、開発向け VM 既定（必要に応じて環境で上書き可）
 - `--profile lite` → Macros OFF の軽量実行
-  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.hako`
 
 Specs & Constraints
 - Invariants (must-hold): `docs/reference/invariants.md`
@@ -140,7 +140,7 @@ Specs & Constraints
 <a id="self-hosting"></a>
 ## 🧪 Self‑Hosting (Dev Focus)
 - Guide: `docs/guides/how-to/self-hosting.md`
-- Minimal E2E: `./target/release/hakorune --backend vm apps/selfhost-minimal/main.nyash`
+- Minimal E2E: `./target/release/hakorune --backend vm apps/selfhost-minimal/main.hako`
 - Smokes: `bash tools/jit_smoke.sh` / `bash tools/selfhost_vm_smoke.sh`
 - JSON (Operator Boxes, dev): `./tools/opbox-json.sh` / `./tools/opbox-quick.sh`
 - Makefile: `make run-minimal`, `make smoke-selfhost`
@@ -160,7 +160,7 @@ Note: JIT runtime execution is currently disabled to reduce debugging overhead. 
 ```bash
 # From Nyash source to native binary (Cranelift required)
 cargo build --release --features cranelift-jit
-./tools/build_aot.sh program.nyash -o app         # Native EXE
+./tools/build_aot.sh program.hako -o app         # Native EXE
 ./app                                             # Standalone execution!
 ```
 
@@ -229,7 +229,7 @@ Phase‑15 (Self‑Hosting): Interpreter is feature‑gated and not enabled by d
 
 ### 1. **Interpreter Mode** (Development)
 ```bash
-./target/release/nyash program.nyash
+./target/release/nyash program.hako
 ```
 - Instant execution
 - Full debug information
@@ -237,7 +237,7 @@ Phase‑15 (Self‑Hosting): Interpreter is feature‑gated and not enabled by d
 
 ### 2. **VM Mode (Rust VM default)**
 ```bash
-./target/release/nyash --backend vm program.nyash
+./target/release/nyash --backend vm program.hako
 ```
 - Default: Rust VM executes MIR.
 - Note (compat, deprecated): PyVM is withdrawn by default. If you must use it for local compatibility checks, build with `--features pyvm-bridge` and run with `NYASH_VM_USE_PY=1`.
@@ -247,7 +247,7 @@ Phase‑15 (Self‑Hosting): Interpreter is feature‑gated and not enabled by d
 # Build once (Cranelift)
 cargo build --release --features cranelift-jit
 
-./tools/build_aot.sh program.nyash -o myapp
+./tools/build_aot.sh program.hako -o myapp
 ./myapp  # Standalone executable!
 ```
 - Zero dependencies
@@ -263,13 +263,13 @@ cargo build --release -p nyash-llvm-compiler && cargo build --release --features
 NYASH_LLVM_USE_HARNESS=1 \
 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
 NYASH_EMIT_EXE_NYRT=target/release \
-  ./target/release/nyash --backend llvm --emit-exe myapp program.nyash
+  ./target/release/nyash --backend llvm --emit-exe myapp program.hako
 ./myapp
 
 # Alternatively, emit an object file then link manually
 NYASH_LLVM_USE_HARNESS=1 \
 NYASH_NY_LLVM_COMPILER=target/release/ny-llvmc \
-  ./target/release/nyash --backend llvm program.nyash \
+  ./target/release/nyash --backend llvm program.hako \
   -D NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o
 cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -Wl,--no-whole-archive -lpthread -ldl -lm -o myapp
 ./myapp
@@ -277,12 +277,12 @@ cc nyash_llvm_temp.o -L crates/nyrt/target/release -Wl,--whole-archive -lnyrt -W
 
 Quick smoke test (VM vs EXE):
 ```bash
-tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.nyash
+tools/smoke_aot_vs_vm.sh examples/aot_min_string_len.hako
 ```
 
 ### LLVM Backend Notes
 - `NYASH_LLVM_OBJ_OUT`: Path to emit `.o` when running `--backend llvm`.
-  - Example: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.nyash`
+  - Example: `NYASH_LLVM_OBJ_OUT=$PWD/nyash_llvm_temp.o ./target/release/nyash --backend llvm apps/ny-llvm-smoke/main.hako`
 - Previously available `NYASH_LLVM_ALLOW_BY_NAME=1`: Removed - all plugin calls now use method_id by default.
   - The LLVM backend only supports method_id-based plugin calls for better performance and type safety.
 
@@ -528,7 +528,7 @@ cargo xwin build --target x86_64-pc-windows-msvc --release
 
 # Native EXE (AOT) on Windows (requires Cranelift and MSYS2/WSL toolchain for linking)
 cargo build --release --features cranelift-jit
-powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot_min_string_len.nyash -Out app.exe
+powershell -ExecutionPolicy Bypass -File tools\build_aot.ps1 -Input examples\aot_min_string_len.hako -Out app.exe
 ./app.exe
 ```
 
