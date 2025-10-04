@@ -148,7 +148,7 @@ static box MirVmMin {
               local i = p + key.length()
               local n = seg.length()
               loop(i < n) {
-                local ob = seg.indexOf("{"pred":", i)
+                local ob = seg.indexOf("{\"pred\":", i)
                 if ob < 0 { break }
                 local pred = JsonFragBox.get_int(seg.substring(ob, n), "pred")
                 local vv = JsonFragBox.get_int(seg.substring(ob, n), "value")
@@ -170,7 +170,6 @@ static box MirVmMin {
             }
           }
         }
-        else if op == "ret" {        }
         else if op == "ret" {
           // Return resolution (Fail‑Fast policy)
           // 1) Compare result takes precedence when ret value equals last compare dst
