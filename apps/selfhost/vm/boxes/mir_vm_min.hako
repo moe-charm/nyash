@@ -141,6 +141,7 @@ static box MirVmMin {
           break
         }
         else if op == "phi" {
+          me._tprint("[ERROR] phi seg="+seg)
           // Minimal PHI decode: prefer values array; fallback to single pred/value
           local dst = JsonFragBox.get_int(seg, "dst")
           if dst == null { /* malformed */ } else {
