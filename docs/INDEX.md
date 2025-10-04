@@ -65,7 +65,8 @@
 **When to use**: Documenting ongoing work, proposals, designs
 
 **Key Subdirectories**:
-- `architecture/` - System architecture and design
+- `architecture/` - System architecture and design (active/in-progress)
+- `design/` - Design specifications and patterns (active/in-progress)
 - `roadmap/` - Development roadmap and phases
 - `proposals/` - Feature proposals and RFCs
 - `current/` - Current task tracking
@@ -79,17 +80,19 @@
 - `current/llvm/` - LLVM track current tasks
 - `proposals/ideas/refactoring/` - Refactoring proposals
 
-#### `docs/architecture/` - Architecture Documentation
-**Purpose**: High-level system architecture
-**When to use**: Documenting system design decisions
+#### `docs/architecture/` - Architecture Documentation (Stable)
+**Purpose**: Completed and stable architecture documents
+**When to use**: Documenting finalized system design decisions
 
-**Note**: Consider consolidating with `development/architecture/` (see cleanup plan)
+**Relation**: Complements `development/architecture/` (active/in-progress)
+**Example**: `runner/entry-resolve-box.md` (completed architecture)
 
-#### `docs/design/` - Design Documents
-**Purpose**: Design specifications and patterns
-**When to use**: Documenting design patterns and approaches
+#### `docs/design/` - Design Documents (Stable)
+**Purpose**: Completed and stable design specifications
+**When to use**: Documenting finalized design patterns and approaches
 
-**Note**: Consider consolidating with `development/design/` (see cleanup plan)
+**Relation**: Complements `development/design/` (active/in-progress)
+**Examples**: `using-and-dispatch.md`, `loopform-scope-debug-and-aot.md` (completed designs)
 
 ---
 
@@ -144,7 +147,10 @@
 | API Reference | `docs/reference/` | Box API specification |
 | Language Spec | `docs/reference/language/` | Syntax documentation |
 | Design Proposal | `docs/development/proposals/` | RFC for new feature |
-| Architecture Doc | `docs/development/architecture/` | System design |
+| Design (Active) | `docs/development/design/` | In-progress design specs |
+| Design (Stable) | `docs/design/` | Completed design specs |
+| Architecture (Active) | `docs/development/architecture/` | In-progress system design |
+| Architecture (Stable) | `docs/architecture/` | Completed architecture |
 | Current Task | `docs/development/current/` | Today's work |
 | Completed Work | `docs/archive/` | Finished phase docs |
 
