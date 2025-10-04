@@ -31,20 +31,24 @@
 - ✅ **LLVM/WASMビルド成功**（Phase 1: Preparation完了）
 - ⚠️ **LLVM Phase 2実行問題**（Warmup後ハング、調査中）
 
-### 🎯 **Phase 3.5完了！固定時間ベンチマーク実装** (2025-10-04)
-- ✅ **TimerBox.now_ms()完全動作確認**
-  - コンパイラが自動的に`ExternCall(nyrt.time.now_ms)`に変換
+### 🎯 **Phase 3.5進行中！固定時間ベンチマーク実装** (2025-10-04)
+- ✅ **VM版完全動作** 🎉
+  - TimerBox.now_ms(): コンパイラが自動的に`ExternCall(nyrt.time.now_ms)`に変換
   - VM側`extern_adapter.rs`で`SystemTime::now()`実装済み
   - 166ms差分を正確に計測✅
 - ✅ **bench_runner.hako固定時間方式実装**
   - `run_duration(file, duration_sec)` メソッド追加
   - DESIGN.md準拠の完全実装（end_timeまでループ、ops/sec計算）
   - MapBoxで結果構造化（iterations/duration_ms/ops_per_sec）
-- ✅ **実測結果**
+- ✅ **VM版実測結果**
   - 空ベンチ: 1秒間で109,543回（約10万ops/sec）
   - sum_loop(100k): 1秒間で5回（5 ops/sec）
     - 妥当性確認: 前回測定200ms/回 × 5 = 1000ms ✅
-- 📋 **次のステップ**: LLVM版/WASM版での固定時間ベンチマーク
+- 🔧 **LLVM版調査中**
+  - Registry/JSON spec正常、MIR生成正常
+  - harness側でnyrt.time.now_ms認識問題調査中
+  - デバッグログ追加済み（externcall.py）
+- 📋 **次のステップ**: LLVM版問題解決 → WASM版実装
 
 ### 📊 **WASM対応状況**（MIR凍結セット16命令基準）
 **✅ 実装済み（16/16命令 - 完全対応！）**:

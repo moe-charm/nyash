@@ -115,9 +115,10 @@ def lower_externcall(
         return f"{iface}.{method}"
 
     def _load_extern_specs_from_env_once():
-        import os, json
+        import os, json, sys
         p = os.environ.get('NYASH_EXTERN_SPEC_JSON')
         if not p:
+            print("[harness] Warning: NYASH_EXTERN_SPEC_JSON not set, extern calls may fail", file=sys.stderr)
             return
         try:
             with open(p, 'r', encoding='utf-8') as f:
@@ -139,8 +140,9 @@ def lower_externcall(
                 arg_tys = [mir_to_abi(x) for x in params]
                 sym = _mk_symbol(iface, method)
                 _extern_specs[(iface, method)] = (ret_ty, arg_tys, sym)
-        except Exception:
-            pass
+            print(f"[harness] Loaded {len(_extern_specs)} extern specs from {p}", file=sys.stderr)
+        except Exception as e:
+            print(f"[harness] Error loading extern specs from {p}: {e}", file=sys.stderr)
 
     _load_extern_specs_from_env_once()
 

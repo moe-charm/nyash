@@ -90,6 +90,38 @@ static box Main {
 
 ---
 
+### 🔧 **LLVM版固定時間ベンチマーク調査中** (2025-10-04)
+
+**目的**: LLVM版でTimerBox.now_ms()を動作させる
+
+**確認済み**:
+1. ✅ **ExternCall Registry正常**
+   - Rust側: `nyrt.time.now_ms`登録済み（registry.rs）
+   - JSON spec: 正しく生成（tmp/externs_registry.json）
+   - 内容: `{"interface":"nyrt.time","method":"now_ms","params":[],"returns":"Integer","effects":"read"}`
+
+2. ✅ **MIR生成正常**
+   - TimerBox.now_ms() → `ExternCall(nyrt.time.now_ms)`に変換
+   - test_timer.hako: 正しいexterncall命令生成確認
+
+3. ✅ **デバッグログ追加**
+   - `src/llvm_py/instructions/externcall.py`にログ追加
+   - 読み込み成功/失敗を明示的に出力
+
+**課題**:
+- ⚠️ **LLVM harness実行時エラー**: "Unknown extern symbol: nyrt.time.now_ms"
+- 🔍 **調査中**: `NYASH_EXTERN_SPEC_JSON`環境変数がharness側で認識されているか確認
+
+**修正ファイル**:
+- `src/llvm_py/instructions/externcall.py` (+3行: デバッグログ追加)
+
+**次のアクション**:
+1. デバッグログでJSON読み込み確認
+2. harness側の環境変数受け渡し確認
+3. 必要に応じてfallback実装追加
+
+---
+
 **目標**: ChatGPT Pro設計に基づく商用レベルベンチマークシステム構築
 
 **設計書**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)
