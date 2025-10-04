@@ -58,6 +58,11 @@ def lower_mir_call(owner, builder: ir.IRBuilder, mir_call: Dict[str, Any], dst_v
         func_name = callee.get("name")
         lower_global_call(builder, owner.module, func_name, args, dst_vid, vmap, resolver, owner)
 
+    elif callee_type == "ModuleFunction":
+        # Module function call (static box methods) - Phase 15.7
+        func_name = callee.get("name")
+        lower_global_call(builder, owner.module, func_name, args, dst_vid, vmap, resolver, owner)
+
     elif callee_type == "Method":
         # Box method call
         box_name = callee.get("box_name")
