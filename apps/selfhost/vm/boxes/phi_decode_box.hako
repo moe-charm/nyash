@@ -77,10 +77,10 @@ static box PhiDecodeBox {
   decode(seg, prev_bb) {
     // Prefer array form; fallback to single form
     local arr = me._decode_array(seg, prev_bb)
-    if arr != null { return arr.pair }
+    if arr != null { return arr.get("pair") }
     local one = me._decode_single(seg)
     if one != null {
-      return one.pair
+      return one.get("pair")
     }
     local out = new ArrayBox()
     out.push(null)
