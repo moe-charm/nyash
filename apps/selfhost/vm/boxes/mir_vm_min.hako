@@ -141,11 +141,49 @@ static box MirVmMin {
           break
         }
         else if op == "phi" {
-          // Decode via box, then apply
-          local res = PhiDecodeBox.decode_result(seg, prev_bb)
-          if res.is_ok() == 1 {
-            local pair = res.value()
-            PhiApplyBox.apply(pair.get(0), pair.get(1), regs)
+          // Minimal inline decode (stable): values[] bracket-bound + GuardBox + fallback
+          local dst = JsonFragBox.get_int(seg, "dst")
+          if dst == null {
+          } else {
+            local vin = null
+            local key = "\"values\":["
+            local p = seg.indexOf(key)
+            if p >= 0 {
+              local arr_br = p + key.length() - 1
+              local i = arr_br + 1
+              local n = me._seek_array_end(seg, arr_br)
+              if n <= 0 { n = seg.length() }
+              local g = new GuardBox("phi_values", 512)
+              loop(i < n) {
+                if g.tick() == 0 { break }
+                local ob = seg.indexOf("{\"pred\":", i)
+                if ob < 0 { break }
+                local pred = JsonFragBox.get_int(seg.substring(ob, n), "pred")
+                local vv = JsonFragBox.get_int(seg.substring(ob, n), "value")
+                if vv != null {
+                  if pred != null && pred == prev_bb { vin = vv  break }
+                  if vin == null { vin = vv }
+                }
+                local nx = seg.indexOf("}", ob)
+                if nx < 0 { break }
+                if nx + 1 <= i { i = i + 1 } else { i = nx + 1 }
+              }
+              if vin == null {
+                local vp = seg.indexOf("\"value\":", arr_br)
+                if vp >= 0 and vp < n {
+                  local vv2 = JsonFragBox.get_int(seg.substring(vp, n), "value")
+                  if vv2 != null { vin = vv2 }
+                }
+              }
+            } else {
+              vin = JsonFragBox.get_int(seg, "value")
+            }
+            if vin != null {
+              local pair = new ArrayBox()
+              pair.push(dst)
+              pair.push(vin)
+              PhiApplyBox.apply(pair.get(0), pair.get(1), regs)
+            }
           }
         }
         else if op == "ret" {
