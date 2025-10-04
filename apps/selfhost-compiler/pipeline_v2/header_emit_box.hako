@@ -1,0 +1,16 @@
+// HeaderEmitBox — emit-only helper for minimal Stage-1 JSON header
+// Responsibility
+// - Provide a single place to emit the minimal JSON v0 header used by
+//   quiet child pipelines (e.g., --min-json). No parsing or lowering here.
+// Input/Output
+// - Input: none
+// - Output: prints a single JSON line: {"version":0,"kind":"Program"}
+// Non-goals
+// - This box does not attempt to inject body or metadata; callers may compose.
+
+static box HeaderEmitBox {
+  emit_min_json_header() {
+    print("{\"version\":0,\"kind\":\"Program\"}")
+    return 0
+  }
+}
