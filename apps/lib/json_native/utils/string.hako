@@ -1,0 +1,311 @@
+// StringUtils — 文字列処理ユーティリティ（美しいモジュラー設計）
+// 責務: 文字列の基本操作・判定・変換
+
+static box StringUtils {
+    
+    // ===== 空白処理 =====
+    
+    // 文字列の前後空白をトリム
+    trim(s) {
+        return this.trim_end(this.trim_start(s))
+    }
+    
+    // 先頭空白をトリム
+    trim_start(s) {
+        local i = 0
+        loop(i < s.length()) {
+            if not this.is_whitespace(s.substring(i, i + 1)) {
+                break
+            }
+            i = i + 1
+        }
+        return s.substring(i, s.length())
+    }
+    
+    // 末尾空白をトリム
+    trim_end(s) {
+        local i = s.length() - 1
+        loop(i >= 0) {
+            if not this.is_whitespace(s.substring(i, i + 1)) {
+                break
+            }
+            i = i - 1
+        }
+        return s.substring(0, i + 1)
+    }
+    
+    // ===== 文字判定 =====
+    
+    // 空白文字かどうか判定
+    is_whitespace(ch) {
+        return ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    }
+    
+    // 数字文字かどうか判定
+    is_digit(ch) {
+        return ch == "0" or ch == "1" or ch == "2" or ch == "3" or ch == "4" or ch == "5" or ch == "6" or ch == "7" or ch == "8" or ch == "9"
+    }
+    
+    // 16進数字かどうか判定
+    is_hex_digit(ch) {
+        return this.is_digit(ch) or ch == "a" or ch == "b" or ch == "c" or ch == "d" or ch == "e" or ch == "f" or ch == "A" or ch == "B" or ch == "C" or ch == "D" or ch == "E" or ch == "F"
+    }
+    
+    // アルファベットかどうか判定
+    is_alpha(ch) {
+        return (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z")
+    }
+    
+    // 英数字かどうか判定
+    is_alphanumeric(ch) {
+        return this.is_alpha(ch) or this.is_digit(ch)
+    }
+    
+    // ===== 文字列検索 =====
+    
+    // 文字が最初に現れる位置を取得（見つからない場合は-1）
+    index_of(s, ch) {
+        local i = 0
+        loop(i < s.length()) {
+            if s.substring(i, i + 1) == ch {
+                return i
+            }
+            i = i + 1
+        }
+        return -1
+    }
+    
+    // 文字が最後に現れる位置を取得（見つからない場合は-1）
+    last_index_of(s, ch) {
+        local i = s.length() - 1
+        loop(i >= 0) {
+            if s.substring(i, i + 1) == ch {
+                return i
+            }
+            i = i - 1
+        }
+        return -1
+    }
+    
+    // 部分文字列が含まれているか判定
+    contains(s, substr) {
+        return this.index_of_string(s, substr) != -1
+    }
+    
+    // 部分文字列の位置を取得（見つからない場合は-1）
+    index_of_string(s, substr) {
+        if substr.length() == 0 {
+            return 0
+        }
+        if substr.length() > s.length() {
+            return -1
+        }
+        
+        local i = 0
+        loop(i <= s.length() - substr.length()) {
+            if s.substring(i, i + substr.length()) == substr {
+                return i
+            }
+            i = i + 1
+        }
+        return -1
+    }
+    
+    // ===== 文字列変換 =====
+    
+    // 文字列を大文字に変換（簡易版）
+    to_upper(s) {
+        local result = ""
+        local i = 0
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            result = result + this.char_to_upper(ch)
+            i = i + 1
+        }
+        return result
+    }
+    
+    // 文字列を小文字に変換（簡易版）
+    to_lower(s) {
+        local result = ""
+        local i = 0
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            result = result + this.char_to_lower(ch)
+            i = i + 1
+        }
+        return result
+    }
+    
+    // 1文字を大文字に変換
+    char_to_upper(ch) {
+        if ch >= "a" and ch <= "z" {
+            // 簡易実装: 主要な小文字のみ対応
+            // 全アルファベット対応（JSON処理で必要）
+            if ch == "a" { return "A" } if ch == "b" { return "B" } if ch == "c" { return "C" }
+            if ch == "d" { return "D" } if ch == "e" { return "E" } if ch == "f" { return "F" }
+            if ch == "g" { return "G" } if ch == "h" { return "H" } if ch == "i" { return "I" }
+            if ch == "j" { return "J" } if ch == "k" { return "K" } if ch == "l" { return "L" }
+            if ch == "m" { return "M" } if ch == "n" { return "N" } if ch == "o" { return "O" }
+            if ch == "p" { return "P" } if ch == "q" { return "Q" } if ch == "r" { return "R" }
+            if ch == "s" { return "S" } if ch == "t" { return "T" } if ch == "u" { return "U" }
+            if ch == "v" { return "V" } if ch == "w" { return "W" } if ch == "x" { return "X" }
+            if ch == "y" { return "Y" } if ch == "z" { return "Z" }
+            return ch
+        } else {
+            return ch
+        }
+    }
+    
+    // 1文字を小文字に変換
+    char_to_lower(ch) {
+        if ch >= "A" and ch <= "Z" {
+            // 簡易実装: 主要な大文字のみ対応
+            // 全アルファベット対応（JSON処理で必要）
+            if ch == "A" { return "a" } if ch == "B" { return "b" } if ch == "C" { return "c" }
+            if ch == "D" { return "d" } if ch == "E" { return "e" } if ch == "F" { return "f" }
+            if ch == "G" { return "g" } if ch == "H" { return "h" } if ch == "I" { return "i" }
+            if ch == "J" { return "j" } if ch == "K" { return "k" } if ch == "L" { return "l" }
+            if ch == "M" { return "m" } if ch == "N" { return "n" } if ch == "O" { return "o" }
+            if ch == "P" { return "p" } if ch == "Q" { return "q" } if ch == "R" { return "r" }
+            if ch == "S" { return "s" } if ch == "T" { return "t" } if ch == "U" { return "u" }
+            if ch == "V" { return "v" } if ch == "W" { return "w" } if ch == "X" { return "x" }
+            if ch == "Y" { return "y" } if ch == "Z" { return "z" }
+            return ch
+        } else {
+            return ch
+        }
+    }
+    
+    // ===== 文字列結合 =====
+    
+    // 配列を指定された区切り文字で結合
+    join(arr, separator) {
+        local result = ""
+        local i = 0
+        loop(i < arr.length()) {
+            if i > 0 {
+                result = result + separator
+            }
+            result = result + arr.get(i)
+            i = i + 1
+        }
+        return result
+    }
+    
+    // 文字列を指定された区切り文字で分割（簡易版）
+    split(s, separator) {
+        local result = new ArrayBox()
+        if separator.length() == 0 {
+            result.push(s)
+            return result
+        }
+        
+        local start = 0
+        local i = 0
+        loop(i <= s.length() - separator.length()) {
+            if s.substring(i, i + separator.length()) == separator {
+                result.push(s.substring(start, i))
+                start = i + separator.length()
+                i = start
+            } else {
+                i = i + 1
+            }
+        }
+        
+        // 最後の部分を追加
+        if start <= s.length() {
+            result.push(s.substring(start, s.length()))
+        }
+        
+        return result
+    }
+    
+    // ===== 数値変換 =====
+    // 浮動小数点の簡易パース（現段階は正規化のみ。数値演算は行わない）
+    parse_float(s) {
+        return s
+    }
+
+    // 文字列が数値表現かどうか判定（整数のみ、簡易版）
+    is_integer(s) {
+        if s.length() == 0 {
+            return false
+        }
+        
+        local start = 0
+        if s.substring(0, 1) == "-" {
+            if s.length() == 1 {
+                return false
+            }
+            start = 1
+        }
+
+        // 先頭ゼロの禁止（"0" 単独は許可、符号付きの "-0" も許可）
+        if s.length() - start > 1 and s.substring(start, start + 1) == "0" {
+            // 2文字目以降が数字なら先頭ゼロ（不正）
+            if this.is_digit(s.substring(start + 1, start + 2)) {
+                return false
+            }
+        }
+        
+        local i = start
+        loop(i < s.length()) {
+            if not this.is_digit(s.substring(i, i + 1)) {
+                return false
+            }
+            i = i + 1
+        }
+        return true
+    }
+    
+    // 文字列が空または空白のみかどうか判定（ユーティリティ）
+    is_empty_or_whitespace(s) {
+        return this.trim(s).length() == 0
+    }
+
+    // 文字列の先頭が指定された文字列で始まるか判定
+    starts_with(s, prefix) {
+        if prefix.length() > s.length() {
+            return false
+        }
+        return s.substring(0, prefix.length()) == prefix
+    }
+
+    // 文字列の末尾が指定された文字列で終わるか判定
+    ends_with(s, suffix) {
+        if suffix.length() > s.length() {
+            return false
+        }
+        return s.substring(s.length() - suffix.length(), s.length()) == suffix
+    }
+
+    // 文字列を整数に変換（簡易版）
+    parse_integer(s) {
+        if not this.is_integer(s) {
+            return 0
+        }
+
+        // 汎用整数パース（符号と任意桁に対応）
+        local neg = false
+        local i = 0
+        if s.substring(0, 1) == "-" {
+            neg = true
+            i = 1
+        }
+
+        local acc = 0
+        local digits = "0123456789"
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            // '0'..'9' → 位置で数値化
+            local d = this.index_of(digits, ch)
+            if d < 0 { break }
+            acc = acc * 10 + d
+            i = i + 1
+        }
+        if neg { return 0 - acc } else { return acc }
+    }
+
+    // ===== ユーティリティ =====
+}

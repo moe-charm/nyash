@@ -12,7 +12,7 @@ build-release:
 	cargo build --release --features cranelift-jit
 
 run-minimal:
-	NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.nyash
+	NYASH_DISABLE_PLUGINS=1 ./target/release/nyash --backend vm apps/selfhost-minimal/main.hako
 
 smoke-core:
 	bash tools/jit_smoke.sh
@@ -50,10 +50,10 @@ lint:
 
 # --- Self-hosting dev helpers (Ny-only inner loop) ---
 dev:
-	./tools/dev_selfhost_loop.sh --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.nyash
+	./tools/dev_selfhost_loop.sh --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.hako
 
 dev-watch:
-	./tools/dev_selfhost_loop.sh --watch --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.nyash
+	./tools/dev_selfhost_loop.sh --watch --std -v -- --using-path apps/selfhost:apps apps/selfhost-minimal/main.hako
 
 
 # --- Self-host dependency tree (Ny-only) ---
@@ -104,10 +104,10 @@ artifacts-restore:
 # ルートの不要ファイルをチェック
 check-root:
 	@echo "🔍 ルートディレクトリチェック中..."
-	@bad_files=$$(ls -1 *.nyash *.o *.err *.log *.tmp *.bak 2>/dev/null | wc -l); \
+	@bad_files=$$(ls -1 *.hako *.o *.err *.log *.tmp *.bak 2>/dev/null | wc -l); \
 	if [ $$bad_files -gt 0 ]; then \
 		echo "❌ ルートに不要なファイルが見つかりました:"; \
-		ls -1 *.nyash *.o *.err *.log *.tmp *.bak 2>/dev/null || true; \
+		ls -1 *.hako *.o *.err *.log *.tmp *.bak 2>/dev/null || true; \
 		echo ""; \
 		echo "実行: make clean-root"; \
 		exit 1; \
@@ -118,7 +118,7 @@ check-root:
 # ルートの不要ファイルを自動削除
 clean-root:
 	@echo "🧹 ルートクリーンアップ中..."
-	@rm -f *.nyash *.o *.err *.log *.tmp *.bak 2>/dev/null || true
+	@rm -f *.hako *.o *.err *.log *.tmp *.bak 2>/dev/null || true
 	@rm -f *_temp.* *_tmp.* commit_message*.txt 2>/dev/null || true
 	@echo "✅ ルートクリーンアップ完了"
 

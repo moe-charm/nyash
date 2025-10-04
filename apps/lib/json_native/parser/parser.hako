@@ -1,0 +1,464 @@
+// JsonParser — 精度重視の構文解析器（yyjson相当精度）
+// 責務: トークン列をJsonNodeに変換、構文エラー検出、ネスト構造処理
+
+// NOTE: use paths relative to this file to work under nyash.toml alias packaging
+using "../lexer/tokenizer.nyash" as JsonTokenizer
+using "../lexer/token.nyash" as TokenType
+using "../core/node.nyash" as JsonNode
+using "../utils/string.nyash" as StringUtils
+
+// 🎯 高精度JSON構文解析器（Everything is Box）
+static box JsonParserModule {
+    create_parser() {
+        // Factory returns a fully initialized parser (auto-birth policy)
+        // Prefer explicit birth to be robust under contracts=ON and legacy callers.
+        // Equivalent to `new JsonParser()` when Builder inserts auto-birth, but
+        // keeping this explicit makes factory semantics clear and future-proof.
+        local p = new JsonParser()
+        // Defensive: if runtime ever skipped auto-birth on this path, call it explicitly.
+        // birth() is idempotent by policy.
+        p.birth()
+        return p
+    }
+}
+
+// Dev-only lightweight trace helper (default OFF)
+static box JsonParserTrace {
+    // Dev logger (disabled by default; enable ad-hoc during manual probes)
+    log(msg) { /* print("[JsonParser] " + msg) */ }
+}
+
+box JsonParser {
+    tokens: ArrayBox       // トークン配列
+    position: IntegerBox   // 現在のトークン位置
+    errors: ArrayBox       // 構文エラー配列
+    
+    birth() {
+        me.tokens = new ArrayBox()
+        me.position = 0
+        me.errors = new ArrayBox()
+    }
+    
+    // ===== メイン解析メソッド =====
+    
+    // JSON文字列を完全解析
+    parse(json_text) {
+        // 初期化
+        me.position = 0
+        me.errors = new ArrayBox()
+        
+        // Step 1: 字句解析
+        local tokenizer = new JsonTokenizer(json_text)
+        // Guard: ensure scanner has the correct input even if constructor args are dropped
+        tokenizer.set_input(json_text)
+        me.tokens = tokenizer.tokenize()
+        
+        // 字句解析エラーをチェック
+        if tokenizer.has_errors() {
+            local lexer_errors = tokenizer.get_errors()
+            local i = 0
+            loop(i < lexer_errors.length()) {
+                me.errors.push(lexer_errors.get(i))
+                i = i + 1
+            }
+            return null  // 字句解析エラーがあれば構文解析は実行しない
+        }
+        
+        // Step 2: 構文解析
+        local result = me.parse_value()
+        
+        // Step 3: 余剰トークンチェック（詳細情報付き）
+        if result != null and not me.is_at_end() {
+            local extra = me.current_token()
+            if extra != null {
+                me.add_error("Unexpected tokens after JSON value: " + extra.get_type() + "(" + extra.get_value() + ")")
+            } else {
+                me.add_error("Unexpected tokens after JSON value")
+            }
+            return null
+        }
+        
+        return result
+    }
+    
+    // JSON値を解析（再帰下降の開始点）
+    parse_value() {
+        local token = me.current_token()
+        
+        if token == null or token.is_eof() {
+            me.add_error("Unexpected end of input")
+            return null
+        }
+        
+        if token.is_error() {
+            me.add_error("Lexer error: " + token.get_value())
+            return null
+        }
+        
+        local token_type = token.get_type()
+        
+        // リテラル値・構造のディスパッチ（厳密一致）
+        if token_type == "NULL" {
+            me.advance()
+            return JsonNode.create_null()
+        }
+        if token_type == "TRUE" {
+            me.advance()
+            return JsonNode.create_bool(true)
+        }
+        if token_type == "FALSE" {
+            me.advance()
+            return JsonNode.create_bool(false)
+        }
+        if token_type == "NUMBER" {
+            return me.parse_number()
+        }
+        if token_type == "STRING" {
+            return me.parse_string()
+        }
+        if token_type == "LBRACE" {
+            return me.parse_object()
+        }
+        if token_type == "LBRACKET" {
+            return me.parse_array()
+        }
+        me.add_error("Expected JSON value, got: " + token_type)
+        return null
+    }
+    
+    // ===== 専用パーサーメソッド =====
+    
+    // 数値解析
+    parse_number() {
+        local token = me.current_token()
+        if token == null or token.get_type() != "NUMBER" {
+            me.add_error_expected("NUMBER")
+            return null
+        }
+        
+        local number_str = token.get_value()
+        me.advance()
+        
+        // 数値変換（簡易版）
+        local info = me.convert_number(number_str)
+        if info.get("kind") == "int" {
+            return JsonNode.create_int(info.get("value"))
+        } else {
+            if info.get("kind") == "float" {
+                return JsonNode.create_float(info.get("value"))
+            } else {
+                // フォールバック（到達しない想定）
+                return JsonNode.create_int(0)
+            }
+        }
+    }
+    
+    // 文字列解析
+    parse_string() {
+        local token = me.current_token()
+        if token == null or token.get_type() != "STRING" {
+            me.add_error_expected("STRING")
+            return null
+        }
+        
+        local string_value = token.get_value()
+        me.advance()
+        
+        return JsonNode.create_string(string_value)
+    }
+    
+    // オブジェクト解析
+    parse_object() {
+        local start_token = me.current_token()
+        if start_token == null or start_token.get_type() != "LBRACE" {
+            me.add_error("Expected '{' to start object")
+            return null
+        }
+        // JsonParserTrace.log("enter object at pos=" + me.position)
+        me.advance()  // '{'を消費
+
+        local object_node = JsonNode.create_object()
+
+        // 空オブジェクトチェック
+        if me.match_token("RBRACE") {
+            // JsonParserTrace.log("empty object -> {}")
+            return object_node
+        }
+        
+        // キー・値ペアの解析
+        loop(true) {
+            // キー解析
+            local key_token = me.current_token()
+            if key_token == null or key_token.get_type() != "STRING" {
+                me.add_error_expected("STRING (object key)")
+                return null
+            }
+            local key = key_token.get_value()
+            me.advance()
+
+            // コロン
+            if not me.match_token("COLON") {
+                me.add_error_expected("COLON ':' after object key")
+                return null
+            }
+
+            // 値解析
+            local value = me.parse_value()
+            if value == null {
+                return null  // エラーは既に記録済み
+            }
+
+            // オブジェクトに追加
+            object_node.object_set(key, value)
+
+            // 継続判定
+            if me.match_token("COMMA") {
+                // 次のキー・値ペアに続く
+                // JsonParserTrace.log("object comma → next pair")
+                continue
+            } else {
+                if me.match_token("RBRACE") {
+                    // JsonParserTrace.log("exit object at pos=" + me.position)
+                    break  // オブジェクト終了
+                } else {
+                    me.add_error_expected("',' or '}' in object")
+                    return null
+                }
+            }
+        }
+
+        return object_node
+    }
+    
+    // 配列解析
+    parse_array() {
+        local start_token = me.current_token()
+        if start_token == null or start_token.get_type() != "LBRACKET" {
+            me.add_error("Expected '[' to start array")
+            return null
+        }
+        // JsonParserTrace.log("enter array at pos=" + me.position)
+        me.advance()  // '['を消費
+
+        local array_node = JsonNode.create_array()
+
+        // 空配列チェック
+        if me.match_token("RBRACKET") {
+            // JsonParserTrace.log("empty array -> []")
+            return array_node
+        }
+        
+        // 要素の解析
+        loop(true) {
+            // 値解析
+            local value = me.parse_value()
+            if value == null {
+                return null  // エラーは既に記録済み
+            }
+            
+            // 配列に追加
+            array_node.array_push(value)
+
+            // 継続判定
+            if me.match_token("COMMA") {
+                // 次の要素に続く
+                // JsonParserTrace.log("array comma → next element")
+                continue
+            } else {
+                if me.match_token("RBRACKET") {
+                    // JsonParserTrace.log("exit array at pos=" + me.position)
+                    break  // 配列終了
+                } else {
+                    me.add_error_expected("',' or ']' in array")
+                    return null
+                }
+            }
+        }
+
+        return array_node
+    }
+    
+    // ===== トークン操作メソッド =====
+    
+    // 現在のトークンを取得
+    current_token() {
+        if me.position >= me.tokens.length() {
+            return null
+        }
+        return me.tokens.get(me.position)
+    }
+    
+    // 次のトークンを先読み
+    peek_token() {
+        if me.position + 1 >= me.tokens.length() {
+            return null
+        }
+        return me.tokens.get(me.position + 1)
+    }
+    
+    // 位置を1つ進める
+    advance() {
+        if me.position < me.tokens.length() {
+            me.position = me.position + 1
+        }
+    }
+    
+    // 指定されたトークンタイプにマッチするかチェック（マッチしたら消費）
+    match_token(expected_type) {
+        local token = me.current_token()
+        if token != null {
+            if token.get_type() == expected_type { me.advance() return true }
+        }
+        return false
+    }
+    
+    // 終端に到達したかチェック
+    is_at_end() {
+        local token = me.current_token()
+        return token == null or token.is_eof()
+    }
+    
+    // ===== エラー処理メソッド =====
+    
+    // 期待/実トークンを含む詳細エラーを追加
+    add_error_expected(expected) {
+        local tok = me.current_token()
+        local got = "EOF"
+        if tok != null {
+            got = tok.get_type() + "(" + tok.get_value() + ")"
+        }
+        me.add_error("Expected " + expected + ", got: " + got)
+    }
+
+    // エラーを追加
+    add_error(message) {
+        local token = me.current_token()
+        local error_info = new MapBox()
+        error_info.set("message", message)
+        
+        if token != null {
+            error_info.set("position", token.get_start())
+            error_info.set("line", token.get_line())
+            error_info.set("column", token.get_column())
+            error_info.set("token", token.get_type() + "(" + token.get_value() + ")")
+        } else {
+            error_info.set("position", me.position)
+            error_info.set("line", 0)
+            error_info.set("column", 0)
+            error_info.set("token", "EOF")
+        }
+        
+        me.errors.push(error_info)
+    }
+    
+    // エラーがあるかチェック
+    has_errors() {
+        return me.errors.length() > 0
+    }
+    
+    // エラー情報を取得
+    get_errors() {
+        return me.errors
+    }
+    
+    // エラーを文字列として取得
+    get_error_messages() {
+        local messages = new ArrayBox()
+        local i = 0
+        
+        loop(i < me.errors.length()) {
+            local error = me.errors.get(i)
+            local message = "Error at line " + error.get("line") + ", column " + error.get("column") + ": " + error.get("message")
+            messages.push(message)
+            i = i + 1
+        }
+        
+        return messages
+    }
+    
+    // ===== ユーティリティメソッド =====
+    
+    // 数値文字列を数値情報に変換（MVP）
+    // 返り値: MapBox { kind:"int"|"float", value: <int|float_str> }
+    convert_number(number_str) {
+        local out = new MapBox()
+        if StringUtils.is_integer(number_str) {
+            out.set("kind", "int")
+            out.set("value", StringUtils.parse_integer(number_str))
+            return out
+        }
+        // 浮動小数点: 小数点または指数表記を含むものは文字列のまま保持
+        if number_str.indexOf != null {
+            // indexOfが提供されていない環境向けフォールバック
+        }
+        if StringUtils.contains(number_str, ".") or StringUtils.contains(number_str, "e") or StringUtils.contains(number_str, "E") {
+            out.set("kind", "float")
+            out.set("value", StringUtils.parse_float(number_str))
+            return out
+        }
+        // 不正な数値表現（エラー済みのはず）: フォールバック
+        out.set("kind", "int")
+        out.set("value", 0)
+        return out
+    }
+    
+    // ===== デバッグメソッド =====
+    
+    print_errors() {
+        if not me.has_errors() {
+            print("✅ No parsing errors")
+            return
+        }
+        
+        print("❌ Parsing errors (" + me.errors.length() + "):")
+        local messages = me.get_error_messages()
+        local i = 0
+        loop(i < messages.length()) {
+            print("  " + messages.get(i))
+            i = i + 1
+        }
+    }
+    
+    get_parse_statistics() {
+        local stats = new MapBox()
+        stats.set("tokens_processed", me.position)
+        stats.set("total_tokens", me.tokens.length())
+        stats.set("error_count", me.errors.length())
+        stats.set("success", not me.has_errors())
+        
+        if me.tokens.length() > 0 {
+            stats.set("completion_rate", me.position / me.tokens.length())
+        } else {
+            stats.set("completion_rate", 0)
+        }
+        
+        return stats
+    }
+}
+
+// 🚀 便利な関数（ワンライナー使用）
+static box JsonParserUtils {
+    
+    // 文字列を直接パース（エラー処理込み）
+    parse_json(json_text) {
+        local parser = new JsonParser()
+        local result = parser.parse(json_text)
+        
+        if parser.has_errors() {
+            print("JSON Parse Errors:")
+            parser.print_errors()
+            return null
+        }
+        
+        return result
+    }
+    
+    // パースしてJSONに戻す（ラウンドトリップテスト用）
+    roundtrip_test(json_text) {
+        local parsed = this.parse_json(json_text)
+        if parsed == null {
+            return null
+        }
+        return parsed.stringify()
+    }
+}

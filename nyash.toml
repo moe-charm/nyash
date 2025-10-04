@@ -11,11 +11,11 @@ paths = ["apps", "lib", "."]
 # Optional package-style entries (opt-in via using resolver)
 [using.json_native]
 path = "apps/lib/json_native/"
-main = "parser/parser.nyash"
+main = "parser/parser.hako"
 
 # JSON Native – String utilities as a standalone package (single-file)
 [using.string_utils]
-path = "apps/lib/json_native/utils/string.nyash"
+path = "apps/lib/json_native/utils/string.hako"
 
 [using.aliases]
 # Resolve `using json as ...` to json_native when desired
@@ -24,7 +24,7 @@ StringUtils = "string_utils"
 JsonNode = "json_node"
 
 [using.json_node]
-path = "apps/lib/json_native/core/node.nyash"
+path = "apps/lib/json_native/core/node.hako"
 
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
