@@ -141,7 +141,7 @@ static box MirVmMin {
           local dst = JsonFragBox.get_int(seg, "dst")
           if dst == null { /* malformed */ } else {
             // Try array form: "values":[ {"pred":P,"value":V}, ... ]
-            local key = ""values":["
+            local key = "\"values\":["
             local p = seg.indexOf(key)
             local vin = null
             if p >= 0 {
