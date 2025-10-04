@@ -5,7 +5,7 @@ using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 
 static box MirVmMin {
-  _tif msg.indexOf("[ERROR]") >= 0 { print(msg) } {
+  _tprint(msg) {
     // Only emit hard errors by default; suppress debug noise in smokes
     if msg.indexOf("[ERROR]") >= 0 { print(msg) }
   }
