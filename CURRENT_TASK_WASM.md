@@ -49,6 +49,47 @@ static box Main {
 
 ## 🚀 **Phase 15.8: ベンチマーク整備** (2025-10-04 開始)
 
+### ✅ **固定時間ベンチマーク完全実装** (2025-10-04) 🎉
+
+**目的**: ChatGPT Pro設計に基づく固定時間方式ベンチマークシステム構築
+
+**実装内容**:
+1. **TimerBox.now_ms()完全動作確認** ✅
+   - コンパイラが自動的に`ExternCall(nyrt.time.now_ms)`に変換
+   - VM側の`extern_adapter.rs`で`SystemTime::now()`実装済み
+   - テスト結果: 166ms差分を正確に計測
+
+2. **bench_runner.hako固定時間方式実装** ✅
+   - `run_duration(file, duration_sec)` メソッド追加
+   - DESIGN.md準拠の実装:
+     ```hako
+     let end_time = now() + duration_seconds;
+     let mut iterations = 0;
+     while now() < end_time {
+         run_benchmark();
+         iterations += 1;
+     }
+     let ops_per_sec = iterations / duration_seconds;
+     ```
+   - MapBoxで結果構造化（iterations/duration_ms/ops_per_sec）
+
+3. **実測結果** ✅
+   - **空ベンチ**: 1秒間で109,543回（約10万ops/sec）
+   - **sum_loop(100k)**: 1秒間で5回（5 ops/sec）
+     - 妥当性確認: 前回測定200ms/回 × 5 = 1000ms ✅
+
+**ファイル**:
+- `apps/benchmarks/harness/bench_runner.hako` - 固定時間方式実装
+- `apps/benchmarks/test_duration_bench.hako` - テストスクリプト
+- `local_tests/test_timer.hako` - TimerBox動作確認
+
+**次のステップ**:
+- LLVM版での固定時間ベンチマーク
+- WASM版での固定時間ベンチマーク
+- ベンチマークスイート整備（DESIGN.md Phase 2以降）
+
+---
+
 **目標**: ChatGPT Pro設計に基づく商用レベルベンチマークシステム構築
 
 **設計書**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)

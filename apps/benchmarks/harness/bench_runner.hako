@@ -29,7 +29,7 @@ box StatsBox {
         me.samples = new ArrayBox()
     }
 
-    push(value: IntegerBox) {
+    push(value) {
         me.samples.push(value)
     }
 
@@ -138,14 +138,14 @@ box RunnerBox {
     target: StringBox
     timer: TimerBox
 
-    birth(target: StringBox) {
+    birth(target) {
         me.target = target
         me.timer = new TimerBox()
     }
 
     // 単一実行（時間計測）
     // 注: 実際のベンチマーク実行はexecで実装予定
-    run_once(file: StringBox) {
+    run_once(file) {
         local t0, t1
 
         t0 = me.timer.now_ms()
@@ -158,8 +158,53 @@ box RunnerBox {
         return t1 - t0
     }
 
-    // ベンチマーク実行（warmup + 計測）
-    run(file: StringBox, warmup: IntegerBox, repeat: IntegerBox) {
+    // 🎯 固定時間方式ベンチマーク（推奨・デフォルト）
+    // duration_sec: 実行時間（秒）
+    // 戻り値: { iterations, duration_ms, ops_per_sec }
+    run_duration(file, duration_sec) {
+        local start_time, end_time, current_time
+        local iterations, elapsed_ms
+        local result
+
+        start_time = me.timer.now_ms()
+        end_time = start_time + (duration_sec * 1000)  // 秒→ミリ秒変換
+
+        iterations = 0
+
+        print("Running for " + duration_sec + " seconds...")
+
+        // 固定時間方式: end_timeまで繰り返し実行
+        current_time = me.timer.now_ms()
+        loop(current_time < end_time) {
+            me.run_once(file)
+            iterations = iterations + 1
+            current_time = me.timer.now_ms()
+        }
+
+        elapsed_ms = current_time - start_time
+
+        // 結果を構造化して返す（MapBoxで簡易的に実装）
+        result = new MapBox()
+        result.set("iterations", iterations)
+        result.set("duration_ms", elapsed_ms)
+
+        // ops/sec計算（ミリ秒→秒変換）
+        local duration_sec_actual
+        duration_sec_actual = elapsed_ms / 1000
+        local ops_per_sec
+        if duration_sec_actual > 0 {
+            ops_per_sec = iterations / duration_sec_actual
+        } else {
+            ops_per_sec = 0
+        }
+        result.set("ops_per_sec", ops_per_sec)
+
+        return result
+    }
+
+    // 🔢 固定回数方式ベンチマーク（オプション）
+    // repeat: 実行回数
+    run(file, warmup, repeat) {
         local i, stats
 
         // Warmupフェーズ（計測しない）
@@ -190,23 +235,18 @@ box RunnerBox {
 // ========================================
 static box Main {
     main(args) {
-        local console
-        console = new ConsoleBox()
+        print("=== Benchmark Runner - 固定時間方式実装 ===")
 
-        // Phase 1最小実装: 動作確認用
-        console.log("=== Benchmark Runner - Phase 1 Minimum Implementation ===")
-
-        local runner, stats
+        local runner, result
         runner = new RunnerBox("vm")
 
-        // テスト実行（仮）
-        stats = runner.run("apps/benchmarks/01_counter.nyash", 2, 5)
+        // 🎯 固定時間方式テスト（1秒間）
+        result = runner.run_duration("dummy.hako", 1)
 
-        console.log("Benchmark completed:")
-        console.log("  Samples: " + str(stats.length()))
-        console.log("  Mean: " + str(stats.mean()) + " ms")
-        console.log("  Min: " + str(stats.min()) + " ms")
-        console.log("  Max: " + str(stats.max()) + " ms")
+        print("=== 固定時間ベンチマーク結果 ===")
+        print("Iterations: " + result.get("iterations"))
+        print("Duration: " + result.get("duration_ms") + " ms")
+        print("Ops/sec: " + result.get("ops_per_sec"))
 
         return 0
     }
