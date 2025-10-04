@@ -478,7 +478,12 @@ pub extern "C" fn main() -> i32 {
             fn ny_main() -> i64;
         }
         let code = ny_main();
-        // Do not print to keep AOT parity scripts simple; just propagate exit code.
-        code as i32
+        let quiet = std::env::var("NYASH_NYRT_SILENT_RESULT").ok().as_deref() == Some("1");
+        if !quiet {
+            println!("Result: {}", code as i32);
+            use std::io::Write as _;
+            let _ = std::io::stdout().flush();
+        }
+        (code as i32) & 0xFF
     }
 }

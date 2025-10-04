@@ -7,6 +7,7 @@ use nyash_rust::{
     parser::NyashParser,
     runtime::{NyashRuntime, NyashRuntimeBuilder},
 };
+use std::io::Write;
 use std::sync::Arc;
 use std::{fs, process};
 
@@ -392,6 +393,8 @@ impl NyashRunner {
                 if !quiet_pipe {
                     println!("ResultType(MIR): {}", ety);
                     println!("Result: {}", sval);
+                    // Flush stdout before exit to ensure output is visible
+                    let _ = std::io::stdout().flush();
                 }
                 // Unify exit behavior across backends: map return value to process exit code.
                 // - Integer/Bool → exit code (masked to 0..255)
