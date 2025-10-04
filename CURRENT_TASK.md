@@ -187,6 +187,19 @@ Acceptance（このラウンド）
 - CURRENT_TASK は 64KB ローテーションスクリプトで維持（tools/maint/current_task_rotate.sh）。
 
 ## Recent Log (carryover)
+Update — 2025-10-04 (Mini‑VM φ decode box化・安定化)
+- φ の再導入を安全版で実施（Box‑First）
+  - MirVmMin: φ decode を Result.ok/err で包み、GuardBox で values[] 走査を上限化。適用は PhiApplyBox.apply に委譲。
+  - values[] は bracket 範囲に限定し、単調前進＋512ガードで Fail‑Fast。pred 不一致時は先頭 value を fallback 採用。
+  - スモーク（dev gate）: selfhost_mir_m3_phi_entry_vm, selfhost_mir_m3_phi_diamond_vm（PASS）
+- 新規ユーティリティ箱
+  - ScannerBox: 安全な逐次スキャン（peek/advance/at_end）。
+  - GuardBox: 反復上限ガード（tick）。
+  - Result/ResultBox: 統一結果（ok/err, unwrap_or）。
+- 次の段階
+  - φ decode を PhiDecodeBox（decode_result）へ本配線する（準備済み）。当面は inline 安定経路を維持し、回帰が無いタイミングで切り替え。
+  - docs/guides に「スキャンは箱経由・前進保証・ガード義務化」を追記。
+
 Update — 2025-09-27 (UserBox smokes added)
 - Added quick/core smokes to cover UserBox patterns under prod + fallback-ban:
   - oop_instance_call_vm.sh — PASS
