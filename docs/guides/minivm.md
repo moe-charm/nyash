@@ -33,3 +33,15 @@ Ret ポリシー（Fail‑Fast）
 - Mini‑VM ret: `selfhost_minivm_thin_vs_legacy_*_vm.sh`。
 - JsonScan: `jsonscan_seek_array_end_vm.sh`（エスケープ対応の配列終端）。
 
+
+
+### OperatorBox（デバッグ用）
+- `apps/selfhost/vm/boxes/operator_box.hako`
+- 目的: Mini‑VM/StepRunner から比較・算術を箱経由で呼び出し、ネイティブ評価とのパリティ確認や観測に使う。
+- 既定: 未使用（非再入ポリシーのため、Rust VM 側の実行核からは呼び戻さない）。
+- 使い方（例）:
+  ```nyash
+  using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
+  print("LT=" + (""+OperatorBox.compare("Lt", 1, 2)))   // → LT=1
+  print("ADD=" + (""+OperatorBox.apply2("Add", 3, 5))) // → ADD=8
+  ```

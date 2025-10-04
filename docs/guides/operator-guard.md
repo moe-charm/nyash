@@ -25,3 +25,8 @@ Policy
 - VM エントリで OperatorGuard が演算・比較の観測/採用判定を一元化。
 - 下位ハンドラでは再度の観測/再入は行わない（副作用の重複を防ぐ）。
 - Compare/Arithmetic/Unary はガード配下でネイティブ評価に委譲。
+
+## Self‑Host OperatorBox（Debug‑Only）
+- 自己ホスト側（Ny製 Mini‑VM/StepRunner）には `OperatorBox` を用意し、比較/算術のパリティ検証に用いる。
+- 既定では未使用。Rust VM 側からの呼び戻しは行わない（Non‑Reentry）。
+- 例: `OperatorBox.compare("Lt", 1, 2)` → 1 ／ `OperatorBox.apply2("Add", 3, 5)` → 8
