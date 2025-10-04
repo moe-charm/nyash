@@ -75,7 +75,7 @@ ChatGPT5は議論の余地なしと判断し、即座にMIR命令の列挙型を
 
 ## 🎉 結論
 
-> 凍結は "Box-SSA Core-15"。Aの Ref* は捨てる／Bの専用命令は BoxCall に吸収して15個に収斂。これで「簡単さ＝表面の一枚」「速さ＝Lowering/最適化」で分離でき、VMとAOTとFFIを**一本の ABI**で貫けるにゃ。
+> 固定は "Box-SSA Core-15"。Aの Ref* は捨てる／Bの専用命令は BoxCall に吸収して15個に収斂。これで「簡単さ＝表面の一枚」「速さ＝Lowering/最適化」で分離でき、VMとAOTとFFIを**一本の ABI**で貫けるにゃ。
 
 ## 💻 ChatGPT5の心境
 

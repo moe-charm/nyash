@@ -1,0 +1,272 @@
+# Mini-VM 依存関係グラフ（ASCII表現）
+
+## レイヤー構造
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│ Layer 4: Application Layer (実行器・エントリポイント)                 │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  flow_runner.hako (39行)                                             │
+│    ├─→ FlowEntryBox (pipeline_v2) [外部]                            │
+│    └─→ mir_vm_min.hako                                               │
+│                                                                       │
+│  mir_vm_min.hako (191行) ★主実行器★                                 │
+│    ├─→ op_handlers.hako                                              │
+│    ├─→ json_frag.hako                                                │
+│    ├─→ operator_box.hako                                             │
+│    └─→ compare_ops.hako                                              │
+│                                                                       │
+│  step_runner.hako (74行) ※観測専用（実行しない）                    │
+│    ├─→ compare_ops.hako                                              │
+│    └─→ json_scan.hako                                                │
+│                                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Layer 3: VM Boxes (VM実装層)                                         │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  mini_vm_core.hako (28行) ※委譲ファサード                           │
+│    ├─→ json_cur.hako                                                 │
+│    ├─→ mini_vm_scan.hako [common]                                    │
+│    ├─→ mini_vm_binop.hako [common]                                   │
+│    ├─→ mini_vm_compare.hako [common]                                 │
+│    └─→ mini_vm_prints.hako                                           │
+│                                                                       │
+│  mini_vm_prints.hako (115行)                                         │
+│    ├─→ mini_vm_scan.hako [common]                                    │
+│    ├─→ mini_vm_binop.hako [common]                                   │
+│    ├─→ mini_vm_compare.hako [common]                                 │
+│    └─→ json_cur.hako as MiniJsonLoader                               │
+│                                                                       │
+│  op_handlers.hako (148行)                                            │
+│    ├─→ arithmetic.hako                                               │
+│    └─→ compare_ops.hako                                              │
+│                                                                       │
+│  operator_box.hako (36行)                                            │
+│    ├─→ arithmetic.hako                                               │
+│    └─→ compare_ops.hako                                              │
+│                                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Layer 2: Operation & JSON Layer (演算・JSON処理層)                   │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  【演算箱】                                                          │
+│    arithmetic.hako (136行) - 安全算術演算                           │
+│    compare_ops.hako (24行) - 比較演算                                │
+│                                                                       │
+│  【JSON箱】                                                          │
+│    json_frag.hako (51行)                                             │
+│      ├─→ string_scan.hako                                            │
+│      └─→ json_scan.hako                                              │
+│                                                                       │
+│    json_scan.hako (71行)                                             │
+│      └─→ string_scan.hako                                            │
+│                                                                       │
+│    json_cur.hako (61行) - カーソルヘルパー                          │
+│                                                                       │
+│    string_scan.hako (42行) - 文字列スキャン基本                     │
+│                                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────┐
+│ Layer 1: Common Utilities (共通ユーティリティ層) ※apps/common/     │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                       │
+│  mini_vm_scan.hako (206行) - スキャン・数値変換                     │
+│                                                                       │
+│  mini_vm_binop.hako (277行) - BinaryOp処理                           │
+│    ├─→ selfhost.vm.scan as MiniVmScan ※上位層への依存！             │
+│    └─→ selfhost.vm.boxes.json_cur as MiniJson ※上位層への依存！     │
+│                                                                       │
+│  mini_vm_compare.hako (48行) - Compare処理                           │
+│    └─→ selfhost.vm.scan as MiniVmScan ※上位層への依存！             │
+│                                                                       │
+│  json_adapter.hako (19行) - JSONアダプター                           │
+│                                                                       │
+└─────────────────────────────────────────────────────────────────────┘
+
+
+## 問題点: 循環依存
+
+❌ **上位層への依存が存在**:
+- common/mini_vm_binop.hako → vm/boxes/json_cur.hako
+- common/mini_vm_compare.hako → vm/scan (存在不明)
+
+✅ **推奨される依存方向**:
+Layer 4 → Layer 3 → Layer 2 → Layer 1
+(下位層のみに依存)
+
+
+## 詳細依存グラフ（ツリー表現）
+
+```
+mir_vm_min.hako (191行) ★主実行器★
+│
+├── op_handlers.hako (148行)
+│   ├── arithmetic.hako (136行)
+│   │   └── (依存なし)
+│   │
+│   └── compare_ops.hako (24行)
+│       └── (依存なし)
+│
+├── json_frag.hako (51行)
+│   ├── string_scan.hako (42行)
+│   │   └── (依存なし)
+│   │
+│   └── json_scan.hako (71行)
+│       └── string_scan.hako (42行)
+│
+├── operator_box.hako (36行)
+│   ├── arithmetic.hako (136行)
+│   └── compare_ops.hako (24行)
+│
+└── compare_ops.hako (24行)
+    └── (依存なし)
+
+
+flow_runner.hako (39行)
+│
+├── FlowEntryBox (pipeline_v2) [外部モジュール]
+│
+└── mir_vm_min.hako (191行) [上記ツリー参照]
+
+
+mini_vm_core.hako (28行) ※ファサード
+│
+├── json_cur.hako (61行) as MiniJson
+│   └── (依存なし)
+│
+├── mini_vm_scan.hako (206行) [common]
+│   └── (依存なし)
+│
+├── mini_vm_binop.hako (277行) [common] ❌循環依存
+│   ├── selfhost.vm.scan as MiniVmScan
+│   └── selfhost.vm.boxes.json_cur as MiniJson
+│
+├── mini_vm_compare.hako (48行) [common] ❌循環依存
+│   └── selfhost.vm.scan as MiniVmScan
+│
+└── mini_vm_prints.hako (115行)
+    ├── mini_vm_scan.hako [common]
+    ├── mini_vm_binop.hako [common]
+    ├── mini_vm_compare.hako [common]
+    └── json_cur.hako as MiniJsonLoader
+
+
+step_runner.hako (74行) ※観測専用
+│
+├── compare_ops.hako (24行)
+│   └── (依存なし)
+│
+└── json_scan.hako (71行)
+    └── string_scan.hako (42行)
+        └── (依存なし)
+```
+
+
+## 共通機能の重複
+
+以下の関数が複数の箱で実装されています:
+
+### _str_to_int() - 5箇所で重複
+1. arithmetic.hako (115-130行)
+2. op_handlers.hako (18-33行)
+3. json_frag.hako (12行)
+4. json_scan.hako (8行)
+5. step_runner.hako (8行)
+
+### _int_to_str() - 3箇所で重複
+1. mir_vm_min.hako (30-36行)
+2. mini_vm_scan.hako (112-123行)
+3. arithmetic.hako (含まれる)
+
+### index_of_from() - 5箇所で重複
+1. mini_vm_scan.hako (4-19行)
+2. json_frag.hako (10行)
+3. flow_runner.hako (7行)
+4. mir_vm_min.hako (41行)
+5. step_runner.hako (6行)
+
+### read_digits() - 4箇所で重複
+1. mini_vm_scan.hako (126-144行)
+2. json_frag.hako (11行)
+3. json_cur.hako (36-59行) as read_digits_from
+4. flow_runner.hako (8行)
+
+
+## 推奨される統一モジュール
+
+```
+【新規作成推奨】
+apps/selfhost/common/utils/
+├── string_utils.hako
+│   ├── str_to_int(s) → int
+│   ├── int_to_str(n) → string
+│   └── is_numeric_str(s) → bool
+│
+├── scan_utils.hako
+│   ├── index_of_from(hay, needle, pos) → int
+│   ├── read_digits(text, pos) → string
+│   └── substring_safe(text, start, end) → string
+│
+└── json_balance_utils.hako
+    ├── find_balanced_array_end(json, idx) → int
+    ├── find_balanced_object_end(json, idx) → int
+    └── scan_string_end(text, pos) → int
+
+【効果】
+- コード重複: 約250行削減
+- 保守性: 大幅向上（1箇所修正で全体に反映）
+- テスト容易性: 向上（共通機能を集中テスト）
+```
+
+
+## 実装優先度マトリックス
+
+| モジュール | 行数 | 依存数 | 重複度 | 優先度 |
+|-----------|------|--------|--------|--------|
+| string_utils.hako | 新規 | 0 | 高 | ⭐⭐⭐ |
+| scan_utils.hako | 新規 | 0 | 高 | ⭐⭐⭐ |
+| json_balance_utils.hako | 新規 | 0 | 中 | ⭐⭐ |
+| レイヤー再編成 | - | - | - | ⭐⭐ |
+| 命名統一化 | - | - | - | ⭐ |
+
+
+## 実装手順（段階的移行）
+
+### Step 1: 共通ユーティリティ箱新設
+```bash
+# 新規ファイル作成
+apps/selfhost/common/utils/string_utils.hako
+apps/selfhost/common/utils/scan_utils.hako
+
+# 既存機能を移行（コピー＆統合）
+```
+
+### Step 2: 既存箱を段階的に移行
+```bash
+# 優先度1: mir_vm_min.hako
+# - _str_to_int → StringUtilsBox.str_to_int
+# - _int_to_str → StringUtilsBox.int_to_str
+# - index_of_from → ScanUtilsBox.index_of_from
+
+# 優先度2: json_frag.hako, op_handlers.hako
+# 優先度3: その他の箱
+```
+
+### Step 3: テスト実行
+```bash
+# 各箱の動作確認
+./target/release/hakorune test_mir_vm_min.hkr
+./target/release/hakorune test_json_frag.hkr
+```
+
+### Step 4: 古い実装削除
+```bash
+# 移行完了後、各箱から重複コード削除
+# コミット単位で段階的に実施
+```

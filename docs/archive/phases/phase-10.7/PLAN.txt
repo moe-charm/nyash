@@ -3,7 +3,7 @@
 目的: 現行の Plugin-First（PyRuntimeBox/PyObjectBox, Handle-First/TLV）を維持しつつ、トランスパイル路線（Python→Nyash）を“All or Nothing”原則で段階導入。10.6の足場（Thread-Safety/Scheduler）上で、AOT配布体験に直結する最短ラインを構築する。
 
 ====================
-A) 方針（判断）
+A) 方針（判断）+ Property System革命統合（2025-09-18追加）
 ====================
 - 二本立てを明確化：
   1) 実行系（現行）: PyRuntimeBox 経由（VM=仕様、JIT=AOT生成のみ）。配布/運用の実用ライン。
@@ -64,4 +64,51 @@ G) 現行との接続
 ====================
 - 10.6の足場（Thread-Safety/Scheduler）は維持。トランスパイル系は単一スレッド/VM基準で十分。
 - 10.5のAOT導線/nyrtシムはそのまま活用（生成Nyashに対して適用）。
+
+====================
+H) Property System革命統合（2025-09-18 ブレイクスルー）
+====================
+
+### 🌟 Python → Nyash Property マッピング革命
+
+今日完成したProperty System（stored/computed/once/birth_once）により、Python transpilationが飛躍的に向上：
+
+**Pythonプロパティの完全対応**:
+```python
+# Python側
+class PyClass:
+    def __init__(self):
+        self._value = 42
+    
+    @property 
+    def computed_prop(self):
+        return self._value * 2
+    
+    @functools.cached_property
+    def expensive_prop(self):
+        return heavy_computation()
+```
+
+**自動生成Nyash（革命的シンプル）**:
+```nyash
+box PyClass {
+    _value: IntegerBox                    // stored: 通常フィールド
+    computed_prop: IntegerBox { me._value * 2 }  // computed: @property
+    once expensive_prop: ResultBox { heavy_computation() }  // once: @cached_property
+    
+    birth() { me._value = 42 }
+}
+```
+
+### 🎯 実装戦略更新
+- **C2フェーズ拡張**: PythonCompilerBoxにProperty System生成機能追加
+- **descriptor protocol**: Python property/method → Nyash property 4分類自動判定
+- **poison-on-throw**: cached_property例外時の安全性保証
+
+### 📊 成功指標追加
+```
+Property coverage: @property(100%), @cached_property(100%), descriptors(80%)
+Performance boost: cached property 10-50x faster (LLVM最適化）
+Code generation: Python class → 50%短いNyashコード
+```
 
