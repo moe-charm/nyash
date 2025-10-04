@@ -1,0 +1,435 @@
+// EscapeUtils — JSON文字列エスケープ処理（美しいモジュラー設計）
+// 責務: JSON文字列のエスケープ・アンエスケープ・妥当性検証
+
+static box EscapeUtils {
+    
+    // ===== JSON文字列エスケープ =====
+    
+    // 文字列をJSON用にエスケープ
+    escape_string(s) {
+        local result = ""
+        local i = 0
+        
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            result = result + this.escape_char(ch)
+            i = i + 1
+        }
+        
+        return result
+    }
+    
+    // 1文字をエスケープ
+    escape_char(ch) {
+        if ch == "\"" {
+            return "\\\""
+        } else {
+            if ch == "\\" {
+                return "\\\\"
+            } else {
+                if ch == "/" {
+                    return "\\/"
+                } else {
+                    if ch == "\b" {
+                        return "\\b"
+                    } else {
+                        if ch == "\f" {
+                            return "\\f"
+                        } else {
+                            if ch == "\n" {
+                                return "\\n"
+                            } else {
+                                if ch == "\r" {
+                                    return "\\r"
+                                } else {
+                                    if ch == "\t" {
+                                        return "\\t"
+                                    } else {
+                                        if this.is_control_char(ch) {
+                                            return this.escape_unicode(ch)
+                                        } else {
+                                            return ch
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    // 制御文字かどうか判定（MVP: 代表的な制御のみ）
+    is_control_char(ch) {
+        return ch == "\0" or ch == "\t" or ch == "\n" or ch == "\r" or ch == "\f" or ch == "\b"
+    }
+    
+    // 文字のASCIIコードを取得（簡易）: 必要最小のケースのみ
+    char_code(ch) {
+        if ch == "\0" { return 0 }
+        if ch == "\t" { return 9 }
+        if ch == "\n" { return 10 }
+        if ch == "\r" { return 13 }
+        if ch == "\f" { return 12 }
+        if ch == " "  { return 32 }
+        if ch == "\"" { return 34 }
+        if ch == "\\" { return 92 }
+        return -1
+    }
+    
+    // Unicodeエスケープ形式に変換（簡易版）
+    escape_unicode(ch) {
+        local code = this.char_code(ch)
+        return "\\u" + this.int_to_hex4(code)
+    }
+    
+    // 整数を4桁の16進数文字列に変換（0..65535にクランプ）
+    int_to_hex4(n) {
+        local v = n
+        if v < 0 { v = 0 }
+        if v > 65535 { v = 65535 }
+        // 4096=16^3, 256=16^2, 16=16^1
+        local d0 = v / 4096
+        local r0 = v % 4096
+        local d1 = r0 / 256
+        local r1 = r0 % 256
+        local d2 = r1 / 16
+        local d3 = r1 % 16
+        return this.int_to_hex_digit(d0) + this.int_to_hex_digit(d1) + this.int_to_hex_digit(d2) + this.int_to_hex_digit(d3)
+    }
+    
+    // 整数（0-15）を16進数文字に変換
+    int_to_hex_digit(n) {
+        return match n {
+            0 => "0", 1 => "1", 2 => "2", 3 => "3",
+            4 => "4", 5 => "5", 6 => "6", 7 => "7",
+            8 => "8", 9 => "9", 10 => "a", 11 => "b",
+            12 => "c", 13 => "d", 14 => "e", 15 => "f",
+            _ => "0"
+        }
+    }
+    
+    // ===== JSON文字列アンエスケープ =====
+    
+    // エスケープされたJSON文字列を元に戻す
+    unescape_string(s) {
+        local result = ""
+        local i = 0
+        
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            
+            if ch == "\\" and i + 1 < s.length() {
+                local next_ch = s.substring(i + 1, i + 2)
+                local unescaped = this.unescape_sequence(next_ch, s, i)
+                result = result + unescaped.value
+                i = i + unescaped.advance
+            } else {
+                result = result + ch
+                i = i + 1
+            }
+        }
+        
+        return result
+    }
+    
+    // エスケープシーケンスを解釈（オブジェクトリテラル未対応環境のため MapBox で返す）
+    unescape_sequence(next_ch, full_string, pos) {
+        local out = new MapBox()
+        if next_ch == "\"" {
+            out.set("value", "\"")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "\\" {
+            out.set("value", "\\")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "/" {
+            out.set("value", "/")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "b" {
+            out.set("value", "\b")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "f" {
+            out.set("value", "\f")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "n" {
+            out.set("value", "\n")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "r" {
+            out.set("value", "\r")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "t" {
+            out.set("value", "\t")
+            out.set("advance", 2)
+            return out
+        }
+        if next_ch == "u" {
+            // Unicodeエスケープ \\uXXXX
+            if pos + 5 < full_string.length() {
+                local hex = full_string.substring(pos + 2, pos + 6)
+                if this.is_valid_hex4(hex) {
+                    out.set("value", this.hex_to_char(hex))
+                    out.set("advance", 6)
+                    return out
+                } else {
+                    out.set("value", "\\u")
+                    out.set("advance", 2)
+                    return out
+                }
+            } else {
+                out.set("value", "\\u")
+                out.set("advance", 2)
+                return out
+            }
+        }
+        // 不明なエスケープはそのまま残す
+        out.set("value", "\\" + next_ch)
+        out.set("advance", 2)
+        return out
+    }
+    
+    // 4桁の16進数文字列が有効かどうか判定
+    is_valid_hex4(s) {
+        if s.length() != 4 {
+            return false
+        }
+        
+        local i = 0
+        loop(i < 4) {
+            local ch = s.substring(i, i + 1)
+            if not this.is_hex_digit(ch) {
+                return false
+            }
+            i = i + 1
+        }
+        return true
+    }
+    
+    // 16進数文字かどうか判定
+    is_hex_digit(ch) {
+        return (ch >= "0" and ch <= "9") or
+               (ch >= "a" and ch <= "f") or
+               (ch >= "A" and ch <= "F")
+    }
+    
+    // 4桁の16進数文字列を文字に変換（MVP: ASCII + 一部制御 + サロゲート検知）
+    hex_to_char(hex) {
+        // サロゲート半の範囲は '?' に置換（結合は現段階で未対応）
+        if hex >= "D800" and hex <= "DFFF" {
+            return "?"
+        }
+        // 制御文字（代表的なもの）
+        if hex == "0000" { return "\0" }
+        if hex == "0008" { return "\b" }
+        if hex == "0009" { return "\t" }
+        if hex == "000A" { return "\n" }
+        if hex == "000C" { return "\f" }
+        if hex == "000D" { return "\r" }
+        // 簡易: よく使う範囲（0x20-0x7E）を網羅
+        if hex == "005C" { return "\\" }
+        if hex == "0022" { return "\"" }
+        // 0-9, A-Z, a-z, 空白と基本記号
+        if hex == "0020" { return " " }
+        if hex == "0021" { return "!" }
+        if hex == "0023" { return "#" }
+        if hex == "0024" { return "$" }
+        if hex == "0025" { return "%" }
+        if hex == "0026" { return "&" }
+        if hex == "0027" { return "'" }
+        if hex == "0028" { return "(" }
+        if hex == "0029" { return ")" }
+        if hex == "002A" { return "*" }
+        if hex == "002B" { return "+" }
+        if hex == "002C" { return "," }
+        if hex == "002D" { return "-" }
+        if hex == "002E" { return "." }
+        if hex == "002F" { return "/" }
+        if hex == "0030" { return "0" }
+        if hex == "0031" { return "1" }
+        if hex == "0032" { return "2" }
+        if hex == "0033" { return "3" }
+        if hex == "0034" { return "4" }
+        if hex == "0035" { return "5" }
+        if hex == "0036" { return "6" }
+        if hex == "0037" { return "7" }
+        if hex == "0038" { return "8" }
+        if hex == "0039" { return "9" }
+        if hex == "003A" { return ":" }
+        if hex == "003B" { return ";" }
+        if hex == "003C" { return "<" }
+        if hex == "003D" { return "=" }
+        if hex == "003E" { return ">" }
+        if hex == "003F" { return "?" }
+        if hex == "0040" { return "@" }
+        if hex == "0041" { return "A" }
+        if hex == "0042" { return "B" }
+        if hex == "0043" { return "C" }
+        if hex == "0044" { return "D" }
+        if hex == "0045" { return "E" }
+        if hex == "0046" { return "F" }
+        if hex == "0047" { return "G" }
+        if hex == "0048" { return "H" }
+        if hex == "0049" { return "I" }
+        if hex == "004A" { return "J" }
+        if hex == "004B" { return "K" }
+        if hex == "004C" { return "L" }
+        if hex == "004D" { return "M" }
+        if hex == "004E" { return "N" }
+        if hex == "004F" { return "O" }
+        if hex == "0050" { return "P" }
+        if hex == "0051" { return "Q" }
+        if hex == "0052" { return "R" }
+        if hex == "0053" { return "S" }
+        if hex == "0054" { return "T" }
+        if hex == "0055" { return "U" }
+        if hex == "0056" { return "V" }
+        if hex == "0057" { return "W" }
+        if hex == "0058" { return "X" }
+        if hex == "0059" { return "Y" }
+        if hex == "005A" { return "Z" }
+        if hex == "005B" { return "[" }
+        if hex == "005D" { return "]" }
+        if hex == "005E" { return "^" }
+        if hex == "005F" { return "_" }
+        if hex == "0060" { return "`" }
+        if hex == "0061" { return "a" }
+        if hex == "0062" { return "b" }
+        if hex == "0063" { return "c" }
+        if hex == "0064" { return "d" }
+        if hex == "0065" { return "e" }
+        if hex == "0066" { return "f" }
+        if hex == "0067" { return "g" }
+        if hex == "0068" { return "h" }
+        if hex == "0069" { return "i" }
+        if hex == "006A" { return "j" }
+        if hex == "006B" { return "k" }
+        if hex == "006C" { return "l" }
+        if hex == "006D" { return "m" }
+        if hex == "006E" { return "n" }
+        if hex == "006F" { return "o" }
+        if hex == "0070" { return "p" }
+        if hex == "0071" { return "q" }
+        if hex == "0072" { return "r" }
+        if hex == "0073" { return "s" }
+        if hex == "0074" { return "t" }
+        if hex == "0075" { return "u" }
+        if hex == "0076" { return "v" }
+        if hex == "0077" { return "w" }
+        if hex == "0078" { return "x" }
+        if hex == "0079" { return "y" }
+        if hex == "007A" { return "z" }
+        if hex == "007B" { return "{" }
+        if hex == "007C" { return "|" }
+        if hex == "007D" { return "}" }
+        if hex == "007E" { return "~" }
+        return "?"
+    }
+    
+    // ===== 妥当性検証 =====
+    
+    // JSON文字列が妥当かどうか検証
+    validate_string(s) {
+        local i = 0
+        
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            
+            // 制御文字のチェック
+            if this.is_control_char(ch) and ch != "\t" and ch != "\n" and ch != "\r" {
+                return false  // エスケープされていない制御文字
+            }
+            
+            // エスケープシーケンスのチェック
+            if ch == "\\" {
+                if i + 1 >= s.length() {
+                    return false  // 不完全なエスケープ
+                }
+                
+                local next_ch = s.substring(i + 1, i + 2)
+                if not this.is_valid_escape_char(next_ch) {
+                    return false  // 無効なエスケープ文字
+                }
+                
+                // Unicodeエスケープの特別処理
+                if next_ch == "u" {
+                    if i + 5 >= s.length() {
+                        return false  // 不完全なUnicodeエスケープ
+                    }
+                    local hex = s.substring(i + 2, i + 6)
+                    if not this.is_valid_hex4(hex) {
+                        return false  // 無効な16進数
+                    }
+                    i = i + 6  // Unicodeエスケープをスキップ
+                } else {
+                    i = i + 2  // 通常のエスケープをスキップ
+                }
+            } else {
+                i = i + 1
+            }
+        }
+        
+        return true
+    }
+    
+    // 有効なエスケープ文字かどうか判定
+    is_valid_escape_char(ch) {
+        return ch == "\"" or ch == "\\" or ch == "/" or
+               ch == "b" or ch == "f" or ch == "n" or
+               ch == "r" or ch == "t" or ch == "u"
+    }
+    
+    // ===== 便利メソッド =====
+    
+    // 文字列をJSON文字列リテラルとしてクォート
+    quote_string(s) {
+        return "\"" + this.escape_string(s) + "\""
+    }
+    
+    // JSON文字列リテラルからクォートを除去してアンエスケープ
+    unquote_string(s) {
+        if s.length() >= 2 and s.substring(0, 1) == "\"" and s.substring(s.length() - 1, s.length()) == "\"" {
+            local content = s.substring(1, s.length() - 1)
+            return this.unescape_string(content)
+        } else {
+            return s  // クォートされていない場合はそのまま
+        }
+    }
+    
+    // 安全な文字列表示（デバッグ用）
+    safe_display(s) {
+        local result = "\""
+        local i = 0
+        
+        loop(i < s.length()) {
+            local ch = s.substring(i, i + 1)
+            if this.is_printable(ch) {
+                result = result + ch
+            } else {
+                result = result + this.escape_char(ch)
+            }
+            i = i + 1
+        }
+        
+        return result + "\""
+    }
+    
+    // 印刷可能文字かどうか判定
+    is_printable(ch) {
+        // MVP: 制御文字でなければ表示可能とみなす（デバッグ用）
+        return not this.is_control_char(ch)
+    }
+}
