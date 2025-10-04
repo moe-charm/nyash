@@ -374,7 +374,7 @@ impl TraceCfg {
         s
     }
 
-    fn render_after(&self, m: &MirInterpreter, bb: BasicBlockId, idx: usize, inst: &crate::mir::MirInstruction) -> Option<String> {
+    fn render_after(&self, m: &MirInterpreter, _bb: BasicBlockId, _idx: usize, inst: &crate::mir::MirInstruction) -> Option<String> {
         if !self.regs { return None; }
         if let Some(dst) = crate::mir::instruction_kinds::CallLikeInst::from_mir(inst).and_then(|c| c.dst()) {
             if let Some(v) = m.regs.get(&dst) {
@@ -460,7 +460,7 @@ fn maybe_stepper_prompt(bb: BasicBlockId, idx: usize, inst: &crate::mir::MirInst
     };
     eprintln!("> {}", line);
     eprint!("[n]ext/[c]ontinue/[r]egisters/[q]uit? ");
-    use std::io::{Read, Write};
+    use std::io::Write;
     let mut auto = true;
     if StepperCfg::allow_block() {
         auto = false;

@@ -1,5 +1,5 @@
 use super::*;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+// Removed unused time imports
 
 impl MirInterpreter {
     pub(super) fn handle_extern_call(
