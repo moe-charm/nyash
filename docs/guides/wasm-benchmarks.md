@@ -178,3 +178,8 @@ declare -a BENCHMARKS=(
 - [Phase 15.8 README](../development/roadmap/phases/phase-15.8/README.md) - WASM implementation roadmap
 - [CLAUDE.md](../../CLAUDE.md) - Project progress and decisions
 - [CURRENT_TASK.md](../../CURRENT_TASK.md) - Current development status
+
+
+## VM出力について
+- VMラインは `Result: <exit code>` を表示します（整数/Boolの戻り値は exit code にマップ、0..255）。
+- 目視のために標準エラーにもミラーされる設計（ランナー実装）です。CI/emit-only（`NYASH_JSON_ONLY=1`）時は抑制。
