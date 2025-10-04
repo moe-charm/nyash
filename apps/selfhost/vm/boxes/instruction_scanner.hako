@@ -1,6 +1,9 @@
 // instruction_scanner.hako — InstructionScannerBox
 // Minimal JSON v0 instruction object scanner with tolerant parsing.
 
+using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
+
 static box InstructionScannerBox {
   _tprint(msg) { print(msg) }
 
@@ -19,27 +22,8 @@ static box InstructionScannerBox {
     return -1
   }
 
-  find_balanced_object_end(json, idx) {
-    if json.substring(idx, idx+1) != "{" { return -1 }
-    local n = json.length()
-    local depth = 0
-    local i = idx
-    local in_str = 0
-    loop (i < n) {
-      local ch = json.substring(i, i+1)
-      if in_str == 1 {
-        if ch == "\\" { i = i + 2  continue }
-        if ch == "\"" { in_str = 0  i = i + 1  continue }
-        i = i + 1
-        continue
-      }
-      if ch == "\"" { in_str = 1  i = i + 1  continue }
-      if ch == "{" { depth = depth + 1 }
-      if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
-      i = i + 1
-    }
-    return -1
-  }
+  find_balanced_object_end(json, idx) { return JsonScanBox.seek_obj_end(json, idx) }
+
 
   normalize_delimiters(seg) {
     if seg == null { return "" }
@@ -61,15 +45,20 @@ static box InstructionScannerBox {
   }
 
   _extract_op(obj) {
+    // Prefer explicit op key with escape-aware string end detection
     local k1 = "\"op\":\""
     local p1 = obj.indexOf(k1)
-    if p1 >= 0 { local i = p1 + k1.length() local j = obj.indexOf("\"", i) if j > i { return obj.substring(i, j) } }
+    if p1 >= 0 {
+      local i = p1 + k1.length()           // start of value (right after opening quote)
+      local j = StringScanBox.scan_string_end(obj, i - 1)
+      if j > i { return obj.substring(i, j) }
+    }
     // v1 style
     local kk = "\"kind\":\""
     local pk = obj.indexOf(kk)
     if pk >= 0 {
       local i2 = pk + kk.length()
-      local j2 = obj.indexOf("\"", i2)
+      local j2 = StringScanBox.scan_string_end(obj, i2 - 1)
       if j2 > i2 {
         local k = obj.substring(i2, j2)
         if k == "Const" { return "const" }
@@ -83,7 +72,23 @@ static box InstructionScannerBox {
     local ko = "\"operation\":\""
     local po = obj.indexOf(ko)
     if po >= 0 { return "compare" }
+    // last-resort heuristics
+    // Use dual-key probe to handle both plain and escaped forms when needed
+    if me._has_key(obj, "lhs") == 1 and me._has_key(obj, "rhs") == 1 { return "compare" }
+    if me._has_key(obj, "cond") == 1 { return "branch" }
+    if me._has_key(obj, "target") == 1 { return "jump" }
+    if obj.indexOf("\"value\":{\"type\":\"i64\"") >= 0 { return "const" }
+    if obj.indexOf("\"op\":\"ret\"") >= 0 { return "ret" }
     return ""
+  }
+
+  // Dual-key existence probe (plain/escaped)
+  _has_key(seg, key) {
+    if seg == null { return 0 }
+    local plain = "\"" + key + "\""
+    local escaped = "\\\"" + key + "\\\""
+    local pos = JsonScanBox.find_key_dual(seg, plain, escaped, 0)
+    if pos >= 0 { return 1 } else { return 0 }
   }
 
   // Return a map {start,end,op} for next object starting at/after pos, or null if none

@@ -56,6 +56,7 @@ mod indexes; // InstanceMethodIndexBox（(Box,method,arity)登録/照会）
 mod materialize; // MaterializeBox（Call直前の材化を一元化）
 mod verify; // CallOrderVerifyBox（dev-only 検証ラッパ）
 pub mod effects; // EffectResolverBox（効果決定の単一入口・既定OFF）
+pub mod entry; // Public entrypoint wrapper (AST→MIR module)
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

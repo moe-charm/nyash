@@ -1,0 +1,96 @@
+// flow_debugger.hako — Mini‑VM JSON v0 デバッグ用の軽量箱
+// 責務:
+//  - JSON v0 の関数/ブロック/命令を静的に走査し、
+//    - ブロックID集合の抽出
+//    - branch/jump の then/else/target が妥当なIDか検証
+//    - op シーケンスの要約出力（最初の N 件）
+// 非責務:
+//  - 実行・評価（それは MirVmMin に委譲）
+
+static box FlowDebugBox {
+  // ユーティリティ — 文字列検索
+  _index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() if pos > n { return -1 } local i = pos local m = needle.length() if m <= 0 { return pos } local limit = n - m loop(i <= limit) { if hay.substring(i, i+m) == needle { return i } i = i + 1 } return -1 }
+  _read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
+  _int_to_str(n) { if n == 0 { return "0" } local v = n local out = "" local digits = "0123456789" loop(v > 0) { local d = v % 10 local ch = digits.substring(d, d+1) out = ch + out v = v / 10 } return out }
+
+  // ブロックID集合を抽出
+  collect_block_ids(mjson) {
+    local ids = new ArrayBox()
+    local pos = 0
+    loop(true) {
+      local p = me._index_of_from(mjson, "\"id\":", pos)
+      if p < 0 { break }
+      local d = me._read_digits(mjson, p + 5)
+      if d != "" { ids.push(d) }
+      pos = p + 5
+    }
+    return ids
+  }
+
+  // op シーケンスを先頭から limit 件だけ抽出
+  collect_ops(mjson, limit) {
+    if limit == null { limit = 50 }
+    local ops = new ArrayBox()
+    local pos = 0
+    loop(ops.size() < limit) {
+      local p = me._index_of_from(mjson, "\"op\":\"", pos)
+      if p < 0 { break }
+      local q = me._index_of_from(mjson, "\"", p + 6)
+      if q < 0 { break }
+      local op = mjson.substring(p + 6, q)
+      ops.push(op)
+      pos = q + 1
+    }
+    return ops
+  }
+
+  // branch/jump の then/else/target を抽出し、集合 membership を検査
+  validate_cf_targets(mjson) {
+    local ids = me.collect_block_ids(mjson)
+    // Set 風マップ化
+    local idset = new MapBox()
+    local i = 0
+    loop(i < ids.size()) { idset.set(ids.get(i), 1) i = i + 1 }
+
+    local errs = new ArrayBox()
+    local pos = 0
+    loop(true) {
+      local p = me._index_of_from(mjson, "\"op\":\"branch\"", pos)
+      if p < 0 { break }
+      // then
+      local pt = me._index_of_from(mjson, "\"then\":", p)
+      local pe = me._index_of_from(mjson, "\"else\":", p)
+      if pt >= 0 { local t = me._read_digits(mjson, pt + 7) if t != "" && idset.get(t) == null { errs.push("branch.then invalid:" + t) } }
+      if pe >= 0 { local e = me._read_digits(mjson, pe + 7) if e != "" && idset.get(e) == null { errs.push("branch.else invalid:" + e) } }
+      pos = p + 14
+    }
+
+    // jump
+    pos = 0
+    loop(true) {
+      local p = me._index_of_from(mjson, "\"op\":\"jump\"", pos)
+      if p < 0 { break }
+      local pt = me._index_of_from(mjson, "\"target\":", p)
+      if pt >= 0 { local t = me._read_digits(mjson, pt + 9) if t != "" && idset.get(t) == null { errs.push("jump.target invalid:" + t) } }
+      pos = p + 12
+    }
+
+    // レポート
+    if errs.size() == 0 { print("{\"kind\":\"flow_debug\",\"ok\":true,\"blocks\":" + (""+ids.size()) + "}") }
+    else {
+      local k = 0
+      loop(k < errs.size()) { print("{\"kind\":\"flow_debug\",\"ok\":false,\"msg\":\"" + errs.get(k) + "\"}") k = k + 1 }
+    }
+    return errs.size()
+  }
+
+  // 要約: 先頭の op を列挙
+  summarize_ops(mjson, limit) {
+    local ops = me.collect_ops(mjson, limit)
+    local i = 0
+    loop(i < ops.size()) { print("{\"kind\":\"flow_ops\",\"op\":\"" + ops.get(i) + "\"}") i = i + 1 }
+    return ops.size()
+  }
+
+  main(args) { return 0 }
+}

@@ -1,11 +1,32 @@
 // flow_runner.hako — Selfhost VM runner thin box（exec allowed under selfhost/vm/）
 
-using selfhost.compiler.pipeline_v2.flow_entry as FlowEntryBox
-using selfhost.vm.mir_min as MirVmMin
+using "apps/selfhost-compiler/pipeline_v2/flow_entry.hako" as FlowEntryBox
+using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
 
 static box FlowRunner {
+  _index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() if pos >= n { return -1 } local m = needle.length() if m <= 0 { return pos } local i = pos local limit = n - m loop(i <= limit) { if hay.substring(i, i + m) == needle { return i } i = i + 1 } return -1 }
+  _read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
+  _parse_return_int(ast_json) {
+    if ast_json == null { return null }
+    local rt = me._index_of_from(ast_json, "\"type\":\"Return\"", 0)
+    if rt < 0 { return null }
+    local it = me._index_of_from(ast_json, "\"type\":\"Int\"", rt)
+    if it < 0 { return null }
+    local vp = me._index_of_from(ast_json, "\"value\":", it)
+    if vp < 0 { return null }
+    local ds = me._read_digits(ast_json, vp + 8)
+    if ds == "" { return null }
+    local acc = 0
+    local i = 0
+    loop(i < ds.length()) { acc = acc * 10 + ("0123456789".indexOf(ds.substring(i,i+1)))  i = i + 1 }
+    return acc
+  }
+
   // Execute on Mini‑VM from Stage‑1 JSON. compat=1 で v1→v0 経路。
   run_vm_min_from_ast(ast_json, prefer_cfg, compat) {
+    // Fast-path Return(Int v)
+    local fast = me._parse_return_int(ast_json)
+    if fast != null { return fast }
     local j = null
     if compat == 1 { j = FlowEntryBox.emit_v1_compat_from_ast(ast_json, prefer_cfg) }
     else { j = FlowEntryBox.emit_v0_from_ast(ast_json, prefer_cfg) }

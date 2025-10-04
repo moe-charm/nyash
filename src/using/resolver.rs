@@ -41,6 +41,14 @@ pub fn populate_from_toml(
         if path.exists() {
             if !crate::config::env::cli_quiet() { eprintln!("[using] toml: using {:?}", std::fs::canonicalize(path).ok()); }
         }
+        // One-line hint about search priority and root envs considered (for field debugging)
+        if !crate::config::env::cli_quiet() {
+            let root = std::env::var("NYASH_ROOT").ok()
+                .or_else(|| std::env::var("HAKO_ROOT").ok())
+                .or_else(|| std::env::var("HAKU_ROOT").ok())
+                .or_else(|| std::env::var("HRN_ROOT").ok());
+            eprintln!("[using] toml search: [./hako.toml > ./nyash.toml > ./hakorune.toml] or roots {:?}", root);
+        }
     }
     if !path.exists() {
         return Ok(policy);
@@ -49,15 +57,21 @@ pub fn populate_from_toml(
         .map_err(|e| UsingError::ReadToml(e.to_string()))?;
     let doc = toml::from_str::<toml::Value>(&text)
         .map_err(|e| UsingError::ParseToml(e.to_string()))?;
+    // One-line summary (trace). Detailed dumps only when NYASH_RESOLVE_DEBUG=1
     if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
-        if let Some(tbl) = doc.as_table() {
-            let keys: Vec<_> = tbl.keys().cloned().collect();
-            if !crate::config::env::cli_quiet() { eprintln!("[using] toml: root keys = {:?}", keys); }
-            if let Some(using_tbl) = tbl.get("using").and_then(|v| v.as_table()) {
-                let ukeys: Vec<_> = using_tbl.keys().cloned().collect();
-                if !crate::config::env::cli_quiet() { eprintln!("[using] toml: [using] keys = {:?}", ukeys); }
-            } else {
-                if !crate::config::env::cli_quiet() { eprintln!("[using] toml: [using] section missing or not a table"); }
+        let mut mods_count = 0usize;
+        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) { mods_count = mods.len(); }
+        let using_tbl = doc.get("using").and_then(|v| v.as_table());
+        let paths_count = using_tbl.and_then(|t| t.get("paths").and_then(|v| v.as_array())).map(|a| a.len()).unwrap_or(0);
+        let aliases_count = using_tbl.and_then(|t| t.get("aliases").and_then(|v| v.as_table())).map(|t| t.len()).unwrap_or(0);
+        let pkgs_count = using_tbl.map(|t| t.len()).unwrap_or(0).saturating_sub(2 /*paths+aliases*/);
+        if !crate::config::env::cli_quiet() {
+            eprintln!("[using] loaded: {:?}; modules:{} paths:{} aliases:{} packages:{}", std::fs::canonicalize(path).ok(), mods_count, paths_count, aliases_count, pkgs_count);
+        }
+        if std::env::var("NYASH_RESOLVE_DEBUG").ok().as_deref() == Some("1") {
+            if let Some(tbl) = doc.as_table() {
+                let keys: Vec<_> = tbl.keys().cloned().collect();
+                if !crate::config::env::cli_quiet() { eprintln!("[using] toml: root keys = {:?}", keys); }
             }
         }
     }

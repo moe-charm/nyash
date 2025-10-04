@@ -1,0 +1,89 @@
+// minivm_probe.hako — Mini‑VM JSON v0 の a/b/r を観測する軽量プローブ
+using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+
+static box MiniVmProbe {
+  probe_compare(mjson) {
+    local regs = new MapBox()
+    local seg = JsonFragBox.block0_segment(mjson)
+    local pos = 0
+    loop(true) {
+      if pos >= seg.length() { break }
+      local s = seg.indexOf("{", pos)
+      if s < 0 { break }
+      // find object end (簡易)
+      local i = s
+      local depth = 0
+      loop(true) {
+        local ch = seg.substring(i, i+1)
+        if ch == "" { break }
+        if ch == "{" { depth = depth + 1 } else { if ch == "}" { depth = depth - 1 } }
+        if depth == 0 { i = i + 1  break }
+        i = i + 1
+      }
+      local obj = seg.substring(s, i)
+      local op = JsonFragBox.get_str(obj, "op")
+      if op == "const" {
+        local dst = JsonFragBox.get_int(obj, "dst")
+        // ネスト value → 数字を拾う
+        local pat = ""value":{"type":"i64","value":"
+        local p = obj.indexOf(pat)
+        local val = 0
+        if p >= 0 {
+          local i2 = p + pat.length()
+          local ds = ""
+          loop(true) {
+            local ch2 = obj.substring(i2, i2+1)
+            if ch2 == "" { break }
+            if ch2 >= "0" && ch2 <= "9" { ds = ds + ch2  i2 = i2 + 1 } else { break }
+          }
+          if ds != "" { val = JsonFragBox._str_to_int(ds) }
+        }
+        regs.set(""+dst, val)
+      } else if op == "binop" {
+        local kind = JsonFragBox.get_str(obj, "op_kind")
+        local lhs = JsonFragBox.get_int(obj, "lhs")
+        local rhs = JsonFragBox.get_int(obj, "rhs")
+        local dst = JsonFragBox.get_int(obj, "dst")
+        local as = "" + regs.get(""+lhs)
+        local bs = "" + regs.get(""+rhs)
+        local a = JsonFragBox._str_to_int(as)
+        local b = JsonFragBox._str_to_int(bs)
+        local out = 0
+        if kind == "Add" { out = a + b }
+        else if kind == "Sub" { out = a - b }
+        else if kind == "Mul" { out = a * b }
+        else if kind == "Div" { if b == 0 { out = 0 } else { out = a / b } }
+        else if kind == "Mod" { if b == 0 { out = 0 } else { out = a % b } }
+        regs.set(""+dst, out)
+      } else if op == "compare" {
+        local kind = JsonFragBox.get_str(obj, "cmp")
+        local lhs = JsonFragBox.get_int(obj, "lhs")
+        local rhs = JsonFragBox.get_int(obj, "rhs")
+        local as2 = "" + regs.get(""+lhs)
+        local bs2 = "" + regs.get(""+rhs)
+        local a = JsonFragBox._str_to_int(as2)
+        local b = JsonFragBox._str_to_int(bs2)
+        local r = 0
+        if kind == "Eq" { if a == b { r = 1 } }
+        else if kind == "Ne" { if a != b { r = 1 } }
+        else if kind == "Lt" { if a < b { r = 1 } }
+        else if kind == "Gt" { if a > b { r = 1 } }
+        else if kind == "Le" { if a <= b { r = 1 } }
+        else if kind == "Ge" { if a >= b { r = 1 } }
+        local out = new MapBox()
+        out.set("a", a)
+        out.set("b", b)
+        out.set("r", r)
+        return out
+      }
+      pos = i
+    }
+    local out = new MapBox()
+    out.set("a", 0)
+    out.set("b", 0)
+    out.set("r", 0)
+    return out
+  }
+}
+
+static box MiniVmProbeStub { main(args) { return 0 } }

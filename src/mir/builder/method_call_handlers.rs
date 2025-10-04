@@ -86,22 +86,19 @@ impl MirBuilder {
             func_name.clone()
         };
 
-        // Prefer ModuleFunction under env gate when the function exists in the module
-        let use_modfn = std::env::var("NYASH_MIR_CALL_MODULE_FN").ok().as_deref() == Some("1");
-        if use_modfn {
-            if let Some(ref module) = self.current_module {
-                if module.functions.contains_key(&target_name) {
-                    let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(dst),
-                        func: name_val,
-                        callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
-                        args: arg_values,
-                        effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-                    })?;
-                    self.annotate_call_result_from_func_name(dst, &target_name);
-                    return Ok(dst);
-                }
+        // Prefer ModuleFunction when the function exists in the current module
+        if let Some(ref module) = self.current_module {
+            if module.functions.contains_key(&target_name) {
+                let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
+                self.emit_instruction(MirInstruction::Call {
+                    dst: Some(dst),
+                    func: name_val,
+                    callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
+                    args: arg_values,
+                    effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                })?;
+                self.annotate_call_result_from_func_name(dst, &target_name);
+                return Ok(dst);
             }
         }
 

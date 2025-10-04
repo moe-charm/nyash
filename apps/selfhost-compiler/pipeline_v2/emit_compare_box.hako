@@ -44,8 +44,6 @@ static box EmitCompareBox {
     } else {
       b.add_branch(3, 1, 2)
     }
-    }
-    }
     b.end_block_continue()
     b.start_block(1)
     b.add_const(6, 1)
@@ -58,13 +56,9 @@ static box EmitCompareBox {
     b.start_block(3)
     b.add_ret(6)
     b.end_all()
+    // Build both forms; return the primary string form
     local result_rebuild = b.to_string_rebuild()
     local result_string = b.to_string()
-    print("[DEBUG] to_string:")
-    print(result_string)
-    print("")
-    print("[DEBUG] to_string_rebuild:")
-    print(result_rebuild)
     return result_string
   }
 }

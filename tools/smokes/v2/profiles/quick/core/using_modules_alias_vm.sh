@@ -5,6 +5,9 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_DEV=1
+export NYASH_ENABLE_USING=1
+export NYASH_MODULES="selfhost.vm.mir_min=apps/selfhost/vm/boxes/mir_vm_min.hako"
+export NYASH_ENABLE_USING=1
 require_env || exit 2
 preflight_plugins || exit 2
 
@@ -27,7 +30,7 @@ static box Main {
 EOF
 
 raw_output=$(run_nyash_vm "$SRC")
-result=$(echo "$raw_output" | awk '/^[[:space:]]*-?[0-9]+[[:space:]]*$/ { val=$0 } END { gsub(/\r/,"",val); gsub(/^[[:space:]]+|[[:space:]]+$/ , "", val); print val }')
+result=$(echo "$raw_output" | tr -d '\r' | grep -E '^[[:space:]]*-?[0-9]+[[:space:]]*$' | tail -n 1 | xargs)
 if [ "$result" = "1" ] || [ "$result" = "0" ]; then
   log_success "using_modules_alias_vm resolved selfhost.vm.mir_min (result=$result)"
   rm -rf "$TMP_DIR"

@@ -4,6 +4,7 @@
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
+export NYASH_MODULES="selfhost.vm.mir_min=apps/selfhost/vm/boxes/mir_vm_min.hako,selfhost.vm.handlers=apps/selfhost/vm/boxes/op_handlers.hako,selfhost.vm.json_frag=apps/selfhost/vm/boxes/json_frag.hako,selfhost.vm.string_scan=apps/selfhost/vm/boxes/string_scan.hako"
 require_env || exit 2
 preflight_plugins || exit 2
 

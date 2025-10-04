@@ -63,6 +63,12 @@ pub(super) fn merge_values(
         if let Some(bb) = f.get_block_mut(pred_b) {
             bb.add_instruction(MirInstruction::Copy { dst, src: val_b });
         }
+    } else if crate::config::env::jsonv0_phi_unify() {
+        use super::phi_adapter::BridgePhiOps;
+        use crate::mir::phi_core::if_phi::PhiMergeOps;
+        let mut dummy_vars = std::collections::HashMap::new();
+        let mut ops = BridgePhiOps::new(f, &mut dummy_vars);
+        let _ = ops.emit_phi_at_block_start(merge_bb, dst, vec![(pred_a, val_a), (pred_b, val_b)]);
     } else if let Some(bb) = f.get_block_mut(merge_bb) {
         bb.insert_instruction_after_phis(MirInstruction::Phi {
             dst,

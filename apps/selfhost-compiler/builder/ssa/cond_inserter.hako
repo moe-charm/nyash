@@ -1,0 +1,117 @@
+// cond_inserter.hako — LocalSSA helper: ensure branch(cond) is materialized with a copy
+// Scope: test-only box for JSON v0(MIR-like) strings. No full JSON parser; tolerant scanning.
+
+using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+
+static box CondInserter {
+  _int_to_str(n) { if n == 0 { return "0" } local v=n local out="" local ds="0123456789" loop(v>0){ local d=v%10 local ch=ds.substring(d,d+1) out=ch+out v=v/10 } return out }
+  _index_of_from(hay, needle, pos) { return JsonFragBox.index_of_from(hay, needle, pos) }
+  _read_digits(text, pos) { return JsonFragBox.read_digits(text, pos) }
+  _seek_obj_end(text, obj_start) {
+    local i = obj_start
+    local depth = 0
+    local in_str = 0
+    loop(true){
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0  i = i + 1  continue }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "{" { depth = depth + 1 } else { if ch == "}" { depth = depth - 1 } }
+      if depth == 0 { return i + 1 }
+      i = i + 1
+    }
+    return i
+  }
+  _seek_array_end(text, pos) {
+    local i = pos
+    local depth = 1
+    loop(true) {
+      local ch = text.substring(i,i+1)
+      if ch == "" { break }
+      if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
+      if depth == 0 { return i }
+      i = i + 1
+    }
+    return i
+  }
+
+  // Insert copy(cond->cond) at the head of instructions for a block that contains branch(cond=R)
+  // Returns new JSON text (string). Tolerant: if copy already present before branch, no-op.
+  ensure_cond(mjson) {
+    if mjson == null { return "" }
+    local blocks_key = "\"blocks\":["
+    local pb = me._index_of_from(mjson, blocks_key, 0)
+    local used_bk_len = blocks_key.length()
+    if pb < 0 { blocks_key = "\\\"blocks\\\":["  pb = me._index_of_from(mjson, blocks_key, 0)  used_bk_len = blocks_key.length() }
+    if pb < 0 { return mjson }
+    local blocks_start = pb + used_bk_len
+    local blocks_end = me._seek_array_end(mjson, blocks_start)
+    if blocks_end <= blocks_start { return mjson }
+    local head = mjson.substring(0, blocks_start)
+    local arr = mjson.substring(blocks_start, blocks_end)
+    local tail = mjson.substring(blocks_end, mjson.length())
+
+    // Rebuild blocks array with potential edits
+    local out_arr = ""
+    local pos = 0
+    local first = 1
+    loop(true) {
+      local bs = me._index_of_from(arr, "{", pos)
+      if bs < 0 { break }
+      local be = me._seek_obj_end(arr, bs)
+      if be <= bs { break }
+      local block = arr.substring(bs, be)
+
+      // Locate instructions array within block
+      local ik = me._index_of_from(block, "\"instructions\":[", 0)
+        if ik < 0 { ik = me._index_of_from(block, "\\\"instructions\\\":[", 0) }
+      if ik >= 0 {
+        local instr_start = ik + 16
+        local instr_end = me._seek_array_end(block, instr_start)
+        if instr_end > instr_start {
+          local instr_seg = block.substring(instr_start, instr_end)
+          // Find branch and cond
+          local pbranch = me._index_of_from(instr_seg, "\"op\":\"branch\"", 0)
+          local escaped_mode = 0
+          if pbranch < 0 { pbranch = me._index_of_from(instr_seg, "\\\"op\\\":\\\"branch\\\"", 0)  if pbranch >= 0 { escaped_mode = 1 } }
+          if pbranch >= 0 {
+            local pat_plain = "\"cond\":"
+            local pat_esc = "\\\"cond\\\":"
+            local pc = me._index_of_from(instr_seg, pat_plain, pbranch)
+            local used_pat_len = pat_plain.length()
+            if pc < 0 { pc = me._index_of_from(instr_seg, pat_esc, pbranch)  used_pat_len = pat_esc.length() }
+            if pc >= 0 {
+              local cond_txt = me._read_digits(instr_seg, pc + used_pat_len)
+              if cond_txt != "" {
+                local cond = JsonFragBox._str_to_int(cond_txt)
+                local has_copy = 0
+                if instr_seg.substring(0, pbranch).indexOf("\"op\":\"copy\"") >= 0 { has_copy = 1 }
+                if has_copy == 0 { if instr_seg.substring(0, pbranch).indexOf("\\\"op\\\":\\\"copy\\\"") >= 0 { has_copy = 1 } }
+                if has_copy == 0 {
+                  local copy_node = "{\"op\":\"copy\",\"dst\":" + me._int_to_str(cond) + ",\"src\":" + me._int_to_str(cond) + "}"
+                  if escaped_mode == 1 { copy_node = "{\\\"op\\\":\\\"copy\\\",\\\"dst\\\":" + me._int_to_str(cond) + ",\\\"src\\\":" + me._int_to_str(cond) + "}" }
+                  local sep = ""
+                  if instr_seg.length() > 0 { sep = "," }
+                  instr_seg = copy_node + sep + instr_seg
+                  block = block.substring(0, instr_start) + instr_seg + block.substring(instr_end, block.length())
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if first == 0 { out_arr = out_arr + "," }
+      out_arr = out_arr + block
+      first = 0
+      pos = be
+    }
+    local out = head + out_arr + tail
+    return out
+  }
+}

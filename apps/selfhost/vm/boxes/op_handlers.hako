@@ -1,6 +1,6 @@
 // op_handlers.hako — OpHandlersBox
 // Minimal handlers for const/compare/ret etc. with loose JSON key parsing.
-
+// Prefer logical module names to avoid file-path using in strict profiles
 static box OpHandlersBox {
   _tprint(msg) { print(msg) }
 
@@ -58,19 +58,15 @@ static box OpHandlersBox {
   }
 
   _find_kv_int(seg, key) {
-    local pat1 = "\"" + key + "\":"
-    local v = me._find_int_in(seg, pat1)
-    if v != null { return v }
-    local pat2 = "\"" + key + "\":"
-    return me._find_int_in(seg, pat2)
+    // pattern: "key":<num>
+    local pat = "\"" + key + "\":"
+    return me._find_int_in(seg, pat)
   }
 
   _find_kv_str(seg, key) {
-    local pat1 = "\"" + key + "\":\""
-    local s = me._find_str_in(seg, pat1)
-    if s != "" { return s }
-    local pat2 = "\"" + key + "\":\""
-    return me._find_str_in(seg, pat2)
+    // pattern: "key":"..."
+    local pat = "\"" + key + "\":\""
+    return me._find_str_in(seg, pat)
   }
 
   _load_reg(regs, id) {
@@ -93,49 +89,59 @@ static box OpHandlersBox {
   }
 
   handle_const(seg, regs) {
+    // Prefer internal scanner to avoid resolver differences in strict profiles
     local dst = me._find_kv_int(seg, "dst")
     if dst == null { return }
-    // Try tolerant parses: direct value or nested {type:i64,value:N}
+    // Try direct value first
     local val = me._find_kv_int(seg, "value")
     if val == null {
-      // explicit nested pattern first (avoids catching preceding keys)
-      val = me._find_int_in(seg, "\"value\":{\"type\":\"i64\",\"value\":")
-      if val == null {
-        local inner = me._find_int_in(seg, "\"value\":")
-        if inner != null { val = inner } else { val = 0 }
+      // Nested pattern: "value":{"type":"i64","value":N}
+      local pat = "\"value\":{\"type\":\"i64\",\"value\":"
+      local p = seg.indexOf(pat)
+      if p >= 0 {
+        // Minimal digit read (inline)
+        local i = p + pat.length()
+        local out = ""
+        loop(true) {
+          local ch = seg.substring(i, i+1)
+          if ch == "" { break }
+          if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+        }
+        if out != "" { val = me._str_to_int(out) }
       }
     }
+    if val == null { val = 0 }
     regs.set("" + dst, val)
   }
 
   handle_compare(seg, regs) {
-    local kind = me._find_kv_str(seg, "cmp")
-    me._tprint("[op_handlers] seg.head=" + seg.substring(0, seg.length() < 80 ? seg.length() : 80))
-    local probe = seg.indexOf("cmp")
-    me._tprint("[op_handlers] probe cmp index=" + (""+probe))
-    if kind == "" {
-      // Fallback parse for kind: locate after cmp:
-      local p = seg.indexOf("\"cmp\"")
-      if p >= 0 {
-        local c = seg.indexOf(":", p)
-        if c > p {
-          local qs = seg.indexOf("\"", c)
-          if qs > c {
-            local qe = seg.indexOf("\"", qs+1)
-            if qe > qs { kind = seg.substring(qs+1, qe) }
-          }
-        }
-      }
-      if kind == "" { kind = me._map_cmp_symbol(me._find_kv_str(seg, "operation")) }
-    }
-    local lhs = me._find_kv_int(seg, "lhs")
-    local rhs = me._find_kv_int(seg, "rhs")
-    local dst = me._find_kv_int(seg, "dst")
+    local kind = JsonFragBox.get_str(seg, "cmp")
+    if kind == "" { kind = me._map_cmp_symbol(JsonFragBox.get_str(seg, "operation")) }
+    local lhs = JsonFragBox.get_int(seg, "lhs")
+    local rhs = JsonFragBox.get_int(seg, "rhs")
+    local dst = JsonFragBox.get_int(seg, "dst")
+    if lhs == null || rhs == null { return }
+    local a = me._load_reg(regs, lhs)
+    local b = me._load_reg(regs, rhs)
+    local r = me._eval_cmp(kind, a, b)
+    regs.set("" + dst, r)
+  }
+
+  handle_binop(seg, regs) {
+    // Minimal Add/Sub/Mul/Div/Mod for selfhost Mini‑VM tests
+    local kind = JsonFragBox.get_str(seg, "op_kind")
+    local lhs = JsonFragBox.get_int(seg, "lhs")
+    local rhs = JsonFragBox.get_int(seg, "rhs")
+    local dst = JsonFragBox.get_int(seg, "dst")
     if lhs == null || rhs == null || dst == null { return }
     local a = me._load_reg(regs, lhs)
     local b = me._load_reg(regs, rhs)
-    me._tprint("[op_handlers] cmp kind=" + kind + " a=" + (""+a) + " b=" + (""+b))
-    local r = me._eval_cmp(kind, a, b)
-    regs.set("" + dst, r)
+    local out = 0
+    if kind == "Add" { out = a + b }
+    else if kind == "Sub" { out = a - b }
+    else if kind == "Mul" { out = a * b }
+    else if kind == "Div" { if b == 0 { out = 0 } else { out = a / b } }
+    else if kind == "Mod" { if b == 0 { out = 0 } else { out = a % b } }
+    regs.set("" + dst, out)
   }
 }

@@ -4,6 +4,7 @@ use super::{
 use crate::mir::{BasicBlockId, MirFunction, MirInstruction, ValueId};
 use std::collections::HashMap;
 use super::super::ast::{StmtV0, CatchV0};
+use crate::mir::phi_core::if_phi::PhiMergeOps;
 
 pub(super) fn lower_try_stmt(
     f: &mut MirFunction,
@@ -282,9 +283,17 @@ pub(super) fn lower_try_stmt(
             phi_entries.push((dst, inputs));
             merged_vars.insert(name.clone(), dst);
         }
-        // フェーズM.2: PHI統一処理（no_phi分岐削除）
-        if let Some(bb) = f.get_block_mut(finally_block) {
-            for (dst, inputs) in phi_entries {
+        // PHI emission at finally head (adapter when unify flag is ON)
+        if crate::config::env::jsonv0_phi_unify() {
+            use super::phi_adapter::BridgePhiOps;
+            let mut ops = BridgePhiOps::new(f, &mut merged_vars);
+            for (dst, mut inputs) in phi_entries {
+                inputs.sort_by_key(|(bbid, _)| bbid.0);
+                let _ = ops.emit_phi_at_block_start(finally_block, dst, inputs);
+            }
+        } else if let Some(bb) = f.get_block_mut(finally_block) {
+            for (dst, mut inputs) in phi_entries {
+                inputs.sort_by_key(|(bbid, _)| bbid.0);
                 bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs });
             }
         }
@@ -337,9 +346,17 @@ pub(super) fn lower_try_stmt(
             phi_entries.push((dst, inputs));
             merged_vars.insert(name.clone(), dst);
         }
-        // フェーズM.2: PHI統一処理（no_phi分岐削除）
-        if let Some(bb) = f.get_block_mut(exit_bb) {
-            for (dst, inputs) in phi_entries {
+        // PHI emission at exit (adapter when unify flag is ON)
+        if crate::config::env::jsonv0_phi_unify() {
+            use super::phi_adapter::BridgePhiOps;
+            let mut ops = BridgePhiOps::new(f, &mut merged_vars);
+            for (dst, mut inputs) in phi_entries {
+                inputs.sort_by_key(|(bbid, _)| bbid.0);
+                let _ = ops.emit_phi_at_block_start(exit_bb, dst, inputs);
+            }
+        } else if let Some(bb) = f.get_block_mut(exit_bb) {
+            for (dst, mut inputs) in phi_entries {
+                inputs.sort_by_key(|(bbid, _)| bbid.0);
                 bb.insert_instruction_after_phis(MirInstruction::Phi { dst, inputs });
             }
         }

@@ -1,0 +1,78 @@
+// step_runner.nyash — JSON v0 compare→branch を静的評価（Mini‑VM非依存）
+
+using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+
+static box StepRunnerBox {
+  // ブロック0の const 値を dst 指定で抽出（i64 前提の最小）
+  get_const_value(seg, dst) {
+    local pat = "{\"op\":\"const\",\"dst\":" + (""+dst)
+    local p = JsonFragBox.index_of_from(seg, pat, 0)
+    if p < 0 { return 0 }
+    local vpat = "\"value\":{\"type\":\"i64\",\"value\":"
+    local q = JsonFragBox.index_of_from(seg, vpat, p)
+    if q < 0 { return 0 }
+    local v = JsonFragBox.read_digits(seg, q + vpat.length())
+    if v == "" { return 0 }
+    return JsonFragBox._str_to_int(v)
+  }
+
+  // compare と branch を評価（lhs/rhs 即値で評価）
+  eval_branch_bool(mjson) {
+    local seg = JsonFragBox.block0_segment(mjson)
+    if seg == "" { return 0 }
+    // 即値
+    local v1 = me.get_const_value(seg, 1)
+    local v2 = me.get_const_value(seg, 2)
+    // 明示的に数値へ正規化
+    local iv1 = JsonFragBox._str_to_int("" + v1)
+    local iv2 = JsonFragBox._str_to_int("" + v2)
+    // compare 情報（compare オブジェクト起点で抽出）
+    local pcmp = JsonFragBox.index_of_from(seg, "\"op\":\"compare\"", 0)
+    if pcmp < 0 { return 0 }
+    local kind = JsonFragBox.get_str(seg.substring(pcmp, seg.length()), "cmp")
+    if kind == "" { kind = JsonFragBox.get_str(seg.substring(pcmp, seg.length()), "operation") }
+    // cond/dst（dst は compare から）
+    local pdst = JsonFragBox.index_of_from(seg, "\"dst\":", pcmp)
+    if pdst < 0 { return 0 }
+    local dst_str = JsonFragBox.read_digits(seg, pdst + 6)
+    local dst = JsonFragBox._str_to_int(dst_str)
+    local cond = JsonFragBox.get_int(seg, "cond")
+    if dst == null || cond == null { return 0 }
+    if cond != dst { return 0 }
+        // 評価（単純な if/else で分岐）
+    local r = 0
+    if kind == "Eq" { if iv1 == iv2 { r = 1 } else { r = 0 } }
+    else if kind == "Ne" { if iv1 != iv2 { r = 1 } else { r = 0 } }
+    else if kind == "Lt" { if iv1 < iv2 { r = 1 } else { r = 0 } }
+    else if kind == "Le" { if iv1 <= iv2 { r = 1 } else { r = 0 } }
+    else if kind == "Gt" {
+      // Robust Gt without relying on direct '>' operator
+      print("PATH Gt")
+      // fast path attempt
+      if iv1 > iv2 { r = 1 } else { r = 0 }
+      // fallback: increment from iv2 to iv1 with a step cap
+      if r == 0 {
+        local t = iv2
+        local cap = 0
+        loop(true) {
+          cap = cap + 1
+          if cap > 100000 { break }
+          t = t + 1
+          if t == iv1 { r = 1 break }
+          // stop early if we clearly passed iv1 by simple guard
+          if t == iv2 { break }
+        }
+      }
+    }
+    else if kind == "Ge" { if iv1 >= iv2 { r = 1 } else { r = 0 } }
+    print("DBG kind=" + kind)
+    print("DBG v1=" + (""+iv1))
+    print("DBG v2=" + (""+iv2))
+    print("DBG dst=" + (""+dst))
+    print("DBG cond=" + (""+cond))
+    print("DBG r=" + (""+r))
+return r
+  }
+
+  main(args) { return 0 }
+}

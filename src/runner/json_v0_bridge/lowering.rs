@@ -8,6 +8,7 @@ use std::collections::HashMap;
 // Split out merge/new_block helpers for readability (no behavior change)
 mod merge;
 use merge::{merge_var_maps, new_block};
+use super::convert_to_ast;
 // Feature splits (gradual extraction)
 pub(super) mod if_else;
 pub(super) mod loop_;
@@ -15,6 +16,7 @@ pub(super) mod try_catch;
 pub(super) mod expr;
 pub(super) mod ternary; // placeholder (not wired)
 pub(super) mod match_expr; // placeholder (not wired)
+pub(super) mod phi_adapter; // Bridge adapter for phi_core (gated)
 pub(super) mod throw_ctx; // thread-local ctx for Result-mode throw routing
 
 #[derive(Clone, Copy)]
@@ -180,6 +182,11 @@ pub(super) fn lower_program(prog: ProgramV0) -> Result<MirModule, String> {
     if prog.body.is_empty() {
         return Err("empty body".into());
     }
+    if crate::config::env::jsonv0_use_builder() {
+        let ast = convert_to_ast::convert_program_to_ast(prog)?;
+        let module = crate::mir::builder::entry::build_module_from_ast(ast)?;
+        return Ok(module);
+    }
     let env = BridgeEnv::load();
     let mut module = MirModule::new("ny_json_v0".into());
     let sig = FunctionSignature {
@@ -207,18 +214,12 @@ pub(super) fn lower_program(prog: ProgramV0) -> Result<MirModule, String> {
         let dst_id = f.next_value_id();
         if let Some(bb) = f.get_block_mut(target_bb) {
             if !bb.is_terminated() {
-                bb.add_instruction(MirInstruction::Const {
-                    dst: dst_id,
-                    value: ConstValue::Integer(0),
-                });
-                bb.set_terminator(MirInstruction::Return {
-                    value: Some(dst_id),
-                });
+                bb.add_instruction(MirInstruction::Const { dst: dst_id, value: ConstValue::Integer(0) });
+                bb.set_terminator(MirInstruction::Return { value: Some(dst_id) });
             }
         }
     }
     f.signature.return_type = MirType::Unknown;
-    // フェーズM.2: PHI後処理削除 - MirBuilder/LoopBuilderでPHI統一済み
     module.add_function(f);
     Ok(module)
 }

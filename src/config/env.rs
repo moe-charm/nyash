@@ -725,3 +725,21 @@ pub fn ny_compiler_use_tmp_only() -> bool {
         .as_deref()
         == Some("1")
 }
+
+/// Enable PHI unification in JSON v0 bridge using shared phi_core helpers.
+/// Default: ON (staged rollout complete). Disable with NYASH_JSONV0_PHI_UNIFY=0
+pub fn jsonv0_phi_unify() -> bool {
+    match std::env::var("NYASH_JSONV0_PHI_UNIFY").ok().as_deref() {
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
+    }
+}
+
+/// Use MirBuilder for JSON v0 lowering end-to-end (ProgramV0 → ASTNode → MirBuilder).
+/// Default: OFF. Enable with NYASH_JSONV0_USE_BUILDER=1
+pub fn jsonv0_use_builder() -> bool {
+    match std::env::var("NYASH_JSONV0_USE_BUILDER").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
+}
