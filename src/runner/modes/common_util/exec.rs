@@ -102,6 +102,11 @@ pub fn ny_llvmc_emit_exe_lib(
     let json_path = tmp_dir.join("nyash_cli_emit.json");
     crate::runner::mir_json_emit::emit_mir_json_for_harness(module, &json_path)
         .map_err(|e| format!("MIR JSON emit error: {}", e))?;
+
+    // Export externs registry (abstract spec) for harness/ny-llvmc
+    let extern_json_path = tmp_dir.join("externs_registry.json");
+    let _ = nyash_rust::mir::externs::registry::export_json(&extern_json_path);
+
     let ny_llvmc = resolve_ny_llvmc();
     if !ny_llvmc.exists() {
         return Err(hint_ny_llvmc_missing(&ny_llvmc));
@@ -113,6 +118,10 @@ pub fn ny_llvmc_emit_exe_lib(
         .arg("exe")
         .arg("--out")
         .arg(exe_out);
+
+    // Provide extern spec JSON to ny-llvmc (which passes to harness)
+    cmd.env("NYASH_EXTERN_SPEC_JSON", extern_json_path);
+
     let default_nyrt = std::env::var("NYASH_EMIT_EXE_NYRT")        .ok()        .or_else(|| std::env::var("NYASH_ROOT").ok().map(|r| format!("{}/target/release", r)))        .unwrap_or_else(|| "target/release".to_string());
     if let Some(dir) = nyrt_dir { cmd.arg("--nyrt").arg(dir); } else { cmd.arg("--nyrt").arg(default_nyrt); }
     if let Some(flags) = extra_libs { if !flags.trim().is_empty() { cmd.arg("--libs").arg(flags); } }

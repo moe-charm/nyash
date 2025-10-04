@@ -212,3 +212,5 @@ docs/research/papers-under-review/
 
 # Removed local analysis tool
 nekocode-rust/
+benchmarks/sum_loop_bench_c
+src/llvm_py/tmp/
