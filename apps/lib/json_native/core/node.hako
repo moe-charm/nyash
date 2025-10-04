@@ -167,12 +167,12 @@ static box JsonNode {
             return ArrayParseBox.parse_array(text)
         }
         
-        // オブジェクト（超シンプル版）
-        // 先に委譲（ObjectParseBox）: prelude安全
+        // オブジェクト（prelude安全の専用箱に委譲）
         if StringUtils.starts_with(text, "{") and StringUtils.ends_with(text, "}") {
             return ObjectParseBox.parse_object(text)
         }
-        if StringUtils.starts_with(text, "{") and StringUtils.ends_with(text, "}") {
+        /* removed fallback single-key object path (moved to ObjectParseBox) */
+        if false {
             // 単一キーの素朴なハンドリング: {"k":<num|string|bool|null>}
             local object_node = this.create_object()
             local inner = text.substring(1, text.length() - 1)
