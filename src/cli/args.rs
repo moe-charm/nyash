@@ -234,6 +234,17 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         std::env::set_var("NYASH_OPERATOR_BOX_ADD_ADOPT", "1");
         // VM: tolerate Void/BoxRef(VoidBox) in comparisons/binops (dev-only guard)
         std::env::set_var("NYASH_VM_TOLERATE_VOID", "1");
+        // Dev safety: cap VM instruction/block execution to prevent infinite loops
+        // Only set when unset so explicit env/CI remains authoritative.
+        let vm_fuel_missing_or_empty = std::env::var("NYASH_VM_MAX_INSTRUCTIONS").ok().map(|v| v.trim().is_empty()).unwrap_or(true);
+        if vm_fuel_missing_or_empty {
+            if let Some(fuel) = cfg.debug_fuel { std::env::set_var("NYASH_VM_MAX_INSTRUCTIONS", fuel.to_string()); }
+        }
+        let bb_fuel_missing_or_empty = std::env::var("NYASH_VM_MAX_BLOCK_EXEC").ok().map(|v| v.trim().is_empty()).unwrap_or(true);
+        if bb_fuel_missing_or_empty {
+            // Reasonable default aligned with smokes to detect tight loops per BB
+            std::env::set_var("NYASH_VM_MAX_BLOCK_EXEC", "200000");
+        }
         // Builder-call ALL is still OFF here to keep MIR shape stable.
     }
 

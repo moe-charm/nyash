@@ -98,73 +98,7 @@ impl MirInterpreter {
                 }
                 Ok(())
             }
-            ("nyrt.time", "now_ms") => {
-                let duration = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .unwrap_or_else(|_| Duration::from_millis(0));
-                let millis = duration.as_millis();
-                let clamped = if millis > i64::MAX as u128 {
-                    i64::MAX
-                } else {
-                    millis as i64
-                };
-                if let Some(d) = dst {
-                    self.regs.insert(d, VMValue::Integer(clamped));
-                }
-                Ok(())
-            }
-            ("nyrt.array", "size") => {
-                if args.is_empty() {
-                    return Err(VMError::InvalidInstruction(
-                        "nyrt.array.size requires receiver".into(),
-                    ));
-                }
-                let recv = self.reg_load(args[0])?;
-                let len = match recv {
-                    VMValue::BoxRef(b) => b
-                        .as_any()
-                        .downcast_ref::<crate::boxes::array::ArrayBox>()
-                        .map(|arr| arr.len() as i64)
-                        .ok_or_else(|| {
-                            VMError::TypeError("nyrt.array.size expects ArrayBox".into())
-                        })?,
-                    _ => {
-                        return Err(VMError::TypeError(
-                            "nyrt.array.size expects ArrayBox".into(),
-                        ))
-                    }
-                };
-                if let Some(d) = dst {
-                    self.regs.insert(d, VMValue::Integer(len));
-                }
-                Ok(())
-            }
-            ("nyrt.map", "size") => {
-                if args.is_empty() {
-                    return Err(VMError::InvalidInstruction(
-                        "nyrt.map.size requires receiver".into(),
-                    ));
-                }
-                let recv = self.reg_load(args[0])?;
-                let len = match recv {
-                    VMValue::BoxRef(b) => b
-                        .as_any()
-                        .downcast_ref::<crate::boxes::map_box::MapBox>()
-                        .map(|map| map.get_data().read().unwrap().len() as i64)
-                        .ok_or_else(|| {
-                            VMError::TypeError("nyrt.map.size expects MapBox".into())
-                        })?,
-                    _ => {
-                        return Err(VMError::TypeError(
-                            "nyrt.map.size expects MapBox".into(),
-                        ))
-                    }
-                };
-                if let Some(d) = dst {
-                    self.regs.insert(d, VMValue::Integer(len));
-                }
-                Ok(())
-            }
+            // Core externs are handled via VM ExternAdapter; unknown fall through
             ("env.runtime", "checkpoint") => {
                 crate::runtime::global_hooks::safepoint_and_poll();
                 if let Some(d) = dst {

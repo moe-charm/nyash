@@ -159,27 +159,26 @@ pub fn merge_modified_at_merge_with<O: PhiMergeOps>(
         if skip_var.map(|s| s == name).unwrap_or(false) {
             continue;
         }
-        let pre = match pre_if_snapshot.get(name.as_str()) {
-            Some(v) => *v,
-            None => continue,
-        };
-        let then_v = then_map_end.get(name.as_str()).copied().unwrap_or(pre);
-        let else_v = else_map_end_opt
+        let pre_opt = pre_if_snapshot.get(name.as_str()).copied();
+        let then_v_opt = then_map_end.get(name.as_str()).copied().or(pre_opt);
+        let else_v_opt = else_map_end_opt
             .as_ref()
             .and_then(|m| m.get(name.as_str()).copied())
-            .unwrap_or(pre);
+            .or(pre_opt);
 
         if trace {
             eprintln!(
-                "[if-trace] merge var={} pre={:?} then_v={:?} else_v={:?} then_pred={:?} else_pred={:?}",
-                name, pre, then_v, else_v, then_pred_opt, else_pred_opt
+                "[if-trace] merge var={} pre={:?} then_v_opt={:?} else_v_opt={:?} then_pred={:?} else_pred={:?}",
+                name, pre_opt, then_v_opt, else_v_opt, then_pred_opt, else_pred_opt
             );
         }
 
         // Build incoming pairs from reachable predecessors only
         let mut inputs: Vec<(crate::mir::BasicBlockId, ValueId)> = Vec::new();
-        if let Some(tp) = then_pred_opt { inputs.push((tp, then_v)); }
-        if let Some(ep) = else_pred_opt.or(Some(else_block)) { inputs.push((ep, else_v)); }
+        if let (Some(tp), Some(tv)) = (then_pred_opt, then_v_opt) { inputs.push((tp, tv)); }
+        if let Some(ev) = else_v_opt {
+            if let Some(ep) = else_pred_opt.or(Some(else_block)) { inputs.push((ep, ev)); }
+        }
 
         match inputs.len() {
             0 => {}

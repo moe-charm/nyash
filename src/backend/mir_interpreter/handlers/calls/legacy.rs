@@ -57,7 +57,27 @@ impl MirInterpreter {
             Callee::Global(func_name) => self.handle_callee_global(func_name, args),
             Callee::ModuleFunction(func_name) => self.handle_callee_module_function(func_name, args),
             Callee::Method { box_name, method, receiver, certainty: _, } => {
+                if method == &"birth" && crate::config::env::cli_verbose() && !crate::config::env::cli_quiet() {
+                    eprintln!("[vm-call] invoking birth() via method call");
+                }
                 if let Some(recv_id) = receiver {
+                    // Fail-Fast: forbid operations on unborn InstanceBox until birth()
+                    if method != "birth" {
+                        let is_instance = match self.reg_load(*recv_id).ok() {
+                            Some(VMValue::BoxRef(b)) => b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some(),
+                            _ => false,
+                        };
+                        if is_instance {
+                            let key = self.object_key_for(*recv_id);
+                            let seen_new = self.contracts_new.contains(&key);
+                            let seen_birth = self.contracts_born.contains(&key);
+                            if seen_new && !seen_birth {
+                                return Err(VMError::InvalidInstruction(
+                                    "operation on unborn instance (call birth() first)".to_string(),
+                                ));
+                            }
+                        }
+                    }
                     // LocalSSA for receiver: prefer materialized id within current block
                     let recv_id = self.materialize_recv_in_current_block(*recv_id);
                     // Primary: load receiver by id. If undefined, attempt a best-effort
@@ -240,6 +260,27 @@ impl MirInterpreter {
             other => other.to_string(),
         };
 
+        // Fail-Fast parity for legacy NameConst-based calls that target instance methods
+        if let Some((_, method_part)) = raw.split_once('.') {
+            let method_only = method_part.split('/').next().unwrap_or(method_part);
+            if method_only != "birth" {
+                if let Some(first) = args.get(0) {
+                    if let VMValue::BoxRef(b) = self.reg_load(*first)? {
+                        if b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                            let key = self.object_key_for(*first);
+                            let seen_new = self.contracts_new.contains(&key);
+                            let seen_birth = self.contracts_born.contains(&key);
+                            if seen_new && !seen_birth {
+                                return Err(VMError::InvalidInstruction(
+                                    "operation on unborn instance (call birth() first)".to_string(),
+                                ));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         // Dev-only: built-in fallback for JSON.stringify(any)
         // This short-circuits legacy resolution to provide a stable stringify during
         // declarative MIR bring-up without requiring a user-prelude.
@@ -341,6 +382,17 @@ impl MirInterpreter {
             );
         }
 
+        // If calling a class birth function directly (e.g., "MyBox.birth/1"),
+        // mark the first argument (receiver) as born before executing the body.
+        if let Some((_, mpart)) = fname.split_once('.') {
+            let method_only = mpart.split('/').next().unwrap_or(mpart);
+            if method_only == "birth" {
+                if let Some(first) = args.get(0) {
+                    self.lifecycle_contracts_birth(*first, args.len().saturating_sub(1));
+                }
+            }
+        }
+
         let callee =
             self.functions.get(&fname).cloned().ok_or_else(|| {
                 VMError::InvalidInstruction(format!("function not found: {}", fname))
@@ -349,6 +401,31 @@ impl MirInterpreter {
         let mut argv: Vec<VMValue> = Vec::new();
         for a in args {
             argv.push(self.reg_load(*a)?);
+        }
+        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+            let mut kinds: Vec<String> = Vec::new();
+            let mut preview: Vec<String> = Vec::new();
+            for v in argv.iter().take(2) {
+                kinds.push(crate::backend::abi_util::tag_of_vm(v).to_string());
+                preview.push(match v {
+                    VMValue::Integer(n) => format!("i64:{}", n),
+                    VMValue::Float(f) => format!("f64:{:.3}", f),
+                    VMValue::Bool(b) => format!("bool:{}", b),
+                    VMValue::String(ref s) => format!("str:'{}'", s),
+                    VMValue::Void => "void".into(),
+                    VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
+                    VMValue::Future(_) => "future".into(),
+                });
+            }
+            eprintln!(
+                "[vm-args] callee=Legacy:{} argc={} a0={:?} a1={:?} kind0={} kind1={}",
+                fname,
+                argv.len(),
+                preview.get(0),
+                preview.get(1),
+                kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
+                kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
+            );
         }
         let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
         let is_kw = fname.ends_with("JsonTokenizer.keyword_to_token_type/1");

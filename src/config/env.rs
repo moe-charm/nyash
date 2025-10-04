@@ -259,10 +259,16 @@ pub fn plugin_meta() -> bool {
 pub fn trace_effects() -> bool {
     std::env::var("NYASH_TRACE_EFFECTS").ok().as_deref() == Some("1")
 }
-/// Development-only: check plugin contracts and log violations.
-/// Default: OFF. Enable with NYASH_CHECK_CONTRACTS=1
+/// Development-time contracts checks (unborn guard instrumentation, arity logs).
+/// Default: ON. Disable explicitly with NYASH_CHECK_CONTRACTS=0|false|off
 pub fn check_contracts() -> bool {
-    std::env::var("NYASH_CHECK_CONTRACTS").ok().as_deref() == Some("1")
+    match std::env::var("NYASH_CHECK_CONTRACTS").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
 }
 /// Enforce capability declarations for plugin methods (dev/ci only).
 /// Default: OFF. Enable with NYASH_PLUGIN_CAPS_ENFORCE=1
@@ -718,4 +724,22 @@ pub fn ny_compiler_use_tmp_only() -> bool {
         .ok()
         .as_deref()
         == Some("1")
+}
+
+/// Enable PHI unification in JSON v0 bridge using shared phi_core helpers.
+/// Default: ON (staged rollout complete). Disable with NYASH_JSONV0_PHI_UNIFY=0
+pub fn jsonv0_phi_unify() -> bool {
+    match std::env::var("NYASH_JSONV0_PHI_UNIFY").ok().as_deref() {
+        Some("0") | Some("false") | Some("off") => false,
+        _ => true,
+    }
+}
+
+/// Use MirBuilder for JSON v0 lowering end-to-end (ProgramV0 → ASTNode → MirBuilder).
+/// Default: OFF. Enable with NYASH_JSONV0_USE_BUILDER=1
+pub fn jsonv0_use_builder() -> bool {
+    match std::env::var("NYASH_JSONV0_USE_BUILDER").ok().as_deref() {
+        Some("1") | Some("true") | Some("on") => true,
+        _ => false,
+    }
 }

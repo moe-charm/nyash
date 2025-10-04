@@ -4,15 +4,24 @@
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
+export SMOKES_DISABLE_PLUGIN_CHECKS=1
+export NYASH_DISABLE_PLUGINS=1
+export SMOKES_TIMEOUT_SEC=${SMOKES_TIMEOUT_SEC:-12}
+# For this micro‑VM scan, allow unlimited VM fuel to avoid interfering with Ny-level loops
+# Use generous VM fuel to avoid interfering with Ny-level loops
+export NYASH_VM_MAX_INSTRUCTIONS=2000000
+export NYASH_VM_MAX_BLOCK_EXEC=400000
+export NYASH_OPERATOR_BOX_COMPARE_ADOPT=0
+export NYASH_OPERATOR_BOX_PRELUDE=0
 require_env || exit 2
 preflight_plugins || exit 2
 
 # Enabled: Mini‑VM compare/ret segment tightened
 
-# Dev-time guards
-export NYASH_DEV=1
-export NYASH_ALLOW_USING_FILE=1
-export NYASH_BUILDER_REWRITE_INSTANCE=1
+# Minimal env (dev-heavy toggles disabled to keep VM work small)
+unset NYASH_DEV || true
+unset NYASH_OPERATOR_BOX_ALL || true
+export NYASH_ENABLE_USING=1
 
 # Build a tiny driver that uses MirVmMin and embeds JSON inline
 TMP_DIR="/tmp/selfhost_mir_m2_eq_true_vm_$$"
@@ -30,8 +39,19 @@ static box Main {
 }
 EOF
 
-output=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
-output=$(echo "$output" | tail -n 1 | tr -d '\r' | xargs)
+raw_output=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
+# Dev log gate: show full output (including using logs) when SMOKES_DEV_LOG=1
+if [ "${SMOKES_DEV_LOG:-0}" = "1" ]; then
+  echo "----- [DEV LOG] full output begin -----" >&2
+  echo "$raw_output" >&2
+  echo "----- [DEV LOG] full output end -----" >&2
+fi
+# Extract the last numeric line from output to avoid dev logs (e.g., [using/alias])
+output=$(echo "$raw_output" | awk '/^[[:space:]]*-?[0-9]+[[:space:]]*$/ { val=$0 } END { gsub(/\r/,"",val); gsub(/^[[:space:]]+|[[:space:]]+$/ , "", val); print val }')
+# Fallback: last non-bracketed line
+if [ -z "$output" ]; then
+  output=$(echo "$raw_output" | grep -v '^\[' | tail -n 1 | tr -d '\r' | xargs)
+fi
 
 expected="1"
 if [ "$output" = "$expected" ]; then

@@ -32,6 +32,27 @@ impl MirInterpreter {
         {
             let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
             let host = host.read().unwrap();
+            // Auto-birth no-op: if plugin does not provide birth, treat as success(void)
+            if method == "birth" {
+                let need_noop = match host.resolve_method(&p.box_type, method) {
+                    Ok(_) => false,
+                    Err(_) => true,
+                };
+                if need_noop {
+                    if std::env::var("NYASH_WARN_PLUGIN_NO_BIRTH").ok().as_deref() != Some("0")
+                        && !crate::config::env::cli_quiet()
+                    {
+                        eprintln!(
+                            "[plugin-loader] info: {} has no birth(); treating as no-op",
+                            p.box_type
+                        );
+                    }
+                    // Mark birth observed to satisfy unborn→alive transition
+                    self.lifecycle_contracts_birth(box_val, args.len());
+                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
+                    return Ok(());
+                }
+            }
             let mut argv: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
             for a in args {
                 argv.push(self.reg_load(*a)?.to_nyash_box());
@@ -96,6 +117,30 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Early lifecycle: if this is birth(), mark as born before any dispatch.
+        // This allows birth() implementation to call back into instance methods
+        // without tripping unborn guards in the same step.
+        if method == "birth" {
+            self.lifecycle_contracts_birth(box_val, args.len());
+        }
+        // Fail-Fast: forbid operations on unborn instances (user InstanceBox) until birth()
+        if method != "birth" {
+            // Only enforce for user InstanceBox (plugin/builtin may not require explicit birth)
+            let is_instance = match self.reg_load(box_val).ok() {
+                Some(VMValue::BoxRef(b)) => b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some(),
+                _ => false,
+            };
+            if is_instance {
+                let key = self.object_key_for(box_val);
+                let seen_new = self.contracts_new.contains(&key);
+                let seen_birth = self.contracts_born.contains(&key);
+                if seen_new && !seen_birth {
+                    return Err(VMError::InvalidInstruction(
+                        "operation on unborn instance (call birth() first)".to_string(),
+                    ));
+                }
+            }
+        }
         // Dev-only call trace for BoxCall (parity aid)
         let label = format!("BoxCall:{}", method);
         self.emit_call_trace_label(&label, args.len(), None);
@@ -130,6 +175,21 @@ impl MirInterpreter {
             if let VMValue::BoxRef(b) = self.reg_load(box_val)? {
                 if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
                     if let Some(d) = dst { self.regs.insert(d, VMValue::String("null".to_string())); }
+                    return Ok(());
+                }
+            }
+        }
+        // Birth no-op for builtin (non-plugin) boxes: if receiver is a BoxRef that is
+        // not PluginBoxV2 and no specific handler claimed it yet, treat birth() as
+        // successful no-op. Early lifecycle marking at entry already recorded born.
+        if method == "birth" {
+            if let VMValue::BoxRef(bx) = self.reg_load(box_val)? {
+                let is_plugin = bx
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                    .is_some();
+                if !is_plugin {
+                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
                     return Ok(());
                 }
             }
@@ -186,14 +246,14 @@ impl MirInterpreter {
                 user_instance_class = Some(inst.class_name.clone());
             }
         }
-        if user_instance_class.is_some() && !crate::config::env::vm_allow_user_instance_boxcall() {
+        if user_instance_class.is_some() && method != "birth" && !crate::config::env::vm_allow_user_instance_boxcall() {
             let cls = user_instance_class.unwrap();
             return Err(VMError::InvalidInstruction(format!(
                 "User Instance BoxCall disallowed in prod: {}.{} (enable builder rewrite)",
                 cls, method
             )));
         }
-        if user_instance_class.is_some() && crate::config::env::vm_allow_user_instance_boxcall() {
+        if user_instance_class.is_some() && method != "birth" && crate::config::env::vm_allow_user_instance_boxcall() {
             if crate::config::env::cli_verbose() && !crate::config::env::cli_quiet() {
                 eprintln!(
                     "[warn] dev fallback: user instance BoxCall {}.{} routed via VM instance-dispatch",
@@ -225,6 +285,18 @@ impl MirInterpreter {
                 eprintln!("[vm-trace] length dispatch handler=map_box");
             }
             return Ok(());
+        }
+        // Birth no-op for user InstanceBox when no class-defined birth() is available.
+        // Builder injects birth() after NewBox; absence of a user birth implementation
+        // should not be fatal. Birth is already recorded at entry; returning Void here
+        // mirrors plugin no-op behavior.
+        if method == "birth" {
+            if let VMValue::BoxRef(b) = self.reg_load(box_val)? {
+                if b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
+                    if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
+                    return Ok(());
+                }
+            }
         }
         // Narrow safety valve: if 'length' wasn't handled by any box-specific path,
         // treat it as 0 (avoids Lt on Void in common loops). This is a dev-time

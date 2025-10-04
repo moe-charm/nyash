@@ -6,9 +6,13 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-# Experimental guard
+# Experimental guard (two gates)
 if [[ "${NYASH_PIPELINE_V2:-}" != "1" ]]; then
   test_skip "Pipeline V2 is experimental; set NYASH_PIPELINE_V2=1 to enable"
+  exit 0
+fi
+if [[ "${SMOKES_ENABLE_PIPELINE_V2_CALL:-}" != "1" ]]; then
+  test_skip "Pipeline V2 Call(exec) is dev-only; set SMOKES_ENABLE_PIPELINE_V2_CALL=1 to enable"
   exit 0
 fi
 

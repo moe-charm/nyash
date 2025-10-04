@@ -266,16 +266,21 @@ impl super::MirBuilder {
             let f_id = crate::mir::builder::emission::constant::emit_bool(self, false);
             crate::mir::builder::emission::branch::emit_jump(self, rhs_join)?;
             let rhs_false_exit = self.current_block()?;
-            // join rhs result into a single bool
+            // join rhs result into a single bool（Helper 統一）
             self.start_new_block(rhs_join)?;
             let rhs_bool = self.value_gen.next();
-            let inputs = vec![(rhs_true_exit, t_id), (rhs_false_exit, f_id)];
-            if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-                crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
-            }
-            self.emit_instruction(MirInstruction::Phi { dst: rhs_bool, inputs })?;
-            self.value_types.insert(rhs_bool, MirType::Bool);
-            rhs_bool
+            let merged = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+                self,
+                Some(rhs_true_exit),
+                t_id,
+                Some(rhs_false_exit),
+                f_id,
+                rhs_false_exit,
+                Some("@sc_rhs"),
+                Some(rhs_bool),
+            )?.expect("rhs merge must produce a value");
+            self.value_types.insert(merged, MirType::Bool);
+            merged
         } else {
             let t_id = crate::mir::builder::emission::constant::emit_bool(self, true);
             t_id
@@ -345,19 +350,23 @@ impl super::MirBuilder {
         self.start_new_block(merge_block)?;
         self.push_if_merge(merge_block);
 
-        // Result PHI (bool)
-        let result_val = self.value_gen.next();
-        let inputs = vec![(then_exit_block, then_value_raw), (else_exit_block, else_value_raw)];
-        if let (Some(func), Some(cur_bb)) = (&self.current_function, self.current_block) {
-            crate::mir::phi_core::common::debug_verify_phi_inputs(func, cur_bb, &inputs);
-        }
-        self.emit_instruction(MirInstruction::Phi { dst: result_val, inputs })?;
+        // Result merge（Helper 統一）
+        let result_val_dst = self.value_gen.next();
+        let (then_pred_opt, else_pred_opt) =
+            super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
+        let result_val = super::phi_merge_helper::PhiMergeHelper::merge_var_value(
+            self,
+            then_pred_opt,
+            then_value_raw,
+            else_pred_opt,
+            else_value_raw,
+            else_exit_block,
+            Some("@sc_result"),
+            Some(result_val_dst),
+        )?.expect("if result must produce a value");
         self.value_types.insert(result_val, MirType::Bool);
 
         // Merge modified vars from both branches back into current scope
-        // Check if branches are terminated
-        let (then_pred_opt, else_pred_opt) =
-            super::phi_merge_helper::PhiMergeHelper::compute_if_merge_preds(self, then_exit_block, else_exit_block);
 
         self.merge_modified_vars(
             then_block,

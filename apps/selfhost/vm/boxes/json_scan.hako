@@ -1,0 +1,66 @@
+// json_scan.hako — JsonScanBox
+// Escape-aware JSON structure scanning helpers.
+
+using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
+
+static box JsonScanBox {
+  // Seek the end index (inclusive) of an object starting at `start` (must be '{').
+  seek_obj_end(text, start) {
+    if text == null { return -1 }
+    if start < 0 || start >= text.length() { return -1 }
+    if text.substring(start, start+1) != "{" { return -1 }
+    local n = text.length()
+    local depth = 0
+    local i = start
+    local in_str = 0
+    loop (i < n) {
+      local ch = text.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0  i = i + 1  continue }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "{" { depth = depth + 1 }
+      if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // Seek the end index (inclusive) of an array starting at `start` (must be '[').
+  seek_array_end(text, start) {
+    if text == null { return -1 }
+    if start < 0 || start >= text.length() { return -1 }
+    if text.substring(start, start+1) != "[" { return -1 }
+    local n = text.length()
+    local depth = 0
+    local i = start
+    local in_str = 0
+    loop (i < n) {
+      local ch = text.substring(i, i+1)
+      if in_str == 1 {
+        if ch == "\\" { i = i + 2  continue }
+        if ch == "\"" { in_str = 0  i = i + 1  continue }
+        i = i + 1
+        continue
+      }
+      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "[" { depth = depth + 1 }
+      if ch == "]" { depth = depth - 1  if depth == 0 { return i } }
+      i = i + 1
+    }
+    return -1
+  }
+
+  // Search for either plain or escaped key pattern starting at `pos`.
+  find_key_dual(text, plain, escaped, pos) {
+    if text == null { return -1 }
+    if pos < 0 { pos = 0 }
+    local p = text.indexOf(plain, pos)
+    if p >= 0 { return p }
+    return text.indexOf(escaped, pos)
+  }
+}
+

@@ -25,6 +25,29 @@ if [ -z "${NYASH_ROOT:-}" ]; then
     export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
   fi
 fi
+# Ensure using resolver is enabled by default for smokes unless explicitly disabled
+if [ -z "${NYASH_ENABLE_USING:-}" ]; then
+  export NYASH_ENABLE_USING=1
+fi
+# Provide a minimal default modules mapping for selfhost Mini-VM smokes when unset
+if [ -z "${NYASH_MODULES:-}" ]; then
+  export NYASH_MODULES="selfhost.vm.mir_min=apps/selfhost/vm/boxes/mir_vm_min.hako"
+fi
+# Dev-friendly VM tolerance to avoid hard-stopping on Void during bring-up
+if [ -z "${NYASH_VM_TOLERATE_VOID:-}" ]; then
+  export NYASH_VM_TOLERATE_VOID=1
+fi
+# VM fuel/limits for smokes: enable conservative caps unless explicitly set by caller.
+if [ -z "${NYASH_VM_MAX_INSTRUCTIONS:-}" ]; then
+  export NYASH_VM_MAX_INSTRUCTIONS="${SMOKES_VM_MAX_INSTRUCTIONS:-1000000}"
+fi
+if [ -z "${NYASH_VM_MAX_BLOCK_EXEC:-}" ]; then
+  export NYASH_VM_MAX_BLOCK_EXEC="${SMOKES_VM_MAX_BLOCK_EXEC:-200000}"
+fi
+# Optional dev logs: enable resolver trace when requested
+if [ "${SMOKES_DEV_LOG:-0}" = "1" ]; then
+  export NYASH_RESOLVE_TRACE=1
+fi
 # Binary path detection: prefer hakorune → hako → nyash unless NYASH_BIN is set
 if [ -z "${NYASH_BIN:-}" ]; then
   for cand in "$NYASH_ROOT/target/release/hakorune" "$NYASH_ROOT/target/release/hako" "$NYASH_ROOT/target/release/nyash"; do
@@ -83,10 +106,11 @@ filter_noise() {
   | grep -v '^\{"ev":' \
       | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
       | sed -E 's/^❌ VM fallback error: *//' \
-      | grep -v '^\[warn\] dev verify: NewBox ' \
-      | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
-      | grep -v "plugins/nyash-array-plugin" \
-      | grep -v "plugins/nyash-map-plugin" \
+  | grep -v '^\[warn\] dev verify: NewBox ' \
+  | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
+  | grep -v '^\{"kind":"contracts_' \
+  | grep -v "plugins/nyash-array-plugin" \
+  | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
       | grep -v "cargo build -p nyash-string-plugin" \
       | grep -v "^\[plugin-loader\] backend=" \
@@ -137,6 +161,11 @@ require_env() {
 
 # プラグイン整合性チェック（必須）
 preflight_plugins() {
+    # Allow tests to opt-out explicitly
+    if [ "${SMOKES_DISABLE_PLUGIN_CHECKS:-0}" = "1" ]; then
+        log_warn "Plugin checks disabled for this smoke (SMOKES_DISABLE_PLUGIN_CHECKS=1)"
+        return 0
+    fi
     # Skip when plugins are explicitly disabled by environment
     if [ "${NYASH_DISABLE_PLUGINS:-0}" = "1" ] || [ "${NYASH_PLUGIN_POLICY:-}" = "off" ]; then
         log_warn "Plugins disabled via env; skipping plugin checks"
@@ -208,8 +237,13 @@ run_nyash_vm() {
         fi
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
-            "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
+            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+                timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        else
+            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+                "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        fi
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
@@ -220,8 +254,13 @@ run_nyash_vm() {
         fi
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
-        NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
-            "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
+            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+                timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        else
+            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+                "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
+        fi
         return ${PIPESTATUS[0]}
     fi
 }

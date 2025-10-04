@@ -6,6 +6,9 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+export NYASH_ENABLE_USING=1
+export NYASH_ALLOW_USING_FILE=1
+
 TMP_DIR="/tmp/selfhost_flow_runner_return_int_vm_$$"
 mkdir -p "$TMP_DIR"
 
@@ -16,7 +19,10 @@ static box Main {
   main() {
     // Minimal Stage‑1 JSON: Return(Int 42)
     local ast = "{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":42}}"
-    return FlowRunner.run_vm_min_from_ast(ast, 0, 1)
+    // Print the executed value explicitly for stable smoke output
+    local v = FlowRunner.run_vm_min_from_ast(ast, 0, 1)
+    print("" + v)
+    return 0
   }
 }
 NYEOF

@@ -121,9 +121,87 @@ Hakoruneで実行器書く
 - **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出
 - **直近TODO**:
-  1. branch/jump 最小生成（完了）
-  2. LocalSSA.ensure_cond 材化コピー（完了）
-  3. Mini‑VM 代表追加（If/Compare 代表、Loop カウンタ 代表 追加済み）
+  1. branch/jump 最小生成（完了✅）
+  2. LocalSSA.ensure_cond 材化コピー（完了✅）
+  3. Mini‑VM 代表追加（If/Compare 代表、Loop カウンタ 代表 追加済み✅）
+  4. **🔥 UsingResolverBox実装（最優先・未着手）** - 詳細は下記「using解決の2つの側面」参照
+
+#### **🔍 using解決の2つの側面（重要な洞察）**
+
+**結論**: usingなどの解決は**コンパイラー側のUsingResolverBox実装**が核心。Mini-VM側は既に設計完了！
+
+##### **A. Mini-VM側 = 既に解決済み！✅**
+- MIR JSONには**解決済みのCallee::ModuleFunction**が入る
+- VM側は`BoxCall`/`ExternCall`を機械的に実行するだけ
+- using解決は**不要**（名前解決は事前完了）
+- **現状**: M2/M3で完全動作中、追加実装不要
+
+##### **B. コンパイラー側 = これが残課題！🔥**
+```hako
+// これを解析してMIR生成する機能が未実装
+using "apps/lib/timer" as Timer
+using "apps/lib/array_ops" as Arr
+
+flow main() {
+    local t = Timer.now_ms()  // ← シンボル解決が必要
+    local a = Arr.map(...)    // ← モジュール関数解決が必要
+}
+```
+
+**必要な実装（3段階）**:
+
+1. **UsingResolverBox**（新規箱、優先度P2-A、見積もり1週間）
+   ```hako
+   static box UsingResolverBox {
+       modules: MapBox  // "Timer" -> "/abs/path/to/timer.hako"
+       symbols: MapBox  // "Timer.now_ms" -> Callee::ModuleFunction
+
+       resolve_using(path, alias) {
+           // using文を解析してmodules/symbolsに登録
+       }
+
+       get_module_path(alias) {
+           // "Timer" -> "/abs/path/to/timer.hako"
+       }
+   }
+   ```
+
+2. **NamespaceBox**（新規箱、優先度P2-B、見積もり5日）
+   ```hako
+   static box NamespaceBox {
+       resolve_call(namespace, method) {
+           // "Timer.now_ms" -> Callee::ModuleFunction
+           // UsingResolverBoxと連携
+       }
+
+       resolve_static_access(namespace, field) {
+           // "Config.VERSION" -> 静的フィールドアクセス
+       }
+   }
+   ```
+
+3. **Pipeline V2統合**（優先度P2-C、見積もり3日）
+   - CompareExtractBoxの前段階でusing解決
+   - 既存のLocalSSABoxと連携
+   - MIR生成時に`Callee::ModuleFunction`に変換
+
+**関心の分離の完璧さ（設計の優秀さ）** ⭐
+```
+┌─────────────────┬──────────────────┐
+│ コンパイラー側  │ Mini-VM側        │
+├─────────────────┼──────────────────┤
+│ using解決       │ 解決済みCallee   │
+│ 名前空間管理    │ 機械的実行       │
+│ シンボル解決    │ 型情報不要       │
+│ → 複雑          │ → シンプル       │
+└─────────────────┴──────────────────┘
+```
+**これがPhase 15.7設計の真の優秀さ！**
+
+Quick smokes from using/new依存削減の真の意味：
+- Mini-VM自体は**using不要で動く**（静的メソッド＋extern_call）
+- using解決は**コンパイラー側の責務**
+- **関心の分離**が完璧に実現されている！
 
 #### **P3: Known/Rewrite 統合 Stage‑1 の仕上げ（dev観測）**
 - 仕様は不変のまま、観測（resolve.try/choose / ssa.phi）と関数化の一貫性を高める
@@ -166,15 +244,157 @@ Hakoruneで実行器書く
 - EnvBox（候補）: get(name)/set(name,value) の最小。既定OFF; 影響範囲が広いので Box 境界で隔離。
 - FSBox（候補）: read_file(path)/write_file(path,data) の最小。Runner/サンドボックス方針の下で将来。
 
+## 📊 **進捗評価と残り作業（客観的評価・2025-10-03）**
+
+### **現在位置: 80%完成、残り20%（見積もり3-4週間）**
+
+```
+Phase 15.7進捗: ████████░░ 80%完成
+
+完了（80%）：
+✅ Mini-VM M3基盤（6命令動作実証）
+  - const, binop, compare, branch, jump, ret
+✅ Pipeline V2基礎実装
+  - CompareExtractBox, EmitCompareBox
+  - LocalSSABox導入済み
+  - MirJsonBuilderMin（JSON v0生成）
+✅ FlowRunner/JsonProgramBox
+  - FlowEntryBox（emit-only入口）
+  - Mini-VM実行薄箱
+✅ Quick smokes 172/172 PASS
+  - コア常在ルール達成
+  - プラグイン無効化対応
+✅ TimerBox実装完了
+  - nyrt.time.now_ms実装（VM/LLVM/WASM）
+✅ EffectResolver一元化導線
+
+残り20%（3-4週間）：
+🔲 UsingResolverBox実装（1週間）
+🔲 NamespaceBox実装（5日）
+🔲 Pipeline V2統合（using）（3日）
+🔲 Mini-VM命令拡張（2週間）
+  - newbox（2日・最重要）
+  - boxcall（2日・最重要）
+  - phi（2日）
+  - load/store（2日）
+  - externcall（1日）
+  - unaryop/typeop（2日）
+🔲 セルフホストループE2E（1週間）
+```
+
+### **作業分解（週別見積もり）**
+
+#### **Week 1: UsingResolver + Namespace実装**
+- Day 1-3: UsingResolverBox実装・テスト
+- Day 4-5: NamespaceBox実装・テスト
+- Day 6-7: Pipeline V2統合（using解決）
+
+#### **Week 2: Mini-VM命令拡張（最重要）**
+- Day 1-2: newbox実装（Box生成）
+- Day 3-4: boxcall実装（メソッド呼び出し）
+- Day 5-6: phi実装（SSA合流）
+- Day 7: load/store実装開始
+
+#### **Week 3: Mini-VM命令拡張（完了）**
+- Day 1-2: load/store実装完了
+- Day 3: externcall実装（print等）
+- Day 4-5: unaryop/typeop実装
+- Day 6-7: 統合テスト・スモークテスト整備
+
+#### **Week 4: セルフホストループE2E**
+- Day 1-2: .hakoソース→MIR JSON生成（コンパイラー）
+- Day 3-4: MIR JSON→実行（Mini-VM）
+- Day 5-6: パリティテスト（Rust VM vs Mini-VM）
+- Day 7: ブートストラップ達成！🎉
+
+### **達成基準（明確な終了条件）**
+
+✅ **Phase 15.7完了 = 以下すべて満たす**:
+1. UsingResolverBox/NamespaceBox動作
+2. Mini-VM 14命令すべて実装
+3. .hakoソース→MIR JSON→Mini-VM実行成功
+4. c0（Rustコンパイラ）→c1（Hakoruneコンパイラ）動作
+5. c1→c1'（自己コンパイル）成功
+6. Quick smokes 全PASS維持
+
 ## 🚀 **セルフホスティング実現への道筋**
+
+### 🔄 **セルフホストループの具体的4ステップ（詳細化）**
+
+```
+┌──────────────────────────────────────┐
+│ Step 1: .hako ソース解析             │
+│    ↓                                  │
+│ Step 2: MIR JSON生成（コンパイラ）   │
+│    ↓                                  │
+│ Step 3: MIR JSON実行（Mini-VM）      │
+│    ↓                                  │
+│ Step 4: 出力検証（パリティテスト）    │
+└──────────────────────────────────────┘
+```
+
+#### **Step 1: .hakoソース解析（Rust VMで実行）**
+- **入力**: `apps/selfhost-compiler/compiler.hako`
+- **処理**:
+  1. using文解析（UsingResolverBox）
+  2. 名前空間解決（NamespaceBox）
+  3. AST構築
+  4. シンボルテーブル構築
+- **出力**: 解決済みAST
+- **検証**: `HAKO_CLI_VERBOSE=1`で解決状況確認
+
+#### **Step 2: MIR JSON生成（コンパイラ）**
+- **入力**: 解決済みAST
+- **処理**:
+  1. Pipeline V2実行
+  2. CompareExtractBox/EmitCompareBox適用
+  3. LocalSSABox適用（材化コピー）
+  4. MirJsonBuilderMin実行
+- **出力**: `output.json`（JSON v0形式）
+- **検証**:
+  ```bash
+  ./target/release/hakorune --emit-mir-json output.json input.hkr
+  cat output.json | jq .  # 整形表示
+  ```
+
+#### **Step 3: MIR JSON実行（Mini-VM）**
+- **入力**: `output.json`
+- **処理**:
+  1. FlowEntryBox初期化
+  2. JsonProgramBox読み込み
+  3. FlowRunner実行
+  4. 命令順次実行（const/binop/compare/branch/jump/ret/newbox/boxcall/phi/load/store/externcall）
+- **出力**: 実行結果（標準出力/終了コード）
+- **検証**:
+  ```bash
+  HAKO_CLI_VERBOSE=1 ./target/release/hakorune \
+    apps/selfhost/vm/flow_runner.hako -- output.json
+  echo $?  # 終了コード確認
+  ```
+
+#### **Step 4: 出力検証（パリティテスト）**
+- **比較対象**:
+  1. Rust VM実行結果
+  2. Mini-VM実行結果
+  3. 期待値（テストケース）
+- **検証項目**:
+  - 標準出力一致
+  - 終了コード一致
+  - 実行トレース一致（`HAKO_VM_DUMP_MIR=1`）
+- **自動化**:
+  ```bash
+  # パリティテストスクリプト
+  tools/smokes/v2/run.sh --profile quick --filter "selfhost_parity_*"
+  ```
 
 ### 📅 **推奨実装順序（並行開発戦略）**
 
 #### **Week 1-2: Hakoruneコンパイラ MVP完成（P2優先）**
 - **Day 1-2**: branch/jump最小生成 ✅
 - **Day 3**: LocalSSA.ensure_cond最終化 ✅
-- **Day 4-7**: 基本構文完全対応（if/loop/call/method）
-- **Day 8-14**: match式サポート、using/namespace対応
+- **Day 4-7**: UsingResolverBox実装 🔥
+- **Day 8-10**: NamespaceBox実装 🔥
+- **Day 11-14**: Pipeline V2統合（using解決） 🔥
 
 #### **Week 3: 統合＋検証**
 - JSON v0完全出力
@@ -188,17 +408,35 @@ Hakoruneで実行器書く
 - 基本プログラム実行成功
 - **成果**: c0→c1→c1' 完全動作
 
-### 📊 **実装優先度マトリックス**
+### 📊 **実装優先度マトリックス（2025-10-03更新）**
 
-| 項目                   | 優先度   | 理由       | 実装時間 | 担当領域 |
-|----------------------|-------|----------|------|------|
-| branch/jump生成        | 🔴 P2 | 制御フロー必須  | 2日   | コンパイラ |
-| LocalSSA.ensure_cond | 🔴 P2 | 条件分岐安定化  | 1日   | コンパイラ |
-| Mini-VM M4（ループ）      | 🟡 P1 | セルフホスト必須 | 3日   | Mini-VM |
-| match式完全対応           | 🟡 P1 | 頻繁に使用    | 2日   | コンパイラ |
-| Mini-VM M5-M7        | 🟡 P1 | Box操作必須  | 4日   | Mini-VM |
-| 最適化パス                | 🟢 P3 | 性能向上     | 1週間  | コンパイラ |
-| エラーハンドリング            | 🟢 P3 | UX向上     | 3日   | コンパイラ |
+| 項目                   | 優先度   | ステータス | 理由       | 実装時間 | 担当領域 |
+|----------------------|-------|-------|----------|------|------|
+| branch/jump生成        | 🔴 P2 | ✅完了 | 制御フロー必須  | 2日   | コンパイラ |
+| LocalSSA.ensure_cond | 🔴 P2 | ✅完了 | 条件分岐安定化  | 1日   | コンパイラ |
+| **UsingResolverBox実装** | 🔴 P2-A | 🔥未着手 | **using解決の核心** | 1週間 | コンパイラ |
+| **NamespaceBox実装** | 🔴 P2-B | 🔥未着手 | 名前空間解決 | 5日 | コンパイラ |
+| **Pipeline V2統合（using）** | 🔴 P2-C | 🔥未着手 | using→MIR変換 | 3日 | コンパイラ |
+| **Mini-VM newbox実装** | 🟡 P1-A | 🔥未着手 | **Box生成（最重要！）** | 2日 | Mini-VM |
+| **Mini-VM boxcall実装** | 🟡 P1-B | 🔥未着手 | **メソッド呼び出し** | 2日 | Mini-VM |
+| Mini-VM phi実装 | 🟡 P1-C | 📝計画 | SSA合流 | 2日 | Mini-VM |
+| Mini-VM load/store実装 | 🟡 P1-D | 📝計画 | メモリアクセス | 2日 | Mini-VM |
+| Mini-VM externcall実装 | 🟡 P1-E | 📝計画 | print等外部呼び出し | 1日 | Mini-VM |
+| match式完全対応 | 🟡 P1-F | 📝計画 | 頻繁に使用 | 2日 | コンパイラ |
+| Mini-VM unaryop/typeop | 🟢 P3-A | 📝計画 | 単項演算・型操作 | 2日 | Mini-VM |
+| 最適化パス | 🟢 P3-B | 📝計画 | 性能向上 | 1週間 | コンパイラ |
+| エラーハンドリング | 🟢 P3-C | 📝計画 | UX向上 | 3日 | コンパイラ |
+
+**凡例**:
+- 🔴 P2: 最優先（セルフホスティング必須）
+- 🟡 P1: 高優先度（基本機能実装）
+- 🟢 P3: 中優先度（改善・UX向上）
+- ✅完了 / 🔥未着手 / 📝計画 / 🔄実装中
+
+**重要な優先順位**:
+1. **P2-A/B/C（using解決）**: これがないとモジュールシステムが動かない
+2. **P1-A/B（newbox/boxcall）**: これだけでほとんどの.hakoが動く
+3. **P1-C/D/E（phi/load/store/externcall）**: 完全動作に必要
 
 ### 🎯 **具体的な実装提案**
 

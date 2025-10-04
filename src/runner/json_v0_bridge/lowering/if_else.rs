@@ -49,16 +49,44 @@ pub(super) fn lower_if_stmt(
         (else_bb, base_vars.clone())
     };
     // PHI-off policy (edge-copy) is the default in Phase 15; enforce for stability
-    merge_var_maps(
-        f,
-        true,
-        merge_bb,
-        tend,
-        else_end_pred,
-        then_vars,
-        else_vars,
-        base_vars,
-        vars,
-    );
+    if crate::config::env::jsonv0_phi_unify() {
+        use crate::mir::phi_core::if_phi as phi;
+        use super::phi_adapter::BridgePhiOps;
+        let pre_if_snapshot = base_vars.clone();
+        let then_map_end = then_vars.clone();
+        let else_map_end_opt = Some(else_vars.clone());
+        // Reset first (closure will be no-op)
+        *vars = pre_if_snapshot.clone();
+        let mut ops = BridgePhiOps::new(f, vars);
+        let reset = || {};
+        let then_pred_opt = Some(tend);
+        let else_pred_opt = Some(else_end_pred);
+        let _ = phi::merge_with_reset_at_merge_with(
+            &mut ops,
+            merge_bb,
+            then_bb,
+            else_bb,
+            then_pred_opt,
+            else_pred_opt,
+            &pre_if_snapshot,
+            &then_map_end,
+            &else_map_end_opt,
+            reset,
+            None,
+        );
+    } else {
+        merge_var_maps(
+            f,
+            true,
+            merge_bb,
+            tend,
+            else_end_pred,
+            then_vars,
+            else_vars,
+            base_vars,
+            vars,
+        );
+    }
+
     Ok(merge_bb)
 }

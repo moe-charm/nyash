@@ -64,6 +64,14 @@ String and Numeric `+`
 - Other mixes are errors (dev: warn; prod: error) — keep it explicit（必要なら `str(x)` を使う）。
  - Enforce (dev flag): `NYASH_PLUS_MIX_ERROR=1`（既定は互換・OFF）
 
+String Literals
+- Normal: `"hello\nworld"` — interprets escapes: `\"`, `\\`, `\n`, `\t`, `\r`
+- Raw: `r"C:\path\file.txt"` — no escape interpretation (raw bytes)
+- Raw with quotes: `r#"He said "Hello""#` — use `#` delimiters (can nest: `r##"..."##`)
+- JSON processing: Use scanner boxes for robust parsing (escape-aware):
+  - `apps/selfhost/vm/boxes/string_scan.hako` — `find_unescaped()`, `scan_string_end()`
+  - `apps/selfhost/vm/boxes/json_scan.hako` — `seek_obj_end()`, `find_key_dual()` (plain/escaped)
+
 Blocks and Control
 - `if (cond) { ... } [else { ... }]`
 - `loop (cond) { ... }` — minimal loop form

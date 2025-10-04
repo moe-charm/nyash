@@ -232,13 +232,20 @@ impl super::MirBuilder {
                             let mut ok = false;
                             let mut j = idx + 1;
                             let mut last_const_name: Option<String> = None;
-                            while j < insns.len() && j <= idx + 3 {
+                            // Allow up to 4 ops ahead to tolerate a receiver copy (dst -> tmp) before birth()
+                            let mut recv_alias: Option<super::ValueId> = None;
+                            while j < insns.len() && j <= idx + 4 {
                                 match &insns[j] {
                                     MirInstruction::BoxCall { box_val, method, .. } => {
-                                        if method == "birth" && box_val == dst { ok = true; break; }
+                                        // accept birth on original dst or its immediate copy alias
+                                        let target = if let Some(a) = recv_alias { a } else { *dst };
+                                        if method == "birth" && *box_val == target { ok = true; break; }
                                     }
                                     MirInstruction::Const { value, .. } => {
                                         if let super::ConstValue::String(s) = value { last_const_name = Some(s.clone()); }
+                                    }
+                                    MirInstruction::Copy { dst: d, src: s } => {
+                                        if s == dst { recv_alias = Some(*d); }
                                     }
                                     MirInstruction::Call {  .. } => {
                                         // If immediately preceded by matching Const String, accept

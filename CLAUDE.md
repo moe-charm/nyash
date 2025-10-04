@@ -156,12 +156,20 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 
 **現在のフェーズ：Phase 15.8 (WASM実装)**
 
+### 🎊 **最新成果（2025-10-03）**
+- ✅ **Phase 15.5-15.8完了**: Core Box統一・MIR命令安定化・LLVM PHI安定化・型変換統一化
+- ✅ **MIR Builder2実装**: static box引数消失バグ回避（インスタンス版）
+- ✅ **Rust VMすけすけトレース実装**: 1命令/1行観測＋ステッパ機能
+- ✅ **VM Bug修正完了**: PHI predecessor判定バグ修正（3つのバグが1つの根本原因から）
+
 ### 🚀 **Phase 15戦略: Rust VM + LLVM 2本柱**
 ```
-【Rust VM】  開発・デバッグ・検証用（712行、高品質・型安全）
+【Rust VM】  開発・デバッグ・検証用（高速・型安全）
 【LLVM】     本番・最適化・配布用（Python/llvmlite、実証済み）
-【WASM】     Phase 15.8実験的（llvm_py拡張）
+【WASM】     Phase 15.8実験的（llvm_py拡張、call命令完全動作済み）
 ```
+
+📋 **詳細**: [Phase 15 INDEX](docs/development/roadmap/phases/phase-15/INDEX.md) | [CURRENT_TASK.md](CURRENT_TASK.md)
 
 ---
 
@@ -303,7 +311,97 @@ NYASH_LLVM_USE_HARNESS=1 ./target/release/hako --backend llvm program.nyash
 
 ---
 
-## 🔍 MIRデバッグ出力完全ガイド
+## 🔬 **Rust VM すけすけトレース（MVP実装済み！）** ⭐NEW
+
+### 🎯 **実行時1命令トレース**
+```bash
+# 基本トレース（フィルタ＋値表示、1命令/1行）
+HAKO_VM_TRACE="op=compare,binop,externcall,boxcall,call;regs=1;block=*" ./target/release/hakorune test.hkr
+
+# または
+NYASH_VM_TRACE="op=compare,binop;regs=1" ./target/release/hakorune test.hkr
+
+# 出力例:
+# [vm] bb=0 inst=2 binop kind=Add lhs=v%1(42) rhs=v%2(10) dst=v%3 → 52
+# [vm] bb=0 inst=3 boxcall recv=v%0(MapBox) method="set" args=[v%1,v%3] dst=v%4
+# [vm] bb=0 inst=4 compare kind=Gt lhs=v%1(6) rhs=v%2(3) dst=v%3 → 1
+```
+
+### 🛑 **ステッパ機能（対話デバッグ）**
+```bash
+# 1命令ずつ停止・実行
+HAKO_VM_STEP=1 ./target/release/hakorune test.hkr
+
+# 対話ブロック許可（stdin待機）
+HAKO_VM_STEP=1 HAKO_VM_STEP_ALLOW_BLOCK=1 ./target/release/hakorune test.hkr
+
+# プロンプト:
+# > [n]ext/[c]ontinue/[r]egisters/[q]uit?
+# n → 次の命令へ
+# c → 実行継続
+# r → レジスタ状態表示
+# q → 終了
+```
+
+### 🔍 **引数トレース（補助機能）**
+```bash
+# Global/ModuleFn/Legacy 経路の a0/a1 と種別を出力
+NYASH_VM_CALL_ARG_TRACE=1 ./target/release/hakorune test.hkr
+
+# 出力例:
+# [call_arg] Global: a0=v%1(42) a1=v%2(10)
+# [call_arg] ModuleFn: a0=v%3(MapBox) a1=null
+```
+
+### 📍 **実装場所**
+- トレース＆ステッパ: `src/backend/mir_interpreter/exec.rs:242, 386`
+- 引数トレース: `src/backend/mir_interpreter/handlers/calls/{function.rs,legacy.rs}`
+
+### 💡 **使用例（今回の static box 引数消失問題）**
+```bash
+# このトレースがあれば一瞬で発見できた：
+HAKO_VM_TRACE="op=boxcall;regs=1" ./target/release/hakorune emit_compare_test.hkr
+
+# 期待される出力:
+# [vm] boxcall MirJsonBuilderMin.start_module args=[v%3(null)]
+#                                                    ↑ ここで即座に「引数null」発見！
+```
+
+### 🚨 **重要：2つのトレースレイヤーを混同しない！**
+
+#### 📦 **Layer 1: Rust VMトレース（すけすけ機能）**
+```bash
+# ← これが「すけすけ」！Rust VM内部のMIR実行を観測
+export HAKO_VM_TRACE="op=boxcall,externcall;regs=1"
+export NYASH_DISABLE_PLUGINS=1
+./target/release/hakorune test.hkr 2>&1
+
+# 出力例:
+# [vm] bb=380 inst=1 boxcall boxcall method="length"
+# [vm] → v%12(267)
+```
+
+#### 📝 **Layer 2: Mini-VM内部ログ（_tprint）**
+```bash
+# Hakoruneスクリプトで書かれたMini-VM内部のprintログ
+# mir_vm_min.hako の _tprint() が出力
+
+# 普通のprint()なので、実行されれば自動で出る
+# （今回はMIRエラーで早期終了したため見えなかった）
+```
+
+#### ⚠️ **私（Claude）がよく混同するポイント**
+```
+❌ 間違い：「_tprintログを見るためにHAKO_VM_TRACEを使う」
+✅ 正解：
+  - HAKO_VM_TRACE = Rust VMの実行トレース（すけすけ）
+  - _tprint = Mini-VM内部のprintログ（Hakoruneスクリプトレベル）
+  - 別物！
+```
+
+---
+
+## 🔍 MIRデバッグ出力完全ガイド（必読！）
 
 ### 🎯 **確実にMIRを出力する方法**（優先順）
 

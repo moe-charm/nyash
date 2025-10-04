@@ -34,7 +34,7 @@ impl NyashRunner {
                     cleaned_code_owned = clean;
                     code_ref = &cleaned_code_owned;
                     if !paths.is_empty() && !use_ast {
-                        eprintln!("❌ using: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
+                        eprintln!("❌ Pipeline error: `using` resolution error: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
                         std::process::exit(1);
                     }
                     if use_ast && !paths.is_empty() {
@@ -49,7 +49,10 @@ impl NyashRunner {
                                     if let Some(alias) = alias_map.get(&canon) {
                                         match crate::runner::modes::common_util::resolve::alias_tools::rename_with_collision_guard(&ast, alias, &mut used_prefixed, &canon) {
                                             Ok(renamed) => prelude_asts.push(renamed),
-                                            Err(e) => { eprintln!("❌ using: {}", e); std::process::exit(1); }
+                                            Err(e) => {
+                                                eprintln!("❌ Pipeline error: `using` resolution error: {}", e);
+                                                std::process::exit(1);
+                                            }
                                         }
                                     } else {
                                         prelude_asts.push(ast);
@@ -61,7 +64,7 @@ impl NyashRunner {
                     }
                 }
                 Err(e) => {
-                    eprintln!("❌ {}", e);
+                    eprintln!("❌ Pipeline error: `using` resolution error: {}", e);
                     process::exit(1);
                 }
             }

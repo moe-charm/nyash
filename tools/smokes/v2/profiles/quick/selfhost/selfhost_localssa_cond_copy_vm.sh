@@ -13,7 +13,7 @@ TMP_DIR="/tmp/selfhost_localssa_cond_copy_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/builder/ssa/local.nyash" as LocalSSAMod
+using "apps/selfhost-compiler/builder/ssa/cond_inserter.hako" as CondInserter
 
 static box Main {
   main() {
@@ -26,10 +26,12 @@ static box Main {
     j = j + "{\"id\":1,\"instructions\":[{\"op\":\"branch\",\"cond\":1,\"then\":2,\"else\":3}]},"
     j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":1}]},"
     j = j + "{\"id\":3,\"instructions\":[{\"op\":\"ret\",\"value\":0}]}]}]}"
-    local out = LocalSSAMod.ensure_cond(j)
-    // simple contains check
+    local out = CondInserter.ensure_cond(j)
+    // simple contains check (both plain and escaped patterns)
     local has = 0
-    // JSON is stringified with escaped quotes (\"), so search for the escaped pattern
+    // plain JSON pattern
+    if out.indexOf("\"op\":\"copy\"") >= 0 { has = 1 }
+    // escaped JSON pattern (when JSON text is double-escaped)
     if out.indexOf("\\\"op\\\":\\\"copy\\\"") >= 0 { has = 1 }
     if has == 1 { print("copy:1") } else { print("copy:0") }
     return 0

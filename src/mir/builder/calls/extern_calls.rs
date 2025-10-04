@@ -7,6 +7,7 @@
 
 use crate::mir::{Effect, EffectMask};
 use crate::mir::externs::registry as extreg;
+use crate::mir::builder::effects::EffectResolverBox;
 
 /// Table-like spec for env.* methods
 /// Returns (iface_name, method_name, effects, returns_value)
@@ -143,30 +144,27 @@ pub fn parse_extern_name(name: &str) -> (String, String) {
 
 /// Determine effects for an external call
 pub fn compute_extern_effects(iface: &str, method: &str) -> EffectMask {
+    // Prefer unified resolver when enabled, then registry table, then legacy heuristics
+    let use_resolver = matches!(
+        std::env::var("NYASH_USE_EFFECT_RESOLVER").ok().as_deref(),
+        Some("1" | "true" | "on")
+    );
+    if use_resolver {
+        if let Some(eff) = EffectResolverBox::new(false).resolve_extern(iface, method) {
+            return eff;
+        }
+    }
     if let Some(eff) = extreg::effects_for(iface, method) {
         return eff;
     }
     match (iface, method) {
         // Runtime time source: monotonic millisecond timestamp (read-only)
-        ("nyrt.time", "now_ms") => {
-            // Treat as a read effect to prevent CSE from assuming purity but
-            // still allow safe reordering against pure ops.
-            EffectMask::READ
-        }
+        ("nyrt.time", "now_ms") => EffectMask::READ,
+        // Collections: size queries are read-only
         ("nyrt.array", "size") | ("nyrt.map", "size") => EffectMask::READ,
-        // Pure reads
-        (_, m) if m.starts_with("get") || m == "argv" || m == "env" => {
-            EffectMask::READ
-        }
-        // Control flow changes
-        (_, "exit") | (_, "panic") | (_, "throw") => {
-            EffectMask::IO.add(Effect::Control)
-        }
-        // Memory allocation
-        (_, m) if m.starts_with("new") || m.starts_with("create") => {
-            EffectMask::IO.add(Effect::Alloc)
-        }
-        // Default to I/O
+        // Control flow changes (explicit)
+        (_, "exit") | (_, "panic") | (_, "throw") => EffectMask::IO.add(Effect::Control),
+        // Default: conservative I/O
         _ => EffectMask::IO,
     }
 }

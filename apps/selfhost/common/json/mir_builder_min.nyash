@@ -8,6 +8,10 @@ static box MirJsonBuilderMin {
     st.set("buf", "")
     st.set("phase", 0)  // 0:init, 1:module, 2:function, 3:block, 4:insts, 5:closed
     st.set("first_inst", 1) // 1=true, next add_* is first item (no comma)
+    // Dual API: maintain minimal structured state in parallel（配列API用）
+    st.set("blocks", new ArrayBox())           // Array of { id, instructions:Array }
+    st.set("cur_block_index", -1)
+    st.set("fn_name", "")
     return st
   }
 
@@ -16,13 +20,11 @@ static box MirJsonBuilderMin {
   _set_buf(st, s) { st.set("buf", s) return st }
   _append(st, s) { local b = me._get_buf(st)  b = b + s  return me._set_buf(st, b) }
   _int_to_str(n) {
-    if n == 0 { return "0" }
-    // Handle negatives
-    if n < 0 {
-      local p = 0 - n
-      return "-" + me._int_to_str(p)
-    }
-    local v = n
+    // Accept both numeric and numeric-like string inputs.
+    // Normalize to i64 first.
+    local v = me._to_i64(n)
+    if v == 0 { return "0" }
+    if v < 0 { return "-" + me._int_to_str(0 - v) }
     local out = ""
     local digits = "0123456789"
     loop (v > 0) {
@@ -32,6 +34,33 @@ static box MirJsonBuilderMin {
       v = v / 10
     }
     return out
+  }
+  _to_i64(x) {
+    // If x is already numeric, arithmetic below will coerce. For strings, parse digits safely.
+    // Build string view
+    local s = "" + x
+    // Fast path: try arithmetic by forcing addition with 0
+    local y = x + 0
+    // If y != y then it's NaN-like, fallback to parse; Nyash doesn't have NaN, keep parse path anyway
+    // Strict parse from s
+    local i = 0
+    local neg = 0
+    if s.substring(0,1) == "-" { neg = 1  i = 1 }
+    local n = s.length()
+    if i >= n { return 0 }
+    local acc = 0
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch < "0" || ch > "9" { break }
+      // digit index in 0123456789
+      local ds = "0123456789"
+      local dpos = ds.indexOf(ch)
+      if dpos < 0 { break }
+      acc = acc * 10 + dpos
+      i = i + 1
+    }
+    if neg == 1 { return 0 - acc }
+    return acc
   }
   _quote(s) {
     if s == null { return "\"\"" }
@@ -74,11 +103,22 @@ static box MirJsonBuilderMin {
 
   // Public builder steps (pipeline-friendly: first arg is state)
   start_module(st) {
+    local has_buf = "no"
+    if st != null && st.has != null && st.has("buf") { has_buf = "yes" }
+    print("[DEBUG start_module] st.has(buf)=" + has_buf)
     st.set("phase", 1)
     return me._append(st, "{\"functions\":[")
   }
   start_function(st, name) {
+    local has_fn = "no"
+    if st != null && st.has != null && st.has("fn_name") { has_fn = "yes" }
+    print("[DEBUG start_function] name=" + name + " st.has(fn_name)=" + has_fn)
     st.set("phase", 2)
+    // Dual API: record function name and reset blocks
+    st.set("fn_name", name)
+    st.set("blocks", new ArrayBox())
+    st.set("cur_block_index", -1)
+    print("[DEBUG start_function] after set, st.get(fn_name)=" + st.get("fn_name"))
     // We support a single function in minimal builder
     local b = "{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
     return me._append(st, b)
@@ -86,6 +126,15 @@ static box MirJsonBuilderMin {
   start_block(st, id) {
     st.set("phase", 3)
     st.set("first_inst", 1)
+    // Dual API: create block record and append
+    {
+      local blk = new MapBox()
+      blk.set("id", id)
+      blk.set("instructions", new ArrayBox())
+      local blks = st.get("blocks")
+      blks.push(blk)
+      st.set("cur_block_index", blks.size() - 1)
+    }
     local b = "{\"id\":" + me._int_to_str(id) + ",\"instructions\":["
     return me._append(st, b)
   }
@@ -104,28 +153,35 @@ static box MirJsonBuilderMin {
     return me._append(st, ",")
   }
   add_const(st, dst, val) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"const\",\"dst\":" + me._int_to_str(dst) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(val) + "}}"
+    // Dual API: push structured inst
+    me._push_inst_map(st, { op:"const", dst:dst, value:{ type:"i64", value:val } })
     return me._append(st, b)
   }
   add_compare(st, kind, lhs, rhs, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"compare\",\"cmp\":" + me._quote(kind) + ",\"lhs\":" + me._int_to_str(lhs) + ",\"rhs\":" + me._int_to_str(rhs) + ",\"dst\":" + me._int_to_str(dst) + "}"
+    me._push_inst_map(st, { op:"compare", cmp:kind, lhs:lhs, rhs:rhs, dst:dst })
     return me._append(st, b)
   }
   add_binop(st, kind, lhs, rhs, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"binop\",\"op_kind\":" + me._quote(kind) + ",\"lhs\":" + me._int_to_str(lhs) + ",\"rhs\":" + me._int_to_str(rhs) + ",\"dst\":" + me._int_to_str(dst) + "}"
+    me._push_inst_map(st, { op:"binop", op_kind:kind, lhs:lhs, rhs:rhs, dst:dst })
     return me._append(st, b)
   }
   add_ret(st, val) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"ret\",\"value\":" + me._int_to_str(val) + "}"
+    me._push_inst_map(st, { op:"ret", value:val })
     return me._append(st, b)
   }
   add_call_ids(st, name, args_json_text, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"call\",\"name\":" + me._quote(name) + ",\"args\":" + args_json_text + ",\"dst\":" + me._int_to_str(dst) + "}"
+    // Note: structured path stores args as textual snapshot minimal (could be parsed later if needed)
+    me._push_inst_map(st, { op:"call", name:name, args_text:args_json_text, dst:dst })
     return me._append(st, b)
   }
   add_call_range(st, name, start, count, dst) {
@@ -133,15 +189,17 @@ static box MirJsonBuilderMin {
     return me.add_call_ids(st, name, arr, dst)
   }
   add_boxcall_range(st, method, recv_id, args_start, count, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local arr = me._ids_range_json(args_start, count)
     local b = "{\"op\":\"boxcall\",\"method\":" + me._quote(method) + ",\"recv\":" + me._int_to_str(recv_id) + ",\"args\":" + arr + ",\"dst\":" + me._int_to_str(dst) + "}"
+    me._push_inst_map(st, { op:"boxcall", method:method, recv:recv_id, args_text:arr, dst:dst })
     return me._append(st, b)
   }
   add_newbox_range(st, box_type, args_start, count, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local arr = me._ids_range_json(args_start, count)
     local b = "{\"op\":\"newbox\",\"box_type\":" + me._quote(box_type) + ",\"args\":" + arr + ",\"dst\":" + me._int_to_str(dst) + "}"
+    me._push_inst_map(st, { op:"newbox", box_type:box_type, args_text:arr, dst:dst })
     return me._append(st, b)
   }
   // --- JSON v1 (MirCall) helpers: experimental minimal emission ---
@@ -149,21 +207,24 @@ static box MirJsonBuilderMin {
     return me._ids_range_json(ids_start, count)
   }
   add_mir_call_global_ids(st, name, args_json_text, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     // {"op":"mir_call","dst":<d>,"callee":{"type":"Global","name":"..."},"args":[...]}
     local b = "{\"op\":\"mir_call\",\"dst\":" + me._int_to_str(dst) + ",\"callee\":{\"type\":\"Global\",\"name\":" + me._quote(name) + "},\"args\":" + args_json_text + "}"
+    me._push_inst_map(st, { op:"mir_call", dst:dst, callee:{ type:"Global", name:name }, args_text:args_json_text })
     return me._append(st, b)
   }
   add_mir_call_method_ids(st, method, recv_id, args_json_text, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     // {"op":"mir_call","dst":<d>,"callee":{"type":"Method","method":"m","receiver":<id>},"args":[...]}
     local b = "{\"op\":\"mir_call\",\"dst\":" + me._int_to_str(dst) + ",\"callee\":{\"type\":\"Method\",\"method\":" + me._quote(method) + ",\"receiver\":" + me._int_to_str(recv_id) + "},\"args\":" + args_json_text + "}"
+    me._push_inst_map(st, { op:"mir_call", dst:dst, callee:{ type:"Method", method:method, receiver:recv_id }, args_text:args_json_text })
     return me._append(st, b)
   }
   add_mir_call_constructor_ids(st, box_type, args_json_text, dst) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     // {"op":"mir_call","dst":<d>,"callee":{"type":"Constructor","box_type":"T"},"args":[...]}
     local b = "{\"op\":\"mir_call\",\"dst\":" + me._int_to_str(dst) + ",\"callee\":{\"type\":\"Constructor\",\"box_type\":" + me._quote(box_type) + "},\"args\":" + args_json_text + "}"
+    me._push_inst_map(st, { op:"mir_call", dst:dst, callee:{ type:"Constructor", box_type:box_type }, args_text:args_json_text })
     return me._append(st, b)
   }
   add_mir_call_global_range(st, name, start, count, dst) {
@@ -179,19 +240,23 @@ static box MirJsonBuilderMin {
     return me.add_mir_call_constructor_ids(st, box_type, arr, dst)
   }
   add_branch(st, cond, then_id, else_id) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"branch\",\"cond\":" + me._int_to_str(cond) + ",\"then\":" + me._int_to_str(then_id) + ",\"else\":" + me._int_to_str(else_id) + "}"
+    me._push_inst_map(st, { op:"branch", cond:cond, then:then_id, else_id:else_id })
     return me._append(st, b)
   }
   add_jump(st, target) {
-    me._comma_if_needed(st)
+    st = me._comma_if_needed(st)
     local b = "{\"op\":\"jump\",\"target\":" + me._int_to_str(target) + "}"
+    me._push_inst_map(st, { op:"jump", target:target })
     return me._append(st, b)
   }
   // Minimal: append a copy instruction (dst <- src)
   add_copy(st, dst, src) {
-    me._comma_if_needed(st)
-    local b = "{\"op\":\"copy\",\"dst\":" + me._int_to_str(dst) + ",\"src\":" + me._int_to_str(src) + "}"
+    st = me._comma_if_needed(st)
+    local node = { op:"copy", dst:dst, src:src }
+    me._push_inst_map(st, node)
+    local b = me._inst_json(node)
     return me._append(st, b)
   }
   end_all(st) {
@@ -200,4 +265,139 @@ static box MirJsonBuilderMin {
     return me._append(st, "]}]}]}")
   }
   to_string(st) { return me._get_buf(st) }
+
+  // ---- Dual API helpers (配列/構造体アクセス) ----
+  _cur_insts(st) {
+    if !st.has("blocks") { return null }
+    local blks = st.get("blocks")
+    if blks == null { return null }
+    local n = 0
+    if blks != null && blks.size != null { n = blks.size() } else { return null }
+    if n <= 0 { return null }
+    // Prefer explicit cur_block_index to avoid ambiguity
+    local idx = -1
+    if st.has("cur_block_index") { idx = st.get("cur_block_index") }
+    if idx == null { idx = -1 }
+    if idx < 0 || idx >= n { idx = n - 1 }
+    local blk = blks.get(idx)
+    if blk == null { return null }
+    return blk.get("instructions")
+  }
+  verify_builder_state(st) { return 0 }
+  // Opt-in verify/trace (builder state flags)
+  _verify_enabled(st) {
+    if st != null && st.has != null && st.has("verify") { return st.get("verify") }
+    return 0
+  }
+  _trace_enabled(st) {
+    if st != null && st.has != null && st.has("trace") { return st.get("trace") }
+    return 0
+  }
+  _push_inst(st, node) {
+    // central push with optional verify/trace
+    local before = 0
+    local insts0 = me._cur_insts(st)
+    if insts0 != null && insts0.size != null { before = insts0.size() }
+    // actual push
+    if insts0 == null || insts0.push == null { return }
+    insts0.push(node)
+    if me._verify_enabled(st) {
+      local after = 0
+      local insts1 = me._cur_insts(st)
+      if insts1 != null && insts1.size != null { after = insts1.size() }
+      if after != before + 1 { print("[builder-verify] size mismatch before=" + before + " after=" + after + " op=" + node.get("op")) }
+    }
+    if me._trace_enabled(st) { print("[builder-trace] push op=" + node.get("op")) }
+  }
+  _push_inst_map(st, node) { return me._push_inst(st, node) }
+
+  // Public toggles
+  enable_trace(st, on) { if on == null { on = 1 } st.set("trace", on) return st }
+  enable_verify(st, on) { if on == null { on = 1 } st.set("verify", on) return st }
+  // Public Dual API
+  get_current_instructions(st) { return me._cur_insts(st) }
+  get_blocks_array(st) { if st.has("blocks") { return st.get("blocks") } return null }
+  get_function_structure(st) {
+    local fndef = new MapBox()
+    local blks = me.get_blocks_array(st)
+    fndef.set("name", st.get("fn_name"))
+    fndef.set("params", new ArrayBox())
+    fndef.set("blocks", blks)
+    return fndef
+  }
+  emit_to_string(st) { return me.to_string(st) }
+
+  // Rebuild JSON text from structured blocks (配列→文字列)
+  _inst_json(node) {
+    if node == null { return "{}" }
+    local op = node.get("op")
+    if op == "const" {
+      return "{\"op\":\"const\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(node.get("value").get("value")) + "}}"
+    }
+    if op == "compare" {
+      return "{\"op\":\"compare\",\"cmp\":" + me._quote(node.get("cmp")) + ",\"lhs\":" + me._int_to_str(node.get("lhs")) + ",\"rhs\":" + me._int_to_str(node.get("rhs")) + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}"
+    }
+    if op == "binop" {
+      return "{\"op\":\"binop\",\"op_kind\":" + me._quote(node.get("op_kind")) + ",\"lhs\":" + me._int_to_str(node.get("lhs")) + ",\"rhs\":" + me._int_to_str(node.get("rhs")) + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}"
+    }
+    if op == "branch" {
+      return "{\"op\":\"branch\",\"cond\":" + me._int_to_str(node.get("cond")) + ",\"then\":" + me._int_to_str(node.get("then")) + ",\"else\":" + me._int_to_str(node.get("else_id")) + "}"
+    }
+    if op == "jump" {
+      return "{\"op\":\"jump\",\"target\":" + me._int_to_str(node.get("target")) + "}"
+    }
+    if op == "ret" {
+      return "{\"op\":\"ret\",\"value\":" + me._int_to_str(node.get("value")) + "}"
+    }
+    if op == "copy" {
+      return "{\"op\":\"copy\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"src\":" + me._int_to_str(node.get("src")) + "}"
+    }
+    // Fallbacks (call/boxcall/mir_call/newbox) — use prebuilt args_text where available
+    if op == "call" {
+      return "{\"op\":\"call\",\"name\":" + me._quote(node.get("name")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}"
+    }
+    if op == "boxcall" {
+      return "{\"op\":\"boxcall\",\"method\":" + me._quote(node.get("method")) + ",\"recv\":" + me._int_to_str(node.get("recv")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}"
+    }
+    if op == "newbox" {
+      return "{\"op\":\"newbox\",\"box_type\":" + me._quote(node.get("box_type")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}"
+    }
+    if op == "mir_call" {
+      // Minimal: callee map is not fully stringified here; keep existing text path for v1 use cases
+      return "{\"op\":\"mir_call\"}"
+    }
+    return "{}"
+  }
+  to_string_rebuild(st) {
+    // Serialize single-function module from blocks structure
+    local name = st.get("fn_name")
+    local blks = me.get_blocks_array(st)
+    local blks_size_str = "null"
+    if blks != null && blks.size != null { blks_size_str = me._int_to_str(blks.size()) }
+    print("[DEBUG rebuild] fn_name=" + name + " blks.size()=" + blks_size_str)
+    local out = "{\"functions\":[{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
+    local n = 0
+    if blks != null && blks.size != null { n = blks.size() }
+    print("[DEBUG rebuild] n=" + me._int_to_str(n))
+    local i = 0
+    loop (i < n) {
+      if i > 0 { out = out + "," }
+      local blk = blks.get(i)
+      local bid = blk.get("id")
+      out = out + "{\"id\":" + me._int_to_str(bid) + ",\"instructions\":["
+      local insts = blk.get("instructions")
+      local m = 0
+      if insts != null && insts.size != null { m = insts.size() }
+      local j = 0
+      loop (j < m) {
+        if j > 0 { out = out + "," }
+        out = out + me._inst_json(insts.get(j))
+        j = j + 1
+      }
+      out = out + "]}"
+      i = i + 1
+    }
+    out = out + "]}]}"
+    return out
+  }
 }

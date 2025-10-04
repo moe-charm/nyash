@@ -60,6 +60,15 @@ impl<'a> VarScope for MapVars<'a> {
                         box_type: env.me_class.clone(),
                         args: vec![],
                     });
+                    // Auto-birth for JSON bridge (uniform with Builder)
+                    bb.add_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: dst,
+                        method: "birth".into(),
+                        method_id: None,
+                        args: vec![],
+                        effects: EffectMask::READ,
+                    });
                 }
                 self.vars.insert(name.to_string(), dst);
                 Ok(Some(dst))
@@ -255,15 +264,21 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                 }
             }
             let out = f.next_value_id();
-            // フェーズM.2: PHI統一処理（no_phi分岐削除）
-            if let Some(bb) = f.get_block_mut(merge_bb) {
-                let mut inputs: Vec<(BasicBlockId, ValueId)> = vec![(fall_bb, cdst)];
-                if rhs_end != fall_bb {
-                    inputs.push((rhs_end, rval));
-                } else {
-                    inputs.push((fall_bb, rval));
-                }
-                inputs.sort_by_key(|(bbid, _)| bbid.0);
+            // PHI emission: adapter path when unify flag is ON, otherwise direct insert
+            let mut inputs: Vec<(BasicBlockId, ValueId)> = vec![(fall_bb, cdst)];
+            if rhs_end != fall_bb {
+                inputs.push((rhs_end, rval));
+            } else {
+                inputs.push((fall_bb, rval));
+            }
+            inputs.sort_by_key(|(bbid, _)| bbid.0);
+            if crate::config::env::jsonv0_phi_unify() {
+                use super::phi_adapter::BridgePhiOps;
+                use crate::mir::phi_core::if_phi::PhiMergeOps;
+                let mut dummy_vars = std::collections::HashMap::new();
+                let mut ops = BridgePhiOps::new(f, &mut dummy_vars);
+                let _ = ops.emit_phi_at_block_start(merge_bb, out, inputs);
+            } else if let Some(bb) = f.get_block_mut(merge_bb) {
                 bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs });
             }
             Ok((out, merge_bb))
@@ -276,6 +291,15 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                         dst: arr,
                         box_type: "ArrayBox".into(),
                         args: vec![],
+                    });
+                    // Auto-birth for array.of
+                    bb.add_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: arr,
+                        method: "birth".into(),
+                        method_id: None,
+                        args: vec![],
+                        effects: EffectMask::READ,
                     });
                 }
                 let mut cur = cur_bb;
@@ -303,6 +327,15 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
                         dst: mapv,
                         box_type: "MapBox".into(),
                         args: vec![],
+                    });
+                    // Auto-birth for map.of
+                    bb.add_instruction(MirInstruction::BoxCall {
+                        dst: None,
+                        box_val: mapv,
+                        method: "birth".into(),
+                        method_id: None,
+                        args: vec![],
+                        effects: EffectMask::READ,
                     });
                 }
                 let mut cur = cur_bb;
@@ -382,7 +415,16 @@ pub(super) fn lower_expr_with_scope<S: VarScope>(
             let (arg_ids, cur) = lower_args_with_scope(env, f, cur_bb, args, vars)?;
             let dst = f.next_value_id();
             if let Some(bb) = f.get_block_mut(cur) {
-                bb.add_instruction(MirInstruction::NewBox { dst, box_type: class.clone(), args: arg_ids });
+                bb.add_instruction(MirInstruction::NewBox { dst, box_type: class.clone(), args: arg_ids.clone() });
+                // Auto-birth for JSON bridge: call birth(dst, args...)
+                bb.add_instruction(MirInstruction::BoxCall {
+                    dst: None,
+                    box_val: dst,
+                    method: "birth".into(),
+                    method_id: None,
+                    args: arg_ids,
+                    effects: EffectMask::READ,
+                });
             }
             Ok((dst, cur))
         }

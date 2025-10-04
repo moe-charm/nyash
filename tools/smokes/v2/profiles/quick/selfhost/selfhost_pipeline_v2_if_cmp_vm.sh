@@ -6,9 +6,13 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-# Experimental guard: run only when explicitly enabled
+# Experimental guard: run only when explicitly enabled (two gates)
 if [[ "${NYASH_PIPELINE_V2:-}" != "1" ]]; then
   test_skip "Pipeline V2 is experimental; set NYASH_PIPELINE_V2=1 to enable"
+  exit 0
+fi
+if [[ "${SMOKES_ENABLE_PIPELINE_V2_IF:-}" != "1" ]]; then
+  test_skip "If(Compare) materialize is dev-only; set SMOKES_ENABLE_PIPELINE_V2_IF=1 to enable"
   exit 0
 fi
 
@@ -38,4 +42,3 @@ compare_outputs "$expected" "$out" "selfhost_pipeline_v2_if_cmp_vm" || { cd /; r
 
 rm -rf "$TMP_DIR"
 exit 0
-

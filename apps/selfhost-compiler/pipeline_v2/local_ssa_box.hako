@@ -62,6 +62,44 @@ static box LocalSSABox {
       return 0
     }
   }
+
+  // 新規: 定義直後に copy を挿入（安全・最小）
+  // - insts: ArrayBox of Map（ブロックの instructions）
+  // - src: 定義済みのレジスタID
+  // - dst: 新規に確保するレジスタID
+  // 見つかった定義の直後に {op:"copy", dst, src} を1つ挿入する。
+  // 見つからない場合は末尾に push（保守的）。
+  ensure_after_last_def_copy(insts, src, dst) {
+    if insts == null { return 1 }
+    if insts.size == null || insts.get == null || insts.set == null || insts.push == null { return 1 }
+    local n = insts.size()
+    local insert_at = n
+    // 探索: 最後に dst=src を定義した位置
+    local i = 0
+    loop (i < n) {
+      local ins = insts.get(i)
+      if ins != null {
+        local d = ins.get("dst")
+        if d != null && d == src { insert_at = i + 1 }
+      }
+      i = i + 1
+    }
+    local node = { op:"copy", dst: dst, src: src }
+    if insert_at >= n { insts.push(node)  return 0 }
+    // 1つ末尾に空きを作る（末尾要素を複製して押し出す）
+    if n > 0 {
+      insts.push(insts.get(n - 1))
+      local j = n - 1
+      loop (j >= insert_at) {
+        insts.set(j + 1, insts.get(j))
+        j = j - 1
+      }
+      insts.set(insert_at, node)
+      return 0
+    }
+    insts.push(node)
+    return 0
+  }
 }
 
 static box LocalSSAStub { main(args) { return 0 } }

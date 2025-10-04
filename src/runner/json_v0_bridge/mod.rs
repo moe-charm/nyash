@@ -1,6 +1,7 @@
 mod ast;
 mod lexer;
 mod lowering;
+mod convert_to_ast;
 
 use ast::{ProgramV0, StmtV0};
 use lowering::lower_program;

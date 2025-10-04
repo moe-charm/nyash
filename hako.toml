@@ -4,6 +4,8 @@
 NYASH_ENABLE_USING = "1"
 # Enable dev sugar preexpand for @ local alias (line-head) during parsing
 NYASH_DEV_AT_LOCAL = "1"
+# Enable contracts checks by default (unborn guard/diagnostics)
+NYASH_CHECK_CONTRACTS = "1"
 
 [using]
 paths = ["apps", "lib", "."]
@@ -32,6 +34,8 @@ selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.nyash"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.nyash"
+selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.nyash"
+selfhost.compiler.pipeline_v2.emit_compare = "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako"
 selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.hako"
 selfhost.vm.json = "apps/selfhost/common/json_adapter.hako"
 selfhost.vm.core = "apps/selfhost/vm/boxes/mini_vm_core.hako"
@@ -42,6 +46,8 @@ selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.hako"
 selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.hako"
 selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.hako"
 selfhost.vm.flow_runner = "apps/selfhost/vm/flow_runner.hako"
+selfhost.vm.scanner = "apps/selfhost/vm/boxes/instruction_scanner.hako"
+selfhost.vm.handlers = "apps/selfhost/vm/boxes/op_handlers.hako"
 selfhost.core.timer = "apps/core/timer/TimerBox.hako"
 selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
 
@@ -51,8 +57,8 @@ selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 # Temporary alias keys (migration aid; keys kept stable)
 selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
 selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
-selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.nyash"
-selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.nyash"
+selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
+selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]

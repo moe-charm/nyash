@@ -18,7 +18,26 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         }
     }
 
-    // Direct v0 bridge when requested via CLI/env
+    // Direct v0 bridge (raw JSON) when requested via env (dev-only)
+    if std::env::var("NYASH_JSON_V0_DIRECT").ok().as_deref() == Some("1") {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+        };
+        match json_v0_bridge::parse_json_v0_to_module(&code) {
+            Ok(module) => {
+                crate::cli_v!("🚀 Nyash MIR Interpreter - (json_v0 direct) Executing file: {} 🚀", filename);
+                runner.execute_mir_module(&module);
+                return;
+            }
+            Err(e) => {
+                eprintln!("❌ Direct JSON v0 parse error: {}", e);
+                process::exit(1);
+            }
+        }
+    }
+
+    // Direct v0 bridge when requested via CLI/env (source v0 mini-grammar)
     let groups = runner.config.as_groups();
     let use_ny_parser = groups.parser.parser_ny
         || std::env::var("NYASH_USE_NY_PARSER").ok().as_deref() == Some("1");

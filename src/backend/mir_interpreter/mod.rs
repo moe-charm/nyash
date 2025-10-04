@@ -38,6 +38,14 @@ pub struct MirInterpreter {
     pub(super) contracts_new: HashSet<u64>,
     pub(super) contracts_new_argv: HashMap<u64, usize>,
     pub(super) contracts_born: HashSet<u64>,
+    // Instruction fuel (opt-in). When Some(limit), the interpreter aborts once
+    // inst_count exceeds the limit. Defaults to None (unlimited) unless
+    // NYASH_VM_MAX_INSTRUCTIONS or HAKO_VM_MAX_INSTRUCTIONS is set.
+    pub(super) inst_count: usize,
+    pub(super) max_inst: Option<usize>,
+    // Basic block execution cap (opt-in): per-block execution counter.
+    pub(super) block_exec_count: HashMap<BasicBlockId, usize>,
+    pub(super) max_block_exec: Option<usize>,
 }
 
 impl MirInterpreter {
@@ -53,6 +61,20 @@ impl MirInterpreter {
             contracts_new: HashSet::new(),
             contracts_born: HashSet::new(),
             contracts_new_argv: HashMap::new(),
+            inst_count: 0,
+            max_inst: {
+                let primary = std::env::var("NYASH_VM_MAX_INSTRUCTIONS").ok();
+                let compat = std::env::var("HAKO_VM_MAX_INSTRUCTIONS").ok();
+                let raw = primary.or(compat);
+                raw.and_then(|s| s.parse::<usize>().ok())
+            },
+            block_exec_count: HashMap::new(),
+            max_block_exec: {
+                let primary = std::env::var("NYASH_VM_MAX_BLOCK_EXEC").ok();
+                let compat = std::env::var("HAKO_VM_MAX_BLOCK_EXEC").ok();
+                let raw = primary.or(compat);
+                raw.and_then(|s| s.parse::<usize>().ok())
+            },
         }
     }
 

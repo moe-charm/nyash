@@ -78,10 +78,16 @@ pub fn resolve_prelude_paths_profiled(
     }
     // Operator Boxes prelude injection（観測"常時ON"のため）
     // stringify/compare/add は常に注入（存在時）。その他（bitwise等）は ALL 指定時のみ。
+    // Opt-out for smokes/dev: set NYASH_OPERATOR_BOX_PRELUDE=0|off|false to skip injection.
+    let prelude_enabled = match std::env::var("NYASH_OPERATOR_BOX_PRELUDE").ok().as_deref() {
+        Some(v) if ["0","off","false"].contains(&v.to_ascii_lowercase().as_str()) => false,
+        _ => true,
+    };
     let opbox_all = std::env::var("NYASH_OPERATOR_BOX_ALL").ok().as_deref() == Some("1")
         || std::env::var("NYASH_BUILDER_OPERATOR_BOX_ALL_CALL").ok().as_deref() == Some("1");
 
-    if let Ok(root) = std::env::var("NYASH_ROOT") {
+    if prelude_enabled {
+      if let Ok(root) = std::env::var("NYASH_ROOT") {
         let must_have = [
             "apps/lib/std/operators/stringify.nyash",
             "apps/lib/std/operators/compare.nyash",
@@ -96,6 +102,7 @@ pub fn resolve_prelude_paths_profiled(
                 }
             }
         }
+      }
     }
     // Inject remaining arithmetic/bitwise/unary operator modules when ALL is requested
     if opbox_all {

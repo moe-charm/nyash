@@ -95,10 +95,30 @@ impl MirBuilder {
         method: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Lower arguments first
         let mut arg_values = Vec::new();
-        for arg in arguments {
-            arg_values.push(self.build_expression(arg)?);
+        for arg in arguments { arg_values.push(self.build_expression(arg)?); }
+
+        // Prefer static ModuleFunction when the current module defines it (BoxName.method/Arity)
+        if let Some(ref module) = self.current_module {
+            let func_name = format!("{}.{}{}", parent, method, format!("/{}", arg_values.len()));
+            if module.functions.contains_key(&func_name) {
+                let dst = self.value_gen.next();
+                let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &func_name)?;
+                self.emit_instruction(super::super::MirInstruction::Call {
+                    dst: Some(dst),
+                    func: fun_val,
+                    callee: Some(crate::mir::Callee::ModuleFunction(func_name.clone())),
+                    args: arg_values,
+                    effects: EffectMask::READ.add(Effect::ReadHeap),
+                })?;
+                // Minimal type/origin annotation when available
+                self.annotate_call_result_from_func_name(dst, &func_name);
+                return Ok(dst);
+            }
         }
+
+        // Fallback: treat as Box/Plugin call using parent as box type name string
         let parent_value = crate::mir::builder::emission::constant::emit_string(self, parent);
         let result_id = self.value_gen.next();
         self.emit_box_or_plugin_call(

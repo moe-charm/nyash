@@ -42,6 +42,9 @@ impl NyashRunner {
         if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
             use crate::runner::trace::log as tlog;
             if !crate::config::env::cli_quiet() {
+                tlog(format!("[using] ctx: paths:{} modules:{} aliases:{} packages:{}", using_paths.len(), pending_modules.len(), aliases.len(), packages.len()));
+            }
+            if std::env::var("NYASH_RESOLVE_DEBUG").ok().as_deref() == Some("1") {
                 tlog(format!("[using] ctx: paths={:?}", using_paths));
                 tlog(format!("[using] ctx: modules={:?}", pending_modules));
                 tlog(format!("[using] ctx: aliases={:?}", aliases));

@@ -43,6 +43,12 @@ Box layout
 - メンバ間の空行・コメントは許可。アノテーション（将来）もメンバ直前/行末で許可。
 - NG: 最初のメソッド以降に stored を追加すること（リンタ警告／厳格モードでエラー）。
 
+Lifecycle（birth/unborn）
+- 既定は auto‑birth。`new TypeBox(args)` は直後に `birth(args)` が自動実行される。
+- 詳細設定が必要な場合は `TypeBox.unborn().withXxx(...).birth()?` を使用。
+- `birth()` は冪等であるべき（2回目は no‑op）。失敗は Result で返し、フォールバックしない。
+- unborn 状態での set/get/call は Fail‑Fast（開発時は詳細メッセージ、製品時は簡潔）。
+
 良い例
 ```nyash
 box Employee {

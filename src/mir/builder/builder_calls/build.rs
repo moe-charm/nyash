@@ -417,6 +417,7 @@ impl MirBuilder {
         }
 
         if method == "now_ms" && arguments.is_empty() {
+            // Prefer direct extern when receiver is TimerBox (origin known)
             if self
                 .origin_get(object_value)
                 .map(|name| name == "TimerBox")
@@ -424,6 +425,9 @@ impl MirBuilder {
             {
                 return self.emit_timer_now_ms_call();
             }
+            // Fallback: for unknown receiver origins, route now_ms to extern timer
+            // This keeps semantics stable and avoids stub returns from script fallback.
+            return self.emit_timer_now_ms_call();
         }
 
         // 5. Handle TypeOp methods: value.is("Type") / value.as("Type")
@@ -438,6 +442,9 @@ impl MirBuilder {
 
     fn emit_timer_now_ms_call(&mut self) -> Result<ValueId, String> {
         let dst = self.value_gen.next();
+        if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[builder] extern timer now_ms emitted → ExternCall(nyrt.time.now_ms)");
+        }
         self.emit_instruction(MirInstruction::ExternCall {
             dst: Some(dst),
             iface_name: "nyrt.time".to_string(),

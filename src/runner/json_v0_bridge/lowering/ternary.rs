@@ -9,6 +9,7 @@ use crate::mir::{BasicBlockId, MirFunction, MirInstruction, ValueId};
 use super::super::ast::ExprV0;
 
 use super::expr::{lower_expr_with_scope, VarScope};
+use crate::mir::phi_core::if_phi::PhiMergeOps;
 
 #[allow(dead_code)]
 pub(super) fn lower_ternary_expr_with_scope<S: VarScope>(
@@ -44,8 +45,15 @@ pub(super) fn lower_ternary_expr_with_scope<S: VarScope>(
         }
     }
     let out = f.next_value_id();
-    // フェーズM.2: PHI統一処理（no_phi分岐削除）
-    if let Some(bb) = f.get_block_mut(merge_bb) {
+    // PHI emission: adapter path when unify flag is ON, otherwise direct insert
+    if crate::config::env::jsonv0_phi_unify() {
+        use super::phi_adapter::BridgePhiOps;
+        let mut dummy_vars: std::collections::HashMap<String, crate::mir::ValueId> = std::collections::HashMap::new();
+        let mut ops = BridgePhiOps::new(f, &mut dummy_vars);
+        let mut inputs = vec![(tend, tval), (eend, eval)];
+        inputs.sort_by_key(|(bbid, _)| bbid.0);
+        let _ = ops.emit_phi_at_block_start(merge_bb, out, inputs);
+    } else if let Some(bb) = f.get_block_mut(merge_bb) {
         let mut inputs = vec![(tend, tval), (eend, eval)];
         inputs.sort_by_key(|(bbid, _)| bbid.0);
         bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs });

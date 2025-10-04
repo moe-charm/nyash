@@ -8,27 +8,32 @@ DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 require_env || exit 2
 preflight_plugins || exit 2
 
-# Router をON（トレース任意）
+# Router をON（トレース任意） + コア常在ルール（プラグイン無効）
 export NYASH_USE_CALL_ROUTER=1
 export NYASH_CALL_ROUTER_TRACE=${NYASH_CALL_ROUTER_TRACE:-0}
+export NYASH_DISABLE_PLUGINS=1
+# TimerBox はコア解決を想定するが、環境差吸収のため明示モジュールも併用
 export NYASH_MODULES=selfhost.core.timer
 
 PROG=$(mktemp)
 cat >"$PROG" <<'NYASH'
-using selfhost.core.timer as TimerBox
-
+// コア常在ルール: new/using なし、静的呼び出しで確認
 static box Main {
   main() {
-    // Var 受け手
-    local t = new TimerBox()
-    local v1 = t.now_ms()
-    // Static 受け手
+    // 3 回取得して単調非減を確認（同値許容）。
+    local v1 = TimerBox.now_ms()
     local v2 = TimerBox.now_ms()
-    // 再度 Var 受け手（CSE抑止と単調性確認）
-    local v3 = t.now_ms()
-    print(v1)
-    print(v2)
-    print(v3)
+    if (v2 < v1) {
+      print("ng")
+      return 0
+    }
+    local v3 = TimerBox.now_ms()
+    if (v3 < v2) {
+      print("ng")
+      return 0
+    }
+    print("ok")
+    return 0
   }
 }
 NYASH
@@ -36,17 +41,8 @@ NYASH
 ensure_hako_toml
 OUT=$(run_nyash_vm "$PROG")
 
-# 出力3行の数値が単調非減（ミリ秒解像度のため同値も許容）
-V1=$(echo "$OUT" | sed -n '1p')
-V2=$(echo "$OUT" | sed -n '2p')
-V3=$(echo "$OUT" | sed -n '3p')
-
-[[ "$V1" =~ ^[0-9]+$ ]] || fail "v1 is not number: $V1"
-[[ "$V2" =~ ^[0-9]+$ ]] || fail "v2 is not number: $V2"
-[[ "$V3" =~ ^[0-9]+$ ]] || fail "v3 is not number: $V3"
-
-if [[ "$V2" -gt "$V3" ]]; then
-  fail "non‑monotonic: v2=$V2 v3=$V3"
+if [[ "$OUT" != "ok" ]]; then
+  fail "timer monotonic check failed: $OUT"
 fi
 
-pass
+pass "timer monotonic: ok"

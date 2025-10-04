@@ -1,6 +1,7 @@
 //! Match/expr-block lowering for JSON v0 bridge.
 
-use super::merge::new_block;
+use super::merge::{new_block, is_block_ends_with_return_or_throw};
+use crate::mir::phi_core::if_phi::PhiMergeOps;
 use super::BridgeEnv;
 use crate::mir::{BasicBlockId, CompareOp, ConstValue, MirFunction, MirInstruction, ValueId};
 use super::super::ast::{ExprV0, MatchArmV0};
@@ -53,7 +54,10 @@ pub(super) fn lower_match_expr_with_scope<S: VarScope>(
                 bb.set_terminator(MirInstruction::Jump { target: merge_bb });
             }
         }
-        phi_inputs.push((tend, tval));
+        // Skip PHI input if the arm ends with return/throw (unreachable to merge)
+        if !is_block_ends_with_return_or_throw(f, tend) {
+            phi_inputs.push((tend, tval));
+        }
 
         cur_dispatch = fall_bb;
     }
@@ -65,14 +69,21 @@ pub(super) fn lower_match_expr_with_scope<S: VarScope>(
             bb.set_terminator(MirInstruction::Jump { target: merge_bb });
         }
     }
-    phi_inputs.push((eend, eval));
+    if !is_block_ends_with_return_or_throw(f, eend) {
+        phi_inputs.push((eend, eval));
+    }
 
     // Merge result
     let out = f.next_value_id();
-    // フェーズM.2: PHI統一処理（no_phi分岐削除）
-    if let Some(bb) = f.get_block_mut(merge_bb) {
-        let mut inputs = phi_inputs;
-        inputs.sort_by_key(|(bbid, _)| bbid.0);
+    // Gate: if PHI unify is ON, use adapter emit; else insert directly (legacy)
+    let mut inputs = phi_inputs;
+    inputs.sort_by_key(|(bbid, _)| bbid.0);
+    if crate::config::env::jsonv0_phi_unify() {
+        use super::phi_adapter::BridgePhiOps;
+        let mut dummy_vars = std::collections::HashMap::new();
+        let mut ops = BridgePhiOps::new(f, &mut dummy_vars);
+        let _ = ops.emit_phi_at_block_start(merge_bb, out, inputs);
+    } else if let Some(bb) = f.get_block_mut(merge_bb) {
         bb.insert_instruction_after_phis(MirInstruction::Phi { dst: out, inputs });
     }
     Ok((out, merge_bb))
