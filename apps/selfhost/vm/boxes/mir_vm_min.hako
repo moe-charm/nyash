@@ -145,12 +145,15 @@ static box MirVmMin {
             local p = seg.indexOf(key)
             local vin = null
             if p >= 0 {
-              local i = p + key.length()
-              local n = seg.length()
+              // Limit scan to inside the values array boundaries
+              local arr_br = p + key.length() - 1  // points at '['
+              local i = arr_br + 1
+              local n = me._seek_array_end(seg, arr_br)
+              if n <= 0 { n = seg.length() }
               local guard = 0
               loop(i < n) {
                 guard = guard + 1
-                if guard > 10000 { break }
+                if guard > 512 { break }
                 local ob = seg.indexOf("{\"pred\":", i)
                 if ob < 0 { break }
                 local pred = JsonFragBox.get_int(seg.substring(ob, n), "pred")
@@ -161,7 +164,7 @@ static box MirVmMin {
                 }
                 local nx = seg.indexOf("}", ob)
                 if nx < 0 { break }
-                i = nx + 1
+                if nx + 1 <= i { i = i + 1 } else { i = nx + 1 }
               }
             } else {
               // Single form: {"pred":P,"value":V}
