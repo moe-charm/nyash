@@ -151,8 +151,8 @@ static box MirVmMin {
             local vin = null
             if p >= 0 {
               // Limit scan to inside the values array boundaries
-              local arr_br = p + key.length() - 1  // points at '['
-              me._tprint("[ERROR] phi arr_br="+me._int_to_str(arr_br))n              me._tprint("[ERROR] phi arr_br="+me._int_to_str(arr_br))'
+              local arr_br = p + key.length() - 1  // bracket start
+              me._tprint("[ERROR] phi arr_br="+me._int_to_str(arr_br))
               local i = arr_br + 1
               local n = me._seek_array_end(seg, arr_br)
               if n <= 0 { n = seg.length() }
