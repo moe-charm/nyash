@@ -34,6 +34,7 @@ impl NyashRunner {
                 self, &code2, filename,
             ) {
                 Ok((clean, paths, alias_pairs)) => {
+                    crate::runner::modes::common_util::resolve::register_aliases_in_modules_registry(&alias_pairs);
                     code2 = clean;
                     for (alias, _canon) in alias_pairs.iter() { alias_names.insert(alias.clone()); }
                     if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {

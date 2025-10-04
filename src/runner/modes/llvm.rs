@@ -31,6 +31,7 @@ impl NyashRunner {
                 self, &code, filename,
             ) {
                 Ok((clean, paths, alias_pairs)) => {
+                    crate::runner::modes::common_util::resolve::register_aliases_in_modules_registry(&alias_pairs);
                     cleaned_code_owned = clean;
                     code_ref = &cleaned_code_owned;
                     if !paths.is_empty() && !use_ast {
