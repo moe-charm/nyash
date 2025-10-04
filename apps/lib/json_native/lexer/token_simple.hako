@@ -1,0 +1,142 @@
+// JsonToken — 簡易版（現在のNyash制限内で動作）
+// 責務: JSONトークンの基本構造
+
+// 🌟 JSONトークン（Everything is Box）
+box JsonToken {
+    type: StringBox        // トークンタイプ
+    value: StringBox       // トークンの値
+    start: IntegerBox      // 開始位置
+    end: IntegerBox        // 終了位置
+    
+    birth(token_type, token_value, start_pos, end_pos) {
+        me.type = token_type
+        me.value = token_value
+        me.start = start_pos
+        me.end = end_pos
+    }
+    
+    // ===== アクセッサーメソッド =====
+    
+    get_type() { return me.type }
+    get_value() { return me.value }
+    get_start() { return me.start }
+    get_end() { return me.end }
+    
+    // ===== 判定メソッド（簡易版） =====
+    
+    is_literal() {
+        return me.type == "NULL" or me.type == "TRUE" or me.type == "FALSE" or me.type == "NUMBER" or me.type == "STRING"
+    }
+    
+    is_structural() {
+        return me.type == "LBRACE" or me.type == "RBRACE" or me.type == "LBRACKET" or me.type == "RBRACKET" or me.type == "COMMA" or me.type == "COLON"
+    }
+    
+    is_error() {
+        return me.type == "ERROR"
+    }
+    
+    is_eof() {
+        return me.type == "EOF"
+    }
+    
+    // ===== デバッグ用メソッド =====
+    
+    to_string() {
+        return me.type + "(" + me.value + ") at " + me.start + "-" + me.end
+    }
+}
+
+// 🏭 トークンファクトリー（簡易版）
+static box TokenFactory {
+    
+    // リテラル値トークン
+    create_null(start, end) {
+        return new JsonToken("NULL", "null", start, end)
+    }
+    
+    create_true(start, end) {
+        return new JsonToken("TRUE", "true", start, end)
+    }
+    
+    create_false(start, end) {
+        return new JsonToken("FALSE", "false", start, end)
+    }
+    
+    create_number(value, start, end) {
+        return new JsonToken("NUMBER", value, start, end)
+    }
+    
+    create_string(value, start, end) {
+        return new JsonToken("STRING", value, start, end)
+    }
+    
+    // 構造文字トークン
+    create_lbrace(start) {
+        return new JsonToken("LBRACE", "{", start, start + 1)
+    }
+    
+    create_rbrace(start) {
+        return new JsonToken("RBRACE", "}", start, start + 1)
+    }
+    
+    create_lbracket(start) {
+        return new JsonToken("LBRACKET", "[", start, start + 1)
+    }
+    
+    create_rbracket(start) {
+        return new JsonToken("RBRACKET", "]", start, start + 1)
+    }
+    
+    create_comma(start) {
+        return new JsonToken("COMMA", ",", start, start + 1)
+    }
+    
+    create_colon(start) {
+        return new JsonToken("COLON", ":", start, start + 1)
+    }
+    
+    // 制御トークン
+    create_eof(pos) {
+        return new JsonToken("EOF", "", pos, pos)
+    }
+    
+    create_error(message, start, end) {
+        return new JsonToken("ERROR", message, start, end)
+    }
+    
+    // ===== 文字からトークンタイプを判定 =====
+    
+    char_to_token_type(ch) {
+        if ch == "{" { return "LBRACE" }
+        if ch == "}" { return "RBRACE" }
+        if ch == "[" { return "LBRACKET" }
+        if ch == "]" { return "RBRACKET" }
+        if ch == "," { return "COMMA" }
+        if ch == ":" { return "COLON" }
+        return null
+    }
+    
+    // 文字が構造文字かどうか判定
+    is_structural_char(ch) {
+        return ch == "{" or ch == "}" or ch == "[" or ch == "]" or ch == "," or ch == ":"
+    }
+    
+    // 文字が空白かどうか判定
+    is_whitespace_char(ch) {
+        return ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    }
+    
+    // 文字が数値の開始文字かどうか判定
+    is_number_start_char(ch) {
+        return ch == "-" or (ch >= "0" and ch <= "9")
+    }
+    
+    // キーワードからトークンタイプを判定
+    keyword_to_token_type(keyword) {
+        if keyword == "null" { return "NULL" }
+        if keyword == "true" { return "TRUE" }
+        if keyword == "false" { return "FALSE" }
+        return null
+    }
+}

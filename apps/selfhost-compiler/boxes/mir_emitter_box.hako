@@ -3,7 +3,7 @@
 // Future: add Binary/Compare/ExternCall/BoxCall lowering incrementally.
 
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
-using "apps/lib/json_native/stringify.nyash" as JSON
+using "apps/lib/json_native/stringify.hako" as JSON
 
 static box MirEmitterBox {
   _index_of(hay, needle) { return hay.indexOf(needle) }

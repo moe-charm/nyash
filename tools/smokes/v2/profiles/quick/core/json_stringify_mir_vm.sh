@@ -20,7 +20,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using selfhost.vm.mir_min as MirVmMin
-using "apps/lib/json_native/stringify.nyash" as JSON
+using "apps/lib/json_native/stringify.hako" as JSON
 
 static box Main {
   main() {

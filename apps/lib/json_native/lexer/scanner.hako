@@ -1,0 +1,389 @@
+// JsonScanner — 文字レベルのスキャン（美しいモジュラー設計）
+// 責務: 文字単位での読み取り・位置管理・先読み機能
+
+// StringUtils dependency removed - using internal methods
+
+// 🔍 JSON文字スキャナー（Everything is Box）
+static box JsonScannerModule {
+    create_scanner(input_text) {
+        return new JsonScanner(input_text)
+    }
+}
+
+box JsonScanner {
+    text: StringBox        // 入力文字列
+    position: IntegerBox   // 現在位置
+    length: IntegerBox     // 文字列長
+    line: IntegerBox       // 現在行番号
+    column: IntegerBox     // 現在列番号
+    
+    birth(input_text) {
+        me.text = input_text
+        me.position = 0
+        me.length = input_text.length()
+        me.line = 1
+        me.column = 1
+    }
+
+    // Runtime-safe initializer (bypass constructor arg loss on some VM paths)
+    reset_text(input_text) {
+        me.text = input_text
+        me.position = 0
+        me.length = input_text.length()
+        me.line = 1
+        me.column = 1
+    }
+    
+    // ===== 基本読み取りメソッド =====
+    
+    // 現在文字を取得（EOF時は空文字列）
+    current() {
+        if me.position >= me.length {
+            return ""  // EOF
+        }
+        return me.text.substring(me.position, me.position + 1)
+    }
+    
+    // 次の文字を先読み（位置は移動しない）
+    peek() {
+        if me.position + 1 >= me.length {
+            return ""  // EOF
+        }
+        return me.text.substring(me.position + 1, me.position + 2)
+    }
+    
+    // n文字先を先読み
+    peek_at(offset) {
+        local pos = me.position + offset
+        if pos >= me.length {
+            return ""  // EOF
+        }
+        return me.text.substring(pos, pos + 1)
+    }
+    
+    // 現在位置から指定長の文字列を取得
+    substring(len) {
+        local end_pos = me.position + len
+        if end_pos > me.length {
+            end_pos = me.length
+        }
+        return me.text.substring(me.position, end_pos)
+    }
+    
+    // ===== 位置制御メソッド =====
+    
+    // 1文字進む
+    advance() {
+        if me.position < me.length {
+            local ch = me.current()
+            me.position = me.position + 1
+            
+            // 行番号・列番号の更新
+            if ch == "\n" {
+                me.line = me.line + 1
+                me.column = 1
+            } else {
+                me.column = me.column + 1
+            }
+            
+            return ch
+        }
+        return ""  // EOF
+    }
+    
+    // n文字進む
+    advance_by(n) {
+        local i = 0
+        loop(i < n) {
+            if me.is_eof() {
+                break
+            }
+            me.advance()
+            i = i + 1
+        }
+    }
+    
+    // 指定位置にジャンプ（行番号は再計算）
+    seek(pos) {
+        if pos < 0 {
+            pos = 0
+        }
+        if pos > me.length {
+            pos = me.length
+        }
+        
+        me.position = pos
+        me.recalculate_line_column()
+    }
+    
+    // ===== 状態チェックメソッド =====
+    
+    // EOFかどうか
+    is_eof() {
+        return me.position >= me.length
+    }
+    
+    // 残り文字数
+    remaining() {
+        return me.length - me.position
+    }
+    
+    // 現在位置を取得
+    get_position() {
+        return me.position
+    }
+    
+    get_line() {
+        return me.line
+    }
+    
+    get_column() {
+        return me.column
+    }
+    
+    // 空白文字判定（内蔵）
+    is_whitespace_char(ch) {
+        return ch == " " or ch == "\t" or ch == "\n" or ch == "\r"
+    }
+    
+    // 数字文字判定（内蔵）
+    is_digit_char(ch) {
+        return ch == "0" or ch == "1" or ch == "2" or ch == "3" or ch == "4" or ch == "5" or ch == "6" or ch == "7" or ch == "8" or ch == "9"
+    }
+
+    // 16進数字判定（内蔵）
+    is_hex_digit_char(ch) {
+        return me.is_digit_char(ch) or ch == "a" or ch == "b" or ch == "c" or ch == "d" or ch == "e" or ch == "f" or ch == "A" or ch == "B" or ch == "C" or ch == "D" or ch == "E" or ch == "F"
+    }
+
+    // 英字判定（内蔵）
+    is_alpha_char(ch) {
+        return (ch >= "a" and ch <= "z") or (ch >= "A" and ch <= "Z")
+    }
+
+    // 英数字 + 下線（識別子向け）
+    is_alphanumeric_or_underscore(ch) {
+        return me.is_alpha_char(ch) or me.is_digit_char(ch) or ch == "_"
+    }
+    
+    // ===== 高レベル読み取りメソッド =====
+    
+    // 空白をスキップ
+    skip_whitespace() {
+        loop(not me.is_eof()) {
+            local ch = me.current()
+            if not me.is_whitespace_char(ch) {
+                break
+            }
+            me.advance()
+        }
+    }
+    
+    // 指定文字列にマッチするかチェック（マッチしたら消費）
+    match_string(expected) {
+        if me.remaining() < expected.length() {
+            return false
+        }
+        
+        local actual = me.text.substring(me.position, me.position + expected.length())
+        if actual == expected {
+            me.advance_by(expected.length())
+            return true
+        }
+        return false
+    }
+    
+    // 指定文字列の先読みチェック（位置は移動しない）
+    starts_with(prefix) {
+        if me.remaining() < prefix.length() {
+            return false
+        }
+        
+        local actual = me.text.substring(me.position, me.position + prefix.length())
+        return actual == prefix
+    }
+    
+    // 条件を満たす間読み取り続ける
+    read_while(condition_fn) {
+        local start_pos = me.position
+        
+        loop(not me.is_eof()) {
+            local ch = me.current()
+            if not condition_fn(ch) {
+                break
+            }
+            me.advance()
+        }
+        
+        return me.text.substring(start_pos, me.position)
+    }
+
+    // 識別子を読み取り（英数字+アンダースコア）
+    read_identifier() {
+        local start_pos = me.position
+        if not me.is_alpha_char(me.current()) and me.current() != "_" {
+            return ""
+        }
+        loop(not me.is_eof() and me.is_alphanumeric_or_underscore(me.current())) {
+            me.advance()
+        }
+        return me.text.substring(start_pos, me.position)
+    }
+    
+    // 数値文字列を読み取り
+    read_number() {
+        local start_pos = me.position
+        
+        // マイナス符号
+        if me.current() == "-" {
+            me.advance()
+        }
+        
+        // 整数部分
+        if me.current() == "0" {
+            me.advance()
+            // 先頭0の直後に数字が続くのは無効（例: 01）
+            if me.is_digit_char(me.current()) {
+                return null
+            }
+        } else {
+            if me.is_digit_char(me.current()) {
+                loop(not me.is_eof() and me.is_digit_char(me.current())) {
+                    me.advance()
+                }
+            } else {
+                return null  // 無効な数値
+            }
+        }
+        
+        // 小数部分（オプション）
+        if me.current() == "." {
+            me.advance()
+            if not me.is_digit_char(me.current()) {
+                return null  // 無効な小数
+            }
+            loop(not me.is_eof() and me.is_digit_char(me.current())) {
+                me.advance()
+            }
+        }
+        
+        // 指数部分（オプション）
+        local ch = me.current()
+        if ch == "e" or ch == "E" {
+            me.advance()
+            ch = me.current()
+            if ch == "+" or ch == "-" {
+                me.advance()
+            }
+            if not me.is_digit_char(me.current()) {
+                return null  // 無効な指数
+            }
+            loop(not me.is_eof() and me.is_digit_char(me.current())) {
+                me.advance()
+            }
+        }
+        
+        return me.text.substring(start_pos, me.position)
+    }
+    
+    // 文字列リテラルを読み取り（クォート含む）
+    read_string_literal() {
+        local start_pos = me.position
+        
+        // 開始クォート
+        if me.current() != "\"" {
+            return null
+        }
+        me.advance()
+        
+        // 文字列内容
+        loop(not me.is_eof()) {
+            local ch = me.current()
+            
+            if ch == "\"" {
+                // 終了クォート
+                me.advance()
+                // Safety: literal must include both quotes → length >= 2
+                if me.position - start_pos < 2 {
+                    return null
+                }
+                return me.text.substring(start_pos, me.position)
+            } else {
+                if ch == "\\" {
+                    // エスケープシーケンス
+                    me.advance()
+                    if me.is_eof() {
+                        return null  // 不完全なエスケープ
+                    }
+                    
+                    local escaped = me.current()
+                    if escaped == "u" {
+                        // Unicode エスケープ \uXXXX
+                        me.advance()
+                        local i = 0
+                        loop(i < 4) {
+                            if me.is_eof() or not me.is_hex_digit_char(me.current()) {
+                                return null  // 無効なUnicodeエスケープ
+                            }
+                            me.advance()
+                            i = i + 1
+                        }
+                    } else {
+                        // 通常のエスケープ（\" \\ \/ \b \f \n \r \t のみ）
+                        if not (escaped == "\"" or escaped == "\\" or escaped == "/" or escaped == "b" or escaped == "f" or escaped == "n" or escaped == "r" or escaped == "t") {
+                            return null
+                        }
+                        me.advance()
+                    }
+                } else {
+                    if ch == "\n" or ch == "\r" {
+                        return null  // 文字列内の生の改行は無効
+                    }
+                    me.advance()
+                }
+            }
+        }
+        
+        return null  // 終了クォートが見つからない
+    }
+    
+    // ===== プライベートメソッド =====
+    
+    // 行番号・列番号を再計算（seek後に使用）
+    recalculate_line_column() {
+        me.line = 1
+        me.column = 1
+        
+        local i = 0
+        loop(i < me.position) {
+            local ch = me.text.substring(i, i + 1)
+            if ch == "\n" {
+                me.line = me.line + 1
+                me.column = 1
+            } else {
+                me.column = me.column + 1
+            }
+            i = i + 1
+        }
+    }
+    
+    // ===== デバッグメソッド =====
+    
+    get_context(radius) {
+        local start = me.position - radius
+        if start < 0 { start = 0 }
+        
+        local end = me.position + radius
+        if end > me.length { end = me.length }
+        
+        local before = me.text.substring(start, me.position)
+        local current = me.current()
+        local after = me.text.substring(me.position + 1, end)
+        
+        return before + "【" + current + "】" + after
+    }
+    
+    to_debug_string() {
+        return "Scanner{pos:" + me.position + "/" + me.length + ", line:" + me.line + ", col:" + me.column + ", context:'" + me.get_context(5) + "'}"
+    }
+}

@@ -19,7 +19,7 @@ TMP_DIR="/tmp/json_stringify_any_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/lib/json_native/stringify.nyash" as JSON
+using "apps/lib/json_native/stringify.hako" as JSON
 
 static box Main {
   main() {

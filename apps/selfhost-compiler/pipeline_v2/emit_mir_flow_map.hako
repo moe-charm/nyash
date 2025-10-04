@@ -1,4 +1,4 @@
-using "apps/lib/json_native/stringify.nyash" as JSON
+using "apps/lib/json_native/stringify.hako" as JSON
 
 flow EmitMirFlowMap {
   _i(n) { return n }
