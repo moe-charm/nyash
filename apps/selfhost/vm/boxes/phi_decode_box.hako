@@ -93,6 +93,9 @@ static box PhiDecodeBox {
     // dev: debug observe
     print("[phi_decode] seg="+seg)
     if pair != null { print("[phi_decode] pair0="+(""+pair.get(0))+" pair1="+(""+pair.get(1))) } else { print("[phi_decode] pair=null") }
+    // probe dst via JsonFragBox directly
+    local dd = JsonFragBox.get_int(seg, "dst")
+    print("[phi_decode] dd="+(""+dd))
     if pair != null {
       local d = pair.get(0)
       local v = pair.get(1)
