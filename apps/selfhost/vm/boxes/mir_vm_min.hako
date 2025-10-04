@@ -61,6 +61,7 @@ static box MirVmMin {
     local last_binop_dst = -1
     local last_binop_val = 0
     local bb = 0
+    local prev_bb = -1
     local steps = 0
     local max_steps = 200000
     loop(true){
@@ -146,6 +147,7 @@ static box MirVmMin {
           if c != null {
             if c == last_cmp_dst { cv = last_cmp_val } else { cv = me._load_reg(regs, c) }
           }
+          prev_bb = bb
           if cv != 0 { bb = t } else { bb = e }
           moved = 1
           scan_pos = obj_end
@@ -154,12 +156,26 @@ static box MirVmMin {
         else if op == "jump" {
           local tgt = JsonFragBox.get_int(seg, "target")
           if tgt == null { return 0 }
+          prev_bb = bb
           bb = tgt
           moved = 1
           scan_pos = obj_end
           break
         }
-        else if op == "ret" {
+                else if op == "phi" {
+          // Minimal PHI: support single incoming pair {pred:<bb>, value:<reg>} and set dst
+          // Note: For multiple incomings, this simplified decoder should be extended to select by prev_bb.
+          local dst = JsonFragBox.get_int(seg, "dst")
+          local pred = JsonFragBox.get_int(seg, "pred")
+          local vin = JsonFragBox.get_int(seg, "value")
+          if dst != null and vin != null {
+            if pred == null || pred == prev_bb || pred == 0 || prev_bb == -1 {
+              local vv = me._load_reg(regs, vin)
+              regs.set(""+dst, vv)
+            }
+          }
+        }
+else if op == "ret" {
           // Return resolution (Fail‑Fast policy)
           // 1) Compare result takes precedence when ret value equals last compare dst
           // 2) If the register has a defined value, return it
