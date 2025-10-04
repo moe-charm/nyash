@@ -144,7 +144,7 @@ static box MirVmMin {
           // Decode: prefer boxed decoder for values[], fallback to single-form inline
           local dst = null
           local vin = null
-          if seg.indexOf(""values":[") >= 0 {
+          if seg.indexOf("\"values\":[") >= 0 {
             local pair = PhiDecodeBox.decode(seg, prev_bb)
             if pair != null { dst = pair.get(0)  vin = pair.get(1) }
           } else {
