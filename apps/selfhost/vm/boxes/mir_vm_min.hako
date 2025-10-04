@@ -157,6 +157,7 @@ static box MirVmMin {
               local i = arr_br + 1
               local n = me._seek_array_end(seg, arr_br)
               me._tprint("[ERROR] phi scan="+seg.substring(i, n))
+              me._tprint("[ERROR] phi n="+me._int_to_str(n))
               if n <= 0 { n = seg.length() }
               local g = new GuardBox("phi_values", 512)
               loop(i < n) {
