@@ -1,0 +1,34 @@
+// Sum Loop Benchmark - ループ合計
+//
+// 目的: ループPHI性能測定・基本的なループ処理の速度
+// 期待値: sum(0..99999) = 4,999,950,000
+// 注意: PHI命令の性能測定に最適
+
+static box Main {
+    // ループで合計計算
+    sum_range(n) {
+        local sum, i
+
+        sum = 0
+        i = 0
+
+        loop(i < n) {
+            sum = sum + i
+            i = i + 1
+        }
+
+        return sum
+    }
+
+    main() {
+        local result
+
+        // sum(0..99999)を計算
+        // 期待値: 0 + 1 + 2 + ... + 99999 = 4,999,950,000
+        result = me.sum_range(100000)
+
+        print("Sum(0..99999) = " + result)
+
+        return result
+    }
+}

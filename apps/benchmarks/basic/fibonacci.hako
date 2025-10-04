@@ -1,0 +1,28 @@
+// Fibonacci Benchmark - フィボナッチ数列（再帰）
+//
+// 目的: 指数的再帰の性能測定・関数呼び出しオーバーヘッド
+// 期待値: fibonacci(30) = 832,040
+// 注意: 再帰版は遅い（意図的）、メモ化なし
+
+static box Main {
+    // フィボナッチ数列（再帰版・メモ化なし）
+    fibonacci(n) {
+        if n <= 1 {
+            return n
+        }
+        return me.fibonacci(n - 1) + me.fibonacci(n - 2)
+    }
+
+    main() {
+        local result
+
+        // fibonacci(30)を計算
+        // 再帰呼び出し回数: 約2,692,537回
+        // 期待値: 832,040
+        result = me.fibonacci(30)
+
+        print("Fibonacci(30) = " + result)
+
+        return result
+    }
+}
