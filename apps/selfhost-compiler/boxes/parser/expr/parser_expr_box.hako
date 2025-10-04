@@ -8,8 +8,7 @@ using "apps/selfhost-compiler/boxes/parser/expr/parser_literal_box.hako"
 
 static box ParserExprBox {
   parse_number2(src, i, ctx) {
-    local scan = new ParserNumberScanBox()
-    local pair = scan.scan_int(src, i)
+    local pair = ParserNumberScanBox.scan_int(src, i)
     local at = pair.lastIndexOf("@")
     local json = pair.substring(0, at)
     local pos = i
@@ -80,8 +79,7 @@ static box ParserExprBox {
     // Peek expression: delegate to ParserPeekBox
     if ctx.starts_with_kw(src, j, "peek") == 1 {
       j = j + 4
-      local peek = new ParserPeekBox()
-      return peek.parse(src, j, ctx)
+      return ParserPeekBox.parse(src, j, ctx)
     }
 
     local ch = src.substring(j, j+1)
@@ -103,14 +101,12 @@ static box ParserExprBox {
 
     // Map literal: delegate to ParserLiteralBox
     if ch == "{" {
-      local lit = new ParserLiteralBox()
-      return lit.parse_map(src, j, ctx)
+      return ParserLiteralBox.parse_map(src, j, ctx)
     }
 
     // Array literal: delegate to ParserLiteralBox
     if ch == "[" {
-      local lit = new ParserLiteralBox()
-      return lit.parse_array(src, j, ctx)
+      return ParserLiteralBox.parse_array(src, j, ctx)
     }
 
     // new Class(args)

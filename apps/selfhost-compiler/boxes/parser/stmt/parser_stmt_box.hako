@@ -103,33 +103,27 @@ static box ParserStmtBox {
 
     // Delegate to specialized boxes
     if ctx.starts_with_kw(src, j, "if") == 1 {
-      local ctrl = new ParserControlBox()
-      return ctrl.parse_if(src, j, stmt_start, ctx)
+      return ParserControlBox.parse_if(src, j, stmt_start, ctx)
     }
 
     if ctx.starts_with_kw(src, j, "loop") == 1 {
-      local ctrl = new ParserControlBox()
-      return ctrl.parse_loop(src, j, stmt_start, ctx)
+      return ParserControlBox.parse_loop(src, j, stmt_start, ctx)
     }
 
     if ctx.starts_with_kw(src, j, "break") == 1 {
-      local ctrl = new ParserControlBox()
-      return ctrl.parse_break(src, j, stmt_start, ctx)
+      return ParserControlBox.parse_break(src, j, stmt_start, ctx)
     }
 
     if ctx.starts_with_kw(src, j, "continue") == 1 {
-      local ctrl = new ParserControlBox()
-      return ctrl.parse_continue(src, j, stmt_start, ctx)
+      return ParserControlBox.parse_continue(src, j, stmt_start, ctx)
     }
 
     if ctx.starts_with_kw(src, j, "throw") == 1 {
-      local exc = new ParserExceptionBox()
-      return exc.parse_throw(src, j, stmt_start, ctx)
+      return ParserExceptionBox.parse_throw(src, j, stmt_start, ctx)
     }
 
     if ctx.starts_with_kw(src, j, "try") == 1 {
-      local exc = new ParserExceptionBox()
-      return exc.parse_try(src, j, stmt_start, ctx)
+      return ParserExceptionBox.parse_try(src, j, stmt_start, ctx)
     }
 
     // Fallback: expression or unknown token
