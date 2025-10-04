@@ -20,6 +20,7 @@ static box PhiDecodeBox {
     local dst = JsonFragBox.get_int(seg, "dst")
     local pred = JsonFragBox.get_int(seg, "pred")
     local vin = JsonFragBox.get_int(seg, "value")
+    print("[_decode_single] dst="+(""+dst)+" pred="+(""+pred)+" vin="+(""+vin))
     if dst == null || vin == null { return null }
     local out = new ArrayBox()
     out.push(dst)
