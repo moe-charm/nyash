@@ -247,8 +247,7 @@ Phase 3: prod 段階ON
 - integration profile 全PASS確認
 
 ### **Day 7: ドキュメント化・まとめ**
-- docs/design/using-and-dispatch.md 完成
-- docs/design/method-resolution.md 追加
+- docs/design/using-and-dispatch.md 完成（method resolution含む）
 - 論文用の技術メモ作成
 
 ---
