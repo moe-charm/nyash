@@ -1,0 +1,128 @@
+// JSON.stringify for MapBox/ArrayBox (Ny implementation)
+using "apps/lib/json_native/utils/escape.nyash" as EscapeUtils
+
+static box JSON {
+  // Public minimal API
+  stringify(o) { return o.toJSON() }
+  stringify_map(m) { return m.toJSON() }
+  stringify_array(a) { return a.toJSON() }
+
+  // Internal helpers
+  _quote_string(s) {
+    if s == null { return "\"\"" }
+    // Accept raw Ny string; ensure it's plain string
+    local body = EscapeUtils.escape_string(s)
+    return "\"" + body + "\""
+  }
+
+  _stringify_value(v) {
+    // Heuristic: try common primitives via toString(); box types handled by callers
+    // String: wrap with quotes and escape
+    // Integer/Bool: rely on toString() stable form
+    // Null: serialize as null
+    // Map/Array: delegate to specific paths (callers)
+    // Note: This function expects callers to dispatch Map/Array
+    if v == null { return "null" }
+    // Best-effort: detect true/false strings
+    local s = v.toString()
+    if s == "true" || s == "false" { return s }
+    // Integer-like? Accept leading '-' and digits
+    local i = 0
+    local n = s.length()
+    local neg = 0
+    if n > 0 && s.substring(0,1) == "-" { neg = 1  i = 1 }
+    local ok = (n > neg)
+    loop(i < n) {
+      local ch = s.substring(i,i+1)
+      if !(ch >= "0" && ch <= "9") { ok = 0  break }
+      i = i + 1
+    }
+    if ok == 1 { return s }
+    return me._quote_string(s)
+  }
+
+  _stringify_array(a) {
+    if a == null { return "[]" }
+    // Assume ArrayBox API: length(), get(i)
+    local out = "["
+    local n = a.length()
+    local i = 0
+    loop(i < n) {
+      if i > 0 { out = out + "," }
+      local e = a.get(i)
+      // Dispatch by heuristic: prefer map/array detection, else primitive
+      // Map detection: e.keys() returns ArrayBox; on non-MapBox many boxes return an "Error:" string
+      local is_map = 0
+      local keys_val = null
+      if e != null {
+        keys_val = e.keys()
+        if keys_val != null {
+          local ks = keys_val.toString()
+          if ks.length() >= 1 && ks.substring(0,1) == "[" { is_map = 1 }
+        }
+      }
+      if is_map == 1 {
+        out = out + me._stringify_map(e)
+      } else {
+        // Array detection: e.length() numeric
+        local l = e.length()
+        local ls = l.toString()
+        local is_num = 1
+        local j = 0
+        if ls.length() == 0 { is_num = 0 }
+        if ls.length() > 0 && ls.substring(0,1) == "-" { if ls.length() == 1 { is_num = 0 } else { j = 1 } }
+        loop(j < ls.length()) {
+          local ch = ls.substring(j,j+1)
+          if !(ch >= "0" && ch <= "9") { is_num = 0  break }
+          j = j + 1
+        }
+        if is_num == 1 { out = out + me._stringify_array(e) } else { out = out + me._stringify_value(e) }
+      }
+      i = i + 1
+    }
+    out = out + "]"
+    return out
+  }
+
+  _stringify_map(m) {
+    if m == null { return "{}" }
+    // MapBox API: keys() -> ArrayBox of string keys (sorted), get(key)
+    local out = "{"
+    local ks = m.keys()
+    local n = ks.length()
+    local i = 0
+    loop(i < n) {
+      if i > 0 { out = out + "," }
+      local k = ks.get(i)
+      local kv = k.toString()
+      out = out + me._quote_string(kv) + ":"
+      local v = m.get(kv)
+      // Heuristic dispatch (Map→Array→primitive)
+      local is_map_v = 0
+      local keys_val_v = v.keys()
+      if keys_val_v != null {
+        local ksvs = keys_val_v.toString()
+        if ksvs.length() >= 1 && ksvs.substring(0,1) == "[" { is_map_v = 1 }
+      }
+      if is_map_v == 1 {
+        out = out + me._stringify_map(v)
+      } else {
+        local lv = v.length()
+        local lvs = lv.toString()
+        local is_num_v = 1
+        local t = 0
+        if lvs.length() == 0 { is_num_v = 0 }
+        if lvs.length() > 0 && lvs.substring(0,1) == "-" { if lvs.length() == 1 { is_num_v = 0 } else { t = 1 } }
+        loop(t < lvs.length()) {
+          local ch = lvs.substring(t,t+1)
+          if !(ch >= "0" && ch <= "9") { is_num_v = 0  break }
+          t = t + 1
+        }
+        if is_num_v == 1 { out = out + me._stringify_array(v) } else { out = out + me._stringify_value(v) }
+      }
+      i = i + 1
+    }
+    out = out + "}"
+    return out
+  }
+}

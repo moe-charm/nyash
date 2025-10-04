@@ -1,7 +1,7 @@
 // EmitCallBox — Return(Call name(int_args...)) を MIR(JSON v0) に最小変換
 // 仕様: 各引数を const i64 として材化し、call を発行、dst を ret する。
 
-using "apps/lib/json_native/stringify.nyash" as JSON
+using "apps/lib/json_native/stringify.hako" as JSON
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
