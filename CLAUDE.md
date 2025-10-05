@@ -6,6 +6,39 @@
 
 ## 🔄 **現在の開発状況** (2025-10-05)
 
+### 🎉 **Phase 15.10完了！Legacy Code大掃除成功** (2025-10-05)
+**モジュール分離＋デッドコード削除で400行純削減、保守性向上**
+
+#### ✅ **legacy.rs分割完了（2ファイル → 8ファイル）**
+**A. calls/legacy.rs分割** (617行 → 5ファイル):
+- `legacy/mod.rs`: エントリポイント handle_call (47行)
+- `legacy/callee_dispatcher.rs`: Callee振り分け (65行)
+- `legacy/method_handler.rs`: レシーバ解決（Copy fallback等） (192行)
+- `legacy/legacy_resolver.rs`: 文字列ベース関数解決 (346行)
+- `legacy/extern_handler.rs`: Extern関数実行 (35行)
+
+**B. boxes/legacy.rs分割** (518行 → 3ファイル):
+- `legacy/mod.rs`: BoxCallディスパッチャ (255行)
+- `legacy/plugin_invoke.rs`: PluginInvokeハンドラ (140行)
+- `legacy/plugin_bridge.rs`: Pluginブリッジ＋フォールバック (175行)
+
+#### ✅ **Config boxes削除（470行デッドコード削除）**
+- DebugConfigBox (165行) - JIT関連、Phase 15でアーカイブ済み
+- GcConfigBox (95行) - 使用箇所なし
+- AotConfigBox (114行) - 使用箇所なし
+- AotCompilerBox (89行) - 使用箇所なし
+
+#### 📊 **統計**
+- **削除**: 1,657行 (legacy分割前 + Config boxes)
+- **追加**: 1,257行 (legacy分割後の構造化コード)
+- **純削減**: 400行
+- **モジュール化**: 2大ファイル → 8小ファイル
+- **コミット**: 5個 (計画書3 + 実装2)
+
+**コミット**: `43679766`, `f6cbbf48`, `f1f3b83e`
+
+---
+
 ### 🎉 **Birth Lifecycle完全統合！** (2025-10-05)
 **Everything is Box思想の完成 - 3つのcalling conventionが統一契約に**
 
@@ -61,10 +94,10 @@ if VmConfig::global().general_trace { ... }
 
 **コミット**: `f1874b3b` - feat(vm): VmConfig集約化
 
-#### 🎯 **次のステップ（Phase 15.10候補）**
-1. BuilderConfigBox実装（MIR Builder用環境変数約15種類）
-2. legacy.rs分割（calls:617行 + boxes:515行）
-3. boxes_* → builtin_boxes/ 移動
+#### ~~🎯 **次のステップ（Phase 15.10候補）**~~ ✅ **完了！**
+1. ~~BuilderConfigBox実装（MIR Builder用環境変数約15種類）~~ → 保留（現状維持）
+2. ✅ legacy.rs分割（calls:617行 + boxes:518行） → **Phase 15.10で完了**
+3. ~~boxes_* → builtin_boxes/ 移動~~ → 現状維持（移動のメリットなし）
 
 ---
 
