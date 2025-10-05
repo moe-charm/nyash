@@ -62,6 +62,9 @@ impl PluginHandleInner {
                 .finalized
                 .swap(true, std::sync::atomic::Ordering::SeqCst)
             {
+                if crate::config::env::release_trace() {
+                    eprintln!(r#"{{"kind":"release","class":"PluginBox","id":{}}}"#, self.instance_id);
+                }
                 crate::runtime::leak_tracker::finalize_plugin("PluginBox", self.instance_id);
                 let tlv_args: [u8; 4] = [1, 0, 0, 0];
                 let _ = super::host_bridge::invoke_alloc(

@@ -52,6 +52,8 @@ pub struct MirInterpreter {
     // Basic block execution cap (opt-in): per-block execution counter.
     pub(super) block_exec_count: HashMap<BasicBlockId, usize>,
     pub(super) max_block_exec: Option<usize>,
+    // Scope-based lifetime tracker (fini on scope exit)
+    pub(super) scope: crate::scope_tracker::ScopeTracker,
 }
 
 impl MirInterpreter {
@@ -82,6 +84,7 @@ impl MirInterpreter {
                 let raw = primary.or(compat);
                 raw.and_then(|s| s.parse::<usize>().ok())
             },
+            scope: crate::scope_tracker::ScopeTracker::new(),
         }
     }
 

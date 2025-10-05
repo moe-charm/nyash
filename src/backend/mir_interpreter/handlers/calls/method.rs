@@ -77,13 +77,9 @@ impl MirInterpreter {
                     for a in args {
                         argv.push(self.reg_load(*a)?.to_nyash_box());
                     }
-                    match host.invoke_instance_method(
-                        &p.box_type,
-                        method,
-                        p.inner.instance_id,
-                        &argv,
-                    ) {
-                        Ok(Some(ret)) => Ok(VMValue::from_nyash_box(ret)),
+                    let out = host.invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv);
+                    match out {
+                        Ok(Some(ret)) => { let v = VMValue::from_nyash_box(ret); self.maybe_register_scope_value(&v); Ok(v) },
                         Ok(None) => Ok(VMValue::Void),
                         Err(e) => Err(VMError::InvalidInstruction(format!(
                             "Plugin method {}.{} failed: {:?}",

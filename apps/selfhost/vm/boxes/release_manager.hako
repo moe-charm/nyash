@@ -1,0 +1,29 @@
+// ReleaseManagerBox — explicit release for identity/extern/user instances
+// Responsibility: Provide a stable Nyash API to finalize boxes explicitly.
+// Implementation: delegates to extern env.runtime.release (best‑effort)
+
+box ReleaseManagerBox {
+  release(obj) {
+    // Call through runtime externs; no return value
+    env.runtime.release(obj)
+    return 0
+  }
+
+  // Release all objects in an array (best‑effort)
+  release_many(arr) {
+    if arr == null { return 0 }
+    // Defensive: tolerate both ArrayBox and array-like values
+    local n = 0
+    if arr.length != null { n = arr.length() } else { return 0 }
+    local i = 0
+    loop(i < n) {
+      local v = arr.get(i)
+      env.runtime.release(v)
+      i = i + 1
+    }
+    return 0
+  }
+}
+
+static box ReleaseManagerStub { main(args) { return 0 } }
+

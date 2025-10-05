@@ -16,6 +16,8 @@ using "apps/selfhost-compiler/pipeline_v2/call_extract_box.hako" as CallExtractB
 using "apps/selfhost-compiler/pipeline_v2/method_extract_box.hako" as MethodExtractBox
 using "apps/selfhost-compiler/pipeline_v2/new_extract_box.hako" as NewExtractBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
+using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
 
 flow PipelineV2 {
   _parse_int_at(s, idx) {
@@ -362,4 +364,45 @@ flow PipelineV2 {
     local j3 = EmitReturnBox.emit_return_int2(v, trace)
     return LocalSSA.ensure_cond(j3)
   }
+  // Overload: resolve names via UsingResolverBox before emit
+  lower_stage1_to_mir_with_usings(ast_json, prefer_cfg, usings_json, modules_json) {
+    if ast_json == null { return PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg) }
+    // Build resolver context
+    local r = new UsingResolverBox()
+    if usings_json != null { r.load_usings_json(usings_json) }
+    if modules_json != null { r.load_modules_json(modules_json) }
+
+    // Prefer Call/Method/New branches with name normalization; otherwise fallback to default
+    {
+      local kq = RegexFlow.find_from(ast_json, "\"type\":\"Call\"", 0)
+      if kq >= 0 {
+        local kc = CallExtractBox.extract_return_call_ints(ast_json)
+        if kc != null {
+          local kn = NormalizerBox.normalize_call_ints(kc)
+          if kn == null { return null }
+          local raw_name = kn.get("name")
+          local fq_name = NamespaceBox.normalize_global_name(raw_name, r)
+          local j4 = EmitCallBox.emit_call_int_args(fq_name, kn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j4))
+        }
+      }
+    }
+    {
+      local nq = RegexFlow.find_from(ast_json, "\"type\":\"New\"", 0)
+      if nq >= 0 {
+        local nb = NewExtractBox.extract_return_new_ints(ast_json)
+        if nb != null {
+          local nn = NormalizerBox.normalize_new_ints(nb)
+          if nn == null { return null }
+          local raw_c = nn.get("class")
+          local fq_c = NamespaceBox.normalize_class_name(raw_c, r)
+          local j6 = EmitNewBoxBox.emit_newbox_int_args(fq_c, nn.get("args"))
+          return LocalSSA.ensure_calls(LocalSSA.ensure_cond(j6))
+        }
+      }
+    }
+    // Fallback to default lowering (includes Compare/Method and other forms)
+    return PipelineV2.lower_stage1_to_mir(ast_json, prefer_cfg)
+  }
+
 }

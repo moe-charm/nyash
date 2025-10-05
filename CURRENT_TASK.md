@@ -1119,3 +1119,39 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
 - hakorune-std（箱化）: apps/hakorune/std/core/array.hako
   - extern_call("nykernel.*") 経由で配列操作（len/cap/ptr管理、resize/copy、Fail‑Fast）
 - 影響: 既存ビルド/quickに未接続（既定OFF）。wasmブランチでの受け取り前提で配置。
+-
+## 2025-10-05 — Phase 15.7 refresh（Self‑Hosting back on track）
+
+- 状態サマリ
+  - Mini‑VM: InstructionScannerBox/OpHandlersBox 統一、ProgramState/CfgNavigator/RetResolver/Diagnostics を導入。代表m2/m3は緑。
+  - JSON v0 Bridge: 到達不能 pred 除外の判定を if/match で統一（PHI 不変を維持）。
+  - helpers: StringHelpers へ委譲（JsonFrag/JsonScan/Compiler 残差を片付け）。selfhost VM 補助の .hako 統一を進行。
+  - WASM: nykernel‑wasm（未接続）＋ hakorune‑std ArrayBox 骨格＋VMスタブ/スモーク（opt‑in）を整備（受け渡しOK）。
+
+- 次の小粒（15.7 継続）
+  1) Stage‑1/2 最小 E2E 代表3本（const→ret／compare→ret／compare→branch→phi）を緑固定（既存スモークの代表で維持）。
+  2) UsingResolverBox/NamespaceBox の実装と Pipeline V2 統合（Callee::ModuleFunction を前段正規化）。
+  3) Mini‑VM: ProgramStateBox/CfgNavigatorBox の参照を全面 get 化、代表 CFG（diamond/jump_chain）を+1本ずつ追加。
+  4) 先送り: index_of_from 集約（CfgNavigatorBox へ段階移行、Phase 15.12で一括）。
+
+- 移行計画（Rust → Hakorune、段階）
+  - 先行済: JSON 断片/走査ヘルパ（StringHelpers/JsonFrag/JsonScan の責務分離）
+  - 次: Mini‑VM 補助箱（InstrDecoderBox, PhiWiringBox, ObserveBox）を薄く追加して呼び替え（意味論は現状維持）
+  - Compiler: UsingResolverBox/NamespaceBox を先に箱化→ Pipeline V2 に統合。Lower/MIR emit は箱経由で集約。
+  - extern_call: nykernel.* の一本化を維持（VMスタブ/LLVM/WASM の橋で切替）。
+
+## 2025-10-05 — P2-A UsingResolverBox (compiler)
+
+- Added box `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako` (pure, no IO).
+- Responsibilities: manage alias→path and alias→namespace maps; load from parser usings JSON; optional modules JSON.
+- API: load_usings_json/load_modules_json, add_ns/add_module/add_path, resolve_* getters, to_context_json.
+- Docs: apps/selfhost-compiler/pipeline_v2/README_using_resolver.md.
+- Smoke: quick/selfhost/selfhost_using_resolver_basic_vm.sh (validates alias/ns/path resolution).
+- Next (P2-B): NamespaceBox to rewrite Timer.now_ms → Callee::ModuleFunction using resolver context.
+
+## 2025-10-05 — P2-B NamespaceBox (compiler)
+
+- Added `apps/selfhost-compiler/pipeline_v2/namespace_box.hako` for alias→namespace normalization.
+- Pipeline addition: `PipelineV2.lower_stage1_to_mir_with_usings(ast, prefer_cfg, usings_json, modules_json)` resolves names via UsingResolverBox before emit.
+- Smoke: `selfhost_namespace_box_basic_vm.sh` validates alias→ns mapping for call/class.
+- Note: end-to-end pipeline smoke for usings is added but optional; main focus is box-level resolution.

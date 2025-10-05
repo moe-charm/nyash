@@ -29,6 +29,10 @@ impl MirInterpreter {
         // Store created instance first so 'me' can be passed to birth
         let created_vm = VMValue::from_nyash_box(created);
         self.regs.insert(dst, created_vm.clone());
+        // Register BoxRef into current function scope for fini-on-scope-exit
+        if let VMValue::BoxRef(arc_box) = &created_vm {
+            self.scope.register_box(arc_box.clone());
+        }
 
         // Centralized lifecycle observation (contracts + traces)
         self.lifecycle_observe_new(dst, box_type, args.len());

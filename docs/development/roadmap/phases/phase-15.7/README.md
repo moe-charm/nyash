@@ -165,6 +165,31 @@ Hakoruneで実行器書く
   - 関数境界で `phi_wired`/`block_phi_incomings` をクリア（リーク防止）
   - ハーネス compile 前に IR をサニタイズ: 空PHI除去＋ブロック先頭へのPHIグループ化（検証を安定化）
 
+【2025-10-05 追記 — 小粒前進のまとめ】
+- Mini‑VM の箱化・安定化（自己ホスト向け）
+  - HakoruneVmMin: InstructionScannerBox.next + OpHandlersBox.handle_* 経由に統一。無限ループ対策/観測の集約を反映。
+  - 共通箱の拡充: ProgramStateBox（bb/prev/steps）, CfgNavigatorBox（index_of_from/head/tail）, RetResolverBox（ret一元化）, DiagnosticsBox（DEVでdebug）。
+  - using/[modules]: alias（hakorune.vm.mir_min）を追加し、flow_runner などの呼び先を段階的に新別名へ統一。
+- JSON v0 Bridge の堅牢化
+  - 到達不能 pred（return/throw）を PHI incoming から除外する判定を unify（if/match両方）。
+- 文字列/数値ヘルパの重複解消
+  - StringHelpers（to_i64/int_to_str/json_quote/read_digits）へ委譲。JsonFrag/JsonScan/Compiler 側の重複を削減。
+  - selfhost VM 補助の .nyash→.hako 統一（一部）。
+- WASM ABI スケルトン（handoff 用）
+  - docs/guides/wasm-abi.md に最小ABI（nykernel.malloc/load_i64/store_i64）と契約を記載。
+  - crates/nykernel-wasm（wasm32向けbump allocator + load/store）を追加（ワークスペース未接続）。
+  - hakorune-std/core/array.hako を追加（extern_call一本化）。VMでは NYASH_ENABLE_NYKERNEL_STUB=1 で開発スタブ稼働。
+- スモーク整備
+  - noisy系は opt-in 化（ゲート環境変数で明示ON）。
+  - ArrayBox の最小E2E（push/get/resize）を quick に opt-in で追加（VMスタブ）。
+
+次の小粒（Phase 15.7 継続）
+1) Stage‑1/2 最小 E2E（Ny→JSON→MIR(JSON)→Hakorune‑VM）を代表3本で緑固定（const→ret／compare→ret／compare→branch→phi）。
+2) UsingResolverBox/NamespaceBox を実装し、Pipeline V2 に統合（Callee::ModuleFunction 正規化を前段で完了）。
+3) Mini‑VM：ProgramStateBox/CfgNavigatorBox の参照を全面 get 化（残差つぶし）＋ 代表CFG（diamond/jump_chain）を1本ずつ追加。
+4) （先送り）index_of_from の集約（JsonFrag/flow_runner/flow_debugger など）を CfgNavigatorBox へ段階移行（Phase 15.12）。
+
+
 #### **P2: Hakoruneコンパイラ MVP（次の主作業）**
 - **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出
@@ -990,4 +1015,3 @@ Unified Call（開発既定ON）
 5) ドキュメントとエコシステム
    - Phase‑15.7 の更新点を継続追記（箱の責務・導線・ゲート説明）。
    - CI は quick 緑維持、重い/環境依存は opt‑in（ゲート付き運用）。
-

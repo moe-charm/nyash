@@ -34,12 +34,42 @@ pub fn extern_call(
                 Err(BidError::PluginError)
             }
         }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }
 
 use std::sync::{Mutex, OnceLock};
-use crate::box_trait::{NyashBox, IntegerBox};
+use crate::box_trait::IntegerBox;
 
 fn heap_state() -> &'static (Mutex<Vec<i64>>, Mutex<i64>) {
     static HEAP: OnceLock<(Mutex<Vec<i64>>, Mutex<i64>)> = OnceLock::new();
@@ -92,6 +122,36 @@ fn handle_nykernel_stub(
             heap[index] = val;
             Ok(None)
         }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }
@@ -107,6 +167,36 @@ fn handle_console(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Op
                     eprintln!("[console.trace] len={} text=<{:.64}>", s.len(), s);
                 }
                 println!("{}", s);
+            }
+            Ok(None)
+        }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
             }
             Ok(None)
         }
@@ -133,6 +223,36 @@ fn handle_result(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opt
                 .unwrap_or_else(|| Box::new(StringBox::new("Error")));
             Ok(Some(Box::new(NyashResultBox::new_err(e))))
         }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }
@@ -157,6 +277,36 @@ fn handle_modules(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Op
             }
             Ok(Some(Box::new(VoidBox::new())))
         }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }
@@ -176,6 +326,36 @@ fn handle_task(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Optio
         }
         "spawn" => handle_task_spawn(args),
         "wait" => handle_task_wait(args),
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }
@@ -210,18 +390,78 @@ fn handle_debug(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opti
             }
             Ok(None)
         }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }
 
 /// Handle env.runtime.* methods
-fn handle_runtime(method_name: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
+fn handle_runtime(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "checkpoint" => {
             if crate::config::env::runtime_checkpoint_trace() {
                 eprintln!("[runtime.checkpoint] reached");
             }
             global_hooks::safepoint_and_poll();
+            Ok(None)
+        }
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
             Ok(None)
         }
         _ => Err(BidError::PluginError),
@@ -250,6 +490,36 @@ fn handle_future(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opt
             Ok(None)
         }
         "await" => handle_future_await(args),
+        "release" => {
+            // Best‑effort finalization for external/identity boxes.
+            if let Some(b) = args.get(0) {
+                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                    let _ = inst.fini();
+                    return Ok(None);
+                }
+                #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                if let Some(p) = b.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                    p.finalize_now();
+                    return Ok(None);
+                }
+            }
+            Ok(None)
+        }
+        "release_many" => {
+            if let Some(b) = args.get(0) {
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    let n = arr.len();
+                    for i in 0..n {
+                        let idx = Box::new(crate::box_trait::IntegerBox::new(i as i64)) as Box<dyn crate::box_trait::NyashBox>;
+                        let elem = arr.get(idx);
+                        if let Some(inst) = elem.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { let _ = inst.fini(); continue; }
+                        #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                        if let Some(p) = elem.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() { p.finalize_now(); continue; }
+                    }
+                }
+            }
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }

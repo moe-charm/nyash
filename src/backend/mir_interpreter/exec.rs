@@ -22,6 +22,9 @@ impl MirInterpreter {
         let saved_fn = self.cur_fn.clone();
         self.cur_fn = Some(func.signature.name.clone());
 
+        // Enter a new scope for this function frame (lifetime management)
+        self.scope.push_scope();
+
         if let Some(args) = arg_vals {
             for (i, pid) in func.params.iter().enumerate() {
                 let v = args.get(i).cloned().unwrap_or(VMValue::Void);
@@ -83,6 +86,10 @@ impl MirInterpreter {
 
             match self.handle_terminator(block)? {
                 BlockOutcome::Return(result) => {
+                    // Leave function scope before restoring caller state.
+                    // Scope pop will call fini() only for boxes that do not escape
+                    // (i.e., Arc strong_count == 1). Returned BoxRef remains alive.
+                    self.scope.pop_scope();
                     self.cur_fn = saved_fn;
                     self.regs = saved_regs;
                     return Ok(result);

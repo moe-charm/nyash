@@ -730,3 +730,15 @@ pub fn ny_compiler_use_tmp_only() -> bool {
         == Some("1")
 }
 
+
+
+/// Emit scope statistics on scope pop (dev diagnostics).
+/// Default: OFF. Enable with NYASH_SCOPE_STATS=1
+pub fn scope_stats_log() -> bool {
+    std::env::var("NYASH_SCOPE_STATS").ok().as_deref() == Some("1")
+}
+/// Emit JSON release/finalize logs (dev diagnostics).
+/// Default: OFF. Enable with NYASH_RELEASE_TRACE=1
+pub fn release_trace() -> bool {
+    std::env::var("NYASH_RELEASE_TRACE").ok().as_deref() == Some("1")
+}

@@ -134,6 +134,19 @@ pub fn get_env_method_spec(
             EffectMask::READ,
             true,
         )),
+        // Runtime management (release/finalize)
+        ("runtime", "release") => Some((
+            "env.runtime".to_string(),
+            "release".to_string(),
+            EffectMask::IO,
+            false,
+        )),
+        ("runtime", "release_many") => Some((
+            "env.runtime".to_string(),
+            "release_many".to_string(),
+            EffectMask::IO,
+            false,
+        )),
 
         // nykernel.* (WASM ABI bridge — dev stub + future AOT)
         ("nykernel", "malloc") => Some((

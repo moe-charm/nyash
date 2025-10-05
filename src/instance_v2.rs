@@ -174,6 +174,12 @@ impl InstanceBox {
         self.fields_ng.lock().unwrap().clear();
 
         *finalized = true;
+        if crate::config::env::release_trace() {
+            eprintln!(
+                r#"{{"kind":"release","class":"{}","id":{}}}"#,
+                self.class_name, self.base.id
+            );
+        }
         eprintln!(
             "🎯 fini(): Instance {} (ID: {}) finalized",
             self.class_name, self.base.id

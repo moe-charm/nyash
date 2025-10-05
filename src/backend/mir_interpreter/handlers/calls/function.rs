@@ -70,7 +70,9 @@ impl MirInterpreter {
                 kinds.get(2).map(|s| s.as_str()).unwrap_or("-")
             );
         }
-        self.execute_global_function(func_name, args)
+        let r = self.execute_global_function(func_name, args);
+        if let Ok(ref v) = r { self.maybe_register_scope_value(v); }
+        r
     }
 
     /// Handle Extern callee: emit trace then dispatch to externs.

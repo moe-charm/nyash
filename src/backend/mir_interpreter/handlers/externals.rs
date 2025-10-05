@@ -17,6 +17,7 @@ impl MirInterpreter {
         }
         if let Some(res) = crate::backend::mir_interpreter::extern_adapter::try_call(iface, method, &loaded_args) {
             let v = res?;
+            self.maybe_register_scope_value(&v);
             if let Some(d) = dst { self.regs.insert(d, v); }
             return Ok(());
         }
@@ -87,8 +88,10 @@ impl MirInterpreter {
                     match f {
                         VMValue::Future(fut) => {
                             let v = fut.get();
+                            let vmv = VMValue::from_nyash_box(v);
+                            self.maybe_register_scope_value(&vmv);
                             if let Some(d) = dst {
-                                self.regs.insert(d, VMValue::from_nyash_box(v));
+                                self.regs.insert(d, vmv);
                             }
                         }
                         _ => {
@@ -122,8 +125,10 @@ impl MirInterpreter {
                     let k = self.reg_load(*a0)?.to_string();
                     let vb = crate::runtime::modules_registry::get(&k)
                         .unwrap_or_else(|| Box::new(crate::box_trait::VoidBox::new()));
+                    let vmv = VMValue::from_nyash_box(vb);
+                    self.maybe_register_scope_value(&vmv);
                     if let Some(d) = dst {
-                        self.regs.insert(d, VMValue::from_nyash_box(vb));
+                        self.regs.insert(d, vmv);
                     }
                 }
                 Ok(())
