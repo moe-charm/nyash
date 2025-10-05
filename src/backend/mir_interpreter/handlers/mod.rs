@@ -27,7 +27,10 @@ impl MirInterpreter {
                     let mut bargs: Vec<super::ValueId> = Vec::with_capacity(1 + args.len());
                     bargs.push(*dst);
                     bargs.extend(args.iter().copied());
-                    let _ = self.handle_callee_module_function(name, &bargs);
+                    // Call only when the function exists; otherwise treat as no-op
+                    if self.functions.contains_key(name) {
+                        let _ = self.handle_callee_module_function(name, &bargs);
+                    }
                 }
             }
             MirInstruction::PluginInvoke { dst, .. } => {

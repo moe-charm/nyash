@@ -633,11 +633,8 @@ impl MirBuilder {
         let mut auto_birth: Option<String> = None;
         if auto_birth_enabled && class != "StringBox" {
             let birth_name = crate::mir::resolve::call_name_resolver::CallNameResolverBox::make_birth_name(&class, arg_values.len());
-            if let Some(ref module) = self.current_module {
-                if module.functions.contains_key(&birth_name) {
-                    auto_birth = Some(birth_name);
-                }
-            }
+            // Do not limit to current_module: embed auto_birth name; VM will call only if exists
+            auto_birth = Some(birth_name);
         }
         self.emit_instruction(MirInstruction::NewBox {
             dst,
