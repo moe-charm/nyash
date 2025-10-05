@@ -32,18 +32,18 @@ box JsonParser {
     errors: ArrayBox       // 構文エラー配列
     
     birth() {
-        me.tokens = new ArrayBox(); me.tokens.birth()
+        me.tokens = new ArrayBox()
         me.position = 0
-        me.errors = new ArrayBox(); me.errors.birth()
+        me.errors = new ArrayBox()
     }
-    
+
     // ===== メイン解析メソッド =====
-    
+
     // JSON文字列を完全解析
     parse(json_text) {
         // 初期化
         me.position = 0
-        me.errors = new ArrayBox(); me.errors.birth()
+        me.errors = new ArrayBox()
         
         // Step 1: 字句解析
         local tokenizer = new JsonTokenizer(json_text)
@@ -332,7 +332,7 @@ box JsonParser {
     // エラーを追加
     add_error(message) {
         local token = me.current_token()
-        local error_info = new MapBox(); error_info.birth()
+        local error_info = new MapBox()
         error_info.set("message", message)
         
         if token != null {

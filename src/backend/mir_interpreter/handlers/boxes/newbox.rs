@@ -49,16 +49,23 @@ impl MirInterpreter {
         // Guarded by NYASH_VM_AUTO_BIRTH_CPP=1. This simulates the future MIR
         // NewBox{auto_birth} semantics without changing the MIR yet.
         if std::env::var("NYASH_VM_AUTO_BIRTH_CPP").ok().as_deref() == Some("1") {
-            // Compose fully-qualified birth name and invoke via ModuleFunction path.
-            // me + args
-            let mut bargs: Vec<super::super::ValueId> = Vec::with_capacity(1 + args.len());
-            bargs.push(dst);
-            bargs.extend(args.iter().copied());
-            let name = format!("{}.birth/{}", box_type, args.len());
-            if self.functions.contains_key(&name) {
-                let _ = self.handle_callee_module_function(&name, &bargs);
-            } else {
-                // No such birth function; treat as no-op
+            // Skip built-in boxes (they don't have birth methods)
+            let is_builtin = matches!(
+                box_type,
+                "StringBox" | "IntegerBox" | "BoolBox" | "ArrayBox" | "MapBox"
+            );
+            if !is_builtin {
+                // Compose fully-qualified birth name and invoke via ModuleFunction path.
+                // me + args
+                let mut bargs: Vec<super::super::ValueId> = Vec::with_capacity(1 + args.len());
+                bargs.push(dst);
+                bargs.extend(args.iter().copied());
+                let name = format!("{}.birth/{}", box_type, args.len());
+                if self.functions.contains_key(&name) {
+                    let _ = self.handle_callee_module_function(&name, &bargs);
+                } else {
+                    // No such birth function; treat as no-op
+                }
             }
         }
 

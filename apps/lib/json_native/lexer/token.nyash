@@ -34,7 +34,17 @@ box JsonToken {
     end: IntegerBox        // 終了位置
     line: IntegerBox       // 行番号（エラー報告用）
     column: IntegerBox     // 列番号（エラー報告用）
-    
+
+    // No-arg constructor for C++ style auto-birth
+    birth() {
+        me.type = "UNKNOWN"
+        me.value = ""
+        me.start = 0
+        me.end = 0
+        me.line = 1
+        me.column = 1
+    }
+
     birth(token_type, token_value, start_pos, end_pos) {
         me.type = token_type
         me.value = token_value

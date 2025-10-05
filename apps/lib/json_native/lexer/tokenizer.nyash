@@ -19,17 +19,17 @@ box JsonTokenizer {
         me.scanner = new JsonScanner("")
         // Ensure scanner is born before use
         me.scanner.birth(input_text)
-        me.tokens = new ArrayBox(); me.tokens.birth()
-        me.errors = new ArrayBox(); me.errors.birth()
+        me.tokens = new ArrayBox()
+        me.errors = new ArrayBox()
     }
-    
+
     // ===== メイン解析メソッド =====
-    
+
     // 全文字列をトークン化
     tokenize() {
         // 初期化
-        me.tokens = new ArrayBox(); me.tokens.birth()
-        me.errors = new ArrayBox(); me.errors.birth()
+        me.tokens = new ArrayBox()
+        me.errors = new ArrayBox()
         
         // メインループ
         loop(not me.scanner.is_eof()) {

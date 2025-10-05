@@ -118,7 +118,6 @@ static box JsonNode {
         node.birth()
         node.kind = "array"
         local arr = new ArrayBox()
-        arr.birth()
         node.value = arr
         return node
     }
@@ -129,7 +128,6 @@ static box JsonNode {
         node.birth()
         node.kind = "object"
         local m = new MapBox()
-        m.birth()
         node.value = m
         return node
     }
