@@ -56,7 +56,6 @@ pub const BUILTIN_BOXES: &[&str] = &[
     "HTTPServerBox",
     "HTTPRequestBox",
     "HTTPResponseBox",
-    "JitConfigBox",
 ];
 
 /// 🔥 ビルトインBox判定関数 - pack透明化システムの核心

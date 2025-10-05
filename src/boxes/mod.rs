@@ -67,8 +67,6 @@ pub mod random_box;
 pub mod string_box;
 pub mod time_box;
 // These boxes use web APIs that require special handling in WASM
-pub mod aot_compiler_box;
-pub mod aot_config_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod audio_box;
 #[cfg(not(target_arch = "wasm32"))]
@@ -76,9 +74,7 @@ pub mod canvas_event_box;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod canvas_loop_box;
 pub mod console_box;
-pub mod debug_config_box;
 pub mod function_box;
-pub mod gc_config_box;
 // ARCHIVED: JIT Box modules moved to archive/jit-cranelift/ during Phase 15
 // pub mod jit_config_box;
 // pub mod jit_events_box;
@@ -108,8 +104,6 @@ pub mod egui_box;
 // pub use string_box::StringBox; // レガシー実装、box_trait::StringBoxを使用すること
 // pub use integer_box::IntegerBox; // レガシー実装、box_trait::IntegerBoxを使用すること
 // pub use bool_box::BoolBox; // レガシー実装、box_trait::BoolBoxを使用すること
-pub use aot_compiler_box::AotCompilerBox;
-pub use aot_config_box::AotConfigBox;
 #[cfg(not(target_arch = "wasm32"))]
 pub use audio_box::AudioBox;
 #[cfg(not(target_arch = "wasm32"))]
