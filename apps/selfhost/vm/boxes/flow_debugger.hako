@@ -7,11 +7,13 @@
 // 非責務:
 //  - 実行・評価（それは MirVmMin に委譲）
 
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
 static box FlowDebugBox {
   // ユーティリティ — 文字列検索
   _index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() if pos > n { return -1 } local i = pos local m = needle.length() if m <= 0 { return pos } local limit = n - m loop(i <= limit) { if hay.substring(i, i+m) == needle { return i } i = i + 1 } return -1 }
-  _read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
-  _int_to_str(n) { if n == 0 { return "0" } local v = n local out = "" local digits = "0123456789" loop(v > 0) { local d = v % 10 local ch = digits.substring(d, d+1) out = ch + out v = v / 10 } return out }
+  _read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
 
   // ブロックID集合を抽出
   collect_block_ids(mjson) {

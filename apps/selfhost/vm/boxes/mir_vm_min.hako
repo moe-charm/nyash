@@ -1,5 +1,6 @@
 // mir_vm_min.hako — Ny製の最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
 using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
@@ -34,13 +35,7 @@ static box MirVmMin {
   }
 
   // helpers
-  _int_to_str(n) {
-    if n == 0 { return "0" }
-    if n < 0 { return "-" + me._int_to_str(0 - n) }
-    local v=n local out="" local digits="0123456789"
-    loop(v>0){ local d=v%10 local ch=digits.substring(d,d+1) out=ch+out v=v/10 }
-    return out
-  }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return 0 }
 

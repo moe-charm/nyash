@@ -1,5 +1,6 @@
 // Mini-VM scanning and numeric helpers
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box MiniVmScan {
   // helper: find needle from position pos
@@ -63,72 +64,9 @@ static box MiniVmScan {
     return -1
   }
 
-  _str_to_int(s) {
-    @i = 0
-    @n = s.length()
-    @acc = 0
-    loop (i < n) {
-      @ch = s.substring(i, i+1)
-      if ch == "0" { acc = acc * 10 + 0  i = i + 1  continue }
-      if ch == "1" { acc = acc * 10 + 1  i = i + 1  continue }
-      if ch == "2" { acc = acc * 10 + 2  i = i + 1  continue }
-      if ch == "3" { acc = acc * 10 + 3  i = i + 1  continue }
-      if ch == "4" { acc = acc * 10 + 4  i = i + 1  continue }
-      if ch == "5" { acc = acc * 10 + 5  i = i + 1  continue }
-      if ch == "6" { acc = acc * 10 + 6  i = i + 1  continue }
-      if ch == "7" { acc = acc * 10 + 7  i = i + 1  continue }
-      if ch == "8" { acc = acc * 10 + 8  i = i + 1  continue }
-      if ch == "9" { acc = acc * 10 + 9  i = i + 1  continue }
-      break
-    }
-    return acc
-  }
-  _digit_char(d) {
-    if d == 0 { return "0" }
-    if d == 1 { return "1" }
-    if d == 2 { return "2" }
-    if d == 3 { return "3" }
-    if d == 4 { return "4" }
-    if d == 5 { return "5" }
-    if d == 6 { return "6" }
-    if d == 7 { return "7" }
-    if d == 8 { return "8" }
-    if d == 9 { return "9" }
-    return "0"
-  }
-  _int_to_str(n) {
-    if n == 0 { return "0" }
-    @v = n
-    @out = ""
-    loop (v > 0) {
-      @d = v % 10
-      @ch = _digit_char(d)
-      out = ch + out
-      v = v / 10
-    }
-    return out
-  }
-
-  // Read digit runs starting at pos
-  read_digits(json, pos) {
-    @out = ""
-    loop (true) {
-      @s = json.substring(pos, pos+1)
-      if s == "" { break }
-      if s == "0" { out = out + s  pos = pos + 1  continue }
-      if s == "1" { out = out + s  pos = pos + 1  continue }
-      if s == "2" { out = out + s  pos = pos + 1  continue }
-      if s == "3" { out = out + s  pos = pos + 1  continue }
-      if s == "4" { out = out + s  pos = pos + 1  continue }
-      if s == "5" { out = out + s  pos = pos + 1  continue }
-      if s == "6" { out = out + s  pos = pos + 1  continue }
-      if s == "7" { out = out + s  pos = pos + 1  continue }
-      if s == "8" { out = out + s  pos = pos + 1  continue }
-      if s == "9" { out = out + s  pos = pos + 1  continue }
-      break
-    }
-    return out
-  }
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
+  read_digits(json, pos) { return StringHelpers.read_digits(json, pos) }
 
   // Linear pass: sum all numbers outside of quotes
   sum_numbers_no_quotes(json) {
@@ -138,16 +76,16 @@ static box MiniVmScan {
     loop (i < n) {
       @ch = json.substring(i, i+1)
       if ch == "\"" {
-        @j = index_of_from(json, "\"", i+1)
+        @j = me.index_of_from(json, "\"", i+1)
         if j < 0 { break }
         i = j + 1
         continue
       }
-      @d = read_digits(json, i)
-      if d { total = total + _str_to_int(d)  i = i + d.length()  continue }
+      @d = me.read_digits(json, i)
+      if d { total = total + me._str_to_int(d)  i = i + d.length()  continue }
       i = i + 1
     }
-    return _int_to_str(total)
+    return me._int_to_str(total)
   }
 
   // Naive: sum all digit runs anywhere
@@ -156,11 +94,11 @@ static box MiniVmScan {
     @n = json.length()
     @total = 0
     loop (i < n) {
-      @d = read_digits(json, i)
-      if d { total = total + _str_to_int(d)  i = i + d.length()  continue }
+      @d = me.read_digits(json, i)
+      if d { total = total + me._str_to_int(d)  i = i + d.length()  continue }
       i = i + 1
     }
-    return _int_to_str(total)
+    return me._int_to_str(total)
   }
 
   // Sum first two integers outside quotes; returns string or empty
@@ -172,17 +110,17 @@ static box MiniVmScan {
     loop (i < n) {
       @ch = json.substring(i, i+1)
       if ch == "\"" {
-        @j = index_of_from(json, "\"", i+1)
+        @j = me.index_of_from(json, "\"", i+1)
         if j < 0 { break }
         i = j + 1
         continue
       }
-      @d = read_digits(json, i)
+      @d = me.read_digits(json, i)
       if d {
-        total = total + _str_to_int(d)
+        total = total + me._str_to_int(d)
         found = found + 1
         i = i + d.length()
-        if found >= 2 { return _int_to_str(total) }
+        if found >= 2 { return me._int_to_str(total) }
         continue
       }
       i = i + 1

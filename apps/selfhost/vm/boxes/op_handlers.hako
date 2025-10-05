@@ -1,36 +1,14 @@
 // op_handlers.hako — OpHandlersBox
 // Minimal handlers for const/compare/ret etc. with loose JSON key parsing.
 using "apps/selfhost/vm/boxes/arithmetic.hako" as ArithmeticBox
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 // Prefer logical module names to avoid file-path using in strict profiles
 static box OpHandlersBox {
   _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
-  _is_numeric_str(s) {
-    if s == null { return 0 }
-    local n = s.length()
-    if n == 0 { return 0 }
-    local i = 0
-    if s.substring(0,1) == "-" { if n == 1 { return 0 } i = 1 }
-    loop(i < n) { local ch = s.substring(i, i+1) if ch < "0" || ch > "9" { return 0 } i = i + 1 }
-    return 1
-  }
+  _is_numeric_str(s) { return StringHelpers.is_numeric_str(s) }
 
-  _str_to_int(s) {
-    local i = 0
-    local n = s.length()
-    local acc = 0
-    local neg = 0
-    if s.substring(0,1) == "-" { neg = 1  i = 1 }
-    loop (i < n) {
-      local ch = s.substring(i, i+1)
-      local d = match ch { "0" => 0, "1" => 1, "2" => 2, "3" => 3, "4" => 4, "5" => 5, "6" => 6, "7" => 7, "8" => 8, "9" => 9, _ => -1 }
-      if d < 0 { break }
-      acc = acc * 10 + d
-      i = i + 1
-    }
-    if neg == 1 { return 0 - acc }
-    return acc
-  }
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
 
   // --- Safe decimal arithmetic on strings (non-negative integers only) ---
 

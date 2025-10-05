@@ -1,4 +1,5 @@
 // mir_builder2.hako — Instance builder（引数渡しバグ回避のため、非staticで内部状態を保持）
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 box MirJsonBuilder2 {
   st: MapBox
@@ -18,53 +19,7 @@ box MirJsonBuilder2 {
   _get_buf() { return me.st.get("buf") }
   _set_buf(s) { me.st.set("buf", s) }
   _append(s) { local b = me._get_buf()  me._set_buf(b + s) }
-  _int_to_str(n) {
-    // 数値/数値っぽい文字列を i64 に正規化してから出力
-    local s = "" + n
-    local i = 0
-    local neg = 0
-    if s.substring(0,1) == "-" { neg = 1  i = 1 }
-    local acc = 0
-    local digits = "0123456789"
-    loop (i < s.length()) {
-      local ch = s.substring(i, i+1)
-      local d = digits.indexOf(ch)
-      if d < 0 { break }
-      acc = acc * 10 + d
-      i = i + 1
-    }
-    if neg == 1 { acc = 0 - acc }
-    // stringify back
-    if acc == 0 { return "0" }
-    local out = ""
-    local v = acc
-    if v < 0 { return "-" + me._int_to_str(0 - v) }
-    loop (v > 0) {
-      local d = v % 10
-      local ch = digits.substring(d, d+1)
-      out = ch + out
-      v = v / 10
-    }
-    return out
-  }
-  _quote(s) {
-    local t = "" + s
-    local out = ""
-    local i = 0
-    loop (i < t.length()) {
-      local ch = t.substring(i, i+1)
-      if ch == "\\" { out = out + "\\\\" }
-      else { if ch == "\"" { out = out + "\\\"" } else {
-        if ch == "\n" { out = out + "\\n" } else {
-          if ch == "\r" { out = out + "\\r" } else {
-            if ch == "\t" { out = out + "\\t" } else { out = out + ch }
-          }
-        }
-      }}
-      i = i + 1
-    }
-    return "\"" + out + "\""
-  }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _cur_insts() {
     local blks = me.st.get("blocks")
     if blks == null || blks.size == null { return null }
@@ -88,7 +43,7 @@ box MirJsonBuilder2 {
     me.st.set("fn_name", name)
     me.st.set("blocks", new ArrayBox())
     me.st.set("cur_block_index", -1)
-    me._append("{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":[")
+    me._append("{\"name\":" + StringHelpers.json_quote(name) + ",\"params\":[],\"blocks\":[")
   }
   start_block(id) {
     me.st.set("phase", 3)
@@ -120,7 +75,7 @@ box MirJsonBuilder2 {
     local node = { op:"compare", cmp:kind, lhs:lhs, rhs:rhs, dst:dst }
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
-    me._append("{\"op\":\"compare\",\"cmp\":" + me._quote(kind) + ",\"lhs\":" + me._int_to_str(lhs) + ",\"rhs\":" + me._int_to_str(rhs) + ",\"dst\":" + me._int_to_str(dst) + "}")
+    me._append("{\"op\":\"compare\",\"cmp\":" + StringHelpers.json_quote(kind) + ",\"lhs\":" + me._int_to_str(lhs) + ",\"rhs\":" + me._int_to_str(rhs) + ",\"dst\":" + me._int_to_str(dst) + "}")
   }
   add_copy(dst, src) {
     me._comma_if_needed()
@@ -157,7 +112,7 @@ box MirJsonBuilder2 {
     // 構造（blocks → instructions）を正として再構築
     local name = me.st.get("fn_name")
     local blks = me.st.get("blocks")
-    local out = "{\"functions\":[{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
+    local out = "{\"functions\":[{\"name\":" + StringHelpers.json_quote(name) + ",\"params\":[],\"blocks\":["
     local n = 0
     if blks != null && blks.size != null { n = blks.size() }
     local i = 0

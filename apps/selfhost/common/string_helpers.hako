@@ -1,0 +1,86 @@
+// string_helpers.hako — StringHelpers (common, pure helpers)
+// Responsibility: numeric/string conversions and JSON quoting for selfhost tools.
+// Non-responsibility: JSON scanning beyond local character processing; use CfgNavigatorBox/StringScanBox for navigation.
+
+static box StringHelpers {
+  // Convert a numeric or numeric-like string to its decimal representation.
+  int_to_str(n) {
+    local v = me.to_i64(n)
+    if v == 0 { return "0" }
+    if v < 0 { return "-" + me.int_to_str(0 - v) }
+    local out = ""
+    local digits = "0123456789"
+    loop (v > 0) {
+      local d = v % 10
+      local ch = digits.substring(d, d+1)
+      out = ch + out
+      v = v / 10
+    }
+    return out
+  }
+
+  // Parse integer from number or numeric-like string (leading '-' allowed; stops at first non-digit).
+  to_i64(x) {
+    local s = "" + x
+    local i = 0
+    local neg = 0
+    if s.substring(0,1) == "-" { neg = 1  i = 1 }
+    local n = s.length()
+    if i >= n { return 0 }
+    local acc = 0
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch < "0" || ch > "9" { break }
+      local ds = "0123456789"
+      local dpos = ds.indexOf(ch)
+      if dpos < 0 { break }
+      acc = acc * 10 + dpos
+      i = i + 1
+    }
+    if neg == 1 { return 0 - acc }
+    return acc
+  }
+
+  // Quote a string for JSON (escape backslash, quote, and control chars) and wrap with quotes
+  json_quote(s) {
+    if s == null { return "\"\"" }
+    local out = ""
+    local i = 0
+    local n = s.length()
+    loop (i < n) {
+      local ch = s.substring(i, i+1)
+      if ch == "\\" { out = out + "\\\\" }
+      else { if ch == "\"" { out = out + "\\\"" } else {
+        if ch == "\n" { out = out + "\\n" } else {
+          if ch == "\r" { out = out + "\\r" } else {
+            if ch == "\t" { out = out + "\\t" } else { out = out + ch }
+          }
+        }
+      }}
+      i = i + 1
+    }
+    return "\"" + out + "\""
+  }
+
+  // Check if string is numeric-like (optional leading '-', then digits).
+  is_numeric_str(s) {
+    if s == null { return 0 }
+    local n = s.length()
+    if n == 0 { return 0 }
+    local i = 0
+    if s.substring(0,1) == "-" { if n == 1 { return 0 } i = 1 }
+    loop(i < n) { local ch = s.substring(i, i+1) if ch < "0" || ch > "9" { return 0 } i = i + 1 }
+    return 1
+  }
+
+  // Read consecutive digits starting at pos (no sign handling here; keep semantics simple)
+  read_digits(text, pos) {
+    local out = ""
+    loop (true) {
+      local ch = text.substring(pos, pos+1)
+      if ch == "" { break }
+      if ch >= "0" && ch <= "9" { out = out + ch  pos = pos + 1 } else { break }
+    }
+    return out
+  }
+}

@@ -1,3 +1,4 @@
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 static box Main {
   // --- minimal helpers (self-contained) ---
   index_of_from(hay, needle, pos) {
@@ -21,19 +22,7 @@ static box Main {
     if ch == "9" { return 1 }
     return 0
   }
-  read_digits(s, pos) {
-    if pos < 0 { return "" }
-    local n = s.length()
-    if pos >= n { return "" }
-    local i = pos
-    local out_start = -1
-    loop (i < n) {
-      local ch = s.substring(i, i+1)
-      if _is_digit(ch) == 1 { if out_start < 0 { out_start = i }  i = i + 1  continue } else { break }
-    }
-    if out_start < 0 { return "" }
-    return s.substring(out_start, i)
-  }
+  read_digits(s, pos) { return StringHelpers.read_digits(s, pos) }
   find_balanced_object_end(json, idx) {
     if idx < 0 { return -1 }
     local n = json.length()
@@ -245,32 +234,7 @@ static box Main {
     }
     return n
   }
-  _int_to_str(n) {
-    if n == 0 { return "0" }
-    local s = new ArrayBox()
-    local x = n
-    loop (x > 0) {
-      local d = x % 10
-      if d == 0 { s.push("0") }
-      if d == 1 { s.push("1") }
-      if d == 2 { s.push("2") }
-      if d == 3 { s.push("3") }
-      if d == 4 { s.push("4") }
-      if d == 5 { s.push("5") }
-      if d == 6 { s.push("6") }
-      if d == 7 { s.push("7") }
-      if d == 8 { s.push("8") }
-      if d == 9 { s.push("9") }
-      x = (x - d) / 10
-    }
-    local out = new ArrayBox()
-    local i = s.size() - 1
-    loop (i >= 0) { out.push(s.get(i))  i = i - 1 }
-    local j = 0
-    local acc = ""
-    loop (j < out.size()) { acc = acc + out.get(j)  j = j + 1 }
-    return acc
-  }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
   main(args) {
     local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"A\"}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"echo\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\"B\"}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"FunctionCall\",\"name\":\"itoa\",\"arguments\":[{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":7}}]}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Compare\",\"operation\":\"<\",\"lhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":1}},\"rhs\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":2}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"BinaryOp\",\"operator\":\"+\",\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":3}},\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":4}}}},{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":5}}}]}"
 
