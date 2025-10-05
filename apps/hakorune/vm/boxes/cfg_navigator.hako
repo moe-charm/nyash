@@ -1,0 +1,16 @@
+// cfg_navigator.hako — CfgNavigatorBox（ブロックの先頭/末尾シーク）
+
+static box CfgNavigatorBox {
+  _int_to_str(n) {
+    if n == 0 { return "0" }
+    if n < 0 { return "-" + me._int_to_str(0 - n) }
+    local v=n local out="" local digits="0123456789"
+    loop(v>0){ local d=v%10 local ch=digits.substring(d,d+1) out=ch+out v=v/10 }
+    return out
+  }
+  index_of_from(hay,needle,pos){ if pos<0 {pos=0} local n=hay.length() if pos>=n {return -1} local m=needle.length() if m<=0 {return pos} local i=pos local limit=n-m loop(i<=limit){ if hay.substring(i,i+m)==needle {return i} i=i+1 } return -1 }
+  _seek_array_end(text, pos){ local i=pos local depth=1 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if ch=="[" {depth=depth+1} else { if ch=="]" {depth=depth-1} } if depth==0 {return i} i=i+1 } return i }
+
+  block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=me.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
+  block_insts_end(mjson,insts_start){ return me._seek_array_end(mjson,insts_start) }
+}

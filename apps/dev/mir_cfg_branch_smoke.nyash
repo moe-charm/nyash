@@ -1,5 +1,5 @@
 using "apps/selfhost-compiler/boxes/mir_emitter_box.hako" as MirEmitterMod
-using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMinMod
+using hakorune.vm.mir_min as MirVmMinMod
 
 static box Main {
   main() {

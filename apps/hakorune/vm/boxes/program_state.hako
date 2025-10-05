@@ -1,0 +1,21 @@
+// program_state.hako — ProgramStateBox（最小ステート）
+// Mini‑VM 用の軽量ステートをMapで扱う（regs/bb/prev/steps/max）
+
+static box ProgramStateBox {
+  new_state(max_steps) {
+    local st = new MapBox()
+    st.set("regs", new MapBox())
+    st.set("bb", 0)
+    st.set("prev_bb", -1)
+    st.set("steps", 0)
+    st.set("max_steps", max_steps)
+    return st
+  }
+  regs(st) { return st.get("regs") }
+  bb(st) { return st.get("bb") }
+  set_bb(st, v) { st.set("bb", v) }
+  prev_bb(st) { return st.get("prev_bb") }
+  set_prev_bb(st, v) { st.set("prev_bb", v) }
+  inc_steps(st) { st.set("steps", st.get("steps") + 1) }
+  over_limit(st) { return st.get("steps") > st.get("max_steps") }
+}

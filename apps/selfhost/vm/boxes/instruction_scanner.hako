@@ -3,24 +3,12 @@
 
 using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
 using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
+using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
 
 static box InstructionScannerBox {
   _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
 
-  index_of_from(hay, needle, pos) {
-    if pos < 0 { pos = 0 }
-    local n = hay.length()
-    if pos >= n { return -1 }
-    local m = needle.length()
-    if m <= 0 { return pos }
-    local i = pos
-    local limit = n - m
-    loop (i <= limit) {
-      if hay.substring(i, i+m) == needle { return i }
-      i = i + 1
-    }
-    return -1
-  }
+  index_of_from(hay, needle, pos) { return CfgNavigatorBox.index_of_from(hay, needle, pos) }
 
   find_balanced_object_end(json, idx) { return JsonScanBox.seek_obj_end(json, idx) }
 

@@ -1,0 +1,23 @@
+// ret_resolver.hako — RetResolverBox
+// 役割: ret の最終値決定（last_cmp 優先→レジスタ定義→Fail‑Fast）
+using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+using "apps/hakorune/vm/boxes/diagnostics.hako" as DiagnosticsBox
+
+static box RetResolverBox {
+  _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
+  _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return null} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return null }
+
+  // Resolve return value. Inputs:
+  //  - regs: レジスタMap
+  //  - ret_id: ret の value フィールド（レジスタ番号）
+  //  - last_cmp_dst/last_cmp_val: 直近 compare の dst と値
+  // 戻り値: i64 値（Fail‑Fast設計: 未定義は -1 を返す）
+  resolve(regs, ret_id, last_cmp_dst, last_cmp_val) {
+    if ret_id == null { DiagnosticsBox.error("Undefined ret value field"); return -1 }
+    if ret_id == last_cmp_dst { return last_cmp_val }
+    local v = me._load_reg(regs, ret_id)
+    if v != null { return v }
+    DiagnosticsBox.error("Undefined register ret: r" + ret_id)
+    return -1
+  }
+}

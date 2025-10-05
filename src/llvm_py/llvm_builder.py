@@ -427,7 +427,12 @@ class NyashLLVMBuilder:
         _finalize(self)
     
     def compile_to_object(self, output_path: str):
-        """Compile module to object file"""
+        """Compile module to object file (or WASM via external toolchain when enabled).
+
+        When target == wasm32 and env NYASH_LLVM_WASM_TOOLCHAIN=1, this method
+        will invoke system LLVM tools (llc + wasm-ld) to produce a final
+        .wasm module, working around llvmlite limitations.
+        """
         # TODO(Phase 2): Delegate to self.target_obj.emit_object()
         # Current implementation uses manual target_machine for PHI sanitize logic
 
@@ -515,17 +520,52 @@ class NyashLLVMBuilder:
                 ir_text = "\n".join(grouped)
             except Exception:
                 pass
+        
+        # wasm32 via external toolchain (optional)
+        if self.target == "wasm32" and os.environ.get('NYASH_LLVM_WASM_TOOLCHAIN') == '1':
+            try:
+                ir_path = '/tmp/nyash_harness.ll'
+                try:
+                    with open(ir_path, 'w') as f:
+                        f.write(ir_text)
+                except Exception:
+                    ir_path = os.path.abspath('tmp/nyash_harness.ll')
+                    os.makedirs(os.path.dirname(ir_path), exist_ok=True)
+                    with open(ir_path, 'w') as f:
+                        f.write(ir_text)
+                obj_path = '/tmp/nyash_harness.o'
+                triple = 'wasm32-unknown-unknown'
+                llc = os.environ.get('LLC', 'llc')
+                wasm_ld = os.environ.get('WASM_LD', 'wasm-ld')
+                cmd1 = [llc, '-mtriple='+triple, '-filetype=obj', ir_path, '-o', obj_path]
+                print(f"[LLVM tools] {' '.join(cmd1)}")
+                r1 = os.spawnvp(os.P_WAIT, cmd1[0], cmd1)
+                if r1 != 0:
+                    print(f"[LLVM tools] llc failed with code {r1}")
+                    raise RuntimeError('llc failed')
+                exports = ['ny_main']
+                extra_exports = (os.environ.get('NYASH_WASM_EXPORTS') or '').strip()
+                if extra_exports:
+                    exports.extend([x for x in extra_exports.split(',') if x])
+                export_args = []
+                for e in exports:
+                    export_args.extend(['--export', e])
+                cmd2 = [wasm_ld, obj_path, '-o', output_path, '--no-entry', '--allow-undefined'] + export_args
+                print(f"[LLVM tools] {' '.join(cmd2)}")
+                r2 = os.spawnvp(os.P_WAIT, cmd2[0], cmd2)
+                if r2 != 0:
+                    print(f"[LLVM tools] wasm-ld failed with code {r2}")
+                    raise RuntimeError('wasm-ld failed')
+                return
+            except Exception as _e:
+                print(f"[LLVM tools] fallback to llvmlite emit_object due to: {_e}")
         mod = llvm.parse_assembly(ir_text)
-        # Allow skipping verifier for iterative bring-up
         if os.environ.get('NYASH_LLVM_SKIP_VERIFY') != '1':
             mod.verify()
-        
-        # Generate object code
         obj = target_machine.emit_object(mod)
-        
-        # Write to file
         with open(output_path, 'wb') as f:
             f.write(obj)
+              
 
 def main():
     # CLI:

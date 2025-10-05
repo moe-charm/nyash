@@ -1,0 +1,8 @@
+// instr_decoder.hako — InstrDecoderBox（最小・薄いラッパー）
+// 既存の InstructionScannerBox をそのまま委譲して使うよ
+using "apps/selfhost/vm/boxes/instruction_scanner.hako" as InstructionScannerBox
+
+static box InstrDecoderBox {
+  // 次のオブジェクト {start,end,op} を返す（無ければ null）
+  next(seg, pos) { return InstructionScannerBox.next(seg, pos) }
+}

@@ -1,25 +1,28 @@
-// mir_vm_min.hako — Ny製の最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
+// hakorune_vm_min.hako — Hakorune最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
+// 互換性のため、当面は selfhost 側の既存Boxへ依存するよ（スリムな差分で段階移行）
 using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "apps/hakorune/vm/boxes/instr_decoder.hako" as InstrDecoderBox
+using "apps/hakorune/vm/boxes/phi_wiring.hako" as PhiWiringBox
+using "apps/hakorune/vm/boxes/program_state.hako" as ProgramStateBox
+using "apps/hakorune/vm/boxes/diagnostics.hako" as DiagnosticsBox
+using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
+using "apps/hakorune/vm/boxes/ret_resolver.hako" as RetResolverBox
 using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
 using "apps/selfhost/vm/boxes/guard_box.hako" as GuardBox
 using "apps/selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
 
-static box MirVmMin {
+static box HakoruneVmMin {
   _tprint(msg) {
-    // Only emit hard errors by default; avoid env dependencies in Mini‑VM
     if msg.indexOf("[ERROR]") >= 0 { print(msg) }
   }
-  // Compatibility runner (prints and returns). Prefer run_min for quiet return-only.
+  // 入口は run_min を標準にする（printは run が担当）
   run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
-  // New: quiet entry that returns the result without printing.
   run_min(mjson) { return me._run_min(mjson) }
-  // Thin-mode runner (ret resolution simplified)
   run_thin(mjson) {
-    // Inject a lightweight marker into JSON to toggle thin mode inside _run_min
     if mjson.substring(0,1) == "{" {
       local payload = mjson.substring(1, mjson.length())
       local j2 = "{\"__thin__\":1," + payload
@@ -27,7 +30,6 @@ static box MirVmMin {
       print(me._int_to_str(v))
       return v
     }
-    // Fallback: no-op when input is unexpected
     local v = me._run_min(mjson)
     print(me._int_to_str(v))
     return v
@@ -44,60 +46,64 @@ static box MirVmMin {
   _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return 0 }
 
-  // block helpers
-  index_of_from(hay,needle,pos){ if pos<0 {pos=0} local n=hay.length() if pos>=n {return -1} local m=needle.length() if m<=0 {return pos} local i=pos local limit=n-m loop(i<=limit){ if hay.substring(i,i+m)==needle {return i} i=i+1 } return -1 }
+  // block helpers（selfhost版と同等の簡易スキャナ）
+  index_of_from(hay,needle,pos){ return CfgNavigatorBox.index_of_from(hay,needle,pos) }
   _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=me.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
   _seek_array_end(text, pos){ local i=pos local depth=1 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if ch=="[" {depth=depth+1} else { if ch=="]" {depth=depth-1} } if depth==0 {return i} i=i+1 } return i }
   _block_insts_end(mjson,insts_start){ return me._seek_array_end(mjson,insts_start) }
   _seek_obj_end(text, obj_start) { local i=obj_start local depth=0 local in_str=0 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if in_str==1 { if ch=="\\" { i=i+2 continue } if ch=="\"" { in_str=0 i=i+1 continue } i=i+1 continue } if ch=="\"" { in_str=1 i=i+1 continue } if ch=="{" { depth=depth+1 } else { if ch=="}" { depth=depth-1 } } if depth==0 { return i+1 } i=i+1 } return i }
 
-  // local copy handler
   _handle_copy(seg, regs){ local dst=JsonFragBox.get_int(seg,"dst") local src=JsonFragBox.get_int(seg,"src") if dst==null || src==null {return} local v=regs.get(""+src) regs.set(""+dst, v) }
 
   _run_min(mjson) {
-    // thin_mode=0: legacy heuristics（互換）; thin_mode=1: simplified ret
     local thin_mode = 0
     if mjson.indexOf("\"__thin__\":1") >= 0 { thin_mode = 1 }
-    local regs = new MapBox()
+    if mjson.indexOf("\"__dev__\":1") >= 0 { DiagnosticsBox.enable_dev() }
+    // Use ProgramStateBox for state/regs (thin introduction)
+    // regs is obtained from ProgramStateBox; other counters remain local for now
     local last_cmp_dst = -1
     local last_cmp_val = 0
-    // Optional: adopt OperatorBox for parity checks when JSON has a special marker
     local op_adopt = 0
     if mjson.indexOf("\"__op_adopt__\":1") >= 0 { op_adopt = 1 }
-    // Track last binop materialization within the current scan window
     local last_binop_dst = -1
     local last_binop_val = 0
     local bb = 0
     local prev_bb = -1
-    local steps = 0
+    // steps now tracked in ProgramStateBox
     local max_steps = 200000
+    // Initialize program state (only regs used for now)
+    local st = ProgramStateBox.new_state(max_steps)
+    local regs = ProgramStateBox.regs(st)
+    // keep state in sync (setter only routing for now)
+    ProgramStateBox.set_bb(st, bb)
+    ProgramStateBox.set_prev_bb(st, prev_bb)
     loop(true){
-      steps = steps + 1
-      if steps > max_steps { return 0 }
-      local start = me._block_insts_start(mjson, bb)
+      ProgramStateBox.inc_steps(st)
+      if ProgramStateBox.over_limit(st) == 1 { return 0 }
+      local start = CfgNavigatorBox.block_insts_start(mjson, ProgramStateBox.bb(st))
       me._tprint("[minivm] start="+me._int_to_str(start))
       if start < 0 { return 0 }
-      local endp = me._block_insts_end(mjson, start)
+      local endp = CfgNavigatorBox.block_insts_end(mjson, start)
       me._tprint("[minivm] endp="+me._int_to_str(endp))
       if endp <= start { return 0 }
       local inst_seg = mjson.substring(start, endp)
       me._tprint("[minivm] seglen="+me._int_to_str(inst_seg.length()))
-      // scan objects in this block
       local scan_pos = 0
-      local inst_count = 0
       local moved = 0
       loop(true){
         if scan_pos >= inst_seg.length() { break }
-        local obj_start = me.index_of_from(inst_seg, "{", scan_pos)
-        if obj_start < 0 { break }
-        local obj_end = me._seek_obj_end(inst_seg, obj_start)
-        if obj_end <= obj_start { break }
+        // Delegate object decode to InstrDecoderBox (thin wrapper over InstructionScannerBox)
+        local nxt = InstrDecoderBox.next(inst_seg, scan_pos)
+        if nxt == null { break }
+        local obj_start = nxt.get("start")
+        local obj_end = nxt.get("end")
+        local op = nxt.get("op")
         local seg = inst_seg.substring(obj_start, obj_end)
-        // derive op from seg contents
-        local op = JsonFragBox.get_str(seg, "op")
+        if op == null { op = "" }
+        if op == "null" { op = "" }
+        if op == 0 { op = "" }
         me._tprint("[minivm] op="+op)
         if op == "" {
-          // Detect binop before generic lhs/rhs (to avoid misclassification)
           if seg.indexOf("\"op_kind\"") >= 0 { op = "binop" } else {
             if seg.indexOf("\"lhs\"") >= 0 and seg.indexOf("\"rhs\"") >= 0 { op = "compare" } else {
             if seg.indexOf("\"cond\"") >= 0 { op = "branch" } else {
@@ -111,7 +117,6 @@ static box MirVmMin {
         else if op == "copy" { me._handle_copy(seg, regs) }
         else if op == "binop" {
           OpHandlersBox.handle_binop(seg, regs)
-          // Record last binop destination and its materialized value for same-block compares
           local bdst = JsonFragBox.get_int(seg, "dst")
           if bdst != null { last_binop_dst = bdst  last_binop_val = me._load_reg(regs, bdst) }
         }
@@ -128,8 +133,10 @@ static box MirVmMin {
           if c != null {
             if c == last_cmp_dst { cv = last_cmp_val } else { cv = me._load_reg(regs, c) }
           }
-          prev_bb = bb
+          ProgramStateBox.set_prev_bb(st, bb)
+          prev_bb = ProgramStateBox.bb(st)
           if cv != 0 { bb = t } else { bb = e }
+          ProgramStateBox.set_bb(st, bb)
           moved = 1
           scan_pos = obj_end
           break
@@ -137,50 +144,37 @@ static box MirVmMin {
         else if op == "jump" {
           local tgt = JsonFragBox.get_int(seg, "target")
           if tgt == null { return 0 }
-          prev_bb = bb
+          ProgramStateBox.set_prev_bb(st, bb)
+          prev_bb = ProgramStateBox.bb(st)
           bb = tgt
+          ProgramStateBox.set_bb(st, bb)
           moved = 1
           scan_pos = obj_end
           break
         }
         else if op == "phi" {
-          // Boxed decode path (Result) + apply
-          local res = PhiDecodeBox.decode_result(seg, prev_bb)
+          local res = PhiDecodeBox.decode_result(seg, ProgramStateBox.prev_bb(st))
           if res.is_ok() == 1 {
             local pair = res.value()
-            PhiApplyBox.apply(pair.get(0), pair.get(1), regs)
+            // Route wiring via PhiWiringBox (thin layer), maintaining existing behavior
+            PhiWiringBox.wire(pair, regs)
           }
         }
-                else if op == "throw" {
-          // Minimal throw terminator: emit error and return distinct code
+        else if op == "throw" {
           me._tprint("[ERROR] Throw terminator encountered")
           return -2
         }
-else if op == "ret" {
-          // Return resolution (Fail‑Fast policy)
-          // 1) Compare result takes precedence when ret value equals last compare dst
-          // 2) If the register has a defined value, return it
-          // 3) Otherwise, emit error and return -1 (explicit error marker)
+        else if op == "ret" {
           local v = JsonFragBox.get_int(seg, "value")
-          if v == null { me._tprint("[ERROR] Undefined ret value field") return -1 }
-          // Debug removed
-          if v == last_cmp_dst { return last_cmp_val }
-          // Consider a register "defined" only if it holds a numeric string
-          local sval = "" + regs.get(""+v)
-          if me._is_numeric_str(sval) == 1 { return me._load_reg(regs, v) }
-          me._tprint("[ERROR] Undefined register ret: r"+me._int_to_str(v))
-          return -1
+          return RetResolverBox.resolve(regs, v, last_cmp_dst, last_cmp_val)
         }
         // advance
-        inst_count = inst_count + 1
         scan_pos = obj_end
       }
       if moved == 1 { continue }
-      // if we didn’t move and no ret occurred, fallback: return first const (dst=1) if present
       local first = me._load_reg(regs, 1)
       return first
     }
     return 0
   }
-
 }

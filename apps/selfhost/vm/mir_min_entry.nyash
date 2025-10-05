@@ -8,7 +8,7 @@ static box Main {
     // 既定の最小 MIR(JSON v0)
     local json = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":42}},{\"op\":\"ret\",\"value\":1}]}]}]}"
     if args != null { if args.size() > 0 { local s = args.get(0) if s != null { json = s } } }
-    local v = MirVmMin._run_min(json)
+    local v = MirVmMin.run_min(json)
     print(MirVmMin._int_to_str(v))
     return 0
   }

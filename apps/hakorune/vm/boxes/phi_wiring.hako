@@ -1,0 +1,10 @@
+// phi_wiring.hako — PhiWiringBox（最小の適用ラッパー）
+// 既存の PhiApplyBox.apply を呼び出すだけの薄い箱
+using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
+
+static box PhiWiringBox {
+  // incomings_pair = [pairs_map, current_bb]
+  wire(incomings_pair, regs) {
+    return PhiApplyBox.apply(incomings_pair.get(0), incomings_pair.get(1), regs)
+  }
+}

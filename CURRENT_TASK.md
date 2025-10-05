@@ -197,6 +197,17 @@ Acceptance（このラウンド）
   - quick/core/using_modules_alias_toml_only_vm.sh: env無しで hako.toml のみ（PASS）
   - LLVM 自己再帰 IR は環境依存のため既定 SKIP（`SMOKES_ENABLE_LLVM_SELFREC=1` で任意）
 
+## 2025-10-05 — Hakorune‑VM への改名と箱構成（Phase 15.7 反映）
+
+- 目的: Mini‑VM を hakorune‑vm へ改名し、箱境界を明確化。自己ホストのユニットとして扱いやすくする。
+- 変更計画（ドキュメント先行→実装）
+  - パス: `apps/selfhost/vm/boxes/mir_vm_min.hako` → `apps/hakorune/vm/boxes/hakorune_vm_min.hako`
+  - [modules]: `selfhost.vm.*` → `hakorune.vm.*`（旧キーは1リリースalias）
+  - 入口: `HakoruneVmBox.run_min(json)`（旧 `_run_min` はadapter）
+  - 箱: InstrDecoderBox / ProgramStateBox / OpHandlersBox / PhiWiringBox / StringScanBox / JsonScanBox / ObserveBox（最小）
+- スモーク影響: `selfhost_m2/m3` を `hakorune_vm_*` 名へ順次置換（旧名は当面維持）
+
+
 - 互換性
   - 公開仕様は不変。Builder/VM の名前解決経路のみ構造的に厳格化。`print` 等の Global 経路は影響なし。
 
@@ -1056,3 +1067,24 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
   - dev では `[contracts_*]` と `[call]` ラインで観測。テストランナーは既にフィルタ済み。
 
 - Implemented: JSON v0 bridge honors NYASH_JSON_NEWBOX_AUTOBIRTH=1 to enable Builder auto_birth during bridge; Builder default auto_birth now ON (override with NYASH_BUILDER_NEWBOX_AUTOBIRTH=0). Added quick smoke: tools/smokes/v2/profiles/quick/core/plugin_no_birth_nop_vm.sh (SKIP unless NYASH_PLUGIN_NO_BIRTH_BOX set).
+
+## 2025-10-05 — Hakorune‑VM rename/stubs
+- Added: `apps/hakorune/vm/boxes/hakorune_vm_min.hako` (copy; entry `run_min` standard).
+- hako.toml: `[modules]` now maps `hakorune.vm.mir_min` → `apps/hakorune/vm/boxes/hakorune_vm_min.hako`; legacy `selfhost.vm.mir_min` kept.
+- Stubs: `InstrDecoderBox`, `ProgramStateBox`, `PhiWiringBox` under `apps/hakorune/vm/boxes` delegating to existing boxes.
+- Entry: switched `apps/selfhost/vm/mir_min_entry.nyash` to use `run_min`.
+- Smokes: added `hakorune_vm_m2_eq_true_vm.sh`, `hakorune_vm_m3_branch_true_vm.sh` using hakorune alias + run_min.
+
+- Alias move: flow_runner / dev sample switched to hakorune.vm.mir_min.
+- HakoruneVmMin now uses InstrDecoderBox.next + PhiWiringBox.wire (thin path).
+- Added one more representative smoke: hakorune_vm_m3_jump_vm.sh.
+
+- Hakorune ProgramStateBox: regs retrieval switched in hakorune_vm_min (state st initialized; counters remain local).
+- Added hakorune phi smoke: tools/smokes/v2/profiles/quick/selfhost/hakorune_vm_m3_phi_diamond_vm.sh (uses run_min).
+- Kept run_min migration scoped to hakorune smokes; originals unchanged.
+
+- ProgramStateBox setters: bb/prev_bb writes now mirrored via ProgramStateBox.set_* in HakoruneVmMin.
+- Added hakorune jump_chain smoke: tools/smokes/v2/profiles/quick/selfhost/hakorune_vm_m3_jump_chain_vm.sh (uses run_min).
+
+- ProgramStateBox get: phi decode now reads prev_bb via ProgramStateBox.prev_bb(st) (one-site get introduction).
+- Added smoke: tools/smokes/v2/profiles/quick/core/builder_autobirth_cross_module_vm.sh (SKIP unless SMOKES_ENABLE_BUILDER_AUTOBIRTH_CROSS=1).

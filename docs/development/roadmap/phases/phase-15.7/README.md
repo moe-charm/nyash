@@ -94,7 +94,7 @@ Branch Note (selfhost)
 ```
 Hakoruneコンパイラ（apps/selfhost-compiler/compiler.hako｜互換: .nyash）
     ↓ MIR生成
-Mini-VM（apps/selfhost/vm/boxes/mir_vm_min.nyash）
+Hakorune-VM（apps/hakorune/vm/boxes/hakorune_vm_min.hako｜互換: apps/selfhost/vm/boxes/mir_vm_min.hako）
     ↓ 実行
 Rust VM（src/backend/mir_interpreter/）
     ↓ 比較検証
@@ -103,7 +103,7 @@ Rust VM（src/backend/mir_interpreter/）
 
 #### 💡 **理由2: デバッグが容易**
 - **Hakoruneコンパイラのバグ**: Mini-VMで実行 → エラー出る → MIRを見る → Rust VMと比較
-- **Mini-VMのバグ**: Rustコンパイラ生成MIRで実行 → Rust VMと比較 → 差分発見
+- **Mini-VMのバグ**: Rustコンパイラ生成MIRで実行 → Rust VMと比較 → 差分発見（hakorune-vmへ改名・箱構造を強化）
 
 #### 💡 **理由3: 完全な理解（教材として最高）**
 ```
@@ -121,10 +121,10 @@ Hakoruneで実行器書く
 - quick/integration 常緑維持（既定の品質基準）
 - **理由**: Rust VMは比較検証の基準点として絶対的に安定している必要がある
 
-#### **P1: Mini‑VM 仕上げ（完了✅）**
+#### **P1: Hakorune‑VM 仕上げ（完了✅）**
 - M2/M3 の代表＋エッジスモークを quick に追加
 - 単一パス＋厳密セグメントで緑維持
-- **成果**: `apps/selfhost/vm/boxes/mir_vm_min.nyash` 安定動作
+- **成果**: `apps/hakorune/vm/boxes/hakorune_vm_min.hako` 安定動作（旧パスとの互換ルート維持）
 
 【2025-10-01 追記】
 - Mini‑VM に call/boxcall/newbox の最小意味論（i64 引数の総和）を追加。代表スモーク（exec）を quick に追加:
@@ -499,7 +499,7 @@ Phase 15.7進捗: ████████░░ 80%完成
 **トラック2（Mini-VM拡張）**:
 - 担当: ChatGPT + Claude
 - 期間: 2週間
-- 成果: 完全なMini-VM（M4-M7）
+- 成果: 完全な Hakorune-VM（M4-M7）
 - ファイル: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
 
 **統合**:
