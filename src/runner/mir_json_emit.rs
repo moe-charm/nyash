@@ -483,10 +483,27 @@ pub fn emit_mir_json_for_harness(
             }
     };
 
-    let root = if use_v1_schema {
+    let mut root = if use_v1_schema {
         create_json_v1_root(json!(funs))
     } else {
         json!({"functions": funs})  // v0 legacy format
+    };
+    // Optional DEV marker injection for Ny-side Diagnostics bridge
+    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
+        if let serde_json::Value::Object(map) = &mut root {
+            map.insert("__dev__".to_string(), serde_json::Value::from(1));
+        }
+    }
+    // Optional DEV marker injection for Ny-side Diagnostics bridge (bin)
+    let mut root_v = if use_v1_schema {
+        create_json_v1_root(json!(funs))
+    } else {
+        json!({"functions": funs})
+    };
+    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
+        if let serde_json::Value::Object(map) = &mut root_v {
+            map.insert("__dev__".to_string(), serde_json::Value::from(1));
+        }
     };
     // Validate before writing (Fail-Fast)
     let skip_validator = std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1");
@@ -811,7 +828,7 @@ pub fn emit_mir_json_for_harness_bin(
     let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
         || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
     let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
-    let root = if use_v1_schema {
+    let mut root = if use_v1_schema {
         json!({
             "schema_version": "1.0",
             "capabilities": ["unified_call","phi","effects","callee_typing"],
@@ -820,6 +837,23 @@ pub fn emit_mir_json_for_harness_bin(
         })
     } else {
         json!({"functions": funs})
+    };
+    // Optional DEV marker injection for Ny-side Diagnostics bridge
+    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
+        if let serde_json::Value::Object(map) = &mut root {
+            map.insert("__dev__".to_string(), serde_json::Value::from(1));
+        }
+    }
+    // Optional DEV marker injection for Ny-side Diagnostics bridge (bin)
+    let mut root_v = if use_v1_schema {
+        create_json_v1_root(json!(funs))
+    } else {
+        json!({"functions": funs})
+    };
+    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
+        if let serde_json::Value::Object(map) = &mut root_v {
+            map.insert("__dev__".to_string(), serde_json::Value::from(1));
+        }
     };
     // Validate before writing (Fail-Fast)
     let skip_validator = std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1");
