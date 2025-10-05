@@ -38,6 +38,27 @@ HAKO_CLI_VERBOSE=1 ./target/release/hakorune program.hkr
 ./target/release/hakorune --dump-mir program.hkr
 ```
 
+
+#### 4.1 WASM（llc + wasm-ld 経路）— llvmlite 制限の回避策
+
+llvmlite の `emit_object` が関数を落とす/リンクが不安定な環境では、LLVM 純正ツールチェイン（`llc` + `wasm-ld`）を使う経路を有効化できます。
+
+- 前提: `llc`, `wasm-ld` が PATH にある（LLVM ≥ 16 目安）
+- 有効化: `NYASH_LLVM_WASM_TOOLCHAIN=1`
+- 追加エクスポート: `NYASH_WASM_EXPORTS="Main.main,main"`（既定で `ny_main` は常に export）
+
+例:
+```bash
+NYASH_LLVM_WASM_TOOLCHAIN=1 \
+  PYTHONPATH=$NYASH_ROOT python3 $NYASH_ROOT/src/llvm_py/llvm_builder.py \
+  --target wasm32 $NYASH_ROOT/program.json -o /tmp/out.wasm
+
+node $NYASH_ROOT/src/llvm_py/tools/wasm_runner.js /tmp/out.wasm
+```
+
+メモ:
+- ツールチェイン経路で IR は `/tmp/nyash_harness.ll` にダンプされます（デバッグ用）。
+- 失敗時は自動的に llvmlite の経路にフォールバックします（既定動作は不変）。
 **出力責務**:
 - ✅ **FallbackVmEngine** (src/backend/vm/fallback_vm_engine.rs)
 - 最深部で出力するため取りこぼしなし
