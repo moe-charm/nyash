@@ -31,10 +31,24 @@ static box FlowRunner {
     if compat == 1 { j = FlowEntryBox.emit_v1_compat_from_ast(ast_json, prefer_cfg) }
     else { j = FlowEntryBox.emit_v0_from_ast(ast_json, prefer_cfg) }
     // DEV marker injection is delegated to the CLI (Rust) bridge.
-    // FlowRunner does not inject {"__dev__":1} by default to avoid enabling DEV inadvertently.
+    // 将来の切替用トグル: CLI が __cli_dev__ を埋めた場合のみ __dev__ に正規化（現状は未使用・既定OFF）
+    j = me._maybe_inject_dev_marker(j)
     return MirVmMin.run(j)
   }
 
   main(args) { return 0 }
 }
 
+
+  _maybe_inject_dev_marker(j) {
+    if j == null { return j }
+    if j.indexOf("\"__dev__\":1") >= 0 { return j }
+    if j.indexOf("\"__cli_dev__\":1") >= 0 {
+      if j.substring(0,1) == "{" {
+        local payload = j.substring(1, j.length())
+        return "{\"__dev__\":1," + payload
+      }
+    }
+    return j
+  }
+}
