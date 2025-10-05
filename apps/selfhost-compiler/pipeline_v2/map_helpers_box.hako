@@ -1,5 +1,6 @@
 // map_helpers_box.hako — Pipeline用の軽量ヘルパ（MapBoxの型付き取得）
 
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 static box MapHelpersBox {
   _raw_get(m, key) {
     if m == null { return null }
@@ -7,26 +8,7 @@ static box MapHelpersBox {
     return m.get(key)
   }
 
-  _to_i64(v) {
-    if v == null { return 0 }
-    local s = "" + v
-    local i = 0
-    local neg = 0
-    if s.substring(0,1) == "-" { neg = 1  i = 1 }
-    local n = s.length()
-    if i >= n { return 0 }
-    local acc = 0
-    loop (i < n) {
-      local ch = s.substring(i, i+1)
-      if ch < "0" || ch > "9" { break }
-      local d = "0123456789".indexOf(ch)
-      if d < 0 { break }
-      acc = acc * 10 + d
-      i = i + 1
-    }
-    if neg == 1 { return 0 - acc }
-    return acc
-  }
+  _to_i64(v) { return StringHelpers.to_i64(v) }
 
   get_str(m, key) {
     local v = me._raw_get(m, key)

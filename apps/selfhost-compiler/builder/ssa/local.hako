@@ -4,6 +4,7 @@
 //   「ブロック内にオペランドが材化されている（LocalSSA）」ことを軽く検証・整形する。
 // - 既定では再配線（Copy挿入）等は行わず、将来の拡張に備えた安全な足場のみを提供する。
 
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 static box LocalSSA {
   // --- 内部ヘルパ ---
   // trace fields are created on demand (dynamic properties)
@@ -24,16 +25,7 @@ static box LocalSSA {
     }
     return -1
   }
-  _read_digits(text, pos) {
-    local out = ""
-    local i = pos
-    loop(true) {
-      local ch = text.substring(i, i+1)
-      if ch == "" { break }
-      if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
-    }
-    return out
-  }
+  _read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
   _count_occurs(hay, needle) {
     if hay == null { return 0 }
     if needle == null { return 0 }
@@ -127,4 +119,3 @@ static box LocalSSA {
   ensure_cmp(stage1_json) { return stage1_json }
   ensure_cond(stage1_json) { return stage1_json }
 }
-

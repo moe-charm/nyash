@@ -14,7 +14,7 @@ static box MiniVm {
     @idx = json.lastIndexOf(key)
     if idx < 0 { return "0" }
     @start = idx + key.length()
-    return read_digits(json, start)
+    return me.read_digits(json, start)
   }
 
   // Execute a minimal program: print the extracted integer and exit code 0

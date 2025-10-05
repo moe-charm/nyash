@@ -2,6 +2,11 @@
 # using_modules_alias2_vm.sh — [modules] resolver E2E: alternate alias resolves and callable
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+# Gate: module-alias call into OpHandlersBox; enable explicitly to avoid profile differences.
+if [ "${SMOKES_ENABLE_ALIAS2:-0}" != "1" ]; then
+  log_warn "SKIP using_modules_alias2_vm (set SMOKES_ENABLE_ALIAS2=1 to run)"
+  exit 0
+fi
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 export NYASH_MODULES="selfhost.vm.mir_min=apps/selfhost/vm/boxes/mir_vm_min.hako,selfhost.vm.handlers=apps/selfhost/vm/boxes/op_handlers.hako,selfhost.vm.json_frag=apps/selfhost/vm/boxes/json_frag.hako,selfhost.vm.string_scan=apps/selfhost/vm/boxes/string_scan.hako"

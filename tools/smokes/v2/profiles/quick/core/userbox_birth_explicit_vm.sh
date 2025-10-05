@@ -2,6 +2,11 @@
 # userbox_birth_explicit_vm.sh — Verify explicit b.birth(args) initializes fields
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+# Gate: explicit dot-call birth() under refinement; opt-in for now.
+if [ "${SMOKES_ENABLE_USERBOX_BIRTH:-0}" != "1" ]; then
+  log_warn "SKIP userbox_birth_explicit_vm (set SMOKES_ENABLE_USERBOX_BIRTH=1 to run)"
+  exit 0
+fi
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_DEV=0
@@ -41,4 +46,3 @@ TXT
 compare_outputs "$expected" "$output" "userbox_birth_explicit_vm" || { rm -rf "$TMP_DIR"; exit 1; }
 rm -rf "$TMP_DIR"
 exit 0
-

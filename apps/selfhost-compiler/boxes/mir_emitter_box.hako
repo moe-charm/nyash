@@ -4,6 +4,7 @@
 
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 using "apps/lib/json_native/stringify.hako" as JSON
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box MirEmitterBox {
   _index_of(hay, needle) { return hay.indexOf(needle) }
@@ -22,35 +23,8 @@ static box MirEmitterBox {
     }
     return -1
   }
-  _read_digits(text, pos) {
-    local out = ""
-    local i = pos
-    loop(true) {
-      local ch = text.substring(i, i+1)
-      if ch == "" { break }
-      if ch >= "0" && ch <= "9" { out = out + ch i = i + 1 } else { break }
-    }
-    return out
-  }
-  _str_to_int(s) {
-    local i = 0
-    local n = s.length()
-    local acc = 0
-    loop (i < n) {
-      local ch = s.substring(i, i+1)
-      local d = match ch {
-        "0" => 0, "1" => 1, "2" => 2, "3" => 3,
-        "4" => 4, "5" => 5, "6" => 6, "7" => 7,
-        "8" => 8, "9" => 9,
-        _ => -1
-      }
-      if d < 0 { break }
-      acc = acc * 10 + d
-      i = i + 1
-      continue
-    }
-    return acc
-  }
+  _read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
 
   _map_binop(op) {
     if op == "Add" || op == "+" { return "Add" }

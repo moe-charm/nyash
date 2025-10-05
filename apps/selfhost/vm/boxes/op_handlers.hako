@@ -8,7 +8,7 @@ static box OpHandlersBox {
   _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
   _is_numeric_str(s) { return StringHelpers.is_numeric_str(s) }
 
-  _str_to_int(s) { return StringHelpers.to_i64(s) }
+  _str_to_int(s) { return JsonFragBox._str_to_int(s) }
 
   // --- Safe decimal arithmetic on strings (non-negative integers only) ---
 

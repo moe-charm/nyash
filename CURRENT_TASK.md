@@ -1088,3 +1088,34 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
 
 - ProgramStateBox get: phi decode now reads prev_bb via ProgramStateBox.prev_bb(st) (one-site get introduction).
 - Added smoke: tools/smokes/v2/profiles/quick/core/builder_autobirth_cross_module_vm.sh (SKIP unless SMOKES_ENABLE_BUILDER_AUTOBIRTH_CROSS=1).
+
+
+### Update — 2025-10-05 19:43 (CLI AST dev marker + ProgramStateBox reads + Stage‑1/2 smokes)
+- CLI: inject "__cli_dev__":1 into AST JSON when NYASH_DEV_JSON_MARKER=1 (src/macro/ast_json.rs). FlowRunner normalizes to {"__dev__":1}.
+- HakoruneVmMin: completed ProgramStateBox read migration (removed local prev_bb reads; all logs/phi use getters).
+- Smokes added (quick/selfhost):
+  - hakorune_pipeline_const_ret_vm.sh (PASS)
+  - hakorune_pipeline_compare_branch_phi_vm.sh (PASS)
+  - hakorune_pipeline_compare_ret_vm.sh (gated: set SMOKES_ENABLE_STAGE12_COMPARE_RET=1; FlowRunner fast-path can shadow)
+
+
+### Update — 2025-10-05 19:58 (Phase‑15.9 optimization plan consolidated)
+- Added consolidated optimization plan under docs/development/roadmap/phases/phase-15.9/README.md (VM unboxed primitives, AOT, fast blocks, externcall, PIC, SBO/arena, KPIs, guards).
+## 2025-10-05 — StringHelpers delegation + .hako unification (batch 2)
+
+- Delegated helpers in Nyash utility files to StringHelpers (read_digits/int_to_str):
+  - apps/selfhost/vm/collect_mixed_smoke.hako (was .nyash)
+  - apps/selfhost/vm/mini_vm_lib.hako (was .nyash)
+  - apps/selfhost/vm/mini_vm_if_branch.hako (was .nyash)
+- Renamed files to .hako for consistency and future using-based imports.
+- Renamed legacy box: apps/selfhost/vm/boxes/mir_vm_m2.hako (was .nyash). No external references affected.
+- Notes: avoided block comments; full delegation via using apps/selfhost/common/string_helpers.hako as StringHelpers.
+## 2025-10-05 — WASM ABI skeleton（handoff for wasm branch）
+
+- Docs: docs/guides/wasm-abi.md（最小ABI/契約/責務分離を記載）
+- Crate (opt-in, not in workspace): crates/nykernel-wasm
+  - wasm32向け bump allocator と nykernel_*(malloc/load_i64/store_i64) をエクスポート
+  - 非wasm向けはダミー（リンク用）
+- hakorune-std（箱化）: apps/hakorune/std/core/array.hako
+  - extern_call("nykernel.*") 経由で配列操作（len/cap/ptr管理、resize/copy、Fail‑Fast）
+- 影響: 既存ビルド/quickに未接続（既定OFF）。wasmブランチでの受け取り前提で配置。

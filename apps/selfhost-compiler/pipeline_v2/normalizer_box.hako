@@ -1,28 +1,8 @@
 // normalizer_box.hako — Minimal normalizer for Compare maps (cmp/lhs/rhs)
 
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 static box NormalizerBox {
-  _to_i64(v) {
-    // Accept number or number-like string; otherwise 0 (Fail-Fast at caller)
-    if v == null { return 0 }
-    // Stringify then parse digits
-    local s = "" + v
-    local i = 0
-    local neg = 0
-    if s.substring(0,1) == "-" { neg = 1  i = 1 }
-    local n = s.length()
-    if i >= n { return 0 }
-    local acc = 0
-    loop (i < n) {
-      local ch = s.substring(i, i+1)
-      if ch < "0" || ch > "9" { break }
-      local d = "0123456789".indexOf(ch)
-      if d < 0 { break }
-      acc = acc * 10 + d
-      i = i + 1
-    }
-    if neg == 1 { return 0 - acc }
-    return acc
-  }
+  _to_i64(v) { return StringHelpers.to_i64(v) }
 
   _to_string(v) {
     if v == null { return "" }

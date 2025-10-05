@@ -2,9 +2,10 @@
 // Scope: test-only box for JSON v0(MIR-like) strings. No full JSON parser; tolerant scanning.
 
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box CondInserter {
-  _int_to_str(n) { if n == 0 { return "0" } local v=n local out="" local ds="0123456789" loop(v>0){ local d=v%10 local ch=ds.substring(d,d+1) out=ch+out v=v/10 } return out }
+  _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _index_of_from(hay, needle, pos) { return JsonFragBox.index_of_from(hay, needle, pos) }
   _read_digits(text, pos) { return JsonFragBox.read_digits(text, pos) }
   _seek_obj_end(text, obj_start) {

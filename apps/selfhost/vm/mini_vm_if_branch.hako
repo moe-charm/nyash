@@ -9,10 +9,10 @@ static box MiniVm {
     @idx = json.lastIndexOf(key)
     if idx < 0 { return "0" }
     @start = idx + key.length()
-    return read_digits(json, start)
+    return me.read_digits(json, start)
   }
   run_branch(json) {
-    @n = parse_first_int(json)
+    @n = me.parse_first_int(json)
     if n == "0" || n == "1" || n == "2" || n == "3" || n == "4" { print("10") return 0 }
     print("20")
     return 0
@@ -31,7 +31,7 @@ static box Main {
         if s { json = s }
       }
     }
-    return vm.run_branch(json)
+    return MiniVm.run_branch(json)
   }
 }
 
@@ -45,7 +45,7 @@ function main(args) {
       if s { json = s }
     }
   }
-  @n = vm.parse_first_int(json)
+  @n = MiniVm.parse_first_int(json)
   if n == "0" || n == "1" || n == "2" || n == "3" || n == "4" { print("10") return 0 }
   print("20")
   return 0

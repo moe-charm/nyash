@@ -25,6 +25,73 @@ pub fn extern_call(
         "env.debug" => handle_debug(method_name, args),
         "env.runtime" => handle_runtime(method_name, args),
         "env.future" => handle_future(method_name, args),
+        // Dev-only stub for WASM experiments: enable NYASH_ENABLE_NYKERNEL_STUB=1
+        // Provides minimal nykernel.* externs over VM (malloc/load_i64/store_i64)
+        "nykernel" => {
+            if std::env::var("NYASH_ENABLE_NYKERNEL_STUB").ok().as_deref() == Some("1") {
+                handle_nykernel_stub(method_name, args)
+            } else {
+                Err(BidError::PluginError)
+            }
+        }
+        _ => Err(BidError::PluginError),
+    }
+}
+
+use std::sync::{Mutex, OnceLock};
+use crate::box_trait::{NyashBox, IntegerBox};
+
+fn heap_state() -> &'static (Mutex<Vec<i64>>, Mutex<i64>) {
+    static HEAP: OnceLock<(Mutex<Vec<i64>>, Mutex<i64>)> = OnceLock::new();
+    HEAP.get_or_init(|| (Mutex::new(Vec::with_capacity(1024)), Mutex::new(1)))
+}
+
+fn parse_i64_arg(b: &dyn NyashBox) -> i64 {
+    let s = b.to_string_box().value;
+    s.parse::<i64>().unwrap_or(0)
+}
+
+fn handle_nykernel_stub(
+    method_name: &str,
+    args: &[Box<dyn NyashBox>],
+) -> BidResult<Option<Box<dyn NyashBox>>> {
+    match method_name {
+        "malloc" => {
+            let size = args.get(0).map(|b| parse_i64_arg(&**b)).unwrap_or(0);
+            let cells = ((size + 7) / 8).max(0) as i64;
+            let (heap_lock, ptr_lock) = heap_state();
+            let mut heap = heap_lock.lock().unwrap();
+            let mut ptr = ptr_lock.lock().unwrap();
+            let base_cells = *ptr;
+            let need = base_cells + cells;
+            if need > heap.len() as i64 {
+                heap.resize(need as usize, 0);
+            }
+            *ptr = need;
+            let addr_bytes = base_cells * 8;
+            Ok(Some(Box::new(IntegerBox::new(addr_bytes))))
+        }
+        "load_i64" => {
+            let addr = args.get(0).map(|b| parse_i64_arg(&**b)).unwrap_or(0);
+            if addr % 8 != 0 || addr < 0 { return Err(BidError::PluginError); }
+            let index = (addr / 8) as usize;
+            let (heap_lock, _) = heap_state();
+            let heap = heap_lock.lock().unwrap();
+            let v = *heap.get(index).ok_or(BidError::PluginError)?;
+            Ok(Some(Box::new(IntegerBox::new(v))))
+        }
+        "store_i64" => {
+            if args.len() < 2 { return Err(BidError::PluginError); }
+            let addr = parse_i64_arg(&*args[0]);
+            let val = parse_i64_arg(&*args[1]);
+            if addr % 8 != 0 || addr < 0 { return Err(BidError::PluginError); }
+            let index = (addr / 8) as usize;
+            let (heap_lock, _) = heap_state();
+            let mut heap = heap_lock.lock().unwrap();
+            if index >= heap.len() { return Err(BidError::PluginError); }
+            heap[index] = val;
+            Ok(None)
+        }
         _ => Err(BidError::PluginError),
     }
 }

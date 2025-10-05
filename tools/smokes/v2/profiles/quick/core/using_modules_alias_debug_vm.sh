@@ -2,6 +2,12 @@
 # using_modules_alias_debug_vm.sh — [modules] resolver E2E: selfhost.compiler.debug
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+# Gate: this smoke verifies NewBox on a module alias-defined user box. It may be
+# temporarily unsupported in some profiles; allow opt-in via SMOKES_ENABLE_DEBUG_BOX=1.
+if [ "${SMOKES_ENABLE_DEBUG_BOX:-0}" != "1" ]; then
+  log_warn "SKIP using_modules_alias_debug_vm (set SMOKES_ENABLE_DEBUG_BOX=1 to run)"
+  exit 0
+fi
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_DEV=1

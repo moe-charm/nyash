@@ -68,7 +68,6 @@ static box HakoruneVmMin {
     local last_binop_dst = -1
     local last_binop_val = 0
     local bb = 0
-    local prev_bb = -1
     // steps now tracked in ProgramStateBox
     local max_steps = 200000
     // Initialize program state (only regs used for now)
@@ -76,7 +75,7 @@ static box HakoruneVmMin {
     local regs = ProgramStateBox.regs(st)
     // keep state in sync (setter only routing for now)
     ProgramStateBox.set_bb(st, bb)
-    ProgramStateBox.set_prev_bb(st, prev_bb)
+    ProgramStateBox.set_prev_bb(st, -1)
     loop(true){
       ProgramStateBox.inc_steps(st)
       if ProgramStateBox.over_limit(st) == 1 { return 0 }
@@ -134,7 +133,6 @@ static box HakoruneVmMin {
             if c == last_cmp_dst { cv = last_cmp_val } else { cv = me._load_reg(regs, c) }
           }
           ProgramStateBox.set_prev_bb(st, bb)
-          prev_bb = ProgramStateBox.bb(st)
           if cv != 0 { bb = t } else { bb = e }
           ProgramStateBox.set_bb(st, bb)
           moved = 1
@@ -145,7 +143,6 @@ static box HakoruneVmMin {
           local tgt = JsonFragBox.get_int(seg, "target")
           if tgt == null { return 0 }
           ProgramStateBox.set_prev_bb(st, bb)
-          prev_bb = ProgramStateBox.bb(st)
           bb = tgt
           ProgramStateBox.set_bb(st, bb)
           moved = 1

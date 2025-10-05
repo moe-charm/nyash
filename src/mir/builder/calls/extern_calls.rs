@@ -135,6 +135,26 @@ pub fn get_env_method_spec(
             true,
         )),
 
+        // nykernel.* (WASM ABI bridge — dev stub + future AOT)
+        ("nykernel", "malloc") => Some((
+            "nykernel".to_string(),
+            "malloc".to_string(),
+            EffectMask::IO,
+            true,
+        )),
+        ("nykernel", "load_i64") => Some((
+            "nykernel".to_string(),
+            "load_i64".to_string(),
+            EffectMask::READ,
+            true,
+        )),
+        ("nykernel", "store_i64") => Some((
+            "nykernel".to_string(),
+            "store_i64".to_string(),
+            EffectMask::IO,
+            false,
+        )),
+
         // Unknown
         _ => None,
     }
