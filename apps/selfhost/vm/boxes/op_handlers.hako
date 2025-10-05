@@ -3,9 +3,13 @@
 using "apps/selfhost/vm/boxes/arithmetic.hako" as ArithmeticBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 // Prefer logical module names to avoid file-path using in strict profiles
 static box OpHandlersBox {
-  _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
+  _tprint(msg) {
+    // Only emit hard errors by default; avoid env dependencies in Mini‑VM
+    if msg.indexOf("[ERROR]") >= 0 { print(msg) }
+  }
   _is_numeric_str(s) { return StringHelpers.is_numeric_str(s) }
 
   _str_to_int(s) { return JsonFragBox._str_to_int(s) }
@@ -33,9 +37,11 @@ static box OpHandlersBox {
     local p = seg.indexOf(keypat)
     if p < 0 { return "" }
     p = p + keypat.length()
-    local q = seg.indexOf("\"", p)
+    // Use substring to work around indexOf not supporting start position
+    local rest = seg.substring(p, seg.length())
+    local q = rest.indexOf("\"")
     if q < 0 { return "" }
-    return seg.substring(p, q)
+    return rest.substring(0, q)
   }
 
   _find_kv_int(seg, key) {
@@ -96,24 +102,34 @@ static box OpHandlersBox {
   }
 
   handle_compare(seg, regs) {
-    local kind = JsonFragBox.get_str(seg, "cmp")
-    if kind == "" { kind = CompareOpsBox.map_symbol(JsonFragBox.get_str(seg, "operation")) }
-    local lhs = JsonFragBox.get_int(seg, "lhs")
-    local rhs = JsonFragBox.get_int(seg, "rhs")
-    local dst = JsonFragBox.get_int(seg, "dst")
-    if lhs == null || rhs == null { return }
+    local kind = me._find_kv_str(seg, "cmp")
+    if kind == "" {
+      local sym = me._find_kv_str(seg, "operation")
+      if sym == "" {
+        print("[ERROR] Missing key: cmp")
+        return
+      }
+      kind = CompareOpsBox.map_symbol(sym)
+    }
+    local lhs = me._find_kv_int(seg, "lhs")
+    local rhs = me._find_kv_int(seg, "rhs")
+    local dst = me._find_kv_int(seg, "dst")
+    if lhs == null { print("[ERROR] Missing key: lhs") return }
+    if rhs == null { print("[ERROR] Missing key: rhs") return }
+    if dst == null { print("[ERROR] Missing key: dst") return }
     local a = me._load_reg(regs, lhs)
     local b = me._load_reg(regs, rhs)
     local r = CompareOpsBox.eval(kind, a, b)
-    regs.set("" + dst, r)
+    // Store as numeric string to simplify downstream _load_reg parsing
+    regs.set("" + dst, "" + r)
   }
 
   handle_binop(seg, regs) {
     // Minimal Add/Sub/Mul/Div/Mod for selfhost Mini‑VM tests
-    local kind = JsonFragBox.get_str(seg, "op_kind")
-    local lhs = JsonFragBox.get_int(seg, "lhs")
-    local rhs = JsonFragBox.get_int(seg, "rhs")
-    local dst = JsonFragBox.get_int(seg, "dst")
+    local kind = JsonFragBox.get_str_strict(seg, "op_kind")
+    local lhs = JsonFragBox.get_int_strict(seg, "lhs")
+    local rhs = JsonFragBox.get_int_strict(seg, "rhs")
+    local dst = JsonFragBox.get_int_strict(seg, "dst")
     if lhs == null || rhs == null || dst == null { return }
     local a = me._load_reg(regs, lhs)
     local b = me._load_reg(regs, rhs)

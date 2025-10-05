@@ -2,13 +2,16 @@
 // 仕様: 各引数を const i64 として材化し、call を発行、dst を ret する。
 
 using "apps/lib/json_native/stringify.hako" as JSON
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
+using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
 static box EmitCallBox {
   emit_call_int_args(name, args) {
-    if name == null { name = "" }
-    if args == null { args = [] }
+    name = match name { null => "", _ => name }
+    args = match args { null => [], _ => args }
     // 1..N を引数用の dst として予約（常に文字列解析で正規化）
     local insts = []
     local s = "" + args
@@ -22,7 +25,7 @@ static box EmitCallBox {
         local pds = RegexFlow.find_from(s, ds, pos)
         if pds < 0 { pos = pos + 1 } else {
           local v = RegexFlow.to_int(ds)
-          insts.push({ op:"const", dst: (n + 1), value:{ type:"i64", value: v } })
+          insts.push(MirEmitBox.make_const((n + 1), v))
           n = n + 1
           pos = pds + ds.length()
         }
@@ -34,41 +37,44 @@ static box EmitCallBox {
     i = 0
     loop (i < n) { arg_ids.push(i + 1)  i = i + 1 }
     local dst_ret = n + 1
-    insts.push({ op:"call", name: name, args: arg_ids, dst: dst_ret })
-    insts.push({ op:"ret", value: dst_ret })
-    // 単一関数 main の MIR として返す
-    local mir = {
-      functions: [{ name:"main", params: [], blocks: [ { id:0, instructions: insts } ] }]
-    }
-    return JSON.stringify_map(mir)
+    insts.push(CallEmitBox.make_call(name, arg_ids, dst_ret))
+    insts.push(MirEmitBox.make_ret(dst_ret))
+    // 単一関数 main の MIR として返す（HeaderEmitBox 経由）
+    local blocks = new ArrayBox()
+    blocks.push(HeaderEmitBox.make_block(0, insts))
+    local fns = new ArrayBox()
+    fns.push(HeaderEmitBox.make_function_main(blocks))
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 
-  // JSON v1 (MirCall) emission — experimental, shape-only
+  // JSON v1 (MirCall) emission — shape equivalent（CallEmitBox + HeaderEmitBox）
   emit_call_int_args_v1(name, args) {
-    if name == null { name = "" }
-    if args == null { args = [] }
-    // Normalize by string parse
+    name = match name { null => "", _ => name }
+    args = match args { null => [], _ => args }
+    // materialize r1..rN
+    local insts = []
     local s = "" + args
     local pos = 0
     local n = 0
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-    // materialize args: r1..rN
     loop (true) {
       local ds = RegexFlow.digits_from(s, pos)
       if ds == "" { pos = pos + 1 } else {
         local pds = RegexFlow.find_from(s, ds, pos)
-        if pds < 0 { pos = pos + 1 } else { b = b |> MirJsonBuilderMin.add_const(1 + n, RegexFlow.to_int(ds))  n = n + 1  pos = pds + ds.length() }
+        if pds < 0 { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + n, RegexFlow.to_int(ds)))  n = n + 1  pos = pds + ds.length() }
       }
       if pos >= s.length() { break }
     }
     local dst = n + 1
-    b = b |> MirJsonBuilderMin.add_mir_call_global_range(name, 1, n, dst)
-      |> MirJsonBuilderMin.add_ret(dst)
-      |> MirJsonBuilderMin.end_all()
-    return MirJsonBuilderMin.to_string(b)
+    // args array 1..n
+    local arg_ids = new ArrayBox()
+    { local i=0  loop(i<n) { arg_ids.push(1+i)  i=i+1 } }
+    insts.push(CallEmitBox.make_mir_call_global(name, arg_ids, dst))
+    insts.push(MirEmitBox.make_ret(dst))
+    local blocks = new ArrayBox()
+    blocks.push(HeaderEmitBox.make_block(0, insts))
+    local fns = new ArrayBox()
+    fns.push(HeaderEmitBox.make_function_main(blocks))
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }
 

@@ -79,7 +79,7 @@ static box MirJsonV1Adapter {
     local ak = me._index_of_from(seg, "\"args\":[", 0)
     local args_json = "[]"
     if ak >= 0 {
-      local lb = seg.indexOf("[", ak)
+      local lb = me._index_of_from(seg, "[", ak)
       if lb >= 0 {
         local rb = me._seek_array_end(seg, lb + 1)
         if rb > lb { args_json = seg.substring(lb, rb + 1) }

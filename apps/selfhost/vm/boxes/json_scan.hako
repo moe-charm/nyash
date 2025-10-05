@@ -66,8 +66,8 @@ static box JsonScanBox {
   find_key_dual(text, plain, escaped, pos) {
     if text == null { return -1 }
     if pos < 0 { pos = 0 }
-    local p = text.indexOf(plain, pos)
+    local p = StringScanBox.index_of_from(text, plain, pos)
     if p >= 0 { return p }
-    return text.indexOf(escaped, pos)
+    return StringScanBox.index_of_from(text, escaped, pos)
   }
 }

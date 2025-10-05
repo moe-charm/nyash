@@ -1,6 +1,6 @@
 // minivm_probe.hako — Mini‑VM JSON v0 の a/b/r を観測する軽量プローブ
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
-using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/vm/boxes/instruction_scanner.hako" as InstructionScannerBox
 using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 

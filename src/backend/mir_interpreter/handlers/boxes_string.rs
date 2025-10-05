@@ -24,18 +24,14 @@ pub(super) fn try_handle_string_box(
                     return Ok(true);
                 }
                 "indexOf" => {
-                    // indexOf(substr[, from]) -> first index or -1 (byte index basis)
-                    if args.is_empty() {
+                    // Enforce arity=1 (Fail‑Fast). Previously a dev-only 2-arg form existed but was inconsistent.
+                    if args.len() != 1 {
                         if crate::config::env::check_contracts() {
-                            eprintln!(r#"{{"kind":"contracts_arity_min","box":"StringBox","method":"indexOf","min_expected":1,"got":0}}"#);
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"StringBox","method":"indexOf","expected":1,"got":{}}}"#, args.len());
                         }
-                        return Err(VMError::InvalidInstruction("indexOf expects at least 1 arg".into()));
+                        return Err(VMError::InvalidInstruction("indexOf expects 1 arg".into()));
                     }
                     let needle = this.reg_load(args[0])?.to_string();
-                    let _hay = if args.len() >= 2 {
-                        let from = this.reg_load(args[1])?.as_integer().unwrap_or(0).max(0) as usize;
-                        if from >= sb.value.len() { "" } else { &sb.value[from..] }
-                    } else { &sb.value[..] };
                     let idx = sb.value.find(&needle).map(|i| i as i64).unwrap_or(-1);
                     if let Some(d) = dst { this.regs.insert(d, VMValue::Integer(idx)); }
                     return Ok(true);

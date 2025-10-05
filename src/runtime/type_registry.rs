@@ -204,6 +204,27 @@ const STRING_METHODS: &[MethodEntry] = &[
         arity: 0,
         slot: 307,
     },
+    // P2: toString/stringify/startsWith/endsWith
+    MethodEntry {
+        name: "toString",
+        arity: 0,
+        slot: 308,
+    },
+    MethodEntry {
+        name: "stringify",
+        arity: 0,
+        slot: 309,
+    },
+    MethodEntry {
+        name: "startsWith",
+        arity: 1,
+        slot: 310,
+    },
+    MethodEntry {
+        name: "endsWith",
+        arity: 1,
+        slot: 311,
+    },
 ];
 static STRINGBOX_TB: TypeBox = TypeBox::new_with("StringBox", STRING_METHODS);
 
@@ -291,6 +312,23 @@ pub fn resolve_slot_by_name(type_name: &str, method: &str, arity: usize) -> Opti
 pub fn known_methods_for(type_name: &str) -> Option<Vec<&'static str>> {
     let tb = resolve_typebox_by_name(type_name)?;
     let mut v: Vec<&'static str> = tb.methods.iter().map(|m| m.name).collect();
+    v.sort();
+    v.dedup();
+    Some(v)
+}
+
+/// Return list of known arities for a specific method name on a type.
+pub fn known_arities_for(type_name: &str, method: &str) -> Option<Vec<u8>> {
+    let tb = resolve_typebox_by_name(type_name)?;
+    let mut v: Vec<u8> = tb
+        .methods
+        .iter()
+        .filter(|m| m.name == method)
+        .map(|m| m.arity)
+        .collect();
+    if v.is_empty() {
+        return Some(vec![]);
+    }
     v.sort();
     v.dedup();
     Some(v)

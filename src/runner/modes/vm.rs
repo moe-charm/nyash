@@ -118,7 +118,7 @@ impl NyashRunner {
                     // Always record alias names for later desugaring of `Alias.X` in main AST.
                     for (alias, _canon) in alias_pairs.iter() { alias_names.insert(alias.clone()); }
                     crate::runner::modes::common_util::resolve::register_aliases_in_modules_registry(&alias_pairs);
-                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                    if crate::config::env::resolve_trace() {
                         if !alias_pairs.is_empty() {
                             eprintln!("[using/alias] collected: {:?}", alias_pairs.iter().map(|(a, _)| a.clone()).collect::<Vec<_>>());
                         }
@@ -178,7 +178,7 @@ impl NyashRunner {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
         // Optional trace: check presence of raw alias variables before desugar
-        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
+        if crate::config::env::resolve_trace() && !alias_names.is_empty() {
             fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
                 match n {
                     nyash_rust::ast::ASTNode::Variable { name, .. } => aliases.contains(name),
@@ -199,7 +199,7 @@ impl NyashRunner {
         let ast = {
             crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast, &alias_names, true)
         };
-        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
+        if crate::config::env::resolve_trace() && !alias_names.is_empty() {
             fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
                 match n {
                     nyash_rust::ast::ASTNode::Variable { name, .. } => aliases.contains(name),

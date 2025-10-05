@@ -1,7 +1,7 @@
 // CallResolver — VM wrapper around shared MIR resolver with optional trace
 
 fn maybe_trace(raw: &str, argc: usize, pick: Option<&str>) {
-    if std::env::var("NYASH_VM_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+    if crate::config::env::vm_resolve_trace() {
         let picked = pick.unwrap_or("");
         eprintln!("{{\"resolve\":{{\"raw\":\"{}\",\"argc\":{},\"pick\":\"{}\"}}}}", raw, argc, picked);
     }

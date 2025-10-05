@@ -47,6 +47,11 @@ fmt:
 
 lint:
 	cargo clippy --all-targets --all-features -- -D warnings || true
+	./tools/lints/lint_indexof_two_args.sh || true
+
+.PHONY: lint-ny
+lint-ny:
+	./tools/lints/lint_indexof_two_args.sh
 
 # --- Self-hosting dev helpers (Ny-only inner loop) ---
 dev:

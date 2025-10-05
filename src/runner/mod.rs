@@ -236,7 +236,7 @@ impl NyashRunner {
                     nyash_rust::runtime::modules_registry::set(ns.clone(), Box::new(sb));
                 }
                 // Resolve CLI --using entries against context and register values (with aliasing)
-                let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+                let strict = crate::config::env::using_strict();
                 let verbose = crate::config::env::cli_verbose();
                 let ctx = std::path::Path::new(filename).parent();
                 for (ns, alias) in pending_using.iter() {

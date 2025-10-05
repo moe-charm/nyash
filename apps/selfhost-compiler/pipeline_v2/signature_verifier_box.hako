@@ -1,0 +1,117 @@
+// signature_verifier_box.hako — SignatureVerifierBox
+// Responsibility: compile-time arity checks for common built-in methods.
+// Notes:
+// - Stage‑1 JSON at this phase does not carry receiver type, so we verify
+//   by method name only for known methods where arity is uniform across boxes
+//   (e.g., indexOf=1 on String/Array, push=1 on Array, etc.).
+// - Unknown methods are allowed (return 1) to avoid over-blocking during bring-up.
+
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/hakorune/vm/boxes/method_registry.hako" as MethodRegistryBox
+
+static box SignatureVerifierBox {
+  // Return 1 if (method, argc) is acceptable; 0 otherwise.
+  verify_method(method, argc) {
+    if method == null { return 1 }
+    // Use shared registry (name-only check); allow unknown names for now
+    if MethodRegistryBox.is_name_arity_known(method, argc) == 1 { return 1 }
+    // Fallback legacy (kept for compatibility)
+    local m = "" + method
+    local a = ("" + argc) + ""
+    // String‑like
+    if m == "len" && a == "0" { return 1 }
+    if m == "length" && a == "0" { return 1 }
+    if m == "substring" && a == "2" { return 1 }
+    if m == "concat" && a == "1" { return 1 }
+    if m == "indexOf" && a == "1" { return 1 }
+    if m == "replace" && a == "2" { return 1 }
+    if m == "trim" && a == "0" { return 1 }
+    if m == "toUpper" && a == "0" { return 1 }
+    if m == "toLower" && a == "0" { return 1 }
+    // Array‑like
+    if m == "get" && a == "1" { return 1 }
+    if m == "set" && a == "2" { return 1 }
+    if m == "push" && a == "1" { return 1 }
+    if m == "pop" && a == "0" { return 1 }
+    if m == "clear" && a == "0" { return 1 }
+    if m == "contains" && a == "1" { return 1 }
+    if m == "join" && a == "1" { return 1 }
+    if m == "slice" && a == "2" { return 1 }
+    // Map‑like
+    if m == "size" && a == "0" { return 1 }
+    if m == "has" && a == "1" { return 1 }
+    if m == "delete" && a == "1" { return 1 }
+    if m == "remove" && a == "1" { return 1 }
+    if m == "keys" && a == "0" { return 1 }
+    if m == "values" && a == "0" { return 1 }
+    if m == "toJSON" && a == "0" { return 1 }
+    // Unknown method: allow (return 1) for now
+    return 1
+  }
+
+  // Count integer args from Stage‑1 args JSON (shape: [ {"type":"Int","value":N}, ... ])
+  _count_int_args(args) {
+    if args == null { return 0 }
+    local s = "" + args
+    local pos = 0
+    local n = 0
+    loop(true) {
+      local ds = RegexFlow.digits_from(s, pos)
+      if ds == "" {
+        pos = pos + 1
+      } else {
+        n = n + 1
+        // advance to the end of this digit run
+        local p2 = RegexFlow.find_from(s, ds, pos)
+        if p2 < 0 { pos = pos + ds.length() } else { pos = p2 + ds.length() }
+      }
+      if pos >= s.length() { break }
+    }
+    return n
+  }
+
+  // Convenience: verify from args JSON directly; prints an error on mismatch.
+  // Returns 1 if OK, 0 if mismatch.
+  verify_from_args(method, args) {
+    local argc = SignatureVerifierBox._count_int_args(args)
+    local ok = SignatureVerifierBox.verify_method(method, argc)
+    if ok != 1 {
+      print("[ERROR] No matching method by arity: " + method + "/" + (""+argc))
+      return 0
+    }
+    return 1
+  }
+  // Name-aware call verifier for global functions like "StringBox.indexOf".
+  // If name pattern matches a known built-in box, validate by registry; otherwise allow.
+  verify_call_name_arity(name, args) {
+    if name == null { return 1 }
+    local argc = SignatureVerifierBox._count_int_args(args)
+    local s = "" + name
+    // Split at last '.' for method name
+    local last = RegexFlow.last_index_of(s, ".")
+    if last < 0 { return 1 }
+    local method = s.substring(last + 1, s.length())
+    // Determine class token just before method (penultimate segment)
+    local head_all = s.substring(0, last)
+    local prev = RegexFlow.last_index_of(head_all, ".")
+    local head = head_all
+    if prev >= 0 {
+      head = head_all.substring(prev + 1, head_all.length())
+    }
+    // Normalize head to Box name
+    local bxname = head
+    if head == "String" { bxname = "StringBox" }
+    if head == "Array" { bxname = "ArrayBox" }
+    if head == "Map" { bxname = "MapBox" }
+    if bxname == "StringBox" || bxname == "ArrayBox" || bxname == "MapBox" {
+      if MethodRegistryBox.is_known(bxname, method, argc) == 1 { return 1 }
+      print("[ERROR] No matching call by arity: " + bxname + "." + method + "/" + (""+argc))
+      return 0
+    }
+    return 1
+  }
+
+}
+
+static box SignatureVerifierMain { main(args) { return 0 } }
+

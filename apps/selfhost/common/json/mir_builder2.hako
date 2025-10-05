@@ -1,5 +1,8 @@
 // mir_builder2.hako — Instance builder（引数渡しバグ回避のため、非staticで内部状態を保持）
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
+using "apps/selfhost-compiler/common/header_emit_box.hako" as HeaderEmitBox
 
 box MirJsonBuilder2 {
   st: MapBox
@@ -13,12 +16,25 @@ box MirJsonBuilder2 {
     me.st.set("blocks", new ArrayBox())
     me.st.set("cur_block_index", -1)
     me.st.set("fn_name", "")
+    me.st.set("prefer_rebuild", 0)
+    // Text emission guards (dev only). Default: headers/instructions are NOT appended.
+    me.st.set("append_headers", 0)
+    me.st.set("append_insts", 0)
   }
 
   // ---- internal helpers ----
   _get_buf() { return me.st.get("buf") }
   _set_buf(s) { me.st.set("buf", s) }
   _append(s) { local b = me._get_buf()  me._set_buf(b + s) }
+  _append_header(s) {
+    local on = me.st.get("append_headers")
+    if on != null && on == 1 { me._append(s) }
+  }
+  _append_inst_json(node) {
+    // Append per-instruction JSON only when explicitly enabled (dev aid)
+    local on = me.st.get("append_insts")
+    if on != null && on == 1 { me._append(JsonEmitBox.to_json(node)) }
+  }
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _cur_insts() {
     local blks = me.st.get("blocks")
@@ -31,19 +47,22 @@ box MirJsonBuilder2 {
     return blk.get("instructions")
   }
   _comma_if_needed() {
+    // Only relevant when appending instruction JSON text
+    local ai = me.st.get("append_insts")
+    if ai == null || ai != 1 { return }
     local first = me.st.get("first_inst")
     if first == 1 { me.st.set("first_inst", 0) return }
     me._append(",")
   }
 
   // ---- building API（インスタンスメソッド）----
-  start_module() { me.st.set("phase", 1) me._append("{\"functions\":[") }
+  start_module() { me.st.set("phase", 1) me._append_header("{\"functions\":[") }
   start_function(name) {
     me.st.set("phase", 2)
     me.st.set("fn_name", name)
     me.st.set("blocks", new ArrayBox())
     me.st.set("cur_block_index", -1)
-    me._append("{\"name\":" + StringHelpers.json_quote(name) + ",\"params\":[],\"blocks\":[")
+    me._append_header("{\"name\":" + StringHelpers.json_quote(name) + ",\"params\":[],\"blocks\":[")
   }
   start_block(id) {
     me.st.set("phase", 3)
@@ -56,94 +75,86 @@ box MirJsonBuilder2 {
     blks.push(blk)
     me.st.set("cur_block_index", blks.size() - 1)
     // 文字列側
-    me._append("{\"id\":" + me._int_to_str(id) + ",\"instructions\":[")
+    me._append_header("{\"id\":" + me._int_to_str(id) + ",\"instructions\":[")
   }
-  end_block_continue() { me._append("]},") }
-  end_all() { me.st.set("phase", 5) me._append("]}]}]}") }
+  end_block_continue() { me._append_header("]},") }
+  end_all() {
+    me.st.set("phase", 5)
+    // Prefer route to rebuild on to_string() for safer parity
+    me.st.set("prefer_rebuild", 1)
+    me._append_header("]}]}]}")
+  }
 
   add_const(dst, val) {
     me._comma_if_needed()
     // 構造
-    local node = { op:"const", dst:dst, value:{ type:"i64", value:val } }
+    local node = MirEmitBox.make_const(dst, val)
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
     // テキスト
-    me._append("{\"op\":\"const\",\"dst\":" + me._int_to_str(dst) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(val) + "}}")
+    me._append_inst_json(node)
   }
   add_compare(kind, lhs, rhs, dst) {
     me._comma_if_needed()
-    local node = { op:"compare", cmp:kind, lhs:lhs, rhs:rhs, dst:dst }
+    local node = MirEmitBox.make_compare(kind, lhs, rhs, dst)
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
-    me._append("{\"op\":\"compare\",\"cmp\":" + StringHelpers.json_quote(kind) + ",\"lhs\":" + me._int_to_str(lhs) + ",\"rhs\":" + me._int_to_str(rhs) + ",\"dst\":" + me._int_to_str(dst) + "}")
+    me._append_inst_json(node)
   }
   add_copy(dst, src) {
     me._comma_if_needed()
-    local node = { op:"copy", dst:dst, src:src }
+    local node = MirEmitBox.make_copy(dst, src)
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
-    me._append("{\"op\":\"copy\",\"dst\":" + me._int_to_str(dst) + ",\"src\":" + me._int_to_str(src) + "}")
+    me._append_inst_json(node)
   }
   add_branch(cond, then_id, else_id) {
     me._comma_if_needed()
-    local node = { op:"branch", cond:cond, then:then_id, else_id:else_id }
+    local node = MirEmitBox.make_branch(cond, then_id, else_id)
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
-    me._append("{\"op\":\"branch\",\"cond\":" + me._int_to_str(cond) + ",\"then\":" + me._int_to_str(then_id) + ",\"else\":" + me._int_to_str(else_id) + "}")
+    me._append_inst_json(node)
   }
   add_jump(target) {
     me._comma_if_needed()
-    local node = { op:"jump", target:target }
+    local node = MirEmitBox.make_jump(target)
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
-    me._append("{\"op\":\"jump\",\"target\":" + me._int_to_str(target) + "}")
+    me._append_inst_json(node)
   }
   add_ret(val) {
     me._comma_if_needed()
-    local node = { op:"ret", value:val }
+    local node = MirEmitBox.make_ret(val)
     local insts = me._cur_insts()
     if insts != null && insts.push != null { insts.push(node) }
-    me._append("{\"op\":\"ret\",\"value\":" + me._int_to_str(val) + "}")
+    me._append_inst_json(node)
   }
 
   // ---- outputs ----
-  to_string() { return me._get_buf() }
+  to_string() {
+    local pref = me.st.get("prefer_rebuild")
+    if pref != null && pref == 1 { return me.to_string_rebuild() }
+    return me._get_buf()
+  }
   to_string_rebuild() {
-    // 構造（blocks → instructions）を正として再構築
+    // 構造（blocks → instructions）を正として再構築（HeaderEmitBox 経由）
     local name = me.st.get("fn_name")
     local blks = me.st.get("blocks")
-    local out = "{\"functions\":[{\"name\":" + StringHelpers.json_quote(name) + ",\"params\":[],\"blocks\":["
-    local n = 0
-    if blks != null && blks.size != null { n = blks.size() }
-    local i = 0
-    loop (i < n) {
-      if i > 0 { out = out + "," }
-      local blk = blks.get(i)
-      local bid = blk.get("id")
-      out = out + "{\"id\":" + me._int_to_str(bid) + ",\"instructions\":["
-      local insts = blk.get("instructions")
-      local m = 0
-      if insts != null && insts.size != null { m = insts.size() }
-      local j = 0
-      loop (j < m) {
-        if j > 0 { out = out + "," }
-        // 最小 stringify（必要な op のみ）
-        local node = insts.get(j)
-        local op = node.get("op")
-        if op == "const" { out = out + "{\"op\":\"const\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(node.get("value").get("value")) + "}}" }
-        else { if op == "compare" { out = out + "{\"op\":\"compare\",\"cmp\":" + me._quote(node.get("cmp")) + ",\"lhs\":" + me._int_to_str(node.get("lhs")) + ",\"rhs\":" + me._int_to_str(node.get("rhs")) + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" }
-        else { if op == "copy" { out = out + "{\"op\":\"copy\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"src\":" + me._int_to_str(node.get("src")) + "}" }
-        else { if op == "branch" { out = out + "{\"op\":\"branch\",\"cond\":" + me._int_to_str(node.get("cond")) + ",\"then\":" + me._int_to_str(node.get("then")) + ",\"else\":" + me._int_to_str(node.get("else_id")) + "}" }
-        else { if op == "jump" { out = out + "{\"op\":\"jump\",\"target\":" + me._int_to_str(node.get("target")) + "}" }
-        else { if op == "ret" { out = out + "{\"op\":\"ret\",\"value\":" + me._int_to_str(node.get("value")) + "}" }
-        else { out = out + "{}" }}}}}}
-        j = j + 1
+    local blocks = new ArrayBox()
+    if blks != null && blks.size != null {
+      local n = blks.size()
+      local i = 0
+      loop (i < n) {
+        local blk = blks.get(i)
+        local bid = blk.get("id")
+        local insts = blk.get("instructions")
+        blocks.push(HeaderEmitBox.make_block(bid, insts))
+        i = i + 1
       }
-      out = out + "]}"
-      i = i + 1
     }
-    out = out + "]}]}"
-    return out
+    local fns = new ArrayBox()
+    fns.push(HeaderEmitBox.make_function_main(blocks))
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }
 

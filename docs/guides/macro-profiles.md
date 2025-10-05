@@ -17,14 +17,15 @@ Profiles
   - trace: OFF
 
 CLI
-- `nyash --profile lite file.nyash`
-- `nyash --profile dev file.nyash`
-- `nyash --profile ci file.nyash`
+- `nyash --macro-profile dev file.nyash`
+- `nyash --macro-profile ci-fast file.nyash`
+- `nyash --macro-profile strict file.nyash`
+- または開発向けショートカット: `nyash --dev file.nyash`（macro ON/strict ON ほか開発既定も有効）
 
 ENV mapping (non-breaking; can be overridden)
 - lite → `NYASH_MACRO_ENABLE=0`, `NYASH_MACRO_STRICT=0`, `NYASH_MACRO_TRACE=0`
 - dev → `NYASH_MACRO_ENABLE=1`, `NYASH_MACRO_STRICT=1`, `NYASH_MACRO_TRACE=0`
-- ci/strict → `NYASH_MACRO_ENABLE=1`, `NYASH_MACRO_STRICT=1`, `NYASH_MACRO_TRACE=0`
+- ci-fast/strict → `NYASH_MACRO_ENABLE=1`, `NYASH_MACRO_STRICT=1`, `NYASH_MACRO_TRACE=0`
 
 Recommended ENV (minimal)
 - `NYASH_MACRO_ENABLE=1`

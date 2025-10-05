@@ -74,7 +74,7 @@ pub fn resolve_preludes_and_aliases(
         if quiet_pipe || min_json_req {
             // Quiet pipeline: proceed without AST merge.
             // Aliases were already collected above; module registration is handled by the runner preprocessor.
-            if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::resolve_trace() {
                 crate::runner::trace::log("[using] AST merge disabled but quiet pipeline active — skipping prelude merge".to_string());
             }
         } else {

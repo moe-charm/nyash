@@ -495,6 +495,18 @@ pub fn cli_quiet() -> bool {
         || std::env::var("NYASH_QUIET").ok().as_deref() == Some("1")
         || std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("0")
 }
+/// Resolver textual trace
+pub fn resolve_trace() -> bool {
+    std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1")
+}
+/// Resolver JSON trace
+pub fn resolve_trace_json() -> bool {
+    std::env::var("NYASH_RESOLVE_TRACE_JSON").ok().as_deref() == Some("1")
+}
+/// Import textual trace
+pub fn import_trace() -> bool {
+    std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1")
+}
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
     // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
@@ -551,6 +563,13 @@ pub fn using_ast_enabled() -> bool {
 /// - prod: default false (disallow)
 /// - dev/ci: default true (allow, with WARN)
 /// Override with NYASH_VM_USER_INSTANCE_BOXCALL={0|1}
+pub fn using_strict() -> bool {
+    match std::env::var("NYASH_USING_STRICT").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
+        Some(ref s) if s == "0" || s == "false" || s == "off" => false,
+        _ => true,
+    }
+}
+
 pub fn vm_allow_user_instance_boxcall() -> bool {
     match std::env::var("NYASH_VM_USER_INSTANCE_BOXCALL").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
         Some(ref s) if s == "0" || s == "false" || s == "off" => false,
@@ -741,4 +760,34 @@ pub fn scope_stats_log() -> bool {
 /// Default: OFF. Enable with NYASH_RELEASE_TRACE=1
 pub fn release_trace() -> bool {
     std::env::var("NYASH_RELEASE_TRACE").ok().as_deref() == Some("1")
+}
+
+// ---- Runner/Compiler dev toggles (selfhost/pipeline helpers) ----
+/// Trace CallResolver decisions in VM (development helper)
+pub fn vm_resolve_trace() -> bool {
+    std::env::var("NYASH_VM_RESOLVE_TRACE").ok().as_deref() == Some("1")
+}
+/// Map NYASH_EMIT_TRACE=1 to compiler --emit-trace (dev aid)
+pub fn emit_trace() -> bool {
+    std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1")
+}
+/// Prefer CFG lowering (v2) in selfhost compiler
+pub fn prefer_cfg2() -> bool {
+    std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1")
+}
+/// Prefer CFG lowering (v1)
+pub fn prefer_cfg() -> bool {
+    std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1")
+}
+/// Enable ScopeBox prepass
+pub fn scopebox_enable() -> bool {
+    std::env::var("NYASH_SCOPEBOX_ENABLE").ok().as_deref() == Some("1")
+}
+/// Enable LoopForm normalization prepass
+pub fn loopform_normalize() -> bool {
+    std::env::var("NYASH_LOOPFORM_NORMALIZE").ok().as_deref() == Some("1")
+}
+/// Optional macro pre‑expand mode for selfhost ("1" or "auto")
+pub fn macro_selfhost_pre_expand() -> Option<String> {
+    std::env::var("NYASH_MACRO_SELFHOST_PRE_EXPAND").ok()
 }

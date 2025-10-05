@@ -14,8 +14,8 @@
 
 ## Levels
 - off: すべての糖衣を無効化
-- basic: `|>` / `??` / `?.` / `..` / 配列/Map リテラル / 末尾カンマ / 数値セパレータ
-- full: basic + パイプ受信者糖 `.m(...)` + パイプ `_` プレースホルダ + Raw Strings
+- basic: `|>` / `??` / `?.` / `..` / 配列/Map リテラル / 末尾カンマ / 数値セパレータ（Mapの識別子キーは不可）
+- full: basic + パイプ受信者糖 `.m(...)` + パイプ `_` プレースホルダ + Raw Strings + Mapの識別子キー許可
 
 ## Pipeline `|>`（basic/full）
 Examples
@@ -55,8 +55,9 @@ Notes
 - 整数/浮動小数で `_` を許可: `1_000_000`, `3.141_592`（PreLex で削除）。
 
 ## Env/CLI（運用）
-- `NYASH_SYNTAX_SUGAR_LEVEL={off|basic|full}`（未設定=ON）
+- `NYASH_SYNTAX_SUGAR_LEVEL={off|basic|full}`（未設定=ON）。同義として `on|1|true` も受理。
 - 参考: PreLex 実装は `src/runner/modes/common_util/prelex.rs`。ランナー入口で共通適用。
+- 備考: パーサ側にもフォールバック（raw文字列/数値セパレータなど）を用意しており、PreLex未適用の単体パースでも安定動作します。
 
 ## 実装メモ
 - 構文ガードは Parser 側（Expressions）で実装し、誤用は Fail‑Fast にします（例: `_` 多重など）。

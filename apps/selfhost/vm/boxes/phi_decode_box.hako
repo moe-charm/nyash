@@ -5,7 +5,7 @@
 // Non-goals: MIR execution, register I/O (caller applies values), full JSON parser.
 
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
-using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/vm/boxes/result_box.hako" as Result
 
 static box PhiDecodeBox {
@@ -38,7 +38,7 @@ static box PhiDecodeBox {
     if p < 0 { return null }
     local arr_br = p + key.length() - 1  // points at '['
     local i = arr_br + 1
-    local endp = JsonScanBox.seek_array_end(seg, arr_br)
+    local endp = JsonCursorBox.seek_array_end(seg, arr_br)
     local n = seg.length()
     if endp >= 0 { n = endp }
     local best_dst = JsonFragBox.get_int(seg, "dst")
@@ -56,7 +56,7 @@ static box PhiDecodeBox {
       // seek next object head '{'
       local ob = JsonFragBox.index_of_from(seg, me._lb(), i)
       if ob < 0 || ob >= n { break }
-      local ob_end = JsonScanBox.seek_obj_end(seg, ob)
+      local ob_end = JsonCursorBox.seek_obj_end(seg, ob)
       if ob_end < 0 || ob_end > n { invalid_cnt = invalid_cnt + 1  break }
       elem_cnt = elem_cnt + 1
       local obj = seg.substring(ob, ob_end+1)

@@ -13,7 +13,7 @@ static box RetResolverBox {
   //  - last_cmp_dst/last_cmp_val: 直近 compare の dst と値
   // 戻り値: i64 値（Fail‑Fast設計: 未定義は -1 を返す）
   resolve(regs, ret_id, last_cmp_dst, last_cmp_val) {
-    if ret_id == null { DiagnosticsBox.error("Undefined ret value field"); return -1 }
+    if ret_id == null { DiagnosticsBox.error("Undefined ret value field")  return -1 }
     if ret_id == last_cmp_dst { return last_cmp_val }
     local v = me._load_reg(regs, ret_id)
     if v != null { return v }

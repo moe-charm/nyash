@@ -1,9 +1,11 @@
 // step_runner.hako — Mini‑VM JSON v0 ステップ観測用の軽量箱（実行はしない）
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
 
 static box StepRunnerBox {
   // 文字列ヘルパ
-  _index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() if pos > n { return -1 } local i = pos local m = needle.length() if m <= 0 { return pos } local limit = n - m loop(i <= limit) { if hay.substring(i, i+m) == needle { return i } i = i + 1 } return -1 }
+  // 文字列ヘルパ（JsonCursorBox に委譲）
+  _index_of_from(hay, needle, pos) { return JsonCursorBox.index_of_from(hay, needle, pos) }
   _read_digits(text, pos) { local out = "" local i = pos loop(i < text.length()) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
   _int(s) { local t = "" + s if t == "" { return 0 } local i = 0 local neg = 0 if t.substring(0,1) == "-" { neg = 1 i = 1 } local acc = 0 loop(i < t.length()) { local ch = t.substring(i, i+1) if ch < "0" || ch > "9" { break } acc = acc * 10 + (ch == "0" ? 0 : ch == "1" ? 1 : ch == "2" ? 2 : ch == "3" ? 3 : ch == "4" ? 4 : ch == "5" ? 5 : ch == "6" ? 6 : ch == "7" ? 7 : ch == "8" ? 8 : 9) i = i + 1 } if neg == 1 { acc = 0 - acc } return acc }
 
@@ -14,21 +16,20 @@ static box StepRunnerBox {
     if k < 0 { return "" }
     local lb = k + key.length() - 1
     // Delegate to JsonScanBox for robust end detection (escape-aware)
-    using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
-    local rb = JsonScanBox.seek_array_end(mjson, lb)
+        local rb = JsonCursorBox.seek_array_end(mjson, lb)
     if rb < 0 { return "" }
     return mjson.substring(lb + 1, rb)
   }
 
   // compare の (lhs,rhs,kind,dst) を抽出
   parse_compare(seg) {
-    local p = me._index_of_from(seg, "\"op\":\"compare\"", 0)
+    local p = JsonCursorBox.index_of_from(seg, "\"op\":\"compare\"", 0)
     if p < 0 { return new MapBox() }
-    local lhs = me._int(me._read_digits(seg, me._index_of_from(seg, "\"lhs\":", p) + 6))
-    local rhs = me._int(me._read_digits(seg, me._index_of_from(seg, "\"rhs\":", p) + 6))
-    local dst = me._int(me._read_digits(seg, me._index_of_from(seg, "\"dst\":", p) + 6))
+    local lhs = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"lhs\":", p) + 6))
+    local rhs = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"rhs\":", p) + 6))
+    local dst = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"dst\":", p) + 6))
     // kind
-    local kpos = me._index_of_from(seg, "\"cmp\":\"", p)
+    local kpos = JsonCursorBox.index_of_from(seg, "\"cmp\":\"", p)
     local kend = me._index_of_from(seg, "\"", kpos + 6)
     local kind = seg.substring(kpos + 6, kend)
     local out = new MapBox()
@@ -41,11 +42,11 @@ static box StepRunnerBox {
 
   // branch の cond/then/else を抽出
   parse_branch(seg) {
-    local p = me._index_of_from(seg, "\"op\":\"branch\"", 0)
+    local p = JsonCursorBox.index_of_from(seg, "\"op\":\"branch\"", 0)
     if p < 0 { return new MapBox() }
-    local cond = me._int(me._read_digits(seg, me._index_of_from(seg, "\"cond\":", p) + 7))
-    local then_id = me._int(me._read_digits(seg, me._index_of_from(seg, "\"then\":", p) + 7))
-    local else_id = me._int(me._read_digits(seg, me._index_of_from(seg, "\"else\":", p) + 7))
+    local cond = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"cond\":", p) + 7))
+    local then_id = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"then\":", p) + 7))
+    local else_id = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"else\":", p) + 7))
     local out = new MapBox()
     out.set("cond", cond)
     out.set("then", then_id)

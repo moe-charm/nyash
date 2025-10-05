@@ -20,7 +20,8 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'NYEOF'
 using selfhost-compiler.pipeline_v2.flow_entry as FlowEntryBox
-using hakorune.vm.mir_min as MirVmMin
+using selfhost.vm.boxes.mir_vm_min as MirVmMin
+
 
 static box Main {
   main() {

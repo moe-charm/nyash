@@ -66,8 +66,7 @@ impl NyashRunner {
         // Default: auto when macro engine is enabled (safe: PyVM only)
         // Gate: NYASH_MACRO_SELFHOST_PRE_EXPAND={1|auto|0}
         {
-            let preenv = std::env::var("NYASH_MACRO_SELFHOST_PRE_EXPAND")
-                .ok()
+            let preenv = crate::config::env::macro_selfhost_pre_expand()
                 .or_else(|| if crate::r#macro::enabled() { Some("auto".to_string()) } else { None });
             let do_pre = match preenv.as_deref() {
                 Some("1") => true,
@@ -154,20 +153,20 @@ impl NyashRunner {
                 if crate::config::env::ny_compiler_min_json() { extra_owned.push("--min-json".to_string()); }
                 if crate::config::env::ny_compiler_stage3() { extra_owned.push("--stage3".to_string()); }
                 // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace (emit-only, safe; default OFF)
-                if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {
+                if crate::config::env::emit_trace() {
                     extra_owned.push("--emit-trace".to_string());
                 }
                 // Optional lowering preference (CFG/materialize); default OFF
-                if std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1") {
+                if crate::config::env::prefer_cfg2() {
                     extra_owned.push("--prefer-cfg2".to_string());
-                } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
+                } else if crate::config::env::prefer_cfg() {
                     extra_owned.push("--prefer-cfg".to_string());
                 }
                 // Optional: map env toggles to child args (prepasses)
-                if std::env::var("NYASH_SCOPEBOX_ENABLE").ok().as_deref() == Some("1") {
+                if crate::config::env::scopebox_enable() {
                     extra_owned.push("--scopebox".to_string());
                 }
-                if std::env::var("NYASH_LOOPFORM_NORMALIZE").ok().as_deref() == Some("1") {
+                if crate::config::env::loopform_normalize() {
                     extra_owned.push("--loopform".to_string());
                 }
                 extra_owned.push("--source-inline".to_string());
@@ -228,7 +227,7 @@ impl NyashRunner {
         }
 
         // Python MVP-first: prefer the lightweight harness to produce JSON v0 (unless skipped)
-        if std::env::var("NYASH_NY_COMPILER_SKIP_PY").ok().as_deref() != Some("1") {
+        if !crate::config::env::ny_compiler_skip_py() {
             if let Ok(py3) = which::which("python3") {
                 let py = std::path::Path::new("tools/ny_parser_mvp.py");
                 if py.exists() {
@@ -381,13 +380,13 @@ impl NyashRunner {
                 }
                 if want_stage3 { extra.push("--stage3".to_string()); }
                 // Dev trace: map NYASH_EMIT_TRACE=1 -> --emit-trace
-                if std::env::var("NYASH_EMIT_TRACE").ok().as_deref() == Some("1") {
+                if crate::config::env::emit_trace() {
                     extra.push("--emit-trace".to_string());
                 }
                 // Optional lowering preference flags
-                if std::env::var("NYASH_PREFER_CFG2").ok().as_deref() == Some("1") {
+                if crate::config::env::prefer_cfg2() {
                     extra.push("--prefer-cfg2".to_string());
-                } else if std::env::var("NYASH_PREFER_CFG").ok().as_deref() == Some("1") {
+                } else if crate::config::env::prefer_cfg() {
                     extra.push("--prefer-cfg".to_string());
                 }
                 extra.push("--source-inline".to_string());

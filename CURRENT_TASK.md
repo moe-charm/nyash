@@ -1,3 +1,61 @@
+## 2025-10-05 — index_of_from 統一（第1弾）+ Throw 最小対応 + Verifier 整理
+
+- 2引数 indexOf 残差の段階移行（検索は index_of_from 統一）
+  - libs: byte_cursor/utf8_cursor を `StringStd.index_of_from` に寄せ、`StringStd.index_of_from` を追加。
+    - apps/libs/byte_cursor.nyash, apps/libs/utf8_cursor.nyash, apps/lib/boxes/string_std.nyash
+  - selfhost VM 最小器: mir_vm_m2 はローカル `index_of_from` を追加して置換。
+    - apps/selfhost/vm/boxes/mir_vm_m2.hako
+  - hakorune VM 最小器: 一括で `me.index_of_from` に統一（presence チェック含む）。
+    - apps/hakorune/vm/boxes/hakorune_vm_min.hako
+  - ツール/アダプタの一部も置換（段階）：
+    - apps/selfhost/tools/dep_tree.nyash → `StringStd.index_of_from`
+    - apps/selfhost/common/json/mir_v1_adapter.nyash → 自前 `_index_of_from`
+  - DEV リント導入: `tools/lints/lint_indexof_two_args.sh`（`.indexOf(a,b)` を検出）。Makefile の `lint`/`lint-ny` に連携。
+
+- Throw/PHI（VM 最小対応）
+  - MIR インタプリタ: 末端 `Throw` を「void で即 return」扱いにし、未到達 Throw 片の存在で VM が落ちないように調整。
+    - src/backend/mir_interpreter/exec.rs
+  - スモーク: Throw 系は引き続きゲート（enable: `SMOKES_ENABLE_JSON_V0_THROW=1`）。実行される Throw を含む JSON では結果行が出ないため、常時ONは段階導入。
+
+- SignatureVerifier/MethodRegistry（現状整理）
+  - Registry は toString/stringify/startsWith/endsWith 等を含む最小カバレッジで稼働中。
+  - Pipeline v2 は `verify_call_name_arity` を適用済み。次フェーズでメソッド群のカバレッジを拡張予定。
+
+- 影響/状態
+  - quick 抜粋 PASS: `using_modules_alias_vm.sh`, `json_missing_key_vm.sh`
+  - lint 実行で 2引数 .indexOf は大幅減（残差は旧/互換/診断系に限定）。
+
+- Next（小粒・推奨順）
+  1) `apps/selfhost/vm/boxes/mir_vm_m2.hako`/`flow_runner.hako` の残り presence/検索箇所を再点検し `index_of_from` に寄せる（完了に近い）
+  2) Throw の意味論（例外伝播/診断整形）を詰め、Throw スモークを常時ON化できる最小形に引上げ
+  3) MethodRegistry カバレッジ拡張 + SignatureVerifierBox 強化（name 正規化の幅/別名対応）
+
+
+
+## 2025-10-05 — Selfhost to_json migration (cont.) + Throw/PHI smokes
+
+- Selfhost emit path unified further to Map→to_json:
+  - builder2: per-instruction string appends are gated off by default (`append_insts=0`),
+    headers also gated (`append_headers=0`); `to_string()` prefers rebuild via HeaderEmitBox.
+  - builder_min: newbox uses NewBoxEmitBox helpers (`with_args_array/with_args_text`) to keep args_text snapshots consistent.
+  - pipeline_v2: mir_call_box/emit_newbox normalized with `match` for nulls; emit path uses HeaderEmitBox + JsonEmitBox.
+- Smokes added (gated):
+  - quick/core/json_v0_if_throw_phi_vm.sh (requires `SMOKES_ENABLE_JSON_V0_THROW=1`; VM may skip/fail otherwise).
+  - quick/llvm/phi/phi_invariants_throw_branch.sh (skips if IR dump is unavailable).
+- No default behavior changes; tests are gated to avoid flakiness on environments without Throw/IR support.
+
+
+### Postmortem: 2-arg indexOf bug + mitigation
+
+- Cause: some paths ignored the start position when using `String.indexOf(needle, from)`, returning matches from the head and masking real errors.
+- Policy: unify all substring search to `index_of_from(text, needle, pos)` helpers (Box-First; centralize in CfgNavigatorBox/StringScanBox/JsonCursorBox).
+- Actions (this patch):
+  - Added `StringScanBox.index_of_from(text, needle, pos)` and migrated `JsonScanBox.find_key_dual` to use it (no more 2-arg `String.indexOf`).
+  - Added DEV lint: `tools/lints/lint_indexof_two_args.sh` (reports 2-arg `indexOf(...)` occurrences; non-fatal by default, set `LINT_INDEXOF_FAIL=1` to fail).
+- Next: continue small-scoped migration (one file at a time) towards `CfgNavigatorBox.index_of_from`/`StringScanBox.index_of_from`.
+
+
+
 ## 2025-10-05 — Contracts hotfixes + Phase 15.9 doc
 
 - Added Phase 15.9 optimization plan: docs/development/roadmap/phases/phase-15.9/README.md
@@ -1155,3 +1213,101 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
 - Pipeline addition: `PipelineV2.lower_stage1_to_mir_with_usings(ast, prefer_cfg, usings_json, modules_json)` resolves names via UsingResolverBox before emit.
 - Smoke: `selfhost_namespace_box_basic_vm.sh` validates alias→ns mapping for call/class.
 - Note: end-to-end pipeline smoke for usings is added but optional; main focus is box-level resolution.
+
+
+## 2025-10-05 — Method arity Fail‑Fast（built‑ins）+ 署名レジストリ足場
+
+- 目的
+  - 「静かな失敗」を排し、BoxCall/Method 呼び出し時にメソッド署名（arity）不一致を明示エラーにする。
+  - indexOf など個別対処ではなく、(Box, method, arity) の一律検証に寄せる。
+
+- 実装（本コミット）
+  - VM 実行時チェック（built‑ins のみ; String/Array/Map）
+    - 変更: src/backend/mir_interpreter/handlers/calls/method.rs
+      - execute_method_call の冒頭で type_registry を参照し、(Box, method, arity) を検証。
+      - 不一致時は `No matching method: <Box>.<method>(<N> args). Available arities: [...]` を返す。
+      - String.indexOf は args.len()!=1 の場合にも明示エラー化。
+    - 変更: src/backend/mir_interpreter/handlers/calls/legacy/method_handler.rs
+      - legacy Method 経路にも同様の arity 検証を追加（Fail‑Fast）。
+  - 型レジストリの拡張
+    - 変更: src/runtime/type_registry.rs に `known_arities_for` を追加（診断用）。
+  - 署名レジストリの箱（スカフォールド）
+    - 追加: apps/hakorune/vm/boxes/method_registry.hako — built‑ins 3種の method/arity 一覧（今後 Pipeline V2 で利用）。
+
+- スモーク
+  - 追加: tools/smokes/v2/profiles/quick/core/arity_error_array_push_2args_vm.sh — Array.push(2) がエラーに。
+  - 備考: String.indexOf(2) はパイプライン経路によっては別分岐を通るため、compile‑time 検証導入後に常設を検討。
+
+- 次アクション（小粒）
+  1) SignatureVerifierBox（Pipeline V2）を追加し、Method/Call 降下直後に (Box, method, arity) を MethodRegistryBox で照合して Fail‑Fast。
+  2) Using STRICT を既定ONに（NYASH_USING_STRICT=1）し、未宣言 using/別名は即エラー。resolver trace は dev のみ。
+  3) JsonFragBox に *_strict アクセサを追加し、必須キー箇所（compare/lhs/rhs/dst 等）を strict 化。
+  4) 代表スモーク: missing_using_should_error_vm / json_missing_cmp_should_error_vm / ret_undefined_register_should_error_vm を追加。
+
+
+
+## Phase 15.7 — Strictness + Compile-time Verifier (P2)
+
+- Added SignatureVerifierBox (apps/selfhost-compiler/pipeline_v2/signature_verifier_box.hako)
+  - Compile-time arity check for common built-ins by method name (uniform arities).
+  - Wired into PipelineV2 method lowering (v1 and legacy Stage‑1 paths).
+- Using strict: NamespaceBox now fails fast on unresolved aliases (prints `[ERROR] Unresolved using alias: X`).
+  - PipelineV2.lower_stage1_to_mir_with_usings returns null if alias resolution fails.
+- JSON strict getters: JsonFragBox.get_int_strict/get_str_strict with `[ERROR] Missing key: <key>`.
+  - OpHandlersBox.handle_compare enforces presence of cmp/lhs/rhs/dst and emits errors, no silent fallbacks.
+- Smokes added:
+  - quick/selfhost/selfhost_missing_using_vm.sh
+  - quick/core/json_missing_key_vm.sh
+  - quick/selfhost/selfhost_ret_undefined_register_vm.sh
+
+Acceptance:
+- Early arity mismatches surface at compile-time in Pipeline V2 path.
+- Missing using alias and missing required JSON keys now produce explicit errors (no silent failure).
+
+
+---
+
+2025-10-06 — Rust VM Fail‑Fast alignment + using strict default ON
+
+- Using strict default ON
+  - Added `config::env::using_strict()` (default true unless `NYASH_USING_STRICT=0|false|off`).
+  - Call sites now use `using_strict()` instead of reading env directly:
+    - `src/runner/modes/common_util/resolve/strip/collect.rs:22`
+    - `src/runner/mod.rs:239`
+    - `src/runner/modes/common.rs:188`
+- Unresolved using in strict mode now fails early
+  - `src/runner/pipeline.rs: resolve_using_target(.., strict=1, ..)` returns Err on unresolved.
+  - Runner surfaces as `❌ using: unresolved using '...' ...` and exits.
+- Runtime method arity Fail‑Fast remains enforced (no code change required)
+  - Built‑ins via `type_registry` validation in `execute_method_call`.
+- Smoke added
+  - `tools/smokes/v2/profiles/quick/core/using_missing_strict_vm.sh` (strict unresolved using → FAIL)
+
+Next Steps (structure-first)
+- Consolidate env reads under `src/config/env.rs` (eliminate direct `std::env::var` checks from runners; use helpers only).
+- Share MethodRegistry between compiler and runtime (single source of truth for built-ins; optional metadata from hako.toml for plugins).
+- Extract JsonCursorBox (seek/scan helpers) and delegate JsonFragBox to it; migrate handlers to strict getters by default for required keys.
+
+
+## 2025-10-06 — Env 集約 + MethodRegistry 拡大 + Call 検証拡張 + JsonCursorBox 採用
+
+- Env 集約（関数化・呼び出し置換）
+  - 追加: vm_resolve_trace(), emit_trace(), prefer_cfg2(), prefer_cfg(), scopebox_enable(), loopform_normalize(), macro_selfhost_pre_expand()（src/config/env.rs）
+  - 呼び出し更新: VM CallResolver / runner selfhost 経路で直読を排除し、関数に統一。
+- MethodRegistry 拡大（ビルトイン整合）
+  - StringBox: toString(0)/stringify(0)/startsWith(1)/endsWith(1) をレジストリへ追加。
+  - Array/Map: toString(0)/stringify(0) をレジストリへ追加。
+  - runtime type_registry.rs にも StringBox の vtable 雛形を拡張（slot 308..311）。
+- Call 側検証の拡張（安全な判定ルール）
+  - SignatureVerifierBox.verify_call_name_arity: 最後の '.' でメソッド名抽出、直前セグメントを Box 名候補として扱い、
+    String|StringBox / Array|ArrayBox / Map|MapBox のみ厳密にアリティを検証（その他は許容）。
+  - 例: core.String.indexOf → StringBox.indexOf として 1 引数のみ許容。
+- JsonCursorBox 採用（直接スキャン箇所の段階移行）
+  - minivm_probe/step_runner で index_of_from / seek_array_end を JsonCursorBox に委譲。
+  - 目的: 文字列/配列/オブジェクト走査の一貫API化とバグ温床の解消。
+- 互換/影響
+  - 既存 quick は互換。ビルトインの arity エラーはより早期/明確に失敗（Fail‑Fast）。
+- 次アクション（小粒）
+  - UsingResolverBox と MethodRegistry の連携（エイリアス正規化の強化）。
+  - JsonCursorBox の段階的適用拡大（残る直接スキャン呼び出しの移行）。
+  - Call 署名検証の対象拡大（必要に応じて Map/Array の追加メソッド）。

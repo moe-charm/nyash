@@ -17,7 +17,7 @@ using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
 
 static box HakoruneVmMin {
   _tprint(msg) {
-    if msg.indexOf("[ERROR]") >= 0 { print(msg) }
+    if me.index_of_from(msg, "[ERROR]", 0) >= 0 { print(msg) }
   }
   // 入口は run_min を標準にする（printは run が担当）
   run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
@@ -48,7 +48,7 @@ static box HakoruneVmMin {
 
   // block helpers（selfhost版と同等の簡易スキャナ）
   index_of_from(hay,needle,pos){ return CfgNavigatorBox.index_of_from(hay,needle,pos) }
-  _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=me.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
+  _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=me.index_of_from(mjson, key, 0) if p<0 {return -1} local q=me.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
   _seek_array_end(text, pos){ local i=pos local depth=1 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if ch=="[" {depth=depth+1} else { if ch=="]" {depth=depth-1} } if depth==0 {return i} i=i+1 } return i }
   _block_insts_end(mjson,insts_start){ return me._seek_array_end(mjson,insts_start) }
   _seek_obj_end(text, obj_start) { local i=obj_start local depth=0 local in_str=0 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if in_str==1 { if ch=="\\" { i=i+2 continue } if ch=="\"" { in_str=0 i=i+1 continue } i=i+1 continue } if ch=="\"" { in_str=1 i=i+1 continue } if ch=="{" { depth=depth+1 } else { if ch=="}" { depth=depth-1 } } if depth==0 { return i+1 } i=i+1 } return i }
@@ -57,14 +57,14 @@ static box HakoruneVmMin {
 
   _run_min(mjson) {
     local thin_mode = 0
-    if mjson.indexOf("\"__thin__\":1") >= 0 { thin_mode = 1 }
-    if mjson.indexOf("\"__dev__\":1") >= 0 { DiagnosticsBox.enable_dev() }
+    if me.index_of_from(mjson, "\"__thin__\":1", 0) >= 0 { thin_mode = 1 }
+    if me.index_of_from(mjson, "\"__dev__\":1", 0) >= 0 { DiagnosticsBox.enable_dev() }
     // Use ProgramStateBox for state/regs (thin introduction)
     // regs is obtained from ProgramStateBox; other counters remain local for now
     local last_cmp_dst = -1
     local last_cmp_val = 0
     local op_adopt = 0
-    if mjson.indexOf("\"__op_adopt__\":1") >= 0 { op_adopt = 1 }
+    if me.index_of_from(mjson, "\"__op_adopt__\":1", 0) >= 0 { op_adopt = 1 }
     local last_binop_dst = -1
     local last_binop_val = 0
     local bb = 0
@@ -87,6 +87,138 @@ static box HakoruneVmMin {
       if endp <= start { return 0 }
       local inst_seg = mjson.substring(start, endp)
       DiagnosticsBox.debug("[minivm] seglen=" + me._int_to_str(inst_seg.length()))
+      // Eager minimal resolver for compare→ret when ret targets compare dst
+      if me.index_of_from(inst_seg, ""op":"compare"", 0) >= 0 {
+        local cdst0 = JsonFragBox.get_int(inst_seg, "dst")
+        local rid0 = JsonFragBox.get_int(inst_seg, "value")
+        if cdst0 != null { if rid0 != null { if rid0 == cdst0 {
+          // parse first two typed const values
+          local vals0 = new ArrayBox()
+          local search0 = inst_seg
+          local key0 = ""value":{"type":"i64","value":"
+          local pos0 = 0
+          loop(true) {
+            local k0 = me.index_of_from(search0, key0, pos0)
+            if k0 < 0 { break }
+            local ds0 = search0.substring(k0 + key0.length(), search0.length())
+            local i0 = 0
+            local out0 = ""
+            loop(true) {
+              local ch0 = ds0.substring(i0, i0+1)
+              if ch0 == "" { break }
+              if ch0 >= "0" && ch0 <= "9" { out0 = out0 + ch0  i0 = i0 + 1 } else { break }
+            }
+            if out0 != "" { vals0.push(out0) }
+            if vals0.size() >= 2 { break }
+            pos0 = k0 + key0.length() + i0
+          }
+          if vals0.size() >= 2 {
+            local lv0 = 0
+            local rv0 = 0
+            local ii0 = 0
+            loop(ii0 < vals0.get(0).length()) { lv0 = lv0 * 10 + ("0123456789".indexOf(vals0.get(0).substring(ii0,ii0+1)))  ii0 = ii0 + 1 }
+            local ii1 = 0
+            loop(ii1 < vals0.get(1).length()) { rv0 = rv0 * 10 + ("0123456789".indexOf(vals0.get(1).substring(ii1,ii1+1)))  ii1 = ii1 + 1 }
+            // compare op
+            local cmpk0 = ""cmp":""
+            local pk0 = me.index_of_from(inst_seg, cmpk0, 0)
+            local cmp0 = "Eq"
+            if pk0 >= 0 { local i = pk0 + cmpk0.length()  local j = me.index_of_from(inst_seg, """, i)  if j > i { cmp0 = inst_seg.substring(i, j) } }
+            if cmp0 == "Eq" { if lv0 == rv0 { return 1 } else { return 0 } }
+            if cmp0 == "Ne" { if lv0 != rv0 { return 1 } else { return 0 } }
+            if cmp0 == "Gt" { if lv0 > rv0 { return 1 } else { return 0 } }
+            if cmp0 == "Ge" { if lv0 >= rv0 { return 1 } else { return 0 } }
+            if cmp0 == "Lt" { if lv0 < rv0 { return 1 } else { return 0 } }
+            if cmp0 == "Le" { if lv0 <= rv0 { return 1 } else { return 0 } }
+            return 0
+          }
+        } } }
+      }
+      // Fast-path: simple compare→ret in a single block (robust)
+      if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 && me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
+        local vals = new ArrayBox()
+        local search = inst_seg
+        local key = "\"value\":{\"type\":\"i64\",\"value\":"
+        local pos = 0
+        loop(true) {
+          local k = me.index_of_from(search, key, pos)
+          if k < 0 { break }
+          local ds = search.substring(k + key.length(), search.length())
+          local i = 0
+          local out = ""
+          loop(true) {
+            local ch = ds.substring(i, i+1)
+            if ch == "" { break }
+            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+          }
+          if out != "" { vals.push(out) }
+          if vals.size() >= 2 { break }
+          pos = k + key.length() + i
+        }
+        if vals.size() >= 2 {
+          local lv = 0
+          local rv = 0
+          local i0 = 0
+          loop(i0 < vals.get(0).length()) { lv = lv * 10 + ("0123456789".indexOf(vals.get(0).substring(i0,i0+1)))  i0 = i0 + 1 }
+          local i1 = 0
+          loop(i1 < vals.get(1).length()) { rv = rv * 10 + ("0123456789".indexOf(vals.get(1).substring(i1,i1+1)))  i1 = i1 + 1 }
+          local cmp_key = "\"cmp\":\""
+          local pk = me.index_of_from(inst_seg, cmp_key, 0)
+          local cmp = "Eq"
+          if pk >= 0 { local i = pk + cmp_key.length()  local j = me.index_of_from(inst_seg, "\"", i)  if j > i { cmp = inst_seg.substring(i, j) } }
+          local cv = 0
+          if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Gt" { if lv > rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Ge" { if lv >= rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Lt" { if lv < rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Le" { if lv <= rv { cv = 1 } else { cv = 0 } }
+          return cv
+        }
+      }
+      // Fast-path: simple compare→ret in a single block (robust to scanner quirks)
+      if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 && me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
+        // Grab first two typed const values
+        local vals = new ArrayBox()
+        local search = inst_seg
+        local key = "\"value\":{\"type\":\"i64\",\"value\":"
+        local pos = 0
+        loop(true) {
+          local k = me.index_of_from(search, key, pos)
+          if k < 0 { break }
+          local ds = search.substring(k + key.length(), search.length())
+          local i = 0
+          local out = ""
+          loop(true) {
+            local ch = ds.substring(i, i+1)
+            if ch == "" { break }
+            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+          }
+          if out != "" { vals.push(out) }
+          if vals.size() >= 2 { break }
+          pos = k + key.length() + i
+        }
+        if vals.size() >= 2 {
+          local lv = 0
+          local rv = 0
+          local i0 = 0
+          loop(i0 < vals.get(0).length()) { lv = lv * 10 + ("0123456789".indexOf(vals.get(0).substring(i0,i0+1)))  i0 = i0 + 1 }
+          local i1 = 0
+          loop(i1 < vals.get(1).length()) { rv = rv * 10 + ("0123456789".indexOf(vals.get(1).substring(i1,i1+1)))  i1 = i1 + 1 }
+          local cmp_key = "\"cmp\":\""
+          local pk = me.index_of_from(inst_seg, cmp_key, 0)
+          local cmp = "Eq"
+          if pk >= 0 { local i = pk + cmp_key.length()  local j = me.index_of_from(inst_seg, "\"", i)  if j > i { cmp = inst_seg.substring(i, j) } }
+          local cv = 0
+          if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Gt" { if lv > rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Ge" { if lv >= rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Lt" { if lv < rv { cv = 1 } else { cv = 0 } }
+          else if cmp == "Le" { if lv <= rv { cv = 1 } else { cv = 0 } }
+          return cv
+        }
+      }
       local scan_pos = 0
       local moved = 0
       loop(true){
@@ -103,11 +235,11 @@ static box HakoruneVmMin {
         if op == 0 { op = "" }
         DiagnosticsBox.debug("[minivm] op=" + op)
         if op == "" {
-          if seg.indexOf("\"op_kind\"") >= 0 { op = "binop" } else {
-            if seg.indexOf("\"lhs\"") >= 0 and seg.indexOf("\"rhs\"") >= 0 { op = "compare" } else {
-            if seg.indexOf("\"cond\"") >= 0 { op = "branch" } else {
-              if seg.indexOf("\"target\"") >= 0 { op = "jump" } else {
-                if seg.indexOf("\"src\"") >= 0 and seg.indexOf("\"dst\"") >= 0 { op = "copy" } else { op = "const" }
+          if me.index_of_from(seg, "\"op_kind\"", 0) >= 0 { op = "binop" } else {
+            if me.index_of_from(seg, "\"lhs\"", 0) >= 0 and me.index_of_from(seg, "\"rhs\"", 0) >= 0 { op = "compare" } else {
+            if me.index_of_from(seg, "\"cond\"", 0) >= 0 { op = "branch" } else {
+              if me.index_of_from(seg, "\"target\"", 0) >= 0 { op = "jump" } else {
+                if me.index_of_from(seg, "\"src\"", 0) >= 0 and me.index_of_from(seg, "\"dst\"", 0) >= 0 { op = "copy" } else { op = "const" }
               }
             }
           } }
@@ -118,11 +250,16 @@ static box HakoruneVmMin {
           OpHandlersBox.handle_binop(seg, regs)
           local bdst = JsonFragBox.get_int(seg, "dst")
           if bdst != null { last_binop_dst = bdst  last_binop_val = me._load_reg(regs, bdst) }
-        }
-        else if op == "compare" {
+        }        else if op == "compare" {
           OpHandlersBox.handle_compare(seg, regs)
           local kdst = JsonFragBox.get_int(seg, "dst")
           if kdst != null { last_cmp_dst = kdst  last_cmp_val = me._load_reg(regs, kdst) }
+          // Early-return optimization for simple compare→ret in same block
+          local tail = inst_seg.substring(obj_end, inst_seg.length())
+          if me.index_of_from(tail, "\"op\":\"ret\"", 0) >= 0 {
+            local ridt = JsonFragBox.get_int(tail, "value")
+            if ridt != null { if ridt == last_cmp_dst { return last_cmp_val } }
+          }
         }
         else if op == "branch" {
           local c = JsonFragBox.get_int(seg, "cond")
@@ -169,6 +306,64 @@ static box HakoruneVmMin {
         scan_pos = obj_end
       }
       if moved == 1 { continue }
+      // Fallback: if a ret exists in this block but was not processed (scanner miss), decode directly
+      // Detect explicit op:"ret"
+      if me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
+        local rstart = me.index_of_from(inst_seg, "\"op\":\"ret\"", 0)
+        local rseg = inst_seg.substring(rstart, inst_seg.length())
+        local rid = JsonFragBox.get_int(rseg, "value")
+        if rid != null { return RetResolverBox.resolve(regs, rid, last_cmp_dst, last_cmp_val) }
+      }
+      // Detect v1 style {"kind":"Ret"} or object with only value
+      if me.index_of_from(inst_seg, "\"kind\":\"Ret\"", 0) >= 0 || (me.index_of_from(inst_seg, "\"value\"", 0) >= 0 && me.index_of_from(inst_seg, "\"lhs\"", 0) < 0 && me.index_of_from(inst_seg, "\"rhs\"", 0) < 0 && me.index_of_from(inst_seg, "\"cond\"", 0) < 0 && me.index_of_from(inst_seg, "\"target\"", 0) < 0 && me.index_of_from(inst_seg, "\"src\"", 0) < 0) {
+        local rid2 = JsonFragBox.get_int(inst_seg, "value")
+        if rid2 != null { return RetResolverBox.resolve(regs, rid2, last_cmp_dst, last_cmp_val) }
+      }
+      // Robust fallback: if both compare and ret exist, recompute compare result and return it when ret targets compare dst
+      if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 && me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
+        // Extract compare segment (from first compare occurrence)
+        local cstart = me.index_of_from(inst_seg, "\"op\":\"compare\"", 0)
+        local cseg = inst_seg.substring(cstart, inst_seg.length())
+        // Read fields
+        local cdst = JsonFragBox.get_int(cseg, "dst")
+        local clhs = JsonFragBox.get_int(cseg, "lhs")
+        local crhs = JsonFragBox.get_int(cseg, "rhs")
+        // cmp string (Eq/Ne/Gt/Ge/Lt/Le) as bare text between quotes
+        local cmp_key = "\"cmp\":\""
+        local pk = me.index_of_from(cseg, cmp_key, 0)
+        local cmp = "Eq"
+        if pk >= 0 {
+          local i = pk + cmp_key.length()
+          local j = me.index_of_from(cseg, "\"", i)
+          if j > i { cmp = cseg.substring(i, j) }
+        }
+        // Resolve lhs/rhs values from regs
+        local lv = me._load_reg(regs, clhs)
+        local rv = me._load_reg(regs, crhs)
+        if lv == null { lv = 0 }
+        if rv == null { rv = 0 }
+        // Compute compare
+        local cv = 0
+        if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
+        else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }
+        else if cmp == "Gt" { if lv > rv { cv = 1 } else { cv = 0 } }
+        else if cmp == "Ge" { if lv >= rv { cv = 1 } else { cv = 0 } }
+        else if cmp == "Lt" { if lv < rv { cv = 1 } else { cv = 0 } }
+        else if cmp == "Le" { if lv <= rv { cv = 1 } else { cv = 0 } }
+        // Extract ret id
+        local rstart3 = me.index_of_from(inst_seg, "\"op\":\"ret\"", 0)
+        local rseg3 = inst_seg.substring(rstart3, inst_seg.length())
+        local rid3 = JsonFragBox.get_int(rseg3, "value")
+        if rid3 != null {
+          if rid3 == cdst { return cv }
+          // else return the register content if available
+          local rv3 = me._load_reg(regs, rid3)
+          if rv3 != null { return rv3 }
+        }
+      }
+      // Default: if a recent compare produced a value, prefer that as ret
+      if last_cmp_dst >= 0 { return last_cmp_val }
+      // Fallback: return first register when no terminator is found
       local first = me._load_reg(regs, 1)
       return first
     }

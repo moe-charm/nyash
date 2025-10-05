@@ -6,8 +6,8 @@ static box Utf8CursorBox {
 
   // CP-based indexOf (MVP: uses .indexOf)
   indexOf(s, sub, from) {
-    if from { return s.indexOf(sub, from) }
-    return s.indexOf(sub)
+    if from { return new StringStd().index_of_from(s, sub, from) }
+    return new StringStd().index_of_from(s, sub, 0)
   }
 
   // CP-based substring (MVP: uses .substring)

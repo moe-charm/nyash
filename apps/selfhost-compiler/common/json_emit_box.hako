@@ -1,0 +1,11 @@
+// json_emit_box.hako — JsonEmitBox: minimal helpers for JSON emission
+// Responsibility: provide a thin, stable facade for JSON.stringify and small append patterns.
+
+static box JsonEmitBox {
+  to_json(node) {
+    // First‑class JSON stringify (normalized in builder). Fallback to .toJSON when available.
+    return JSON.stringify(node)
+  }
+}
+
+static box JsonEmitBoxStub { main(args) { return 0 } }

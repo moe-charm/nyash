@@ -1,0 +1,31 @@
+// header_emit_box.hako — HeaderEmitBox: thin helpers to build MIR(JSON v0) headers
+// Responsibility: construct minimal Maps for block/function/module headers consistently.
+
+static box HeaderEmitBox {
+  make_block(id, insts) {
+    local b = new MapBox()
+    if id == null { id = 0 }
+    if insts == null { insts = new ArrayBox() }
+    b.set("id", id)
+    b.set("instructions", insts)
+    return b
+  }
+
+  make_function_main(blocks) {
+    local f = new MapBox()
+    if blocks == null { blocks = new ArrayBox() }
+    f.set("name", "main")
+    f.set("params", new ArrayBox())
+    f.set("blocks", blocks)
+    return f
+  }
+
+  make_module_with_functions(fns) {
+    local m = new MapBox()
+    if fns == null { fns = new ArrayBox() }
+    m.set("functions", fns)
+    return m
+  }
+}
+
+static box HeaderEmitBoxStub { main(args) { return 0 } }

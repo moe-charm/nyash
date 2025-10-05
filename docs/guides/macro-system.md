@@ -1,6 +1,6 @@
 # Macro System (Phase 16) — Quickstart
 
-Status: MVP available behind environment gates (default OFF). This page describes how to enable and use the initial features (derive, test runner, expansion dump) and the developer‑facing Pattern/Quote API preview.
+Status: MVP available (default ON). Disable with NYASH_MACRO_DISABLE=1 or NYASH_MACRO_ENABLE=0|false|off. This page describes how to enable and use the initial features (derive, test runner, expansion dump) and the developer‑facing Pattern/Quote API preview.
 
 ## Enabling/disabling macros
 

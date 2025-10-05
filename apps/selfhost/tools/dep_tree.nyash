@@ -26,10 +26,10 @@ static box DepTree {
     local i = 0
     local n = src.length()
     loop(i < n) {
-      local j = src.indexOf("include \"", i)
+      local j = new StringStd().index_of_from(src, "include \"", i)
       if j < 0 { break }
       local k = j + 9 // after include "
-      local q = src.indexOf("\"", k)
+      local q = new StringStd().index_of_from(src, "\"", k)
       if q < 0 { break }
       out.push(src.substring(k, q))
       i = q + 1
@@ -59,7 +59,7 @@ static box DepTree {
 
       local rec = new MapBox()
       // Split alias
-      local as_pos = t.indexOf(" as ")
+      local as_pos = new StringStd().index_of_from(t, " as ", 0)
       local target = t
       local alias = null
       if as_pos >= 0 {
@@ -92,7 +92,7 @@ static box DepTree {
         local line = lines.get(i).trim()
         if line.startsWith("// @module ") {
           local rest = line.substring(11, line.length()).trim()
-          local eq = rest.indexOf("=")
+          local eq = new StringStd().index_of_from(rest, "=", 0)
           if eq > 0 {
             local ns = rest.substring(0, eq).trim()
             local path = rest.substring(eq+1, rest.length()).trim()

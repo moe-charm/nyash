@@ -16,7 +16,7 @@ macro_rules! cli_v {
 /// Unstructured trace output function used by pipeline helpers
 pub fn log<S: AsRef<str>>(msg: S) {
     // Only emit when explicitly requested for resolver traces or when CLI verbose is on.
-    let resolve_trace = std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
+    let resolve_trace = crate::config::env::resolve_trace();
     if (resolve_trace || crate::config::env::cli_verbose()) && !crate::config::env::cli_quiet() {
         eprintln!("{}", msg.as_ref());
     }

@@ -37,7 +37,7 @@ pub fn populate_from_toml(
     }
     let path_opt = chosen.as_ref().map(|p| p.as_path());
     let path = if let Some(p) = path_opt { p } else { std::path::Path::new("nyash.toml") };
-    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+    if crate::config::env::resolve_trace() {
         if path.exists() {
             if !crate::config::env::cli_quiet() { eprintln!("[using] toml: using {:?}", std::fs::canonicalize(path).ok()); }
         }
@@ -58,7 +58,7 @@ pub fn populate_from_toml(
     let doc = toml::from_str::<toml::Value>(&text)
         .map_err(|e| UsingError::ParseToml(e.to_string()))?;
     // One-line summary (trace). Detailed dumps only when NYASH_RESOLVE_DEBUG=1
-    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+    if crate::config::env::resolve_trace() {
         let mut mods_count = 0usize;
         if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) { mods_count = mods.len(); }
         let using_tbl = doc.get("using").and_then(|v| v.as_table());

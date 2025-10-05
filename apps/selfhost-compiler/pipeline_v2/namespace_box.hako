@@ -23,7 +23,11 @@ static box NamespaceBox {
     local tail = s.substring(pos + 1, s.length())
     if resolver == null { return s }
     local ns = resolver.resolve_namespace_alias(head)
-    if ns == null { return s }
+    if ns == null {
+      // Strict: alias used but not declared
+      print("[ERROR] Unresolved using alias: " + head)
+      return null
+    }
     return ns + "." + tail
   }
 
@@ -37,13 +41,19 @@ static box NamespaceBox {
       if resolver == null { return s }
       local ns = resolver.resolve_namespace_alias(s)
       if ns != null { return ns }
-      return s
+      // If a bare alias is used but not declared, treat as error as well
+      // (keeps behavior consistent with global name normalization)
+      print("[ERROR] Unresolved using alias: " + s)
+      return null
     }
     local head = s.substring(0, pos)
     local tail = s.substring(pos + 1, s.length())
     if resolver == null { return s }
     local ns2 = resolver.resolve_namespace_alias(head)
-    if ns2 == null { return s }
+    if ns2 == null {
+      print("[ERROR] Unresolved using alias: " + head)
+      return null
+    }
     return ns2 + "." + tail
   }
 }

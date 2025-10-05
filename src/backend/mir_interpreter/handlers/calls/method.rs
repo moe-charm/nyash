@@ -11,6 +11,35 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+        // Built-in arity validation (Fail-Fast)
+        {
+            let arity = args.len();
+            let mut type_name: Option<&str> = None;
+            match receiver {
+                VMValue::String(_) => { type_name = Some("StringBox"); }
+                VMValue::BoxRef(bx) => {
+                    let tn = bx.type_name();
+                    if matches!(tn, "ArrayBox" | "MapBox" | "StringBox") { type_name = Some(tn); }
+                }
+                _ => {}
+            }
+            if let Some(tn) = type_name {
+                if method != "birth" {
+                    if crate::runtime::type_registry::resolve_typebox_by_name(tn).is_some() {
+                        if crate::runtime::type_registry::resolve_slot_by_name(tn, method, arity).is_none() {
+                            if let Some(known) = crate::runtime::type_registry::known_arities_for(tn, method) {
+                                if !known.is_empty() {
+                                    return Err(VMError::InvalidInstruction(format!(
+                                        "No matching method: {}.{}({} args). Available arities: {:?}", tn, method, arity, known
+                                    )));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         match receiver {
             VMValue::String(s) => match method {
                 "length" => Ok(VMValue::Integer(s.len() as i64)),
@@ -26,6 +55,9 @@ impl MirInterpreter {
                     }
                 }
                 "indexOf" => {
+                    if args.len() != 1 {
+                        return Err(VMError::InvalidInstruction(format!("No matching method: StringBox.indexOf({} args). Available arities: [1]", args.len())));
+                    }
                     if let Some(arg_id) = args.get(0) {
                         let needle = self.reg_load(*arg_id)?.to_string();
                         let idx = s.find(&needle).map(|i| i as i64).unwrap_or(-1);
@@ -101,4 +133,3 @@ impl MirInterpreter {
         }
     }
 }
-

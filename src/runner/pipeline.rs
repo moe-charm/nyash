@@ -39,7 +39,7 @@ impl NyashRunner {
             &mut aliases,
             &mut packages,
         );
-        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+        if crate::config::env::resolve_trace() {
             use crate::runner::trace::log as tlog;
             if !crate::config::env::cli_quiet() {
                 tlog(format!("[using] ctx: paths:{} modules:{} aliases:{} packages:{}", using_paths.len(), pending_modules.len(), aliases.len(), packages.len()));
@@ -146,7 +146,7 @@ pub(super) fn resolve_using_target(
     if is_path {
         return Ok(tgt.to_string());
     }
-    let trace = verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
+    let trace = verbose || crate::config::env::resolve_trace();
     let idx = super::box_index::get_box_index();
     let mut strict_effective = strict || idx.plugins_require_prefix_global;
     if std::env::var("NYASH_PLUGIN_REQUIRE_PREFIX").ok().as_deref() == Some("1") {
@@ -314,6 +314,10 @@ pub(super) fn resolve_using_target(
         if c2.exists() { cand.push(c2.to_string_lossy().to_string()); }
     }
     if cand.is_empty() {
+        // Unresolved: in strict mode, fail-fast with an error; otherwise emit a concise note
+        if strict {
+            return Err(format!("unresolved using '{}': not found in modules/using-paths", tgt));
+        }
         // Always emit a concise unresolved note to aid diagnostics in smokes
         let leaf = tgt.split('.').last().unwrap_or(tgt);
         let mut cands: Vec<String> = Vec::new();
@@ -482,7 +486,7 @@ pub(super) fn lint_fields_top(code: &str, strict: bool, verbose: bool) -> Result
         }
         return Err(msg);
     }
-    if verbose || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+    if verbose || crate::config::env::resolve_trace() {
         for (lno, fld, bx) in violations {
             eprintln!(
                 "[lint] fields-top: line {} in box {} -> {}",

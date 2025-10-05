@@ -1,6 +1,9 @@
 // EmitCompareBox — compare/branch/jump/ret の最小 MIR(JSON v0) 生成（Builder版）
 using "apps/selfhost/common/json/mir_builder2.hako" as MirJsonBuilder2
 using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
+using "apps/selfhost-compiler/common/header_emit_box.hako" as HeaderEmitBox
 
 static box EmitCompareBox {
   // Return-only variant (prefer_cfg = 0): emit compare → ret directly
@@ -9,17 +12,18 @@ static box EmitCompareBox {
   emit_compare_ret(lhs, rhs, cmp, trace) {
     // dev-trace（最小）
     if trace == 1 { print("[emit] compare-ret lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp) }
-    // entry: const lhs/rhs; compare→r3; ret r3
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, lhs)
-      |> MirJsonBuilderMin.add_const(2, rhs)
-      |> MirJsonBuilderMin.add_compare(cmp, 1, 2, 3)
-      |> MirJsonBuilderMin.add_ret(3)
-      |> MirJsonBuilderMin.end_all()
-    return MirJsonBuilderMin.to_string(b)
+    // entry: const lhs/rhs; compare→r3; ret r3（Map→to_json に統一）
+    local insts = new ArrayBox()
+    insts.push(MirEmitBox.make_const(1, lhs))
+    insts.push(MirEmitBox.make_const(2, rhs))
+    insts.push(MirEmitBox.make_compare(cmp, 1, 2, 3))
+    insts.push(MirEmitBox.make_ret(3))
+
+    local blocks = new ArrayBox()
+    blocks.push(HeaderEmitBox.make_block(0, insts))
+    local fns = new ArrayBox()
+    fns.push(HeaderEmitBox.make_function_main(blocks))
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 
   emit_compare_cfg(lhs, rhs, cmp) { return EmitCompareBox.emit_compare_cfg2(lhs, rhs, cmp, 0) }
@@ -28,38 +32,42 @@ static box EmitCompareBox {
 
   emit_compare_cfg3(lhs, rhs, cmp, materialize, trace) {
     if trace == 1 { print("[emit] compare lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp + " mat=" + materialize) }
-    if cmp == null { cmp = "Gt" } else { if cmp == "" { cmp = "Gt" } }
-    // Build via instance builder (arg-loss 回避)
-    local b = new MirJsonBuilder2()
-    b.setup()
-    b.start_module()
-    b.start_function("main")
-    b.start_block(0)
-    b.add_const(1, lhs)
-    b.add_const(2, rhs)
-    b.add_compare(cmp, 1, 2, 3)
-    if materialize == 1 {
-      b.add_copy(4, 3)
-      b.add_branch(3, 1, 2)
-    } else {
-      b.add_branch(3, 1, 2)
-    }
-    b.end_block_continue()
-    b.start_block(1)
-    b.add_const(6, 1)
-    b.add_jump(3)
-    b.end_block_continue()
-    b.start_block(2)
-    b.add_const(6, 0)
-    b.add_jump(3)
-    b.end_block_continue()
-    b.start_block(3)
-    b.add_ret(6)
-    b.end_all()
-    // Build both forms; return the primary string form
-    local result_rebuild = b.to_string_rebuild()
-    local result_string = b.to_string()
-    return result_string
+    // normalize cmp via match
+    cmp = match cmp { null => "Gt", "" => "Gt", _ => cmp }
+    // Map→to_json で構築
+    // block 0
+    local b0 = new ArrayBox()
+    b0.push(MirEmitBox.make_const(1, lhs))
+    b0.push(MirEmitBox.make_const(2, rhs))
+    b0.push(MirEmitBox.make_compare(cmp, 1, 2, 3))
+    match materialize { 1 => { b0.push(MirEmitBox.make_copy(4, 3)) }, _ => { } }
+    b0.push({ op:"branch", cond:3, then:1, else_id:2 })
+    // block 1 (then)
+    local b1 = new ArrayBox()
+    b1.push(MirEmitBox.make_const(6, 1))
+    b1.push(MirEmitBox.make_jump(3))
+    local blk1 = HeaderEmitBox.make_block(1, b1)
+
+    // block 2 (else)
+    local b2 = new ArrayBox()
+    b2.push(MirEmitBox.make_const(6, 0))
+    b2.push(MirEmitBox.make_jump(3))
+    local blk2 = HeaderEmitBox.make_block(2, b2)
+
+    // block 3 (merge)
+    local b3 = new ArrayBox()
+    b3.push(MirEmitBox.make_ret(6))
+    local blk3 = HeaderEmitBox.make_block(3, b3)
+
+    // assemble function/module
+    local blocks = new ArrayBox()
+    blocks.push(HeaderEmitBox.make_block(0, b0))
+    blocks.push(blk1)
+    blocks.push(blk2)
+    blocks.push(blk3)
+    local fns = new ArrayBox()
+    fns.push(HeaderEmitBox.make_function_main(blocks))
+    return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }
 

@@ -1,8 +1,7 @@
 // instruction_scanner.hako — InstructionScannerBox
 // Minimal JSON v0 instruction object scanner with tolerant parsing.
 
-using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
-using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
+using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
 
 static box InstructionScannerBox {
@@ -10,7 +9,7 @@ static box InstructionScannerBox {
 
   index_of_from(hay, needle, pos) { return CfgNavigatorBox.index_of_from(hay, needle, pos) }
 
-  find_balanced_object_end(json, idx) { return JsonScanBox.seek_obj_end(json, idx) }
+  find_balanced_object_end(json, idx) { return JsonCursorBox.seek_obj_end(json, idx) }
 
 
   normalize_delimiters(seg) {
@@ -38,7 +37,7 @@ static box InstructionScannerBox {
     local p1 = obj.indexOf(k1)
     if p1 >= 0 {
       local i = p1 + k1.length()           // start of value (right after opening quote)
-      local j = StringScanBox.scan_string_end(obj, i - 1)
+      local j = JsonCursorBox.scan_string_end(obj, i - 1)
       if j > i { return obj.substring(i, j) }
     }
     // v1 style
@@ -46,7 +45,7 @@ static box InstructionScannerBox {
     local pk = obj.indexOf(kk)
     if pk >= 0 {
       local i2 = pk + kk.length()
-      local j2 = StringScanBox.scan_string_end(obj, i2 - 1)
+      local j2 = JsonCursorBox.scan_string_end(obj, i2 - 1)
       if j2 > i2 {
         local k = obj.substring(i2, j2)
         if k == "Const" { return "const" }
@@ -65,8 +64,16 @@ static box InstructionScannerBox {
     if me._has_key(obj, "lhs") == 1 and me._has_key(obj, "rhs") == 1 { return "compare" }
     if me._has_key(obj, "cond") == 1 { return "branch" }
     if me._has_key(obj, "target") == 1 { return "jump" }
-    if obj.indexOf("\"value\":{\"type\":\"i64\"") >= 0 { return "const" }
+    // Detect explicit ret first
     if obj.indexOf("\"op\":\"ret\"") >= 0 { return "ret" }
+    // Detect v1-style Ret without op key: presence of top-level "value" and absence of other discriminator keys
+    if me._has_key(obj, "value") == 1 {
+      if me._has_key(obj, "lhs") == 0 && me._has_key(obj, "rhs") == 0 && me._has_key(obj, "cond") == 0 && me._has_key(obj, "target") == 0 && me._has_key(obj, "src") == 0 && me._has_key(obj, "op_kind") == 0 {
+        return "ret"
+      }
+    }
+    // Const fallback (typed value object)
+    if obj.indexOf("\"value\":{\"type\":\"i64\"") >= 0 { return "const" }
     return ""
   }
 
@@ -75,7 +82,7 @@ static box InstructionScannerBox {
     if seg == null { return 0 }
     local plain = "\"" + key + "\""
     local escaped = "\\\"" + key + "\\\""
-    local pos = JsonScanBox.find_key_dual(seg, plain, escaped, 0)
+    local pos = JsonCursorBox.find_key_dual(seg, plain, escaped, 0)
     if pos >= 0 { return 1 } else { return 0 }
   }
 
@@ -97,4 +104,3 @@ static box InstructionScannerBox {
     return m
   }
 }
-

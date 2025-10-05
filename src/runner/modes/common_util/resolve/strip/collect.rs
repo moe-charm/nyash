@@ -19,9 +19,9 @@ pub fn collect_using_and_strip(
     }
     let using_ctx = runner.init_using_context();
     let prod = crate::config::env::using_is_prod();
-    let strict = std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1");
+    let strict = crate::config::env::using_strict();
     let verbose = crate::config::env::cli_verbose()
-        || std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1");
+        || crate::config::env::resolve_trace();
     let ctx_dir = std::path::Path::new(filename).parent();
 
     let mut out = String::with_capacity(code.len());
@@ -75,7 +75,7 @@ pub fn collect_using_and_strip(
             } else {
                 (rest0.to_string(), None)
             };
-            if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+            if crate::config::env::resolve_trace() {
                 eprintln!("[using] alias-trace: using target='{}' alias={:?}", target, alias_name);
             }
             let is_win_abs = target.len() >= 2
@@ -338,7 +338,7 @@ pub fn collect_using_and_strip(
                                     }
                                 } else {
                                     seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
-                                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                                    if crate::config::env::resolve_trace() {
                                         crate::runner::trace::log(format!("[using/alias] push pair alias='{}' canon='{}'", alias, canon));
                                     }
                                     alias_pairs.push((alias, canon));
@@ -355,7 +355,7 @@ pub fn collect_using_and_strip(
                             // attempt a dev fallback using alias name to locate a prelude file.
                             if value == target {
                                 if let Some(alias) = alias_name.clone() {
-                                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                                    if crate::config::env::resolve_trace() {
                                         eprintln!("[using] alias-trace: unresolved token '{}', try alias scan for '{}'", value, alias);
                                     }
                                     // Reuse the same alias-scan helper as in Err branch
@@ -431,7 +431,7 @@ pub fn collect_using_and_strip(
                         }
                     }
                     Err(_e) => {
-                        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                        if crate::config::env::resolve_trace() {
                             eprintln!("[using/fallback] entering dev fallback for target='{}' alias={:?}", target, alias_name);
                         }
                         // Dev fallback: if alias provided and resolver failed, try to locate a .nyash file

@@ -1,0 +1,13 @@
+// mir_emit_box.hako — MirEmitBox: construct minimal MIR(JSON v0) instruction maps
+// Responsibility: return MapBox-style literals for common MIR ops.
+
+static box MirEmitBox {
+  make_const(dst, val) { return { op:"const", dst:dst, value:{ type:"i64", value:val } } }
+  make_compare(kind, lhs, rhs, dst) { return { op:"compare", cmp:kind, lhs:lhs, rhs:rhs, dst:dst } }
+  make_copy(dst, src) { return { op:"copy", dst:dst, src:src } }
+  make_branch(cond, then_id, else_id) { return { op:"branch", cond:cond, then:then_id, else_id:else_id } }
+  make_jump(target) { return { op:"jump", target:target } }
+  make_ret(val) { return { op:"ret", value:val } }
+}
+
+static box MirEmitBoxStub { main(args) { return 0 } }

@@ -1,0 +1,39 @@
+// newbox_emit_box.hako — NewBoxEmitBox: construct MIR(JSON v0) node for newbox
+// Responsibility: return MapBox node for { op: newbox, box_type, args, dst }.
+using "apps/lib/json_native/stringify.hako" as JSON
+
+static box NewBoxEmitBox {
+  make_new(box_type, arg_ids, dst) {
+    local m = new MapBox()
+    m.set("op", "newbox")
+    m.set("box_type", box_type)
+    m.set("args", arg_ids)
+    m.set("dst", dst)
+    return m
+  }
+
+  // Optional: attach original ids_text snapshot for rebuild compatibility
+  set_args_text(node, args_text) {
+    if node == null { return null }
+    node.set("args_text", args_text)
+    return node
+  }
+
+  // Overload: accept args as ArrayBox and also record args_text as JSON string
+  with_args_array(node, arg_ids) {
+    if node == null { return null }
+    if arg_ids == null { arg_ids = new ArrayBox() }
+    node.set("args", arg_ids)
+    node.set("args_text", JSON.stringify_array(arg_ids))
+    return node
+  }
+
+  // Overload: accept args as text; keep args as-is
+  with_args_text(node, args_text) {
+    if node == null { return null }
+    node.set("args_text", args_text)
+    return node
+  }
+}
+
+static box NewBoxEmitBoxStub { main(args) { return 0 } }

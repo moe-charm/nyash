@@ -14,8 +14,8 @@ static box StringStd {
   indexOf(s, needle, start) {
     if s == null { return -1 }
     if needle == null { needle = "" }
-    if start == null { return s.indexOf(needle) }
-    return s.indexOf(needle, start)
+    if start == null { start = 0 }
+    return me.index_of_from(s, needle, start)
   }
   lastIndexOf(s, needle, start) {
     if s == null { return -1 }

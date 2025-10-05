@@ -52,7 +52,7 @@ static box MiniVm {
   try_print_binop_typed_direct(json) {
     local k_left = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
     local k_right = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
-    local lp = json.indexOf(k_left)
+    local lp = index_of_from(json, k_left, 0)
     if lp < 0 { return -1 }
     local ld = read_digits(json, lp + k_left.length())
     if ld == "" { return -1 }
@@ -67,7 +67,7 @@ static box MiniVm {
   // Tokenized typed extractor: search left/right blocks then type/value pairs
   try_print_binop_typed_tokens(json) {
     local k_bo = "\"kind\":\"BinaryOp\""
-    local bpos = json.indexOf(k_bo)
+    local bpos = index_of_from(json, k_bo, 0)
     if bpos < 0 { return -1 }
     local lp = index_of_from(json, "\"left\":", bpos)
     if lp < 0 { return -1 }
@@ -94,7 +94,7 @@ static box MiniVm {
   // Fast value-pair extractor: find left/right then first value digits after each
   try_print_binop_value_pairs(json) {
     local k_bo = "\"kind\":\"BinaryOp\""
-    local bpos = json.indexOf(k_bo)
+    local bpos = index_of_from(json, k_bo, 0)
     if bpos < 0 { return -1 }
     local kl = "\"left\":"
     local kv = "\"value\":"
@@ -120,11 +120,11 @@ static box MiniVm {
   parse_first_print_literal(json) {
     // Find a Print statement
     local k_print = "\"kind\":\"Print\""
-    local p = json.indexOf(k_print)
+    local p = index_of_from(json, k_print, 0)
     if p < 0 { return null }
     // Find value type in the expression following Print
     local k_type = "\"type\":\""
-    local tpos = json.indexOf(k_type)
+    local tpos = index_of_from(json, k_type, 0)
     if tpos < 0 { return null }
     tpos = tpos + k_type.length()
     // Read type name until next quote
@@ -169,7 +169,7 @@ static box MiniVm {
   // Fallback: find first BinaryOp and return sum of two numeric values as string; empty if not found
   parse_first_binop_sum(json) {
     local k_bo = "\"kind\":\"BinaryOp\""
-    local bpos = json.indexOf(k_bo)
+    local bpos = index_of_from(json, k_bo, 0)
     if bpos < 0 { return "" }
     // typed pattern inside left/right.literal.value: {"type":"int","value":<digits>}
     local k_typed = "\"type\":\"int\",\"value\":"
@@ -195,7 +195,7 @@ static box MiniVm {
   // Sum two integers near a BinaryOp '+' token; bounded window to keep steps low
   sum_two_numbers_near_plus(json) {
     local k_plus = "\"operator\":\"+\""
-    local op = json.indexOf(k_plus)
+    local op = index_of_from(json, k_plus, 0)
     if op < 0 { return "" }
     local n = json.length()
     local start = op - 120
@@ -256,25 +256,25 @@ static box MiniVm {
   run(json) {
     // entry: attempt minimal quick shapes first, then broader routes
     // Quick path: Program-level Print of a single Literal string/int
-    if json.indexOf("\"kind\":\"Program\"") >= 0 && json.indexOf("\"kind\":\"Print\"") >= 0 {
+    if index_of_from(json, "\"kind\":\"Program\"", 0) >= 0 && index_of_from(json, "\"kind\":\"Print\"", 0) >= 0 {
       // Literal string
-      if json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\"") >= 0 {
+      if index_of_from(json, "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\"") >= 0 {
         local ks = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\""
-        local ps = json.indexOf(ks)
+        local ps = index_of_from(json, ks, 0)
         if ps >= 0 {
           local si = ps + ks.length()
-          local sj = json.indexOf("\"", si)
+          local sj = index_of_from(json, "\"", si)
           if sj >= 0 { print(json.substring(si, sj))  return 0 }
         }
       }
       // Literal int
-      if json.indexOf("\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\"") >= 0 {
+      if index_of_from(json, "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\"") >= 0 {
         local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
-        local pi = json.indexOf(ki)
+        local pi = index_of_from(json, ki, 0)
         if pi >= 0 {
           local ii = pi + ki.length()
           // digits until closing brace
-          local ie = json.indexOf("}", ii)
+          local ie = index_of_from(json, "}", ii)
           if ie < 0 { ie = ii }
           local d = json.substring(ii, ie)
           if d { print(d)  return 0 }
@@ -282,7 +282,7 @@ static box MiniVm {
       }
     }
     // Single-purpose fast path for smoke: if BinaryOp '+' exists, try expression-bounded extractor first.
-    if json.indexOf("\"BinaryOp\"") >= 0 && json.indexOf("\"operator\":\"+\"") >= 0 {
+    if index_of_from(json, "\"BinaryOp\"", 0) >= 0 && index_of_from(json, "\"operator\":\"+\"", 0) >= 0 {
       // Bind to first Print and extract value×2 within expression bounds
       local k_print = "\"kind\":\"Print\""
       local p = index_of_from(json, k_print, 0)
@@ -292,7 +292,7 @@ static box MiniVm {
       }
       // Typed direct inside BinaryOp object (fast and finite)
       local k_bo = "\"kind\":\"BinaryOp\""
-      local bpos = json.indexOf(k_bo)
+      local bpos = index_of_from(json, k_bo, 0)
       if bpos >= 0 {
         local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
         local li = index_of_from(json, k_lint, bpos)
@@ -320,7 +320,7 @@ static box MiniVm {
     if ifc > 0 { return 0 }
     // Quick conservative path: if BinaryOp exists, sum bare numbers outside quotes
     // (limited to simple BinaryOp(int,int) JSON)
-    if json.indexOf("\"BinaryOp\"") >= 0 {
+    if index_of_from(json, "\"BinaryOp\"", 0) >= 0 {
       // Prefer expression-bounded scan first
       local k_print = "\"kind\":\"Print\""
       local p = index_of_from(json, k_print, 0)
@@ -339,7 +339,7 @@ static box MiniVm {
     // 0) direct typed BinaryOp '+' fast-path (explicit left/right literal ints)
     local k_bo = "\"kind\":\"BinaryOp\""
     local k_plus = "\"operator\":\"+\""
-    if json.indexOf(k_bo) >= 0 && json.indexOf(k_plus) >= 0 {
+    if index_of_from(json, k_bo, 0) >= 0 && index_of_from(json, k_plus, 0) >= 0 {
       local np = try_print_binop_typed_direct(json)
       if np > 0 { return 0 }
       np = try_print_binop_typed_tokens(json)
@@ -350,7 +350,7 @@ static box MiniVm {
     }
     // 0) quick path: BinaryOp(int+int) typed fast-path
     local k_bo = "\"kind\":\"BinaryOp\""
-    local bpos = json.indexOf(k_bo)
+    local bpos = index_of_from(json, k_bo, 0)
     if bpos >= 0 {
       // typed left/right ints inside BinaryOp
       local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
@@ -424,7 +424,7 @@ static box MiniVm {
     }
     // 0-c) quick path: Compare(lhs int, rhs int)
     local k_cp = "\"kind\":\"Compare\""
-    local cpos = json.indexOf(k_cp)
+    local cpos = index_of_from(json, k_cp, 0)
     if cpos >= 0 {
       // operation
       local k_op = "\"operation\":\""

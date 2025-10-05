@@ -190,6 +190,49 @@ Hakoruneで実行器書く
 4) （先送り）index_of_from の集約（JsonFrag/flow_runner/flow_debugger など）を CfgNavigatorBox へ段階移行（Phase 15.12）。
 
 
+## 🔁 Rust → Nyash 移植計画（Phase 15.7 拡張）
+
+目的
+- Hakorune Compiler/VM の“自己完結”を高め、Rust 実装への依存を段階的に縮小。
+- Box‑First 原則に従い、移植点を小箱の境界に分解して安全に前進。
+
+優先度P1（1–2週）— コンパイラ側（apps/selfhost-compiler）
+- Using/Namespace 解決（未完の中核）
+  - 新規: `UsingResolverBox`（modules/symbols の登録・照会）
+  - 新規: `NamespaceBox`（"A.B" → Callee::ModuleFunction への正規化）
+  - 統合: Pipeline V2 の compare/call/method 前段で using 解決を完了
+- Emit/Builder の整流
+  - `emit_*_box.hako` 群を Map→to_json に統一（HeaderEmitBox 経由）
+  - `CallEmitBox/NewBoxEmitBox` の API 統一（args_array/text の併設）
+- 署名検証（コンパイル時Fail‑Fastの拡張）
+  - `SignatureVerifierBox` を全発行点に適用
+  - `MethodRegistryBox` のカバレッジ拡張（toJSON/length 別名整理, startsWith/endsWith 等）
+
+優先度P2（1週）— VM 側（apps/selfhost/vm, apps/hakorune/vm）
+- Mini‑VM の箱化仕上げ
+  - `InstructionScannerBox`/`OpHandlersBox` 採用の残差つぶし
+  - `ProgramStateBox`（bb/prev/steps）利用の全面化
+  - `CfgNavigatorBox.index_of_from` への検索統一（残差）
+- PHI/Throw 周辺の最小意味論
+  - 非到達 Throw の PHI 除外（Bridge/Builder は済）
+  - Throw は VM での最小 return 化（将来の例外伝播は別フェーズ）
+
+優先度P3（1週）— 共有ユーティリティ
+- `JsonCursorBox` の採用拡大（minivm_probe/step_runner 等の直接スキャン撤去）
+- `StringStd.index_of_from` の横展開（ツール系・旧コードの2引数 indexOf 残差つぶし）
+- DEV リントを段階的に厳格化（`LINT_INDEXOF_FAIL=1`）
+
+マイルストーン（WBS 概算）
+- Week 1: UsingResolver/Namespace 実装→Pipeline V2 統合, Call/Method/New emit の to_json 仕上げ
+- Week 2: SignatureVerifier/MethodRegistry 拡張, Mini‑VM 箱化仕上げ（state/scanner/handlers）
+- Week 3: JsonCursor 置換の残差、2引数 indexOf の完全撤去、Throw/PHI スモーク常時ON化の可否判断
+
+受け入れ（本セクション）
+- quick: 自己ホスト代表3本（const→ret / compare→ret / compare→branch→phi）常時緑
+- Throwスモーク: if 非到達側に Throw を含むケースを常時ONで緑（実行側 Throw は別テストでゲート）
+- lint-ny: 2引数 `.indexOf(a,b)` のワークスペース内ゼロ（archive/互換/外部除外）
+
+
 #### **P2: Hakoruneコンパイラ MVP（次の主作業）**
 - **既存**: `apps/selfhost-compiler/compiler.hako` を軸に実装（.nyash は後方受理）
 - **目標**: Stage‑2/3 入力から JSON v0 を安定排出

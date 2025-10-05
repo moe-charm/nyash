@@ -7,7 +7,18 @@ static box JsonProgramBox {
   }
 
   ensure_meta(json, usings_json) {
-    if json == null { return "{\"version\":0,\"kind\":\"Program\",\"body\":[],\"meta\":{\"usings\":[]}}" }
+    // Fast-path: when no program JSON yet, build minimal Program via Map→to_json
+    if json == null {
+      local mod = new MapBox()
+      mod.set("version", 0)
+      mod.set("kind", "Program")
+      mod.set("body", new ArrayBox())
+      local meta = new MapBox()
+      meta.set("usings", new ArrayBox())
+      mod.set("meta", meta)
+      // keep usings_json ignored in map fast-path (no parser available)
+      return JSON.stringify_map(mod)
+    }
     local payload = usings_json
     if payload == null { payload = "[]" }
     if payload.length() == 0 { payload = "[]" }

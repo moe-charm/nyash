@@ -81,10 +81,10 @@ NYASH_VM_USE_PY=1 \
 Notes: 現状は PyVM ルートのみ対応。`NYASH_VM_USE_PY=1` が必須。
 
 CLI プロファイル（推奨）
-- `--profile dev`（既定相当: マクロON/厳格ON）
+- `--macro-profile dev`（既定相当: マクロON/厳格ON）
 - `--profile lite`（マクロOFFの軽量モード）
 - `--profile ci|strict`（マクロON/厳格ON）
-  - 例: `./target/release/nyash --profile dev --backend vm apps/tests/ternary_basic.nyash`
+  - 例: `./target/release/nyash --macro-profile dev --backend vm apps/tests/ternary_basic.nyash`
 
 Notes
 - Built-in child route (stdin JSON -> stdout JSON) remains available when `NYASH_MACRO_BOX_CHILD_RUNNER=0`.

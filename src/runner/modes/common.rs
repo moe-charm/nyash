@@ -185,7 +185,7 @@ impl NyashRunner {
                     }
                     let exists = p.exists();
                     if !exists {
-                        if std::env::var("NYASH_USING_STRICT").ok().as_deref() == Some("1") {
+                        if crate::config::env::using_strict() {
                             eprintln!(
                                 "❌ import: path not found: {} (from {})",
                                 p.display(),
@@ -193,7 +193,7 @@ impl NyashRunner {
                             );
                             process::exit(1);
                         } else if crate::config::env::cli_verbose()
-                            || std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1")
+                            || crate::config::env::import_trace()
                         {
                             eprintln!("[import] path not found (continuing): {}", p.display());
                         }

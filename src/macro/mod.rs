@@ -39,7 +39,9 @@ pub fn maybe_expand_and_dump(ast: &ASTNode, _dump_only: bool) -> ASTNode {
 }
 
 fn maybe_inject_test_harness(ast: &ASTNode) -> ASTNode {
-    if std::env::var("NYASH_TEST_RUN").ok().as_deref() != Some("1") {
+    let run_tests = std::env::var("NYASH_TEST_RUN").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_RUN_TESTS").ok().as_deref() == Some("1");
+    if !run_tests {
         return ast.clone();
     }
     // Test call plan

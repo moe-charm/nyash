@@ -37,7 +37,7 @@ impl NyashRunner {
                     crate::runner::modes::common_util::resolve::register_aliases_in_modules_registry(&alias_pairs);
                     code2 = clean;
                     for (alias, _canon) in alias_pairs.iter() { alias_names.insert(alias.clone()); }
-                    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") {
+                    if crate::config::env::resolve_trace() {
                         if !alias_names.is_empty() {
                             eprintln!("[vm-fallback/alias] collected aliases: {:?}", alias_names.iter().cloned().collect::<Vec<_>>());
                         }
@@ -96,7 +96,7 @@ impl NyashRunner {
         } else { main_ast };
         // Apply alias desugar on combined AST so `Alias.X` becomes `Alias_X` (matching prelude renames)
         let ast_combined = crate::runner::modes::common_util::resolve::alias_tools::desugar_alias_field_access(&ast_combined, &alias_names, true);
-        if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && !alias_names.is_empty() {
+        if crate::config::env::resolve_trace() && !alias_names.is_empty() {
             fn contains_alias_var(n: &nyash_rust::ast::ASTNode, aliases: &std::collections::HashSet<String>) -> bool {
                 match n {
                     nyash_rust::ast::ASTNode::Variable { name, .. } => aliases.contains(name),

@@ -46,3 +46,7 @@ Error taxonomy (phi decode)
 - phi:no-values:empty — values[] present but empty.
 - phi:no-values:all-malformed — values[] present but none contain a value.
 - phi:no-values — fallback when no incoming could be chosen.
+
+アップデート（2025-10-06）
+- `JsonCursorBox` を導入（index_of_from/scan_string_end/seek_array_end/seek_obj_end を提供）。
+- 直接スキャン箇所は段階的に `JsonCursorBox` に委譲（例: minivm_probe, step_runner）。

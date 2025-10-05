@@ -279,6 +279,11 @@ impl MirInterpreter {
                 "unterminated block {:?}",
                 block.id
             ))),
+            Some(MirInstruction::Throw { .. }) => {
+                // Minimal support: treat throw as immediate function return (void)
+                // This allows non-taken throw arms to be lowered without crashing the VM.
+                Ok(BlockOutcome::Return(VMValue::Void))
+            }
             Some(other) => Err(VMError::InvalidInstruction(format!(
                 "invalid terminator in MIR interp: {:?}",
                 other

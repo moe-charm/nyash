@@ -11,6 +11,7 @@
 
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 
 box UsingResolverBox {
   alias_paths
@@ -121,12 +122,14 @@ box UsingResolverBox {
   }
 
   // 4) Materialize a compact JSON context for debugging/diagnostics
-  // {"alias_paths":{...},"namespaces":{...},"modules":{...}}
+  // {alias_paths:{...},namespaces:{...},modules:{...}}
   to_context_json() {
-    local out = "{\"alias_paths\":" + me._map_to_json(me.alias_paths)
-    out = out + ",\"namespaces\":" + me._map_to_json(me.alias_names)
-    out = out + ",\"modules\":" + me._map_to_json(me.modules_map) + "}"
-    return out
+    // Build a shallow map and delegate stringify to JsonEmitBox for consistency
+    local root = new MapBox()
+    root.set("alias_paths", me.alias_paths)
+    root.set("namespaces", me.alias_names)
+    root.set("modules", me.modules_map)
+    return JsonEmitBox.to_json(root)
   }
 
   _map_to_json(m) {
@@ -160,4 +163,3 @@ static box UsingResolverBoxMain {
     return 0
   }
 }
-

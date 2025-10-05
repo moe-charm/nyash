@@ -2,13 +2,12 @@
 // 責務: 文字列JSONから key:int / key:str を簡便に取り出す。
 // 非責務: 実行・評価（構造検査やVM実行は他箱に委譲）。
 
-using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
-using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box JsonFragBox {
   // 基本ヘルパ
-  index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() local m = needle.length() if pos > n { return -1 } if m <= 0 { return pos } local i = pos local limit = n - m loop(i <= limit) { local ok = 1 local j = 0 loop(j < m) { local ch = hay.substring(i+j, i+j+1) local nh = needle.substring(j, j+1) if ch != nh { ok = 0 break } j = j + 1 } if ok == 1 { return i } i = i + 1 } return -1 }
+  index_of_from(hay, needle, pos) { return JsonCursorBox.index_of_from(hay, needle, pos) }
   read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
   _str_to_int(s) { return StringHelpers.to_i64(s) }
 
@@ -29,12 +28,30 @@ static box JsonFragBox {
     local p = me.index_of_from(seg, pat, 0)
     if p >= 0 {
       local vstart = p + pat.length()              // start of value (right after opening quote)
-      local vend = StringScanBox.scan_string_end(seg, vstart - 1)
+      local vend = JsonCursorBox.scan_string_end(seg, vstart - 1)
       if vend > vstart { return seg.substring(vstart, vend) }
     }
     return ""
   }
 
+
+
+  // Strict variants: emit an error when the key is missing
+  get_int_strict(seg, key) {
+    local v = me.get_int(seg, key)
+    if v == null {
+      print("[ERROR] Missing key: " + key)
+    }
+    return v
+  }
+
+  get_str_strict(seg, key) {
+    local v = me.get_str(seg, key)
+    if v == "" {
+      print("[ERROR] Missing key: " + key)
+    }
+    return v
+  }
   // ブロック0の instructions を丸ごと返す（配列の中身のみ返す）。
   block0_segment(mjson) {
     if mjson == null { return "" }
@@ -45,7 +62,7 @@ static box JsonFragBox {
     // '[' position
     local arr_bracket = pk + key.length() - 1
     // Use escape-aware scanner to find matching ']'
-    local endp = JsonScanBox.seek_array_end(mjson, arr_bracket)
+    local endp = JsonCursorBox.seek_array_end(mjson, arr_bracket)
     if endp < 0 { return "" }
     return mjson.substring(arr_bracket + 1, endp)
   }

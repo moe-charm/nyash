@@ -19,6 +19,37 @@ impl MirInterpreter {
                     eprintln!("[vm-call] invoking birth() via method call");
                 }
                 if let Some(recv_id) = receiver {
+                    // Built-in arity check (Fail-Fast)
+                    {
+                        let arity = args.len();
+                        let mut type_name: Option<String> = None;
+                        if let Ok(v) = self.reg_load(recv_id) {
+                            match v {
+                                VMValue::String(_) => { type_name = Some("StringBox".to_string()); },
+                                VMValue::BoxRef(bx) => {
+                                    let tn = bx.type_name().to_string();
+                                    if matches!(tn.as_str(), "ArrayBox" | "MapBox" | "StringBox") { type_name = Some(tn); }
+                                },
+                                _ => {}
+                            }
+                        }
+                        if let Some(tn) = type_name {
+                            if method != "birth" {
+                                if crate::runtime::type_registry::resolve_typebox_by_name(&tn).is_some() {
+                                    if crate::runtime::type_registry::resolve_slot_by_name(&tn, method, arity).is_none() {
+                                        if let Some(known) = crate::runtime::type_registry::known_arities_for(&tn, method) {
+                                            if !known.is_empty() {
+                                                return Err(VMError::InvalidInstruction(format!(
+                                                    "No matching method: {}.{}({} args). Available arities: {:?}", tn, method, arity, known
+                                                )));
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     // Fail-Fast: forbid operations on unborn InstanceBox until birth()
                     if method != "birth" {
                         let is_instance = match self.reg_load(recv_id).ok() {

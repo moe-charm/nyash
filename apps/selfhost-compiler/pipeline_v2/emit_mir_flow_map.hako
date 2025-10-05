@@ -1,4 +1,5 @@
 using "apps/lib/json_native/stringify.hako" as JSON
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 
 flow EmitMirFlowMap {
   _i(n) { return n }
@@ -79,7 +80,7 @@ flow EmitMirFlowMap {
     local blocks = EmitMirFlowMap._empty_arr()
     blocks.push(EmitMirFlowMap._block(0, insts))
     local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JSON.stringify_map(mod)
+    return JsonEmitBox.to_json(mod)
   }
 
   emit_binop(lhs, rhs, opk) {
@@ -91,7 +92,7 @@ flow EmitMirFlowMap {
     local blocks = EmitMirFlowMap._empty_arr()
     blocks.push(EmitMirFlowMap._block(0, insts))
     local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JSON.stringify_map(mod)
+    return JsonEmitBox.to_json(mod)
   }
 
   // materialize: 0/1 (builder parity)
@@ -119,7 +120,7 @@ flow EmitMirFlowMap {
     blocks.push(EmitMirFlowMap._block(2, b2))
     blocks.push(EmitMirFlowMap._block(3, b3))
     local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JSON.stringify_map(mod)
+    return JsonEmitBox.to_json(mod)
   }
 
   emit_loop_counter(limit) {
@@ -146,6 +147,6 @@ flow EmitMirFlowMap {
     blocks.push(EmitMirFlowMap._block(2, b2))
     blocks.push(EmitMirFlowMap._block(3, b3))
     local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JSON.stringify_map(mod)
+    return JsonEmitBox.to_json(mod)
   }
 }
