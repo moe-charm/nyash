@@ -77,9 +77,6 @@ impl super::MirBuilder {
     pub(crate) fn local_arg(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::arg(self, v) }
     #[allow(dead_code)]
     #[inline]
-    pub(crate) fn local_cmp_operand(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::cmp_operand(self, v) }
-    #[allow(dead_code)]
-    #[inline]
     pub(crate) fn local_field_base(&mut self, v: super::ValueId) -> super::ValueId { super::ssa::local::field_base(self, v) }
     #[allow(dead_code)]
     #[inline]

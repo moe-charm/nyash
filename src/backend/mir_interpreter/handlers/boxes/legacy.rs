@@ -419,10 +419,13 @@ impl MirInterpreter {
                     }
                     Ok(())
                 }
-                Err(e) => Err(VMError::InvalidInstruction(format!(
-                    "BoxCall {}.{} failed: {:?}",
-                    p.box_type, method, e
-                ))),
+                Err(e) => {
+                    if __birth { self.contracts_in_birth.remove(&__key); }
+                    Err(VMError::InvalidInstruction(format!(
+                        "BoxCall {}.{} failed: {:?}",
+                        p.box_type, method, e
+                    )))
+                }
             }
         } else {
             // Special-case: minimal runtime fallback for common InstanceBox methods when
