@@ -102,7 +102,7 @@ impl MirInterpreter {
     ) -> Option<Result<(), VMError>> {
         let cur = match &self.cur_fn { Some(s) => s, None => return None };
         if !cur.starts_with("ParserBox.") { return None; }
-        if std::env::var("NYASH_VM_STRLIKE_INSTANCE_COERCE").ok().as_deref() != Some("1") {
+        if !super::super::VmConfig::global().strlike_instance_coerce {
             return None;
         }
         match method {

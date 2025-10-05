@@ -36,9 +36,7 @@ impl MirInterpreter {
         // Dev-only: optional auto birth after NewBox to unblock selfhost paths
         // Guarded by NYASH_VM_AUTO_BIRTH_DEV=1. In production, builders must
         // materialize explicit birth calls.
-        let auto_birth =
-            std::env::var("NYASH_VM_AUTO_BIRTH_DEV").ok().as_deref() == Some("1");
-        if auto_birth {
+        if super::super::VmConfig::global().auto_birth_dev {
             // Dev: call birth with the same args that were provided to NewBox
             // This covers user-defined boxes that rely on birth parameters
             let _ = self.handle_box_call(None, dst, "birth", args);
@@ -52,7 +50,7 @@ impl MirInterpreter {
         // Everything is Box: unified lifecycle rule for all boxes (core/plugin/user).
         // If birth/N exists in function table → call it. Otherwise → no-op.
         // No hardcoded special rules for built-in boxes.
-        if std::env::var("NYASH_VM_AUTO_BIRTH_CPP").ok().as_deref() == Some("1") {
+        if super::super::VmConfig::global().auto_birth_cpp {
             // Compose fully-qualified birth name and invoke via ModuleFunction path.
             // me + args
             let mut bargs: Vec<super::super::ValueId> = Vec::with_capacity(1 + args.len());

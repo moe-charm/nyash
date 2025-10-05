@@ -219,7 +219,7 @@ impl MirInterpreter {
             self.box_trace_emit_call(&cls, method, args.len());
         }
         // Debug: trace length dispatch receiver type before any handler resolution
-        if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+        if method == "length" && super::super::VmConfig::global().general_trace {
             let recv = self.reg_load(box_val).unwrap_or(VMValue::Void);
             let type_name = match recv.clone() {
                 VMValue::BoxRef(b) => b.type_name().to_string(),
@@ -235,7 +235,7 @@ impl MirInterpreter {
         // Graceful void guard for common short-circuit patterns in user code
         if let Some(res) = self.boxcall_void_guard_defaults(dst, &self.reg_load(box_val)?, method) { return res; }
         if boxes_fields::try_handle_object_fields(self, dst, box_val, method, args)? {
-            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if method == "length" && super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=object_fields");
             }
             return Ok(());
@@ -268,25 +268,25 @@ impl MirInterpreter {
             }
         }
         if boxes_instance::try_handle_instance_box(self, dst, box_val, method, args)? {
-            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if method == "length" && super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=instance_box");
             }
             return Ok(());
         }
         if boxes_string::try_handle_string_box(self, dst, box_val, method, args)? {
-            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if method == "length" && super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=string_box");
             }
             return Ok(());
         }
         if boxes_array::try_handle_array_box(self, dst, box_val, method, args)? {
-            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if method == "length" && super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=array_box");
             }
             return Ok(());
         }
         if boxes_map::try_handle_map_box(self, dst, box_val, method, args)? {
-            if method == "length" && std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if method == "length" && super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=map_box");
             }
             return Ok(());
@@ -307,7 +307,7 @@ impl MirInterpreter {
         // treat it as 0 (avoids Lt on Void in common loops). This is a dev-time
         // robustness measure; precise behavior should be provided by concrete boxes.
         if method == "length" {
-            if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=fallback(length=0)");
             }
             if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); }

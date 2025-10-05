@@ -223,7 +223,7 @@ impl MirInterpreter {
                 if let Some(first) = args.get(0) {
                     let key = self.object_key_for(*first);
                     if self.contracts_born.contains(&key) {
-                        if std::env::var("NYASH_VM_BIRTH_TRACE").ok().as_deref() == Some("1") {
+                        if super::super::VmConfig::global().birth_trace {
                             eprintln!("{{\"kind\":\"birth_idempotent\",\"name\":\"{}\",\"key\":{}}}", name, key);
                         }
                         return Ok(VMValue::Void);
@@ -245,7 +245,7 @@ impl MirInterpreter {
         }
         let label = format!("ModuleFn:{}", name);
         self.emit_call_trace_label(&label, args.len(), None);
-        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+        if super::super::VmConfig::global().call_arg_trace {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
             for (_i, a) in args.iter().enumerate().take(3) {

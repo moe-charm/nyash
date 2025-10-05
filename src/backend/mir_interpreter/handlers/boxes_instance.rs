@@ -15,7 +15,7 @@ pub(super) fn try_handle_instance_box(
         other => other.to_nyash_box(),
     };
 
-    if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") && method == "toString" {
+    if super::VmConfig::global().general_trace && method == "toString" {
         eprintln!(
             "[vm-trace] instance-check recv_box_any.type={} args_len={}",
             recv_box_any.type_name(),
@@ -58,7 +58,7 @@ pub(super) fn try_handle_instance_box(
             (None, None)
         };
 
-        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+        if super::VmConfig::global().general_trace {
             eprintln!(
                 "[vm-trace] instance-dispatch class={} method={} arity={} candidates=[{}, {}, {}]",
                 inst.class_name,
@@ -82,7 +82,7 @@ pub(super) fn try_handle_instance_box(
         .or_else(|| interp.functions.get(&static_variant).cloned());
 
         if let Some(func) = func_opt {
-            if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+            if super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] instance-dispatch hit -> {}", func.signature.name);
             }
             let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());

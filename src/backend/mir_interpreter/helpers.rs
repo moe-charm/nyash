@@ -42,9 +42,8 @@ impl MirInterpreter {
         match self.regs.get(&id).cloned() {
             Some(v) => Ok(v),
             None => {
-                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1")
-                    || std::env::var("NYASH_VM_TRACE_EXEC").ok().as_deref() == Some("1")
-                {
+                let cfg = super::VmConfig::global();
+                if cfg.general_trace || cfg.trace_exec {
                     let keys: Vec<String> = self
                         .regs
                         .keys()
@@ -59,8 +58,7 @@ impl MirInterpreter {
                     );
                 }
                 // Dev-time safety valve: tolerate undefined registers as Void when enabled
-                let tolerate = std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
-                if tolerate {
+                if cfg.tolerate_void {
                     return Ok(VMValue::Void);
                 }
                 Err(VMError::InvalidValue(format!(
@@ -172,9 +170,8 @@ impl MirInterpreter {
         use BinaryOp::*;
         use VMValue::*;
         // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev mode.
-        let tolerate =
-            std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1") ||
-            std::env::var("NYASH_DEV_FALLBACK").ok().as_deref() == Some("1");
+        let cfg = super::VmConfig::global();
+        let tolerate = cfg.tolerate_void || cfg.dev_fallback;
         let (a, b) = if tolerate {
             let norm = |v: VMValue| -> VMValue {
                 if let VMValue::BoxRef(bx) = &v {
@@ -240,7 +237,7 @@ impl MirInterpreter {
         use CompareOp::*;
         use VMValue::*;
         // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev.
-        let tolerate = std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+        let tolerate = super::VmConfig::global().tolerate_void;
         let (a, b) = if tolerate {
             let norm = |v: VMValue| -> VMValue {
                 if let VMValue::BoxRef(bx) = &v {
@@ -348,7 +345,7 @@ impl MirInterpreter {
             (Gt, VMValue::String(ref s), VMValue::String(ref t)) => s > t,
             (Ge, VMValue::String(ref s), VMValue::String(ref t)) => s >= t,
             (opk, va, vb) => {
-                if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
+                if super::VmConfig::global().general_trace {
                     eprintln!(
                         "[vm-trace] compare error fn={:?} op={:?} a={:?} b={:?} last_block={:?} last_inst={:?}",
                         self.cur_fn, opk, va, vb, self.last_block, self.last_inst

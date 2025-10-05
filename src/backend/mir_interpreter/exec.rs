@@ -4,8 +4,8 @@ use std::mem;
 
 impl MirInterpreter {
     fn trace_enabled() -> bool {
-        std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_VM_TRACE_EXEC").ok().as_deref() == Some("1")
+        let cfg = super::VmConfig::global();
+        cfg.general_trace || cfg.trace_exec
     }
 
     pub(super) fn exec_function_inner(
@@ -27,7 +27,7 @@ impl MirInterpreter {
                 let v = args.get(i).cloned().unwrap_or(VMValue::Void);
                 self.regs.insert(*pid, v.clone());
             }
-            if std::env::var("NYASH_VM_PARAM_TRACE").ok().as_deref() == Some("1") {
+            if super::VmConfig::global().param_trace {
                 let mut pairs = Vec::new();
                 for (i, pid) in func.params.iter().enumerate() {
                     let vi = self.regs.get(pid).cloned().unwrap_or(VMValue::Void);
@@ -112,7 +112,7 @@ impl MirInterpreter {
                             Ok(v) => v,
                             Err(e) => {
                                 // Dev safety valve: tolerate undefined phi inputs by substituting Void
-                                if std::env::var("NYASH_VM_PHI_TOLERATE_UNDEFINED").ok().as_deref() == Some("1") {
+                                if super::VmConfig::global().phi_tolerate_undefined {
                                     if Self::trace_enabled() {
                                         eprintln!("[vm-trace] phi tolerate undefined input {:?} -> Void (err={:?})", val, e);
                                     }
@@ -123,7 +123,7 @@ impl MirInterpreter {
                             }
                         };
                         self.regs.insert(dst_id, v);
-                        if std::env::var("NYASH_VM_PHI_TRACE").ok().as_deref() == Some("1") {
+                        if super::VmConfig::global().phi_trace {
                             eprintln!(
                                 "[vm-phi] fn={} bb={} dst=v%{} pred={} val=v%{}",
                                 self.cur_fn.as_deref().unwrap_or("") ,
@@ -144,7 +144,7 @@ impl MirInterpreter {
                     let v = match self.reg_load(*val) {
                         Ok(v) => v,
                         Err(e) => {
-                            if std::env::var("NYASH_VM_PHI_TOLERATE_UNDEFINED").ok().as_deref() == Some("1") {
+                            if super::VmConfig::global().phi_tolerate_undefined {
                                 if Self::trace_enabled() {
                                     eprintln!("[vm-trace] phi tolerate undefined default input {:?} -> Void (err={:?})", val, e);
                                 }
@@ -155,7 +155,7 @@ impl MirInterpreter {
                         }
                     };
                     self.regs.insert(dst_id, v);
-                    if std::env::var("NYASH_VM_PHI_TRACE").ok().as_deref() == Some("1") {
+                    if super::VmConfig::global().phi_trace {
                         eprintln!(
                             "[vm-phi] fn={} bb={} dst=v%{} pred=<default> val=v%{}",
                             self.cur_fn.as_deref().unwrap_or("") ,
@@ -224,7 +224,7 @@ impl MirInterpreter {
                 } else {
                     VMValue::Void
                 };
-                if std::env::var("NYASH_VM_RET_TRACE").ok().as_deref() == Some("1") {
+                if super::VmConfig::global().ret_trace {
                     let kind = crate::backend::abi_util::tag_of_vm(&result);
                     eprintln!(
                         "[vm-ret] fn={} kind={} bb={}",
@@ -245,7 +245,7 @@ impl MirInterpreter {
                 else_bb,
             }) => {
                 let cond = self.reg_load(*condition)?;
-                if std::env::var("NYASH_VM_BRANCH_TRACE").ok().as_deref() == Some("1") {
+                if super::VmConfig::global().branch_trace {
                     // Lightweight condition trace: tag and class name for BoxRef
                     let tag = crate::backend::abi_util::tag_of_vm(&cond);
                     let class = match &cond {

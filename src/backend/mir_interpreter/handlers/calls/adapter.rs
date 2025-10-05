@@ -6,7 +6,7 @@ impl MirInterpreter {
     /// Try to execute a legacy call-like instruction via `execute_callee_call` by
     /// converting it to a `Callee`. Enabled only when `NYASH_VM_CALL_ADAPTER=1`.
     pub(crate) fn try_execute_via_callee(&mut self, inst: &crate::mir::MirInstruction) -> Option<Result<VMValue, VMError>> {
-        if std::env::var("NYASH_VM_CALL_ADAPTER").ok().as_deref() != Some("1") {
+        if !super::super::VmConfig::global().call_adapter {
             return None;
         }
         use crate::mir::MirInstruction as I;

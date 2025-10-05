@@ -24,7 +24,10 @@ mod helpers;
 mod method_router;
 mod extern_adapter;
 mod operator_guard;
+mod vm_config;
 pub mod resolve;
+
+pub use vm_config::VmConfig;
 
 pub struct MirInterpreter {
     pub(super) regs: HashMap<ValueId, VMValue>,

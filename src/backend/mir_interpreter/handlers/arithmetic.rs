@@ -53,9 +53,8 @@ impl MirInterpreter {
                 }
             } else { (a0, b0) }
         } else { (a0, b0) };
-        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1")
-            || std::env::var("NYASH_VM_TRACE_EXEC").ok().as_deref() == Some("1")
-        {
+        let cfg = super::VmConfig::global();
+        if cfg.general_trace || cfg.trace_exec {
             let ak = crate::backend::abi_util::tag_of_vm(&a);
             let bk = crate::backend::abi_util::tag_of_vm(&b);
             eprintln!("[vm-op] binop {:?} a_k={} b_k={}", op, ak, bk);

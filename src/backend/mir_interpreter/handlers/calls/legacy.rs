@@ -133,8 +133,8 @@ impl MirInterpreter {
                                     }
                                     if let Some(v) = found { v } else {
                                         // Fallbacks (dev-only/tolerant modes)
-                                        let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
-                                            || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+                                        let cfg = super::super::VmConfig::global();
+                                        let tolerate = cfg.recv_arg_fallback || cfg.tolerate_void;
                                         if tolerate {
                                             if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
                                         } else {
@@ -158,8 +158,8 @@ impl MirInterpreter {
                                     }
                                 } else {
                                     // Dev fallback: use args[0] as surrogate when enabled
-                                    let tolerate = std::env::var("NYASH_VM_RECV_ARG_FALLBACK").ok().as_deref() == Some("1")
-                                        || std::env::var("NYASH_VM_TOLERATE_VOID").ok().as_deref() == Some("1");
+                                    let cfg = super::super::VmConfig::global();
+                                    let tolerate = cfg.recv_arg_fallback || cfg.tolerate_void;
                                     if tolerate {
                                         if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
                                     } else {
@@ -185,7 +185,7 @@ impl MirInterpreter {
                             }
                         }
                     };
-                    let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
+                    let dev_trace = super::super::VmConfig::global().general_trace;
                     // Fast bridge for builtin boxes (Array) and common methods.
                     // Preserve legacy semantics when plugins are absent.
                     if let VMValue::BoxRef(bx) = &recv_val {
@@ -370,7 +370,7 @@ impl MirInterpreter {
             }
         };
 
-        if std::env::var("NYASH_VM_CALL_TRACE").ok().as_deref() == Some("1") {
+        if super::super::VmConfig::global().call_trace {
             eprintln!("[vm] legacy-call resolved '{}' -> '{}'", raw, fname);
         }
         if std::env::var("NYASH_WARN_LEGACY_CALL").ok().as_deref() == Some("1") {
@@ -402,7 +402,7 @@ impl MirInterpreter {
         for a in args {
             argv.push(self.reg_load(*a)?);
         }
-        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+        if super::super::VmConfig::global().call_arg_trace {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
             for v in argv.iter().take(2) {
@@ -427,7 +427,7 @@ impl MirInterpreter {
                 kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
             );
         }
-        let dev_trace = std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1");
+        let dev_trace = super::super::VmConfig::global().general_trace;
         let is_kw = fname.ends_with("JsonTokenizer.keyword_to_token_type/1");
         let is_sc_ident = fname.ends_with("JsonScanner.read_identifier/0");
         let is_sc_current = fname.ends_with("JsonScanner.current/0");
