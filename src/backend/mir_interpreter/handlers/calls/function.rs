@@ -3,6 +3,7 @@
 //! Behavior-preserving extraction of execute_global_function from legacy.
 
 use super::super::*;
+use crate::backend::mir_interpreter::resolve::call_resolver;
 
 impl MirInterpreter {
     /// Dev-only bridge: JSON.stringify(any) when invoked as a Global callee.
@@ -182,10 +183,16 @@ impl MirInterpreter {
                 }
                 Ok(VMValue::Void)
             }
-            _ => Err(VMError::InvalidInstruction(format!(
-                "Unknown global function: {}",
-                func_name
-            ))),
+            _ => {
+                let clean_name = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
+                if let Some(pick) = call_resolver::resolve_module_function_collect(self.functions.keys().cloned(), clean_name, args.len()) {
+                    return self.handle_callee_module_function(&pick, args);
+                }
+                Err(VMError::InvalidInstruction(format!(
+                    "Unknown global function: {}",
+                    func_name
+                )))
+            }
         }
     }
 
@@ -197,6 +204,19 @@ impl MirInterpreter {
         name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+        // Lifecycle: if this ModuleFunction is a birth function ("Class.birth/N"),
+        // mark the receiver (first arg) as born before executing the body.
+        if let Some((_cls, method_arity)) = name.split_once('.') {
+            let method = method_arity.split('/').next().unwrap_or(method_arity);
+            if method == "birth" {
+                if let Some(first) = args.get(0) {
+                    self.lifecycle_contracts_birth(*first, args.len().saturating_sub(1));
+                    if std::env::var("NYASH_VM_BIRTH_TRACE").ok().as_deref() == Some("1") {
+                        eprintln!("{{\"kind\":\"contracts_birth_pre\",\"name\":\"{}\",\"me\":{},\"argc\":{}}}", name, first.0, args.len().saturating_sub(1));
+                    }
+                }
+            }
+        }
 
         // Fail-Fast: if this ModuleFunction is actually an instance method form
         // like "Class.method" and the first arg is an unborn InstanceBox, forbid.

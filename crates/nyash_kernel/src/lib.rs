@@ -6,6 +6,10 @@ mod plugin;
 
 pub use plugin::*;
 
+fn nyrt_trace_enabled() -> bool {
+    std::env::var("NYASH_NYRT_TRACE").ok().as_deref() == Some("1")
+}
+
 // --- AOT ObjectModule dotted-name exports (String/Any helpers) ---
 // String.len_h(handle) -> i64
 #[export_name = "nyash.string.len_h"]
@@ -81,7 +85,9 @@ pub extern "C" fn nyash_string_concat_hh_export(a_h: i64, b_h: i64) -> i64 {
     nyash_rust::runtime::global_hooks::gc_alloc(s.len() as u64);
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s));
     let h = handles::to_handle_arc(arc) as i64;
-    eprintln!("[TRACE] concat_hh -> {}", h);
+    if nyrt_trace_enabled() {
+        eprintln!("[TRACE] concat_hh -> {}", h);
+    }
     h
 }
 
@@ -137,7 +143,9 @@ pub extern "C" fn nyash_string_substring_hii_export(h: i64, start: i64, end: i64
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(sub.to_string()));
     nyash_rust::runtime::global_hooks::gc_alloc(sub.len() as u64);
     let nh = handles::to_handle_arc(arc) as i64;
-    eprintln!("[TRACE] substring_hii -> {}", nh);
+    if nyrt_trace_enabled() {
+        eprintln!("[TRACE] substring_hii -> {}", nh);
+    }
     nh
 }
 
@@ -216,7 +224,9 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s.clone()));
     nyash_rust::runtime::global_hooks::gc_alloc(s.len() as u64);
     let h = handles::to_handle_arc(arc) as i64;
-    eprintln!("[TRACE] from_i8_string -> {}", h);
+    if nyrt_trace_enabled() {
+        eprintln!("[TRACE] from_i8_string -> {}", h);
+    }
     h
 }
 

@@ -1,3 +1,67 @@
+
+## 2025-10-05 — CallResolver 箱導入と VM 経路の名寄せ修正（quick 緑化）
+
+- 追加（箱化）
+  - `src/backend/mir_interpreter/resolve/call_resolver.rs`: Global→ModuleFunction の名前解決を一元化。
+    - 戦略: 完全一致 → arity 付与(`/N`) → tail一致(`.method/N` かつ `Class.`/`Class_` 接頭) → `Alias_Alias.method/N` → 末尾一致ユニーク拾い。
+  - ハンドラ適用: `handlers/calls/function.rs::handle_callee_global` で resolver を呼ぶように変更。
+    - 追加の正規化: resolver 呼び出し前に raw 名の末尾 `"/N"` を除去。
+
+- 修正（LLVM/共通方針）
+  - `src/llvm_py/instructions/mir_call.py`: print 正規化を表化（`print|println|log` → `nyash.console.log`）。
+  - safepoint 方針を統一（constructor/value にも `allow_safepoint` を適用）。
+
+- スモーク/結果
+  - PASS: `tools/smokes/v2/profiles/quick/apps/json_object_roundtrip_vm.sh`（以前の Unknown global StringUtils.trim を解消）
+  - PASS: `json_pp_vm.sh`, `json_query_vm.sh`（deprec ノイズはフィルタ済み）
+  - Unified 再帰（Global/ModuleFunction/Method）は gated で追加済み（既知課題のため既定 SKIP）。
+
+- ドキュメント
+  - 追加: `docs/guides/call-resolver.md`（設計/戦略/利用箇所/将来拡張）
+  - `tools/smokes/v2/README.md` に quick.env の案内を追記済み（`SMOKES_PROFILE_ENV=quick`）。
+
+- 影響範囲と互換性
+  - 既存の Builder/ランナーの公開仕様は不変。VM fallback の名前解決が強化され、曖昧な Global 呼びでも ModuleFunction に安全に合流。
+  - 既存テストの動作差は無し（quick 一部はノイズ除去のみ）。
+
+- 次アクション（小粒で継続）
+  1) CallResolver に観測トレース（`NYASH_VM_RESOLVE_TRACE=1`）を仮実装（デフォルト OFF）
+  2) nested alias を含む最小ケースのスモークを quick に1本だけ常設（過剰追加は避ける）
+  3) 余裕があれば Builder 側の ModuleFunction 降下判定も CallResolver に寄せて一本化
+
+### Follow-up done (same day)
+- CallResolver: `NYASH_VM_RESOLVE_TRACE=1` で raw/argc/pick を一行JSONで出力（既定OFF／テストではフィルタ済み）。
+- Smokes: `quick/apps/json_lint_vm.sh` を常時ONに変更。`quick/core/using_modules_nested_alias_vm.sh` を追加（入れ子 alias のE2E）。
+- テストノイズ整備: test_runner フィルタに `^{"resolve":` を追加。
+- 警告掃除: 未使用 `std::io::Write` import を削除（vm_pipeline.rs）。
+- Docs: `docs/INDEX.md` に CallResolver ガイドへのリンクを追加。
+- Nested alias: 同一ファイル内ローカル別名テーブルを導入。`resolve_using_target` にヘッド置換（`Alias.*` → `target.*`）を追加。
+  - スモーク `using_modules_nested_alias_vm.sh` は `NYASH_USING_AST=1` でPASS（必要モジュールを `NYASH_MODULES` に付与）。
+
+## 2025-10-05 — Phase 1 self-rec direct + Phase 2 scaffolding
+
+- Phase 1（自己再帰直呼び；既定OFF）
+  - Builder: self-recursive call は `ModuleFunction` 直呼びを強制（Global/文字列経路をバイパス）。
+    - src/mir/builder/builder_calls/build.rs:101
+  - LLVM harness: Global self-rec は `from_i8_string`/`to_i8p_h` を生成せず、直接 call を組み立て。
+    - src/llvm_py/instructions/mir_call.py:120+
+  - フラグ: `NYASH_MIR_SELFREC_DIRECT=1`（観測: `NYASH_MIR_OPTIMIZE_TRACE=1` でJSON）
+
+- Phase 2（5箱の骨格；既定OFF）
+  - Config: `src/mir/optimizer_passes/hints_config.rs`
+  - Detectors: `src/mir/optimizer_passes/detectors/mod.rs`（SelfRec/Tail）
+  - Hints: `src/mir/optimizer_passes/hints.rs`（HintsMap）
+  - Reporter: `src/mir/optimizer_passes/reporter.rs`
+  - Docs: `docs/guides/mir-hints.md`
+
+- SSOT: 共有CallResolverコア導入（VM/Builder兼用）
+  - `src/mir/resolve/call_resolver_core.rs`／VMラッパは共有を呼ぶ＋トレース維持
+
+- 次アクション（小粒）
+  1) LLVM側に tail 指定の薄接続（`NYASH_LLVM_TAILCALL=1` or `NYASH_MIR_HINTS=tail|all`）
+  2) Reporter の最小配線（適用イベントを一行JSONで出力）
+  3) fib(12) IR差分の簡易スモーク（from_i8_string/… の消滅を確認）
+
 ## 2025-10-04 — Mini‑VM alias + builder fixes (WIP)
 
 - Fix: emit_compare_box.hako stray braces removed; debug prints guarded/removed to stabilize JSON capture.
@@ -857,3 +921,15 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
 - Optionally expand phi error variants if new malformed shapes appear.
 - Keep quick lean (1 phi test), run extras via filter/ENV when diagnosing.
 - Proceed to remaining m3 validation (branch_false/cond_prev_block/jump_chain) once needed.
+
+
+### LLVM: plain main() exit policy (fixed)
+
+- Problem: ny_main wrapped plain `main()` and returned its value as the process exit code. For benchmarks that `print("Result: ...")`, the last expression path could yield a String handle; AOT runtime then printed a trailing `Result: 2`, making output look wrong.
+
+- Fix: Update wrapper in `src/llvm_py/builders/entry.py`.
+  - Plain `main()` is executed (side effects preserved) but its return value is discarded.
+  - ny_main returns `0` for plain `main()`.
+  - `Main.main/1` remains the only path that can define an intentional numeric exit code.
+
+- Bench hygiene: Use `NYASH_NYRT_SILENT_RESULT=1` during timing to suppress the runtime’s final `Result: <exit>` line. Our bench tools already set this where applicable.

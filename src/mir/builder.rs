@@ -573,6 +573,10 @@ impl MirBuilder {
         class: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+            eprintln!("[BUILDER] enter build_new_expression class={} argc={}", class, arguments.len());
+        }
+
         // Forbid instantiation of static/flow boxes declared in source
         if self.static_box_names.contains(&class) {
             return Err(format!(
@@ -617,6 +621,15 @@ impl MirBuilder {
             box_type: class.clone(),
             args: arg_values.clone(),
         })?;
+        // Dev trace: log NewBox emission when enabled
+        if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+            eprintln!(
+                "[BUILDER] new {}(arity={}) -> v{}",
+                class,
+                arg_values.len(),
+                dst
+            );
+        }
         // Phase 15.5: Unified box type handling
         // All boxes (including former core boxes) are treated uniformly as Box types
         self.value_types
@@ -638,31 +651,29 @@ impl MirBuilder {
             // Prefer lowered global function for user-defined boxes even if not yet materialized.
             // Rationale: static factories may be lowered before instance boxes; the function will
             // be added later in the same module, so we can safely emit the call now.
-            let is_user_box = self.user_defined_boxes.contains(&class);
-            let use_lowered = if let Some(ref module) = self.current_module {
-                module.functions.contains_key(&lowered) || is_user_box
-            } else { is_user_box };
-            if use_lowered {
-                // Call Global("Class.birth/Arity") with argv = [me, args...]
-                let mut argv: Vec<ValueId> = Vec::with_capacity(1 + arity);
-                argv.push(dst);
-                argv.extend(arg_values.iter().copied());
-                self.emit_legacy_call(None, CallTarget::Global(lowered), argv)?;
-            } else {
-                // Auto-birth policy (strict, uniform): always emit birth() for all boxes
-                // when a lowered global constructor is not available.
-                // This covers user-defined, builtin, and plugin boxes uniformly.
-                let birt_mid = resolve_slot_by_type_name(&class, "birth");
-                self.emit_box_or_plugin_call(
-                    None,
-                    dst,
-                    "birth".to_string(),
-                    birt_mid,
-                    arg_values,
-                    EffectMask::READ.add(Effect::ReadHeap),
-                    false,
-                )?;
+            // Only use lowered Global when the function actually exists in the current module.
+            // Avoid assuming user boxes have a static `Class.birth/Arity` symbol; prefer instance method.
+            // Always emit birth() as a method call; VM will route to ModuleFunction when available
+            // Prefer ModuleFunction form so VM can pre-mark born before executing the body
+            let name_val = crate::mir::builder::name_const::make_name_const_result(self, &lowered)?;
+            if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                eprintln!(
+                    "[BUILDER] auto-birth via ModuleFunction {} for v{}",
+                    lowered,
+                    dst
+                );
             }
+            // birth(me, args...)
+            let mut call_args: Vec<ValueId> = Vec::with_capacity(1 + arity);
+            call_args.push(dst);
+            call_args.extend(arg_values.into_iter());
+            self.emit_instruction(MirInstruction::Call {
+                dst: None,
+                func: name_val,
+                callee: Some(crate::mir::definitions::Callee::ModuleFunction(lowered)),
+                args: call_args,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
         }
 
         Ok(dst)

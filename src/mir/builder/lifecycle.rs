@@ -247,12 +247,22 @@ impl super::MirBuilder {
                                     MirInstruction::Copy { dst: d, src: s } => {
                                         if s == dst { recv_alias = Some(*d); }
                                     }
-                                    MirInstruction::Call {  .. } => {
-                                        // If immediately preceded by matching Const String, accept
+                                    MirInstruction::Call { callee, args, .. } => {
+                                        // Accept unified ModuleFunction("Class.birth/N") with me == dst (or alias)
+                                        if let Some(ref c) = callee {
+                                            if let crate::mir::definitions::Callee::ModuleFunction(ref fname) = c {
+                                                if fname == &expect_tail {
+                                                    if let Some(first) = args.get(0) {
+                                                        let target = if let Some(a) = recv_alias { a } else { *dst };
+                                                        if *first == target { ok = true; break; }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        // Legacy: If immediately preceded by matching Const String, accept
                                         if let Some(prev) = last_const_name.as_ref() {
                                             if prev == &expect_tail { ok = true; break; }
                                         }
-                                        // Heuristic: in some forms, builder may reuse a shared const; best-effort only
                                     }
                                     _ => {}
                                 }

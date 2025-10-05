@@ -280,3 +280,12 @@ NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend llvm test.nyash
 #### **plugins** - プラグイン専用（任意）
 - 安定検証用に最小フィクスチャプラグイン（`nyash-fixture-plugin`）を優先利用
 - 実在プラグイン（Counter/Math/String）は存在すれば追加で実行（無ければSKIP）
+
+## Env overlay (quick.env)
+
+- Use `SMOKES_PROFILE_ENV=quick` to load `tools/smokes/v2/configs/quick.env` automatically.
+- Example: `SMOKES_PROFILE_ENV=quick ./run.sh --profile quick` or `SMOKES_PROFILE_ENV=quick tools/smokes/v2/profiles/quick/llvm/unified_print_harness_llvm.sh`.
+
+Note
+- Nested alias smokes rely on AST merge for stability. When running nested alias tests locally, ensure `NYASH_USING_AST=1` is set (the quick env overlay does this by default for relevant tests).
+ - Optimization traces: enable `NYASH_MIR_OPTIMIZE_TRACE=1` to see one-line JSON events when self-rec direct is applied by LLVM (`kind=selfrec_direct`).

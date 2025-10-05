@@ -54,10 +54,17 @@ def ensure_ny_main(builder) -> None:
         rv = b.call(fn_main_box, [args_handle], name='call_Main_main_1')
     else:
         # Plain main() fallback
+        # Execute user main() for side effects, but DO NOT propagate its return
+        # value as process exit code. Bare scripts typically end with expressions
+        # like `print("Result: " + v)`, and their last expression may yield a
+        # String handle (i64) when lowered. Returning that handle as ny_main()
+        # exit code leads to confusing results (e.g., "Result: 2").
+        # Policy: For plain `main()`, always return 0; only `Main.main/1` may
+        # define an intentional numeric exit code.
         if len(fn_main_plain.args) == 0:
-            rv = b.call(fn_main_plain, [], name='call_user_main')
-        else:
-            rv = ir.Constant(builder.i64, 0)
+            _ = b.call(fn_main_plain, [], name='call_user_main')
+        # Ignore any return value from plain main(); set exit code = 0.
+        rv = ir.Constant(builder.i64, 0)
     if hasattr(rv, 'type') and isinstance(rv.type, ir.IntType) and rv.type.width != 32:
         rv64 = b.trunc(rv, builder.i64) if rv.type.width > 64 else b.zext(rv, builder.i64)
         b.ret(rv64)

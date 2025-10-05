@@ -5,7 +5,6 @@
 use crate::ast::ASTNode;
 use crate::runner::NyashRunner;
 use std::collections::{HashMap, HashSet};
-use std::io::Write;
 use std::{fs, process};
 use thiserror::Error;
 

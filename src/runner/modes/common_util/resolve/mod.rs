@@ -20,6 +20,7 @@ pub mod strip;
 pub mod seam;
 pub mod alias_tools;
 pub mod register;
+pub mod alias_expand;
 
 // Public re-exports to preserve existing call sites
 pub use strip::{

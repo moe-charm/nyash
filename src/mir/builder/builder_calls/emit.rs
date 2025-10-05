@@ -137,20 +137,17 @@ impl MirBuilder {
                         if matches.len() == 1 {
                             let (bx, _arity) = matches.remove(0);
                             let func_name = format!("{}.{}{}", bx, name, format!("/{}", arity_for_try));
-                            // Emit legacy call directly to preserve behavior
+                            // Emit unified ModuleFunction instead of legacy string-based call
                             let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                            let name_const = match crate::mir::builder::name_const::make_name_const_result(self, &func_name) {
-                                Ok(v) => v,
-                                Err(e) => return Err(e),
-                            };
+                            let mut args2 = args.clone();
+                            crate::mir::builder::ssa::local::finalize_args(self, &mut args2);
                             self.emit_instruction(MirInstruction::Call {
                                 dst: Some(dstv),
-                                func: name_const,
-                                callee: None,
-                                args: args.clone(),
+                                func: ValueId::new(0),
+                                callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(func_name.clone())),
+                                args: args2,
                                 effects: EffectMask::IO,
                             })?;
-                            // annotate
                             self.annotate_call_result_from_func_name(dstv, func_name);
                             return Ok(());
                         }
@@ -271,6 +268,33 @@ impl MirBuilder {
         // callee model and RouterPolicy. Behavior is unchanged.
         match target {
             CallTarget::Method { receiver, method, box_type: _ } => {
+                // Special-case: instance.birth(args) should invoke lowered ModuleFunction (user-defined birth)
+                if method == "birth" {
+                    let (cls, _cert) = crate::mir::builder::infer::receiver::infer_receiver(
+                        None,
+                        &method,
+                        receiver,
+                        |vid| self.origin_get(vid).map(|s| s.to_string()),
+                        &self.value_types,
+                    );
+                    let me_local = self.local_recv(receiver);
+                    let mut call_args: Vec<ValueId> = Vec::with_capacity(args.len() + 1);
+                    call_args.push(me_local);
+                    call_args.extend(args.into_iter());
+                    crate::mir::builder::ssa::local::finalize_args(self, &mut call_args);
+                    let out = dst.unwrap_or_else(|| self.value_gen.next());
+                    let fname = function_lowering::generate_method_function_name(&cls, &method, call_args.len() - 1);
+                    let name_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(out),
+                        func: name_val,
+                        callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(fname.clone())),
+                        args: call_args,
+                        effects: EffectMask::IO,
+                    })?;
+                    self.annotate_call_result_from_func_name(out, &fname);
+                    return Ok(());
+                }
                 // Prod rewrite: when user instance BoxCall is disallowed by policy,
                 // lower `obj.method(a,b)` into module function `Class.method/Arity(me,a,b)`.
                 // This preserves stable prod semantics without requiring unified-call flag.
@@ -360,23 +384,17 @@ impl MirBuilder {
                         return Ok(());
                     }
                 }
-                // Create a string constant for the function name via NameConstBox
-                let name_const = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
-                // Allocate a destination if not provided so we can annotate it
+                // Emit unified Global callee instead of legacy string-based call
                 let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
                 let mut args = args;
                 crate::mir::builder::ssa::local::finalize_args(self, &mut args);
                 self.emit_instruction(MirInstruction::Call {
                     dst: Some(actual_dst),
-                    func: name_const,
-                    callee: None,
+                    func: ValueId::new(0),
+                    callee: Some(crate::mir::definitions::call_unified::Callee::Global(name.clone())),
                     args,
                     effects: EffectMask::IO,
                 })?;
-                if std::env::var("NYASH_WARN_LEGACY_CALL").ok().as_deref() == Some("1") {
-                    eprintln!("[legacy-call] Global('{}') emitted without callee (legacy path)", name);
-                }
-                // Annotate from module signature (if present)
                 self.annotate_call_result_from_func_name(actual_dst, name);
                 Ok(())
             },

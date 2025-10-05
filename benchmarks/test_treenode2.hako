@@ -1,0 +1,30 @@
+// Test TreeNode with explicit birth
+
+box TreeNode {
+    left
+    right
+    item
+
+    birth(l, r, i) {
+        me.left = l
+        me.right = r
+        me.item = i
+    }
+
+    get_item() {
+        return me.item
+    }
+}
+
+static box Main {
+    main() {
+        local node
+        node = new TreeNode()
+        node.birth(null, null, 42)
+
+        local result
+        result = node.get_item()
+
+        print("Result: " + result)
+    }
+}

@@ -256,8 +256,24 @@ def lower_binop(
         # Signed division
         result = builder.sdiv(lhs_val, rhs_val, name=f"div_{dst}")
     elif op == '%':
-        # Signed remainder
-        result = builder.srem(lhs_val, rhs_val, name=f"rem_{dst}")
+        # Optimize x % C when C is a positive power of two: x & (C-1)
+        const_rhs = None
+        try:
+            if hasattr(rhs_val, 'constant') and rhs_val.constant:
+                const_rhs = int(rhs_val.constant)
+        except Exception:
+            try:
+                srepr = str(rhs_val)
+                if srepr.startswith('i64 '):
+                    const_rhs = int(srepr.split(' ')[1])
+            except Exception:
+                const_rhs = None
+        if const_rhs is not None and const_rhs > 0 and (const_rhs & (const_rhs - 1)) == 0:
+            mask = ir.Constant(i64, const_rhs - 1)
+            result = builder.and_(lhs_val, mask, name=f"rem_p2_{dst}")
+        else:
+            # Signed remainder (generic)
+            result = builder.srem(lhs_val, rhs_val, name=f"rem_{dst}")
     elif op == '&':
         result = builder.and_(lhs_val, rhs_val, name=f"and_{dst}")
     elif op == '|':

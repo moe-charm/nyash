@@ -30,8 +30,8 @@ static box Main {
     loop(i < cases.length()) {
       local s = cases.get(i)
       local p = JsonParserModule.create_parser()
-      // Defensive: ensure parser is alive under contracts=ON (birth is idempotent)
-      p.birth()
+      // Auto-birth enabled: parser is alive after creation
+      // p.birth()  // idempotent; not required under auto-birth
       // Fast path: simple literalsを先に判定（重いパーサを避ける）
       local t = StringUtils.trim(s)
       // 文字列の fast-path: 厳密性はトークナイザーに委譲しつつ、単独の "…" はOKとして扱う

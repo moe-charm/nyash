@@ -25,6 +25,14 @@ if [ -z "${NYASH_ROOT:-}" ]; then
     export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
   fi
 fi
+# Optional profile env overlay (e.g., SMOKES_PROFILE_ENV=quick)
+if [ -n "${SMOKES_PROFILE_ENV:-}" ]; then
+  CAND="$NYASH_ROOT/tools/smokes/v2/configs/${SMOKES_PROFILE_ENV}.env"
+  if [ -f "$CAND" ]; then
+    # shellcheck disable=SC1090
+    source "$CAND"
+  fi
+fi
 # Ensure using resolver is enabled by default for smokes unless explicitly disabled
 if [ -z "${NYASH_USING:-}" ] && [ -z "${NYASH_ENABLE_USING:-}" ]; then
   export NYASH_USING=1
@@ -110,7 +118,9 @@ filter_noise() {
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
   | grep -v '^\{"kind":"contracts_' \
+  | grep -v '^\{"resolve":' \
   | grep -v '^Result: ' \
+  | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
   | grep -v "plugins/nyash-array-plugin" \
   | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \

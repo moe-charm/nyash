@@ -27,6 +27,8 @@ pub fn collect_using_and_strip(
     let mut out = String::with_capacity(code.len());
     let mut prelude_paths: Vec<String> = Vec::new();
     let mut alias_pairs: Vec<(String, String)> = Vec::new(); // (alias, canon_path)
+    // Local alias map within this file to support nested alias resolution
+    let mut local_aliases: std::collections::HashMap<String, String> = std::collections::HashMap::new();
     // Duplicate-using detection (same target imported multiple times or alias rebound): error in all profiles
     use std::collections::HashMap;
     let mut seen_paths: HashMap<String, (String, usize)> = HashMap::new(); // canon_path -> (alias/label, first_line)
@@ -85,6 +87,8 @@ pub fn collect_using_and_strip(
                 || is_win_abs
                 || target.ends_with(".hako")
                 || target.ends_with(".nyash");
+            // Record local alias for namespace targets to enable nested alias in subsequent lines
+            crate::runner::modes::common_util::resolve::alias_expand::record_local_namespace_alias(&target, &alias_name, &mut local_aliases);
             if is_path {
                 // SSOT: Disallow file-using at top-level; allow only for sources located
                 // under a declared package root (internal package wiring), so that packages
@@ -251,12 +255,15 @@ pub fn collect_using_and_strip(
                 }
             } else {
                 // dev/ci: allow broader resolution via resolver
+                // Merge static aliases with local aliases collected so far
+                let mut merged_aliases = using_ctx.aliases.clone();
+                for (k, v) in local_aliases.iter() { merged_aliases.insert(k.clone(), v.clone()); }
                 match crate::runner::pipeline::resolve_using_target(
                     &target,
                     false,
                     &using_ctx.pending_modules,
                     &using_ctx.using_paths,
-                    &using_ctx.aliases,
+                    &merged_aliases,
                     &using_ctx.packages,
                     ctx_dir,
                     strict,
@@ -335,6 +342,11 @@ pub fn collect_using_and_strip(
                                         crate::runner::trace::log(format!("[using/alias] push pair alias='{}' canon='{}'", alias, canon));
                                     }
                                     alias_pairs.push((alias, canon));
+                                    // If target looked like a namespace (not a file path), remember this alias for subsequent nested alias resolution
+                                    let looks_like_ns = !target.starts_with('"') && !target.starts_with('/') && !target.contains(".nyash") && !target.contains(".hako") && !target.contains(std::path::MAIN_SEPARATOR);
+                                    if looks_like_ns {
+                                        if let Some(an) = &alias_name { local_aliases.insert(an.clone(), target.clone()); }
+                                    }
                                 }
                             }
                             prelude_paths.push(path_str);

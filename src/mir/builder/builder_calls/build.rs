@@ -70,6 +70,32 @@ impl MirBuilder {
                 let arity = args.len();
                 let cand2 = format!("{}/{}", name, arity);
                 let dotted = name.contains('.') && name.contains('/');
+                // Phase 1: Self-recursive direct call (env-gated)
+                if std::env::var("NYASH_MIR_SELFREC_DIRECT").ok().as_deref() == Some("1") {
+                    if let Some(cur_fn) = self.current_function.as_ref() {
+                        let cur_name = cur_fn.signature.name.clone();
+                        // If this call targets current function (name or name/arity), force ModuleFunction
+                        let is_self = cur_name == name || cur_name == cand2;
+                        if is_self {
+                            let target_key = if module.functions.contains_key(&cur_name) { cur_name.clone() } else { cand2.clone() };
+                            if module.functions.contains_key(&target_key) {
+                                let dst2 = self.value_gen.next();
+                                let fun_val2 = crate::mir::builder::name_const::make_name_const_result(self, &target_key)?;
+                                let mut arg_values2 = Vec::new();
+                                for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
+                                self.emit_instruction(MirInstruction::Call {
+                                    dst: Some(dst2),
+                                    func: fun_val2,
+                                    callee: Some(crate::mir::Callee::ModuleFunction(target_key.clone())),
+                                    args: arg_values2,
+                                    effects: EffectMask::READ.add(Effect::ReadHeap),
+                                })?;
+                                self.annotate_call_result_from_func_name(dst2, &target_key);
+                                return Ok(dst2);
+                            }
+                        }
+                    }
+                }
                 if dotted && module.functions.contains_key(&name) {
                     let dst = self.value_gen.next();
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
@@ -97,6 +123,26 @@ impl MirBuilder {
                     })?;
                     self.annotate_call_result_from_func_name(dst, &cand2);
                     return Ok(dst);
+                }
+                // Fallback: use shared CallResolver core when dotted but no exact match
+                if dotted {
+                    if let Some(fname) = crate::mir::resolve::call_resolver_core::resolve_module_function(
+                        module.functions.keys().cloned(), &name, arity,
+                    ) {
+                        let dst2 = self.value_gen.next();
+                        let fun_val2 = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
+                        let mut arg_values2 = Vec::new();
+                        for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(dst2),
+                            func: fun_val2,
+                            callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
+                            args: arg_values2,
+                            effects: EffectMask::READ.add(Effect::ReadHeap),
+                        })?;
+                        self.annotate_call_result_from_func_name(dst2, &fname);
+                        return Ok(dst2);
+                    }
                 }
             }
         }
@@ -135,7 +181,14 @@ impl MirBuilder {
                                     "Ambiguous module function resolution for '{}', arity={} ({} candidates, showing {}):\n",
                                     name, arity, ambig_list.len(), shown
                                 );
-                                for k in ambig_list.iter().take(shown) { msg.push_str("  - "); msg.push_str(k); msg.push('\n'); }
+                                // Stable and informative ordering: prefer current box first, then lexical
+                                let mut display = ambig_list.clone();
+                                display.sort();
+                                if let Some(cur_fn_name) = self.current_function.as_ref().map(|f| f.signature.name.clone()) {
+                                    let preferred = crate::mir::indexes::functions::prefer_current_box(&cur_fn_name, &display);
+                                    display = preferred;
+                                }
+                                for k in display.iter().take(shown) { msg.push_str("  - "); msg.push_str(k); msg.push('\n'); }
                                 if ambig_list.len() > shown { msg.push_str(&format!("  ... and {} more\n", ambig_list.len() - shown)); }
                                 msg.push_str("Hint: qualify with Class.method/Arity, or set NYASH_MIR_CALL_MODULE_FN_STRICT=0 to fallback.");
                                 return Err(msg);

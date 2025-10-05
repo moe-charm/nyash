@@ -30,11 +30,14 @@ def lower_branch(
         vmap: Value map
         bb_map: Block map
     """
-    # Resolve condition via DispatchPoint（統一フォールバック経路）
-    cond = PhiDispatchPoint.resolve_i64(builder, resolver, cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
-    if cond is None:
-        # Default to false if missing
-        cond = ir.Constant(ir.IntType(1), 0)
+    # Prefer canonical i1 produced by compare lowering when available.
+    cond = vmap.get(cond_vid)
+    if cond is None or not (hasattr(cond, 'type') and isinstance(cond.type, ir.IntType) and cond.type.width == 1):
+        # Fallback to i64 resolution via DispatchPoint（統一フォールバック経路）
+        cond = PhiDispatchPoint.resolve_i64(builder, resolver, cond_vid, builder.block, preds, block_end_values, vmap, bb_map)
+        if cond is None:
+            # Default to false if missing
+            cond = ir.Constant(ir.IntType(1), 0)
     
     # Convert to i1 if needed
     if hasattr(cond, 'type'):

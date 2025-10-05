@@ -203,6 +203,16 @@ pub(super) fn resolve_using_target(
         crate::runner::box_index::cache_put(&key, rec.clone());
         return Ok(rec);
     }
+    // Nested alias support: when target is like "Alias.rest.of.path", resolve head alias first
+    if let Some(recomposed) = crate::runner::modes::common_util::resolve::alias_expand::expand_head_alias(tgt, aliases) {
+        if trace {
+            if !crate::config::env::cli_quiet() { crate::runner::trace::log(format!("[using/resolve] nested-alias '{}' -> '{}'", tgt, recomposed)); }
+        }
+        let rec = resolve_using_target(&recomposed, false, modules, using_paths, aliases, packages, context_dir, strict, verbose)?;
+        crate::runner::trace::log_json_using(tgt, Some(&rec), &[], "nested-alias");
+        crate::runner::box_index::cache_put(&key, rec.clone());
+        return Ok(rec);
+    }
     // Named packages (nyash.toml [using.<name>])
     if let Some(pkg) = packages.get(tgt) {
         match pkg.kind {

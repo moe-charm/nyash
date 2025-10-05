@@ -53,27 +53,41 @@ def lower_mir_call(owner, builder: ir.IRBuilder, mir_call: Dict[str, Any], dst_v
         except Exception:
             pass
 
+    # Decide safepoint policy (dev-flag + effects-aware)
+    def _allow_safepoint() -> bool:
+        auto = os.getenv('NYASH_LLVM_AUTO_SAFEPOINT', '0') not in ('0','false','off')
+        eff = effects or {}
+        if os.getenv('NYASH_LLVM_SAFEPOINT_READONLY_SKIP', '1') in ('1','true','on'):
+            try:
+                is_read = bool(eff.get('read', False))
+                has_other = any(bool(eff.get(k, False)) for k in ('write','alloc','io'))
+                if is_read and not has_other:
+                    return False and auto
+            except Exception:
+                pass
+        return auto
+
     if callee_type == "Global":
         # Global function call (e.g., print, panic)
         func_name = callee.get("name")
-        lower_global_call(builder, owner.module, func_name, args, dst_vid, vmap, resolver, owner)
+        lower_global_call(builder, owner.module, func_name, args, dst_vid, vmap, resolver, owner, _allow_safepoint())
 
     elif callee_type == "ModuleFunction":
         # Module function call (static box methods) - Phase 15.7
         func_name = callee.get("name")
-        lower_global_call(builder, owner.module, func_name, args, dst_vid, vmap, resolver, owner)
+        lower_global_call(builder, owner.module, func_name, args, dst_vid, vmap, resolver, owner, _allow_safepoint())
 
     elif callee_type == "Method":
         # Box method call
         box_name = callee.get("box_name")
         method = callee.get("method")
         receiver = callee.get("receiver")
-        lower_method_call(builder, owner.module, box_name, method, receiver, args, dst_vid, vmap, resolver, owner)
+        lower_method_call(builder, owner.module, box_name, method, receiver, args, dst_vid, vmap, resolver, owner, _allow_safepoint())
 
     elif callee_type == "Constructor":
         # Box constructor (NewBox)
         box_type = callee.get("box_type")
-        lower_constructor_call(builder, owner.module, box_type, args, dst_vid, vmap, resolver, owner)
+        lower_constructor_call(builder, owner.module, box_type, args, dst_vid, vmap, resolver, owner, _allow_safepoint())
 
     elif callee_type == "Closure":
         # Closure creation (NewClosure)
@@ -85,12 +99,12 @@ def lower_mir_call(owner, builder: ir.IRBuilder, mir_call: Dict[str, Any], dst_v
     elif callee_type == "Value":
         # Dynamic function value call
         func_vid = callee.get("value")
-        lower_value_call(builder, owner.module, func_vid, args, dst_vid, vmap, resolver, owner)
+        lower_value_call(builder, owner.module, func_vid, args, dst_vid, vmap, resolver, owner, _allow_safepoint())
 
     elif callee_type == "Extern":
         # External C ABI function call
         extern_name = callee.get("name")
-        lower_extern_call(builder, owner.module, extern_name, args, dst_vid, vmap, resolver, owner)
+        lower_extern_call(builder, owner.module, extern_name, args, dst_vid, vmap, resolver, owner, _allow_safepoint())
 
     else:
         raise ValueError(f"Unknown callee type: {callee_type}")
@@ -103,15 +117,60 @@ def lower_legacy_call(owner, builder, mir_call, dst_vid, vmap, resolver):
     raise NotImplementedError("Legacy call dispatch not implemented in mir_call.py")
 
 
-def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver, owner):
+def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver, owner, allow_safepoint: bool = True):
     """Lower global function call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
     import os
 
     # Insert automatic safepoint
-    if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+    if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
         insert_automatic_safepoint(builder, module, "function_call")
+
+    # Phase 1: self-recursive direct call (env-gated)
+    try:
+        if os.getenv('NYASH_MIR_SELFREC_DIRECT', '0') in ('1','true','on'):
+            cur_name = getattr(owner, 'current_function_name', '')
+            if cur_name:
+                want_arity = len(args)
+                base = func_name.split('/')[0] if '/' in func_name else func_name
+                expect_full = func_name if '/' in func_name else f"{func_name}/{want_arity}"
+                # Direct when targeting the same function (full or base match)
+                if cur_name == func_name or cur_name == expect_full or cur_name.split('/')[0] == base:
+                    i64 = ir.IntType(64)
+                    target = None
+                    for f in module.functions:
+                        if f.name == expect_full:
+                            target = f
+                            break
+                    if target is None:
+                        fty = ir.FunctionType(i64, [i64] * want_arity)
+                        target = ir.Function(module, fty, name=expect_full)
+                    def _resolve_arg_i64(vid: int):
+                        if resolver and hasattr(resolver, 'resolve_i64'):
+                            try:
+                                return resolver.resolve_i64(vid, builder.block, owner.preds, owner.block_end_values, vmap, owner.bb_map)
+                            except Exception:
+                                pass
+                        return vmap.get(vid)
+                    call_args = []
+                    for a in args:
+                        av = _resolve_arg_i64(a)
+                        if av is None:
+                            av = ir.Constant(i64, 0)
+                        call_args.append(av)
+                    # Optional trace
+                    if os.getenv('NYASH_MIR_OPTIMIZE_TRACE', '0') in ('1','true','on'):
+                        try:
+                            print(json.dumps({'phase':'llvm','cat':'opt','kind':'selfrec_direct','func': expect_full}))
+                        except Exception:
+                            pass
+                    result = builder.call(target, call_args, name='direct_self_global')
+                    if dst_vid is not None:
+                        vmap[dst_vid] = result
+                    return
+    except Exception:
+        pass
 
     # Resolver helpers
     def _resolve_arg(vid: int):
@@ -123,8 +182,21 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
                 pass
         return vmap.get(vid)
 
-    # Special mapping for built-in globals (print → nyash.console.log)
-    if func_name == 'print':
+    # Special mapping for built-in globals via a simple map
+    # Normalize names: strip arity suffix ("/N") and take last dotted segment
+    base_name = func_name
+    try:
+        import re as _re
+        base_name = _re.sub(r"/\d+$", "", base_name)
+    except Exception:
+        pass
+    tail = base_name.rsplit('.', 1)[-1] if '.' in base_name else base_name
+    BUILTIN_GLOBALS = {
+        'print': 'nyash.console.log',
+        'println': 'nyash.console.log',
+        'log': 'nyash.console.log',
+    }
+    if tail in BUILTIN_GLOBALS:
         from llvmlite import ir
         i64 = ir.IntType(64)
         i8 = ir.IntType(8)
@@ -184,6 +256,22 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
 
     # Make the call - TRUE UNIFIED
     result = builder.call(func, call_args, name=f"unified_global_{func_name}")
+    # Optional: tail call hint (env or hints)
+    try:
+        hint_tail = os.getenv('NYASH_LLVM_TAILCALL', '0') in ('1','true','on') or \
+                    os.getenv('NYASH_MIR_HINTS', '').lower() in ('tail','all')
+        if hint_tail:
+            try:
+                result.tail = True
+            except Exception:
+                pass
+            if os.getenv('NYASH_MIR_OPTIMIZE_TRACE', '0') in ('1','true','on'):
+                try:
+                    print(json.dumps({'phase':'llvm','cat':'opt','kind':'tail_call','func': func_name}))
+                except Exception:
+                    pass
+    except Exception:
+        pass
 
     # Store result
     if dst_vid is not None:
@@ -194,7 +282,7 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
                 resolver.mark_string(dst_vid)
 
 
-def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid, vmap, resolver, owner):
+def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid, vmap, resolver, owner, allow_safepoint: bool = True):
     """Lower box method call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
@@ -204,8 +292,55 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
     i8 = ir.IntType(8)
     i8p = i8.as_pointer()
 
+    # Optional fast-path: direct self-call for methods within the same static box
+    # Guarded by env NYASH_LLVM_DIRECT_SELF=1 to allow staged rollout.
+    try:
+        if os.getenv('NYASH_LLVM_DIRECT_SELF', '0') in ('1','true','on'):
+            cur_name = getattr(owner, 'current_function_name', '')
+            base = cur_name.split('/') [0] if '/' in cur_name else cur_name
+            expect_base = f"{box_name}.{method}"
+            if base == expect_base:
+                want_arity = 1 + len(args)
+                target = None
+                for f in module.functions:
+                    fname = getattr(f, 'name', '')
+                    if fname.startswith(expect_base + '/'):
+                        try:
+                            ar = int(fname.split('/')[-1])
+                        except Exception:
+                            ar = -1
+                        if ar == want_arity:
+                            target = f
+                            break
+                if target is None:
+                    fty = ir.FunctionType(i64, [i64] * want_arity)
+                    target = ir.Function(module, fty, name=f"{expect_base}/{want_arity}")
+                def _resolve_arg(vid: int):
+                    if resolver and hasattr(resolver, 'resolve_i64'):
+                        try:
+                            return resolver.resolve_i64(vid, builder.block, owner.preds,
+                                                      owner.block_end_values, vmap, owner.bb_map)
+                        except:
+                            pass
+                    return vmap.get(vid)
+                call_args = []
+                rv = _resolve_arg(receiver) or ir.Constant(i64, 0)
+                call_args.append(rv)
+                for a in args:
+                    av = _resolve_arg(a) or ir.Constant(i64, 0)
+                    call_args.append(av)
+                result = builder.call(target, call_args, name=f"direct_self_{method}")
+                if dst_vid is not None:
+                    vmap[dst_vid] = result
+                return
+    except Exception:
+        pass
+
+    i8 = ir.IntType(8)
+    i8p = i8.as_pointer()
+
     # Insert automatic safepoint
-    if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+    if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
         insert_automatic_safepoint(builder, module, "boxcall")
 
     # Helper to declare function
@@ -341,6 +476,23 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
         callee = _declare("nyash.plugin.invoke_by_name_i64", i64, [i64, i8p, i64, i64, i64])
         result = builder.call(callee, [recv_h, mptr, argc, a1, a2], name="unified_plugin_invoke")
 
+    # Optional: tail call hint (env or hints)
+    try:
+        hint_tail = os.getenv('NYASH_LLVM_TAILCALL', '0') in ('1','true','on') or \
+                    os.getenv('NYASH_MIR_HINTS', '').lower() in ('tail','all')
+        if hint_tail:
+            try:
+                result.tail = True
+            except Exception:
+                pass
+            if os.getenv('NYASH_MIR_OPTIMIZE_TRACE', '0') in ('1','true','on'):
+                try:
+                    print(json.dumps({'phase':'llvm','cat':'opt','kind':'tail_call','method': method}))
+                except Exception:
+                    pass
+    except Exception:
+        pass
+
     # Store result
     if dst_vid is not None:
         vmap[dst_vid] = result
@@ -350,10 +502,15 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
                 resolver.mark_string(dst_vid)
 
 
-def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resolver, owner):
+def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resolver, owner, allow_safepoint: bool = True):
     """Lower box constructor - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
+    from instructions.safepoint import insert_automatic_safepoint
     import os
+
+    # Insert automatic safepoint for constructor
+    if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+        insert_automatic_safepoint(builder, module, 'constructor')
 
     i64 = ir.IntType(64)
     i8 = ir.IntType(8)
@@ -505,13 +662,19 @@ def lower_closure_creation(builder, module, params, captures, me_capture, dst_vi
         vmap[dst_vid] = result
 
 
-def lower_value_call(builder, module, func_vid, args, dst_vid, vmap, resolver, owner):
+def lower_value_call(builder, module, func_vid, args, dst_vid, vmap, resolver, owner, allow_safepoint: bool = True):
     """Lower dynamic function value call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
+    from instructions.safepoint import insert_automatic_safepoint
+    import os
 
     i64 = ir.IntType(64)
     i8 = ir.IntType(8)
     i8p = i8.as_pointer()
+
+    # Insert automatic safepoint for dynamic value call
+    if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+        insert_automatic_safepoint(builder, module, 'value_call')
 
     # Helper to resolve arguments
     def _resolve_arg(vid: int):
@@ -593,7 +756,7 @@ def lower_value_call(builder, module, func_vid, args, dst_vid, vmap, resolver, o
         vmap[dst_vid] = result
 
 
-def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolver, owner):
+def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolver, owner, allow_safepoint: bool = True):
     """Lower external C ABI call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
@@ -604,7 +767,7 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
     i8p = i8.as_pointer()
 
     # Insert automatic safepoint
-    if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+    if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
         insert_automatic_safepoint(builder, module, "externcall")
 
     # Helper to resolve arguments

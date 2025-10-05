@@ -15,9 +15,8 @@ static box JsonParserModule {
         // Equivalent to `new JsonParser()` when Builder inserts auto-birth, but
         // keeping this explicit makes factory semantics clear and future-proof.
         local p = new JsonParser()
-        // Defensive: if runtime ever skipped auto-birth on this path, call it explicitly.
-        // birth() is idempotent by policy.
-        p.birth()
+        // Auto-birth policy ensures parser is born; explicit call not required.
+        // p.birth()  // idempotent; kept commented to avoid legacy resolution issues
         return p
     }
 }

@@ -63,6 +63,10 @@ pub enum QualifiedCallee {
 
 Alias desugar（MVP, Runner実装）
 - 概要: `using "path" as Alias` で読み込んだプレリュードのトップレベル記号を `Alias_<Name>` にリネームし、コード側の `Alias.Name` を `Alias_Name` にデシュガーする。
+  - ネスト別名（実験的）: `using A as X; using X.B as Y` のように、同一ファイル内で先に導入した別名 `X` をヘッドにもつ名前を次行以降で参照可能。
+    - dev/ci プロファイルで有効。AST マージ（`NYASH_USING_AST=1`）を伴う場合に安定動作。
+    - 解決順序: トップレベルの別名テーブル（toml/env）→ ローカル別名（当該ファイル内で先に出現した `using`）→ modules/env の順。
+    - 例: `using selfhost.vm as VM; using VM.mir_min as MirVmMin` → `selfhost.vm.mir_min` に合成され、`[modules]`/`NYASH_MODULES` で解決。
 - 狙い: 衝突なき名前空間の導入（ASTマージ前提）と、`Main` などの汎用名の競合回避。
 - ルール（MVP）:
   - 対象: 静的Box名、関数名（トップレベル）。

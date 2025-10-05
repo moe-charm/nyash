@@ -1,0 +1,140 @@
+// The Computer Language Benchmarks Game
+// Binary Trees benchmark - Hakorune simplified version (using MapBox)
+
+static box BinaryTrees {
+    console
+    timer
+
+    newNode(left, right, item) {
+        local node
+        node = new MapBox()
+        node.set("left", left)
+        node.set("right", right)
+        node.set("item", item)
+        return node
+    }
+
+    itemCheck(tree) {
+        local left
+        left = tree.get("left")
+
+        if left == null {
+            return tree.get("item")
+        }
+
+        local right
+        right = tree.get("right")
+
+        local item
+        item = tree.get("item")
+
+        return item + me.itemCheck(left) - me.itemCheck(right)
+    }
+
+    bottomUpTree(item, depth) {
+        if depth > 0 {
+            local left
+            local right
+            left = me.bottomUpTree(2 * item - 1, depth - 1)
+            right = me.bottomUpTree(2 * item, depth - 1)
+            return me.newNode(left, right, item)
+        }
+        return me.newNode(null, null, item)
+    }
+
+    main() {
+        me.console = new ConsoleBox()
+        me.timer = new TimerBox()
+
+        local n
+        n = 10  // depth
+
+        local minDepth
+        minDepth = 4
+
+        local maxDepth
+        if minDepth + 2 > n {
+            maxDepth = minDepth + 2
+        } else {
+            maxDepth = n
+        }
+
+        local stretchDepth
+        stretchDepth = maxDepth + 1
+
+        // Fixed 5-second benchmark
+        local startTime
+        startTime = me.timer.now_ms()
+
+        local iterations
+        iterations = 0
+
+        local currentTime
+        local finalCheck
+
+        loop(1) {
+            currentTime = me.timer.now_ms()
+            if currentTime - startTime >= 5000 {
+                break
+            }
+
+            // Stretch tree
+            local stretchTree
+            stretchTree = me.bottomUpTree(0, stretchDepth)
+            local check
+            check = me.itemCheck(stretchTree)
+
+            // Long-lived tree
+            local longLivedTree
+            longLivedTree = me.bottomUpTree(0, maxDepth)
+
+            // Create and check many trees
+            local depth
+            depth = minDepth
+            loop(depth <= maxDepth) {
+                local numIterations
+                numIterations = 1 << (maxDepth - depth + minDepth)
+
+                local checkSum
+                checkSum = 0
+
+                local i
+                i = 1
+                loop(i <= numIterations) {
+                    local tempTree
+                    tempTree = me.bottomUpTree(i, depth)
+                    checkSum = checkSum + me.itemCheck(tempTree)
+
+                    tempTree = me.bottomUpTree(-i, depth)
+                    checkSum = checkSum + me.itemCheck(tempTree)
+
+                    i = i + 1
+                }
+
+                depth = depth + 2
+            }
+
+            finalCheck = me.itemCheck(longLivedTree)
+            iterations = iterations + 1
+        }
+
+        local endTime
+        endTime = me.timer.now_ms()
+        local elapsedMs
+        elapsedMs = endTime - startTime
+
+        local opsPerSec
+        opsPerSec = iterations * 1000 / elapsedMs
+
+        local usPerOp
+        usPerOp = elapsedMs * 1000 / iterations
+
+        me.console.log("Binary Trees (depth 10) - 5 seconds")
+        me.console.log("")
+        me.console.log("Iterations: " + iterations)
+        me.console.log("Elapsed: " + elapsedMs + " ms")
+        me.console.log("Ops/sec: " + opsPerSec)
+        me.console.log("µs/op: " + usPerOp)
+        me.console.log("Last result: " + finalCheck)
+    }
+}

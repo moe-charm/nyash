@@ -40,6 +40,9 @@
 - `language-guide.md` - Language tutorial
 - `testing-guide.md` - Testing practices
 - `style-guide.md` - Code style conventions
+- `call-resolver.md` - VM fallback name resolution (Global→ModuleFunction)
+- `using-alias-expand.md` - Local nested alias expansion (preprocess)
+- `mir-hints.md` - MIR optimization hints and boxes (config/detector/applier)
 
 #### `docs/reference/` - Reference Documentation
 **Purpose**: Complete technical specifications

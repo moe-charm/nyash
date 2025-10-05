@@ -34,6 +34,7 @@ pub mod value_id;
 pub mod verification;
 pub mod verification_types; // extracted error types // Optimization subpasses (e.g., type_hints)
 pub mod externs; // ExternCallRegistryBox（共通マッピング；backend疎結合の基点）
+pub mod resolve; // Shared MIR resolvers (CallResolver core)
 
 // Re-export main types for easy access
 pub use basic_block::{BasicBlock, BasicBlockId, BasicBlockIdGenerator};

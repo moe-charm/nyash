@@ -24,6 +24,7 @@ mod helpers;
 mod method_router;
 mod extern_adapter;
 mod operator_guard;
+pub mod resolve;
 
 pub struct MirInterpreter {
     pub(super) regs: HashMap<ValueId, VMValue>,
@@ -135,7 +136,7 @@ impl MirInterpreter {
                 if let Ok(raw) = std::env::var("NYASH_SCRIPT_ARGS_JSON") {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
                         if let Some(arr) = v.as_array() {
-                            let mut ab = ArrayBox::new();
+                            let ab = ArrayBox::new();
                             for item in arr {
                                 if let Some(s) = item.as_str() {
                                     let sb = crate::box_trait::StringBox::new(s.to_string());
