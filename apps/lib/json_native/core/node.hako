@@ -117,8 +117,8 @@ static box JsonNode {
         local node = new JsonNodeInstance()
         node.birth()
         node.kind = "array"
-        local arr = new ArrayBox()
-        node.value = arr
+        // ArrayBox uses auto-birth; explicit birth not required
+        node.value = new ArrayBox()
         return node
     }
     
@@ -127,8 +127,8 @@ static box JsonNode {
         local node = new JsonNodeInstance()
         node.birth()
         node.kind = "object"
-        local m = new MapBox()
-        node.value = m
+        // MapBox uses auto-birth; explicit birth not required
+        node.value = new MapBox()
         return node
     }
     

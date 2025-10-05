@@ -3,10 +3,12 @@ use crate::ast::{ASTNode, LiteralValue, Span, BinaryOperator, CatchClause};
 
 pub(super) fn convert_program_to_ast(p: ProgramV0) -> Result<ASTNode, String> {
     let mut out: Vec<ASTNode> = Vec::with_capacity(p.body.len());
-    for s in p.body.iter() {
-        out.push(convert_stmt(s)?);
+    for s in p.body.iter() { out.push(convert_stmt(s)?); }
+    let mut prog = ASTNode::Program { statements: out, span: Span::unknown() };
+    if std::env::var("NYASH_JSONV0_PHI_UNIFY").ok().as_deref() == Some("1") {
+        prog = try_phi_unify_if_return(prog);
     }
-    Ok(ASTNode::Program { statements: out, span: Span::unknown() })
+    Ok(prog)
 }
 
 fn convert_stmt(s: &StmtV0) -> Result<ASTNode, String> {
@@ -173,4 +175,53 @@ fn parse_iface(iface: &str) -> Result<(String, String), String> {
         return Err(format!("unsupported extern namespace: {}", ns));
     }
     Ok(("env".to_string(), iface.to_string()))
+}
+
+// Minimal transform: Program of the shape [If{...}, Return Var(x)] where x is only
+// declared via Local inside branches. Hoist `local x = void` and rewrite branch Locals
+// to Assignments to `x` so that a final `return x` is valid.
+fn try_phi_unify_if_return(mut prog: ASTNode) -> ASTNode {
+    use crate::ast::LiteralValue;
+    match &mut prog {
+        ASTNode::Program { statements, .. } => {
+            if statements.len() < 2 { return prog; }
+            let ret_name = match &statements[statements.len()-1] {
+                ASTNode::Return { value: Some(v), .. } => {
+                    if let ASTNode::Variable { name, .. } = v.as_ref() { Some(name.clone()) } else { None }
+                }
+                _ => None,
+            };
+            let Some(var_name) = ret_name else { return prog; };
+            let (then_body_opt, else_body_opt) = match &mut statements[0] {
+                ASTNode::If { then_body, else_body, .. } => (Some(then_body), else_body.as_mut()),
+                _ => return prog,
+            };
+            let (then_body, else_body) = match (then_body_opt, else_body_opt) { (Some(t), Some(e)) => (t, e), _ => return prog };
+            let mut found = false;
+            fn rewrite_branch(var_name: &str, body: &mut Vec<ASTNode>, found: &mut bool) {
+                for st in body.iter_mut() {
+                    if let ASTNode::Local { variables, initial_values, span } = st {
+                        if variables.len() == 1 && variables[0] == var_name && initial_values.len() == 1 {
+                            let init = initial_values[0].clone().unwrap_or(Box::new(ASTNode::Literal { value: LiteralValue::Void, span: Span::unknown() }));
+                            let assign = ASTNode::Assignment {
+                                target: Box::new(ASTNode::Variable { name: var_name.to_string(), span: *span }),
+                                value: init,
+                                span: *span,
+                            };
+                            *st = assign;
+                            *found = true;
+                        }
+                    }
+                }
+            }
+            rewrite_branch(&var_name, then_body, &mut found);
+            rewrite_branch(&var_name, else_body, &mut found);
+            if found {
+                let hoisted = ASTNode::Local { variables: vec![var_name.clone()], initial_values: vec![Some(Box::new(ASTNode::Literal { value: LiteralValue::Void, span: Span::unknown() }))], span: Span::unknown() };
+                statements.insert(0, hoisted);
+            }
+            prog
+        }
+        _ => prog,
+    }
 }

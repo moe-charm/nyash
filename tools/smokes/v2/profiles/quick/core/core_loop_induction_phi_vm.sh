@@ -36,7 +36,7 @@ EOF
 
 # NOTE: Local with same name acts like rebind (assignment). x = x + 1
 
-raw_output=$(run_nyash_vm "$JSON_FILE")
+raw_output=$("$NYASH_BIN" --backend vm "$JSON_FILE" 2>&1)
 result=$(echo "$raw_output" | sed -n 's/^Result: \(.*\)$/\1/p' | tail -n 1)
 if [ "$result" = "3" ]; then
   log_success "core_loop_induction_phi_vm Result: 3"

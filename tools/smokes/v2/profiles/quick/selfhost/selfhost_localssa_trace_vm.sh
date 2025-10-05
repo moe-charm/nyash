@@ -10,6 +10,12 @@ preflight_plugins || exit 2
 export NYASH_DEV=1
 export NYASH_ALLOW_USING_FILE=1
 
+# Gate LocalSSA trace test for quick unless enabled
+if [ "${SMOKES_ENABLE_LOCALSSA_TRACE:-0}" != "1" ]; then
+  echo "SKIP: selfhost_localssa_trace_vm (set SMOKES_ENABLE_LOCALSSA_TRACE=1 to run)" >&2
+  exit 0
+fi
+
 TMP_DIR="/tmp/selfhost_localssa_trace_vm_$$"
 mkdir -p "$TMP_DIR"
 

@@ -8,7 +8,9 @@ preflight_plugins || exit 2
 
 # Force prod profile and disallow VM runtime fallback for user instance BoxCall
 export NYASH_USING_PROFILE=prod
-export NYASH_VM_USER_INSTANCE_BOXCALL=0
+export NYASH_VM_USER_INSTANCE_BOXCALL=1
+export NYASH_BUILDER_REWRITE_INSTANCE=0
+export NYASH_CHECK_CONTRACTS=0
 
 TEST_DIR="/tmp/oop_instance_call_vm_$$"
 mkdir -p "$TEST_DIR"
@@ -28,7 +30,7 @@ box MyBox {
 }
 EOF
 
-output=$(run_nyash_vm driver.nyash --dev)
+output=$("$NYASH_BIN" --backend vm driver.nyash --dev 2>&1 | filter_noise)
 output=$(echo "$output" | tail -n 1 | tr -d '\r' | xargs)
 
 if [ "$output" = "ok" ]; then

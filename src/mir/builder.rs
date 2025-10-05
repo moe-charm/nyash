@@ -4,13 +4,11 @@
  * Implements AST → MIR conversion with SSA construction
  */
 
-use super::slot_registry::resolve_slot_by_type_name;
 use super::{
     BasicBlock, BasicBlockId, BasicBlockIdGenerator, CompareOp, ConstValue, Effect, EffectMask,
     FunctionSignature, MirFunction, MirInstruction, MirModule, MirType, ValueId, ValueIdGenerator,
 };
 use crate::ast::{ASTNode, LiteralValue};
-use crate::mir::builder::builder_calls::CallTarget;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::OnceLock;

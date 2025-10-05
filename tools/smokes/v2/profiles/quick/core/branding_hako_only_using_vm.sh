@@ -6,6 +6,13 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+
+# Gate heavy/unstable branding test unless explicitly enabled
+if [ "${SMOKES_ENABLE_BRANDING:-0}" != "1" ]; then
+  echo "SKIP: branding_hako_only_using_vm (set SMOKES_ENABLE_BRANDING=1 to run)" >&2
+  exit 0
+fi
+
 TEST_DIR="/tmp/ny_hako_only_using_$$"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"

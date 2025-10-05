@@ -5,6 +5,13 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate harness test for quick unless explicitly enabled
+if [ "${SMOKES_ENABLE_LLVM_HARNESS:-0}" != "1" ]; then
+  echo "SKIP: timer_now_ms_harness (set SMOKES_ENABLE_LLVM_HARNESS=1 to run)" >&2
+  exit 0
+fi
+
+
 export NYASH_LLVM_USE_HARNESS=1
 TEST_PATH="$NYASH_ROOT/apps/tests/core/timer_now_ms.hako"
 

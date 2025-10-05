@@ -1,27 +1,27 @@
-# Box Lifecycle — auto‑birth Policy (2025‑10)
+# Box Lifecycle — auto‑birth (C++‑style) and unborn/in_birth (2025‑10)
 
 Purpose: remove ambiguity around object initialization. “new means usable.”
 
 Policy (Strict, Uniform)
-- Default is auto‑birth: `new TypeBox(args)` automatically invokes `birth(args)` right after allocation. Applies to ALL boxes, including plugins.
+- Default is auto‑birth: `new TypeBox(args)` automatically invokes `birth(args)` as part of construction.
 - Advanced path with `unborn()`: `TypeBox.unborn().withXxx(...).birth(...)` suppresses auto‑birth until `birth` is explicitly called.
 - `birth()` is idempotent and returns Result:
   - Calling `birth()` twice is a no‑op (success).
-  - On failure, the `new` expression fails (no silent fallback).
+  - On failure, the construction fails (no silent fallback).
 - Verifier/Lint:
   - Any operation on an unborn instance (set/get/call) is an immediate error.
 
-Implementation Roadmap (small, reversible steps)
-1) Lowering: Builder emits `birth` immediately after `NewBox` (except `unborn()` path).
-2) Plugin Loader: synthesize a no‑op `birth` for legacy plugins lacking it (warn for one release, then silent).
-   - Migration flag: set `NYASH_WARN_PLUGIN_NO_BIRTH=1` to emit a one‑time info about synthesized no‑op; default is silent (`0`).
-3) Verifier: enforce unborn-forbid rules (dev: detailed diagnostics; prod: concise).
-4) Docs: keep this guide as the single source of truth, link from README.
+MIR/VM Semantics (C++‑style constructor)
+- MIR `NewBox` carries an optional `auto_birth: Option<String>` where the value is `"Class.birth/N"`.
+- VM executes `NewBox` and, if `auto_birth` is present (or discoverable by global function table), calls `birth(me, args...)` immediately.
+- Lifecycle states:
+  - unborn → in_birth (during `birth`) → born (on success) / unborn (on failure)
+  - During `in_birth`, methods on the same instance are allowed; re‑entrancy of `birth` is an error; second `birth` after success is a no‑op.
 
 Parser / Surface Syntax
-- Dot-call `birth()` is accepted on instances for the unborn path:
-  - Example: `local alice = Life.unborn(); alice.birth(); alice.name()`
-- Auto‑birth path remains sugar: `local alice = new Life("Alice")`.
+- Dot‑call `birth()` is accepted on instances for the unborn path:
+  - Example: `local alice = Life.unborn(); alice.birth("Alice"); alice.name()`
+- Auto‑birth sugar remains: `local alice = new Life("Alice")`.
 
 Fail‑Fast Error (stable text)
 - Operations on unborn instances fail with the message containing:
@@ -39,26 +39,22 @@ local regs = MapBox.unborn()
     .birth()?  # Result-returning birth
 ```
 
-Plugin Requirements
-- All plugin boxes must expose a `birth()` method. When absent, the loader provides a no‑op stub during migration.
-- `birth` should be safe for repeated invocation (idempotent).
+Plugin Policy
+- If a plugin defines `birth`, it is called as constructor (`method_id = 0` recommended).
+- If `birth` is absent, construction proceeds without calling it (no‑op) to maintain compatibility.
+- `birth` implementations should be idempotent.
 
 Testing Notes
-- Smokes validate auto‑birth/unborn and plugin no‑op birth:
+- Smokes validate auto‑birth/unborn and plugin no‑birth:
   - `tools/smokes/v2/profiles/quick/core/userbox_unborn_failfast_vm.sh`
   - `tools/smokes/v2/profiles/quick/core/userbox_unborn_then_birth_ok_vm.sh`
   - `tools/smokes/v2/profiles/quick/core/plugin_no_birth_noop_vm.sh` (dev fixture; skips if missing)
 
-## Auto‑Birth と unborn
-- 既定は auto‑birth（`new` が自動で `birth` を呼ぶ）。
-- 上級者向けに `TypeBox.unborn().withXxx(...).birth()` を許可。
-- `birth()` は冪等（多重呼び出しは no‑op）。
-
 実装ポリシー（2025‑10 更新）
-- Builder: `new` の直後に `Box.birth/Arity(me, args...)` を ModuleFunction 形式で生成（関数が Module に存在する場合のみ）。
-- 明示 `obj.birth(args)` は Builder 側で ModuleFunction に正規化（BoxCall では発行しない）。
-- VM: `birth` の ModuleFunction 入口で born をプリマーク（`contracts_birth_pre` を観測可能）。
-- Plugin/Builtin の birth 未実装は no‑op 合成で互換。
+- Builder: `NewBox { auto_birth: Some("Class.birth/N") }` を既定で付与（関数が見つかる場合）。
+- VM: `NewBox` 実行時に `auto_birth` を直ちに呼び出す。`in_birth` 状態を導入し、成功時のみ `born` を確定。
+- Parser: `obj.birth(...)`（ドット呼び）を受理（unborn 経路のE2E）。
+- Contracts: `NYASH_CHECK_CONTRACTS=1` 既定ON。unbornの操作は禁止。`birth()` は冪等。
 
 注意（dev モード）
 - bring‑up 便宜の挙動差が混じるため、core の値検証系スモークは dev=OFF（`SMOKES_USE_DEV=0`）を既定とする。

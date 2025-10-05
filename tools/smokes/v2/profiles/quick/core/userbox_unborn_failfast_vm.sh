@@ -34,7 +34,7 @@ static box Main {
 }
 EOF
 
-raw_output=$(run_nyash_vm "$SRC")
+raw_output=$("$NYASH_BIN" --backend vm "$SRC" 2>&1)
 status=$?
 # Expect non-zero and specific error substring
 echo "$raw_output" | sed -n '1,120p' >&2

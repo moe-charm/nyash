@@ -20,7 +20,7 @@ TMP_DIR="/tmp/plugin_no_birth_$$"
 mkdir -p "$TMP_DIR"
 SRC="$TMP_DIR/main.nyash"
 
-cat > "$SRC" << EOF
+cat > "main.nyash" << EOF
 static box Main {
   main() {
     // Construct plugin box; loader should synthesize no-op birth and mark born
@@ -32,8 +32,31 @@ static box Main {
 }
 EOF
 
-output=$(run_nyash_vm "$SRC")
+## Provide a minimal plugin config to avoid loading all repo plugins
+MINI_CFG="$TMP_DIR/hako.toml"
+cat > "$MINI_CFG" << TOML
+[libraries]
+[libraries."libnyash_nobirth_plugin.so"]
+boxes = ["$BOX_NAME"]
+path = "$NYASH_ROOT/plugins/nyash-nobirth-plugin/target/release/libnyash_nobirth_plugin.so"
+
+[libraries."libnyash_nobirth_plugin.so".$BOX_NAME]
+type_id = 120
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_nobirth_plugin.so".$BOX_NAME.methods]
+ping = { method_id = 4 }
+fini = { method_id = 4294967295 }
+TOML
+
+export NYASH_PLUGIN_LOOKUP_LOCAL=1
+
 expected="OK"
+# Run from temp dir so runner picks our minimal hako.toml first
+pushd "$TMP_DIR" >/dev/null
+output=$(NYASH_PLUGIN_LOOKUP_LOCAL=1 "$NYASH_BIN" --backend vm "main.nyash" 2>&1 | filter_noise)
+popd >/dev/null
 compare_outputs "$expected" "$output" "plugin_no_birth_nop_vm" || { rm -rf "$TMP_DIR"; exit 1; }
 rm -rf "$TMP_DIR"
 exit 0

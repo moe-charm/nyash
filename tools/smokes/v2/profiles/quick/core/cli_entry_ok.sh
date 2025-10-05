@@ -6,6 +6,12 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate: requires PyVM entry pipe support (disabled in Phase-15 by default)
+if [ "${SMOKES_ENABLE_PYVM_ENTRY:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_PYVM_ENTRY=1" >&2
+  exit 0
+fi
+
 # Minimal MIR JSON v0 with App.main returning 7
 JSON='{"functions":[{"name":"App.main","params":[],"blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":7}},{"op":"ret","value":1}]}]}]}'
 

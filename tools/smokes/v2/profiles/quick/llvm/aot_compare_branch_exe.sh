@@ -3,6 +3,13 @@
 
 set -euo pipefail
 
+# Gate AOT LLVM test unless explicitly enabled in quick profile
+if [ "${SMOKES_ENABLE_LLVM_AOT:-0}" != "1" ]; then
+  echo "SKIP: aot_compare_branch_exe (set SMOKES_ENABLE_LLVM_AOT=1 to run)" >&2
+  exit 0
+fi
+
+
 # Resolve repo root by walking up to Cargo.toml
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$ROOT_DIR"

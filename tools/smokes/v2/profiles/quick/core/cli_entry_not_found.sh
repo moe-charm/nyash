@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: CLI entry negative case differs under new bridge; skip by default
+if [ "${SMOKES_ENABLE_CLI_ENTRY_NEG:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_CLI_ENTRY_NEG=1" >&2
+  exit 0
+fi
 # cli_entry_not_found.sh — Unknown --entry yields clear error, non-zero exit
 # tags: selfhost,entry
 

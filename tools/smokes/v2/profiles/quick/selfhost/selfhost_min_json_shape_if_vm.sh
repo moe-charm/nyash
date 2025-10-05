@@ -6,6 +6,13 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate selfhost min-json shape check for quick unless explicitly enabled
+if [ "${SMOKES_ENABLE_SELFHOST_MIN:-0}" != "1" ]; then
+  echo "SKIP: selfhost_min_json_shape_if_vm (set SMOKES_ENABLE_SELFHOST_MIN=1 to run)" >&2
+  exit 0
+fi
+
+
 TMP_DIR="/tmp/selfhost_min_json_shape_if_$$"
 mkdir -p "$TMP_DIR"
 

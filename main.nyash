@@ -1,0 +1,9 @@
+static box Main {
+  main() {
+    // Construct plugin box; loader should synthesize no-op birth and mark born
+    local p = new NoBirthBox()
+    // If construction succeeded without unborn error, print OK
+    print("OK")
+    return 0
+  }
+}

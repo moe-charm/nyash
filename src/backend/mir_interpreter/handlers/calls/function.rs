@@ -213,50 +213,34 @@ impl MirInterpreter {
             )));
         }
 
-        // Lifecycle: if this ModuleFunction is a birth function ("Class.birth/N"),
-        // mark the receiver (first arg) as born before executing the body.
+        // Lifecycle: handle birth enter (idempotence + reentrancy)
+        let mut birth_key: Option<u64> = None;
+        let mut is_birth_fn = false;
         if let Some((_cls, method_arity)) = name.split_once('.') {
             let method = method_arity.split('/').next().unwrap_or(method_arity);
             if method == "birth" {
+                is_birth_fn = true;
                 if let Some(first) = args.get(0) {
-                    self.lifecycle_contracts_birth(*first, args.len().saturating_sub(1));
-                    if std::env::var("NYASH_VM_BIRTH_TRACE").ok().as_deref() == Some("1") {
-                        eprintln!("{{\"kind\":\"contracts_birth_pre\",\"name\":\"{}\",\"me\":{},\"argc\":{}}}", name, first.0, args.len().saturating_sub(1));
+                    let key = self.object_key_for(*first);
+                    if self.contracts_born.contains(&key) {
+                        if std::env::var("NYASH_VM_BIRTH_TRACE").ok().as_deref() == Some("1") {
+                            eprintln!("{{\"kind\":\"birth_idempotent\",\"name\":\"{}\",\"key\":{}}}", name, key);
+                        }
+                        return Ok(VMValue::Void);
                     }
+                    if !self.contracts_in_birth.insert(key) {
+                        return Err(VMError::InvalidInstruction("reentrant birth()".to_string()));
+                    }
+                    birth_key = Some(key);
                 }
             }
         }
 
-        // Fail-Fast: if this ModuleFunction is actually an instance method form
-        // like "Class.method" and the first arg is an unborn InstanceBox, forbid.
+        
+        // Fail-Fast: unified unborn guard for instance-dispatch ModuleFunction (non-birth)
         if let Some((_, method)) = name.split_once('.') {
             if method != "birth" {
-                if let Some(first) = args.get(0) {
-                    let recv = self.reg_load(*first)?;
-                    if let VMValue::BoxRef(b) = recv {
-                        if b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
-                            let key = self.object_key_for(*first);
-                            let seen_new = self.contracts_new.contains(&key);
-                            let seen_birth = self.contracts_born.contains(&key);
-                            if seen_new && !seen_birth {
-                                if crate::config::env::check_contracts() && std::env::var("NYASH_VM_BIRTH_TRACE").ok().as_deref() == Some("1") {
-                                    if let Some(first) = args.get(0) {
-                                        let cls = match self.reg_load(*first).ok() {
-                                            Some(crate::backend::mir_interpreter::VMValue::BoxRef(b)) => {
-                                                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { inst.class_name.clone() } else { b.type_name().to_string() }
-                                            }
-                                            _ => "<unknown>".to_string(),
-                                        };
-                                        eprintln!("{{\"kind\":\"contracts_unborn_fail\",\"class\":\"{}\",\"method\":\"{}\"}}", cls, method);
-                                    }
-                                }
-                                return Err(VMError::InvalidInstruction(
-                                    "operation on unborn instance (call birth() first)".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                }
+                if let Some(first) = args.get(0) { self.check_unborn_guard(*first)?; }
             }
         }
         let label = format!("ModuleFn:{}", name);
@@ -308,7 +292,20 @@ impl MirInterpreter {
         if let Some(func) = self.functions.get(&want_name).cloned() {
             let mut argv: Vec<VMValue> = Vec::new();
             for a in args { argv.push(self.reg_load(*a)?); }
-            return self.exec_function_inner(&func, Some(&argv));
+            {
+                let r = self.exec_function_inner(&func, Some(&argv));
+                if is_birth_fn {
+                    if let Some(k) = birth_key { self.contracts_in_birth.remove(&k); }
+                    if r.is_ok() {
+                        if let Some(first) = args.get(0) {
+                            self.lifecycle_contracts_birth(*first, args.len().saturating_sub(1));
+                        }
+                    } else {
+                        if let Some(first) = args.get(0) { self.regs.remove(first); }
+                    }
+                }
+                return r;
+            }
         }
 
         // Tail-based fallback: collect candidates that end with ".method/arity"
@@ -327,7 +324,20 @@ impl MirInterpreter {
                 if let Some(func) = self.functions.get(&pick).cloned() {
                     let mut argv: Vec<VMValue> = Vec::new();
                     for a in args { argv.push(self.reg_load(*a)?); }
-                    return self.exec_function_inner(&func, Some(&argv));
+                    {
+                let r = self.exec_function_inner(&func, Some(&argv));
+                if is_birth_fn {
+                    if let Some(k) = birth_key { self.contracts_in_birth.remove(&k); }
+                    if r.is_ok() {
+                        if let Some(first) = args.get(0) {
+                            self.lifecycle_contracts_birth(*first, args.len().saturating_sub(1));
+                        }
+                    } else {
+                        if let Some(first) = args.get(0) { self.regs.remove(first); }
+                    }
+                }
+                return r;
+            }
                 }
             }
         }

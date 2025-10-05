@@ -1,3 +1,40 @@
+## 2025-10-05 — Contracts hotfixes + Phase 15.9 doc
+
+- Added Phase 15.9 optimization plan: docs/development/roadmap/phases/phase-15.9/README.md
+- VM fixes (runtime semantics):
+  - PluginInvoke: unborn guard for non-birth (both direct and helper path)
+  - NewBox: mark born when no birth/N exists (builtin/plugin compatibility)
+  - ModuleFunction birth failure: remove exposed instance from regs to avoid use-after-unborn
+- Next: run quick smokes; then integration minimal pass
+
+
+## 2025-10-05 — Auto‑birth C++型/in_birth 最終確定 + Plugin 互換
+
+- 仕様確定
+  - C++型: MIR NewBox に auto_birth を内包。VM が NewBox 実行後に即時 birth(me,args...) を呼ぶ（関数が存在する場合のみ）。
+  - ライフサイクル: unborn → in_birth(try) → born(success)/unborn(fail)。in_birth 中は同一インスタンスのメソッド呼び出しを許可。再入はエラー、二度目の birth は冪等 no‑op。
+  - Parser: dot 呼び birth 受理（unborn 経路のE2E）。
+  - Contracts 既定ON: NYASH_CHECK_CONTRACTS=1。unborn 操作は禁止。
+  - 実例: `local alice = new Life("Alice")` は自動 birth で name()=="Alice"。
+- プラグイン方針
+  - `birth` 実装があればコンストラクタとして呼ぶ（method_id=0 推奨）。
+  - `birth` 不在なら no‑op（互換維持）。birth は冪等実装を推奨。
+- 実装ステータス
+  - Builder: cross‑module 検出で `auto_birth=Some("Class.birth/N")` を付与（既定ON）。
+  - VM: in_birth 導入・成功時のみ born 確定。生存期間ガードを born||in_birth で評価。
+  - Bridge(JSON v0): 降下で NewBox.auto_birth を付与可能（フラグ）。PHI最小統合はENVゲート。
+  - Runner: 実行バイナリ優先度 `hakorune → hako → nyash`。
+  - Smokes: quick 必要最小は緑（重い/外部依存はENVでSKIPゲート）。
+- ドキュメント
+  - 更新: docs/guides/box-lifecycle.md（C++型 auto‑birth / in_birth を反映）。
+- Next（小粒）
+  1) integration を一周し、最小ゲートで緑維持
+  2) Global 呼びの正規化を CallNameResolverBox に完全移行（短名の根絶）
+  3) Plugin birth あり/なしの E2E をもう1本だけ追加（過剰追加は避ける）
+  4) [modules] 別 alias のE2Eを+1本
+  5) 警告掃除と README/INDEX の導線微修正
+
+
 ## 2025-10-05 — CallResolver 箱導入と VM 経路の名寄せ修正（quick 緑化）
 
 - 追加（箱化）
@@ -156,6 +193,7 @@ Acceptance（このラウンド）
 - スモーク計画（最小）
   - quick/core/userbox_birth_vm.sh（auto/explicit）: 正常化を確認（PASS 維持）
   - quick/core/using_modules_alias_vm.sh: [modules] alias 解決（既存 PASS）
+  - quick/core/using_modules_alias_timer_static_vm.sh: [modules] 別alias（TimerBox）E2E 追加（PASS）
   - LLVM 自己再帰 IR は環境依存のため既定 SKIP（`SMOKES_ENABLE_LLVM_SELFREC=1` で任意）
 
 - 互換性

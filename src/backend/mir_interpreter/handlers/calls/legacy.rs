@@ -70,7 +70,7 @@ impl MirInterpreter {
                         if is_instance {
                             let key = self.object_key_for(*recv_id);
                             let seen_new = self.contracts_new.contains(&key);
-                            let seen_birth = self.contracts_born.contains(&key);
+                            let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
                             if seen_new && !seen_birth {
                                 return Err(VMError::InvalidInstruction(
                                     "operation on unborn instance (call birth() first)".to_string(),
@@ -269,7 +269,7 @@ impl MirInterpreter {
                         if b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
                             let key = self.object_key_for(*first);
                             let seen_new = self.contracts_new.contains(&key);
-                            let seen_birth = self.contracts_born.contains(&key);
+                            let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
                             if seen_new && !seen_birth {
                                 return Err(VMError::InvalidInstruction(
                                     "operation on unborn instance (call birth() first)".to_string(),

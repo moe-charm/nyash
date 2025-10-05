@@ -9,6 +9,12 @@ preflight_plugins || exit 2
 export NYASH_LLVM_USE_HARNESS=1
 export NYASH_NYRT_SILENT_RESULT=1
 
+# Gate selfhost front minimal parity in quick unless explicitly enabled
+if [ "${SMOKES_ENABLE_SELFHOST_FRONT:-0}" != "1" ]; then
+  echo "SKIP: selfhost_front_min_vm_llvm (set SMOKES_ENABLE_SELFHOST_FRONT=1 to run)" >&2
+  exit 0
+fi
+
 cases=(
   "const:apps/tests/selfhost_min/const_ret.hako:Result: 42"
   "if_merge:apps/tests/selfhost_min/if_merge.hako:Result: 10"

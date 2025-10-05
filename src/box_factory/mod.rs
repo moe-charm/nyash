@@ -378,7 +378,31 @@ impl UnifiedBoxRegistry {
             }
         }
 
-        Err(RuntimeError::InvalidOperation {
+        {
+            let host_arc = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+            let maybe = host_arc.read().ok().and_then(|h| h.create_box(name, args).ok());
+            if let Some(b) = maybe { return Ok(b); }
+        }
+
+        
+        if std::env::var("NYASH_PLUGIN_LOOKUP_LOCAL").ok().as_deref() == Some("1") {
+            let candidates = ["hako.toml", "nyash.toml"];
+            for cfg in candidates.iter() {
+                if let Ok(ny) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg) {
+                    if let Some((lib, def)) = ny.find_library_for_box(name) {
+                        let maybe = {
+                            let host_arc = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                            host_arc.read().ok().and_then(|h| {
+                                let _ = h.load_library_direct(lib, &def.path, &def.boxes);
+                                h.create_box(name, args).ok()
+                            })
+                        };
+                        if let Some(b) = maybe { return Ok(b); }
+                    }
+                }
+            }
+        }
+Err(RuntimeError::InvalidOperation {
             message: format!("Unknown Box type: {}", name),
         })
     }

@@ -58,7 +58,7 @@ if [ "${SMOKES_DEV_LOG:-0}" = "1" ]; then
 fi
 # Binary path detection: prefer hakorune → hako → nyash unless NYASH_BIN is set
 if [ -z "${NYASH_BIN:-}" ]; then
-  for cand in "$NYASH_ROOT/target/release/nyash" "$NYASH_ROOT/target/release/hako" "$NYASH_ROOT/target/release/hakorune"; do
+  for cand in "$NYASH_ROOT/target/release/hakorune" "$NYASH_ROOT/target/release/hako" "$NYASH_ROOT/target/release/nyash"; do
     if [ -x "$cand" ]; then NYASH_BIN="$cand"; break; fi
   done
   export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
@@ -118,11 +118,11 @@ filter_noise() {
   | sed -E 's/^VM execution error: VM fallback error: *//' \
   | grep -v '^VM execution error: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
+  | grep -v '^Result: ' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
   | grep -v '^\{"kind":"contracts_' \
   | grep -v '^\{"resolve":' \
-  | grep -v '^Result: ' \
   | grep -v '^\[deprecate\] CLI name' \
   | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
   | grep -v "plugins/nyash-array-plugin" \
@@ -324,7 +324,7 @@ run_nyash_llvm() {
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
-            grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'
+            grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'
         local exit_code=${PIPESTATUS[0]}
         rm -f "$tmpfile"
         return $exit_code
@@ -340,7 +340,7 @@ run_nyash_llvm() {
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
-            grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'
+            grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'
         return ${PIPESTATUS[0]}
     fi
 }

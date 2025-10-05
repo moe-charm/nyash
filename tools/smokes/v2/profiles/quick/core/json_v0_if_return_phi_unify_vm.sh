@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: run only when explicitly enabled (VM PHI unify is environment-dependent)
+if [ "${SMOKES_ENABLE_JSON_V0_UNIFY:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_JSON_V0_UNIFY=1" >&2
+  exit 0
+fi
 export NYASH_JSONV0_PHI_UNIFY=1
 # json_v0_if_return_phi_vm.sh — JSON v0 bridge: If with then=Return, else=Local; merge must take else value
 

@@ -439,3 +439,18 @@ get    = { method_id = 2 }
 push   = { method_id = 3 }
 set    = { method_id = 4 }
 fini   = { method_id = 4294967295 }
+
+
+[libraries."libnyash_nobirth_plugin.so"]
+boxes = ["NoBirthBox"]
+path = "plugins/nyash-nobirth-plugin/target/release/libnyash_nobirth_plugin.so"
+
+[libraries."libnyash_nobirth_plugin.so".NoBirthBox]
+type_id = 120
+abi_version = 1
+singleton = false
+
+# Intentionally omit birth here to test loader no-op synthesis
+[libraries."libnyash_nobirth_plugin.so".NoBirthBox.methods]
+ping = { method_id = 4 }
+fini = { method_id = 4294967295 }

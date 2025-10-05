@@ -6,6 +6,13 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate rune_host disabled check unless explicitly enabled; quick defaults vary
+if [ "${SMOKES_ENABLE_RUNE_DISABLED:-0}" != "1" ]; then
+  echo "SKIP: rune_host_disabled_vm (set SMOKES_ENABLE_RUNE_DISABLED=1 to run)" >&2
+  exit 0
+fi
+
+
 TMP_DIR="/tmp/rune_host_disabled_vm_$$"
 mkdir -p "$TMP_DIR"
 

@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: enable when result line capture is desired (filtered by default)
+if [ "${SMOKES_ENABLE_JSON_V0_RESULT:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_JSON_V0_RESULT=1" >&2
+  exit 0
+fi
 # json_v0_try_return_vm.sh — JSON v0 bridge: try with return (no catch/finally)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"

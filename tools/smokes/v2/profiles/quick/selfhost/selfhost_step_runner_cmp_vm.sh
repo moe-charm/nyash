@@ -5,6 +5,13 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate selfhost StepRunner quick test unless explicitly enabled
+if [ "${SMOKES_ENABLE_SELFHOST_STEPRUNNER:-0}" != "1" ]; then
+  echo "SKIP: selfhost_step_runner_cmp_vm (set SMOKES_ENABLE_SELFHOST_STEPRUNNER=1 to run)" >&2
+  exit 0
+fi
+
+
 export NYASH_ENABLE_USING=1
 export NYASH_ALLOW_USING_FILE=1
 

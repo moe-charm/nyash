@@ -68,6 +68,20 @@ impl MirInterpreter {
 
         // Note: productionでは birth の自動呼び出しは行わない。
         // 正しい設計は Builder が NewBox 後に明示的に birth 呼び出しを生成すること。
-        Ok(())
+        
+        // Contracts: if no birth method exists globally, mark as born immediately
+        // to satisfy lifecycle for builtin/plugin boxes that don't require birth.
+        let birth_name = format!("{}.birth/{}", box_type, args.len());
+        if !self.functions.contains_key(&birth_name) {
+            let key = self.object_key_for(dst);
+            self.contracts_born.insert(key);
+            if crate::config::env::check_contracts() {
+                eprintln!(
+                    "{{\"kind\":\"contracts_born_nobirth\",\"class\":\"{}\",\"key\":{}}}",
+                    box_type, key
+                );
+            }
+        }
+Ok(())
     }
 }

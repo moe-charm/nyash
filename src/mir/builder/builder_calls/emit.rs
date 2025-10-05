@@ -359,6 +359,10 @@ impl MirBuilder {
                 })
             },
             CallTarget::Global(name) => {
+                let normalized = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, args.len()) {
+                    Ok(full) => full,
+                    Err(_) => format!("{}/{}", name, args.len()),
+                };
                 // Prefer direct ModuleFunction when available in current module (avoids legacy string callee)
                 // Use CallNameResolverBox::normalize to ensure fully qualified form before lookup.
                 if let Some(ref module) = self.current_module {
@@ -400,11 +404,11 @@ impl MirBuilder {
                 self.emit_instruction(MirInstruction::Call {
                     dst: Some(actual_dst),
                     func: ValueId::new(0),
-                    callee: Some(crate::mir::definitions::call_unified::Callee::Global(name.clone())),
+                    callee: Some(crate::mir::definitions::call_unified::Callee::Global(normalized.clone())),
                     args,
                     effects: EffectMask::IO,
                 })?;
-                self.annotate_call_result_from_func_name(actual_dst, name);
+                self.annotate_call_result_from_func_name(actual_dst, normalized);
                 Ok(())
             },
             CallTarget::Value(func_val) => {

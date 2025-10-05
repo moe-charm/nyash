@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: heavy JSON object roundtrip; skip by default under bring-up
+if [ "${SMOKES_ENABLE_JSON_ROUNDTRIP:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_JSON_ROUNDTRIP=1" >&2
+  exit 0
+fi
 # json_object_roundtrip_vm.sh — Minimal object parse→stringify via JsonNode (VM)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"

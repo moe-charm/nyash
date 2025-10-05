@@ -31,7 +31,12 @@ impl NyashRunner {
                     .unwrap_or(true)
             };
             if need_init {
-                let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
+                // If explicit plugin config or direct lib is provided, defer to runner_plugin_init only
+                let has_override = std::env::var("NYASH_PLUGIN_CONFIG").ok().map(|v| !v.trim().is_empty()).unwrap_or(false)
+                    || std::env::var("NYASH_PLUGIN_DIRECT_LIB").is_ok();
+                if !has_override {
+                    let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
+                }
                 crate::runner_plugin_init::init_bid_plugins();
             }
             // Prefer plugin-builtins for core types unless explicitly disabled

@@ -13,6 +13,21 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+        // Unborn guard for plugin instance methods (except birth)
+        if method != "birth" {
+            if crate::config::env::check_contracts() {
+                let key = self.object_key_for(box_val);
+                let seen_new = self.contracts_new.contains(&key);
+                let seen_birth =
+                    self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
+                if seen_new && !seen_birth {
+                    return Err(VMError::InvalidInstruction(
+                        "operation on unborn plugin instance (call birth() first)".to_string(),
+                    ));
+                }
+            }
+        }
+
         // Dev-only call trace for PluginInvoke (parity aid)
         let cls = match self.reg_load(box_val).unwrap_or(VMValue::Void) {
             VMValue::BoxRef(b) => b.type_name().to_string(),
@@ -32,6 +47,7 @@ impl MirInterpreter {
         {
             let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
             let host = host.read().unwrap();
+            if method == "birth" { let k = self.object_key_for(box_val); if self.contracts_born.contains(&k) { if let Some(d)=dst { self.regs.insert(d, VMValue::Void);} return Ok(()); } if !self.contracts_in_birth.insert(k) { return Err(VMError::InvalidInstruction("reentrant birth()".into())); } }
             // Auto-birth no-op: if plugin does not provide birth, treat as success(void)
             if method == "birth" {
                 let need_noop = match host.resolve_method(&p.box_type, method) {
@@ -57,18 +73,19 @@ impl MirInterpreter {
             for a in args {
                 argv.push(self.reg_load(*a)?.to_nyash_box());
             }
+            let __birth = method=="birth"; let __key = self.object_key_for(box_val);
             match host.invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv) {
-                Ok(Some(ret)) => {
+                Ok(Some(ret)) => { if __birth { self.contracts_in_birth.remove(&__key); self.lifecycle_contracts_birth(box_val, args.len()); }
                     if let Some(d) = dst {
                         self.regs.insert(d, VMValue::from_nyash_box(ret));
                     }
                 }
-                Ok(None) => {
+                Ok(None) => { if __birth { self.contracts_in_birth.remove(&__key); self.lifecycle_contracts_birth(box_val, args.len()); }
                     if let Some(d) = dst {
                         self.regs.insert(d, VMValue::Void);
                     }
                 }
-                Err(e) => {
+                Err(e) => { if __birth { self.contracts_in_birth.remove(&__key); }
                     return Err(VMError::InvalidInstruction(format!(
                         "PluginInvoke {}.{} failed: {:?}",
                         p.box_type, method, e
@@ -117,6 +134,10 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Result<(), VMError> {
+
+        // Unborn guard for plugin instance methods (except birth)
+        if method != "birth" { self.check_unborn_guard(box_val)?; }
+
         // Early lifecycle: if this is birth(), mark as born before any dispatch.
         // This allows birth() implementation to call back into instance methods
         // without tripping unborn guards in the same step.
@@ -124,23 +145,7 @@ impl MirInterpreter {
             self.lifecycle_contracts_birth(box_val, args.len());
         }
         // Fail-Fast: forbid operations on unborn instances (user InstanceBox) until birth()
-        if method != "birth" {
-            // Only enforce for user InstanceBox (plugin/builtin may not require explicit birth)
-            let is_instance = match self.reg_load(box_val).ok() {
-                Some(VMValue::BoxRef(b)) => b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some(),
-                _ => false,
-            };
-            if is_instance {
-                let key = self.object_key_for(box_val);
-                let seen_new = self.contracts_new.contains(&key);
-                let seen_birth = self.contracts_born.contains(&key);
-                if seen_new && !seen_birth {
-                    return Err(VMError::InvalidInstruction(
-                        "operation on unborn instance (call birth() first)".to_string(),
-                    ));
-                }
-            }
-        }
+        if method != "birth" { self.check_unborn_guard(box_val)?; }
         // Dev-only call trace for BoxCall (parity aid)
         let label = format!("BoxCall:{}", method);
         self.emit_call_trace_label(&label, args.len(), None);
@@ -395,18 +400,20 @@ impl MirInterpreter {
             }
             let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
             let host = host.read().unwrap();
+            if method == "birth" { let k = self.object_key_for(box_val); if self.contracts_born.contains(&k) { if let Some(d)=dst { self.regs.insert(d, VMValue::Void);} return Ok(()); } if !self.contracts_in_birth.insert(k) { return Err(VMError::InvalidInstruction("reentrant birth()".into())); } }
             let mut argv: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
             for a in args {
                 argv.push(self.reg_load(*a)?.to_nyash_box());
             }
+            let __birth = method=="birth"; let __key = self.object_key_for(box_val);
             match host.invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv) {
-                Ok(Some(ret)) => {
+                Ok(Some(ret)) => { if __birth { self.contracts_in_birth.remove(&__key); self.lifecycle_contracts_birth(box_val, args.len()); }
                     if let Some(d) = dst {
                         self.regs.insert(d, VMValue::from_nyash_box(ret));
                     }
                     Ok(())
                 }
-                Ok(None) => {
+                Ok(None) => { if __birth { self.contracts_in_birth.remove(&__key); self.lifecycle_contracts_birth(box_val, args.len()); }
                     if let Some(d) = dst {
                         self.regs.insert(d, VMValue::Void);
                     }

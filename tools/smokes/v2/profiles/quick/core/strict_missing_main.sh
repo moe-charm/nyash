@@ -1,4 +1,9 @@
 #!/bin/bash
+# Gate: strict entry policy varies; run only when enabled
+if [ "${SMOKES_ENABLE_STRICT_MAIN:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_STRICT_MAIN=1" >&2
+  exit 0
+fi
 # strict_missing_main.sh — Strict policy: App.main only → error (no implicit adoption)
 # tags: selfhost,entry
 

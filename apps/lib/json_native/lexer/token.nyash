@@ -45,6 +45,7 @@ box JsonToken {
         me.column = 1
     }
 
+    // full initializer
     birth(token_type, token_value, start_pos, end_pos) {
         me.type = token_type
         me.value = token_value
@@ -53,6 +54,17 @@ box JsonToken {
         me.line = 1
         me.column = start_pos + 1
     }
+
+    // no-arg birth for uniform constructor behavior
+    birth() {
+        me.type = "UNKNOWN"
+        me.value = ""
+        me.start = 0
+        me.end = 0
+        me.line = 1
+        me.column = 1
+    }
+
 
     // Runtime-initializer (constructor-independent)
     setup(token_type, token_value, start_pos, end_pos) {

@@ -40,6 +40,7 @@ pub struct MirInterpreter {
     pub(super) contracts_new: HashSet<u64>,
     pub(super) contracts_new_argv: HashMap<u64, usize>,
     pub(super) contracts_born: HashSet<u64>,
+    pub(super) contracts_in_birth: HashSet<u64>,
     // Instruction fuel (opt-in). When Some(limit), the interpreter aborts once
     // inst_count exceeds the limit. Defaults to None (unlimited) unless
     // NYASH_VM_MAX_INSTRUCTIONS or HAKO_VM_MAX_INSTRUCTIONS is set.
@@ -62,6 +63,7 @@ impl MirInterpreter {
             last_inst: None,
             contracts_new: HashSet::new(),
             contracts_born: HashSet::new(),
+            contracts_in_birth: HashSet::new(),
             contracts_new_argv: HashMap::new(),
             inst_count: 0,
             max_inst: {

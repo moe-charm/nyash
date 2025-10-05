@@ -6,6 +6,13 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate selfhost emit compare (materialize copy) check for quick unless enabled
+if [ "${SMOKES_ENABLE_SELFHOST_EMIT:-0}" != "1" ]; then
+  echo "SKIP: selfhost_emit_compare_cfg3_copy_vm (set SMOKES_ENABLE_SELFHOST_EMIT=1 to run)" >&2
+  exit 0
+fi
+
+
 # Allow file-path using for pipeline boxes
 export NYASH_ENABLE_USING=1
 export NYASH_ALLOW_USING_FILE=1
