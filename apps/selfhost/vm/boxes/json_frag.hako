@@ -4,12 +4,13 @@
 
 using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
 using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box JsonFragBox {
   // 基本ヘルパ
   index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() local m = needle.length() if pos > n { return -1 } if m <= 0 { return pos } local i = pos local limit = n - m loop(i <= limit) { local ok = 1 local j = 0 loop(j < m) { local ch = hay.substring(i+j, i+j+1) local nh = needle.substring(j, j+1) if ch != nh { ok = 0 break } j = j + 1 } if ok == 1 { return i } i = i + 1 } return -1 }
-  read_digits(text, pos) { local out = "" local i = pos loop(i < text.length()) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
-  _str_to_int(s) { local i = 0 local n = s.length() local acc = 0 local neg = 0 if s.substring(0,1) == "-" { neg = 1  i = 1 } loop (i < n) { local ch = s.substring(i, i+1) local d = match ch { "0"=>0,"1"=>1,"2"=>2,"3"=>3,"4"=>4,"5"=>5,"6"=>6,"7"=>7,"8"=>8,"9"=>9, _=>-1 } if d < 0 { break } acc = acc*10 + d i = i + 1 } if neg == 1 { return 0 - acc } return acc }
+  read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
+  _str_to_int(s) { return StringHelpers.to_i64(s) }
 
   // key に続く数値（最初の一致）を返す。見つからなければ null。
   get_int(seg, key) {
