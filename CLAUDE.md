@@ -6,6 +6,51 @@
 
 ## 🔄 **現在の開発状況** (2025-10-05)
 
+### 🎉 **Phase 15.11完了！StringHelpers共通ライブラリ箱化成功** (2025-10-05)
+**セルフホストコード重複削減 - 12ファイル統合で319行純削減**
+
+#### ✅ **StringHelpers共通ライブラリ作成**
+**新規ファイル**:
+- `apps/selfhost/common/string_helpers.hako` (86行)
+  - `int_to_str(n)` - 整数→文字列変換
+  - `to_i64(x)` - 文字列/数値→i64パース（負数対応）
+  - `json_quote(s)` - JSON文字列エスケープ
+  - `is_numeric_str(s)` - 数値文字列判定
+  - `read_digits(text, pos)` - 連続数字読み取り
+- `apps/selfhost/test_string_helpers.hako` - 包括的テストスイート
+
+#### ✅ **12ファイル更新完了**
+**JSON builders** (3ファイル):
+- mir_builder2.hako
+- mir_builder_min.hako
+- mir_builder_min.nyash
+
+**Mini-VM components** (5ファイル):
+- mini_vm_scan.hako
+- mir_vm_min.hako
+- mir_vm_m2.hako
+- op_handlers.hako
+- flow_debugger.hako
+
+**Other tools** (4ファイル):
+- seam_inspector.hako
+- collect_mixed_smoke.hako
+- mini_vm_if_branch.hako
+- mini_vm_lib.hako
+
+#### 📊 **統計**
+- **削除**: 380行（重複ヘルパー関数）
+- **追加**: 61行（using文等）
+- **純削減**: 319行
+- **重複削除**: 7種類のヘルパー関数を統合
+- **コミット**: `6ba6b026`
+
+#### 🐛 **既知の問題**
+- `--dump-mir`フラグがusing文でパースエラー（別issue記録済み）
+- 通常実行は完全動作
+
+---
+
 ### 🎉 **Phase 15.10完了！Legacy Code大掃除成功** (2025-10-05)
 **モジュール分離＋デッドコード削除で400行純削減、保守性向上**
 
