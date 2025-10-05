@@ -33,8 +33,36 @@
 - **Report 3**: モジュール構造問題（legacy.rs 500行超×2）
 - **Report 4**: レガシーコード検出（1,310行削除候補）
 
-#### 🎯 **次のステップ（Phase 15.9）**
-1. VmConfigBox実装（環境変数42ファイル散在→統一）
+---
+
+### 🎉 **Phase 15.9完了！VmConfig集約化成功** (2025-10-05)
+**環境変数42ファイル散在問題を解決 - テスト容易性・保守性・パフォーマンス向上**
+
+#### ✅ **VmConfig実装完了（13ファイル・43箇所置換）**
+```rust
+// 従来（42ファイルに散在）:
+if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") { ... }
+
+// Phase 15.9後（1箇所に集約）:
+if VmConfig::global().general_trace { ... }
+```
+
+**成果**:
+- ✅ **新規ファイル**: vm_config.rs (110行、Singleton実装)
+- ✅ **変更ファイル**: 12ファイル（exec.rs, helpers.rs, handlers/*）
+- ✅ **置換箇所**: 43箇所の環境変数チェック
+- ✅ **管理環境変数**: 27種類（call/phi/birth/trace/behavior/limits系）
+- ✅ **パフォーマンス**: OnceLockで初回のみ読み込み（42回 → 1回）
+
+**テスト**:
+- ✅ cargo check: PASS
+- ✅ json_lint_vm smoke test: PASS (.238s)
+- ✅ 動作変更なし（完全後方互換）
+
+**コミット**: `f1874b3b` - feat(vm): VmConfig集約化
+
+#### 🎯 **次のステップ（Phase 15.10候補）**
+1. BuilderConfigBox実装（MIR Builder用環境変数約15種類）
 2. legacy.rs分割（calls:617行 + boxes:515行）
 3. boxes_* → builtin_boxes/ 移動
 
