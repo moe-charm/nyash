@@ -194,6 +194,7 @@ Acceptance（このラウンド）
   - quick/core/userbox_birth_vm.sh（auto/explicit）: 正常化を確認（PASS 維持）
   - quick/core/using_modules_alias_vm.sh: [modules] alias 解決（既存 PASS）
   - quick/core/using_modules_alias_timer_static_vm.sh: [modules] 別alias（TimerBox）E2E 追加（PASS）
+  - quick/core/using_modules_alias_toml_only_vm.sh: env無しで hako.toml のみ（PASS）
   - LLVM 自己再帰 IR は環境依存のため既定 SKIP（`SMOKES_ENABLE_LLVM_SELFREC=1` で任意）
 
 - 互換性
