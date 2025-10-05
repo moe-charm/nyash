@@ -4,6 +4,7 @@
 //! including Copy-based materialization and fallback strategies.
 
 use super::super::super::*;
+use crate::backend::mir_interpreter::VmConfig;
 
 impl MirInterpreter {
     /// Handle Method callee: resolve receiver and execute method call
@@ -14,18 +15,18 @@ impl MirInterpreter {
         receiver: Option<ValueId>,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
-                if method == &"birth" && crate::config::env::cli_verbose() && !crate::config::env::cli_quiet() {
+                if method == "birth" && crate::config::env::cli_verbose() && !crate::config::env::cli_quiet() {
                     eprintln!("[vm-call] invoking birth() via method call");
                 }
                 if let Some(recv_id) = receiver {
                     // Fail-Fast: forbid operations on unborn InstanceBox until birth()
                     if method != "birth" {
-                        let is_instance = match self.reg_load(*recv_id).ok() {
+                        let is_instance = match self.reg_load(recv_id).ok() {
                             Some(VMValue::BoxRef(b)) => b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some(),
                             _ => false,
                         };
                         if is_instance {
-                            let key = self.object_key_for(*recv_id);
+                            let key = self.object_key_for(recv_id);
                             let seen_new = self.contracts_new.contains(&key);
                             let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
                             if seen_new && !seen_birth {
@@ -36,7 +37,7 @@ impl MirInterpreter {
                         }
                     }
                     // LocalSSA for receiver: prefer materialized id within current block
-                    let recv_id = self.materialize_recv_in_current_block(*recv_id);
+                    let recv_id = self.materialize_recv_in_current_block(recv_id);
                     // Primary: load receiver by id. If undefined, attempt a best-effort
                     // recovery by resolving a local Copy(dst := recv_id) in the same block,
                     // then fall back to arg[0] or error.
@@ -90,7 +91,7 @@ impl MirInterpreter {
                                     }
                                     if let Some(v) = found { v } else {
                                         // Fallbacks (dev-only/tolerant modes)
-                                        let cfg = super::super::VmConfig::global();
+                                        let cfg = VmConfig::global();
                                         let tolerate = cfg.recv_arg_fallback || cfg.tolerate_void;
                                         if tolerate {
                                             if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
@@ -115,7 +116,7 @@ impl MirInterpreter {
                                     }
                                 } else {
                                     // Dev fallback: use args[0] as surrogate when enabled
-                                    let cfg = super::super::VmConfig::global();
+                                    let cfg = VmConfig::global();
                                     let tolerate = cfg.recv_arg_fallback || cfg.tolerate_void;
                                     if tolerate {
                                         if let Some(a0) = args.get(0) { self.reg_load(*a0)? } else { return Err(e); }
@@ -142,7 +143,7 @@ impl MirInterpreter {
                             }
                         }
                     };
-                    let dev_trace = super::super::VmConfig::global().general_trace;
+                    let dev_trace = VmConfig::global().general_trace;
                     // Fast bridge for builtin boxes (Array) and common methods.
                     // Preserve legacy semantics when plugins are absent.
                     if let VMValue::BoxRef(bx) = &recv_val {
@@ -151,7 +152,7 @@ impl MirInterpreter {
                             .downcast_ref::<crate::boxes::array::ArrayBox>()
                         {
                             if let Some(res) =
-                                self.box_array_fastpath(arr, method.as_str(), args)
+                                self.box_array_fastpath(arr, method, args)
                             {
                                 return res;
                             }
@@ -161,18 +162,18 @@ impl MirInterpreter {
                             .downcast_ref::<crate::boxes::map_box::MapBox>()
                         {
                             if let Some(res) =
-                                self.box_map_fastpath(map, method.as_str(), args)
+                                self.box_map_fastpath(map, method, args)
                             {
                                 return res;
                             }
                         }
                     }
                     // Minimal bridge for birth(): delegate to BoxCall handler and return Void
-                    if method == &"birth" {
+                    if method == "birth" {
                         let _ = self.handle_box_call(None, recv_id, method, args)?;
                         return Ok(VMValue::Void);
                     }
-                    let is_kw = method == &"keyword_to_token_type";
+                    let is_kw = method == "keyword_to_token_type";
                     if dev_trace && is_kw {
                         let a0 = args.get(0).and_then(|id| self.reg_load(*id).ok());
                         eprintln!("[vm-trace] mcall {} argv0={:?}", method, a0);

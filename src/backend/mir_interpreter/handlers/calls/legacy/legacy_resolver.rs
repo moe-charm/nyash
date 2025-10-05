@@ -4,6 +4,7 @@
 //! Provides fallback resolution, arity normalization, and FunctionIndex lookup.
 
 use super::super::super::*;
+use crate::backend::mir_interpreter::VmConfig;
 
 impl MirInterpreter {
     pub(crate) fn execute_legacy_call(
@@ -127,7 +128,7 @@ impl MirInterpreter {
             }
         };
 
-        if super::super::VmConfig::global().call_trace {
+        if VmConfig::global().call_trace {
             eprintln!("[vm] legacy-call resolved '{}' -> '{}'", raw, fname);
         }
         if std::env::var("NYASH_WARN_LEGACY_CALL").ok().as_deref() == Some("1") {
@@ -159,7 +160,7 @@ impl MirInterpreter {
         for a in args {
             argv.push(self.reg_load(*a)?);
         }
-        if super::super::VmConfig::global().call_arg_trace {
+        if VmConfig::global().call_arg_trace {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
             for v in argv.iter().take(2) {
@@ -184,7 +185,7 @@ impl MirInterpreter {
                 kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
             );
         }
-        let dev_trace = super::super::VmConfig::global().general_trace;
+        let dev_trace = VmConfig::global().general_trace;
         let is_kw = fname.ends_with("JsonTokenizer.keyword_to_token_type/1");
         let is_sc_ident = fname.ends_with("JsonScanner.read_identifier/0");
         let is_sc_current = fname.ends_with("JsonScanner.current/0");
