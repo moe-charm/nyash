@@ -30,7 +30,7 @@ static box FlowRunner {
     local j = null
     if compat == 1 { j = FlowEntryBox.emit_v1_compat_from_ast(ast_json, prefer_cfg) }
     else { j = FlowEntryBox.emit_v0_from_ast(ast_json, prefer_cfg) }
-    // DEV marker injection (JSON)
+    // DEV marker injection (JSON): CLI (Rust) sets NYASH_DEV_JSON_MARKER=1; Ny injects a lightweight marker
     if j.indexOf("\"__dev__\":1") < 0 {
       if j.substring(0,1) == "{" {
         local payload = j.substring(1, j.length())

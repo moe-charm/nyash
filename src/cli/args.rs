@@ -245,6 +245,8 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
             // Reasonable default aligned with smokes to detect tight loops per BB
             std::env::set_var("NYASH_VM_MAX_BLOCK_EXEC", "200000");
         }
+        // Bridge: JSON dev marker for Ny-side Diagnostics (FlowRunner/HakoruneVmMin)
+        std::env::set_var("NYASH_DEV_JSON_MARKER", "1");
         // Builder-call ALL is still OFF here to keep MIR shape stable.
     }
 
