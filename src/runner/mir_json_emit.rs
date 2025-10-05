@@ -426,9 +426,12 @@ pub fn emit_mir_json_for_harness(
                             dst,
                             box_type,
                             args,
+                            auto_birth,
                         } => {
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                            let mut _o = json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()});
+                            if let Some(name) = auto_birth { _o["auto_birth"] = json!(name); }
+                            insts.push(_o);
                             emitted_defs.insert(dst.as_u32());
                         }
                         I::Branch {
@@ -757,6 +760,7 @@ pub fn emit_mir_json_for_harness_bin(
                             dst,
                             box_type,
                             args,
+                            auto_birth,
                         } => {
                             if use_v1_schema {
                                 let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
@@ -766,7 +770,9 @@ pub fn emit_mir_json_for_harness_bin(
                                 emitted_defs.insert(dst.as_u32());
                             } else {
                                 let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                                insts.push(json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()}));
+                                let mut _o = json!({"op":"newbox","type": box_type, "args": args_a, "dst": dst.as_u32()});
+                            if let Some(name) = auto_birth { _o["auto_birth"] = json!(name); }
+                            insts.push(_o);
                                 emitted_defs.insert(dst.as_u32());
                             }
                         }

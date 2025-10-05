@@ -467,11 +467,7 @@ mod tests {
         let mut b0 = BasicBlock::new(bb0);
         let v0 = ValueId::new(0);
         let v1 = ValueId::new(1);
-        b0.add_instruction(MirInstruction::NewBox {
-            dst: v0,
-            box_type: "IntegerBox".to_string(),
-            args: vec![],
-        });
+        b0.add_instruction(MirInstruction::NewBox { dst: v0, box_type: "IntegerBox".to_string(), args: vec![], auto_birth: None });
         b0.add_instruction(MirInstruction::TypeOp {
             dst: v1,
             op: TypeOpKind::Check,

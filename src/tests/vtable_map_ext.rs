@@ -19,11 +19,8 @@ fn vtable_map_keys_values_delete_clear() {
     let m = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: m,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     // set two entries
     let k1 = f.next_value_id();
     f.get_block_mut(bb)
@@ -148,11 +145,8 @@ fn vtable_map_keys_values_delete_clear() {
     let m2v = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: m2v,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: m2v, box_type: "MapBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let k = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()

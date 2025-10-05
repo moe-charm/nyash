@@ -7,7 +7,7 @@ fn core13_jit_array_push_len_get() {
     let mut f = MirFunction::new(sig, BasicBlockId::new(0));
     let bb = f.entry_block;
     let a = f.next_value_id();
-    f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![] });
+    f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![] , auto_birth: None , auto_birth: None });
     let three = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: three, value: ConstValue::Integer(3) });
     f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: None, box_val: a, method: "push".into(), args: vec![three], method_id: None, effects: EffectMask::PURE });
     let ln = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(ln), box_val: a, method: "len".into(), args: vec![], method_id: None, effects: EffectMask::PURE });
@@ -28,7 +28,7 @@ fn core13_jit_array_set_get() {
     let sig = FunctionSignature { name: "main".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
     let mut f = MirFunction::new(sig, BasicBlockId::new(0));
     let bb = f.entry_block;
-    let a = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![] });
+    let a = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![] , auto_birth: None , auto_birth: None });
     let zero = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: zero, value: ConstValue::Integer(0) });
     let nine = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: nine, value: ConstValue::Integer(9) });
     f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::BoxCall { dst: None, box_val: a, method: "set".into(), args: vec![zero, nine], method_id: None, effects: EffectMask::PURE });

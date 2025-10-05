@@ -141,6 +141,7 @@ pub(super) fn lower_one_function<'ctx>(
                     dst,
                     box_type,
                     args,
+                    auto_birth: _,
                 } => {
                     instructions::lower_newbox(
                         codegen,

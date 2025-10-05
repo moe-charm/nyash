@@ -19,11 +19,8 @@ fn vtable_array_sort_reverse_slice() {
     let arr = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: arr,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let c3 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -124,11 +121,8 @@ fn vtable_array_sort_reverse_slice() {
     let a2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a2,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a2, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let i1 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -212,11 +206,8 @@ fn vtable_array_sort_reverse_slice() {
     let a3 = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a3,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a3, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let sa = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()

@@ -20,7 +20,16 @@ impl MirInterpreter {
                 dst,
                 box_type,
                 args,
-            } => self.handle_new_box(*dst, box_type, args)?,
+                auto_birth,
+            } => {
+                self.handle_new_box(*dst, box_type, args)?;
+                if let Some(name) = auto_birth.as_ref() {
+                    let mut bargs: Vec<super::ValueId> = Vec::with_capacity(1 + args.len());
+                    bargs.push(*dst);
+                    bargs.extend(args.iter().copied());
+                    let _ = self.handle_callee_module_function(name, &bargs);
+                }
+            }
             MirInstruction::PluginInvoke { dst, .. } => {
                 if let Some(res) = self.try_execute_via_callee(inst) {
                     let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }

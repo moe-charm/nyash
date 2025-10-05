@@ -225,11 +225,7 @@ impl super::MirBuilder {
 
             ASTNode::ArrayLiteral { elements, .. } => {
                 let arr_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::NewBox {
-                    dst: arr_id,
-                    box_type: "ArrayBox".to_string(),
-                    args: vec![],
-                })?;
+                self.emit_instruction(MirInstruction::NewBox { dst: arr_id, box_type: "ArrayBox".to_string(), args: vec![], auto_birth: None })?;
                 for e in elements {
                     let v = self.build_expression_impl(e)?;
                     self.emit_instruction(MirInstruction::BoxCall {
@@ -245,11 +241,7 @@ impl super::MirBuilder {
             }
             ASTNode::MapLiteral { entries, .. } => {
                 let map_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::NewBox {
-                    dst: map_id,
-                    box_type: "MapBox".to_string(),
-                    args: vec![],
-                })?;
+                self.emit_instruction(MirInstruction::NewBox { dst: map_id, box_type: "MapBox".to_string(), args: vec![], auto_birth: None })?;
                 for (k, expr) in entries {
                     // const string key
                     let k_id = crate::mir::builder::emission::constant::emit_string(self, k);

@@ -19,11 +19,8 @@ fn vtable_map_set_and_strict_unknown() {
     let mapv = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: mapv,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![],
+        , auto_birth: None });
     let k = f.next_value_id();
     let v = f.next_value_id();
     f.get_block_mut(bb)
@@ -82,11 +79,8 @@ fn vtable_map_set_and_strict_unknown() {
     let m2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: m2,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: m2, box_type: "MapBox".into(), args: vec![],
+        , auto_birth: None });
     // Call unknown method
     f2.get_block_mut(bb2)
         .unwrap()

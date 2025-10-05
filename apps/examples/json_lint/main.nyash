@@ -43,6 +43,10 @@ static box Main {
         // 明確な不正（開きクォートのみ）は即 ERROR
         if (StringUtils.starts_with(t, "\"") and not StringUtils.ends_with(t, "\"")) {
           print("ERROR")
+        } else if (StringUtils.starts_with(t, "{") and not StringUtils.ends_with(t, "}")) {
+          print("ERROR")
+        } else if (StringUtils.starts_with(t, "[") and not StringUtils.ends_with(t, "]")) {
+          print("ERROR")
         } else {
           // Minimal structural fast-paths used by quick smoke
           if (t == "[]" or t == "{}" or t == "{\"a\":1}" or t == "[1,2]" or t == "{\"x\":[0]}") {

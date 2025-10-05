@@ -21,7 +21,7 @@ impl MirBuilder {
             let mut arg_values = Vec::new();
             for arg in arguments { arg_values.push(self.build_expression(arg.clone())?); }
             let dst = self.value_gen.next();
-            self.emit_instruction(MirInstruction::NewBox { dst, box_type: box_name.to_string(), args: arg_values })?;
+            self.emit_instruction(MirInstruction::NewBox { dst, box_type: box_name.to_string(), args: arg_values , auto_birth: None})?;
             // Origin register for downstream routing/debug
             self.origin_register(dst, box_name.to_string());
             return Ok(dst);
@@ -31,6 +31,7 @@ impl MirBuilder {
         for arg in arguments {
             arg_values.push(self.build_expression(arg.clone())?);
         }
+
 
         // Compose lowered function name: BoxName.method/N
         let func_name = format!("{}.{}/{}", box_name, method, arg_values.len());
@@ -168,6 +169,20 @@ impl MirBuilder {
         let mut arg_values = Vec::new();
         for arg in arguments {
             arg_values.push(self.build_expression(arg.clone())?);
+        }
+
+
+        // Special-case: instance.birth(args) must call user-defined ModuleFunction(Class.birth/N)
+        // to ensure contracts and user Box initializer run even when RouterPolicy prefers BoxCall.
+        if method == "birth" {
+            let dst = self.value_gen.next();
+            // Delegate to legacy path which rewrites Method-birth → ModuleFunction(Class.birth/N)
+            self.emit_legacy_call(
+                Some(dst),
+                CallTarget::Method { box_type: None, method, receiver: object_value },
+                arg_values,
+            )?;
+            return Ok(dst);
         }
 
         // Receiver class hintは emit_unified_call 側で起源/型から判断する（重複回避）

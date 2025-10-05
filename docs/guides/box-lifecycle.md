@@ -50,11 +50,15 @@ Testing Notes
   - `tools/smokes/v2/profiles/quick/core/plugin_no_birth_noop_vm.sh` (dev fixture; skips if missing)
 
 ## Auto‑Birth と unborn
-- 既定は auto‑birth（ が自動で  を呼ぶ）。
-- 上級者向けに  を許可。
--  は冪等（多重呼び出しは no‑op）。
-
-## Auto‑Birth と unborn
 - 既定は auto‑birth（`new` が自動で `birth` を呼ぶ）。
 - 上級者向けに `TypeBox.unborn().withXxx(...).birth()` を許可。
 - `birth()` は冪等（多重呼び出しは no‑op）。
+
+実装ポリシー（2025‑10 更新）
+- Builder: `new` の直後に `Box.birth/Arity(me, args...)` を ModuleFunction 形式で生成（関数が Module に存在する場合のみ）。
+- 明示 `obj.birth(args)` は Builder 側で ModuleFunction に正規化（BoxCall では発行しない）。
+- VM: `birth` の ModuleFunction 入口で born をプリマーク（`contracts_birth_pre` を観測可能）。
+- Plugin/Builtin の birth 未実装は no‑op 合成で互換。
+
+注意（dev モード）
+- bring‑up 便宜の挙動差が混じるため、core の値検証系スモークは dev=OFF（`SMOKES_USE_DEV=0`）を既定とする。

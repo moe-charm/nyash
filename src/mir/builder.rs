@@ -15,6 +15,7 @@ use std::collections::HashMap;
 use std::collections::HashSet;
 use std::sync::OnceLock;
 mod calls; // Call system modules (refactored from builder_calls)
+pub mod birth; // Auto-birth policy/emitter (thin boxes)
 mod builder_calls;
 mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
 mod method_call_handlers; // Method call handler separation (Phase 3)
@@ -531,14 +532,22 @@ impl MirBuilder {
                                     )
                                 }
                             }
-                            MirInstruction::Call {
-                                func, args, dst, ..
-                            } => format!("call {}({:?}) -> {:?}", func, args, dst),
-                            MirInstruction::NewBox {
-                                dst,
-                                box_type,
-                                args,
-                            } => format!("new {}({:?}) -> {}", box_type, args, dst),
+                            MirInstruction::Call { func, callee, args, dst, .. } => {
+                                if let Some(c) = callee {
+                                    match c {
+                                        crate::mir::definitions::Callee::ModuleFunction(name) =>
+                                            format!("call MF:{}({:?}) -> {:?}", name, args, dst),
+                                        crate::mir::definitions::Callee::Global(name) =>
+                                            format!("call G:{}({:?}) -> {:?}", name, args, dst),
+                                        crate::mir::definitions::Callee::Method { box_name, method, .. } =>
+                                            format!("call M:{}.{}/{} -> {:?}", box_name, method, args.len(), dst),
+                                        _ => format!("call {:?}({:?}) -> {:?}", c, args, dst),
+                                    }
+                                } else {
+                                    format!("call {}({:?}) -> {:?}", func, args, dst)
+                                }
+                            },
+                            MirInstruction::NewBox { dst, box_type, args, .. } => format!("new {}({:?}) -> {}", box_type, args, dst),
                             MirInstruction::Const { dst, value } =>
                                 format!("const {:?} -> {}", value, dst),
                             MirInstruction::Branch {
@@ -616,10 +625,25 @@ impl MirBuilder {
 
         // Emit NewBox instruction for all Box types
         // VM will handle optimization for basic types internally
+        // Decide auto_birth (env-gated)
+        let auto_birth_enabled = match std::env::var("NYASH_BUILDER_NEWBOX_AUTOBIRTH").ok().as_deref() {
+            Some("0") | Some("false") | Some("off") => false,
+            _ => true,
+        };
+        let mut auto_birth: Option<String> = None;
+        if auto_birth_enabled && class != "StringBox" {
+            let birth_name = crate::mir::resolve::call_name_resolver::CallNameResolverBox::make_birth_name(&class, arg_values.len());
+            if let Some(ref module) = self.current_module {
+                if module.functions.contains_key(&birth_name) {
+                    auto_birth = Some(birth_name);
+                }
+            }
+        }
         self.emit_instruction(MirInstruction::NewBox {
             dst,
             box_type: class.clone(),
             args: arg_values.clone(),
+            auto_birth,
         })?;
         // Dev trace: log NewBox emission when enabled
         if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
@@ -641,40 +665,20 @@ impl MirBuilder {
         // birth 呼び出し（Builder 正規化）
         // 優先: 低下済みグローバル関数 `<Class>.birth/Arity`（Arity は me を含まない）
         // 代替: 既存互換として BoxCall("birth")（プラグイン/ビルトインの初期化に対応）
-        if class != "StringBox" {
-            let arity = arg_values.len();
-            let lowered = crate::mir::builder::calls::function_lowering::generate_method_function_name(
-                &class,
-                "birth",
-                arity,
-            );
-            // Prefer lowered global function for user-defined boxes even if not yet materialized.
-            // Rationale: static factories may be lowered before instance boxes; the function will
-            // be added later in the same module, so we can safely emit the call now.
-            // Only use lowered Global when the function actually exists in the current module.
-            // Avoid assuming user boxes have a static `Class.birth/Arity` symbol; prefer instance method.
-            // Always emit birth() as a method call; VM will route to ModuleFunction when available
-            // Prefer ModuleFunction form so VM can pre-mark born before executing the body
-            let name_val = crate::mir::builder::name_const::make_name_const_result(self, &lowered)?;
+        if auto_birth_enabled == false {
+            if let Some(call_insn) = crate::mir::builder::birth::emitter::BirthCallEmitterBox::try_build(
+            self,
+            &class,
+            dst,
+            arg_values.clone(),
+        ) {
             if std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
-                eprintln!(
-                    "[BUILDER] auto-birth via ModuleFunction {} for v{}",
-                    lowered,
-                    dst
-                );
+                eprintln!("[BUILDER] auto-birth via ModuleFunction for v{}", dst);
             }
-            // birth(me, args...)
-            let mut call_args: Vec<ValueId> = Vec::with_capacity(1 + arity);
-            call_args.push(dst);
-            call_args.extend(arg_values.into_iter());
-            self.emit_instruction(MirInstruction::Call {
-                dst: None,
-                func: name_val,
-                callee: Some(crate::mir::definitions::Callee::ModuleFunction(lowered)),
-                args: call_args,
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+            self.emit_instruction(call_insn)?;
+            }
         }
+        
 
         Ok(dst)
     }

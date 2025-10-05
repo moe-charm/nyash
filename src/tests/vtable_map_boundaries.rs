@@ -9,7 +9,7 @@ fn vtable_map_boundary_cases() {
     let mut f1 = MirFunction::new(sig1, BasicBlockId::new(0));
     let bb1 = f1.entry_block;
     let m = f1.next_value_id();
-    f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![] });
+    f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![] , auto_birth: None , auto_birth: None });
     // set("", 1)
     let k_empty = f1.next_value_id(); f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::Const { dst: k_empty, value: ConstValue::String("".into()) });
     let v1 = f1.next_value_id(); f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::Const { dst: v1, value: ConstValue::Integer(1) });
@@ -34,7 +34,7 @@ fn vtable_map_boundary_cases() {
     let mut f2 = MirFunction::new(sig2, BasicBlockId::new(0));
     let bb2 = f2.entry_block;
     let m2 = f2.next_value_id();
-    f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::NewBox { dst: m2, box_type: "MapBox".into(), args: vec![] });
+    f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::NewBox { dst: m2, box_type: "MapBox".into(), args: vec![] , auto_birth: None , auto_birth: None });
     // set("k", 1); set("k", 2)
     let k = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::Const { dst: k, value: ConstValue::String("k".into()) });
     let one = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::Const { dst: one, value: ConstValue::Integer(1) });

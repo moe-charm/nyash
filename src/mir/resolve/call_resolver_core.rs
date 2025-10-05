@@ -50,3 +50,27 @@ pub fn resolve_module_function(
     None
 }
 
+/// Normalize a call name to fully qualified "Class.method/Arity".
+/// - If already fully qualified, return as-is.
+/// - If "Class.method" without arity, append "/Arity".
+/// - Otherwise (only method name), return Err.
+pub fn normalize(raw_name: &str, argc: usize) -> Result<String, String> {
+    if is_fully_qualified(raw_name) { return Ok(raw_name.to_string()); }
+    if raw_name.contains('.') { return Ok(format!("{}/{}", raw_name, argc)); }
+    Err(format!("CallNameResolver: class name required: {}", raw_name))
+}
+
+/// Parse a fully qualified name into (Class, method, arity).
+pub fn parse(full: &str) -> Result<(String, String, usize), String> {
+    if let Some((class_method, arity_str)) = full.rsplit_once('/') {
+        if let Some((class, method)) = class_method.split_once('.') {
+            if let Ok(arity) = arity_str.parse::<usize>() {
+                return Ok((class.to_string(), method.to_string(), arity));
+            }
+        }
+    }
+    Err(format!("Invalid call name: {}", full))
+}
+
+/// Return true if name is fully qualified (contains both '.' and '/').
+pub fn is_fully_qualified(name: &str) -> bool { name.contains('.') && name.contains('/') }

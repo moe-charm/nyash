@@ -44,6 +44,24 @@ impl MirInterpreter {
             let _ = self.handle_box_call(None, dst, "birth", args);
         }
 
+        // C++-style constructor mode (interim): optionally invoke ModuleFunction
+        // "Class.birth/N" immediately after NewBox, using fully qualified name.
+        // Guarded by NYASH_VM_AUTO_BIRTH_CPP=1. This simulates the future MIR
+        // NewBox{auto_birth} semantics without changing the MIR yet.
+        if std::env::var("NYASH_VM_AUTO_BIRTH_CPP").ok().as_deref() == Some("1") {
+            // Compose fully-qualified birth name and invoke via ModuleFunction path.
+            // me + args
+            let mut bargs: Vec<super::super::ValueId> = Vec::with_capacity(1 + args.len());
+            bargs.push(dst);
+            bargs.extend(args.iter().copied());
+            let name = format!("{}.birth/{}", box_type, args.len());
+            if self.functions.contains_key(&name) {
+                let _ = self.handle_callee_module_function(&name, &bargs);
+            } else {
+                // No such birth function; treat as no-op
+            }
+        }
+
         // Note: productionでは birth の自動呼び出しは行わない。
         // 正しい設計は Builder が NewBox 後に明示的に birth 呼び出しを生成すること。
         Ok(())

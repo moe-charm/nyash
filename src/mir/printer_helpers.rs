@@ -242,18 +242,28 @@ pub fn format_instruction(
             format!("{} phi {}", format_dst(dst, types), inputs_str)
         }
 
-        MirInstruction::NewBox { dst, box_type, args } => {
+        MirInstruction::NewBox { dst, box_type, args, auto_birth } => {
             let args_str = args
                 .iter()
                 .map(|v| format!("{}", v))
                 .collect::<Vec<_>>()
                 .join(", ");
-            format!(
-                "{} new {}({})",
-                format_dst(dst, types),
-                box_type,
-                args_str
-            )
+            if let Some(name) = auto_birth {
+                format!(
+                    "{} new {}({}) .auto_birth({})",
+                    format_dst(dst, types),
+                    box_type,
+                    args_str,
+                    name
+                )
+            } else {
+                format!(
+                    "{} new {}({})",
+                    format_dst(dst, types),
+                    box_type,
+                    args_str
+                )
+            }
         }
 
         // Legacy -> Unified print: TypeCheck as TypeOp(check)

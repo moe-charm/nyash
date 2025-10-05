@@ -4,7 +4,7 @@
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
-export SMOKES_USE_DEV=1
+export SMOKES_USE_DEV=0
 require_env || exit 2
 preflight_plugins || exit 2
 

@@ -19,11 +19,8 @@ fn vtable_array_and_string_len_get_set() {
     let arr = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: arr,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let idx0 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -99,11 +96,8 @@ fn vtable_array_and_string_len_get_set() {
     let sb = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb,
-            box_type: "StringBox".into(),
-            args: vec![s],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s],
+        , auto_birth: None , auto_birth: None });
     let ln = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()

@@ -76,6 +76,9 @@ pub(super) fn try_handle_object_fields(
                     }
                     // Prefer Ng fields
                     if let Some(nv) = inst.get_field_ng(&fname) {
+                        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+                            eprintln!("[vm-getfield] class={} name={} nv={:?}", inst.class_name, fname, nv);
+                        }
                         if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") && inst.class_name == "JsonToken" {
                             eprintln!("[vm-trace] JsonToken.getField name={} nv={:?}", fname, nv);
                         }
@@ -120,6 +123,14 @@ pub(super) fn try_handle_object_fields(
                 v => v.to_string(),
             };
             let valv = interp.reg_load(args[1])?;
+            if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
+                if let VMValue::BoxRef(bref) = interp.reg_load(box_val)? {
+                    if let Some(inst) = bref.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                        let vkind = match &valv { VMValue::Integer(_) => "Integer", VMValue::Float(_) => "Float", VMValue::Bool(_) => "Bool", VMValue::String(_) => "String", VMValue::BoxRef(b) => b.type_name(), VMValue::Void => "Void", VMValue::Future(_) => "Future"};
+                        eprintln!("[vm-setfield] class={} name={} kind={}", inst.class_name, fname, vkind);
+                    }
+                }
+            }
             if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
                 if let VMValue::BoxRef(bref) = interp.reg_load(box_val)? {
                     if let Some(inst) = bref.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {

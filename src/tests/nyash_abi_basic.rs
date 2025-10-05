@@ -50,11 +50,8 @@ mod tests {
         let mapv = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: mapv,
-                box_type: "MapBox".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![],
+            , auto_birth: None });
 
         let k = f.next_value_id();
         f.get_block_mut(bb)

@@ -22,11 +22,8 @@ mod tests {
         let arr = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: arr,
-                box_type: "ArrayBox".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+            , auto_birth: None });
         let idx0 = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
@@ -67,11 +64,8 @@ mod tests {
         let m = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::NewBox {
-                dst: m,
-                box_type: "MapBox".into(),
-                args: vec![],
-            });
+            .add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![],
+            , auto_birth: None });
         let k = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()

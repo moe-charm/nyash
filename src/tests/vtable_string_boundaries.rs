@@ -9,7 +9,7 @@ fn vtable_string_boundary_cases() {
     let mut f1 = MirFunction::new(sig1, BasicBlockId::new(0));
     let bb1 = f1.entry_block;
     let s = f1.next_value_id(); f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::Const { dst: s, value: ConstValue::String("".into()) });
-    let sb = f1.next_value_id(); f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s] });
+    let sb = f1.next_value_id(); f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s] , auto_birth: None , auto_birth: None });
     let ln = f1.next_value_id(); f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(ln), box_val: sb, method: "len".into(), args: vec![], method_id: Some(300), effects: EffectMask::PURE });
     f1.get_block_mut(bb1).unwrap().add_instruction(MirInstruction::Return { value: Some(ln) });
     let mut m1 = MirModule::new("str_empty_len".into()); m1.add_function(f1);
@@ -22,7 +22,7 @@ fn vtable_string_boundary_cases() {
     let mut f2 = MirFunction::new(sig2, BasicBlockId::new(0));
     let bb2 = f2.entry_block;
     let s2 = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::Const { dst: s2, value: ConstValue::String("abc".into()) });
-    let sb2 = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::NewBox { dst: sb2, box_type: "StringBox".into(), args: vec![s2] });
+    let sb2 = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::NewBox { dst: sb2, box_type: "StringBox".into(), args: vec![s2] , auto_birth: None , auto_birth: None });
     let z = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::Const { dst: z, value: ConstValue::String("z".into()) });
     let idx = f2.next_value_id(); f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(idx), box_val: sb2, method: "indexOf".into(), args: vec![z], method_id: Some(303), effects: EffectMask::PURE });
     f2.get_block_mut(bb2).unwrap().add_instruction(MirInstruction::Return { value: Some(idx) });
@@ -36,7 +36,7 @@ fn vtable_string_boundary_cases() {
     let mut f3 = MirFunction::new(sig3, BasicBlockId::new(0));
     let bb3 = f3.entry_block;
     let s3 = f3.next_value_id(); f3.get_block_mut(bb3).unwrap().add_instruction(MirInstruction::Const { dst: s3, value: ConstValue::String("a😊b".into()) });
-    let sb3 = f3.next_value_id(); f3.get_block_mut(bb3).unwrap().add_instruction(MirInstruction::NewBox { dst: sb3, box_type: "StringBox".into(), args: vec![s3] });
+    let sb3 = f3.next_value_id(); f3.get_block_mut(bb3).unwrap().add_instruction(MirInstruction::NewBox { dst: sb3, box_type: "StringBox".into(), args: vec![s3] , auto_birth: None , auto_birth: None });
     let sub = f3.next_value_id(); f3.get_block_mut(bb3).unwrap().add_instruction(MirInstruction::BoxCall { dst: Some(sub), box_val: sb3, method: "substring".into(), args: vec![
         { let v = f3.next_value_id(); f3.get_block_mut(bb3).unwrap().add_instruction(MirInstruction::Const { dst: v, value: ConstValue::Integer(1) }); v },
         { let v = f3.next_value_id(); f3.get_block_mut(bb3).unwrap().add_instruction(MirInstruction::Const { dst: v, value: ConstValue::Integer(2) }); v },

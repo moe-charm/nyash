@@ -26,11 +26,8 @@ fn vtable_string_substring_concat() {
     let sb = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb,
-            box_type: "StringBox".into(),
-            args: vec![s],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s],
+        , auto_birth: None , auto_birth: None });
     let i1 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -84,11 +81,8 @@ fn vtable_string_substring_concat() {
     let ab = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: ab,
-            box_type: "StringBox".into(),
-            args: vec![a],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: ab, box_type: "StringBox".into(), args: vec![a],
+        , auto_birth: None , auto_birth: None });
     let c = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()

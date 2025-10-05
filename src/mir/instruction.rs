@@ -142,6 +142,10 @@ pub enum MirInstruction {
         dst: ValueId,
         box_type: String,
         args: Vec<ValueId>,
+        /// Optional fully-qualified birth name (e.g., "Class.birth/N").
+        /// When present, backends may invoke birth immediately after allocation
+        /// (C++-style constructor semantics).
+        auto_birth: Option<String>,
     },
 
     /// Check Box type

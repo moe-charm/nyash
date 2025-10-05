@@ -17,9 +17,10 @@ box JsonTokenizer {
         // Avoid static module wrapper to ensure constructor args are preserved on VM path
         // (create_scanner(...) lost the argument under VM fallback in some cases)
         me.scanner = new JsonScanner("")
-        me.scanner.reset_text(input_text)
-        me.tokens = new ArrayBox()
-        me.errors = new ArrayBox()
+        // Ensure scanner is born before use
+        me.scanner.birth(input_text)
+        me.tokens = new ArrayBox(); me.tokens.birth()
+        me.errors = new ArrayBox(); me.errors.birth()
     }
     
     // ===== メイン解析メソッド =====
@@ -27,8 +28,8 @@ box JsonTokenizer {
     // 全文字列をトークン化
     tokenize() {
         // 初期化
-        me.tokens = new ArrayBox()
-        me.errors = new ArrayBox()
+        me.tokens = new ArrayBox(); me.tokens.birth()
+        me.errors = new ArrayBox(); me.errors.birth()
         
         // メインループ
         loop(not me.scanner.is_eof()) {
@@ -67,8 +68,10 @@ box JsonTokenizer {
     set_input(input_text) {
         if me.scanner == null {
             me.scanner = new JsonScanner("")
+            me.scanner.birth(input_text)
+        } else {
+            me.scanner.reset_text(input_text)
         }
-        me.scanner.reset_text(input_text)
     }
     
     // 次のトークンを1つ取得

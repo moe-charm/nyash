@@ -38,7 +38,7 @@ impl MirInterpreter {
         if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
-            for (_i, a) in args.iter().enumerate().take(2) {
+            for (_i, a) in args.iter().enumerate().take(3) {
                 match self.reg_load(*a) {
                     Ok(v) => {
                         kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
@@ -59,13 +59,15 @@ impl MirInterpreter {
                 }
             }
             eprintln!(
-                "[vm-args] callee=Global:{} argc={} a0={:?} a1={:?} kind0={} kind1={}",
+                "[vm-args] callee=Global:{} argc={} a0={:?} a1={:?} a2={:?} kind0={} kind1={} kind2={}",
                 func_name,
                 args.len(),
                 preview.get(0),
                 preview.get(1),
+                preview.get(2),
                 kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
-                kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
+                kinds.get(1).map(|s| s.as_str()).unwrap_or("-"),
+                kinds.get(2).map(|s| s.as_str()).unwrap_or("-")
             );
         }
         self.execute_global_function(func_name, args)
@@ -203,7 +205,14 @@ impl MirInterpreter {
         &mut self,
         name: &str,
         args: &[ValueId],
-    ) -> Result<VMValue, VMError> {
+        ) -> Result<VMValue, VMError> {
+        if !crate::mir::resolve::call_resolver_core::is_fully_qualified(name) {
+            return Err(VMError::InvalidInstruction(format!(
+                "VM received incomplete module function name: {}",
+                name
+            )));
+        }
+
         // Lifecycle: if this ModuleFunction is a birth function ("Class.birth/N"),
         // mark the receiver (first arg) as born before executing the body.
         if let Some((_cls, method_arity)) = name.split_once('.') {
@@ -230,6 +239,17 @@ impl MirInterpreter {
                             let seen_new = self.contracts_new.contains(&key);
                             let seen_birth = self.contracts_born.contains(&key);
                             if seen_new && !seen_birth {
+                                if crate::config::env::check_contracts() && std::env::var("NYASH_VM_BIRTH_TRACE").ok().as_deref() == Some("1") {
+                                    if let Some(first) = args.get(0) {
+                                        let cls = match self.reg_load(*first).ok() {
+                                            Some(crate::backend::mir_interpreter::VMValue::BoxRef(b)) => {
+                                                if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() { inst.class_name.clone() } else { b.type_name().to_string() }
+                                            }
+                                            _ => "<unknown>".to_string(),
+                                        };
+                                        eprintln!("{{\"kind\":\"contracts_unborn_fail\",\"class\":\"{}\",\"method\":\"{}\"}}", cls, method);
+                                    }
+                                }
                                 return Err(VMError::InvalidInstruction(
                                     "operation on unborn instance (call birth() first)".to_string(),
                                 ));
@@ -244,7 +264,7 @@ impl MirInterpreter {
         if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
             let mut kinds: Vec<String> = Vec::new();
             let mut preview: Vec<String> = Vec::new();
-            for (_i, a) in args.iter().enumerate().take(2) {
+            for (_i, a) in args.iter().enumerate().take(3) {
                 match self.reg_load(*a) {
                     Ok(v) => {
                         kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
@@ -265,13 +285,15 @@ impl MirInterpreter {
                 }
             }
             eprintln!(
-                "[vm-args] callee=ModuleFn:{} argc={} a0={:?} a1={:?} kind0={} kind1={}",
+                "[vm-args] callee=ModuleFn:{} argc={} a0={:?} a1={:?} a2={:?} kind0={} kind1={} kind2={}",
                 name,
                 args.len(),
                 preview.get(0),
                 preview.get(1),
+                preview.get(2),
                 kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
-                kinds.get(1).map(|s| s.as_str()).unwrap_or("-")
+                kinds.get(1).map(|s| s.as_str()).unwrap_or("-"),
+                kinds.get(2).map(|s| s.as_str()).unwrap_or("-")
             );
         }
 

@@ -70,6 +70,7 @@ static box JsonNode {
     // null値を作成
     create_null() {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "null"
         node.value = null
         return node
@@ -78,6 +79,7 @@ static box JsonNode {
     // bool値を作成
     create_bool(b) {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "bool"
         node.value = b
         return node
@@ -86,6 +88,7 @@ static box JsonNode {
     // int値を作成
     create_int(i) {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "int"
         node.value = i
         return node
@@ -94,6 +97,7 @@ static box JsonNode {
     // float値を作成（値は文字列表現を保持）
     create_float(fstr) {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "float"
         node.value = fstr  // Phase 1: 文字列として保持（演算不要、stringify重視）
         return node
@@ -102,6 +106,7 @@ static box JsonNode {
     // string値を作成
     create_string(s) {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "string"
         node.value = s
         return node
@@ -110,16 +115,22 @@ static box JsonNode {
     // array値を作成
     create_array() {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "array"
-        node.value = new ArrayBox()
+        local arr = new ArrayBox()
+        arr.birth()
+        node.value = arr
         return node
     }
     
     // object値を作成
     create_object() {
         local node = new JsonNodeInstance()
+        node.birth()
         node.kind = "object"
-        node.value = new MapBox()
+        local m = new MapBox()
+        m.birth()
+        node.value = m
         return node
     }
     

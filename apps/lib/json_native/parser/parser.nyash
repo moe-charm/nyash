@@ -15,8 +15,7 @@ static box JsonParserModule {
         // Equivalent to `new JsonParser()` when Builder inserts auto-birth, but
         // keeping this explicit makes factory semantics clear and future-proof.
         local p = new JsonParser()
-        // Auto-birth policy ensures parser is born; explicit call not required.
-        // p.birth()  // idempotent; kept commented to avoid legacy resolution issues
+        p.birth()  // idempotent under contracts, explicit when cross-file auto-birth may skip
         return p
     }
 }
@@ -33,9 +32,9 @@ box JsonParser {
     errors: ArrayBox       // 構文エラー配列
     
     birth() {
-        me.tokens = new ArrayBox()
+        me.tokens = new ArrayBox(); me.tokens.birth()
         me.position = 0
-        me.errors = new ArrayBox()
+        me.errors = new ArrayBox(); me.errors.birth()
     }
     
     // ===== メイン解析メソッド =====
@@ -44,10 +43,11 @@ box JsonParser {
     parse(json_text) {
         // 初期化
         me.position = 0
-        me.errors = new ArrayBox()
+        me.errors = new ArrayBox(); me.errors.birth()
         
         // Step 1: 字句解析
         local tokenizer = new JsonTokenizer(json_text)
+        tokenizer.birth()  // ensure born before any operations
         // Guard: ensure scanner has the correct input even if constructor args are dropped
         tokenizer.set_input(json_text)
         me.tokens = tokenizer.tokenize()
@@ -332,7 +332,7 @@ box JsonParser {
     // エラーを追加
     add_error(message) {
         local token = me.current_token()
-        local error_info = new MapBox()
+        local error_info = new MapBox(); error_info.birth()
         error_info.set("message", message)
         
         if token != null {
@@ -441,6 +441,7 @@ static box JsonParserUtils {
     // 文字列を直接パース（エラー処理込み）
     parse_json(json_text) {
         local parser = new JsonParser()
+        parser.birth()  // defensive; idempotent
         local result = parser.parse(json_text)
         
         if parser.has_errors() {

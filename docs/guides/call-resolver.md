@@ -30,3 +30,9 @@ Next
 - Optional trace (dev‑only): `NYASH_VM_RESOLVE_TRACE=1` to emit one‑line JSON
   showing `raw → pick` for difficult cases.
 - Consider sharing the resolver in Builder for ModuleFunction lowering.
+
+Update (2025‑10)
+- Added `normalize(raw, argc) -> String` to enforce fully‑qualified names (`Class.method/Arity`).
+- Added `parse(full) -> (Class, method, arity)` and `is_fully_qualified(name)`.
+- Builder: Global routes now emit `Callee::ModuleFunction(normalize(name, argc))` when present in the module.
+- VM: `handle_callee_module_function` requires fully‑qualified names (Fail‑Fast otherwise).

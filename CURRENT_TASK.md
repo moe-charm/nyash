@@ -1,4 +1,3 @@
-
 ## 2025-10-05 — CallResolver 箱導入と VM 経路の名寄せ修正（quick 緑化）
 
 - 追加（箱化）
@@ -139,6 +138,29 @@ Acceptance（このラウンド）
 - PHI 統一: phi_core::if_phi で else 側のみ代入の変数も single-pred bind 可能に（Bridge フラグONスモーク緑化）
 - op_handlers.hako: JsonFrag 依存を排除し、自前の軽量スキャナで const を処理（strict プロファイルでも using 依存を減らす）
 - Mini‑VM (mir_vm_min): ret の即値/レジスタ曖昧性に軽いヒューリスティクスを導入（既存 selfhost_m2/m3 の期待に一致）
+
+## 2025-10-05 — Auto‑birth/Resolver 仕上げ（Phase 1/2）
+
+- Phase 1（完了）: Builder の Global 経路を `CallNameResolverBox::normalize` に統一（短名根絶）
+  - src/mir/builder/builder_calls/emit.rs: Global 分岐で `name.contains('.')` のみ ModuleFunction 候補とし、`normalize(name, argc)` に通した上で `module.functions.contains_key` を確認。完全名のみ許可。
+  - 目的: `birth` 系や `Box.method/N` 解決の一貫化と、レガシー `func` 文字列経路の撲滅（事故の温床）
+
+- Phase 2（観測の統一）: birth_auto は公開JSONに出さない（devトレースのみ）
+  - VM 側の契約系ログ（`contracts_newbox`/`contracts_birth`/`contracts_birth_pre`）に寄せて観測。test_runner は `^{\"kind\":\"contracts_` を既にフィルタ済み。
+  - Builder での auto‑birth 生成に新たな公開フィールドは付与せず（JSON スキーマ変更なし）。必要時は `NYASH_BUILDER_DEBUG=1` で観測。
+
+- Phase 3（構想/既定OFF）: birth 引数スキーマ宣言（軽量）→ arity/type の早期検証
+  - Box定義側に最小メタ（arity/型ヒント）を宣言 → Builder が `new → birth(args…)` 生成時に早期検証（Fail‑Fast/警告は既定OFF）。
+  - 影響: 既定OFFのため互換不変。導入時は `docs/guides/box-lifecycle.md` に仕様追記、`NYASH_BIRTH_SCHEMA_STRICT=1` で段階導入予定。
+
+- スモーク計画（最小）
+  - quick/core/userbox_birth_vm.sh（auto/explicit）: 正常化を確認（PASS 維持）
+  - quick/core/using_modules_alias_vm.sh: [modules] alias 解決（既存 PASS）
+  - LLVM 自己再帰 IR は環境依存のため既定 SKIP（`SMOKES_ENABLE_LLVM_SELFREC=1` で任意）
+
+- 互換性
+  - 公開仕様は不変。Builder/VM の名前解決経路のみ構造的に厳格化。`print` 等の Global 経路は影響なし。
+
 
 
 ### Update — 2025-10-04 (FlowRunner 安定化 / PHI 統一 既定ON / binop 対応)
@@ -933,3 +955,65 @@ Rationale: keep a minimal, box-first entry point for future rune integration wit
   - `Main.main/1` remains the only path that can define an intentional numeric exit code.
 
 - Bench hygiene: Use `NYASH_NYRT_SILENT_RESULT=1` during timing to suppress the runtime’s final `Result: <exit>` line. Our bench tools already set this where applicable.
+
+## 2025-10-05 — Auto‑birth一本化と完全名解決（smokes 緑化）
+
+- 仕様と構造（箱化・統一）
+  - Auto‑birth の SSOT を Builder→VM に一本化。
+    - Builder: `new Box(args)` の直後に、ModuleFunction 形式 `Box.birth/Arity(me, args…)` を生成（関数が Module に存在する場合のみ）。
+    - 明示 `obj.birth(args)` も Builder 側で ModuleFunction に正規化（BoxCall 経路に残さない）。
+  - 名前解決は共有コアに集約。
+    - `src/mir/resolve/call_resolver_core.rs` に `normalize/parse/is_fully_qualified` を追加。
+    - Builder 側の Global 経路は `normalize()` を通した完全名のみを `Callee::ModuleFunction` で emit。
+    - VM 側の ModuleFunction は完全名のみ受理（不完全名は Fail‑Fast）。
+
+- レガシー経路の隔離
+  - `builder_calls/emit.rs` の module.functions 命中時の legacy Call 生成（callee=None）を撤廃し、常に ModuleFunction を emit。
+  - VM の tail-based fallback は維持しつつ、入口は完全名に寄せる（将来的に VM 側は exact のみへ簡素化予定）。
+
+- 観測とデバッグ
+  - Builder: `NYASH_BUILDER_DEBUG=1` で New と auto‑birth の1行ログ、Call は callee 優先表示（`MF:Box.method/N`）。
+  - VM: `NYASH_VM_BIRTH_TRACE=1` で birth プリマーク JSON 一行。`NYASH_VM_CALL_ARG_TRACE=1` で ModuleFunction 呼びの a0/a1/a2 種別を表示。
+
+- スモーク緑化（quick）
+  - `tools/smokes/v2/profiles/quick/core/userbox_birth_vm.sh`
+  - `tools/smokes/v2/profiles/quick/core/userbox_birth_explicit_vm.sh`
+  - 安定化のため、当該2本は `SMOKES_USE_DEV=0`（devモードOFF）に変更。`test_runner.sh` の既定 `NYASH_VM_TOLERATE_VOID` も 0 へ。
+  - `test_runner.sh` のバイナリ解決順を `nyash → hako → hakorune` に変更し、雑音をフィルタ（`[deprecate]`）。
+
+- Docs 反映
+  - `docs/guides/box-lifecycle.md`: auto‑birth 既定・unborn 経路・冪等性・ModuleFunction 経路固定を追記。
+  - `docs/guides/call-resolver.md`: 完全名前提の normalize/parse API と適用箇所（Builder/VM）を追記。
+
+- 既知メモ
+  - dev モード（--dev）では bring‑up 便宜の挙動差が混じるため、core の値検証系は dev=OFF を既定に維持（今回の2本も OFF）。
+  - Plugin/Array/Map/String の birth は no‑op 合成で互換（VM 側でプリマークのみ）。
+
+
+## 2025-10-05 — C++方式 auto‑birth（設計→実装計画）
+
+- ねらい: NewBox に birth 呼び（コンストラクタ）を内包し、C++ 同様に「new が即 birth」を実現する。New→Call(birth) の二重命令を解消し、未born誤爆を構造的に減らす。
+
+- 仕様（設計）
+  - MIR 拡張: `NewBox { dst, box_type, args, auto_birth: Option<String> }`
+    - `auto_birth = Some("Class.birth/N")`（完全名）であれば、VM は NewBox 実行直後に birth を自動実行。
+    - `None` の場合は未出生（unborn）。ユーザーは明示 `birth()` を呼ぶ。
+  - Builder: CallNameResolverBox で完全名を生成し、モジュールに存在する場合のみ `auto_birth=Some` を付与。`StringBox` 等は `None`。
+  - VM: NewBox 実行時に contracts の born を先出し→`auto_birth` があれば ModuleFunction 経由で birth 実行。失敗は NewBox としてエラー伝播（コンストラクタ例外準拠）。
+  - 互換: 旧MIR（New + Call(birth)）は当面受理。
+
+- 段階導入（実装計画）
+  1) VM: `NewBox.auto_birth` を受理（旧MIRも継続）。
+  2) Builder: フラグ `NYASH_BUILDER_NEWBOX_AUTOBIRTH=1` で `auto_birth` を付与（既定OFF）。
+  3) JSON v0 ブリッジ: `NewBox(auto_birth)` 降下を追加（既定OFF）。
+  4) 既定ONに切替→レガシーの New→Call(birth) 特別扱いを段階整理。
+
+- テスト方針（最小）
+  - auto: `new Life("A")` → name()=="A"。
+  - unborn: `Life.unborn().name()` は Fail‑Fast、`Life.unborn().birth("A").name()` は OK。
+  - plugin no‑birth: `new SomePlugin()` が安定（no‑op birth + born 記録）。
+
+- メモ（観測）
+  - dev では `[contracts_*]` と `[call]` ラインで観測。テストランナーは既にフィルタ済み。
+
+- Implemented: JSON v0 bridge honors NYASH_JSON_NEWBOX_AUTOBIRTH=1 to enable Builder auto_birth during bridge; Builder default auto_birth now ON (override with NYASH_BUILDER_NEWBOX_AUTOBIRTH=0). Added quick smoke: tools/smokes/v2/profiles/quick/core/plugin_no_birth_nop_vm.sh (SKIP unless NYASH_PLUGIN_NO_BIRTH_BOX set).

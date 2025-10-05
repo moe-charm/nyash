@@ -109,61 +109,61 @@ static box TokenFactory {
     
     // リテラル値トークン
     create_null(start, end) {
-        return new JsonToken().setup("NULL", "null", start, end)
+        return new JsonToken().birth("NULL", "null", start, end)
     }
     
     create_true(start, end) {
-        return new JsonToken().setup("TRUE", "true", start, end)
+        return new JsonToken().birth("TRUE", "true", start, end)
     }
     
     create_false(start, end) {
-        return new JsonToken().setup("FALSE", "false", start, end)
+        return new JsonToken().birth("FALSE", "false", start, end)
     }
     
     create_number(value, start, end) {
-        return new JsonToken().setup("NUMBER", value, start, end)
+        return new JsonToken().birth("NUMBER", value, start, end)
     }
     
     create_string(value, start, end) {
-        return new JsonToken().setup("STRING", value, start, end)
+        return new JsonToken().birth("STRING", value, start, end)
     }
     
     // 構造文字トークン
     create_lbrace(start) {
-        return new JsonToken().setup("LBRACE", "{", start, start + 1)
+        return new JsonToken().birth("LBRACE", "{", start, start + 1)
     }
     
     create_rbrace(start) {
-        return new JsonToken().setup("RBRACE", "}", start, start + 1)
+        return new JsonToken().birth("RBRACE", "}", start, start + 1)
     }
     
     create_lbracket(start) {
-        return new JsonToken().setup("LBRACKET", "[", start, start + 1)
+        return new JsonToken().birth("LBRACKET", "[", start, start + 1)
     }
     
     create_rbracket(start) {
-        return new JsonToken().setup("RBRACKET", "]", start, start + 1)
+        return new JsonToken().birth("RBRACKET", "]", start, start + 1)
     }
     
     create_comma(start) {
-        return new JsonToken().setup("COMMA", ",", start, start + 1)
+        return new JsonToken().birth("COMMA", ",", start, start + 1)
     }
     
     create_colon(start) {
-        return new JsonToken().setup("COLON", ":", start, start + 1)
+        return new JsonToken().birth("COLON", ":", start, start + 1)
     }
     
     // 制御トークン
     create_eof(pos) {
-        return new JsonToken().setup("EOF", "", pos, pos)
+        return new JsonToken().birth("EOF", "", pos, pos)
     }
     
     create_error(message, start, end) {
-        return new JsonToken().setup("ERROR", message, start, end)
+        return new JsonToken().birth("ERROR", message, start, end)
     }
     
     create_whitespace(value, start, end) {
-        return new JsonToken().setup("WHITESPACE", value, start, end)
+        return new JsonToken().birth("WHITESPACE", value, start, end)
     }
     
     // ===== 文字からトークンタイプを判定 =====

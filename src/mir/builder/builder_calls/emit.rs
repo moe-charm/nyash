@@ -115,14 +115,14 @@ impl MirBuilder {
                         return Ok(());
                     }
                     // 1) Direct module function fallback: call by name if present
+                    // ONLY accept fully qualified names (Box.method/Arity) to avoid ambiguity
                     if let Some(ref module) = self.current_module {
-                        if module.functions.contains_key(name) {
+                        // Only proceed if name is already fully qualified (contains '.' and '/')
+                        if name.contains('.') && name.contains('/') && module.functions.contains_key(name) {
                             let dstv = dst.unwrap_or_else(|| self.value_gen.next());
-                            let name_const = match crate::mir::builder::name_const::make_name_const_result(self, name) {
-                                Ok(v) => v,
-                                Err(e) => return Err(e),
-                            };
-                            self.emit_instruction(MirInstruction::Call { dst: Some(dstv), func: name_const, callee: None, args: args.clone(), effects: EffectMask::IO })?;
+                            let mut args2 = args.clone();
+                            crate::mir::builder::ssa::local::finalize_args(self, &mut args2);
+                            self.emit_instruction(MirInstruction::Call { dst: Some(dstv), func: ValueId::new(0), callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name.to_string())), args: args2, effects: EffectMask::IO })?;
                             self.annotate_call_result_from_func_name(dstv, name);
                             return Ok(());
                         }
@@ -334,6 +334,7 @@ impl MirBuilder {
                     dst,
                     box_type,
                     args,
+                    auto_birth: None,
                 })
             },
             CallTarget::Extern(name) => {
@@ -359,20 +360,28 @@ impl MirBuilder {
             },
             CallTarget::Global(name) => {
                 // Prefer direct ModuleFunction when available in current module (avoids legacy string callee)
+                // Use CallNameResolverBox::normalize to ensure fully qualified form before lookup.
                 if let Some(ref module) = self.current_module {
-                    if module.functions.contains_key(&name) {
-                        let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
-                        let mut args = args;
-                        crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                        self.emit_instruction(MirInstruction::Call {
-                            dst: Some(actual_dst),
-                            func: ValueId::new(0),
-                            callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name.clone())),
-                            args,
-                            effects: EffectMask::IO,
-                        })?;
-                        self.annotate_call_result_from_func_name(actual_dst, &name);
-                        return Ok(());
+                    // Only attempt module function lookup when the name looks like Class.method or fully-qualified.
+                    if name.contains('.') {
+                        let want = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, args.len()) {
+                            Ok(full) => full,
+                            Err(_) => name.clone(), // keep raw if it cannot be normalized (unlikely when contains '.')
+                        };
+                        if module.functions.contains_key(&want) {
+                            let actual_dst = if let Some(d) = dst { d } else { self.value_gen.next() };
+                            let mut args = args;
+                            crate::mir::builder::ssa::local::finalize_args(self, &mut args);
+                            self.emit_instruction(MirInstruction::Call {
+                                dst: Some(actual_dst),
+                                func: ValueId::new(0),
+                                callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(want.clone())),
+                                args,
+                                effects: EffectMask::IO,
+                            })?;
+                            self.annotate_call_result_from_func_name(actual_dst, &want);
+                            return Ok(());
+                        }
                     }
                 }
                 // First-class: JSON.stringify(any) → arg0.toJSON() (arity 1→0)

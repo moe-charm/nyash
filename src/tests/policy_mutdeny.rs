@@ -21,11 +21,8 @@ fn jit_readonly_array_push_denied() {
     let a = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let three = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -92,11 +89,8 @@ fn jit_readonly_map_set_denied() {
     let mbox = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: mbox,
-            box_type: "MapBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: mbox, box_type: "MapBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let key = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()

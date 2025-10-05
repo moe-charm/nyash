@@ -7,7 +7,7 @@ fn core13_jit_map_set_get_size() {
     let mut f = MirFunction::new(sig, BasicBlockId::new(0));
     let bb = f.entry_block;
     let m = f.next_value_id();
-    f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![] });
+    f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::NewBox { dst: m, box_type: "MapBox".into(), args: vec![] , auto_birth: None , auto_birth: None });
     // set("k", 11)
     let k = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: k, value: ConstValue::String("k".into()) });
     let v = f.next_value_id(); f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: v, value: ConstValue::Integer(11) });

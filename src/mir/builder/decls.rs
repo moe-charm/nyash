@@ -42,11 +42,7 @@ impl super::MirBuilder {
                     let pid = self.value_gen.next();
                     if p == "args" {
                         // new ArrayBox() with no args
-                        self.emit_instruction(MirInstruction::NewBox {
-                            dst: pid,
-                            box_type: "ArrayBox".to_string(),
-                            args: vec![],
-                        })?;
+                        self.emit_instruction(MirInstruction::NewBox { dst: pid, box_type: "ArrayBox".to_string(), args: vec![], auto_birth: None })?;
                     } else {
                         let v = crate::mir::builder::emission::constant::emit_void(self);
                         // ensure pid holds the emitted const id

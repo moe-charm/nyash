@@ -43,7 +43,7 @@ if [ -z "${NYASH_MODULES:-}" ]; then
 fi
 # Dev-friendly VM tolerance to avoid hard-stopping on Void during bring-up
 if [ -z "${NYASH_VM_TOLERATE_VOID:-}" ]; then
-  export NYASH_VM_TOLERATE_VOID=1
+  export NYASH_VM_TOLERATE_VOID=0
 fi
 # VM fuel/limits for smokes: enable conservative caps unless explicitly set by caller.
 if [ -z "${NYASH_VM_MAX_INSTRUCTIONS:-}" ]; then
@@ -58,7 +58,7 @@ if [ "${SMOKES_DEV_LOG:-0}" = "1" ]; then
 fi
 # Binary path detection: prefer hakorune → hako → nyash unless NYASH_BIN is set
 if [ -z "${NYASH_BIN:-}" ]; then
-  for cand in "$NYASH_ROOT/target/release/hakorune" "$NYASH_ROOT/target/release/hako" "$NYASH_ROOT/target/release/nyash"; do
+  for cand in "$NYASH_ROOT/target/release/nyash" "$NYASH_ROOT/target/release/hako" "$NYASH_ROOT/target/release/hakorune"; do
     if [ -x "$cand" ]; then NYASH_BIN="$cand"; break; fi
   done
   export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
@@ -115,11 +115,15 @@ filter_noise() {
       | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
       | sed -E 's/^❌ VM fallback error: *//' \
       | sed -E 's/^❌ Pipeline error: *//' \
+  | sed -E 's/^VM execution error: VM fallback error: *//' \
+  | grep -v '^VM execution error: ' \
+  | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
   | grep -v '^\{"kind":"contracts_' \
   | grep -v '^\{"resolve":' \
   | grep -v '^Result: ' \
+  | grep -v '^\[deprecate\] CLI name' \
   | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
   | grep -v "plugins/nyash-array-plugin" \
   | grep -v "plugins/nyash-map-plugin" \

@@ -224,7 +224,7 @@ impl super::MirBuilder {
                 let insns = &bb.instructions;
                 let mut idx = 0usize;
                 while idx < insns.len() {
-                    if let MirInstruction::NewBox { dst, box_type, args } = &insns[idx] {
+                    if let MirInstruction::NewBox { dst, box_type, args, .. } = &insns[idx] {
                         // Skip StringBox (literal optimization path)
                         if box_type != "StringBox" {
                             let expect_tail = format!("{}.birth/{}", box_type, args.len());

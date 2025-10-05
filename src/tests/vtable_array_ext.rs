@@ -19,11 +19,8 @@ fn vtable_array_push_get_len_pop_clear() {
     let arr = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: arr,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let sval = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -80,11 +77,8 @@ fn vtable_array_push_get_len_pop_clear() {
     let a2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a2,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a2, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let y = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -136,11 +130,8 @@ fn vtable_array_push_get_len_pop_clear() {
     let a3 = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: a3,
-            box_type: "ArrayBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: a3, box_type: "ArrayBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let z = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()

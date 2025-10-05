@@ -18,11 +18,8 @@ fn vtable_console_log_clear_smoke() {
     let con = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: con,
-            box_type: "ConsoleBox".into(),
-            args: vec![],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: con, box_type: "ConsoleBox".into(), args: vec![],
+        , auto_birth: None , auto_birth: None });
     let msg = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()

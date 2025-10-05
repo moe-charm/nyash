@@ -26,11 +26,8 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     let sb = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb,
-            box_type: "StringBox".into(),
-            args: vec![s],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s],
+        , auto_birth: None , auto_birth: None });
     let b = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -77,11 +74,8 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     let sb2 = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb2,
-            box_type: "StringBox".into(),
-            args: vec![s2],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb2, box_type: "StringBox".into(), args: vec![s2],
+        , auto_birth: None , auto_birth: None });
     let dash = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -135,11 +129,8 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     let sb3 = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::NewBox {
-            dst: sb3,
-            box_type: "StringBox".into(),
-            args: vec![s3],
-        });
+        .add_instruction(MirInstruction::NewBox { dst: sb3, box_type: "StringBox".into(), args: vec![s3],
+        , auto_birth: None , auto_birth: None });
     let t = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()

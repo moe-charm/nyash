@@ -145,6 +145,34 @@ impl super::MirBuilder {
         // (unified -> boxcall -> unified -> ...).
         force_legacy: bool,
     ) -> Result<(), String> {
+        if method == "birth" {
+            let recv_local = self.local_recv(box_val);
+            let mut argv: Vec<super::ValueId> = args.into_iter().map(|a| self.local_arg(a)).collect();
+            let (cls, _c) = crate::mir::builder::infer::receiver::infer_receiver(
+                None,
+                &method,
+                recv_local,
+                |vid| self.origin_get(vid).map(|s| s.to_string()),
+                &self.value_types,
+            );
+            let arity = argv.len();
+            let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(&cls, &method, arity);
+            let name_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
+            let mut call_args: Vec<super::ValueId> = Vec::with_capacity(1 + arity);
+            call_args.push(recv_local);
+            call_args.extend(argv.drain(..));
+            let out = dst.unwrap_or_else(|| self.value_gen.next());
+            self.emit_instruction(super::MirInstruction::Call {
+                dst: Some(out),
+                func: name_val,
+                callee: Some(crate::mir::definitions::Callee::ModuleFunction(fname.clone())),
+                args: call_args,
+                effects,
+            })?;
+            self.annotate_call_result_from_func_name(out, &fname);
+            return Ok(());
+        }
+
         // Ensure receiver has a definition in the current block to avoid undefined use across
         // block boundaries (LoopForm/header, if-joins, etc.).
         // LocalSSA: ensure receiver has an in-block definition (kind=0 = recv)
