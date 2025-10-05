@@ -943,3 +943,51 @@ Unified Call（開発既定ON）
   - CLI→DiagnosticsBox の DEV 橋渡し（起動時に dev マーカー注入）
   - hakorune_* の代表を1本だけ追加（compare→branch→phi entry の複合）
 
+
+【2025-10-05 追記 2】DEV ブリッジと箱化の仕上げ（FlowRunner/CLI／スキャン統一／プラグイン検証）
+
+- DEV ブリッジ（CLI 主導）
+  - CLI（Rust）で `NYASH_DEV_JSON_MARKER=1` の時、MIR JSON 出力に `{"__dev__":1}` を付与（`src/runner/mir_json_emit.rs`）。
+  - FlowRunner は注入を既定OFFにし、将来用の薄い導線 `_maybe_inject_dev_marker(j, ast_json)` を追加。
+    - AST JSON 側に `{"__cli_dev__":1}` が含まれる時のみ `{"__dev__":1}` に正規化（既定は未使用）。
+  - HakoruneVmMin は `{"__dev__":1}` を検出して DiagnosticsBox.debug を有効化（既定静音）。
+
+- ProgramStateBox の read を debug/trace でも統一
+  - `bb/prev_bb` は ProgramStateBox から取得（write/read の一貫化）。
+  - 情報系ログは DiagnosticsBox.debug（DEVのみ）に寄せ、[ERROR]のみ従来出力。
+
+- CfgNavigatorBox 委譲の仕上げ（ホットパス外から）
+  - InstructionScannerBox に加え、MiniVmScan（selfhost/common）側でも `index_of_from` を委譲。
+  - JSON スキャン系の重複ロジックを段階的に削減（性能影響は最小）。
+
+- プラグイン birth 仕様の固定（E2E）
+  - 既存: `plugin_birth_e2e_vm.sh`（明示 birth の冪等）、`plugin_no_birth_nop_vm.sh`（no‑birth は no‑op）。
+  - 追加: `plugin_autobirth_e2e_vm.sh`（new→method の auto‑birth）。
+  - 追加（opt‑in）: `userbox_birth_idempotent_vm.sh`（二回目 birth が no‑op、パーサ制約のためゲート付与）。
+
+—
+
+この先（セルフホスティングに向けた大まかな計画）
+
+1) コンパイラ最小ルートの完成（Ny→JSON v0→MIR(JSON v0)）
+   - Stage‑1: AST→JSON v0 の出力見直し（UsingResolverBox の導入、prelude 安全）。
+   - Stage‑2: MIR(JSON v0) の最小命令（const/binop/compare/branch/jump/ret/phi）を安定排出。
+   - 代表ケース（const→ret／compare→ret／compare→branch→phi）で Hakorune‑VM 実行＝緑。
+
+2) VM/箱の仕上げ（薄い境界を維持）
+   - ProgramStateBox: read 残差の完全移行（log/trace/観測点まで get 化）。
+   - CfgNavigatorBox: 依存箇所の委譲をもう一段だけ拡大（重複ロジックの排除）。
+   - RetResolverBox/DiagnosticsBox: 失敗系と観測の一元化（Fail‑Fast＋DEV静音）。
+
+3) DEV ブリッジの一本化
+   - 既定は CLI→MIR JSON emit で `{"__dev__":1}` を付与。
+   - FlowRunner の `_maybe_inject_dev_marker` は将来の AST 側からの橋渡し用（既定OFFのまま）。
+
+4) スモーク/テスト（増やしすぎず代表性重視）
+   - hakorune_*: m2/m3 の代表を1本ずつ（既存 eq_true / branch / jump / phi + 複合1本）。
+   - プラグイン系: auto/明示/no‑birth の3本で固定。userbox 冪等は opt‑in で補助。
+
+5) ドキュメントとエコシステム
+   - Phase‑15.7 の更新点を継続追記（箱の責務・導線・ゲート説明）。
+   - CI は quick 緑維持、重い/環境依存は opt‑in（ゲート付き運用）。
+
