@@ -268,13 +268,7 @@ static box Main {
               ast_json = "{\"version\":0,\"kind\":\"Program\",\"body\":[{\"type\":\"Return\",\"expr\":{\"type\":\"Int\",\"value\":0}}]}"
             }
           }
-          local trace = 0
-          if emit_trace == 1 { trace = 1 }
-          if trace == 1 {
-            // dev-only: dump stage-1 json used for lowering
-            print("[trace] ast_json=" + ast_json)
-          }
-          local out = PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace)
+          local out = PipelineV2.lower_stage1_to_mir_with_usings(ast_json, prefer_cfg, me._usings, null)
           if out != null { print(out) } else { print("{}") }
           return 0
         } else {
@@ -325,9 +319,12 @@ static box Main {
       json = ast_json
     } else {
       if emit_mir == 1 {
-        // Phase A: emit_mir path is disabled in minimal compiler
-        // Future phases will re-enable via MirEmitterBox/PipelineV2.
-        json = "{\"version\":0,\"kind\":\"Program\",\"body\":[]}" // placeholder
+        if pipeline_v2 == 1 {
+          local out2 = PipelineV2.lower_stage1_to_mir_with_usings(ast_json, prefer_cfg, me._usings, null)
+          json = out2
+        } else {
+          json = "{\"version\":0,\"kind\":\"Program\",\"body\":[]}" // placeholder
+        }
       } else {
         // Emit Stage‑1 JSON with metadata (requires parser-produced AST)
         json = EmitterBox.emit_program(ast_json, me._usings)
