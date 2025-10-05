@@ -899,3 +899,47 @@ Unified Call（開発既定ON）
 - P0: json_query_vm → 期待出力一致、寛容フラグ不要。
 - P1: loops（break/continue/loop_statement）→ PHI 搬送安定。
 - P2: Mini‑VM（M2/M3）→ 代表4件 PASS、coarse 撤去・単一パス維持。
+
+
+【2025-10-05 更新】Hakorune‑VM と箱の適用／WASM toolchain ゲート
+
+- Hakorune‑VM の配置と alias（段階移行）
+  - 追加: `apps/hakorune/vm/boxes/hakorune_vm_min.hako`
+  - `hako.toml` に `[modules] hakorune.vm.mir_min` を追加（旧 `selfhost.vm.mir_min` は1リリース alias 維持）
+  - FlowRunner/dev サンプルの using を hakorune alias へ寄せ（印字は `run`、実行は `run_min`）
+
+- 箱（Box‑First）の導入と責務分解（薄い境界）
+  - InstrDecoderBox: JSON v0 のオブジェクト走査（`InstructionScannerBox.next` 委譲）
+  - ProgramStateBox: `regs/bb/prev_bb/steps` の状態管理（write 全面／read は段階導入中）
+  - CfgNavigatorBox: ブロック head/tail と `index_of_from` を集約し、VM/Scanner から委譲
+  - RetResolverBox: `ret` 値決定を一本化（last_cmp 優先→regs→Fail‑Fast）
+  - PhiWiringBox: Φ 適用の薄いラッパ（既存 apply に委譲）
+  - DiagnosticsBox: 既定静音、`{"__dev__":1}` マーカーで `debug()` を有効化（将来 CLI→Box 橋渡し）
+
+- 実装ポイント（HakoruneVmMin）
+  - `run_min` を標準入口に統一（`run` は印字付きアダプタ）
+  - `ProgramStateBox` を regs/steps/bb/prev に導入（write 全面、read を段階拡大）
+  - `CfgNavigatorBox` の head/tail、`index_of_from` へ呼び替え（重複排除）
+  - `RetResolverBox.resolve` へ ret 判定を委譲（診断は Diagnostics に一元化）
+
+- スモーク（代表最小・増やしすぎ回避）
+  - 追加: `hakorune_vm_m2_eq_true_vm.sh`
+  - 追加: `hakorune_vm_m3_branch_true_vm.sh` / `..._branch_false_vm.sh` / `..._jump_vm.sh` / `..._jump_chain_vm.sh` / `..._phi_diamond_vm.sh`
+  - Builder auto‑birth のクロスモジュール確認: `builder_autobirth_cross_module_{vm,alias}_vm.sh`（常時ONに寄せ）
+
+- using/[modules] の扱い
+  - `hakorune.vm.mir_min` への alias 寄せを段階実施（selfhost.* は1リリース alias 維持）
+  - E2E は代表1本に限定して確認（増やしすぎ回避）
+
+- WASM: llvmlite 制限の回避（オプトイン・フォールバック有）
+  - `NYASH_LLVM_WASM_TOOLCHAIN=1` で `llc + wasm-ld` 経路を使用（既定OFF）
+  - 追加エクスポートは `NYASH_WASM_EXPORTS="Main.main,main"`（既定で `ny_main`）
+  - 失敗時は llvmlite `emit_object` にフォールバック（既定挙動は不変）
+  - ドキュメント追記: `docs/guides/execution-modes-guide.md` にツールチェイン手順を追加
+
+- 次の小粒 TODO（48h）
+  - ProgramStateBox の read を残差2箇所で get 化（bb/prev_bb 一貫性）
+  - CfgNavigatorBox への `index_of_from` 呼びを段階置換（VM 側の重複を削減）
+  - CLI→DiagnosticsBox の DEV 橋渡し（起動時に dev マーカー注入）
+  - hakorune_* の代表を1本だけ追加（compare→branch→phi entry の複合）
+
