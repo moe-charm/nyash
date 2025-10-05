@@ -7,7 +7,7 @@
 ## 🔄 **現在の開発状況** (2025-10-05)
 
 ### 🎉 **Phase 15.11完了！StringHelpers共通ライブラリ箱化成功** (2025-10-05)
-**セルフホストコード重複削減 - 12ファイル統合で319行純削減**
+**セルフホストコード重複削減 - 14ファイル統合で335行純削減**
 
 #### ✅ **StringHelpers共通ライブラリ作成**
 **新規ファイル**:
@@ -19,11 +19,15 @@
   - `read_digits(text, pos)` - 連続数字読み取り
 - `apps/selfhost/test_string_helpers.hako` - 包括的テストスイート
 
-#### ✅ **12ファイル更新完了**
+#### ✅ **14ファイル更新完了**
 **JSON builders** (3ファイル):
 - mir_builder2.hako
 - mir_builder_min.hako
 - mir_builder_min.nyash
+
+**JSON utilities** (2ファイル) - **Phase 15.11.1追加**:
+- json_scan.hako (_str_to_int委譲)
+- json_frag.hako (read_digits + _str_to_int委譲)
 
 **Mini-VM components** (5ファイル):
 - mini_vm_scan.hako
@@ -39,11 +43,15 @@
 - mini_vm_lib.hako
 
 #### 📊 **統計**
-- **削除**: 380行（重複ヘルパー関数）
-- **追加**: 61行（using文等）
-- **純削減**: 319行
+- **Phase 15.11**: 319行削減 (380削除 - 61追加)
+- **Phase 15.11.1**: 15行削減 (22削除 - 7追加) - ChatGPT協力
+- **合計削減**: 335行
 - **重複削除**: 7種類のヘルパー関数を統合
-- **コミット**: `6ba6b026`
+- **コミット**: `6ba6b026` (本体), `d07f3af3` (追加統合), `0de80fa6` (docs)
+
+#### 🎯 **次のステップ（Phase 15.12候補）**
+- `index_of_from` → CfgNavigatorBox統合 (60-100行削減見込み)
+- 詳細: `docs/development/proposals/ideas/improvements/phase-15-12-index-of-from-consolidation.md`
 
 #### 🐛 **既知の問題**
 - `--dump-mir`フラグがusing文でパースエラー（別issue記録済み）
