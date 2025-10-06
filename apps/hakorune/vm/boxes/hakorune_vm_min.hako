@@ -88,14 +88,14 @@ static box HakoruneVmMin {
       local inst_seg = mjson.substring(start, endp)
       DiagnosticsBox.debug("[minivm] seglen=" + me._int_to_str(inst_seg.length()))
       // Eager minimal resolver for compare→ret when ret targets compare dst
-      if me.index_of_from(inst_seg, ""op":"compare"", 0) >= 0 {
+      if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 {
         local cdst0 = JsonFragBox.get_int(inst_seg, "dst")
         local rid0 = JsonFragBox.get_int(inst_seg, "value")
         if cdst0 != null { if rid0 != null { if rid0 == cdst0 {
           // parse first two typed const values
           local vals0 = new ArrayBox()
           local search0 = inst_seg
-          local key0 = ""value":{"type":"i64","value":"
+          local key0 = "\"value\":{\"type\":\"i64\",\"value\":\""
           local pos0 = 0
           loop(true) {
             local k0 = me.index_of_from(search0, key0, pos0)
@@ -120,10 +120,10 @@ static box HakoruneVmMin {
             local ii1 = 0
             loop(ii1 < vals0.get(1).length()) { rv0 = rv0 * 10 + ("0123456789".indexOf(vals0.get(1).substring(ii1,ii1+1)))  ii1 = ii1 + 1 }
             // compare op
-            local cmpk0 = ""cmp":""
+            local cmpk0 = "\"cmp\":\""
             local pk0 = me.index_of_from(inst_seg, cmpk0, 0)
             local cmp0 = "Eq"
-            if pk0 >= 0 { local i = pk0 + cmpk0.length()  local j = me.index_of_from(inst_seg, """, i)  if j > i { cmp0 = inst_seg.substring(i, j) } }
+            if pk0 >= 0 { local i = pk0 + cmpk0.length()  local j = me.index_of_from(inst_seg, "\"", i)  if j > i { cmp0 = inst_seg.substring(i, j) } }
             if cmp0 == "Eq" { if lv0 == rv0 { return 1 } else { return 0 } }
             if cmp0 == "Ne" { if lv0 != rv0 { return 1 } else { return 0 } }
             if cmp0 == "Gt" { if lv0 > rv0 { return 1 } else { return 0 } }

@@ -62,7 +62,7 @@ selfhost.json.utils.array_parse = "apps/lib/json_native/utils/array_parse_box.ha
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 
 # Temporary alias keys (migration aid; keys kept stable)
-selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
+# selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
 selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
 selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
 selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"

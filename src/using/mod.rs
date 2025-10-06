@@ -17,3 +17,4 @@ pub mod spec;
 pub mod policy;
 pub mod errors;
 pub mod simple_registry;
+pub mod namespace_box;

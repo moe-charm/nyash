@@ -190,10 +190,13 @@ impl MirInterpreter {
             let op_s = match op { BinaryOp::Add=>"Add", BinaryOp::Sub=>"Sub", BinaryOp::Mul=>"Mul", BinaryOp::Div=>"Div", BinaryOp::Mod=>"Mod", BinaryOp::BitAnd=>"BitAnd", BinaryOp::BitOr=>"BitOr", BinaryOp::BitXor=>"BitXor", BinaryOp::And=>"And", BinaryOp::Or=>"Or", BinaryOp::Shl=>"Shl", BinaryOp::Shr=>"Shr" };
             eprintln!("{{\"ev\":\"binop\",\"op\":\"{}\",\"a_k\":\"{}\",\"b_k\":\"{}\",\"a_n\":\"{}\",\"b_n\":\"{}\"}}", op_s, ak, bk, an, bn);
         }
+        let nyk_stub = std::env::var("NYASH_ENABLE_NYKERNEL_STUB").ok().as_deref() == Some("1");
         Ok(match (op, a, b) {
             // Dev-only safety valves for Add (guarded by tolerance or --dev):
             // - Treat Void as 0 for numeric +
             // - Treat Void as empty string for string +
+            (Mul, VMValue::Void, VMValue::Integer(_)) | (Mul, VMValue::Integer(_), VMValue::Void) if tolerate || nyk_stub => Integer(0),
+            (Mul, VMValue::Void, VMValue::Float(_)) | (Mul, VMValue::Float(_), VMValue::Void) if tolerate || nyk_stub => Float(0.0),
             (Add, VMValue::Void, Integer(y)) | (Add, Integer(y), VMValue::Void) if tolerate => Integer(y),
             (Add, VMValue::Void, Float(y)) | (Add, Float(y), VMValue::Void) if tolerate => Float(y),
             (Add, String(s), VMValue::Void) | (Add, VMValue::Void, String(s)) if tolerate => String(s),

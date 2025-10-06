@@ -171,6 +171,31 @@ impl MirBuilder {
             arg_values.push(self.build_expression(arg.clone())?);
         }
 
+        // Core containers fast-path: when the receiver originated from a
+        // builtin core box (ArrayBox/MapBox/StringBox), prefer emitting a
+        // BoxCall so VM can dispatch to the builtin handlers. This avoids
+        // accidental shadowing by user-defined boxes with the same name in
+        // prelude files (e.g., hakorune std ArrayBox), while keeping behavior
+        // consistent for user boxes (their NewBox origin will not be core).
+        if method != "birth" {
+            if let Some(cls) = self.origin_get(object_value) {
+                if cls == "ArrayBox" || cls == "MapBox" || cls == "StringBox" {
+                    let dst = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::BoxCall {
+                        dst: Some(dst),
+                        box_val: object_value,
+                        method: method.clone(),
+                        method_id: None,
+                        args: arg_values,
+                        effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                    })?;
+                    // Conservatively annotate result type based on method name
+                    self.annotate_call_result_from_func_name(dst, &method);
+                    return Ok(dst);
+                }
+            }
+        }
+
 
         // Special-case: instance.birth(args) must call user-defined ModuleFunction(Class.birth/N)
         // to ensure contracts and user Box initializer run even when RouterPolicy prefers BoxCall.

@@ -26,6 +26,7 @@ mod extern_adapter;
 mod operator_guard;
 mod vm_config;
 pub mod resolve;
+pub mod contracts;
 
 pub use vm_config::VmConfig;
 

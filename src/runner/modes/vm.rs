@@ -226,16 +226,46 @@ impl NyashRunner {
             }
             let rt = builder.build();
             self.collect_box_declarations(&ast, &rt);
-            // Register UserDefinedBoxFactory backed by the same declarations (when available)
-            #[cfg(feature = "interpreter-legacy")]
+            // Register a lightweight user-defined Box factory backed by the
+            // collected declarations so that `new <UserBox>()` prefers the
+            // InstanceBox over builtin boxes when names collide (e.g., ArrayBox).
+            // This mirrors vm_pipeline.rs behavior and is intentionally always-on.
             {
-                use nyash_rust::box_factory::SharedState;
-                use nyash_rust::box_factory::user_defined::UserDefinedBoxFactory;
-                let mut shared = SharedState::new();
-                shared.box_declarations = rt.box_declarations.clone();
-                let udf = Arc::new(UserDefinedBoxFactory::new(shared));
+                struct InlineUserBoxFactory {
+                    decls: std::sync::Arc<std::sync::RwLock<std::collections::HashMap<String, nyash_rust::core::model::BoxDeclaration>>>,
+                }
+                impl nyash_rust::box_factory::BoxFactory for InlineUserBoxFactory {
+                    fn create_box(
+                        &self,
+                        name: &str,
+                        args: &[Box<dyn nyash_rust::box_trait::NyashBox>],
+                    ) -> std::result::Result<Box<dyn nyash_rust::box_trait::NyashBox>, nyash_rust::box_factory::RuntimeError> {
+                        let opt = { self.decls.read().unwrap().get(name).cloned() };
+                        let decl = match opt {
+                            Some(d) => d,
+                            None => {
+                                return Err(nyash_rust::box_factory::RuntimeError::InvalidOperation {
+                                    message: format!("Unknown Box type: {}", name),
+                                })
+                            }
+                        };
+                        let mut inst = nyash_rust::instance_v2::InstanceBox::from_declaration(
+                            decl.name.clone(),
+                            decl.fields.clone(),
+                            decl.methods.clone(),
+                        );
+                        let _ = inst.init(args);
+                        Ok(Box::new(inst))
+                    }
+                    fn box_types(&self) -> Vec<&str> { vec![] }
+                    fn is_available(&self) -> bool { true }
+                    fn factory_type(&self) -> nyash_rust::box_factory::FactoryType { nyash_rust::box_factory::FactoryType::User }
+                }
+                let udf = InlineUserBoxFactory { decls: rt.box_declarations.clone() };
                 if let Ok(mut reg) = rt.box_registry.lock() {
-                    reg.register(udf);
+                    // Prefer user-defined over builtin when present to avoid builtin shadowing.
+                    reg.set_policy(nyash_rust::box_factory::FactoryPolicy::StrictPluginFirst);
+                    reg.register(std::sync::Arc::new(udf));
                 }
             }
             rt

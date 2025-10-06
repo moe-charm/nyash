@@ -1,6 +1,7 @@
 //! lifecycle.rs — birth/fini observation & contracts helpers (extracted)
 
 use super::super::*;
+use crate::backend::mir_interpreter::contracts::policy as contracts_policy;
 
 impl MirInterpreter {
     /// Observe NewBox lifecycle events in a single place (contracts + traces).
@@ -9,14 +10,7 @@ impl MirInterpreter {
         let key = self.object_key_for(dst);
         self.contracts_new.insert(key);
         self.contracts_new_argv.insert(key, argc);
-        if crate::config::env::check_contracts() {
-            eprintln!(
-                r#"{{"kind":"contracts_newbox","class":"{}","argc":{},"key":{}}}"#,
-                box_type,
-                argc,
-                key
-            );
-        }
+        contracts_policy::emit_new(box_type, argc, key.try_into().unwrap_or(i64::MAX));
 
         // Handle-trace (dev-only, no behavior change)
         if std::env::var("NYASH_HANDLE_TRACE").ok().as_deref() == Some("1") {
@@ -56,16 +50,6 @@ impl MirInterpreter {
         let seen_new = self.contracts_new.contains(&key);
         let duplicate = !self.contracts_born.insert(key);
         let argc_new = self.contracts_new_argv.get(&key).cloned().unwrap_or(0);
-        if crate::config::env::check_contracts() {
-            eprintln!(
-                r#"{{"kind":"contracts_birth","seen_new":{},"duplicate":{},"argc_new":{},"argc_birth":{},"argc_match":{},"key":{}}}"#,
-                if seen_new { 1 } else { 0 },
-                if duplicate { 1 } else { 0 },
-                argc_new,
-                argc_birth,
-                if argc_new == argc_birth { 1 } else { 0 },
-                key
-            );
-        }
+        contracts_policy::emit_birth(seen_new, duplicate, argc_new, argc_birth, key.try_into().unwrap_or(i64::MAX));
     }
 }

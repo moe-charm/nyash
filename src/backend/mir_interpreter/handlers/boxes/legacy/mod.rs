@@ -78,16 +78,14 @@ impl MirInterpreter {
                 }
             }
         }
-        // Birth no-op for builtin (non-plugin) boxes: if receiver is a BoxRef that is
-        // not PluginBoxV2 and no specific handler claimed it yet, treat birth() as
+        // Birth no-op for builtin (non-plugin, non-user-instance) boxes: if receiver is a BoxRef that is
+        // neither PluginBoxV2 nor user InstanceBox, and no specific handler claimed it yet, treat birth() as
         // successful no-op. Early lifecycle marking at entry already recorded born.
         if method == "birth" {
             if let VMValue::BoxRef(bx) = self.reg_load(box_val)? {
-                let is_plugin = bx
-                    .as_any()
-                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
-                    .is_some();
-                if !is_plugin {
+                let is_plugin = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some();
+                let is_instance = bx.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some();
+                if !is_plugin && !is_instance {
                     if let Some(d) = dst { self.regs.insert(d, VMValue::Void); }
                     return Ok(());
                 }

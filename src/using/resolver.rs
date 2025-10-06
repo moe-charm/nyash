@@ -55,8 +55,21 @@ pub fn populate_from_toml(
     }
     let text = std::fs::read_to_string(path)
         .map_err(|e| UsingError::ReadToml(e.to_string()))?;
-    let doc = toml::from_str::<toml::Value>(&text)
-        .map_err(|e| UsingError::ParseToml(e.to_string()))?;
+    let doc = match toml::from_str::<toml::Value>(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            // When tracing is enabled, surface TOML parse issues to help diagnose
+            // missing [using]/[modules] during development.
+            if crate::config::env::resolve_trace() && !crate::config::env::cli_quiet() {
+                eprintln!(
+                    "[using] toml parse error at {:?}: {}",
+                    std::fs::canonicalize(path).ok(),
+                    e
+                );
+            }
+            return Ok(policy);
+        }
+    };
     // One-line summary (trace). Detailed dumps only when NYASH_RESOLVE_DEBUG=1
     if crate::config::env::resolve_trace() {
         let mut mods_count = 0usize;

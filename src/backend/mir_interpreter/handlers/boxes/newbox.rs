@@ -14,6 +14,43 @@ impl MirInterpreter {
         if let Err(e) = crate::runtime::provider_lock::guard_before_new_box(box_type) {
             return Err(VMError::InvalidInstruction(e));
         }
+        
+        // Forbid instantiation of flow/static entry boxes (dev guard):
+        // Heuristic: when flow is enabled and a `<Class>.main/0` exists but there is
+        // no `<Class>.birth/N`, treat the class as a flow/static box and reject `new`.
+        if let Some(msg) = crate::guards::entry_guard::forbid_new(box_type) {
+            return Err(VMError::InvalidInstruction(msg));
+        }
+// User-defined Box fast-path: when module contains methods/ctors for this
+        // class (e.g., "Class.birth/N"), construct an InstanceBox directly to
+        // avoid builtin shadowing (ArrayBox/MapBox reserved types).
+        let has_user_birth = self
+            .functions
+            .contains_key(&format!("{}.birth/{}", box_type, args.len()));
+        let has_user_any = if has_user_birth {
+            true
+        } else {
+            // Light probe: any function starting with "Class." indicates a user box
+            self.functions
+                .keys()
+                .any(|k| k.starts_with(&format!("{}.", box_type)))
+        };
+        if has_user_any {
+            let inst = crate::instance_v2::InstanceBox::new(
+                box_type.to_string(),
+                Vec::new(),
+                std::collections::HashMap::new(),
+            );
+            let created_vm = VMValue::from_nyash_box(Box::new(inst));
+            self.regs.insert(dst, created_vm.clone());
+            if let VMValue::BoxRef(arc_box) = &created_vm {
+                self.scope.register_box(arc_box.clone());
+            }
+            self.lifecycle_observe_new(dst, box_type, args.len());
+            // Invoke birth() via instance path (idempotent for user boxes by policy)
+            let _ = self.handle_box_call(None, dst, "birth", args);
+            return Ok(());
+        }
         let mut converted: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
         for vid in args {
             converted.push(self.reg_load(*vid)?.to_nyash_box());

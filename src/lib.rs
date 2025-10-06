@@ -67,6 +67,7 @@ pub mod grammar;
 pub mod syntax; // syntax sugar config and helpers
 // Execution runner (CLI coordinator)
 pub mod runner;
+pub mod guards;
 pub mod using; // using resolver scaffolding (Phase 15)
 
 // Expose the macro engine module under a raw identifier; the source lives under `src/macro/`.

@@ -59,6 +59,33 @@ impl ExternCallRegistryBox {
             effects: EffectMask::READ,
         });
         // 今後: env.console.log などを必要に応じて追記
+
+        // nykernel.* (dev stub) — gated at call site by env `NYASH_ENABLE_NYKERNEL_STUB=1`
+        // malloc(size: i64) -> i64 (byte address)
+        self.register(ExternCallSpec {
+            interface: "nykernel".into(),
+            method: "malloc".into(),
+            args: vec![MirType::Integer],
+            returns: MirType::Integer,
+            effects: EffectMask::IO,
+        });
+        // load_i64(addr: i64) -> i64
+        self.register(ExternCallSpec {
+            interface: "nykernel".into(),
+            method: "load_i64".into(),
+            args: vec![MirType::Integer],
+            returns: MirType::Integer,
+            effects: EffectMask::READ,
+        });
+        // store_i64(addr: i64, value: i64) -> void
+        self.register(ExternCallSpec {
+            interface: "nykernel".into(),
+            method: "store_i64".into(),
+            args: vec![MirType::Integer, MirType::Integer],
+            returns: MirType::Void,
+            effects: EffectMask::IO,
+        });
+
     }
 
     pub fn register(&mut self, info: ExternCallSpec) {

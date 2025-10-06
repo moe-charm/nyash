@@ -512,6 +512,25 @@ pub fn collect_using_and_strip(
                                 continue;
                             }
                         }
+                        // As a final dev-friendly allowance: if the target looks like a namespace
+                        // and nyash.toml/env provided [modules] entries under that prefix, accept
+                        // this using as a pure alias without a prelude file.
+                        // Example: using selfhost.vm as VM; with modules like selfhost.vm.mir_min=...
+                        let looks_like_ns = !target.starts_with('"') && !target.starts_with('/') && !target.contains(".nyash") && !target.contains(".hako") && !target.contains(std::path::MAIN_SEPARATOR);
+                        if looks_like_ns {
+                            if crate::using::namespace_box::accept_namespace_alias_if_modules_have_children(&target, &alias_name, &using_ctx.pending_modules, &mut seen_aliases, &mut alias_pairs, line_no, verbose) {
+                                if let Some(alias) = alias_name.clone() {
+                                    // Record alias pair (alias -> namespace token) for later nested alias expansion and registration.
+                                    if !seen_aliases.contains_key(&alias) {
+                                        seen_aliases.insert(alias.clone(), (target.clone(), line_no));
+                                        alias_pairs.push((alias.clone(), target.clone()));
+                                        if verbose { crate::runner::trace::log(format!("[using/dev] accept namespace alias '{}' for prefix '{}'", alias, target)); }
+                                    }
+                                }
+                                // Do not push a prelude path; continue to next line
+                                continue;
+                            }
+                        }
                         // No fallback; return original error
                         return Err(format!("using: failed to resolve '{}' (dev path)", target));
                     },

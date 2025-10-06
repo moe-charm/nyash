@@ -28,6 +28,7 @@ pub mod modules_registry;
 pub mod type_box_abi; // Phase 12: Nyash ABI (vtable) 雛形
 pub mod type_meta;
 pub mod type_registry; // Phase 12: TypeId→TypeBox 解決（雛形） // env.modules minimal registry
+pub mod nykernel_stub; // Dev-only nykernel.* stub (shared)
 
 #[cfg(test)]
 mod tests;

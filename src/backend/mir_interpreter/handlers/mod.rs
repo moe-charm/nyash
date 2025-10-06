@@ -32,6 +32,11 @@ impl MirInterpreter {
                         let _ = self.handle_callee_module_function(name, &bargs);
                     }
                 }
+                // Fallback safety: ensure birth() runs for user/builtin boxes.
+                // This covers cases where the module-level birth function name
+                // was not materialized or auto_birth was omitted. Builtins
+                // treat birth as no-op, user boxes should make birth idempotent.
+                let _ = self.handle_box_call(None, *dst, "birth", args);
             }
             MirInstruction::PluginInvoke { dst, .. } => {
                 if let Some(res) = self.try_execute_via_callee(inst) {

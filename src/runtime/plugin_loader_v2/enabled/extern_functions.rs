@@ -89,38 +89,29 @@ fn handle_nykernel_stub(
         "malloc" => {
             let size = args.get(0).map(|b| parse_i64_arg(&**b)).unwrap_or(0);
             let cells = ((size + 7) / 8).max(0) as i64;
-            let (heap_lock, ptr_lock) = heap_state();
-            let mut heap = heap_lock.lock().unwrap();
-            let mut ptr = ptr_lock.lock().unwrap();
-            let base_cells = *ptr;
-            let need = base_cells + cells;
-            if need > heap.len() as i64 {
-                heap.resize(need as usize, 0);
+            match crate::runtime::nykernel_stub::malloc_bytes(cells*8) {
+            Ok(v) => {
+                let addr = if let crate::backend::vm_types::VMValue::Integer(i) = v { i } else { 0 };
+                Ok(Some(Box::new(IntegerBox::new(addr))))
             }
-            *ptr = need;
-            let addr_bytes = base_cells * 8;
-            Ok(Some(Box::new(IntegerBox::new(addr_bytes))))
+            Err(_) => Err(BidError::PluginError),
+            }
         }
         "load_i64" => {
             let addr = args.get(0).map(|b| parse_i64_arg(&**b)).unwrap_or(0);
-            if addr % 8 != 0 || addr < 0 { return Err(BidError::PluginError); }
-            let index = (addr / 8) as usize;
-            let (heap_lock, _) = heap_state();
-            let heap = heap_lock.lock().unwrap();
-            let v = *heap.get(index).ok_or(BidError::PluginError)?;
-            Ok(Some(Box::new(IntegerBox::new(v))))
+            match crate::runtime::nykernel_stub::load_i64(addr) {
+            Ok(crate::backend::vm_types::VMValue::Integer(v)) => Ok(Some(Box::new(IntegerBox::new(v)))),
+            _ => Err(BidError::PluginError),
+            }
         }
         "store_i64" => {
             if args.len() < 2 { return Err(BidError::PluginError); }
             let addr = parse_i64_arg(&*args[0]);
             let val = parse_i64_arg(&*args[1]);
-            if addr % 8 != 0 || addr < 0 { return Err(BidError::PluginError); }
-            let index = (addr / 8) as usize;
-            let (heap_lock, _) = heap_state();
-            let mut heap = heap_lock.lock().unwrap();
-            if index >= heap.len() { return Err(BidError::PluginError); }
-            heap[index] = val;
-            Ok(None)
+            match crate::runtime::nykernel_stub::store_i64(addr, val) {
+            Ok(_) => Ok(None),
+            Err(_) => Err(BidError::PluginError),
+            }
         }
         "release" => {
             // Best‑effort finalization for external/identity boxes.
