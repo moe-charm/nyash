@@ -1,7 +1,7 @@
 // json_scan.hako — JsonScanBox
 // Escape-aware JSON structure scanning helpers.
 
-using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
+using "apps/selfhost/common/json/core/string_scan.hako" as StringScanBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box JsonScanBox {

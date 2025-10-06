@@ -1,7 +1,7 @@
 // instruction_scanner.hako — InstructionScannerBox
 // Minimal JSON v0 instruction object scanner with tolerant parsing.
 
-using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
 
 static box InstructionScannerBox {

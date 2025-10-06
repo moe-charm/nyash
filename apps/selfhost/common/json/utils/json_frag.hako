@@ -2,7 +2,7 @@
 // 責務: 文字列JSONから key:int / key:str を簡便に取り出す。
 // 非責務: 実行・評価（構造検査やVM実行は他箱に委譲）。
 
-using "apps/selfhost/vm/boxes/json_cursor.hako" as JsonCursorBox
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box JsonFragBox {
