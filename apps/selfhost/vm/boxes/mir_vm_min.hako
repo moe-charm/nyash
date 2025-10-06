@@ -1,6 +1,7 @@
 // mir_vm_min.hako — Ny製の最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
 using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/string_ops.hako" as StringOps
 using "apps/selfhost/vm/boxes/json_frag.hako" as JsonFragBox
 using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
@@ -42,8 +43,7 @@ static box MirVmMin {
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return 0 }
 
   // block helpers
-  index_of_from(hay,needle,pos){ if pos<0 {pos=0} local n=hay.length() if pos>=n {return -1} local m=needle.length() if m<=0 {return pos} local i=pos local limit=n-m loop(i<=limit){ if hay.substring(i,i+m)==needle {return i} i=i+1 } return -1 }
-  _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=me.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
+  _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=StringOps.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
   _seek_array_end(text, pos){ local i=pos local depth=1 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if ch=="[" {depth=depth+1} else { if ch=="]" {depth=depth-1} } if depth==0 {return i} i=i+1 } return i }
   _block_insts_end(mjson,insts_start){ return me._seek_array_end(mjson,insts_start) }
   _seek_obj_end(text, obj_start) { local i=obj_start local depth=0 local in_str=0 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if in_str==1 { if ch=="\\" { i=i+2 continue } if ch=="\"" { in_str=0 i=i+1 continue } i=i+1 continue } if ch=="\"" { in_str=1 i=i+1 continue } if ch=="{" { depth=depth+1 } else { if ch=="}" { depth=depth-1 } } if depth==0 { return i+1 } i=i+1 } return i }
@@ -192,7 +192,7 @@ else if op == "ret" {
         local key = "\"value\":{\"type\":\"i64\",\"value\":"
         local pos = 0
         loop(true) {
-          local k = me.index_of_from(search, key, pos)
+          local k = StringOps.index_of_from(search, key, pos)
           if k < 0 { break }
           local ds = search.substring(k + key.length(), search.length())
           // read consecutive digits as number
@@ -221,7 +221,7 @@ else if op == "ret" {
           local cmp = "Eq"
           if pk >= 0 {
             local i = pk + cmp_key.length()
-            local j = me.index_of_from(inst_seg, "\"", i)
+            local j = StringOps.index_of_from(inst_seg, "\"", i)
             if j > i { cmp = inst_seg.substring(i, j) }
           }
           local cv = 0
@@ -263,7 +263,7 @@ else if op == "ret" {
         local key = "\"value\":{\"type\":\"i64\",\"value\":"
         local pos = 0
         loop(true) {
-          local k = me.index_of_from(search, key, pos)
+          local k = StringOps.index_of_from(search, key, pos)
           if k < 0 { break }
           local ds = search.substring(k + key.length(), search.length())
           // read consecutive digits as number
@@ -292,7 +292,7 @@ else if op == "ret" {
           local cmp = "Eq"
           if pk >= 0 {
             local i = pk + cmp_key.length()
-            local j = me.index_of_from(inst_seg, "\"", i)
+            local j = StringOps.index_of_from(inst_seg, "\"", i)
             if j > i { cmp = inst_seg.substring(i, j) }
           }
           local cv = 0

@@ -1,0 +1,23 @@
+// string_ops.hako — Common string utility functions
+// Responsibility: Basic string operations used across the codebase
+// Non-goals: JSON parsing, complex text processing
+
+static box StringOps {
+  // Find substring starting from position
+  // Returns: index of first occurrence at/after pos, or -1 if not found
+  index_of_from(text, needle, pos) {
+    if text == null { return -1 }
+    if pos < 0 { pos = 0 }
+    local n = text.length()
+    if pos >= n { return -1 }
+    local m = needle.length()
+    if m <= 0 { return pos }
+    local i = pos
+    local limit = n - m
+    loop (i <= limit) {
+      if text.substring(i, i + m) == needle { return i }
+      i = i + 1
+    }
+    return -1
+  }
+}

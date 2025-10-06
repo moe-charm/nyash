@@ -1,18 +1,14 @@
 // json_cursor.hako — JsonCursorBox (thin scan facade)
 // Responsibility: provide a minimal, escape-aware scanning facade used by JsonFragBox
-// Delegates to StringScanBox and JsonScanBox.
+// Delegates to StringOps, StringScanBox and JsonScanBox.
 
+using "apps/selfhost/common/string_ops.hako" as StringOps
 using "apps/selfhost/vm/boxes/string_scan.hako" as StringScanBox
 using "apps/selfhost/vm/boxes/json_scan.hako" as JsonScanBox
 
 static box JsonCursorBox {
   index_of_from(hay, needle, pos) {
-    if pos < 0 { pos = 0 }
-    local n = hay.length() local m = needle.length() if pos > n { return -1 }
-    if m <= 0 { return pos }
-    local i = pos local limit = n - m
-    loop(i <= limit) { if hay.substring(i,i+m) == needle { return i } i = i + 1 }
-    return -1
+    return StringOps.index_of_from(hay, needle, pos)
   }
   scan_string_end(text, quote_pos) { return StringScanBox.scan_string_end(text, quote_pos) }
   seek_array_end(text, lbracket_pos) { return JsonScanBox.seek_array_end(text, lbracket_pos) }
