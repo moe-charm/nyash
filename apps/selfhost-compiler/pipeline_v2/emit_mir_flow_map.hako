@@ -5,72 +5,33 @@ flow EmitMirFlowMap {
   _i(n) { return n }
 
   _empty_arr() { return new ArrayBox() }
-  _empty_map() { return new MapBox() }
 
   _instr_const(dst, val) {
-    local v = EmitMirFlowMap._empty_map()
-    v.set("type", "i64")
-    v.set("value", EmitMirFlowMap._i(val))
-    local m = EmitMirFlowMap._empty_map()
-    m.set("op", "const")
-    m.set("dst", EmitMirFlowMap._i(dst))
-    m.set("value", v)
-    return m
+    local v = {type: "i64", value: EmitMirFlowMap._i(val)}
+    return {op: "const", dst: EmitMirFlowMap._i(dst), value: v}
   }
   _instr_ret(val) {
-    local m = EmitMirFlowMap._empty_map()
-    m.set("op", "ret")
-    m.set("value", EmitMirFlowMap._i(val))
-    return m
+    return {op: "ret", value: EmitMirFlowMap._i(val)}
   }
   _instr_binop(kind, lhs, rhs, dst) {
-    local m = EmitMirFlowMap._empty_map()
-    m.set("op", "binop")
-    m.set("op_kind", kind)
-    m.set("lhs", EmitMirFlowMap._i(lhs))
-    m.set("rhs", EmitMirFlowMap._i(rhs))
-    m.set("dst", EmitMirFlowMap._i(dst))
-    return m
+    return {op: "binop", op_kind: kind, lhs: EmitMirFlowMap._i(lhs), rhs: EmitMirFlowMap._i(rhs), dst: EmitMirFlowMap._i(dst)}
   }
   _instr_compare(cmp, lhs, rhs, dst) {
-    local m = EmitMirFlowMap._empty_map()
-    m.set("op", "compare")
-    m.set("cmp", cmp)
-    m.set("lhs", EmitMirFlowMap._i(lhs))
-    m.set("rhs", EmitMirFlowMap._i(rhs))
-    m.set("dst", EmitMirFlowMap._i(dst))
-    return m
+    return {op: "compare", cmp: cmp, lhs: EmitMirFlowMap._i(lhs), rhs: EmitMirFlowMap._i(rhs), dst: EmitMirFlowMap._i(dst)}
   }
   _instr_branch(cond, then_id, else_id) {
-    local m = EmitMirFlowMap._empty_map()
-    m.set("op", "branch")
-    m.set("cond", EmitMirFlowMap._i(cond))
-    m.set("then", EmitMirFlowMap._i(then_id))
-    m.set("else", EmitMirFlowMap._i(else_id))
-    return m
+    return {op: "branch", cond: EmitMirFlowMap._i(cond), then: EmitMirFlowMap._i(then_id), else: EmitMirFlowMap._i(else_id)}
   }
   _instr_jump(target) {
-    local m = EmitMirFlowMap._empty_map()
-    m.set("op", "jump")
-    m.set("target", EmitMirFlowMap._i(target))
-    return m
+    return {op: "jump", target: EmitMirFlowMap._i(target)}
   }
   _block(id, insts) {
-    local b = EmitMirFlowMap._empty_map()
-    b.set("id", EmitMirFlowMap._i(id))
-    b.set("instructions", insts)
-    return b
+    return {id: EmitMirFlowMap._i(id), instructions: insts}
   }
   _single_function_main(blocks) {
-    local f = EmitMirFlowMap._empty_map()
-    f.set("name", "main")
-    f.set("params", EmitMirFlowMap._empty_arr())
-    f.set("blocks", blocks)
-    local fns = EmitMirFlowMap._empty_arr()
-    fns.push(f)
-    local mod = EmitMirFlowMap._empty_map()
-    mod.set("functions", fns)
-    return mod
+    local f = {name: "main", params: [], blocks: blocks}
+    local fns = [f]
+    return {functions: fns}
   }
 
   emit_return_int(v) {

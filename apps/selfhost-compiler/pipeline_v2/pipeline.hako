@@ -371,19 +371,13 @@ flow PipelineV2 {
           if prefer_cfg >= 1 {
           local mat = 0
           if prefer >= 2 { mat = 1 }
-            local raw3 = new MapBox()
-            raw3.set("cmp", cmp2)
-            raw3.set("lhs", lhs)
-            raw3.set("rhs", rhs)
+            local raw3 = {cmp: cmp2, lhs: lhs, rhs: rhs}
             local nn3 = NormalizerBox.normalize_cmp(raw3)
             if nn3 == null { return null }
             local j1 = EmitCompareBox.emit_compare_cfg3(nn3.get("lhs"), nn3.get("rhs"), nn3.get("cmp"), mat, trace)
             return LocalSSA.ensure_cond(j1)
           } else {
-            local raw4 = new MapBox()
-            raw4.set("cmp", cmp2)
-            raw4.set("lhs", lhs)
-            raw4.set("rhs", rhs)
+            local raw4 = {cmp: cmp2, lhs: lhs, rhs: rhs}
             local nn4 = NormalizerBox.normalize_cmp(raw4)
             if nn4 == null { return null }
             local j0 = EmitCompareBox.emit_compare_ret(nn4.get("lhs"), nn4.get("rhs"), nn4.get("cmp"), trace)

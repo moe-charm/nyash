@@ -3,28 +3,19 @@
 
 static box HeaderEmitBox {
   make_block(id, insts) {
-    local b = new MapBox()
     if id == null { id = 0 }
     if insts == null { insts = new ArrayBox() }
-    b.set("id", id)
-    b.set("instructions", insts)
-    return b
+    return {id: id, instructions: insts}
   }
 
   make_function_main(blocks) {
-    local f = new MapBox()
     if blocks == null { blocks = new ArrayBox() }
-    f.set("name", "main")
-    f.set("params", new ArrayBox())
-    f.set("blocks", blocks)
-    return f
+    return {name: "main", params: [], blocks: blocks}
   }
 
   make_module_with_functions(fns) {
-    local m = new MapBox()
     if fns == null { fns = new ArrayBox() }
-    m.set("functions", fns)
-    return m
+    return {functions: fns}
   }
 }
 
