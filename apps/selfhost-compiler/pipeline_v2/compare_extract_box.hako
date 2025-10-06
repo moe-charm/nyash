@@ -66,11 +66,7 @@ static box CompareExtractBox {
     }
     if lv < 0 || rv < 0 { return null }
     // Pack cmp/lhs/rhs into ArrayBox [cmp, lhs, rhs]
-    local out = new ArrayBox()
-    out.push(lv)
-    out.push(rv)
-    out.push(cmp)
-    return out
+    return [lv, rv, cmp]
   }
 
   // If(cond=Compare(lhs,rhs,op), then=[Return(Int 1)], else=[Return(Int 0)]) → MapBox {cmp,lhs,rhs} or null
@@ -115,11 +111,7 @@ static box CompareExtractBox {
     if ds2 == "" { return null }
     local rv = RegexFlow.to_int(ds2)
     print("DBG:rhs=" + (""+rv))
-    local out = new ArrayBox()
-    out.push(lv)
-    out.push(rv)
-    out.push(cmp)
-    return out
+    return [lv, rv, cmp]
   }
 }
 

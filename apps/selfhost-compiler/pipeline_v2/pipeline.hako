@@ -69,11 +69,7 @@ flow PipelineV2 {
     if lhs_val == null { return null }
     local rhs_val = PipelineV2._parse_int_after_prefix(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", start_pos)
     if rhs_val == null { return null }
-    local arr = new ArrayBox()
-    arr.push(lhs_val)
-    arr.push(rhs_val)
-    arr.push(cmp)
-    return arr
+    return [lhs_val, rhs_val, cmp]
   }
 
   _to_i64(v) { return StringHelpers.to_i64(v) }
