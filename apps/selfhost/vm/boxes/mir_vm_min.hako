@@ -224,13 +224,7 @@ else if op == "ret" {
             local j = StringOps.index_of_from(inst_seg, "\"", i)
             if j > i { cmp = inst_seg.substring(i, j) }
           }
-          local cv = 0
-          if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Gt" { if lv > rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Ge" { if lv >= rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Lt" { if lv < rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Le" { if lv <= rv { cv = 1 } else { cv = 0 } }
+          local cv = CompareOpsBox.eval(cmp, lv, rv)
           // ret id (ensure it's the compare result or still return computed cv as final)
           local rstart4 = inst_seg.indexOf("\"op\":\"ret\"")
           local rseg4 = inst_seg.substring(rstart4, inst_seg.length())
@@ -295,13 +289,7 @@ else if op == "ret" {
             local j = StringOps.index_of_from(inst_seg, "\"", i)
             if j > i { cmp = inst_seg.substring(i, j) }
           }
-          local cv = 0
-          if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Gt" { if lv > rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Ge" { if lv >= rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Lt" { if lv < rv { cv = 1 } else { cv = 0 } }
-          else if cmp == "Le" { if lv <= rv { cv = 1 } else { cv = 0 } }
+          local cv = CompareOpsBox.eval(cmp, lv, rv)
           // ret id
           local rstart4 = inst_seg.indexOf("\"op\":\"ret\"")
           local rseg4 = inst_seg.substring(rstart4, inst_seg.length())
