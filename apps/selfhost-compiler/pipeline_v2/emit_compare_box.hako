@@ -13,16 +13,15 @@ static box EmitCompareBox {
     // dev-trace（最小）
     if trace == 1 { print("[emit] compare-ret lhs=" + lhs + " rhs=" + rhs + " cmp=" + cmp) }
     // entry: const lhs/rhs; compare→r3; ret r3（Map→to_json に統一）
-    local insts = new ArrayBox()
-    insts.push(MirEmitBox.make_const(1, lhs))
-    insts.push(MirEmitBox.make_const(2, rhs))
-    insts.push(MirEmitBox.make_compare(cmp, 1, 2, 3))
-    insts.push(MirEmitBox.make_ret(3))
+    local insts = [
+      MirEmitBox.make_const(1, lhs),
+      MirEmitBox.make_const(2, rhs),
+      MirEmitBox.make_compare(cmp, 1, 2, 3),
+      MirEmitBox.make_ret(3)
+    ]
 
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 
@@ -36,37 +35,33 @@ static box EmitCompareBox {
     cmp = match cmp { null => "Gt", "" => "Gt", _ => cmp }
     // Map→to_json で構築
     // block 0
-    local b0 = new ArrayBox()
-    b0.push(MirEmitBox.make_const(1, lhs))
-    b0.push(MirEmitBox.make_const(2, rhs))
-    b0.push(MirEmitBox.make_compare(cmp, 1, 2, 3))
+    local b0 = [
+      MirEmitBox.make_const(1, lhs),
+      MirEmitBox.make_const(2, rhs),
+      MirEmitBox.make_compare(cmp, 1, 2, 3)
+    ]
     match materialize { 1 => { b0.push(MirEmitBox.make_copy(4, 3)) }, _ => { } }
     b0.push({ op:"branch", cond:3, then:1, else_id:2 })
     // block 1 (then)
-    local b1 = new ArrayBox()
-    b1.push(MirEmitBox.make_const(6, 1))
-    b1.push(MirEmitBox.make_jump(3))
+    local b1 = [MirEmitBox.make_const(6, 1), MirEmitBox.make_jump(3)]
     local blk1 = HeaderEmitBox.make_block(1, b1)
 
     // block 2 (else)
-    local b2 = new ArrayBox()
-    b2.push(MirEmitBox.make_const(6, 0))
-    b2.push(MirEmitBox.make_jump(3))
+    local b2 = [MirEmitBox.make_const(6, 0), MirEmitBox.make_jump(3)]
     local blk2 = HeaderEmitBox.make_block(2, b2)
 
     // block 3 (merge)
-    local b3 = new ArrayBox()
-    b3.push(MirEmitBox.make_ret(6))
+    local b3 = [MirEmitBox.make_ret(6)]
     local blk3 = HeaderEmitBox.make_block(3, b3)
 
     // assemble function/module
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, b0))
-    blocks.push(blk1)
-    blocks.push(blk2)
-    blocks.push(blk3)
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [
+      HeaderEmitBox.make_block(0, b0),
+      blk1,
+      blk2,
+      blk3
+    ]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }

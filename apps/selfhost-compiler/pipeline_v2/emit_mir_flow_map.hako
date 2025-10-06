@@ -97,55 +97,49 @@ flow EmitMirFlowMap {
 
   // materialize: 0/1 (builder parity)
   emit_compare_cfg2(lhs, rhs, cmp, materialize) {
-    local b0 = EmitMirFlowMap._empty_arr()
-    b0.push(EmitMirFlowMap._instr_const(1, lhs))
-    b0.push(EmitMirFlowMap._instr_const(2, rhs))
-    b0.push(EmitMirFlowMap._instr_compare(cmp, 1, 2, 3))
-    b0.push(EmitMirFlowMap._instr_branch(3, 1, 2))
+    local b0 = [
+      EmitMirFlowMap._instr_const(1, lhs),
+      EmitMirFlowMap._instr_const(2, rhs),
+      EmitMirFlowMap._instr_compare(cmp, 1, 2, 3),
+      EmitMirFlowMap._instr_branch(3, 1, 2)
+    ]
 
-    local b1 = EmitMirFlowMap._empty_arr()
-    b1.push(EmitMirFlowMap._instr_const(6, 1))
-    b1.push(EmitMirFlowMap._instr_jump(3))
+    local b1 = [EmitMirFlowMap._instr_const(6, 1), EmitMirFlowMap._instr_jump(3)]
 
-    local b2 = EmitMirFlowMap._empty_arr()
-    b2.push(EmitMirFlowMap._instr_const(6, 0))
-    b2.push(EmitMirFlowMap._instr_jump(3))
+    local b2 = [EmitMirFlowMap._instr_const(6, 0), EmitMirFlowMap._instr_jump(3)]
 
-    local b3 = EmitMirFlowMap._empty_arr()
-    b3.push(EmitMirFlowMap._instr_ret(6))
+    local b3 = [EmitMirFlowMap._instr_ret(6)]
 
-    local blocks = EmitMirFlowMap._empty_arr()
-    blocks.push(EmitMirFlowMap._block(0, b0))
-    blocks.push(EmitMirFlowMap._block(1, b1))
-    blocks.push(EmitMirFlowMap._block(2, b2))
-    blocks.push(EmitMirFlowMap._block(3, b3))
+    local blocks = [
+      EmitMirFlowMap._block(0, b0),
+      EmitMirFlowMap._block(1, b1),
+      EmitMirFlowMap._block(2, b2),
+      EmitMirFlowMap._block(3, b3)
+    ]
     local mod = EmitMirFlowMap._single_function_main(blocks)
     return JsonEmitBox.to_json(mod)
   }
 
   emit_loop_counter(limit) {
-    local b0 = EmitMirFlowMap._empty_arr()
-    b0.push(EmitMirFlowMap._instr_const(1, 0))
-    b0.push(EmitMirFlowMap._instr_const(2, limit))
-    b0.push(EmitMirFlowMap._instr_const(4, 1))
-    b0.push(EmitMirFlowMap._instr_jump(1))
+    local b0 = [
+      EmitMirFlowMap._instr_const(1, 0),
+      EmitMirFlowMap._instr_const(2, limit),
+      EmitMirFlowMap._instr_const(4, 1),
+      EmitMirFlowMap._instr_jump(1)
+    ]
 
-    local b1 = EmitMirFlowMap._empty_arr()
-    b1.push(EmitMirFlowMap._instr_compare("Lt", 1, 2, 3))
-    b1.push(EmitMirFlowMap._instr_branch(3, 2, 3))
+    local b1 = [EmitMirFlowMap._instr_compare("Lt", 1, 2, 3), EmitMirFlowMap._instr_branch(3, 2, 3)]
 
-    local b2 = EmitMirFlowMap._empty_arr()
-    b2.push(EmitMirFlowMap._instr_binop("Add", 1, 4, 1))
-    b2.push(EmitMirFlowMap._instr_jump(1))
+    local b2 = [EmitMirFlowMap._instr_binop("Add", 1, 4, 1), EmitMirFlowMap._instr_jump(1)]
 
-    local b3 = EmitMirFlowMap._empty_arr()
-    b3.push(EmitMirFlowMap._instr_ret(1))
+    local b3 = [EmitMirFlowMap._instr_ret(1)]
 
-    local blocks = EmitMirFlowMap._empty_arr()
-    blocks.push(EmitMirFlowMap._block(0, b0))
-    blocks.push(EmitMirFlowMap._block(1, b1))
-    blocks.push(EmitMirFlowMap._block(2, b2))
-    blocks.push(EmitMirFlowMap._block(3, b3))
+    local blocks = [
+      EmitMirFlowMap._block(0, b0),
+      EmitMirFlowMap._block(1, b1),
+      EmitMirFlowMap._block(2, b2),
+      EmitMirFlowMap._block(3, b3)
+    ]
     local mod = EmitMirFlowMap._single_function_main(blocks)
     return JsonEmitBox.to_json(mod)
   }
