@@ -578,3 +578,36 @@ impl MirBuilder {
         Ok(dst)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::super::super::MirBuilder;
+
+    #[test]
+    fn normalize_external_module_function_name_basic() {
+        let b = MirBuilder::new();
+        // String.len/1 → StringBox.length/0
+        assert_eq!(
+            b.normalize_external_module_function_name("String.len/1", 1),
+            Some("StringBox.length/0".to_string())
+        );
+        // Array.get/2 → ArrayBox.get/1
+        assert_eq!(
+            b.normalize_external_module_function_name("Array.get/2", 2),
+            Some("ArrayBox.get/1".to_string())
+        );
+        // Map.set (arity from argc=3) → MapBox.set/2
+        assert_eq!(
+            b.normalize_external_module_function_name("Map.set", 3),
+            Some("MapBox.set/2".to_string())
+        );
+        // Already canonical with Box suffix stays canonical (arity inferred)
+        assert_eq!(
+            b.normalize_external_module_function_name("ConsoleBox.println/1", 1),
+            Some("ConsoleBox.println/0".to_string())
+        );
+        // Non-dotted names return None
+        assert_eq!(b.normalize_external_module_function_name("print", 1), None);
+    }
+}

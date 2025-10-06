@@ -24,7 +24,12 @@ static box JsonScanBox {
         i = i + 1
         continue
       }
-      if ch == "\"" { in_str = 1  i = i + 1  continue }
+      if ch == "\"" {
+        local j = StringScanBox.find_quote(text, i+1)
+        if j < 0 { return -1 }
+        i = j + 1
+        continue
+      }
       if ch == "{" { depth = depth + 1 }
       if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
       i = i + 1

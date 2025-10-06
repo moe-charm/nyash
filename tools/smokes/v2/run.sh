@@ -247,6 +247,11 @@ find_test_files() {
     if [ -d "$profile_dir" ]; then
         search_dirs+=("$profile_dir")
     fi
+    # Also collect curated core suites for quick aggregation (tests are SKIP-gated)
+    if [ "$PROFILE" = "quick" ]; then
+        local core_suite="$SCRIPT_DIR/suites/core"
+        [ -d "$core_suite" ] && search_dirs+=("$core_suite") || true
+    fi
     if [ "$PROFILE" = "full" ]; then
         for d in             "$SCRIPT_DIR/profiles/quick"             "$SCRIPT_DIR/profiles/integration"             "$SCRIPT_DIR/profiles/plugins"             "$SCRIPT_DIR/suites/core"             "$SCRIPT_DIR/suites/mir"             "$SCRIPT_DIR/suites/vm"             "$SCRIPT_DIR/suites/llvm"             "$SCRIPT_DIR/suites/plugins"             "$SCRIPT_DIR/suites/experimental" ; do
             [ -d "$d" ] && search_dirs+=("$d") || true
