@@ -6,60 +6,27 @@
 
 static box CallEmitBox {
   make_call(name, arg_ids, dst) {
-    local m = new MapBox()
-    m.set("op", "call")
-    m.set("name", name)
-    m.set("args", arg_ids)
-    m.set("dst", dst)
-    return m
+    return {op: "call", name: name, args: arg_ids, dst: dst}
   }
 
   make_boxcall(method, recv_id, arg_ids, dst) {
-    local m = new MapBox()
-    m.set("op", "boxcall")
-    m.set("method", method)
-    m.set("recv", recv_id)
-    m.set("args", arg_ids)
-    m.set("dst", dst)
-    return m
+    return {op: "boxcall", method: method, recv: recv_id, args: arg_ids, dst: dst}
   }
 
   // MIR v1 experimental variants
   make_mir_call_global(name, arg_ids, dst) {
-    local callee = new MapBox()
-    callee.set("type", "Global")
-    callee.set("name", name)
-    local m = new MapBox()
-    m.set("op", "mir_call")
-    m.set("dst", dst)
-    m.set("callee", callee)
-    m.set("args", arg_ids)
-    return m
+    local callee = {type: "Global", name: name}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
   }
 
   make_mir_call_method(method, recv_id, arg_ids, dst) {
-    local callee = new MapBox()
-    callee.set("type", "Method")
-    callee.set("method", method)
-    callee.set("receiver", recv_id)
-    local m = new MapBox()
-    m.set("op", "mir_call")
-    m.set("dst", dst)
-    m.set("callee", callee)
-    m.set("args", arg_ids)
-    return m
+    local callee = {type: "Method", method: method, receiver: recv_id}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
   }
 
   make_mir_call_constructor(box_type, arg_ids, dst) {
-    local callee = new MapBox()
-    callee.set("type", "Constructor")
-    callee.set("box_type", box_type)
-    local m = new MapBox()
-    m.set("op", "mir_call")
-    m.set("dst", dst)
-    m.set("callee", callee)
-    m.set("args", arg_ids)
-    return m
+    local callee = {type: "Constructor", box_type: box_type}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
   }
 }
 
