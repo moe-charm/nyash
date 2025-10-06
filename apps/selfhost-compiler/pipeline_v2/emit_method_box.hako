@@ -27,10 +27,8 @@ static box EmitMethodBox {
     insts.push(CallEmitBox.make_boxcall(method, 1, arg_ids, dst))
     insts.push(MirEmitBox.make_ret(dst))
     // Assemble via HeaderEmitBox
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 
@@ -51,10 +49,8 @@ static box EmitMethodBox {
     { local k=0  loop(k < n) { arg_ids.push(2 + k)  k = k + 1 } }
     insts.push(CallEmitBox.make_mir_call_method(method, 1, arg_ids, dst))
     insts.push(MirEmitBox.make_ret(dst))
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }

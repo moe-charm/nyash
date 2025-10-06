@@ -33,10 +33,8 @@ static box EmitNewBoxBox {
     insts.push(NewBoxEmitBox.with_args_array(NewBoxEmitBox.make_new(class_name, arg_ids, dst), arg_ids))
     insts.push(MirEmitBox.make_ret(dst))
     // Assemble via header helper
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 
@@ -60,10 +58,8 @@ static box EmitNewBoxBox {
     { local i=0  loop(i<n) { arg_ids.push(1+i)  i=i+1 } }
     insts.push(CallEmitBox.make_mir_call_constructor(class_name, arg_ids, dst))
     insts.push(MirEmitBox.make_ret(dst))
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }

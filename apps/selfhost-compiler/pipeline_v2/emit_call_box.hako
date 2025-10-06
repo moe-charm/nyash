@@ -40,10 +40,8 @@ static box EmitCallBox {
     insts.push(CallEmitBox.make_call(name, arg_ids, dst_ret))
     insts.push(MirEmitBox.make_ret(dst_ret))
     // 単一関数 main の MIR として返す（HeaderEmitBox 経由）
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 
@@ -70,10 +68,8 @@ static box EmitCallBox {
     { local i=0  loop(i<n) { arg_ids.push(1+i)  i=i+1 } }
     insts.push(CallEmitBox.make_mir_call_global(name, arg_ids, dst))
     insts.push(MirEmitBox.make_ret(dst))
-    local blocks = new ArrayBox()
-    blocks.push(HeaderEmitBox.make_block(0, insts))
-    local fns = new ArrayBox()
-    fns.push(HeaderEmitBox.make_function_main(blocks))
+    local blocks = [HeaderEmitBox.make_block(0, insts)]
+    local fns = [HeaderEmitBox.make_function_main(blocks)]
     return JsonEmitBox.to_json(HeaderEmitBox.make_module_with_functions(fns))
   }
 }
