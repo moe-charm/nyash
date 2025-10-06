@@ -18,14 +18,14 @@ static box Tokenizer {
             if i >= n { break }
             local ch = input.substring(i, i+1)
             if ch == "+" || ch == "-" || ch == "*" || ch == "/" || ch == "(" || ch == ")" {
-                local tok = new MapBox(); tok.set("type", ch)
+                local tok = map({ type: ch })
                 tokens.push(tok); i = i + 1; continue
             }
             // keyword: return
             if i + 6 <= n {
                 local kw = input.substring(i, i+6)
                 if kw == "return" {
-                    local t = new MapBox(); t.set("type", "RETURN")
+                    local t = map({ type: "RETURN" })
                     tokens.push(t); i = i + 6; continue
                 }
             }
@@ -37,18 +37,18 @@ static box Tokenizer {
                     if cj >= "0" && cj <= "9" { j = j + 1 } else { break }
                 }
                 local num_str = input.substring(i, j)
-                local tnum = new MapBox(); tnum.set("type", "INT"); tnum.set("value", num_str)
+                local tnum = map({ type: "INT", value: num_str })
                 tokens.push(tnum); i = j; continue
             }
             // unknown
-            local err = new MapBox(); err.set("version", 0); err.set("kind", "Error")
-            local e = new MapBox(); e.set("message", "Unknown token");
-            local sp = new MapBox(); sp.set("start", i); sp.set("end", i+1)
+            local err = map({ version: 0, kind: "Error" })
+            local e = map({ message: "Unknown token" })
+            local sp = map({ start: i, end: i+1 })
             e.set("span", sp); err.set("error", e)
             return err
         }
         // EOF
-        local eof = new MapBox(); eof.set("type", "EOF"); tokens.push(eof)
+        local eof = map({ type: "EOF" }); tokens.push(eof)
         return tokens
     }
 }

@@ -1,0 +1,11 @@
+// mini_map_arr.hako — tiny demo for json/map/arr sugar
+static box Main {
+  main() {
+    local m = map({ name: "nyash", ver: 1 })
+    local a = arr([10,20,30])
+    // Use them to prevent dead code elimination in future
+    if m.get("ver") == 1 { /* noop */ }
+    if a.get(1) == 20 { /* noop */ }
+    return 0
+  }
+}

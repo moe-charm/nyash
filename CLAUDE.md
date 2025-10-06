@@ -2,9 +2,59 @@
 
 このファイルは最小限の入口だよ。詳細はREADMEから辿ってねにゃ😺
 
+**⚠️ 重要**: このファイルの「開発状況」は**成功報告が中心**です。実際の開発では**失敗・問題点の報告が最も重要**です。失敗報告については [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクションを必ず参照してください。
+
 ---
 
-## 🔄 **現在の開発状況** (2025-10-05)
+## 🔄 **現在の開発状況** (2025-10-06)
+
+**注**: 以下は主に成功報告です。各Phaseの問題点・失敗・学びについては、個別のドキュメントや issue を参照してください。
+
+### ⚠️ **Phase 2.1（dep_tree統合）の問題点・失敗** (2025-10-06)
+
+#### ❌ **主要な問題点**
+
+**1️⃣ テスト実行完全失敗**
+- **問題**: 3ファイル統合したが、1回も動作確認できていない
+- **実際**: FileBoxエラー、usingパースエラー、原因調査なし
+- **影響**: commit前に動作検証必須（現在未検証状態）
+
+**2️⃣ 見積もりの大誤算**
+- **見積もり**: 108-150行削減
+- **実際**: 20行削減のみ（**見積もりの18%**）
+- **原因**: Hakoruneの構文制約（セミコロン区切り不可）を考慮せず
+- **内訳**: 重複削減-75行、構文修正+23行、Core追加+55行 → 純削減20行
+
+**3️⃣ 構文エラー連発（4回修正）**
+- Line 47: `continue` 使用 → Hakoruneは未サポート
+- Line 94, 111, 172, 177, 183, 226: セミコロン区切り → すべて複数行展開
+
+**4️⃣ using文の混乱**
+- `using selfhost.tools.dep_tree_core` → ❌ "Unsupported namespace"
+- `using "./dep_tree_core.hako"` → ❌ "Expected identifier"
+- hako.tomlに追加したのに動かない理由、**調査していない**
+
+**5️⃣ 背景プロセス放置**
+- LLVMベンチマーク（Bash 15351f）実行中のまま、結果確認なし
+
+#### 📊 **実際の成果（客観的）**
+
+**変更ファイル**:
+- 新規: `dep_tree_core.hako` (55行)
+- 変更: `dep_tree.nyash` (253→247行, -6行)
+- 変更: `dep_tree_simple.nyash` (265→233行, -32行)
+- 変更: `dep_tree_min_string.nyash` (159→122行, -37行)
+- 変更: `hako.toml` (+1行エイリアス)
+
+**合計**: 純削減20行（見積もり比18%）
+
+#### 🎓 **学び**
+1. **事前確認**: Hakoruneの構文制約を確認してから見積もるべき
+2. **中間テスト**: コード編集中に最低1回は動作確認すべき
+3. **調査優先**: エラーが出たら、試行錯誤より根本原因調査を優先
+4. **背景プロセス**: 長時間実行プロセスは定期的に確認
+
+---
 
 ### 🎉 **Phase 15.11完了！StringHelpers共通ライブラリ箱化成功** (2025-10-05)
 **セルフホストコード重複削減 - 14ファイル統合で335行純削減**
@@ -23,7 +73,7 @@
 **JSON builders** (3ファイル):
 - mir_builder2.hako
 - mir_builder_min.hako
-- mir_builder_min.nyash
+- mir_builder_min.hako
 
 **JSON utilities** (2ファイル) - **Phase 15.11.1追加**:
 - json_scan.hako (_str_to_int委譲)
@@ -59,215 +109,30 @@
 
 ---
 
-### 🎉 **Phase 15.10完了！Legacy Code大掃除成功** (2025-10-05)
-**モジュール分離＋デッドコード削除で400行純削減、保守性向上**
+### ✅ **Phase 15.10完了** (2025-10-05)
+Legacy Code大掃除 - 2大ファイル→8小ファイル分割、デッドコード470行削除、純削減400行。コミット: `43679766`, `f6cbbf48`, `f1f3b83e`
 
-#### ✅ **legacy.rs分割完了（2ファイル → 8ファイル）**
-**A. calls/legacy.rs分割** (617行 → 5ファイル):
-- `legacy/mod.rs`: エントリポイント handle_call (47行)
-- `legacy/callee_dispatcher.rs`: Callee振り分け (65行)
-- `legacy/method_handler.rs`: レシーバ解決（Copy fallback等） (192行)
-- `legacy/legacy_resolver.rs`: 文字列ベース関数解決 (346行)
-- `legacy/extern_handler.rs`: Extern関数実行 (35行)
+### ✅ **Phase 15.9完了** (2025-10-05)
+VmConfig集約化 - 環境変数42ファイル散在→1箇所集約、パフォーマンス向上。コミット: `f1874b3b`
 
-**B. boxes/legacy.rs分割** (518行 → 3ファイル):
-- `legacy/mod.rs`: BoxCallディスパッチャ (255行)
-- `legacy/plugin_invoke.rs`: PluginInvokeハンドラ (140行)
-- `legacy/plugin_bridge.rs`: Pluginブリッジ＋フォールバック (175行)
-
-#### ✅ **Config boxes削除（470行デッドコード削除）**
-- DebugConfigBox (165行) - JIT関連、Phase 15でアーカイブ済み
-- GcConfigBox (95行) - 使用箇所なし
-- AotConfigBox (114行) - 使用箇所なし
-- AotCompilerBox (89行) - 使用箇所なし
-
-#### 📊 **統計**
-- **削除**: 1,657行 (legacy分割前 + Config boxes)
-- **追加**: 1,257行 (legacy分割後の構造化コード)
-- **純削減**: 400行
-- **モジュール化**: 2大ファイル → 8小ファイル
-- **コミット**: 5個 (計画書3 + 実装2)
-
-**コミット**: `43679766`, `f6cbbf48`, `f1f3b83e`
-
----
-
-### 🎉 **Birth Lifecycle完全統合！** (2025-10-05)
-**Everything is Box思想の完成 - 3つのcalling conventionが統一契約に**
-
-#### ✅ **修正完了（58ファイル、843行）**
-1. **PluginInvoke unborn チェック追加**
-   - プラグインboxもInstanceBoxと同じ契約に
-   - birth前のメソッド呼び出しを防止
-
-2. **NewBox birth不在時のborn確定**
-   - StringBox/ArrayBox等のビルトインboxが正しくborn扱いに
-   - production環境での致命的バグ解消
-
-3. **ModuleFunction birth失敗時の値露出防止**
-   - birth失敗時にレジスタから値削除
-   - 未初期化インスタンスの後続使用を防止
-
-#### ✅ **リファクタリング完了（26行削減）**
-- **Bug Fix**: invoke_plugin_box error path cleanup
-- **Dead Code**: loops.rs (23行) + utils.rs (3行) 削除
-- **誤認訂正**: Task先生の2件の分析ミスを発見・修正
-
-#### 📋 **4人のTask先生による徹底調査**
-- **Report 1**: Birth Lifecycle一貫性 ✅
-- **Report 2**: 箱化機会発見（VmConfigBox等6件）
-- **Report 3**: モジュール構造問題（legacy.rs 500行超×2）
-- **Report 4**: レガシーコード検出（1,310行削除候補）
-
----
-
-### 🎉 **Phase 15.9完了！VmConfig集約化成功** (2025-10-05)
-**環境変数42ファイル散在問題を解決 - テスト容易性・保守性・パフォーマンス向上**
-
-#### ✅ **VmConfig実装完了（13ファイル・43箇所置換）**
-```rust
-// 従来（42ファイルに散在）:
-if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") { ... }
-
-// Phase 15.9後（1箇所に集約）:
-if VmConfig::global().general_trace { ... }
-```
-
-**成果**:
-- ✅ **新規ファイル**: vm_config.rs (110行、Singleton実装)
-- ✅ **変更ファイル**: 12ファイル（exec.rs, helpers.rs, handlers/*）
-- ✅ **置換箇所**: 43箇所の環境変数チェック
-- ✅ **管理環境変数**: 27種類（call/phi/birth/trace/behavior/limits系）
-- ✅ **パフォーマンス**: OnceLockで初回のみ読み込み（42回 → 1回）
-
-**テスト**:
-- ✅ cargo check: PASS
-- ✅ json_lint_vm smoke test: PASS (.238s)
-- ✅ 動作変更なし（完全後方互換）
-
-**コミット**: `f1874b3b` - feat(vm): VmConfig集約化
-
-#### ~~🎯 **次のステップ（Phase 15.10候補）**~~ ✅ **完了！**
+### ✅ **Birth Lifecycle完全統合** (2025-10-05)
+3つのcalling convention統一契約化、58ファイル843行修正、production環境バグ解消
 1. ~~BuilderConfigBox実装（MIR Builder用環境変数約15種類）~~ → 保留（現状維持）
 2. ✅ legacy.rs分割（calls:617行 + boxes:518行） → **Phase 15.10で完了**
 3. ~~boxes_* → builtin_boxes/ 移動~~ → 現状維持（移動のメリットなし）
 
 ---
 
-### 🎯 **Phase 15.8: WASM実装進行中**
-- **ブランチ**: `wasm-development` (← `selfhost`からfork)
-- **目標**: MIR18命令 → WASM変換、ブラウザ/エッジ環境対応
-- **戦略**: llvm_py拡張（既存800行活用）+ WASI runtime連携
-- **計画書**: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
+### ✅ **Phase 15.8** (2025-10-04)
+WASM実装進行中 - MIR16命令完全対応。詳細: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
 
-### 🎉 **Result表示修正完了！VM/LLVM AOT両対応** (2025-10-04)
-- ✅ **Leaf-level Result表示**: VM/LLVM AOT両方で完全動作
-- ✅ **selfhostブランチ統合**: Result表示修正を完全移植
-- ✅ **3ファイル修正**:
-  - `crates/hako_kernel/src/lib.rs`: AOT main stub Result表示＋flush
-  - `src/runner/vm_pipeline.rs`: Result表示責任明確化
-  - `src/runner/modes/vm.rs`: stdout flush実装
-- ✅ **環境変数対応**: `NYASH_NYRT_SILENT_RESULT=1` でベンチマーク用出力抑制
-- ✅ **テスト確認**: `/tmp/mini_ret.hako` → `Result: 7` 完全動作
-- ✅ **コミット**: `0edaaffa` - "feat(vm): Result表示完全修正"
-- 📖 **詳細**: hakorune-selfhost の `docs/guides/result-printing.md`
-
-### 🎉 **Phase 3.4完了！統合ベンチマークシステム実装** (2025-10-03)
-- ✅ **bench_unified.sh完全書き直し**（420行、2フェーズ分離設計）
-- ✅ **ChatGPT Pro設計準拠**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md)
-- ✅ **VMベンチマーク完全動作**（カウンター: 2ms、フィボナッチ: 2ms、素数判定: 3ms）
-- ✅ **LLVM/WASMビルド成功**（Phase 1: Preparation完了）
-- ⚠️ **LLVM Phase 2実行問題**（Warmup後ハング、調査中）
-
-### 🎉 **Phase 3.5完了！固定時間ベンチマーク完全実装** (2025-10-04)
-
-#### ✅ **VM版完全動作**
-- TimerBox.now_ms(): コンパイラが自動的に`ExternCall(nyrt.time.now_ms)`に変換
-- VM側`extern_adapter.rs`で`SystemTime::now()`実装済み
-- 166ms差分を正確に計測✅
-
-#### ✅ **LLVM版完全動作** 🎉
-**根本原因判明・解決**:
-- nyrt.time.now_ms()実装は完全に正常（libhako_kernel.a）
-- SystemTime::now()を正しく呼び出し
-- **問題**: ループ100,000回は1ミリ秒未満で完了（時間差が0）
-- **解決**: ループ回数を10,000,000回に増加 → 測定可能な時間差発生 ✅
-
-**確認済み事項**:
-- ✅ libhako_kernel.aにnyrt.time.now_ms実装あり（121バイト）
-- ✅ 実行可能ファイルに正しくリンク済み
-- ✅ LLVM IRでexterncall正しく生成
-- ✅ SystemTime::now()を呼び出し中
-- ✅ 逆アセンブルで動作確認完了
-
-#### ✅ **固定時間方式実装完了**
-- `run_duration(file, duration_sec)` メソッド（bench_runner.hako）
-- DESIGN.md準拠の完全実装（end_timeまでループ、ops/sec計算）
-- MapBoxで結果構造化（iterations/duration_ms/ops_per_sec）
-- **VM版実測**: 空ベンチ 109,543 ops/sec、sum_loop 5 ops/sec
-- **LLVM版**: local_tests/bench_timer_llvm.hako（5秒間測定方式）実装
-
-### 🏆 **言語対決ベンチマーク完了！** (2025-10-04)
-
-**sum_loop ベンチマーク（固定5秒測定）**:
-
-| 言語   | Backend | Ops/sec      | 相対速度 | 対C比 | 備考 |
-|--------|---------|--------------|----------|-------|------|
-| C      | gcc -O3 | 58,012,004   | 1.00x    | 100% | - |
-| Python | CPython 3.x | 17,915,223 | 0.31x  | 31%  | Computed goto |
-| **Ruby** | **YARV 3.2** | **11,178,680** | **0.19x** | **19%** | Switch VM |
-| Nyash  | Rust VM | 351,263      | 0.006x   | 0.6% | BoxCall重い |
-| Nyash  | LLVM    | **失敗**     | -        | -    | シンボル不足* |
-
-**\*LLVM失敗原因**: `libhako_kernel.a`に`nyash.console.log`/`nyash.string.concat_si`が未実装
-
-**重要な発見**:
-- 🧠 **Python二層戦略の発見**: 「インタープリター」ではなく「軽量VM + C層委譲」
-  - Python層: 制御フローのみ（バイトコードVM、18命令/ループ）
-  - C層: 実際の処理（`time.time()`, 整数演算等）
-  - オーバーヘッド: 約9 CPU命令/バイトコード（**超軽量！**）
-  - 実測: 3.2億バイトコード命令/秒（Computed goto最適化）
-  - 📝 このベンチは**C層の速度**を測定（Python VM層ほぼ未測定）
-- 🔴 **Ruby vs Python**: 命令数少ないのに遅い！
-  - Ruby: 14命令/ループ、1.6億命令/秒（1命令≈20 CPU）
-  - Python: 18命令/ループ、3.2億命令/秒（1命令≈9 CPU）
-  - 原因: Rubyは「すべてオブジェクト」思想（Time.nowも重い）
-- ✅ Nyash VM妥当なインタープリターオーバーヘッド（ただしBoxCall重い）
-- 🎉 **LLVM版完全成功！** (2025-10-04)
-  - **39.4M ops/sec** - C言語の68%、VM版の112倍！
-  - シンボル追加完了: `nyash.console.log`, `nyash.string.concat_si`
-  - Python (31%) / Ruby (19%) を大幅に超える速度を実現！
-
-**実行方法**: `bash benchmarks/run_language_shootout.sh`
-
-**詳細**: [benchmark-implementation.md](docs/development/current/wasm/benchmark-implementation.md)
-
-#### 📋 **次のステップ**: WASM版固定時間ベンチマーク実装 → VM/LLVM/WASM速度比較表作成
-
-### 📊 **WASM対応状況**（MIR凍結セット16命令基準）
-**✅ 実装済み（16/16命令 - 完全対応！）**:
-1. **基本演算(5)**: Const, UnaryOp, BinOp, Compare, TypeOp
-2. **メモリ(2)**: Load, Store
-3. **制御(4)**: Branch, Jump, Return, Phi（if/loop両対応）
-4. **呼び出し(1)**: Call/MirCall（統一Call実装済み）
-5. **GC(2)**: Barrier, Safepoint
-6. **構造(2)**: Copy, Nop
-
-**🎉 完全実装済み！**
-- ExternCall, BoxCall, NewBox も動作確認済み
-- LoopForm実験的実装あり
-- 詳細: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
-
-**🚨 発見された問題**:
-- Hakoコンパイラ: 不正PHI命令生成バグ（到達不能ブロックがPHI predecessorに含まれる）
+### ✅ **Phase 3.4-3.5完了** (2025-10-03~04)
+統合ベンチマーク＋固定時間測定実装。言語対決: Nyash LLVM版39.4M ops/sec（C言語の68%）達成。詳細: [benchmark-implementation.md](docs/development/current/wasm/benchmark-implementation.md)
 
 ### 📚 **重要リソース**
 - **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
-- **現在のタスク**: [CURRENT_TASK_WASM.md](CURRENT_TASK_WASM.md) ⭐ここを見る！
-- **Phase 15.8詳細**: [docs/development/roadmap/phases/phase-15.8/](docs/development/roadmap/phases/phase-15.8/)
-- **ベンチマーク設計図**: [apps/benchmarks/DESIGN.md](apps/benchmarks/DESIGN.md) ⭐ChatGPT Pro設計
-- **WASMベンチマークガイド**: [docs/guides/wasm-benchmarks.md](docs/guides/wasm-benchmarks.md)
-- **MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md) ⭐正式仕様
+- **現在のタスク**: [CURRENT_TASK.md](CURRENT_TASK.md)
+- **MIR命令セット**: [INSTRUCTION_SET.md](docs/reference/mir/INSTRUCTION_SET.md)
 
 ---
 
@@ -429,8 +294,11 @@ Nyashは「Everything is Box」。実装・最適化・検証のすべてを「�
 
 ### 実践方法
 1. **まず動くものを作る**（80%）
-2. **改善アイデアは `docs/development/proposals/ideas/` フォルダに記録**（20%）
-3. **優先度に応じて後から改善**
+2. **失敗・問題点を記録**（最重要！）
+3. **改善アイデアは `docs/development/proposals/ideas/` フォルダに記録**（20%）
+4. **優先度に応じて後から改善**
+
+**⚠️ 注意**: 80%で完了とするのは「機能」だけです。**失敗・問題点の記録は100%必須**です。
 
 ---
 
@@ -889,6 +757,99 @@ docs/development/proposals/ideas/
 ├── improvements/     # 80%実装の残り20%改善候補
 ├── new-features/     # 新機能アイデア
 └── other/           # その他すべて（調査、メモ、設計案）
+```
+
+---
+
+## 🚨 **失敗報告の重要性（最優先！）**
+
+### **プログラム開発では失敗報告が一番大事**
+
+**成功報告より失敗報告が重要な理由**:
+- ✅ 失敗は**次の改善の種**（成功は既に終わったこと）
+- ✅ 失敗は**学習の最大の機会**（同じミスを繰り返さない）
+- ✅ 失敗は**システムの脆弱性を教えてくれる**（本番障害を未然に防ぐ）
+- ✅ 失敗は**見積もり精度を上げる**（楽観的予測を修正）
+
+### **報告すべき失敗の種類**
+
+#### 1️⃣ **実行失敗・テスト失敗**
+```
+❌ テスト実行0回成功
+❌ コンパイルエラー4回連続
+❌ 動作確認できていない状態でcommit提案
+```
+
+#### 2️⃣ **見積もりの失敗**
+```
+当初見積もり: 108-150行削減
+実際の結果:   20行削減のみ（見積もりの18%）
+
+原因: 構文制約による増加分を考慮していなかった
+```
+
+#### 3️⃣ **設計判断の失敗**
+```
+判断: セミコロン区切り1行文で書く
+結果: Hakoruneでパースエラー → 全部複数行に書き直し (+23行)
+
+原因: Hakoruneの構文制約を忘れていた
+```
+
+#### 4️⃣ **理解不足・調査不足**
+```
+問題: using文でパースエラー
+対応: 3通りの書き方を試す → すべて失敗
+根本原因: **調査していない**（hako.tomlに追加したのに動かない理由不明）
+```
+
+#### 5️⃣ **作業の抜け・忘れ**
+```
+✅ コード編集完了
+❌ テスト実行忘れ
+❌ 背景プロセス放置
+❌ エラー原因調査なし
+```
+
+### **客観的な失敗報告フォーマット**
+
+```markdown
+## ❌ Phase X.X の問題点・失敗
+
+### 1️⃣ **[失敗の種類]**
+**問題**: [何が起きたか]
+**期待**: [何を期待していたか]
+**実際**: [実際にどうなったか]
+**原因**: [なぜ失敗したか]
+**影響**: [どのくらい深刻か]
+**学び**: [次回どう避けるか]
+
+### 2️⃣ **[次の失敗]**
+...
+```
+
+### **成功報告の注意点**
+
+**❌ 避けるべき成功報告**:
+- 「Phase X完了！」だけ（問題点なし）
+- 「✅✅✅」だらけ（失敗が見えない）
+- 「成功」を過度に強調（客観性の欠如）
+
+**✅ 良い成功報告**:
+```markdown
+## Phase X.X 完了
+
+### 成果
+- 削減: 20行（見積もり108-150行の18%）
+
+### 問題点
+1. テスト実行0回成功
+2. 構文エラー4回修正
+3. 見積もり精度の甘さ
+
+### 学び
+- Hakoruneの構文制約を事前確認すべき
+- 中間テストを挟むべき
 ```
 
 ---

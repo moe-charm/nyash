@@ -71,6 +71,13 @@ export SMOKES_TEST_COUNT=0
 export SMOKES_PASS_COUNT=0
 export SMOKES_FAIL_COUNT=0
 
+# 補助ライブラリの読込み（結果検証など）
+_SMOKES_LIB_DIR="$(dirname "${BASH_SOURCE[0]}")"
+if [ -f "${_SMOKES_LIB_DIR}/result_checker.sh" ]; then
+  # shellcheck disable=SC1090
+  source "${_SMOKES_LIB_DIR}/result_checker.sh"
+fi
+
 # 色定義（重複回避）
 if [ -z "${RED:-}" ]; then
     readonly RED='\033[0;31m'
@@ -118,7 +125,6 @@ filter_noise() {
   | sed -E 's/^VM execution error: VM fallback error: *//' \
   | grep -v '^VM execution error: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
-  | grep -v '^Result: ' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
   | grep -v '^\{"kind":"contracts_' \
@@ -463,4 +469,19 @@ output_junit() {
   <!-- Individual test cases would be added by specific test scripts -->
 </testsuite>
 EOF
+}
+
+# LLVM 利用可否のプリフライト
+# 利用可能なら0、不可ならSKIPを通知して1を返す。SMOKES_FORCE_LLVM=1で常に0。
+require_llvm_or_skip() {
+  if [ "${SMOKES_FORCE_LLVM:-0}" = "1" ]; then
+    return 0
+  fi
+  if ! "$NYASH_BIN" --version 2>/dev/null | grep -q "features.*llvm"; then
+    if ! command -v python3 >/dev/null 2>&1 || ! python3 -c "import llvmlite" >/dev/null 2>&1; then
+      log_warn "SKIP LLVM parity Harness unavailable (install llvmlite or build with --features llvm)"
+      return 1
+    fi
+  fi
+  return 0
 }

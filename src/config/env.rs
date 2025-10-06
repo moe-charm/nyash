@@ -34,6 +34,8 @@ impl NyashEnv {
 // Global current env config (thread-safe)
 use once_cell::sync::OnceCell;
 use std::sync::RwLock;
+use std::collections::HashSet;
+use once_cell::sync::OnceCell as StdOnceLock;
 
 static GLOBAL_ENV: OnceCell<RwLock<NyashEnv>> = OnceCell::new();
 // フェーズM.2: PHI_ON_GATED_WARNED削除（phi-legacy簡略化により不要）
@@ -56,6 +58,16 @@ pub fn set_current(cfg: NyashEnv) {
     }
     let _ = GLOBAL_ENV.set(RwLock::new(cfg));
 }
+
+// ---- Deprecation helper (print once per key when verbose) ----
+static DEPREC_EMITTED: StdOnceLock<RwLock<HashSet<String>>> = StdOnceLock::new();
+fn deprec_once(key: &str, message: &str) {
+    if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() != Some("1") { return; }
+    let lock = DEPREC_EMITTED.get_or_init(|| RwLock::new(HashSet::new()));
+    if let Ok(g) = lock.read() { if g.contains(key) { return; } }
+    if let Ok(mut w) = lock.write() { if w.insert(key.to_string()) { eprintln!("{}", message); } }
+}
+
 
 /// Load overrides from nyash.toml `[env]` table and apply them to process env.
 ///
@@ -272,14 +284,18 @@ pub fn check_contracts() -> bool {
 }
 
 /// Control VM fallback that calls birth() immediately after every NewBox.
-/// Default: ON for backward compatibility. Set NYASH_VM_BIRTH_AFTER_NEW=0 to disable.
+/// Default: OFF（撤退方針）。Builder/Bridge が birth を生成するのが正道。
+/// 明示的に有効化された場合は、開発ログで非推奨警告を 1 行だけ出す。
 pub fn vm_birth_after_new_fallback() -> bool {
     match std::env::var("NYASH_VM_BIRTH_AFTER_NEW").ok() {
         Some(v) => {
-            let lv = v.to_ascii_lowercase();
-            !(lv == "0" || lv == "false" || lv == "off")
+            let on = matches!(v.as_str(), "1" | "true" | "on" | "TRUE" | "ON");
+            if on && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[deprecated] NYASH_VM_BIRTH_AFTER_NEW is deprecated; Builder/Bridge emits birth(). Disable this flag to match production path.");
+            }
+            on
         }
-        None => true,
+        None => false,
     }
 }
 
@@ -531,10 +547,12 @@ pub fn using_namespace_alias() -> bool {
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
     // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
-    let alias = std::env::var("NYASH_ENABLE_USING").ok();
-    if alias.is_some() && crate::config::env::cli_verbose() {
-        eprintln!("[env] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead");
+    // Compat brand alias notice (verbose only): prefer NYASH_USING over HAKO_USING
+    if std::env::var("HAKO_USING").ok().is_some() {
+        deprec_once("HAKO_USING", "[deprecated] HAKO_USING is deprecated; use NYASH_USING instead");
     }
+    let alias = std::env::var("NYASH_ENABLE_USING").ok();
+    if alias.is_some() { deprec_once("NYASH_ENABLE_USING", "[deprecated] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead"); }
     match std::env::var("NYASH_USING").ok().or(alias).as_deref() {
         Some("0") | Some("false") | Some("off") => false,
         _ => true, // デフォルト: ON
@@ -565,7 +583,7 @@ pub fn allow_using_file() -> bool {
 pub fn using_ast_enabled() -> bool {
     // 優先順: NYASH_USING_STRATEGY / NYASH_USING_IMPL → NYASH_USING_AST（後方互換）。
     if let Some(mode) = std::env::var("NYASH_USING_STRATEGY").ok()
-        .or_else(|| std::env::var("NYASH_USING_IMPL").ok())
+        .or_else(|| { if let Some(v) = std::env::var("NYASH_USING_IMPL").ok() { deprec_once("NYASH_USING_IMPL", "[deprecated] NYASH_USING_IMPL is deprecated; use NYASH_USING_STRATEGY={resolver|prelude}"); Some(v) } else { None } })
     {
         let m = mode.to_ascii_lowercase();
         return match m.as_str() {
@@ -574,7 +592,7 @@ pub fn using_ast_enabled() -> bool {
             _ => !using_is_prod(),
         };
     }
-    match std::env::var("NYASH_USING_AST").ok().as_deref().map(|v| v.to_ascii_lowercase()) {
+    match std::env::var("NYASH_USING_AST").ok().as_deref().map(|v| { deprec_once("NYASH_USING_AST", "[deprecated] NYASH_USING_AST is deprecated; prefer NYASH_USING_STRATEGY=prelude"); v.to_ascii_lowercase() }) {
         Some(ref s) if s == "1" || s == "true" || s == "on" => true,
         Some(ref s) if s == "0" || s == "false" || s == "off" => false,
         _ => !using_is_prod(), // dev/ci → true, prod → false
@@ -829,4 +847,3 @@ pub fn vm_reenter_trace() -> bool {
 pub fn vm_reenter_limit() -> Option<usize> {
     std::env::var("NYASH_VM_REENTER_LIMIT").ok().and_then(|s| s.parse().ok())
 }
-

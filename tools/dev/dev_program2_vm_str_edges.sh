@@ -4,7 +4,7 @@ cd "$(dirname "$0")/../.."
 
 cargo build --release >/dev/null
 
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 export NYASH_USING_AST=1
 export NYASH_VM_PARSERBOX_BOOL=${NYASH_VM_PARSERBOX_BOOL:-0}

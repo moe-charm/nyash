@@ -15,7 +15,7 @@ box MirBuilderBox {
   build(ast_json) {
     if ast_json == null { return EmitReturnBox.emit_return_int2(0, 0) }
     // If(cond=Compare) → CFG (branch/jump/ret)
-    if ast_json.indexOf("\"type\":\"If\"") >= 0 {
+    if call("String.indexOf/2", ast_json, "\"type\":\"If\"") >= 0 {
       local ic = Stage1ExtractFlow.extract_if_compare(ast_json)
       if ic != null { return EmitCompareBox.emit_compare_cfg3(ic.get("lhs"), ic.get("rhs"), ic.get("cmp"), 0, 0) }
     }

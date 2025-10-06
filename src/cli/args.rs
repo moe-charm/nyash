@@ -55,7 +55,7 @@ pub fn build_command() -> Command {
         .arg(Arg::new("test-filter").long("test-filter").value_name("SUBSTR").help("Only run tests whose name contains SUBSTR (with --run-tests)"))
         .arg(Arg::new("test-entry").long("test-entry").value_name("{wrap|override}").help("When --run-tests and a main exists: wrap or override") )
         .arg(Arg::new("test-return").long("test-return").value_name("{tests|original}").help("Harness return policy (tests or original)") )
-        .arg(Arg::new("dump-mir").long("dump-mir").help("Dump MIR instead of executing").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("dump-mir").long("dump-mir").help("Dump MIR (parser-only). Note: using statements are not resolved; prefer --emit-mir-json for files with using").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("verify").long("verify").help("Verify MIR integrity and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("mir-verbose").long("mir-verbose").help("Show verbose MIR output with statistics").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("mir-verbose-effects").long("mir-verbose-effects").help("Show per-instruction effect category").action(clap::ArgAction::SetTrue))
@@ -217,7 +217,7 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         // AST prelude merge
         std::env::set_var("NYASH_USING_AST", "1");
         // Using grammar is mainline; keep explicit enable for clarity (default is ON; this makes intent obvious in dev)
-        std::env::set_var("NYASH_ENABLE_USING", "1");
+        std::env::set_var("NYASH_USING", "1");
         // Allow top-level main resolution in dev for convenience (prod default remains OFF)                // Ensure project root is available for prelude injection
         if std::env::var("NYASH_ROOT").is_err() {
             if let Ok(cwd) = std::env::current_dir() {

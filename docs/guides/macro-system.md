@@ -80,6 +80,29 @@ Notes:
 - Backward-compat function names `ny_for` / `ny_foreach` are also accepted but `for` / `foreach` are preferred.
 - This pass is part of the language pipeline; it is orthogonal to user-defined macros.
 
+## Selfhost-Min Macros (json/map/arr/call)
+
+- json/map/arr (dev): the `SelfhostMin` macro package provides simple passthrough sugar:
+  - `json({k:v})` → `{k:v}`
+  - `map({k:v})` → `{k:v}`
+  - `arr([a,b])` → `[a,b]`
+  These operate on AST and do not change semantics.
+
+- call! (experimental):
+  - Shape: `call("Box.method/N", args...)` with a strict name string.
+  - Expansion strategy (bring‑up):
+    - For method‑like names (N>=1), normalize to a dotted ModuleFunction name and rewrite to `FunctionCall` with `N-1` as method arity (receiver excluded):
+      - `call("String.len/1", s)` → `FunctionCall("StringBox.len/0", [s])`
+    - Fallback: `FunctionCall(name, [args...])`.
+  - Builder resolution: dotted+arity names for common built-ins are canonicalized (class → *Box, arity excludes receiver).
+    - Example: `call("String.len/1", s)` is compiled as `ModuleFunction("StringBox.length/0", [s])`.
+
+  - Gate: enabled in smokes via `NYASH_ENABLE_CALL_MACRO=1`. Intended for selfhost sources to improve readability; subject to strict resolver behavior.
+  - Caveats:
+    - Built‑in Box methods may require ModuleFunction resolution to be wired in the builder/VM profile; unresolved errors can occur depending on environment.
+    - Prefer direct method syntax when available (`obj.m()`), or emit ModuleFunction via builder facilities.
+
+
 ## Developer API (preview)
 
 - Pattern/Quote primitives are available to bootstrap macro authorship.
@@ -136,3 +159,8 @@ Notes
   - `NYASH_MACRO_MAX_PASSES` (default 32)
   - `NYASH_MACRO_CYCLE_WINDOW` (default 8) — detect cycles across recent states
   - `NYASH_MACRO_TRACE=1` — pass-by-pass logging
+## Scope in Phase‑15/16 — keep it simple
+
+- Recommended scope now: simple, pure AST rewrites (syntax sugar → core forms). Examples: `json/map/arr` helpers and strict call normalization.
+- Defer complex/effectful macros until after self‑hosting. Prefer promoting them to Boxes/plugins with clear interfaces and tests.
+- Load user macros from `NYASH_MACRO_PATHS=apps/macros/<pkg>/macros.hako` (MacroBoxSpec.expand), or use a built‑in Rust MacroBox variant during bring‑up when available.

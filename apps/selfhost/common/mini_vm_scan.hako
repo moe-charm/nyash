@@ -17,7 +17,7 @@ static box MiniVmScan {
     loop (i < n) {
       guard = guard + 1
       if guard > 50000 { return -1 }
-      @ch = json.substring(i, i+1)
+      @ch = call("String.substring/2", json, i, i+1)
       if in_str == 1 {
         if ch == "\\" { i = i + 2  continue }
         if ch == "\"" { in_str = 0  i = i + 1  continue }
@@ -46,7 +46,7 @@ static box MiniVmScan {
     loop (i < n) {
       guard = guard + 1
       if guard > 50000 { return -1 }
-      @ch = json.substring(i, i+1)
+      @ch = call("String.substring/2", json, i, i+1)
       if in_str == 1 {
         if ch == "\\" { i = i + 2  continue }
         if ch == "\"" { in_str = 0  i = i + 1  continue }
@@ -74,7 +74,7 @@ static box MiniVmScan {
     @n = json.length()
     @total = 0
     loop (i < n) {
-      @ch = json.substring(i, i+1)
+      @ch = call("String.substring/2", json, i, i+1)
       if ch == "\"" {
         @j = me.index_of_from(json, "\"", i+1)
         if j < 0 { break }
@@ -108,7 +108,7 @@ static box MiniVmScan {
     @total = 0
     local found = 0
     loop (i < n) {
-      @ch = json.substring(i, i+1)
+      @ch = call("String.substring/2", json, i, i+1)
       if ch == "\"" {
         @j = me.index_of_from(json, "\"", i+1)
         if j < 0 { break }

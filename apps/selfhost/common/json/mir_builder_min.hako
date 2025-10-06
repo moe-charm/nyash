@@ -10,14 +10,14 @@ using "apps/selfhost-compiler/common/newbox_emit_box.hako" as NewBoxEmitBox
 static box MirJsonBuilderMin {
   // Create new builder state (MapBox)
   make() {
-    local st = new MapBox()
-    st.set("buf", "")
-    st.set("phase", 0)  // 0:init, 1:module, 2:function, 3:block, 4:insts, 5:closed
-    st.set("first_inst", 1) // 1=true, next add_* is first item (no comma)
-    // Dual API: maintain minimal structured state in parallel（配列API用）
-    st.set("blocks", new ArrayBox())           // Array of { id, instructions:Array }
-    st.set("cur_block_index", -1)
-    st.set("fn_name", "")
+    local st = map({
+      buf: "",
+      phase: 0,           // 0:init, 1:module, 2:function, 3:block, 4:insts, 5:closed
+      first_inst: 1,      // 1=true, next add_* is first item (no comma)
+      blocks: new ArrayBox(),    // Array of { id, instructions:Array }
+      cur_block_index: -1,
+      fn_name: ""
+    })
     return st
   }
 
@@ -104,9 +104,7 @@ static box MirJsonBuilderMin {
     st.set("first_inst", 1)
     // Dual API: create block record and append
     {
-      local blk = new MapBox()
-      blk.set("id", id)
-      blk.set("instructions", new ArrayBox())
+      local blk = map({ id: id, instructions: new ArrayBox() })
       local blks = st.get("blocks")
       blks.push(blk)
       st.set("cur_block_index", blks.size() - 1)
@@ -336,12 +334,8 @@ static box MirJsonBuilderMin {
   get_current_instructions(st) { return me._cur_insts(st) }
   get_blocks_array(st) { if st.has("blocks") { return st.get("blocks") } return null }
   get_function_structure(st) {
-    local fndef = new MapBox()
     local blks = me.get_blocks_array(st)
-    fndef.set("name", st.get("fn_name"))
-    fndef.set("params", new ArrayBox())
-    fndef.set("blocks", blks)
-    return fndef
+    return map({ name: st.get("fn_name"), params: new ArrayBox(), blocks: blks })
   }
   emit_to_string(st) { return me.to_string(st) }
 

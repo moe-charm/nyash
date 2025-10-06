@@ -16,7 +16,7 @@ preflight_plugins || exit 2
 
 unset NYASH_DEV || true
 unset NYASH_OPERATOR_BOX_ALL || true
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 
 TMP_DIR="/tmp/hakorune_vm_m2_eq_true_vm_$$"
 mkdir -p "$TMP_DIR"

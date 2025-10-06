@@ -4,6 +4,9 @@
 
 Status: Accepted (Runner‑side resolution). Selfhost parser accepts using as no‑op and attaches `meta.usings` for future use.
 
+WARNING — --dump-mir is parser-only
+- Files containing `using` fail with `--dump-mir` because resolution happens in the Runner. Use `--emit-mir-json <file>` to inspect MIR, or run without `--dump-mir`.
+
 > Phase 15.5 指針（いいとこ取り）
 > - 依存の唯一の真実（SSOT）: `hako.toml` の `[using]`（互換: `nyash.toml`。aliases/packages/paths）
 > - 実体の合成: テキスト結合は廃止し、AST マージに一本化（曖昧さ根絶）

@@ -4,7 +4,7 @@
 // NOTE: relative paths to support alias packaging (nyash.toml)
 using "./scanner.nyash" as JsonScanner
 using "./token.nyash" as JsonToken
-using "../utils/escape.nyash" as EscapeUtils
+using "../utils/escape.hako" as EscapeUtils
 // Removed other dependencies - using self-contained methods
 
 // 🎯 高精度JSONトークナイザー（Everything is Box）

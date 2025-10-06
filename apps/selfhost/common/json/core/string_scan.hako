@@ -4,6 +4,7 @@
 using "apps/selfhost/common/string_ops.hako" as StringOps
 
 static box StringScanBox {
+  read_char(text, i) { return me.read_char(text, i) }
   // Find substring starting from position (simple, non-escape-aware)
   index_of_from(text, needle, pos) {
     return StringOps.index_of_from(text, needle, pos)
@@ -16,7 +17,7 @@ static box StringScanBox {
     local n = text.length()
     local i = pos
     loop (i < n) {
-      local c = text.substring(i, i+1)
+      local c = me.read_char(text, i)
       if c == "\\" {
         // skip escape sequence
         i = i + 2
@@ -37,7 +38,7 @@ static box StringScanBox {
     local i = start + 1
     local n = text.length()
     loop (i < n) {
-      local c = text.substring(i, i+1)
+      local c = me.read_char(text, i)
       if c == "\\" { i = i + 2  continue }
       if c == "\"" { return i }
       i = i + 1

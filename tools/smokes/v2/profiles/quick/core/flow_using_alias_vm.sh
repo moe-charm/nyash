@@ -47,7 +47,7 @@ flow Main {
 EOF
 
   local output rc
-  output=$(run_nyash_vm main.nyash 2>&1)
+  output=$(run_nyash_vm main.nyash 2>&1 | grep -v '^Result: ')
   compare_outputs "30" "$output" "flow_using_alias_vm"
   rc=$?
   cd /

@@ -1,9 +1,13 @@
 [env]
 # Put environment defaults used by tools or examples if needed
 # Enable using resolver by default (can be disabled with NYASH_SKIP_TOML_ENV=1)
-NYASH_ENABLE_USING = "1"
+NYASH_USING = "1"
 # Enable dev sugar preexpand for @ local alias (line-head) during parsing
 NYASH_DEV_AT_LOCAL = "1"
+# Macros: enable minimal macro engine and built-in selfhost micro macros (dev)
+NYASH_MACRO_ENABLE = "1"
+# Note: Macro PATHS are opt-in per test/profile to avoid argv overflows in child runner.
+# Set NYASH_MACRO_PATHS in specific smokes or profiles as needed.
 # Enable contracts checks by default (unborn guard/diagnostics)
 NYASH_CHECK_CONTRACTS = "1"
 
@@ -34,6 +38,7 @@ selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.hako"
+selfhost.common.json.mir_v1_adapter = "apps/selfhost/common/json/mir_v1_adapter.hako"
 selfhost.compiler.pipeline_v2.emit_compare = "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako"
 selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.hako"
 selfhost.vm.json = "apps/selfhost/common/json_adapter.hako"
@@ -67,6 +72,9 @@ selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
 selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
 selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"
 selfhost.common.string_ops = "apps/selfhost/common/string_ops.hako"
+
+# Tools (dep_tree utilities)
+selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 [libraries]

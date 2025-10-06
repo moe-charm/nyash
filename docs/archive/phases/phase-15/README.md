@@ -107,7 +107,7 @@ Imports/Namespace plan（15.3‑late）
 
 【受入（MVP）】
 - `tools/ny_roundtrip_smoke.sh` 緑（Case A/B）。
-- `apps/tests/esc_dirname_smoke.nyash` / `apps/selfhost/tools/dep_tree_min_string.nyash` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
+- `apps/tests/esc_dirname_smoke.nyash` / `apps/selfhost/tools/dep_tree_min_string.hako` を Ny パーサ経路で実行し、PyVM/llvmlite とパリティ一致（stdout/exit）。
 
 #### 予告: LoopForm（MIR18）での PHI 自動化（Phase‑15 後）
 - LoopForm を強化し、`loop.begin(loop_carried_values) / loop.iter / loop.branch / loop.end` の構造的情報から逆Loweringで PHI を合成。
@@ -321,7 +321,7 @@ ny_free_buf(buffer)
 
 ### ✅ クイックスモーク（現状）
 - PyVM↔llvmlite パリティ: `tools/parity.sh --lhs pyvm --rhs llvmlite apps/tests/esc_dirname_smoke.nyash`
-- dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh apps/selfhost/tools/dep_tree_min_string.nyash -o app_dep && ./app_dep`
+- dep_tree（ハーネスON）: `NYASH_LLVM_FEATURE=llvm ./tools/build_llvm.sh apps/selfhost/tools/dep_tree_min_string.hako -o app_dep && ./app_dep`
 - Selfhost Parser EXE: `tools/build_compiler_exe.sh && (cd dist/nyash_compiler && ./nyash_compiler tmp/sample.nyash > sample.json)`
 - JSON v0 bridge spec: `docs/reference/ir/json_v0.md`
 - Stage‑2 smokes: `tools/ny_stage2_bridge_smoke.sh`, `tools/ny_parser_stage2_phi_smoke.sh`, `tools/ny_me_dummy_smoke.sh`

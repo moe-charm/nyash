@@ -52,6 +52,22 @@ static box MacroBoxSpec {
 
 Example (repo): `apps/macros/examples/echo_macro.nyash`.
 
+### Simple rewrite macros (recommended now)
+
+For Phase‑15/16 stabilization, keep user macros as pure, deterministic AST rewrites that desugar syntax sugar into the existing language forms. This keeps behavior strict and predictable and lets the normal Builder/VM pipeline handle semantics.
+
+- Examples (selfhost minimum):
+  - `json({ a: 1, b: arr([2,3]) })` → Map/Array literals (no semantic change)
+  - `map({ k: v })` → Map literal
+  - `arr([x, y])` → Array literal
+- Packaging (suggested layout):
+  - Put your macros under `apps/macros/<pkg>/macros.hako`
+  - Enable via `NYASH_MACRO_PATHS=apps/macros/<pkg>/macros.hako`
+- Policy: no IO/NET/ENV by default (caps off). Expansion must return valid AST JSON v0, or the runner fails fast.
+
+Complex, effectful, or code‑generating macros are deferred until after self‑hosting. When needed, prefer promoting them to proper Boxes or plugins with clear interfaces and tests.
+
+
 Editing template (string literal uppercasing)
 - Example: `apps/macros/examples/upper_string_macro.nyash`
 - Behavior: if a string literal value starts with `UPPER:`, the suffix is uppercased.
@@ -79,6 +95,18 @@ NYASH_VM_USE_PY=1 \
 ```
 
 Notes: 現状は PyVM ルートのみ対応。`NYASH_VM_USE_PY=1` が必須。
+
+Selfhost minimum (json/map/arr) — enable and run
+```
+export NYASH_MACRO_ENABLE=1
+export NYASH_MACRO_PATHS=apps/macros/selfhost_min/macros.hako   # when provided
+
+# Or use the built‑in Rust MacroBox variant during bring‑up (dev only):
+#   export NYASH_MACRO_BOX_ENABLE=SelfhostMinMacro
+
+./target/release/hakorune --backend vm apps/APP/main.hako
+```
+
 
 CLI プロファイル（推奨）
 - `--macro-profile dev`（既定相当: マクロON/厳格ON）

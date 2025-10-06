@@ -7,6 +7,36 @@ use crate::mir::TypeOpKind;
 
 impl MirBuilder {
     // === ChatGPT5 Pro Design: Type-safe Call Resolution System ===
+    /// Normalize external (builtin) ModuleFunction names so dotted+arity strings always resolve.
+    /// Examples:
+    /// - "String.len/1"  + args.len()==1  -> Some("StringBox.len/0")
+    /// - "Array.get/2"   + args.len()==2  -> Some("ArrayBox.get/1")
+    /// - "Map.set/3"     + args.len()==3  -> Some("MapBox.set/2")
+    /// Returns None when the input isn't a dotted name or doesn't target known builtins.
+    fn normalize_external_module_function_name(&self, name: &str, argc: usize) -> Option<String> {
+        if !name.contains('.') { return None; }
+        let (class, method_and_arity) = name.split_once('.')?;
+        let canon_class = match class {
+            "String" => Some("StringBox"),
+            "Array" => Some("ArrayBox"),
+            "Map" => Some("MapBox"),
+            "Console" => Some("ConsoleBox"),
+            s if s.ends_with("Box") => Some(s),
+            _ => None,
+        }?;
+        let (mut method, provided_arity_opt) = if let Some((m, a)) = method_and_arity.split_once('/') {
+            (m.to_string(), a.parse::<usize>().ok())
+        } else {
+            (method_and_arity.to_string(), None)
+        };
+        // Method alias normalization for builtins
+        if canon_class == "StringBox" {
+            if method.as_str() == "len" { method = "length".to_string(); }
+        }
+        let total = provided_arity_opt.unwrap_or(argc);
+        let method_arity = total.saturating_sub(1);
+        Some(format!("{}.{}{}", canon_class, method, format!("/{}", method_arity)))
+    }
 
     /// Resolve function call target to type-safe Callee
     /// Implements the core logic of compile-time function resolution
@@ -152,6 +182,31 @@ impl MirBuilder {
         for a in args {
             arg_values.push(self.build_expression(a)?);
         }
+        
+        // External (builtin) ModuleFunction index — always resolve dotted+arity names
+        // even when not present in current module (String/Array/Map/Console families).
+                // Direct extern mapping for Timer.now_ms (function-call form)
+        if (name == "Timer.now_ms" || name == "TimerBox.now_ms") && arg_values.is_empty() {
+            return self.emit_timer_now_ms_call();
+        }
+        if name == "Timer.now_ms/0" || name == "TimerBox.now_ms/0" {
+            return self.emit_timer_now_ms_call();
+        }
+
+        if let Some(ext_name) = self.normalize_external_module_function_name(&name, arg_values.len()) {
+            let dst = self.value_gen.next();
+            let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
+            self.emit_instruction(MirInstruction::Call {
+                dst: Some(dst),
+                func: fun_val,
+                callee: Some(crate::mir::Callee::ModuleFunction(ext_name.clone())),
+                args: arg_values,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+            self.annotate_call_result_from_func_name(dst, &ext_name);
+            return Ok(dst);
+        }
+
         if module_fn_unify {
             if let Some(ref module) = self.current_module {
                 let arity = arg_values.len();

@@ -1,66 +1,30 @@
 // dep_tree_simple.nyash — dependency tree (include + using/module) in a single static box
 
+using selfhost.tools.dep_tree_core as Core
+
 static box Main {
-  // ---- file utils ----
-  read_all(path) {
-    local fb = new FileBox()
-    local ok = fb.open(path, "r")
-    if ok == false { return null }
-    local s = fb.read()
-    fb.close()
-    return s
-  }
-
-  file_exists(path) {
-    local fb = new FileBox()
-    local ok = fb.open(path, "r")
-    if ok == false { return false }
-    fb.close()
-    return true
-  }
-
-  dirname(path) {
-    local pb = new PathBox()
-    local d = pb.dirname(path)
-    if d != null { return d }
-    local i = path.lastIndexOf("/")
-    if i < 0 { return "." }
-    return path.substring(0, i)
-  }
-
-  join(base, rel) {
-    local pb = new PathBox()
-    local j = pb.join(base, rel)
-    if j != null { return j }
-    return base + "/" + rel
-  }
-
   // ---- text utils ----
   split_lines(src) {
     // return { arr, len }
-    local pair = new MapBox()
-    local out = new ArrayBox()
+        local out = new ArrayBox()
     local len = 0
     local i = 0
     local n = src.length()
     local start = 0
     loop(true) {
-      if i == n { out.push(src.substring(start, i)) len = len + 1 pair.set("arr", out) pair.set("len", len) return pair }
+      if i == n { out.push(src.substring(start, i)) len = len + 1 return map({ arr: out, len: len }) }
       local ch = src.substring(i, i+1)
       if ch == "\n" { out.push(src.substring(start, i)) len = len + 1 start = i + 1 }
       i = i + 1
     }
-    pair.set("arr", out)
-    pair.set("len", len)
-    return pair
+    return map({ arr: out, len: len })
   }
 
   // ---- scanners ----
   scan_includes(src) {
-    local pair = new MapBox()
-    local out = new ArrayBox()
+        local out = new ArrayBox()
     local out_len = 0
-    if src == null { pair.set("arr", out) pair.set("len", out_len) return pair }
+    if src == null { return map({ arr: out, len: out_len }) }
     local lp = me.split_lines(src)
     local lines = lp.get("arr")
     local lines_len = lp.get("len")
@@ -79,17 +43,14 @@ static box Main {
       }
       i = i + 1
     }
-    pair.set("arr", out)
-    pair.set("len", out_len)
-    return pair
+    return map({ arr: out, len: out_len })
   }
 
   scan_usings(src) {
     // return { arr, len }
-    local pair = new MapBox()
-    local out = new ArrayBox()
+        local out = new ArrayBox()
     local out_len = 0
-    if src == null { pair.set("arr", out) pair.set("len", out_len) return pair }
+    if src == null { return map({ arr: out, len: out_len }) }
     local lp = me.split_lines(src)
     local lines = lp.get("arr")
     local lines_len = lp.get("len")
@@ -106,8 +67,7 @@ static box Main {
         local target = t
         local alias = null
         if as_pos >= 0 { target = t.substring(0, as_pos).trim() alias = t.substring(as_pos+4, t.length()).trim() }
-        local rec = new MapBox()
-        rec.set("target", target)
+        local rec = map({ target: target })
         if alias != null { rec.set("alias", alias) }
         if target.startsWith("./") || target.startsWith("/") || target.endsWith(".nyash") { rec.set("kind", "path") } else { rec.set("kind", "namespace") }
         out.push(rec)
@@ -115,17 +75,14 @@ static box Main {
       }
       i = i + 1
     }
-    pair.set("arr", out)
-    pair.set("len", out_len)
-    return pair
+    return map({ arr: out, len: out_len })
   }
 
   scan_modules(src) {
     // return { arr, len }
-    local pair = new MapBox()
-    local out = new ArrayBox()
+        local out = new ArrayBox()
     local out_len = 0
-    if src == null { pair.set("arr", out) pair.set("len", out_len) return pair }
+    if src == null { return map({ arr: out, len: out_len }) }
     local lp = me.split_lines(src)
     local lines = lp.get("arr")
     local lines_len = lp.get("len")
@@ -138,18 +95,14 @@ static box Main {
         if eq > 0 {
           local ns = rest.substring(0, eq).trim()
           local path = rest.substring(eq+1, t.length()).trim()
-          local m = new MapBox()
-          m.set("namespace", ns)
-          m.set("path", path)
+          local m = map({ namespace: ns, path: path })
           out.push(m)
           out_len = out_len + 1
         }
       }
       i = i + 1
     }
-    pair.set("arr", out)
-    pair.set("len", out_len)
-    return pair
+    return map({ arr: out, len: out_len })
   }
 
   default_using_paths() {
@@ -163,14 +116,14 @@ static box Main {
 
   resolve_ns(base_dir, ns) {
     local rel = ns.replace(".", "/") + ".nyash"
-    local cand0 = me.join(base_dir, rel)
-    if me.file_exists(cand0) { return cand0 }
+    local cand0 = Core.join(base_dir, rel)
+    if Core.file_exists(cand0) { return cand0 }
     local paths = me.default_using_paths()
     local paths_len = 4
     local i = 0
     loop(i < paths_len) {
-      local cand = me.join(paths.get(i), rel)
-      if me.file_exists(cand) { return cand }
+      local cand = Core.join(paths.get(i), rel)
+      if Core.file_exists(cand) { return cand }
       i = i + 1
     }
     return null
@@ -178,19 +131,18 @@ static box Main {
 
   node_for(path, visited) {
     if visited.has(path) {
-      local m = new MapBox()
-      m.set("path", path)
-      m.set("children", new ArrayBox())
-      m.set("includes", new ArrayBox())
-      m.set("uses", new ArrayBox())
-      m.set("modules", new ArrayBox())
-      m.set("note", "visited")
-      return m
+      return map({
+        path: path,
+        children: new ArrayBox(),
+        includes: new ArrayBox(),
+        uses: new ArrayBox(),
+        modules: new ArrayBox(),
+        note: "visited"
+      })
     }
     visited.set(path, true)
-    local out = new MapBox()
-    out.set("path", path)
-    local src = me.read_all(path)
+    local out = map({ path: path })
+    local src = Core.read_all(path)
     if src == null {
       out.set("error", "read_fail")
       out.set("includes", new ArrayBox())
@@ -199,7 +151,7 @@ static box Main {
       out.set("children", new ArrayBox())
       return out
     }
-    local base = me.dirname(path)
+    local base = Core.dirname(path)
     local incp = me.scan_includes(src)
     local incs = incp.get("arr")
     local incs_len = incp.get("len")
@@ -212,7 +164,7 @@ static box Main {
     out.set("includes", incs)
     out.set("uses", uses)
     out.set("modules", mods)
-    local mod_map = new MapBox()
+    local mod_map = map({})
     local mi = 0
     loop(mi < mods_len) {
       local mm = mods.get(mi)
@@ -222,7 +174,7 @@ static box Main {
     local children = new ArrayBox()
     local i = 0
     loop(i < incs_len) {
-      local child_path = me.join(base, incs.get(i))
+      local child_path = Core.join(base, incs.get(i))
       children.push(me.node_for(child_path, visited))
       i = i + 1
     }
@@ -230,13 +182,13 @@ static box Main {
     loop(i < uses_len) {
       local u = uses.get(i)
       if u.get("kind") == "path" {
-        local p = me.join(base, u.get("target"))
-        if me.file_exists(p) { u.set("resolved", p) children.push(me.node_for(p, visited)) } else { u.set("unresolved", true) u.set("hint", p) }
+        local p = Core.join(base, u.get("target"))
+        if Core.file_exists(p) { u.set("resolved", p) children.push(me.node_for(p, visited)) } else { u.set("unresolved", true) u.set("hint", p) }
       } else {
         local tgt = u.get("target")
         local via = mod_map.get(tgt)
         if via != null {
-          if me.file_exists(via) { u.set("resolved", via) children.push(me.node_for(via, visited)) } else { u.set("unresolved", true) u.set("hint", via) }
+          if Core.file_exists(via) { u.set("resolved", via) children.push(me.node_for(via, visited)) } else { u.set("unresolved", true) u.set("hint", via) }
         } else {
           local found = me.resolve_ns(base, tgt)
           if found != null { u.set("resolved", found) children.push(me.node_for(found, visited)) } else { u.set("unresolved", true) u.set("hint", tgt) }
@@ -253,12 +205,9 @@ static box Main {
     local entry = null
     if args != null && args.length() >= 1 { entry = args.get(0) }
     if entry == null || entry == "" { entry = "apps/selfhost/ny-parser-nyash/main.nyash" }
-    local visited = new MapBox()
+    local visited = map({})
     local tree = me.node_for(entry, visited)
-    local root = new MapBox()
-    root.set("version", 1)
-    root.set("root_path", entry)
-    root.set("tree", tree)
+    local root = map({ version: 1, root_path: entry, tree: tree })
     console.println(root.toJson())
     return 0
   }

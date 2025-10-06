@@ -17,7 +17,7 @@ static box Main {
     local ir = ParserV0.parse_program(buf)
     // If already an Error envelope, print as-is
     local s = ir.as_any().toString()
-    if s.indexOf("\"kind\":\"Error\"") >= 0 {
+    if call("String.indexOf/2", s, "\"kind\":\"Error\"") >= 0 {
       console.log(s)
       return 1
     }

@@ -4,6 +4,11 @@
 
 # set -eは使わない（個々のテストが失敗しても全体を続行するため）
 set -uo pipefail
+# Guard against double sourcing
+if [ -n "${RESULT_CHECKER_SH_LOADED:-}" ]; then
+    return 0 2>/dev/null || true
+fi
+RESULT_CHECKER_SH_LOADED=1
 
 # 結果比較種別
 readonly EXACT_MATCH="exact"

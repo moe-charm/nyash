@@ -2,6 +2,7 @@
 # selfhost_mir_m2_compare_ge_builder_vm_llvm.sh — VM vs LLVM parity for compare Ge using MirJsonBuilderMin
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2

@@ -169,7 +169,7 @@ static box MiniVmBinOp {
     local nums = []
     local i = obj_start
     loop (i < obj_end) {
-      if json.substring(i, i+1) == "\"" {
+      if call("String.substring/2", json, i, i+1) == "\"" {
         local j = scan.index_of_from(json, "\"", i+1)
         if j < 0 || j >= obj_end { break }
         i = j + 1

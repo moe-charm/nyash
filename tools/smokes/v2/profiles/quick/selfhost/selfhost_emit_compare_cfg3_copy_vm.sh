@@ -14,7 +14,7 @@ fi
 
 
 # Allow file-path using for pipeline boxes
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 
 TMP_DIR="/tmp/selfhost_emit_compare_cfg3_copy_vm_$$"

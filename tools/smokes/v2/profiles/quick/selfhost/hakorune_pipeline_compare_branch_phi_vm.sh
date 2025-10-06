@@ -6,7 +6,7 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 
 TMP_DIR="/tmp/hakorune_pipeline_compare_branch_phi_vm_$$"

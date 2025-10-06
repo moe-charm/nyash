@@ -16,7 +16,7 @@ export NYASH_DISABLE_PLUGINS=1
 # テスト実装
 test_basic_print() {
     local output
-    output=$(run_nyash_vm -c 'print("Hello, World!")')
+    output=$(run_nyash_vm -c 'print("Hello, World!")' | grep -v '^Result: ')
     compare_outputs "Hello, World!" "$output" "basic_print"
 }
 

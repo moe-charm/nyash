@@ -20,7 +20,7 @@ x = 42
 print(x)
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "42" "$output" "local_variable"
 }
 
@@ -31,7 +31,7 @@ name = "Nyash"
 print(name)
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "Nyash" "$output" "string_variable"
 }
 
@@ -44,7 +44,7 @@ c = 3
 print(a + b + c)
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "6" "$output" "multiple_variables"
 }
 

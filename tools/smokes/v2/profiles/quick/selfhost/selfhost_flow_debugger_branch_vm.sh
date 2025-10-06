@@ -5,7 +5,7 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 
 TMP_DIR="/tmp/selfhost_flow_debugger_$$"

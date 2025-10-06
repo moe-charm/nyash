@@ -2,6 +2,7 @@
 # selfhost_mir_m2_compare_ops_rev_vm_llvm.sh — parity for compare ops with a<b (a=4, b=5)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2

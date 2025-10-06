@@ -12,7 +12,7 @@ if [ "${SMOKES_ENABLE_SELFHOST_ACCEPT:-0}" != "1" ]; then
   exit 0
 fi
 
-OUT=$(NYASH_DISABLE_PLUGINS=1 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_ALLOW_USING_FILE=1 NYASH_ENABLE_USING=1 NYASH_JSON_ONLY=1 \
+OUT=$(NYASH_DISABLE_PLUGINS=1 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING=1 NYASH_JSON_ONLY=1 \
       timeout 5 "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" -- --min-json 2>/dev/null | \
       awk 'match($0,/^\{/) {print; exit}')
 

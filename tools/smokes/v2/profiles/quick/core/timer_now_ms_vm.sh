@@ -10,7 +10,7 @@ export NYASH_DISABLE_PLUGINS=1
 run_timer_now_ms_vm() {
   # Static TimerBox.now_ms; no plugins/using required
   local out
-  out=$(run_nyash_vm -c 'static box Main { main() { if TimerBox.now_ms() >= 0 { print("ok") } else { print("ng") } return 0 } }' --dev | tail -n 1 | tr -d '\r' | xargs)
+  out=$(run_nyash_vm -c 'static box Main { main() { if TimerBox.now_ms() >= 0 { print("ok") } else { print("ng") } return 0 } }' --dev | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)
   compare_outputs "ok" "$out" "timer_now_ms_vm"
 }
 

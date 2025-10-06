@@ -34,7 +34,27 @@ pub fn maybe_expand_and_dump(ast: &ASTNode, _dump_only: bool) -> ASTNode {
     let mut eng = self::engine::MacroEngine::new();
     let (out, _patches) = eng.expand(ast);
     let out2 = maybe_inject_test_harness(&out);
-    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") { eprintln!("[macro] output AST: {:?}", out2); }
+    if std::env::var("NYASH_MACRO_TRACE").ok().as_deref() == Some("1") {
+        fn count_calls(n: &nyash_rust::ASTNode, acc: &mut std::collections::HashMap<String, usize>) {
+            use nyash_rust::ast::ASTNode as A;
+            match n.clone() {
+                A::Program { statements, .. } => { for s in statements { count_calls(&s, acc); } }
+                A::FunctionCall { name, arguments, .. } => { *acc.entry(name).or_insert(0) += 1; for a in arguments { count_calls(&a, acc); } }
+                A::MethodCall { object, arguments, .. } => { count_calls(&object, acc); for a in arguments { count_calls(&a, acc); } }
+                A::ArrayLiteral { elements, .. } => { for e in elements { count_calls(&e, acc); } }
+                A::MapLiteral { entries, .. } => { for (_k, v) in entries { count_calls(&v, acc); } }
+                A::BinaryOp { left, right, .. } => { count_calls(&left, acc); count_calls(&right, acc); }
+                A::UnaryOp { operand, .. } => { count_calls(&operand, acc); }
+                A::Assignment { target, value, .. } => { count_calls(&target, acc); count_calls(&value, acc); }
+                A::If { condition, then_body, else_body, .. } => { count_calls(&condition, acc); for s in then_body { count_calls(&s, acc); } if let Some(b) = else_body { for s in b { count_calls(&s, acc); } } }
+                _ => {}
+            }
+        }
+        let mut acc = std::collections::HashMap::new();
+        count_calls(&out2, &mut acc);
+        if !acc.is_empty() { eprintln!("[macro] call census: {:?}", acc); }
+        eprintln!("[macro] output AST: {:?}", out2);
+    }
     out2
 }
 

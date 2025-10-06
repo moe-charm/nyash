@@ -58,3 +58,31 @@ impl CallNameResolverBox {
         crate::mir::resolve::call_resolver_core::normalize(raw_name, argc)
     }
 }
+
+
+#[cfg(test)]
+mod tests {
+    use super::CallNameResolverBox as R;
+
+    #[test]
+    fn valid_ident_allows_underscores_and_digits() {
+        assert!(R::is_valid_ident("JsonFragBox"));
+        assert!(R::is_valid_ident("block0_segment"));
+        assert!(R::is_valid_ident("_private"));
+        assert!(!R::is_valid_ident("0leading"));
+        assert!(!R::is_valid_ident("bad-hyphen"));
+        assert!(!R::is_valid_ident("bad space"));
+    }
+
+    #[test]
+    fn static_name_preserves_underscores() {
+        let s = R::static_name("JsonFragBox", "block0_segment", 1).unwrap();
+        assert_eq!(s, "JsonFragBox.block0_segment/1");
+    }
+
+    #[test]
+    fn static_name_rejects_invalid() {
+        assert!(R::static_name("Bad-Name", "x", 0).is_err());
+        assert!(R::static_name("X", "bad name", 0).is_err());
+    }
+}

@@ -21,7 +21,7 @@ preflight_plugins || exit 2
 # Minimal env (dev-heavy toggles disabled to keep VM work small)
 unset NYASH_DEV || true
 unset NYASH_OPERATOR_BOX_ALL || true
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 
 # Build a tiny driver that uses MirVmMin and embeds JSON inline
 TMP_DIR="/tmp/selfhost_mir_m2_eq_true_vm_$$"

@@ -39,7 +39,7 @@ static box Main {
 NYASH
 
 ensure_hako_toml
-OUT=$(run_nyash_vm "$PROG")
+OUT=$(run_nyash_vm "$PROG" | grep -v '^Result: ')
 
 if [[ "$OUT" != "ok" ]]; then
   fail "timer monotonic check failed: $OUT"

@@ -4,10 +4,10 @@
 
 using "apps/selfhost-runtime/mir_loader.nyash"
 using "apps/selfhost-runtime/ops_calls.nyash"
-using "apps/lib/boxes/console_std.nyash"
-using "apps/lib/boxes/string_std.nyash"
-using "apps/lib/boxes/array_std.nyash"
-using "apps/lib/boxes/map_std.nyash"
+using "apps/lib/boxes/console_std.hako"
+using "apps/lib/boxes/string_std.hako"
+using "apps/lib/boxes/array_std.hako"
+using "apps/lib/boxes/map_std.hako"
 
 static box Main {
   main(args) {

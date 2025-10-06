@@ -1,49 +1,164 @@
-# 🚀 Nyash開発マスタープラン
+# 🚀 Hakorune開発マスタープラン
 
-Status: Active Development  
-Last Updated: 2025-09-02  
-Purpose: Claude×Copilot×ChatGPT×Gemini×Codex協調開発の総合ロードマップ
+Status: Active Development
+Last Updated: 2025-10-06
+Purpose: Claude×Copilot×ChatGPT×Gemini協調開発の総合ロードマップ
 
 ## 📍 現在位置
 
-- 現在フェーズ: Phase 12 TypeBox統合ABI・セルフホスティング準備
-- 最新成果: 🔥 **Nyash ABIをC実装TypeBoxで提供** - Rust依存排除への道！
-- 次フェーズ: Phase 12.0.5 Nyash ABI C実装開始
-- 備考: GeminiとCodexの深い考察により、セルフホスティングへの明確な道筋が見えました。
-
-## 🗺️ フェーズ概要
-
-| Phase | 状態 | 概要 | 詳細リンク |
-|-------|------|------|------------|
-| 8.4 | ✅完了 | AST→MIR Lowering完全実装 | [phase_8_4_ast_mir_lowering.md](phase-8/phase_8_4_ast_mir_lowering.md) |
-| 8.5 | ✅完了 | MIRダイエット（35→26→15命令） | [phase_8_5_mir_35_to_26_reduction.md](phase-8/phase_8_5_mir_35_to_26_reduction.md) |
-| 8.6 | 🔄進行中 | VM性能改善（0.9倍→2倍以上） | [phase_8_6_vm_performance_improvement.md](phase-8/phase_8_6_vm_performance_improvement.md) |
-| 9 | 📅予定 | JIT実装 | [phase-9/](phase-9/) |
-| 9.75g-0 | ✅完了 | BID-FFI Plugin System | [Phase-9.75g-0-BID-FFI-Developer-Guide.md](phase-9/Phase-9.75g-0-BID-FFI-Developer-Guide.md) |
-| 9.8 | 📅予定 | BIDレジストリ + 自動コード生成 | [phase_9_8_bid_registry_and_codegen.md](phase-9/phase_9_8_bid_registry_and_codegen.md) |
-| 10 | 📅予定 | Cranelift JIT（主経路） | [phase_10_cranelift_jit_backend.md](phase-10/phase_10_cranelift_jit_backend.md) |
-| 11 | ✅完了 | LLVM統合・AOT実装（依存重い） | [phase-11/](phase-11/) |
-| 11.8 | 📅予定 | MIR整理（Core-15→Core-13） | [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/) |
-| 12 | 🔄進行中 | TypeBox統合ABI・セルフホスティング準備 | [phase-12/](phase-12/) |
-| 12.5 | 📅予定 | MIR15最適化戦略 | [phase-12.5/](phase-12.5/) |
-| 12.7 | 📅予定 | AI-Nyash Compact Notation Protocol (ANCP) | [phase-12.7/](phase-12.7/) |
-| 13 | 📅予定 | Nyashブラウザー革命 | [phase-13/](phase-13/) |
-| 14 | 📅予定 | パッケージング・CI改善 | [phase-14/](phase-14/) |
-| 15 | 🌟実現可能 | セルフホスティング（C実装ABI経由） | [phase-15/](phase-15/) |
-| 16 | 🔄進行中 | マクロ革命（正規化＋テストランナー） | [phase-16-macro-revolution/](../phase-16-macro-revolution/) |
-| 17 | 🧪計画中 | LoopForm Self‑Hosting＋Mini‑VM | [phase-17-loopform-selfhost/](../phase-17-loopform-selfhost/) |
-| 17+ | 💡候補 | Rust所有権統合（オプショナル） | [rust-ownership-fusion](../../private/ideas/new-features/2025-09-22-rust-ownership-fusion.md) |
+- **現在フェーズ**: Phase 15.7 セルフホスティング実現への道筋
+- **進捗**: 85-90%完成（残り10-15%、1-2週間）
+- **次フェーズ**: Phase 15.7完了 → セルフホスティング達成！
+- **備考**: Hakorune言語で Hakorune をコンパイル・実行する完全なセルフホスティングへ
 
 ---
 
-## 🎯 Nyash実行モード併用戦略
+## 🗺️ フェーズ概要
+
+### ✅ **完了済みフェーズ（Phase 1-14）**
+
+| Phase | 状態 | 概要 | 詳細リンク |
+|-------|------|------|------------|
+| 1-7 | ✅完了 | 言語設計・パーサー・基本機能実装 | - |
+| 8.4 | ✅完了 | AST→MIR Lowering完全実装 | [phase_8_4_ast_mir_lowering.md](phase-8/phase_8_4_ast_mir_lowering.md) |
+| 8.5 | ✅完了 | MIRダイエット（35→26→15命令） | [phase_8_5_mir_35_to_26_reduction.md](phase-8/phase_8_5_mir_35_to_26_reduction.md) |
+| 8.6 | ✅完了 | VM性能改善（0.9倍→2倍以上） | [phase_8_6_vm_performance_improvement.md](phase-8/phase_8_6_vm_performance_improvement.md) |
+| 9 | ✅完了 | プラグインシステム基盤 | [phase-9/](phase-9/) |
+| 9.75g-0 | ✅完了 | BID-FFI Plugin System | [Phase-9.75g-0-BID-FFI-Developer-Guide.md](phase-9/Phase-9.75g-0-BID-FFI-Developer-Guide.md) |
+| 10 | 📋計画 | Cranelift JIT（主経路、将来検討） | [phase_10_cranelift_jit_backend.md](phase-10/phase_10_cranelift_jit_backend.md) |
+| 11 | ✅完了 | LLVM統合・AOT実装 | [phase-11/](phase-11/) |
+| 11.8 | 📋計画 | MIR整理（Core-15→Core-13） | [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/) |
+| 12 | ✅完了 | TypeBox統合ABI | [phase-12/](phase-12/) |
+| 13 | 📋計画 | Hakoruneブラウザー革命 | [phase-13/](phase-13/) |
+| 14 | 📋計画 | パッケージング・CI改善 | [phase-14/](phase-14/) |
+
+---
+
+### 🔥 **Phase 15系: セルフホスティング実現（進行中）**
+
+#### ✅ **Phase 15: セルフホスティング基盤**
+- **概要**: Hakoruneコンパイラ・Hakorune VM実装の総合計画
+- **詳細**: [phase-15/](phase-15/)
+
+#### ✅ **Phase 15.5: JSON v0中心化・統一Call基盤革命** (2025-09 完了)
+- **概要**: セルフホスティング前の基盤アーキテクチャ大改革
+- **成果**:
+  - Core Box統一
+  - MIR命令安定化
+  - LLVM PHI安定化
+  - 型変換統一化
+- **詳細**: [phase-15.5/README.md](phase-15.5/README.md)
+
+#### 🔥 **Phase 15.7: セルフホスティング実現への道筋 - Hakoruneコンパイラ完成計画** (進行中)
+- **期間**: 2025-09-28 ~ 2025-10-20（予想）
+- **進捗**: **85-90%完成**（残り10-15%、1-2週間）
+- **目標**: Hakorune言語で Hakorune をコンパイル・実行する
+- **詳細**: [phase-15.7/README.md](phase-15.7/README.md)
+
+**完了済み（85-90%）**:
+- ✅ P2-A/B/C（Using解決系）完全実装
+  - UsingResolverBox実装（1日で完了、見積もり7日 → **85%短縮！**）
+  - NamespaceBox実装（1日で完了、見積もり5日 → **80%短縮！**）
+  - Pipeline V2統合（1日で完了、見積もり3日 → **67%短縮！**）
+- ✅ SignatureVerifier/MethodRegistry（品質強化）
+- ✅ Hakorune VM基盤（InstructionScannerBox/OpHandlersBox/ProgramStateBox等）
+- ✅ FlowRunner/JsonProgramBox
+- ✅ Pipeline V2基礎実装
+- ✅ Quick smokes 常緑（172/172 PASS）
+- ✅ TimerBox実装完了
+- ✅ Hakorune VM への改名完了（Mini-VM → Hakorune VM）
+
+**残り10-15%（1-2週間）**:
+- 🔥 **Hakorune VM命令拡張（最後の砦）**
+  - newbox（2日・最重要）← **今ココ！**
+  - boxcall（2日・最重要）
+  - phi（2日）
+  - load/store（2日）
+  - externcall（1日）
+- 🔲 セルフホストループE2E（1週間）
+
+**教訓（Lessons Learned）**:
+1. **Box-First設計の威力**: 新機能追加が予想の**9倍速**
+2. **見積もりの精度**: 初期見積もりは慎重すぎた
+3. **並行開発の難しさ**: 実際は順次開発が正解
+4. **品質ファーストの重要性**: 計画外の成果が大きい
+
+#### ✅ **Phase 15.8: LLVM→WASM実装** (2025-10-01~10-22 完了)
+- **概要**: MIR16命令をWASMに変換、ブラウザ/エッジ環境で実行可能に
+- **成果**: WebAssembly完全対応
+- **詳細**: [phase-15.8/README.md](phase-15.8/README.md)
+
+#### ✅ **Phase 15.9: VmConfig集約化** (2025-10-05 完了)
+- **概要**: 環境変数42ファイル散在→1箇所集約
+- **成果**: パフォーマンス向上、管理性改善
+- **コミット**: `f1874b3b`
+
+#### ✅ **Phase 15.10: Legacy Code大掃除** (2025-10-05 完了)
+- **概要**: 2大ファイル→8小ファイル分割
+- **成果**: デッドコード470行削除、純削減400行
+- **コミット**: `43679766`, `f6cbbf48`, `f1f3b83e`
+- **詳細**: legacy.rs分割（calls:617行 + boxes:518行）
+
+#### ✅ **Phase 15.11: StringHelpers共通ライブラリ箱化** (2025-10-05 完了)
+- **概要**: セルフホストコード重複削減
+- **成果**: 14ファイル統合で335行純削減
+- **詳細**:
+  - Phase 15.11: 319行削減 (380削除 - 61追加)
+  - Phase 15.11.1: 15行削減 (22削除 - 7追加) - ChatGPT協力
+  - 合計削減: 335行
+  - 重複削除: 7種類のヘルパー関数を統合
+- **コミット**: `6ba6b026` (本体), `d07f3af3` (追加統合), `0de80fa6` (docs)
+
+#### 📋 **Phase 15.12候補: index_of_from統一**
+- **概要**: `index_of_from` → CfgNavigatorBox統合
+- **見込み**: 60-100行削減
+- **詳細**: `docs/development/proposals/ideas/improvements/phase-15-12-index-of-from-consolidation.md`
+
+---
+
+### 🌟 **Phase 16-20系: マクロシステム（計画・一部完了）**
+
+#### ✅ **Phase 16: マクロ革命（Rust実装版）** (2025-09-19 完了、バグあり)
+- **状態**: Rust実装完了、バグ発見により暫定対応中
+- **成果**:
+  - AST Pattern Matching実装
+  - Quote/Unquote実装
+  - Match式構文実装
+  - @derive(Equals, ToString)実装
+  - @test ランナー実装
+- **問題**: フル機能にバグあり
+- **暫定対応**: `.hako`で単純置き換えマクロ実装中（`apps/macros/`）
+- **詳細**: [phase-16-macro-revolution/README.md](phase-16-macro-revolution/README.md)
+
+#### 📋 **Phase 20: マクロフル機能（Hakorune実装版）** (Phase 15.7完了後)
+- **状態**: 計画中（セルフホスティング完了後に開始）
+- **目的**: Phase 16のRust実装をHakoruneでセルフホスト実装に書き直す
+- **優先機能**:
+  1. @derive(Equals, ToString) - 最も便利
+  2. @test ランナー - セルフホストコードのテスト自動化
+  3. AST Pattern Matching - 複雑なマクロ基盤
+  4. Quote/Unquote - テンプレート生成
+- **詳細**: [phase-20-macro-full-features/README.md](phase-20-macro-full-features/README.md)
+- **移行ガイド**: [phase-20-macro-full-features/MIGRATION.md](phase-20-macro-full-features/MIGRATION.md)
+
+### 🌟 **Phase 17以降（将来計画）**
+
+| Phase | 状態 | 概要 | 詳細リンク |
+|-------|------|------|------------|
+| 17 | 🧪計画中 | LoopForm Self‑Hosting＋Hakorune VM | [phase-17-loopform-selfhost/](phase-17-loopform-selfhost/) |
+| 17+ | 💡候補 | Rust所有権統合（オプショナル） | [rust-ownership-fusion](../../private/ideas/new-features/2025-09-22-rust-ownership-fusion.md) |
+| 22 | 💡構想 | Hakorune LLVM Compiler | [phase-22/README.md](phase-22/README.md) |
+
+---
+
+## 🎯 Hakorune実行モード併用戦略
 
 ### 🌟 インタープリター＋コンパイラ併用の価値
 
 #### 実行モード使い分け
 ```
-開発時: インタープリター（デバッグ・即時実行・非同期フル対応）
-本番時: インタープリター（Pythonのように実用的）
+開発時: Rust VM（デバッグ・即時実行）
+本番時: Rust VM（Pythonのように実用的）
         OR
         WASM/AOT（性能要求時）
 配布時: AOT native（最高性能）
@@ -59,233 +174,157 @@ Web時:  WASM（ブラウザ対応）
 
 ---
 
-## 📊 Phase別詳細
+## 🚀 **Phase 15.7詳細: セルフホスティング実現への道筋**
 
-### 🚨 Phase 8.6: VM性能改善 - 最優先課題（進行中）
+### 🎯 **Phase 15.7の真の目的**
 
-**Summary**:
-- **緊急問題**: VMがインタープリターより0.9倍遅い（性能回帰！）
-- **目標**: 2倍以上高速化でVM実行を実用レベルに引き上げ
-- **担当**: Copilot主導（GitHub Issue #112）
+**「Hakorune で Hakorune をコンパイルする」完全なセルフホスティングの実現**
 
-**技術的課題**:
-```bash
-# 現状のベンチマーク結果
-Interpreter: 110.10ms (ベースライン)
-VM:          119.80ms (0.9倍 - 遅い...)
-Target:       55.00ms (2倍高速化目標)
+### 🔄 **セルフホストループの具体的4ステップ**
+
+```
+┌──────────────────────────────────────┐
+│ Step 1: .hako ソース解析             │
+│    ↓                                  │
+│ Step 2: MIR JSON生成（コンパイラ）   │
+│    ↓                                  │
+│ Step 3: MIR JSON実行（Hakorune VM）  │
+│    ↓                                  │
+│ Step 4: 出力検証（パリティテスト）    │
+└──────────────────────────────────────┘
 ```
 
-**推定原因と対策**:
-- **デバッグ出力過多**: `println!`による性能劣化
-- **HashMap操作重い**: ValueId → VM値の変換コスト
-- **命令ディスパッチ非効率**: switch文ベースディスパッチ
+### 📅 **推奨実装順序**
+
+#### **Week 1-2: Hakoruneコンパイラ MVP完成（P2優先）** ✅ 完了！
+- ~~Day 1-2: branch/jump最小生成~~
+- ~~Day 3: LocalSSA.ensure_cond最終化~~
+- ~~Day 4-7: UsingResolverBox実装~~
+- ~~Day 8-10: NamespaceBox実装~~
+- ~~Day 11-14: Pipeline V2統合（using解決）~~
+
+#### **Week 3: Hakorune VM命令拡張（最優先）** 🔥 今ココ！
+- Day 1-2: newbox実装（Box生成）
+- Day 3-4: boxcall + phi 並行実装
+- Day 5-6: load/store + externcall 並行実装
+- Day 7: 統合テスト・スモークテスト
+
+#### **Week 4: セルフホストループE2E**
+- Day 1-2: .hakoソース→MIR JSON生成確認
+- Day 3-4: MIR JSON→Hakorune VM実行確認
+- Day 5-6: パリティテスト（Rust VM vs Hakorune VM）
+- Day 7: ブートストラップ達成！🎉
+
+### 📊 **実装優先度マトリックス（2025-10-06更新）**
+
+| 項目                   | 優先度   | ステータス | 理由       | 見積 | 実績 | 担当領域 |
+|----------------------|-------|-------|----------|------|------|------|
+| branch/jump生成        | 🔴 P2 | ✅完了 | 制御フロー必須  | 2日   | 2日 | コンパイラ |
+| LocalSSA.ensure_cond | 🔴 P2 | ✅完了 | 条件分岐安定化  | 1日   | 1日 | コンパイラ |
+| **UsingResolverBox実装** | 🔴 P2-A | ✅**完了** | **using解決の核心** | 1週間 | **1日**✨ | コンパイラ |
+| **NamespaceBox実装** | 🔴 P2-B | ✅**完了** | 名前空間解決 | 5日 | **1日**✨ | コンパイラ |
+| **Pipeline V2統合（using）** | 🔴 P2-C | ✅**完了** | using→MIR変換 | 3日 | **1日**✨ | コンパイラ |
+| **SignatureVerifier** | - | ✅**完了** | **計画外追加** | - | **1日** | コンパイラ |
+| **MethodRegistry拡大** | - | ✅**完了** | **計画外追加** | - | **1日** | コンパイラ |
+| **JsonCursorBox採用** | - | ✅**完了** | **計画外追加** | - | **1日** | 共通 |
+| **Hakorune VM改名** | - | ✅**完了** | **ブランディング統一** | - | **1日** | Hakorune VM |
+| **Hakorune VM newbox実装** | 🟡 P1-A | 🔥**最優先** | **Box生成（最重要！）** | 2日 | **未着手** | Hakorune VM |
+| **Hakorune VM boxcall実装** | 🟡 P1-B | 🔥未着手 | **メソッド呼び出し** | 2日 | **未着手** | Hakorune VM |
+| Hakorune VM phi実装 | 🟡 P1-C | 📝計画 | SSA合流 | 2日 | 未着手 | Hakorune VM |
+| Hakorune VM load/store実装 | 🟡 P1-D | 📝計画 | メモリアクセス | 2日 | 未着手 | Hakorune VM |
+| Hakorune VM externcall実装 | 🟡 P1-E | 📝計画 | print等外部呼び出し | 1日 | 未着手 | Hakorune VM |
+| match式完全対応 | 🟡 P1-F | 📝計画 | 頻繁に使用 | 2日 | 未着手 | コンパイラ |
+| Hakorune VM unaryop/typeop | 🟢 P3-A | 📝計画 | 単項演算・型操作 | 2日 | 未着手 | Hakorune VM |
+| 最適化パス | 🟢 P3-B | 📝計画 | 性能向上 | 1週間 | 未着手 | コンパイラ |
+| エラーハンドリング | 🟢 P3-C | 📝計画 | UX向上 | 3日 | 未着手 | コンパイラ |
+
+**凡例**:
+- 🔴 P2: 最優先（セルフホスティング必須）
+- 🟡 P1: 高優先度（基本機能実装）
+- 🟢 P3: 中優先度（改善・UX向上）
+- ✅完了 / 🔥最優先 / 🔥未着手 / 📝計画 / ✨予想より早い達成
+
+**達成状況**:
+- ✅ **P2系完全達成**（コンパイラー側：using解決・品質強化）
+- 🔥 **P1系が最優先**（Hakorune VM命令拡張：残り10-15%）
+
+### 🎯 **達成基準（明確な終了条件）**
+
+✅ **Phase 15.7完了 = 以下すべて満たす**:
+1. UsingResolverBox/NamespaceBox動作
+2. Hakorune VM 14命令すべて実装
+3. .hakoソース→MIR JSON→Hakorune VM実行成功
+4. c0（Rustコンパイラ）→c1（Hakoruneコンパイラ）動作
+5. c1→c1'（自己コンパイル）成功
+6. Quick smokes 全PASS維持
 
 ---
 
-### 🎊 Phase 9.75g-0: BID-FFI Plugin System - 完全完了！ ✅
+## 📊 Phase 15系の全体進捗
 
-**革命的成果**: NyashがプラグインでBox型を動的拡張可能に！
+```
+Phase 15系全体進捗: ████████████░ 85-90%完成
 
-```nyash
-// これが現実になった！
-local file = new FileBox()        // プラグイン提供
-local db = new PostgreSQLBox()    // 将来: プラグイン提供  
-local gpu = new CudaBox()         // 将来: プラグイン提供
+完了済み：
+✅ Phase 15: セルフホスティング基盤設計
+✅ Phase 15.5: JSON v0中心化・統一Call基盤革命
+✅ Phase 15.8: LLVM→WASM実装
+✅ Phase 15.9: VmConfig集約化
+✅ Phase 15.10: Legacy Code大掃除
+✅ Phase 15.11: StringHelpers共通ライブラリ箱化
+🔥 Phase 15.7: セルフホスティング実現（85-90%、残り1-2週間）
+
+次のステップ：
+1. Hakorune VM命令拡張（newbox/boxcall/phi/load/store/externcall）
+2. セルフホストループE2E検証
+3. ブートストラップ達成！🎉
 ```
 
-**References**:
-- [Phase-9.75g-0-BID-FFI-Developer-Guide.md](phase-9/Phase-9.75g-0-BID-FFI-Developer-Guide.md)
-- tools/plugin-tester/ (プラグイン診断ツール)
+---
+
+## 🏗️ 重要な設計原則
+
+### 🧱 Box-First原則: 「箱理論」で足場を積む
+
+Hakoruneは「Everything is Box」。実装・最適化・検証のすべてを「箱」で分離・固定し、いつでも戻せる足場を積み木のように重ねる。
+
+#### 実践テンプレート（開発時の合言葉）
+- 「箱にする」: 設定・状態・橋渡しはBox化（例: JitConfigBox, HandleRegistry）
+- 「境界を作る」: 変換は境界1箇所で（VMValue↔JitValue, Handle↔Arc）
+- 「戻せる」: フラグ・feature・env/Boxで切替。panic→フォールバック経路を常設
+- 「見える化」: ダンプ/JSON/DOTで可視化、回帰テストを最小構成で先に入れる
+- 「Fail-Fast」: エラーは隠さず即座に失敗。フォールバックより明示的エラー
+
+### 🏗️ Everything is Box
+- すべての値がBox（StringBox, IntegerBox, BoolBox等）
+- ユーザー定義Box: `box ClassName { field1: TypeBox field2: TypeBox }`
+- **MIR凍結セット**: 16命令で全機能実現！
 
 ---
 
-### 📦 Phase 9.8: BIDレジストリ + 自動コード生成ツール
+## 🎓 重要な教訓（Lessons Learned）
 
-**Summary**:
-- Phase 9.75g-0完了により準備完了
-- BID→各ターゲットのスタブ生成自動化
+### ✅ **Phase 15.7からの学び**
 
-**革命的価値**:
-```bash
-# 🎯 1つのプラグインが4バックエンド全対応！
-nyash bid gen --target wasm   bid.yaml  # WASM用import生成
-nyash bid gen --target vm     bid.yaml  # VM用関数テーブル生成  
-nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
-```
+1. **Box-First設計の威力**
+   - 新機能追加が予想の**9倍速**で完了
+   - UsingResolver/Namespace実装は1日ずつで完了（見積もり18日 → 実績2日）
+   - Pipeline V2の強固な設計が成功の鍵
 
----
+2. **見積もりの精度**
+   - 初期見積もりは慎重すぎた
+   - コンパイラー側: 見積もり18日 → 実績2日
+   - 基盤の成熟度を過小評価していた
 
-### 🏆 Phase 10: Cranelift JIT（主経路）
+3. **並行開発の難しさ**
+   - 実際は順次開発が正解
+   - Using解決がモジュールシステムの基盤
+   - コンパイラー完成 → Hakorune VM拡張の順が合理的
 
-**Summary**:
-- MIR→VMを維持しつつ、ホットパスをCraneliftでJIT化
-- 目標: VM比2倍以上の高速化
-- LLVM AOTは設計資産は維持しつつ、Phase 11以降に検討
-- **🌟 NEW: GC切り替え可能ランタイム（世界初の柔軟なメモリ管理）**
-
-**Start Gate（着手前の必須完了）**:
-- ✅ MIRダイエット（15命令）整合完了
-- ✅ VM統計: `--vm-stats` でホット関数抽出可能
-- 🔄 Proof of Concept: MIR→CLIFの最小Lower
-- ❓ BoxCall/Array/MapのJIT最適化
-
-**実装ステップ**:
-1. **Phase 10.1**: Proof of Concept（2週間）
-2. **Phase 10.2**: 基本実装（4週間）
-3. **Phase 10.3**: 非同期の扱い（最小）
-4. **Phase 10.4**: GC切り替え可能ランタイム（2-3ヶ月）
-5. **Phase 10.5**: セルフホスティング（並行実装）
-
----
-
-### 🔧 Phase 11: LLVM統合・AOT実装（完了 - 依存重い）
-
-**Summary**:
-- ✅ LLVM IRへの変換実装完了
-- ✅ AOT（Ahead-of-Time）コンパイル動作確認
-- ✅ ネイティブ実行ファイル生成成功
-
-**得られた知見**:
-- **依存関係が重い**: LLVM自体のビルド時間・サイズが巨大
-- **動作は確認**: 技術的には成功、実用性に課題
-- **Cranelift回帰**: 軽量な代替として再評価
-
----
-
-### 📐 Phase 11.8: MIR整理（Core-15→Core-13）
-
-**Summary**:
-- ArrayGet/ArraySet → BoxCall統合
-- PluginInvoke → BoxCall統合  
-- 最終的にCore-13を目指す
-
-**詳細**: [phase-11.8_mir_cleanup/](phase-11.8_mir_cleanup/)
-
----
-
-### 🎯 Phase 12: TypeBox統合ABI・セルフホスティング準備（進行中）
-
-**Summary**:
-- TypeBox革命：型情報もBoxとして扱う統一設計
-- C ABI + Nyash ABI完全統合
-- 🔥 **Nyash ABIのC実装**でRust依存排除！
-
-**革命的成果**:
-1. TypeBox：プラグイン間Box生成を可能に
-2. 統合ABI：C/Nyash ABIをシームレス統合
-3. **セルフホスティング**：C実装ABIで実現可能！
-
-**AI専門家の評価**:
-- Gemini：「技術的妥当性が高く、哲学とも合致した極めて優れた設計」
-- Codex：「16バイトアライメント、セレクターキャッシング等の具体案」
-
----
-
-### ⚡ Phase 12.5: MIR15最適化戦略 - コンパイラ丸投げ作戦
-
-**Summary**:
-- 「CPU（コンパイラ）に丸投げできるところは丸投げ」
-- MIR15の美しさ（15命令）を保ちながら実用的性能達成
-- 自前最適化は最小限、成熟したコンパイラ技術を活用
-
-**最適化境界線**:
-- **MIR側**: カノニカル化・軽量最適化のみ
-- **コンパイラ側**: ループ最適化・SIMD・レジスタ割当等
-
-**ヒントシステム**:
-- 命令は増やさずメタデータでヒント付与
-- pure/readonly/noalias/likely等の属性
-- Cコンパイラ/Cranelift/LLVMへ機械的マップ
-
-**詳細**: [phase-12.5/](phase-12.5/)
-
----
-
-## 🧠 AI大会議から得られた技術的知見
-
-### Gemini先生の助言
-- ✅ エスケープ解析・ボックス化解除が性能の鍵  
-- ✅ wasmtime compileは短期的に実用的
-- ✅ WASM実行は確実に高速（13.5倍実証済み）
-- 🔄 Cranelift → LLVM段階的アプローチ
-
-### codex先生の助言
-- ✅ MIR前倒し実装推奨（全バックエンドが恩恵）
-- ✅ wasmtime互換性管理が重要
-- ✅ CPU差異対応 (baseline/v3二段ビルド)
-- ✅ 起動時間・割当削減・配布体験がKPI
-
-### Claude統合分析
-- ✅ 実用価値最大化: WASM+AOTで十分な競争力
-- ✅ 開発効率: Cranelift JITの恩恵限定的
-- ✅ Everything is Box最適化が差別化の核心
-- ✅ 時間効率: 2-3ヶ月節約でLLVM集中投資
-
----
-
-## 💡 協調開発への具体的お願い
-
-### 🔧 Phase 8.6 VM性能改善（最優先）
-- ❓ 命令ディスパッチのボトルネック特定方法は？
-- ❓ HashMap操作の最適化戦略は？  
-- ❓ デバッグ出力削除による性能改善測定は？
-- ❓ Direct threading実装の現実的アプローチは？
-
-### 🚀 長期戦略相談
-- ❓ インタープリターとコンパイラの互換性保証は？
-- ❓ MIR→LLVM IR変換の基本的な実装戦略は？
-- ❓ Box型のLLVM表現として最適なアプローチは？
-- ❓ エスケープ解析によるスタック化判定は？
-
----
-
-## 🌟 Phase 15: セルフホスティング（実現可能！）
-
-**革命的発見**: Nyash ABIをC実装TypeBoxで提供することで、Rust依存を排除！
-
-### 実現への道筋（明確化）
-1. **Phase 12.0.5**: Nyash ABI C Shim実装（Rust FFI経由）
-2. **Phase 13**: C実装の完全化（基本型・参照カウント）
-3. **Phase 14**: NyashでABI再実装（AOTでC ABI公開）
-4. **Phase 15**: Nyashコンパイラ自身をNyashで実装！
-
-### 技術的革新
-- **TypeBox哲学**: ABIすらBoxとして扱う究極の統一
-- **C ABI基盤**: 最も安定した普遍的インターフェース
-- **段階的移行**: 既存Rust実装との共存期間を確保
-
----
-
-## 📊 進捗管理・コミュニケーション
-
-### 🤝 協調開発ルール
-- ✅ 大きな変更前にはdocs/CURRENT_TASK.mdで情報共有
-- ✅ ベンチマーク機能は最優先で維持
-- ✅ 競合発生時は機能優先度で解決
-- ✅ AI専門家（Gemini/Codex）の深い考察を活用
-
-### 品質保証
-- ✅ cargo check でビルドエラーなし
-- ✅ 既存ベンチマークが regression なし
-- ✅ 新機能のドキュメント整備
-- ✅ テストケース追加・CI通過
-
----
-
-## 🎯 期待される成果
-
-### 達成済み
-- 🏆 RefNew/RefGet/RefSet WASM完全動作
-- 🏆 MIR命令削減完了（35→26→15命令、Phase 8.5）
-- 🏆 Phase 9.75g-0 BID-FFI Plugin System完全完了
-- 🏆 警告削減100%達成（Phase 9.75j）
-
-### 進行中・予定
-- 🔄 VM性能改善進行中（Phase 8.6）- GitHub Issue #112
-- 📅 Cranelift JIT（Phase 10）: VM比2×以上の高速化
-- 📅 非同期ネイティブ実装: async/await完全対応
-- 📅 インタープリター併用: 開発・本番両対応
+4. **品質ファーストの重要性**
+   - 計画外の成果が大きい
+   - SignatureVerifier/MethodRegistry/JsonCursorBox
+   - Fail-Fast文化の確立が開発速度を加速
 
 ---
 
@@ -299,21 +338,18 @@ nyash bid gen --target llvm   bid.yaml  # AOT用declare生成（LLVM実装時）
 4. 💬 コミットメッセージでの進捗共有
 
 どんな小さなことでも相談大歓迎です！
-一緒にNyashを最高の言語にしていきましょう🚀
+一緒にHakoruneを最高の言語にしていきましょう🚀
 
 ---
 
-**最終更新**: 2025-08-26 (copilot_issues.txt統合・Markdown化)  
-**作成者**: Claude (ファイル統合・構造整理)
+**最終更新**: 2025-10-06 (Phase 15.7進捗反映・名前統一)
+**作成者**: Claude (全面書き直し・Phase 15系統合)
 
 ### 🎯 重要な変更点
-- ✅ **Phase 9.75g-0 BID-FFI Plugin System完全完了**
-- 🔄 **Phase 8.6 VM性能改善を最優先** (進行中)
-- 📦 **Phase 9.8 BIDレジストリ** (Phase 8.6完了後の次期重点)
-- 🔍 **Phase 10 Cranelift JIT** (主経路として確定)
-- 🌟 **統一ロードマップ化** (phasesフォルダに集約)
-## 🌈 Phase 22構想 - Nyash LLVM Compiler (将来)
-- LLVMコンパイラ自体をNyashで実装
-- C++薄ラッパー(20-30関数) + Nyash実装(100-200行)
-- ビルド時間: 5-7分 → 即時反映
-- 詳細: [Phase 22 README](phase-22/README.md)
+
+- ✅ **Phase 15系全面追加**（15.5/15.7/15.8/15.9/15.10/15.11）
+- 🔄 **現在位置更新**（Phase 12 → Phase 15.7）
+- 📊 **進捗率明確化**（85-90%完成、残り10-15%）
+- 🎯 **セルフホスティング予定明確化**
+- 📚 **教訓・Lessons Learned追加**
+- 🏗️ **Box-First原則明記**

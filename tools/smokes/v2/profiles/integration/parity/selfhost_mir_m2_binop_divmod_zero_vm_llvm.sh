@@ -2,6 +2,7 @@
 # selfhost_mir_m2_binop_divmod_zero_vm_llvm.sh — parity for Div/Mod by zero (expect 0)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2

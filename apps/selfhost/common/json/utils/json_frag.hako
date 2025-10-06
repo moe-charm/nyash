@@ -57,7 +57,7 @@ static box JsonFragBox {
     if mjson == null { return "" }
     // Find the instructions array start reliably
     local key = "\"instructions\":["
-    local pk = mjson.indexOf(key)
+    local pk = call("String.indexOf/2", mjson, key)
     if pk < 0 { return "" }
     // '[' position
     local arr_bracket = pk + key.length() - 1

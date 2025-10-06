@@ -12,7 +12,7 @@ if [ "${SMOKES_ENABLE_SELFHOST_STEPRUNNER:-0}" != "1" ]; then
 fi
 
 
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 
 TMP_DIR="/tmp/selfhost_step_runner_cmp_$$"

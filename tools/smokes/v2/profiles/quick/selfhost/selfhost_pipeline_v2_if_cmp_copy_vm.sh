@@ -13,7 +13,7 @@ if [[ "${NYASH_PIPELINE_V2:-}" != "1" ]]; then
 fi
 
 # Allow file-path using for pipeline boxes
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 
 TMP_DIR="/tmp/selfhost_pipeline_v2_if_cmp_copy_vm_$$"

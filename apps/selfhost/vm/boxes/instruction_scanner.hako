@@ -5,7 +5,7 @@ using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
 
 static box InstructionScannerBox {
-  _tprint(msg) { if msg.indexOf("[ERROR]") >= 0 { print(msg) } }
+  _tprint(msg) { if call("String.indexOf/2", msg, "[ERROR]") >= 0 { print(msg) } }
 
   index_of_from(hay, needle, pos) { return CfgNavigatorBox.index_of_from(hay, needle, pos) }
 
@@ -97,10 +97,6 @@ static box InstructionScannerBox {
     endp = endp + 1
     local obj = seg.substring(start, endp)
     local op = me._extract_op(obj)
-    local m = new MapBox()
-    m.set("start", start)
-    m.set("end", endp)
-    m.set("op", op)
-    return m
+    return map({ start: start, end: endp, op: op })
   }
 }

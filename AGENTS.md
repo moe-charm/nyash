@@ -379,6 +379,8 @@ Notes
 - Language statements (ASI): `docs/reference/language/statements.md`
 - using 文の方針: `docs/reference/language/using.md`
 - Nyash ソースのスタイルガイド: `docs/guides/style-guide.md`
+- Env variables guide: `docs/guides/env-variables.md`
+- Smokes profiles: `docs/guides/smokes-profiles.md`
 - Stage‑2 EBNF: `docs/reference/language/EBNF.md`
 - Macro profiles: `docs/guides/macro-profiles.md`
 - Template → Macro 統合方針: `docs/guides/template-unification.md`

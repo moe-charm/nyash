@@ -15,32 +15,32 @@ preflight_plugins || exit 2
 # テスト実装
 test_addition() {
     local output
-    output=$(run_nyash_vm -c 'print(10 + 25)' 2>&1)
+    output=$(run_nyash_vm -c 'print(10 + 25)' 2>&1 | grep -v '^Result: ')
     check_exact "35" "$output" "addition"
 }
 
 test_subtraction() {
     local output
-    output=$(run_nyash_vm -c 'print(100 - 42)' 2>&1)
+    output=$(run_nyash_vm -c 'print(100 - 42)' 2>&1 | grep -v '^Result: ')
     check_exact "58" "$output" "subtraction"
 }
 
 test_multiplication() {
     local output
-    output=$(run_nyash_vm -c 'print(7 * 6)' 2>&1)
+    output=$(run_nyash_vm -c 'print(7 * 6)' 2>&1 | grep -v '^Result: ')
     check_exact "42" "$output" "multiplication"
 }
 
 test_division() {
     local output
-    output=$(run_nyash_vm -c 'print(84 / 2)' 2>&1)
+    output=$(run_nyash_vm -c 'print(84 / 2)' 2>&1 | grep -v '^Result: ')
     check_exact "42" "$output" "division"
 }
 
 test_complex_expression() {
     local output
     # (10 + 5) * 2 - 8 = 30 - 8 = 22
-    output=$(run_nyash_vm -c 'print((10 + 5) * 2 - 8)' 2>&1)
+    output=$(run_nyash_vm -c 'print((10 + 5) * 2 - 8)' 2>&1 | grep -v '^Result: ')
     check_exact "22" "$output" "complex_expression"
 }
 

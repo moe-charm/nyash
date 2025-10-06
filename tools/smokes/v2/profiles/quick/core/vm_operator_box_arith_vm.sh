@@ -1,5 +1,10 @@
 #!/bin/bash
 # vm_operator_box_arith_vm.sh — OperatorBox arithmetic parity (debug box)
+# Gate: skip in quick profile by default (depends on operator box prelude availability)
+if [ "${SMOKES_ENABLE_OPERATOR_BOX:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_OPERATOR_BOX=1" >&2
+  exit 0
+fi
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2

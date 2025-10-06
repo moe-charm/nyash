@@ -23,7 +23,7 @@ static box Main {
 }
 NYCODE
 
-out=$(NYASH_ALLOW_USING_FILE=1 NYASH_ENABLE_USING=1 NYASH_USING_AST=1 run_nyash_vm "$TMP_DIR/driver.nyash" --dev | awk '/^\{/{print; exit}')
+out=$(NYASH_ALLOW_USING_FILE=1 NYASH_USING=1 NYASH_USING_AST=1 run_nyash_vm "$TMP_DIR/driver.nyash" --dev | awk '/^\{/{print; exit}')
 [ -n "$out" ] || { log_error "json_norm_edges: no JSON"; rm -rf "$TMP_DIR"; exit 1; }
 
 echo "$out" | grep -F -q '"type":"Loop","cond":{"type":"Bool","value":true},"body":[]' || { log_error "json_norm_edges: Loop body not normalized to []"; rm -rf "$TMP_DIR"; exit 1; }

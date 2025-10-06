@@ -2,6 +2,7 @@
 # selfhost_mir_m2_binop_ops_vm_llvm.sh — parity for minimal binops (Add/Sub/Mul/Div/Mod)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2

@@ -2,6 +2,7 @@
 # json_roundtrip_vm_llvm.sh — VM vs LLVM parity for JSON roundtrip
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
@@ -9,6 +10,7 @@ preflight_plugins || exit 2
 # Harness-first: rely on run_nyash_llvm() to decide availability (harness or native)
 
 TEST_DIR="/tmp/json_parity_roundtrip_$$"
+trap 'cd /; rm -rf "$TEST_DIR"' EXIT
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 

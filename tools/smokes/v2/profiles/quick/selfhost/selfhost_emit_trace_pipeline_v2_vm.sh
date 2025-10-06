@@ -16,7 +16,7 @@ test_selfhost_emit_trace_pipeline_v2_vm() {
   local out all first json
   # Parent→child: pass pipeline-v2 + emit-mir + emit-trace; ensure child prints one [emit] line and final JSON
   all=$(NYASH_DISABLE_PLUGINS=1 \
-        NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+        NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
         NYASH_EMIT_TRACE=1 NYASH_JSON_ONLY=1 \
         "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" -- --min-json --pipeline-v2 --emit-mir 2>/dev/null | tr -d '\r')
 

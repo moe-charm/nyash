@@ -8,7 +8,7 @@ Scope (Phase 0)
 - Runner bridge: `NYASH_DEPS_JSON=<path>` is read and logged only (no behavior change).
 
 Tool
-- `apps/selfhost/tools/dep_tree_min_string.nyash`
+- `apps/selfhost/tools/dep_tree_min_string.hako`
   - Recursively reads source files, scans for `include "path"` outside of strings and comments.
   - Comments: `//` and `#` (line comments) are ignored.
   - Strings: `"..."` with `\"` escapes are honored.
@@ -34,6 +34,6 @@ Examples
 - Cycle: `apps/selfhost/smokes/dep_smoke_cycle_a.nyash` ↔ `dep_smoke_cycle_b.nyash`
 
 Validation (examples)
-- `echo apps/selfhost/smokes/dep_smoke_root.nyash | ./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.nyash`
+- `echo apps/selfhost/smokes/dep_smoke_root.nyash | ./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.hako`
 - `make dep-tree`
 

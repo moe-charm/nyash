@@ -6,9 +6,9 @@ using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 
 static box MiniVmProbe {
   probe_compare(mjson) {
-    local regs = new MapBox()
+    local regs = map({})
     local seg = JsonFragBox.block0_segment(mjson)
-    if seg.length() == 0 { return new MapBox() }
+    if seg.length() == 0 { return map({}) }
     local pos = 0
     loop(true) {
       if pos >= seg.length() { break }
@@ -38,19 +38,11 @@ static box MiniVmProbe {
         else if kind == "Gt" { if a > b { r = 1 } }
         else if kind == "Le" { if a <= b { r = 1 } }
         else if kind == "Ge" { if a >= b { r = 1 } }
-        local out = new MapBox()
-        out.set("a", a)
-        out.set("b", b)
-        out.set("r", r)
-        return out
+        return map({ a: a, b: b, r: r })
       }
       pos = i
     }
-    local out = new MapBox()
-    out.set("a", 0)
-    out.set("b", 0)
-    out.set("r", 0)
-    return out
+    return map({ a: 0, b: 0, r: 0 })
   }
 }
 

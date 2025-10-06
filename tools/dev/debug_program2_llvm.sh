@@ -10,7 +10,7 @@ if [ ! -x "$BIN" ]; then
 fi
 
 export NYASH_LLVM_USE_HARNESS=1
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1
 export NYASH_USING_AST=1
 TO=${DEV_TIMEOUT_SEC:-60}

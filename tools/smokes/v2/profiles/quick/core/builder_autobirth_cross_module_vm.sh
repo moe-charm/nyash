@@ -39,7 +39,7 @@ static box Main {
 }
 EOF_MAIN
 
-out=$(run_nyash_vm "$TMP_DIR/main.nyash" --dev | tail -n 1 | tr -d '\r' | xargs)
+out=$(run_nyash_vm "$TMP_DIR/main.nyash" --dev | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)
 expected="Alice"
 compare_outputs "$expected" "$out" "builder_autobirth_cross_module_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 

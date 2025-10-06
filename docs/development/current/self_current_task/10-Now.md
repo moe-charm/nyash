@@ -5,7 +5,7 @@
 ## 🔴 重要：ループビルダーのバグ発見（詳細調査完了）
 
 ### 問題詳細
-- **症状**: dep_tree_min_string.nyashがVM実行でエラー `Invalid value: Value %57 not set`
+- **症状**: dep_tree_min_string.hakoがVM実行でエラー `Invalid value: Value %57 not set`
 - **発生箇所**: `loop(i + m <= n) { if ... { return 1 } i = i + 1 }`のような構造
 
 ### 根本原因（深掘り調査結果）
@@ -51,12 +51,12 @@ Nyashの開発哲学「Everything is Box」に従い、スコープも箱化す�
      - 各ブロックの変数状態を自動的に箱として保存
      - 実装工数: 中程度（既存構造を活用）
    - 代替案A: ループビルダーの根本的な再設計（工数大）
-   - 代替案B: 一時的なワークアラウンド（dep_tree_min_string.nyashの書き換え）
+   - 代替案B: 一時的なワークアラウンド（dep_tree_min_string.hakoの書き換え）
 2. dep-tree 深さ1（直下 include）を children に反映（行ベースの素朴抽出、`//`/`#` 行コメントスキップ）。
 3. `make dep-tree` 結果の JSON 形を確認（先頭 `{`、必須キー、children のリーフが path のみ）。
 4. その後、深さ2→任意深さ（max-depth=64、visited）を段階的に解禁。
 
 代表コマンド
 - ビルド: `cargo build --release`
-- 最小 dep-tree: `./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.nyash`
+- 最小 dep-tree: `./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.hako`
 - 生成: `make dep-tree`（`tmp/deps.json`）

@@ -21,7 +21,7 @@ static box Main {
 }
 EOF
 
-output=$(NYASH_REWRITE_FUTURE=1 run_nyash_vm async.nyash 2>&1 || true)
+output=$(NYASH_REWRITE_FUTURE=1 run_nyash_vm async.nyash 2>&1 | grep -v '^Result: ' || true)
 if echo "$output" | grep -q "ExternCall .* not supported\|unimplemented instruction: FutureNew"; then
   test_skip "async_await" "VM interpreter lacks Future/ExternCall support"
   rc=0

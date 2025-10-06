@@ -9,17 +9,17 @@ box MirJsonBuilder2 {
 
   // ---- lifecycle ----
   setup() {
-    me.st = new MapBox()
-    me.st.set("buf", "")
-    me.st.set("phase", 0)
-    me.st.set("first_inst", 1)
-    me.st.set("blocks", new ArrayBox())
-    me.st.set("cur_block_index", -1)
-    me.st.set("fn_name", "")
-    me.st.set("prefer_rebuild", 0)
-    // Text emission guards (dev only). Default: headers/instructions are NOT appended.
-    me.st.set("append_headers", 0)
-    me.st.set("append_insts", 0)
+    me.st = map({
+      buf: "",
+      phase: 0,
+      first_inst: 1,
+      blocks: new ArrayBox(),
+      cur_block_index: -1,
+      fn_name: "",
+      prefer_rebuild: 0,
+      append_headers: 0,
+      append_insts: 0
+    })
   }
 
   // ---- internal helpers ----
@@ -68,9 +68,7 @@ box MirJsonBuilder2 {
     me.st.set("phase", 3)
     me.st.set("first_inst", 1)
     // 配列側
-    local blk = new MapBox()
-    blk.set("id", id)
-    blk.set("instructions", new ArrayBox())
+    local blk = map({ id: id, instructions: new ArrayBox() })
     local blks = me.st.get("blocks")
     blks.push(blk)
     me.st.set("cur_block_index", blks.size() - 1)

@@ -187,7 +187,7 @@ impl NyashRunner {
                     &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE", "NYASH_QUIET"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
-                        ("NYASH_ENABLE_USING", "1"),
+                        ("NYASH_USING", "1"),
                         ("NYASH_ALLOW_USING_FILE", "1"),
                         ("NYASH_USING_AST", "1"),
                     ],
@@ -405,7 +405,7 @@ impl NyashRunner {
                     &["NYASH_USE_NY_COMPILER", "NYASH_CLI_VERBOSE", "NYASH_QUIET"],
                     &[
                         ("NYASH_JSON_ONLY", "1"),
-                        ("NYASH_ENABLE_USING", "1"),
+                        ("NYASH_USING", "1"),
                         ("NYASH_ALLOW_USING_FILE", "1"),
                         ("NYASH_USING_AST", "1"),
                     ],
@@ -469,7 +469,7 @@ impl NyashRunner {
             cmd.env_remove("NYASH_CLI_VERBOSE");
             cmd.env("NYASH_JSON_ONLY", "1");
             // Allow file-based using in the inline child code (it includes ParserBox/EmitterBox)
-            cmd.env("NYASH_ENABLE_USING", "1");
+            cmd.env("NYASH_USING", "1");
             cmd.env("NYASH_ALLOW_USING_FILE", "1");
             cmd.env("NYASH_USING_AST", "1");
             let timeout_ms: u64 = std::env::var("NYASH_NY_COMPILER_TIMEOUT_MS")

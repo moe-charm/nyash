@@ -16,7 +16,7 @@ test_selfhost_pipeline_v2_driver_min_json_vm() {
   local out
   out=$(NYASH_DISABLE_PLUGINS=1 \
         NYASH_VM_TOLERATE_VOID=1 \
-        NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+        NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
         NYASH_JSON_ONLY=1 NYASH_QUIET=1 \
         "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/dev/pipeline_v2_min_json.nyash" 2>/dev/null | tr -d '\r' | head -n 1)
 

@@ -1,22 +1,15 @@
 // dep_tree.nyash — Build dependency info for a Nyash script (include + using/module)
 
+using selfhost.tools.dep_tree_core as Core
+using "apps/selfhost/tools/dep_tree_annotator.hako" as DepTreeAnnotatorBox
+
 static box DepTree {
   init { visited }
 
   // Public API: build tree for entry path
   build(entry_path) {
-    me.visited = new MapBox()
+    me.visited = map({})
     return me.node(entry_path)
-  }
-
-  // Read entire file as string via FileBox
-  read_file(path) {
-    local fb = new FileBox()
-    local ok = fb.open(path, "r")
-    if ok == false { return null }
-    local content = fb.read()
-    fb.close()
-    return content
   }
 
   // Extract include paths from source: include "./path.nyash"
@@ -50,33 +43,35 @@ static box DepTree {
     loop(i < lines.length()) {
       local line = lines.get(i).trim()
       local t = line
-      if t.startsWith("// @using ") { t = t.substring(10, t.length()).trim() }
-      else if t.startsWith("using ") { t = t.substring(6, t.length()).trim() }
-      else { i = i + 1; continue }
+      local matched = false
+      if t.startsWith("// @using ") { t = t.substring(10, t.length()).trim() matched = true }
+      else if t.startsWith("using ") { t = t.substring(6, t.length()).trim() matched = true }
 
-      // optional trailing semicolon
-      if t.endsWith(";") { t = t.substring(0, t.length()-1).trim() }
+      if matched {
+        // optional trailing semicolon
+        if t.endsWith(";") { t = t.substring(0, t.length()-1).trim() }
 
-      local rec = new MapBox()
-      // Split alias
-      local as_pos = new StringStd().index_of_from(t, " as ", 0)
-      local target = t
-      local alias = null
-      if as_pos >= 0 {
-        target = t.substring(0, as_pos).trim()
-        alias = t.substring(as_pos+4, t.length()).trim()
+        local rec = map({})
+        // Split alias
+        local as_pos = new StringStd().index_of_from(t, " as ", 0)
+        local target = t
+        local alias = null
+        if as_pos >= 0 {
+          target = t.substring(0, as_pos).trim()
+          alias = t.substring(as_pos+4, t.length()).trim()
+        }
+        rec.set("target", target)
+        if alias != null { rec.set("alias", alias) }
+        // classify
+        if target.startsWith("\"") || target.startsWith("./") || target.startsWith("/") || target.endsWith(".nyash") {
+          rec.set("kind", "path")
+          // strip quotes
+          if target.startsWith("\"") { rec.set("target", target.substring(1, target.length()-1)) }
+        } else {
+          rec.set("kind", "ns")
+        }
+        out.push(rec)
       }
-      rec.set("target", target)
-      if alias != null { rec.set("alias", alias) }
-      // classify
-      if target.startsWith("\"") || target.startsWith("./") || target.startsWith("/") || target.endsWith(".nyash") {
-        rec.set("kind", "path")
-        // strip quotes
-        if target.startsWith("\"") { rec.set("target", target.substring(1, target.length()-1)) }
-      } else {
-        rec.set("kind", "ns")
-      }
-      out.push(rec)
       i = i + 1
     }
     return out
@@ -97,7 +92,8 @@ static box DepTree {
             local ns = rest.substring(0, eq).trim()
             local path = rest.substring(eq+1, rest.length()).trim()
             path = me.strip_quotes(path)
-            local m = new MapBox(); m.set("ns", ns); m.set("path", path); out.push(m)
+            local m = map({ ns: ns, path: path })
+            out.push(m)
           }
         }
         i = i + 1
@@ -111,11 +107,11 @@ static box DepTree {
     if me.visited.has(path) { return me.leaf(path) }
     me.visited.set(path, true)
 
-    local m = new MapBox(); m.set("path", path)
-    local src = me.read_file(path)
-    if src == null { m.set("error", "read_fail"); me.ensure_arrays(m); return m }
+    local m = map({ path: path, includes: new ArrayBox(), using: new ArrayBox(), modules: new ArrayBox(), children: new ArrayBox() })
+    local src = Core.read_all(path)
+    if src == null { m.set("error", "read_fail")  return m }
 
-    local base_dir = me.dirname(path)
+    local base_dir = Core.dirname(path)
 
     // includes
     local incs = me.extract_includes(src)
@@ -134,6 +130,8 @@ static box DepTree {
     loop(i < incs.length()) {
       local p = incs.get(i)
       local child_path = me.resolve_path(base_dir, p)
+      if Core.file_exists(child_path) { DepTreeAnnotatorBox.annotate_include_resolved(m, p, child_path) }
+      else { DepTreeAnnotatorBox.annotate_include_missing(m, p, child_path) }
       children.push(me.node(child_path))
       i = i + 1
     }
@@ -142,9 +140,9 @@ static box DepTree {
     loop(i < us.length()) {
       local u = us.get(i)
       if u.get("kind") == "path" {
-        local p = u.get("target")
+        local p = u.get(\"target\")
         local child_path = me.resolve_path(base_dir, p)
-        children.push(me.node(child_path))
+        if Core.file_exists(child_path) { DepTreeAnnotatorBox.annotate_resolved_using(u, child_path)  children.push(me.node(child_path)) } else { DepTreeAnnotatorBox.annotate_path_missing(u, child_path) }
       }
       i = i + 1
     }
@@ -157,7 +155,7 @@ static box DepTree {
         local ns = u.get("target")
         local rel = ns.replace(".", "/") + ".nyash"
         local found = me.search_in_paths(base_dir, search, rel)
-        if found != null { children.push(me.node(found)) }
+        if found != null { DepTreeAnnotatorBox.annotate_resolved_using(u, found)  children.push(me.node(found)) }
         else {
           // annotate unresolved
           u.set("unresolved", true)
@@ -172,18 +170,29 @@ static box DepTree {
   }
 
   // Helpers
-  ensure_arrays(m) { m.set("includes", new ArrayBox()); m.set("using", new ArrayBox()); m.set("modules", new ArrayBox()); m.set("children", new ArrayBox()) }
+  ensure_arrays(m) {
+    m.set("includes", new ArrayBox())
+    m.set("using", new ArrayBox())
+    m.set("modules", new ArrayBox())
+    m.set("children", new ArrayBox())
+    return m
+  }
 
   default_using_paths() {
     // Best-effort defaults prioritized for selfhost
     local arr = new ArrayBox()
-    arr.push("apps/selfhost"); arr.push("apps"); arr.push("lib"); arr.push(".")
+    arr.push("apps/selfhost")
+    arr.push("apps")
+    arr.push("lib")
+    arr.push(".")
     return arr
   }
 
   split_lines(src) {
     local out = new ArrayBox()
-    local i = 0; local n = src.length(); local start = 0
+    local i = 0
+    local n = src.length()
+    local start = 0
     loop(i <= n) {
       if i == n || src.substring(i, i+1) == "\n" {
         out.push(src.substring(start, i))
@@ -202,52 +211,31 @@ static box DepTree {
     return s
   }
 
-  dirname(path) {
-    local pb = new PathBox();
-    local d = pb.dirname(path)
-    if d != null { return d }
-    local i = path.lastIndexOf("/")
-    if i < 0 { return "." }
-    return path.substring(0, i)
-  }
-
   resolve_path(base, rel) {
     if rel.indexOf("/") == 0 { return rel }
     if rel.startsWith("./") || rel.startsWith("../") {
-      local pb = new PathBox();
-      local j = pb.join(base, rel)
-      if j != null { return j }
-      return base + "/" + rel
+      return Core.join(base, rel)
     }
     return rel
   }
 
   search_in_paths(base, paths, rel) {
     // try relative to file first
-    local pb = new PathBox();
-    local j = pb.join(base, rel)
-    if me.file_exists(j) { return j }
+    local j = Core.join(base, rel)
+    if Core.file_exists(j) { return j }
     // then search list
     local i = 0
     loop(i < paths.length()) {
       local p = paths.get(i)
-      local cand = pb.join(p, rel)
-      if me.file_exists(cand) { return cand }
+      local cand = Core.join(p, rel)
+      if Core.file_exists(cand) { return cand }
       i = i + 1
     }
     return null
   }
 
-  file_exists(path) {
-    // Use FileBox.open in read mode as exists check
-    local fb = new FileBox();
-    local ok = fb.open(path, "r")
-    if ok == false { return false }
-    fb.close(); return true
-  }
-
   leaf(path) {
-    local m = new MapBox(); m.set("path", path); m.set("children", new ArrayBox()); m.set("note", "visited")
-    return m
+    return map({ path: path, children: new ArrayBox(), includes: new ArrayBox(), using: new ArrayBox(), modules: new ArrayBox(), note: "visited" })
+  })
   }
 }

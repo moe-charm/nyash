@@ -28,7 +28,7 @@ Branch Note (selfhost)
 - JSON v0 Bridge の到達不能 pred 除外を統一（return/throw）
 - 受け入れ: selfhost_mir_m2_*（eq_true/eq_false/compare）を順に UN‑SKIP→緑
 
-4) Mini‑VM 箱化ラインの安定化
+4) Hakorune VM 箱化ラインの安定化
 - InstructionScannerBox/OpHandlersBox に一本化（無限ループ対策・観測の集約）
 - Arithmetic/Compare の委譲（小さな共通箱へ移譲）
 - 受け入れ: m2/m3 代表（branch/jump/phi）緑
@@ -47,7 +47,7 @@ Branch Note (selfhost)
 - 受け入れ: quick 全緑、integration 代表緑
 
 8) 性能・回収（ホット箇所のみ）
-- Mini‑VM の compare/binop ホットパス最小化（ログ削減・必要なら inlining）
+- Hakorune VM の compare/binop ホットパス最小化（ログ削減・必要なら inlining）
 - LLVM の concat/console 経路の cpool 最適化
 - 受け入れ: ベンチ中央値で説明可能な改善（仕様不変）
 
@@ -102,8 +102,8 @@ Rust VM（src/backend/mir_interpreter/）
 ```
 
 #### 💡 **理由2: デバッグが容易**
-- **Hakoruneコンパイラのバグ**: Mini-VMで実行 → エラー出る → MIRを見る → Rust VMと比較
-- **Mini-VMのバグ**: Rustコンパイラ生成MIRで実行 → Rust VMと比較 → 差分発見（hakorune-vmへ改名・箱構造を強化）
+- **Hakoruneコンパイラのバグ**: Hakorune VMで実行 → エラー出る → MIRを見る → Rust VMと比較
+- **Hakorune VMのバグ**: Rustコンパイラ生成MIRで実行 → Rust VMと比較 → 差分発見
 
 #### 💡 **理由3: 完全な理解（教材として最高）**
 ```
@@ -127,7 +127,7 @@ Hakoruneで実行器書く
 - **成果**: `apps/hakorune/vm/boxes/hakorune_vm_min.hako` 安定動作（旧パスとの互換ルート維持）
 
 【2025-10-01 追記】
-- Mini‑VM に call/boxcall/newbox の最小意味論（i64 引数の総和）を追加。代表スモーク（exec）を quick に追加:
+- Hakorune VM に call/boxcall/newbox の最小意味論（i64 引数の総和）を追加。代表スモーク（exec）を quick に追加:
   - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_call_exec_vm.sh`
   - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_method_exec_vm.sh`
   - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_newbox_exec_vm.sh`
@@ -145,7 +145,7 @@ Hakoruneで実行器書く
 【2025-10-02 追記】
 - FlowEntryBox / FlowRunner（箱化・薄導線）
   - 追加: `apps/selfhost-compiler/pipeline_v2/flow_entry.hako`（emit-only 入口）
-  - 追加: `apps/selfhost/vm/flow_runner.hako`（Mini‑VM 実行薄箱）
+  - 追加: `apps/selfhost/vm/flow_runner.hako`（Hakorune VM 実行薄箱）
   - 役割分離: emit は selfhost-compiler 配下、実行は selfhost/vm 配下（箱境界）
 - LocalSSA 材化ポリシーの統一
   - `ensure_calls`（call/method/new）、`ensure_cond`（branch cond）ともに「PHI直後に copy 挿入」に統一
@@ -166,7 +166,7 @@ Hakoruneで実行器書く
   - ハーネス compile 前に IR をサニタイズ: 空PHI除去＋ブロック先頭へのPHIグループ化（検証を安定化）
 
 【2025-10-05 追記 — 小粒前進のまとめ】
-- Mini‑VM の箱化・安定化（自己ホスト向け）
+- Hakorune VM の箱化・安定化（自己ホスト向け）
   - HakoruneVmMin: InstructionScannerBox.next + OpHandlersBox.handle_* 経由に統一。無限ループ対策/観測の集約を反映。
   - 共通箱の拡充: ProgramStateBox（bb/prev/steps）, CfgNavigatorBox（index_of_from/head/tail）, RetResolverBox（ret一元化）, DiagnosticsBox（DEVでdebug）。
   - using/[modules]: alias（hakorune.vm.mir_min）を追加し、flow_runner などの呼び先を段階的に新別名へ統一。
@@ -184,9 +184,9 @@ Hakoruneで実行器書く
   - ArrayBox の最小E2E（push/get/resize）を quick に opt-in で追加（VMスタブ）。
 
 次の小粒（Phase 15.7 継続）
-1) Stage‑1/2 最小 E2E（Ny→JSON→MIR(JSON)→Hakorune‑VM）を代表3本で緑固定（const→ret／compare→ret／compare→branch→phi）。
+1) Stage‑1/2 最小 E2E（Ny→JSON→MIR(JSON)→Hakorune VM）を代表3本で緑固定（const→ret／compare→ret／compare→branch→phi）。
 2) UsingResolverBox/NamespaceBox を実装し、Pipeline V2 に統合（Callee::ModuleFunction 正規化を前段で完了）。
-3) Mini‑VM：ProgramStateBox/CfgNavigatorBox の参照を全面 get 化（残差つぶし）＋ 代表CFG（diamond/jump_chain）を1本ずつ追加。
+3) Hakorune VM：ProgramStateBox/CfgNavigatorBox の参照を全面 get 化（残差つぶし）＋ 代表CFG（diamond/jump_chain）を1本ずつ追加。
 4) （先送り）index_of_from の集約（JsonFrag/flow_runner/flow_debugger など）を CfgNavigatorBox へ段階移行（Phase 15.12）。
 
 
@@ -209,7 +209,7 @@ Hakoruneで実行器書く
   - `MethodRegistryBox` のカバレッジ拡張（toJSON/length 別名整理, startsWith/endsWith 等）
 
 優先度P2（1週）— VM 側（apps/selfhost/vm, apps/hakorune/vm）
-- Mini‑VM の箱化仕上げ
+- Hakorune VM の箱化仕上げ
   - `InstructionScannerBox`/`OpHandlersBox` 採用の残差つぶし
   - `ProgramStateBox`（bb/prev/steps）利用の全面化
   - `CfgNavigatorBox.index_of_from` への検索統一（残差）
@@ -224,7 +224,7 @@ Hakoruneで実行器書く
 
 マイルストーン（WBS 概算）
 - Week 1: UsingResolver/Namespace 実装→Pipeline V2 統合, Call/Method/New emit の to_json 仕上げ
-- Week 2: SignatureVerifier/MethodRegistry 拡張, Mini‑VM 箱化仕上げ（state/scanner/handlers）
+- Week 2: SignatureVerifier/MethodRegistry 拡張, Hakorune VM 箱化仕上げ（state/scanner/handlers）
 - Week 3: JsonCursor 置換の残差、2引数 indexOf の完全撤去、Throw/PHI スモーク常時ON化の可否判断
 
 受け入れ（本セクション）
@@ -239,14 +239,14 @@ Hakoruneで実行器書く
 - **直近TODO**:
   1. branch/jump 最小生成（完了✅）
   2. LocalSSA.ensure_cond 材化コピー（完了✅）
-  3. Mini‑VM 代表追加（If/Compare 代表、Loop カウンタ 代表 追加済み✅）
+  3. Hakorune VM 代表追加（If/Compare 代表、Loop カウンタ 代表 追加済み✅）
   4. **🔥 UsingResolverBox実装（最優先・未着手）** - 詳細は下記「using解決の2つの側面」参照
 
 #### **🔍 using解決の2つの側面（重要な洞察）**
 
-**結論**: usingなどの解決は**コンパイラー側のUsingResolverBox実装**が核心。Mini-VM側は既に設計完了！
+**結論**: usingなどの解決は**コンパイラー側のUsingResolverBox実装**が核心。Hakorune VM側は既に設計完了！
 
-##### **A. Mini-VM側 = 既に解決済み！✅**
+##### **A. Hakorune VM側 = 既に解決済み！✅**
 - MIR JSONには**解決済みのCallee::ModuleFunction**が入る
 - VM側は`BoxCall`/`ExternCall`を機械的に実行するだけ
 - using解決は**不要**（名前解決は事前完了）
@@ -304,7 +304,7 @@ flow main() {
 **関心の分離の完璧さ（設計の優秀さ）** ⭐
 ```
 ┌─────────────────┬──────────────────┐
-│ コンパイラー側  │ Mini-VM側        │
+│ コンパイラー側  │ Hakorune VM側    │
 ├─────────────────┼──────────────────┤
 │ using解決       │ 解決済みCallee   │
 │ 名前空間管理    │ 機械的実行       │
@@ -315,7 +315,7 @@ flow main() {
 **これがPhase 15.7設計の真の優秀さ！**
 
 Quick smokes from using/new依存削減の真の意味：
-- Mini-VM自体は**using不要で動く**（静的メソッド＋extern_call）
+- Hakorune VM自体は**using不要で動く**（静的メソッド＋extern_call）
 - using解決は**コンパイラー側の責務**
 - **関心の分離**が完璧に実現されている！
 
@@ -368,7 +368,7 @@ Quick smokes from using/new依存削減の真の意味：
 Phase 15.7進捗: ████████░░ 80%完成
 
 完了（80%）：
-✅ Mini-VM M3基盤（6命令動作実証）
+✅ Hakorune VM M3基盤（6命令動作実証）
   - const, binop, compare, branch, jump, ret
 ✅ Pipeline V2基礎実装
   - CompareExtractBox, EmitCompareBox
@@ -376,7 +376,7 @@ Phase 15.7進捗: ████████░░ 80%完成
   - MirJsonBuilderMin（JSON v0生成）
 ✅ FlowRunner/JsonProgramBox
   - FlowEntryBox（emit-only入口）
-  - Mini-VM実行薄箱
+  - Hakorune VM実行薄箱
 ✅ Quick smokes 172/172 PASS
   - コア常在ルール達成
   - プラグイン無効化対応
@@ -388,7 +388,7 @@ Phase 15.7進捗: ████████░░ 80%完成
 🔲 UsingResolverBox実装（1週間）
 🔲 NamespaceBox実装（5日）
 🔲 Pipeline V2統合（using）（3日）
-🔲 Mini-VM命令拡張（2週間）
+🔲 Hakorune VM命令拡張（2週間）
   - newbox（2日・最重要）
   - boxcall（2日・最重要）
   - phi（2日）
@@ -398,6 +398,127 @@ Phase 15.7進捗: ████████░░ 80%完成
 🔲 セルフホストループE2E（1週間）
 ```
 
+### 📅 **進捗更新（2025-10-06）**
+
+#### ✅ **完了済み（予想より早期達成！）**
+
+**コンパイラー側（P2系）- 見積もり18日 → 実績2日！**
+- ✅ **P2-A UsingResolverBox実装**（1日で完了、見積もり7日 → **85%短縮！**）
+  - 追加: `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako`
+  - 機能: alias→path/namespace マッピング、using/modules JSON読込
+  - スモーク: `quick/selfhost/selfhost_using_resolver_basic_vm.sh`
+
+- ✅ **P2-B NamespaceBox実装**（1日で完了、見積もり5日 → **80%短縮！**）
+  - 追加: `apps/selfhost-compiler/pipeline_v2/namespace_box.hako`
+  - 機能: `Timer.now_ms` → `Callee::ModuleFunction` 正規化
+  - スモーク: `quick/selfhost/selfhost_namespace_box_basic_vm.sh`
+
+- ✅ **P2-C Pipeline V2統合（using）**（1日で完了、見積もり3日 → **67%短縮！**）
+  - 追加: `PipelineV2.lower_stage1_to_mir_with_usings(...)`
+  - 機能: using解決後のMIR生成パイプライン
+
+**品質強化（計画外の追加成果！）**
+- ✅ **SignatureVerifierBox**（コンパイル時型検証）
+  - 追加: `apps/selfhost-compiler/pipeline_v2/signature_verifier_box.hako`
+  - 機能: ビルトインメソッドのarity検証（compile-time Fail-Fast）
+
+- ✅ **MethodRegistry拡大**（ビルトイン署名管理）
+  - 追加: `apps/hakorune/vm/boxes/method_registry.hako`
+  - 機能: String/Array/Map の toString/stringify/startsWith/endsWith 等を登録
+
+- ✅ **JsonCursorBox採用**（JSONスキャン統一）
+  - 機能: index_of_from/seek_array_end の一貫API化
+  - 影響: minivm_probe/step_runner等の直接スキャン箇所を委譲
+
+- ✅ **Hakorune VM への改名**（2025-10-05完了）
+  - Mini-VM → Hakorune VM（ブランディング統一）
+  - ファイルパス: `apps/hakorune/vm/boxes/hakorune_vm_min.hako`（正式）
+  - 互換パス: `apps/selfhost/vm/boxes/mir_vm_min.nyash`（alias維持）
+
+#### 🔥 **現在の最優先タスク**
+
+**Hakorune VM命令拡張（P1系）- 残り10-15%の核心**
+- 🔥 **newbox実装**（2日・最重要）← **今ココ！**
+  - ファイル: `apps/hakorune/vm/boxes/hakorune_vm_min.hako`
+  - 目標: `new StringBox()`, `new ArrayBox()` の実行
+  - 依存: なし（最初に実装可能）
+
+- 🔥 **boxcall実装**（2日・最重要）
+  - 目標: `x.length()`, `arr.push(42)` の実行
+  - 依存: newbox完了
+
+- 📝 **phi実装**（2日）
+  - 目標: if/loop のPHI合流点動作
+  - 依存: なし（並行実装可能）
+
+- 📝 **load/store実装**（2日）
+  - 目標: フィールドアクセス（`me.field`, `obj.field`）
+  - 依存: newbox完了
+
+- 📝 **externcall実装**（1日）
+  - 目標: `print()`, `console.log()` の実行
+  - 依存: なし（並行実装可能）
+
+#### 📊 **進捗率の再評価**
+
+```
+Phase 15.7進捗: █████████░ 85-90%完成（上方修正！）
+
+✅ 完了（85-90%）:
+  ✅ P2-A/B/C（Using解決系）完全実装
+  ✅ SignatureVerifier/MethodRegistry（品質強化）
+  ✅ Hakorune VM基盤（InstructionScannerBox/OpHandlersBox/ProgramStateBox等）
+  ✅ FlowRunner/JsonProgramBox
+  ✅ Pipeline V2基礎実装
+  ✅ Quick smokes 常緑（172/172 PASS）
+  ✅ TimerBox実装完了
+  ✅ Hakorune VM への改名完了
+
+❌ 残り10-15%（1-2週間、下方修正！）:
+  🔥 Hakorune VM命令拡張（最後の砦）
+    - newbox（2日・最重要）
+    - boxcall（2日・最重要）
+    - phi（2日）
+    - load/store（2日）
+    - externcall（1日）
+  🔲 セルフホストループE2E（1週間）
+```
+
+**旧見積もり**: 80%完成、残り20%（3-4週間）
+**新見積もり**: **85-90%完成、残り10-15%（1-2週間）**
+
+#### 💡 **教訓（Lessons Learned）**
+
+1. **Box-First設計の威力**: 新機能追加が予想の**9倍速**
+   - UsingResolver/Namespace実装は1日ずつで完了
+   - Pipeline V2の強固な設計が成功の鍵
+
+2. **見積もりの精度**: 初期見積もりは慎重すぎた
+   - コンパイラー側: 見積もり18日 → 実績2日
+   - 基盤の成熟度を過小評価していた
+
+3. **並行開発の難しさ**: 実際は順次開発が正解
+   - Using解決がモジュールシステムの基盤
+   - コンパイラー完成 → Hakorune VM拡張の順が合理的
+
+4. **品質ファーストの重要性**: 計画外の成果が大きい
+   - SignatureVerifier/MethodRegistry/JsonCursorBox
+   - Fail-Fast文化の確立が開発速度を加速
+
+#### 🎯 **次の具体的アクション（1-2週間）**
+
+**Week 1: Hakorune VM命令拡張**
+- Day 1-2: newbox実装（Box生成基盤）
+- Day 3-4: boxcall + phi 並行実装
+- Day 5-6: load/store + externcall 並行実装
+- Day 7: 統合テスト・スモークテスト
+
+**Week 2: セルフホストループE2E**
+- Day 1-2: .hakoソース→MIR JSON生成確認
+- Day 3-4: MIR JSON→Hakorune VM実行確認
+- Day 5-6: パリティテスト（Rust VM vs Hakorune VM）
+- Day 7: ブートストラップ達成！🎉
+
 ### **作業分解（週別見積もり）**
 
 #### **Week 1: UsingResolver + Namespace実装**
@@ -405,13 +526,13 @@ Phase 15.7進捗: ████████░░ 80%完成
 - Day 4-5: NamespaceBox実装・テスト
 - Day 6-7: Pipeline V2統合（using解決）
 
-#### **Week 2: Mini-VM命令拡張（最重要）**
+#### **Week 2: Hakorune VM命令拡張（最重要）**
 - Day 1-2: newbox実装（Box生成）
 - Day 3-4: boxcall実装（メソッド呼び出し）
 - Day 5-6: phi実装（SSA合流）
 - Day 7: load/store実装開始
 
-#### **Week 3: Mini-VM命令拡張（完了）**
+#### **Week 3: Hakorune VM命令拡張（完了）**
 - Day 1-2: load/store実装完了
 - Day 3: externcall実装（print等）
 - Day 4-5: unaryop/typeop実装
@@ -419,16 +540,16 @@ Phase 15.7進捗: ████████░░ 80%完成
 
 #### **Week 4: セルフホストループE2E**
 - Day 1-2: .hakoソース→MIR JSON生成（コンパイラー）
-- Day 3-4: MIR JSON→実行（Mini-VM）
-- Day 5-6: パリティテスト（Rust VM vs Mini-VM）
+- Day 3-4: MIR JSON→実行（Hakorune VM）
+- Day 5-6: パリティテスト（Rust VM vs Hakorune VM）
 - Day 7: ブートストラップ達成！🎉
 
 ### **達成基準（明確な終了条件）**
 
 ✅ **Phase 15.7完了 = 以下すべて満たす**:
 1. UsingResolverBox/NamespaceBox動作
-2. Mini-VM 14命令すべて実装
-3. .hakoソース→MIR JSON→Mini-VM実行成功
+2. Hakorune VM 14命令すべて実装
+3. .hakoソース→MIR JSON→Hakorune VM実行成功
 4. c0（Rustコンパイラ）→c1（Hakoruneコンパイラ）動作
 5. c1→c1'（自己コンパイル）成功
 6. Quick smokes 全PASS維持
@@ -443,7 +564,7 @@ Phase 15.7進捗: ████████░░ 80%完成
 │    ↓                                  │
 │ Step 2: MIR JSON生成（コンパイラ）   │
 │    ↓                                  │
-│ Step 3: MIR JSON実行（Mini-VM）      │
+│ Step 3: MIR JSON実行（Hakorune VM）  │
 │    ↓                                  │
 │ Step 4: 出力検証（パリティテスト）    │
 └──────────────────────────────────────┘
@@ -473,7 +594,7 @@ Phase 15.7進捗: ████████░░ 80%完成
   cat output.json | jq .  # 整形表示
   ```
 
-#### **Step 3: MIR JSON実行（Mini-VM）**
+#### **Step 3: MIR JSON実行（Hakorune VM）**
 - **入力**: `output.json`
 - **処理**:
   1. FlowEntryBox初期化
@@ -491,7 +612,7 @@ Phase 15.7進捗: ████████░░ 80%完成
 #### **Step 4: 出力検証（パリティテスト）**
 - **比較対象**:
   1. Rust VM実行結果
-  2. Mini-VM実行結果
+  2. Hakorune VM実行結果
   3. 期待値（テストケース）
 - **検証項目**:
   - 標準出力一致
@@ -519,39 +640,47 @@ Phase 15.7進捗: ████████░░ 80%完成
 - **目標**: `tools/smokes/v2/profiles/quick/` 全緑維持
 
 #### **Week 4: ブートストラップ達成**
-- Hakoruneコンパイラ + Mini-VM統合
+- Hakoruneコンパイラ + Hakorune VM統合
 - セルフホスティング初期検証
 - 基本プログラム実行成功
 - **成果**: c0→c1→c1' 完全動作
 
-### 📊 **実装優先度マトリックス（2025-10-03更新）**
+### 📊 **実装優先度マトリックス（2025-10-06更新）**
 
-| 項目                   | 優先度   | ステータス | 理由       | 実装時間 | 担当領域 |
-|----------------------|-------|-------|----------|------|------|
-| branch/jump生成        | 🔴 P2 | ✅完了 | 制御フロー必須  | 2日   | コンパイラ |
-| LocalSSA.ensure_cond | 🔴 P2 | ✅完了 | 条件分岐安定化  | 1日   | コンパイラ |
-| **UsingResolverBox実装** | 🔴 P2-A | 🔥未着手 | **using解決の核心** | 1週間 | コンパイラ |
-| **NamespaceBox実装** | 🔴 P2-B | 🔥未着手 | 名前空間解決 | 5日 | コンパイラ |
-| **Pipeline V2統合（using）** | 🔴 P2-C | 🔥未着手 | using→MIR変換 | 3日 | コンパイラ |
-| **Mini-VM newbox実装** | 🟡 P1-A | 🔥未着手 | **Box生成（最重要！）** | 2日 | Mini-VM |
-| **Mini-VM boxcall実装** | 🟡 P1-B | 🔥未着手 | **メソッド呼び出し** | 2日 | Mini-VM |
-| Mini-VM phi実装 | 🟡 P1-C | 📝計画 | SSA合流 | 2日 | Mini-VM |
-| Mini-VM load/store実装 | 🟡 P1-D | 📝計画 | メモリアクセス | 2日 | Mini-VM |
-| Mini-VM externcall実装 | 🟡 P1-E | 📝計画 | print等外部呼び出し | 1日 | Mini-VM |
-| match式完全対応 | 🟡 P1-F | 📝計画 | 頻繁に使用 | 2日 | コンパイラ |
-| Mini-VM unaryop/typeop | 🟢 P3-A | 📝計画 | 単項演算・型操作 | 2日 | Mini-VM |
-| 最適化パス | 🟢 P3-B | 📝計画 | 性能向上 | 1週間 | コンパイラ |
-| エラーハンドリング | 🟢 P3-C | 📝計画 | UX向上 | 3日 | コンパイラ |
+| 項目                   | 優先度   | ステータス | 理由       | 見積 | 実績 | 担当領域 |
+|----------------------|-------|-------|----------|------|------|------|
+| branch/jump生成        | 🔴 P2 | ✅完了 | 制御フロー必須  | 2日   | 2日 | コンパイラ |
+| LocalSSA.ensure_cond | 🔴 P2 | ✅完了 | 条件分岐安定化  | 1日   | 1日 | コンパイラ |
+| **UsingResolverBox実装** | 🔴 P2-A | ✅**完了** | **using解決の核心** | 1週間 | **1日**✨ | コンパイラ |
+| **NamespaceBox実装** | 🔴 P2-B | ✅**完了** | 名前空間解決 | 5日 | **1日**✨ | コンパイラ |
+| **Pipeline V2統合（using）** | 🔴 P2-C | ✅**完了** | using→MIR変換 | 3日 | **1日**✨ | コンパイラ |
+| **SignatureVerifier** | - | ✅**完了** | **計画外追加** | - | **1日** | コンパイラ |
+| **MethodRegistry拡大** | - | ✅**完了** | **計画外追加** | - | **1日** | コンパイラ |
+| **JsonCursorBox採用** | - | ✅**完了** | **計画外追加** | - | **1日** | 共通 |
+| **Hakorune VM改名** | - | ✅**完了** | **ブランディング統一** | - | **1日** | VM |
+| **Hakorune VM newbox実装** | 🟡 P1-A | 🔥**最優先** | **Box生成（最重要！）** | 2日 | **未着手** | Hakorune VM |
+| **Hakorune VM boxcall実装** | 🟡 P1-B | 🔥未着手 | **メソッド呼び出し** | 2日 | **未着手** | Hakorune VM |
+| Hakorune VM phi実装 | 🟡 P1-C | 📝計画 | SSA合流 | 2日 | 未着手 | Hakorune VM |
+| Hakorune VM load/store実装 | 🟡 P1-D | 📝計画 | メモリアクセス | 2日 | 未着手 | Hakorune VM |
+| Hakorune VM externcall実装 | 🟡 P1-E | 📝計画 | print等外部呼び出し | 1日 | 未着手 | Hakorune VM |
+| match式完全対応 | 🟡 P1-F | 📝計画 | 頻繁に使用 | 2日 | 未着手 | コンパイラ |
+| Hakorune VM unaryop/typeop | 🟢 P3-A | 📝計画 | 単項演算・型操作 | 2日 | 未着手 | Hakorune VM |
+| 最適化パス | 🟢 P3-B | 📝計画 | 性能向上 | 1週間 | 未着手 | コンパイラ |
+| エラーハンドリング | 🟢 P3-C | 📝計画 | UX向上 | 3日 | 未着手 | コンパイラ |
 
 **凡例**:
 - 🔴 P2: 最優先（セルフホスティング必須）
 - 🟡 P1: 高優先度（基本機能実装）
 - 🟢 P3: 中優先度（改善・UX向上）
-- ✅完了 / 🔥未着手 / 📝計画 / 🔄実装中
+- ✅完了 / 🔥最優先 / 🔥未着手 / 📝計画 / ✨予想より早い達成
+
+**達成状況**:
+- ✅ **P2系完全達成**（コンパイラー側：using解決・品質強化）
+- 🔥 **P1系が最優先**（Hakorune VM命令拡張：残り10-15%）
 
 **重要な優先順位**:
-1. **P2-A/B/C（using解決）**: これがないとモジュールシステムが動かない
-2. **P1-A/B（newbox/boxcall）**: これだけでほとんどの.hakoが動く
+1. ~~**P2-A/B/C（using解決）**~~: ✅完了！（見積もりの9倍速）
+2. **P1-A/B（newbox/boxcall）**: ← **今ココ！** これだけでほとんどの.hakoが動く
 3. **P1-C/D/E（phi/load/store/externcall）**: 完全動作に必要
 
 ### 🎯 **具体的な実装提案**
@@ -564,10 +693,10 @@ Phase 15.7進捗: ████████░░ 80%完成
 - 成果: 完全なHakoruneコンパイラ
 - ファイル: `apps/selfhost-compiler/`
 
-**トラック2（Mini-VM拡張）**:
+**トラック2（Hakorune VM拡張）**:
 - 担当: ChatGPT + Claude
 - 期間: 2週間
-- 成果: 完全な Hakorune-VM（M4-M7）
+- 成果: 完全な Hakorune VM（M4-M7）
 - ファイル: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
 
 **統合**:
@@ -579,12 +708,12 @@ Phase 15.7進捗: ████████░░ 80%完成
 #### **Option B: 順次開発**
 
 1. コンパイラ完成（3週間）
-2. Mini-VM完成（2週間）
+2. Hakorune VM完成（2週間）
 3. 統合（1週間）
 
 **総期間**: 6週間
 
-### 💎 **Mini-VM実装のメリット**
+### 💎 **Hakorune VM実装のメリット**
 
 #### **1. 教材として最高**
 ```hakorune
@@ -602,17 +731,17 @@ box MirVmMin {
 
 #### **2. デバッグの容易さ**
 - **Rust VM**: コンパイル必要、デバッグ困難
-- **Mini-VM**: 即座に修正、即座に実行
+- **Hakorune VM**: 即座に修正、即座に実行
 
 #### **3. 完全な制御**
 - **Rust VM**: 複雑、変更リスク大
-- **Mini-VM**: シンプル、実験容易
+- **Hakorune VM**: シンプル、実験容易
 
 #### **4. セルフホスティングへの道**
 ```
 Hakoruneコンパイラ（Hakorune実装）
     ↓ MIR生成
-Mini-VM（Hakorune実装）
+Hakorune VM（Hakorune実装）
     ↓ 実行
 完全なセルフホスティング達成！🎉
 ```
@@ -622,7 +751,7 @@ Mini-VM（Hakorune実装）
 #### **Phase 15.7完了基準**
 
 1. **quick プロファイル**: 全緑維持（96/96 PASS）
-   - Mini-VM（M2/M3）代表スモーク緑
+   - Hakorune VM（M2/M3）代表スモーク緑
    - const/binop/compare/branch/jump/ret 動作確認
    - call/boxcall/newbox（最小意味論）実行スモーク緑
    - v1 `mir_call` 形状スモーク（VM-only）緑
@@ -689,7 +818,7 @@ Mini-VM（Hakorune実装）
    - call/method（実装中🔄）
    - new/me（計画📝）
 
-### **Phase 2: Mini-VM拡張（Week 2-3、並行可能）**
+### **Phase 2: Hakorune VM拡張（Week 2-3、並行可能）**
 
 4. **M4: ループサポート**（3日）
    - ファイル: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
@@ -707,7 +836,7 @@ Mini-VM（Hakorune実装）
 ### **Phase 3: 統合＋ブートストラップ（Week 4）**
 
 7. **統合テスト**（3日）
-   - Hakoruneコンパイラ + Mini-VM連携
+   - Hakoruneコンパイラ + Hakorune VM連携
    - JSON v0 完全出力確認
    - スモークテスト整備
 
@@ -726,7 +855,7 @@ tools/smokes/v2/run.sh --profile quick
 # セルフホスティング関連のみ
 tools/smokes/v2/run.sh --profile quick --filter "selfhost_*"
 
-# Mini-VM テスト
+# Hakorune VM テスト
 tools/smokes/v2/run.sh --profile quick --filter "selfhost_mir_m*"
 ```
 
@@ -736,7 +865,7 @@ tools/smokes/v2/run.sh --profile quick --filter "selfhost_mir_m*"
 ./target/release/hakorune apps/selfhost-compiler/compiler.hako \
   -- --stage3 sample.hkr > output.json
 
-# Mini-VM実行
+# Hakorune VM実行
 ./target/release/hakorune apps/selfhost/vm/boxes/mir_vm_min.nyash \
   -- output.json
 
@@ -770,7 +899,7 @@ HAKO_COMPILER_TRACK=1 # コンパイラトラック有効化
 
 2. ✅ **教材として最高の価値**
    - コンパイラ実装: `apps/selfhost-compiler/` 全体
-   - VM実装: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
+   - Hakorune VM実装: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
    - 完全な理解が可能な規模
 
 3. ✅ **保守性の革命**
@@ -811,26 +940,26 @@ HAKO_COMPILER_TRACK=1 # コンパイラトラック有効化
 - ✅ 教材として最高
 - ✅ セルフホスティング直結
 
-**推奨**: コンパイラとMini-VMを並行開発！4週間でセルフホスティング達成！
+**推奨**: コンパイラとHakorune VMを並行開発！4週間でセルフホスティング達成！
 
 ---
 
 背景（技術詳細）
 - Instance→Function 正規化の方針は既定ON。Known 経路は関数化し、VM側は単純化する。
 - resolve.try/choose（Builder）と ssa.phi（Builder）の観測は dev‑only で導入済み（既定OFF）。
-- Mini‑VM は M2/M3 の代表ケースを安定化（パス/境界厳密化）。
+- Hakorune VM は M2/M3 の代表ケースを安定化（パス/境界厳密化）。
 - VM Kernel の Ny 化は後段（観測・ポリシーから段階導入、既定OFF）。
 
 優先順（2025‑09‑29 リバランス / 2025‑10‑04 反映）
 - P0: Rust VM 層の安定化（既存バグの点修正・回帰防止）
   - 受け手推定・RouterPolicy・LocalSSA/材化・VarMapGuard 等の補強を優先（quick/integration 常緑）。
-- P1: Mini‑VM 仕上げ（完了）
+- P1: Hakorune VM 仕上げ（完了）
   - M2/M3 の代表＋エッジスモークを quick に追加し、単一パス＋厳密セグメントで緑維持。
 - P2: Nyash コンパイラ MVP（Phase 15.6）の前進（次の主作業）
 - 既存 `apps/selfhost-compiler/compiler.hako` を軸に、Stage‑2/3 入力から JSON v0 を安定排出（.nyash は後方受理）。
   - 受け入れ（dev限定）: `NYASH_JSON_ONLY=1` で `version/kind` を含む JSON ヘッダが非空であること。
   - 既定挙動は不変。コンパイラは別アプリ（apps/）として進め、VM/LLVM 本線は影響最小。
-  - 直近 TODO: branch/jump 最小生成＋LocalSSA.ensure_cond の材化コピー最終化、Mini‑VM 代表追加1件。
+  - 直近 TODO: branch/jump 最小生成＋LocalSSA.ensure_cond の材化コピー最終化、Hakorune VM 代表追加1件。
 - P3: Known/Rewrite 統合 Stage‑1 の仕上げ（dev観測）
   - 仕様は不変のまま、観測（resolve.try/choose / ssa.phi）と関数化の一貫性を高める。
 - P4: NYABI Kernel 下地の維持（未配線・既定OFF）
@@ -863,7 +992,7 @@ Unified Call（開発既定ON）
    - 互換: `stringify()` は当面エイリアスとして許容
    - QuickRef/ガイドの更新（plus混在の誘導も `str()` に統一）
 
-3) Mini‑VM（MirVmMin）安定化（devのみ）
+3) Hakorune VM（MirVmMin）安定化（devのみ）
    - 厳密セグメントによる単一パス化、M2/M3 代表スモーク常緑（const/binop/compare/branch/jump/ret）
    - パリティ: VM↔LLVM↔Ny のミニ・パリティ 2〜3件
 
@@ -878,12 +1007,12 @@ Unified Call（開発既定ON）
 - VM Kernel の本配線（観測・ポリシーは dev‑only/未配線）
 
 リスクと軽減策
-- 性能: 境界越えは後Phaseに限る（本Phaseは未配線）。Mini‑VMは開発補助で性能要件なし。
+- 性能: 境界越えは後Phaseに限る（本Phaseは未配線）。Hakorune VMは開発補助で性能要件なし。
 - 複雑性: 設計は最小APIに限定。拡張は追加のみ（後方互換維持）。
 - 安全: すべて既定OFF。Fail‑Fast方針。再入禁止/タイムアウトを仕様に明記。
 
 受け入れ条件（Acceptance）
-- quick: Mini‑VM（M2/M3）代表スモーク緑（const/binop/compare/branch/jump/ret）
+- quick: Hakorune VM（M2/M3）代表スモーク緑（const/binop/compare/branch/jump/ret）
 - integration: 代表パリティ緑（llvmlite/ハーネス）
 - Builder: resolve.try/choose と ssa.phi が dev‑only で取得可能（NYASH_DEBUG_*）
 - 表示API: QuickRef/ガイドが `str()` に統一（実行挙動は従前と同じ）
@@ -904,7 +1033,7 @@ Unified Call（開発既定ON）
 - NYASH_VM_NY_KERNEL_TRACE=0|1
 
 ロールバック方針
-- Mini‑VMの変更は apps/selfhost/ 配下に限定（本線コードは未配線）。
+- Hakorune VMの変更は apps/selfhost/ 配下に限定（本線コードは未配線）。
 - NYABIは docs/ と スケルトンBoxのみ（実行経路から未参照）。
 - Unified Call は env で即時OFF可能。問題時は `NYASH_MIR_UNIFIED_CALL=0` を宣言してレガシーへ退避し、修正後に既定へ復帰。
 
@@ -916,15 +1045,16 @@ Unified Call（開発既定ON）
 - Phase 15.5（基盤整理）: ../phase-15.5/README.md
 - Known/Rewrite 観測: src/mir/builder/{method_call_handlers.rs,builder_calls.rs}, src/debug/hub.rs
 - QuickRef（表示API）: docs/reference/language/quick-reference.md
-- Mini‑VM: apps/selfhost/vm/boxes/mir_vm_min.nyash
+- Hakorune VM: apps/selfhost/vm/boxes/mir_vm_min.nyash
 - スモーク: tools/smokes/v2/profiles/quick/core/
 
 更新履歴
-- 2025‑09‑28 v2（本書）: Known 化＋Rewrite 統合（dev観測）、表示API `str()` 統一、Mini‑VM 安定化へ焦点を再定義
-- 2025‑09‑28 初版: Mini‑VM M3 + NYABI下地の計画
+- 2025‑10‑06 v3（本版）: "Mini-VM" → "Hakorune VM" ブランディング統一、進捗反映（85-90%完成）
+- 2025‑09‑28 v2: Known 化＋Rewrite 統合（dev観測）、表示API `str()` 統一、Hakorune VM 安定化へ焦点を再定義
+- 2025‑09‑28 初版: Hakorune VM M3 + NYABI下地の計画
 
 ## ステータス（2025‑09‑28 仕上げメモ）
-- M3（compare/branch/jump）: Mini‑VM（MirVmMin）が厳密セグメントの単一パスで動作。代表 JSON 断片で compare(Eq)→ret、branch、jump を評価。
+- M3（compare/branch/jump）: Hakorune VM（MirVmMin）が厳密セグメントの単一パスで動作。代表 JSON 断片で compare(Eq)→ret、branch、jump を評価。
 - 統合スモーク: integration プロファイル（LLVM/llvmlite）は PASS 17/17（全緑）。
 - ルータ／順序ガード（仕様不変）:
   - Router: 受信者クラスが Unknown のメソッド呼び出しは常にレガシー BoxCall にフォールバック（安定性優先・常時ON）。
@@ -940,7 +1070,7 @@ Unified Call（開発既定ON）
   - 既知箇所の観測を最小ONで確認（必要時のみ）。
 - json_query_vm（VM）: LocalSSA/順序の取りこぼし補強（救済OFFで緑）。
 - ループ PHI 搬送: header/合流の VarMapGuard 観測（break/continue を安定）。
-- Mini‑VM M2/M3: 追加エッジ（複数compare/ret先頭/ゼロ除算/no‑retフォールバック）を quick で常緑（完了済）。
+- Hakorune VM M2/M3: 追加エッジ（複数compare/ret先頭/ゼロ除算/no‑retフォールバック）を quick で常緑（完了済）。
 - Selfhost Compiler（dev）: JSONヘッダ非空スモーク（任意ゲート）を準備。
 
 ## Builder 小箱（Box 化）方針（仕様不変・段階導入）
@@ -966,7 +1096,7 @@ Unified Call（開発既定ON）
 ## Unskip Plan（段階復帰）
 - P0: json_query_vm → 期待出力一致、寛容フラグ不要。
 - P1: loops（break/continue/loop_statement）→ PHI 搬送安定。
-- P2: Mini‑VM（M2/M3）→ 代表4件 PASS、coarse 撤去・単一パス維持。
+- P2: Hakorune VM（M2/M3）→ 代表4件 PASS、coarse 撤去・単一パス維持。
 
 
 【2025-10-05 更新】Hakorune‑VM と箱の適用／WASM toolchain ゲート

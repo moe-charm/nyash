@@ -50,7 +50,7 @@ static box FlowDebugBox {
   validate_cf_targets(mjson) {
     local ids = me.collect_block_ids(mjson)
     // Set 風マップ化
-    local idset = new MapBox()
+    local idset = map({})
     local i = 0
     loop(i < ids.size()) { idset.set(ids.get(i), 1) i = i + 1 }
 

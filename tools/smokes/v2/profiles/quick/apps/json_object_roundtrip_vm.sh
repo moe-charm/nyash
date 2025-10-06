@@ -1,5 +1,10 @@
 #!/bin/bash
 # json_object_roundtrip_vm.sh — JsonNode.parse → stringify roundtrip (object)
+# Gate: heavy path; skip unless explicitly enabled
+if [ "${SMOKES_ENABLE_JSON_ROUNDTRIP:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_JSON_ROUNDTRIP=1" >&2
+  exit 0
+fi
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0

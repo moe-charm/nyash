@@ -16,12 +16,12 @@ fi
 echo "[selfhost-smoke] Step 1: Emit JSON via selfhost compiler (min-json first, then mir if needed)"
 OUT_JSON="/tmp/nyash_selfhost_out.json"
 set -x
-if NYASH_LLVM_USE_HARNESS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+if NYASH_LLVM_USE_HARNESS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
    "${NY_BIN}" --backend llvm apps/selfhost-compiler/compiler.nyash -- --min-json --stage3 > "${OUT_JSON}"; then
   :
 else
   echo "[selfhost-smoke] WARN: min-json emission failed; trying mir-emitter path..." >&2
-  if NYASH_LLVM_USE_HARNESS=1 NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+  if NYASH_LLVM_USE_HARNESS=1 NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
      "${NY_BIN}" --backend llvm apps/selfhost-compiler/compiler.nyash -- --min-json --emit-mir --stage3 > "${OUT_JSON}"; then
     :
   else

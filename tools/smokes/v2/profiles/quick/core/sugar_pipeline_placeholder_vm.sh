@@ -26,7 +26,7 @@ static box Main {
 }
 EOF
 
-out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | tail -n 1 | tr -d '\r' | xargs)
+out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)
 expected="159"
 compare_outputs "$expected" "$out" "sugar_pipeline_placeholder_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 

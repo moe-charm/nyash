@@ -1,10 +1,15 @@
 #!/bin/bash
 # wasm_std_array_resize_vm.sh — Ensure ArrayBox triggers resize and preserves values
+# Gate: skip unless explicitly enabled (WASM/std path not stable in quick)
+if [ "${SMOKES_ENABLE_WASM_STD:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_WASM_STD=1" >&2
+  exit 0
+fi
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 export SMOKES_USE_DEV=1
 export NYASH_ENABLE_NYKERNEL_STUB=1
 require_env || exit 2

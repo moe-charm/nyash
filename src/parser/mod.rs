@@ -120,7 +120,7 @@ pub enum ParseError {
     TransparencySystemRemoved { suggestion: String, line: usize },
 
     #[error(
-        "Unsupported namespace '{name}' at line {line}. Only 'nyashstd' is supported in Phase 0."
+        "Using statement requires runner-side resolution: namespace '{name}' at line {line}'.\nDump-only modes (e.g., --dump-mir) parse without resolution and will fail.\nUse --emit-mir-json to inspect MIR, or run without --dump-mir."
     )]
     UnsupportedNamespace { name: String, line: usize },
 

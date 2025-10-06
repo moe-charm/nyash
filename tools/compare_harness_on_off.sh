@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
-APP=${1:-apps/selfhost/tools/dep_tree_min_string.nyash}
+APP=${1:-apps/selfhost/tools/dep_tree_min_string.hako}
 OUTDIR=${OUTDIR:-$ROOT_DIR/tmp}
 mkdir -p "$OUTDIR"
 

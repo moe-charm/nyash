@@ -1,5 +1,7 @@
 // dep_tree_min_string.nyash — minimal include-only dependency tree (no Array/Map plugins)
 
+using selfhost.tools.dep_tree_core as Core
+
 static box Main {
   has_in_stack(stack, p) {
     // check if stack contains "\n" + p + "\n"
@@ -14,56 +16,17 @@ static box Main {
     }
     return 0
   }
-  read_all(path) {
-    local fb = new FileBox()
-    local ok = fb.open(path, "r")
-    if ok == false { return null }
-    local s = fb.read()
-    fb.close()
-    return s
-  }
-
-  dirname(path) {
-    local pb = new PathBox()
-    local d = pb.dirname(path)
-    if d != null { return d }
-    local i = path.lastIndexOf("/")
-    if i < 0 { return "." }
-    return path.substring(0, i)
-  }
-
-  join(base, rel) {
-    local pb = new PathBox()
-    local j = pb.join(base, rel)
-    if j != null { return j }
-    return base + "/" + rel
-  }
-
-  esc_json(s) {
-    // very small escaper: replace \ and "
-    local out = ""
-    local i = 0
-    local n = s.length()
-    loop(i < n) {
-      local ch = s.substring(i, i+1)
-      if ch == "\\" { out = out + "\\\\" } else {
-        if ch == "\"" { out = out + "\\\"" } else { out = out + ch }
-      }
-      i = i + 1
-    }
-    return out
-  }
 
   node_json(path, stack, depth) {
     // safety valve: max depth
     if depth >= 64 {
-      return "{\\\"path\\\":\\\"" + me.esc_json(path) + "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
+      return "{\\\"path\\\":\\\"" + Core.esc_json(path) + "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
     }
-    local src = me.read_all(path)
+    local src = Core.read_all(path)
     if src == null {
-      return "{\\\"path\\\":\\\"" + me.esc_json(path) + "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
+      return "{\\\"path\\\":\\\"" + Core.esc_json(path) + "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
     }
-    local base = me.dirname(path)
+    local base = Core.dirname(path)
     local incs = ""
     local inc_first = 1
     local children = ""
@@ -115,16 +78,16 @@ static box Main {
         if found == 1 {
           local p = src.substring(i+9, j)
           if inc_first == 1 {
-            incs = incs + "\"" + me.esc_json(p) + "\""
+            incs = incs + "\"" + Core.esc_json(p) + "\""
             inc_first = 0
           } else {
-            incs = incs + ",\"" + me.esc_json(p) + "\""
+            incs = incs + ",\"" + Core.esc_json(p) + "\""
           }
-          local child_path = me.join(base, p)
+          local child_path = Core.join(base, p)
           // cycle detection: if child_path already in stack, do not recurse
           local cj = null
           if me.has_in_stack(stack, child_path) == 1 {
-            cj = "{\\\"path\\\":\\\"" + me.esc_json(child_path) + "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
+            cj = "{\\\"path\\\":\\\"" + Core.esc_json(child_path) + "\\\",\\\"includes\\\":[],\\\"children\\\":[]}"
           } else {
             cj = me.node_json(child_path, stack + child_path + "\n", depth + 1)
           }
@@ -142,7 +105,7 @@ static box Main {
         i = i + 1
       }
     }
-    return "{\\\"path\\\":\\\"" + me.esc_json(path) + "\\\",\\\"includes\\\":[" + incs + "],\\\"children\\\":[" + children + "]}"
+    return "{\\\"path\\\":\\\"" + Core.esc_json(path) + "\\\",\\\"includes\\\":[" + incs + "],\\\"children\\\":[" + children + "]}"
   }
 
   main(args) {
@@ -152,7 +115,7 @@ static box Main {
     if args != null && args.length() >= 1 { entry = args.get(0) }
     if entry == null || entry == "" { entry = "apps/selfhost/ny-parser-nyash/main.nyash" }
     local tree = me.node_json(entry, "\n" + entry + "\n", 0)
-    local out = "{\\\"version\\\":1,\\\"root_path\\\":\\\"" + me.esc_json(entry) + "\\\",\\\"tree\\\":" + tree + "}"
+    local out = "{\\\"version\\\":1,\\\"root_path\\\":\\\"" + Core.esc_json(entry) + "\\\",\\\"tree\\\":" + tree + "}"
     console.println(out)
     return 0
   }

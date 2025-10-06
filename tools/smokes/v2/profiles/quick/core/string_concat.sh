@@ -15,7 +15,7 @@ preflight_plugins || exit 2
 # テスト実装
 test_simple_concat() {
     local output
-    output=$(run_nyash_vm -c 'print("Hello" + " " + "World")' 2>&1)
+    output=$(run_nyash_vm -c 'print("Hello" + " " + "World")' 2>&1 | grep -v '^Result: ')
     check_exact "Hello World" "$output" "simple_concat"
 }
 
@@ -28,7 +28,7 @@ message = greeting + ", " + name + "!"
 print(message)
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "Hello, Nyash!" "$output" "variable_concat"
 }
 
@@ -40,7 +40,7 @@ text = "The answer is " + num
 print(text)
 '
     local output
-    output=$(run_nyash_vm -c "$script" 2>&1)
+    output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
     check_exact "The answer is 42" "$output" "number_string_concat"
 }
 

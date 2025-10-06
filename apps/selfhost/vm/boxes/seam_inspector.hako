@@ -11,7 +11,7 @@ static box SeamInspector {
     @n = end
     @delta = 0
     loop (i < n) {
-      @ch = text.substring(i, i+1)
+      @ch = call("String.substring/2", text, i, i+1)
       if ch == "\"" {
         i = i + 1
         loop (i < n) {
@@ -43,12 +43,12 @@ static box SeamInspector {
     return -1
   }
   _find_balanced_object_end(text, idx) {
-    if text.substring(idx, idx+1) != "{" { return -1 }
+    if call("String.substring/2", text, idx, idx+1) != "{" { return -1 }
     @i = idx
     @n = text.length()
     @depth = 0
     loop (i < n) {
-      @ch = text.substring(i, i+1)
+      @ch = call("String.substring/2", text, i, i+1)
       if ch == "\"" {
         i = i + 1
         loop (i < n) {
@@ -85,7 +85,7 @@ static box SeamInspector {
       loop (j < n) { @c2 = text.substring(j, j+1) if c2 == "{" { break } j = j + 1 }
       @end = _find_balanced_object_end(text, j)
       if end < 0 { end = j }
-      @obj = new MapBox()
+      @obj = map({})
       obj.set("name", name)
       obj.set("start", _int_to_str(p))
       obj.set("end", _int_to_str(end))
@@ -96,7 +96,7 @@ static box SeamInspector {
   }
   _report_duplicate_boxes(text) {
     @boxes = _scan_boxes(text)
-    @cnt = new MapBox()
+    @cnt = map({})
     @names = new ArrayBox()
     @i = 0
     loop (i < boxes.size()) {
@@ -117,7 +117,7 @@ static box SeamInspector {
   _report_duplicate_functions_in_box(text, box_name) {
     @boxes = _scan_boxes(text)
     @i = 0
-    @fnmap = new MapBox()
+    @fnmap = map({})
     @fnames = new ArrayBox()
     loop (i < boxes.size()) {
       @b = boxes.get(i)

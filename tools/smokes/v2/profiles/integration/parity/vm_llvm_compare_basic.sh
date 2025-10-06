@@ -2,8 +2,7 @@
 # vm_llvm_compare_basic.sh - VM vs LLVM parity for basic integer comparisons
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
-source "$(dirname "$0")/../../../lib/result_checker.sh"
-
+require_llvm_or_skip || exit 0
 require_env || exit 2
 preflight_plugins || exit 2
 

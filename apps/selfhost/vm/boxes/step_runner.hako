@@ -24,7 +24,7 @@ static box StepRunnerBox {
   // compare の (lhs,rhs,kind,dst) を抽出
   parse_compare(seg) {
     local p = JsonCursorBox.index_of_from(seg, "\"op\":\"compare\"", 0)
-    if p < 0 { return new MapBox() }
+    if p < 0 { return map({}) }
     local lhs = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"lhs\":", p) + 6))
     local rhs = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"rhs\":", p) + 6))
     local dst = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"dst\":", p) + 6))
@@ -32,26 +32,17 @@ static box StepRunnerBox {
     local kpos = JsonCursorBox.index_of_from(seg, "\"cmp\":\"", p)
     local kend = me._index_of_from(seg, "\"", kpos + 6)
     local kind = seg.substring(kpos + 6, kend)
-    local out = new MapBox()
-    out.set("lhs", lhs)
-    out.set("rhs", rhs)
-    out.set("dst", dst)
-    out.set("kind", kind)
-    return out
+    return map({ lhs: lhs, rhs: rhs, dst: dst, kind: kind })
   }
 
   // branch の cond/then/else を抽出
   parse_branch(seg) {
     local p = JsonCursorBox.index_of_from(seg, "\"op\":\"branch\"", 0)
-    if p < 0 { return new MapBox() }
+    if p < 0 { return map({}) }
     local cond = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"cond\":", p) + 7))
     local then_id = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"then\":", p) + 7))
     local else_id = me._int(me._read_digits(seg, JsonCursorBox.index_of_from(seg, "\"else\":", p) + 7))
-    local out = new MapBox()
-    out.set("cond", cond)
-    out.set("then", then_id)
-    out.set("else", else_id)
-    return out
+    return map({ cond: cond, then: then_id, else: else_id })
   }
 
   // compare を評価し cond==dst のときに bool を返す

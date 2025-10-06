@@ -2,6 +2,7 @@
 # lang_match_digit_vm_llvm.sh — Parity for match mapping digits to integers
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2

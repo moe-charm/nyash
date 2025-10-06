@@ -339,7 +339,9 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
             Err(e) => { eprintln!("[macro-proxy] current_exe failed: {}", e); return ast.clone(); }
         };
         // Prefer Nyash runner route by default for self-hosting; legacy env can force internal child with 0.
-        let use_runner = std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false);
+        // Prefer runner route by default so user .hako macros can implement MacroBoxSpec.expand(json[, ctx]) directly.
+        // Legacy internal child analyzer can be forced by setting NYASH_MACRO_BOX_CHILD_RUNNER=0.
+        let use_runner = std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(true);
         if std::env::var("NYASH_MACRO_BOX_CHILD_RUNNER").ok().is_some() {
             eprintln!("[macro][compat] NYASH_MACRO_BOX_CHILD_RUNNER is deprecated; prefer defaults");
         }

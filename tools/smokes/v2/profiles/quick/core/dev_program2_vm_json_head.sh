@@ -16,7 +16,7 @@ test_program2_vm_json_head() {
 
   # Enable using for dev driver
   local out
-  out=$(NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+  out=$(NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
         run_nyash_vm "apps/dev/debug_program2_vm.nyash" 2>&1 || true)
 
   # Expect five JSON head lines

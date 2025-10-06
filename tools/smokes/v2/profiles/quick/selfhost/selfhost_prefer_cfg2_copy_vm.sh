@@ -15,7 +15,7 @@ fi
 test_selfhost_prefer_cfg2_copy_vm() {
   local json
   json=$(NYASH_DISABLE_PLUGINS=1 \
-         NYASH_ENABLE_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
+         NYASH_USING=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
          NYASH_PREFER_CFG2=1 NYASH_JSON_ONLY=1 \
          "$NYASH_BIN" --backend vm "$NYASH_ROOT/apps/selfhost-compiler/compiler.hako" -- --min-json --pipeline-v2 --emit-mir 2>/dev/null | tr -d '\r' | awk 'match($0,/^\{.*\}$/){line=$0} END{print line}')
   echo "$json" | grep -q '"op":"copy"' || { log_error "missing materialize copy in MIR(JSON)"; return 1; }

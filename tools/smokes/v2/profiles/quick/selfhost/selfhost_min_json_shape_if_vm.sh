@@ -33,7 +33,7 @@ static box Main {
 }
 NY
 
-out=$(NYASH_ALLOW_USING_FILE=1 NYASH_ENABLE_USING=1 run_nyash_vm "$TMP_DIR/driver.nyash" --dev | awk '/^\{/{print; exit}')
+out=$(NYASH_ALLOW_USING_FILE=1 NYASH_USING=1 run_nyash_vm "$TMP_DIR/driver.nyash" --dev | awk '/^\{/{print; exit}')
 [ -n "$out" ] || { log_error "min_json_shape_if: no JSON"; rm -rf "$TMP_DIR"; exit 1; }
 echo "$out" | grep -q '"If"' || { log_error "min_json_shape_if: If not found"; rm -rf "$TMP_DIR"; exit 1; }
 

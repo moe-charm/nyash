@@ -16,7 +16,7 @@ static box Main {
 }
 EOF
 
-output=$(run_nyash_vm /tmp/entry_main_ok_$$.nyash)
+output=$(run_nyash_vm /tmp/entry_main_ok_$$.nyash | grep -v '^Result: ')
 code=$?
 rm -f /tmp/entry_main_ok_$$.nyash
 

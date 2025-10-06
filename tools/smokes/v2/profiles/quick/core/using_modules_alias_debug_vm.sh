@@ -11,7 +11,7 @@ fi
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_DEV=1
-export NYASH_ENABLE_USING=1
+export NYASH_USING=1
 require_env || exit 2
 preflight_plugins || exit 2
 

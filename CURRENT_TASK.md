@@ -2,14 +2,14 @@
 
 - 2引数 indexOf 残差の段階移行（検索は index_of_from 統一）
   - libs: byte_cursor/utf8_cursor を `StringStd.index_of_from` に寄せ、`StringStd.index_of_from` を追加。
-    - apps/libs/byte_cursor.nyash, apps/libs/utf8_cursor.nyash, apps/lib/boxes/string_std.nyash
+    - apps/libs/byte_cursor.nyash, apps/libs/utf8_cursor.nyash, apps/lib/boxes/string_std.hako
   - selfhost VM 最小器: mir_vm_m2 はローカル `index_of_from` を追加して置換。
     - apps/selfhost/vm/boxes/mir_vm_m2.hako
   - hakorune VM 最小器: 一括で `me.index_of_from` に統一（presence チェック含む）。
     - apps/hakorune/vm/boxes/hakorune_vm_min.hako
   - ツール/アダプタの一部も置換（段階）：
     - apps/selfhost/tools/dep_tree.nyash → `StringStd.index_of_from`
-    - apps/selfhost/common/json/mir_v1_adapter.nyash → 自前 `_index_of_from`
+    - apps/selfhost/common/json/mir_v1_adapter.hako → 自前 `_index_of_from`
   - DEV リント導入: `tools/lints/lint_indexof_two_args.sh`（`.indexOf(a,b)` を検出）。Makefile の `lint`/`lint-ny` に連携。
 
 - Throw/PHI（VM 最小対応）
@@ -1474,3 +1474,128 @@ Planned next (per plan):
   - `VmConfig.call_adapter` flag removed (env `NYASH_VM_CALL_ADAPTER` no longer read).
   - Rationale: Unified `Call + Callee::{ModuleFunction,ExternCall}` is default; adapter increased ambiguity with no remaining users.
   - Strict policy stays: `NYASH_VM_GLOBAL_TAIL_FALLBACK` remains dev‑only; namespace alias remains default OFF.
+
+### Box .nyash inventory (staged migration plan)
+- To convert next (low risk):
+  - apps/selfhost-vm/boxes/json_cur.nyash → .hako
+  - apps/selfhost-vm/boxes/mini_vm_core.nyash → .hako
+  - apps/selfhost-vm/boxes/mini_vm_prints.nyash → .hako
+  - apps/selfhost-vm/boxes/seam_inspector.nyash → .hako
+- To leave archived (no change):
+  - apps/archive/selfhost-legacy/boxes/*.nyash (kept for historical reference)
+- Already converted in this change:
+  - apps/lib/boxes/{console_std.hako,string_std.hako,array_std.hako,map_std.hako}
+- Notes:
+  - All references must be updated in using lines after renaming.
+  - Parity/runner scripts adjusted separately as needed.
+
+## Macro bring-up (selfhost-min)
+
+- Added apps/macros/selfhost_min/macros.hako (json/map/arr skeleton; call normalization WIP)
+- Loader prefers runner route for .hako MacroBoxSpec (child runner default)
+- PATHS wiring: nyash.toml / hako.toml set NYASH_MACRO_PATHS=apps/macros/selfhost_min/macros.hako
+- Rust SelfhostMinMacro gated: NYASH_MACRO_SELFHOST_MIN=1 registers built-in variant (dev only)
+- call! macro (experimental):
+  - Shape: call("Box.method/N", args...)
+  - Rust macro variant normalizes to ModuleFunction name for method-like forms:
+    - Example: call("String.len/1", s) → FunctionCall("StringBox.len/0", [s])
+  - Smoke: tools/smokes/v2/profiles/quick/selfhost/call_macro_strict_vm.sh (gated by NYASH_ENABLE_CALL_MACRO=1)
+  - Caveat: core built-ins resolution depends on profile; keep smoke gated until strict resolver path is fully wired end-to-end
+
+- Next: introduce macros gradually in selfhost sources (small areas), avoid over‑rewrites.
+
+## 2025-10-06 — Builder external ModuleFunction index + call! smoke
+- Added builder normalization for external (builtin) ModuleFunction names: dotted+arity always resolves.
+  - Maps `String.*` / `Array.*` / `Map.*` / `Console.*` → `*Box.*` and adjusts arity (receiver excluded).
+  - Alias example: `String.len/1` → `StringBox.length/0` to match VM method set.
+- Un‑skipped call! smoke: tools/smokes/v2/profiles/quick/selfhost/call_macro_strict_vm.sh (PASS).
+- Docs updated: docs/guides/macro-system.md (call! resolution by builder).
+- Next: introduce macros gradually in selfhost sources (small areas), avoid over‑rewrites.
+
+## 2025-10-06 — call! Map.set smoke + small adoptions
+- Added smoke: tools/smokes/v2/profiles/quick/selfhost/call_macro_map_set_vm.sh (PASS).
+- Adopted call normalization in selfhost boxes (no semantic change):
+  - apps/selfhost/vm/boxes/op_handlers.hako:11 uses call("String.indexOf/2", ...) in _tprint.
+  - apps/selfhost/vm/boxes/mir_vm_min.hako:15 uses call("String.indexOf/2", ...) in _tprint.
+  - apps/selfhost/vm/boxes/instruction_scanner.hako:68 use call for "op":"ret" probe.
+- Example added for json/map/arr sugar: apps/examples/macro_sugar/mini_map_arr.hako with smoke
+  tools/smokes/v2/profiles/quick/examples/macro/json_map_arr_example_vm.sh (PASS).
+- Notes: macro PATHS are enabled per smoke; no global defaults changed.
+
+\n## 2025-10-06 — Selfhost macro adoption (small batch)\n- Replaced verbose MapBox constructions with  in:\n  - apps/selfhost/ny-parser-nyash/tokenizer.nyash:21\n  - apps/selfhost/ny-parser-nyash/parser_minimal.nyash:18,28,62,78,82\n  - apps/selfhost/vm/boxes/instruction_scanner.hako:100\n  - apps/selfhost/vm/boxes/minivm_probe.hako:9,11,41,45\n  - apps/selfhost/vm/boxes/step_runner.hako:27,35,41,45\n- Introduced a gated smoke (SKIP by default) to validate parser file uses macros:\n  - tools/smokes/v2/profiles/quick/selfhost/parser_minimal_macro_vm.sh\n- Minor fix: removed duplicate using in parser_minimal.nyash to avoid resolver error.\n- All builds green; integration (LLVM parity) remains 30/30 PASS.\n\nNotes\n- Macro PATHS are already set in nyash.toml; core env enables macros by default.\n- The parser_minimal smoke is gated due to Stage‑0 prelude scanner limitations with ';'. Enable with SMOKES_ENABLE_SELFHOST_MIN_PARSER=1 when needed.\n
+
+## 2025-10-06 — Selfhost macro adoption (small batch)
+- Replaced verbose MapBox constructions with `map({ ... })` in:
+  - apps/selfhost/ny-parser-nyash/tokenizer.nyash:21
+  - apps/selfhost/ny-parser-nyash/parser_minimal.nyash:18,28,62,78,82
+  - apps/selfhost/vm/boxes/instruction_scanner.hako:100
+  - apps/selfhost/vm/boxes/minivm_probe.hako:9,11,41,45
+  - apps/selfhost/vm/boxes/step_runner.hako:27,35,41,45
+- Introduced a gated smoke (SKIP by default) to validate parser file uses macros:
+  - tools/smokes/v2/profiles/quick/selfhost/parser_minimal_macro_vm.sh
+- Minor fix: removed duplicate using in parser_minimal.nyash to avoid resolver error.
+- All builds green; integration (LLVM parity) remains 30/30 PASS.
+
+Notes
+- Macro PATHS are already set in nyash.toml; core env enables macros by default.
+- The parser_minimal smoke is gated due to Stage-0 prelude scanner limitations with ';'. Enable with SMOKES_ENABLE_SELFHOST_MIN_PARSER=1 when needed.
+
+
+## 2025-10-06 — Macro adoption Batch-2
+- dep_tree_simple.nyash: using/ modules 出力レコードを map({...}) 化（rec, m）, visited短絡と root/out の生成を map 化。
+- mir_builder_min.hako: builder state(make)・start_block の blk・get_function_structure の fndef を map({...}) 化。
+- seam_inspector.hako: @obj/@cnt/@fnmap の初期化を map({}) に統一。
+- call! 追加適用: ny-parser-nyash/main.nyash と parser_minimal.nyash の Error 検出に call("String.indexOf/2", ...) を採用（strict）。
+- suites/core: macro_min_mix_core.sh を追加（SKIP既定、SMOKES_ENABLE_CORE_MACRO=1 で有効）。
+- Build/LLVM integration 確認: cargo build OK、integration 既存緑維持（代表 subset 実行済）。
+
+
+## 2025-10-06 — Macro adoption Batch-3
+- dep_tree_simple: pair returns unified to map({arr,len}) with early returns in split_lines/scan_includes/scan_usings/scan_modules.
+- seam_inspector: representative call! adoption for String.substring/2 in brace scanner.
+- suites/core: added map_pair_spec_core.sh (SKIP by default; enable with SMOKES_ENABLE_CORE_MAP_PAIR=1). Note: print capture in run helper may filter outputs; assertion checks may need refinement later.
+- Build green; integration (LLVM) parity set unaffected.
+
+
+## 2025-10-06 — Batch‑4 (selfhost only)
+- dep_tree.nyash: Node/ensure_arrays map化（初期化を map({ path, includes:[], using:[], modules:[], children:[] }) に統一。read_fail は error を付与して即返却）。
+- mir_builder2.hako: state の一括初期化を map({...}) に、start_block の blk を map({ id, instructions:[] }) に置換。
+- call! 追加（common/json スキャナ）:
+  - json_frag.hako: block0_segment の indexOf を call("String.indexOf/2", ...) に置換。
+  - json/core/json_scan.hako: 先頭ガードの substring を call("String.substring/2", ...) に置換。
+- スモーク（SKIP既定、必要時のみ）:
+  - suites/core/map_pair_usings_null_core.sh — scan_usings(null) の map({arr:[],len:0}) を確認。
+  - suites/core/call_substring_min_core.sh — call!(String.substring/2) 最小動作（"abc"→"b"）。
+- ビルド/統合: cargo build OK、既存 integration(LLVM) 緑のまま。
+
+## 2025-10-07 — Selfhost map/call! polish + .hako move
+- tools/dep_tree: renamed `apps/selfhost/tools/dep_tree.nyash` → `apps/selfhost/tools/dep_tree.hako` and `dep_tree_simple.nyash` → `dep_tree_simple.hako`; updated imports in `apps/selfhost/tools/dep_tree_main.hako`, suites/core smokes.
+- mir_builder_min.nyash: map init adoption
+  - `make()` now returns `map({ buf, phase, first_inst, blocks, cur_block_index, fn_name })` directly.
+  - `start_block`: blk construction switched to `map({ id, instructions:[] })`.
+  - `get_function_structure`: returns `map({ name, params:[], blocks })`.
+- json scanners: added safe `call!(String.substring/2)` uses
+  - json/core/json_scan.hako: character reads in object/array scan loops now use `call("String.substring/2", text, i, i+1)`; kept logic unchanged.
+  - json/core/string_scan.hako: added call! for loop char reads; kept simple guard as-is.
+- Scope: selfhost/common + tools only. VM/runtime untouched.
+- Next (small):
+  - Continue replacing pure-structure `new MapBox()+set(...)` with `map({ ... })` in selfhost/common and vm/boxes safe spots.
+  - Expand call! minimally in string scanners (indexOf/substring guards) with tests.
+
+## 2025-10-07 — Selfhost polish (batch, small)
+- Map init: `apps/selfhost/tools/dep_tree.hako:10` visited → `map({})`（構造生成の純化）。
+- call! 追加（局所・安全な1件ずつ）:
+  - `apps/selfhost/common/mini_vm_scan.hako:20` → `@ch = call("String.substring/2", json, i, i+1)`。
+  - `apps/selfhost/common/string_helpers.hako:32` → `local ch = call("String.substring/2", s, i, i+1)`。
+  - `apps/selfhost/common/mini_vm_binop.hako:13` → `if call("String.substring/2", json, i, i+1) == '"'`。
+- .hako 移行（低リスク）:
+  - `apps/selfhost/tools/dep_tree_min_string.nyash` → `apps/selfhost/tools/dep_tree_min_string.hako` にリネーム、全参照の置換。
+
+Notes
+- 実行状態の Map（`regs` 等）は対象外。scan/guard/純構造のみを map/call! へ段階適用。
+- 追加の候補（次回）: mini_vm_scan/string_helpers の残りの substring 判定、tools/dep_tree 内 set チェーンの map 圧縮（段階）。
+
+## 2025-10-07 — Selfhost polish (batch, follow-up)
+- mini_vm_scan.hako: added two more call!(String.substring/2) at character reads in array/object scan loops.
+- string_helpers.hako: numeric string check loop now uses call!(String.substring/2) for per-char read.
+- tools/dep_tree_main: .nyash → .hako rename; updated all references.
