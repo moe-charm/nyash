@@ -211,12 +211,6 @@ impl MirInterpreter {
         // share the same method name/arity (e.g., JsonScanner.is_eof vs JsonToken.is_eof).
         if let Some(func) = {
             let tail = format!(".{}{}", method, format!("/{}", args.len()));
-            let mut cands: Vec<String> = self
-                .functions
-                .keys()
-                .filter(|k| k.ends_with(&tail))
-                .cloned()
-                .collect();
             // Determine receiver class name when possible
             let recv_cls: Option<String> = match self.reg_load(box_val).ok() {
                 Some(VMValue::BoxRef(b)) => {
@@ -226,11 +220,22 @@ impl MirInterpreter {
                 }
                 _ => None,
             };
+            // Safety: only attempt tail-based fallback when we know the receiver class.
+            // This prevents accidental cross-module resolution (e.g., JsonCursorBox → JsonFragBox)
+            // which can create recursion cycles.
             if let Some(ref want) = recv_cls {
+                let mut cands: Vec<String> = self
+                    .functions
+                    .keys()
+                    .filter(|k| k.ends_with(&tail))
+                    .cloned()
+                    .collect();
                 let prefix = format!("{}.", want);
                 cands.retain(|k| k.starts_with(&prefix));
+                if cands.len() == 1 { self.functions.get(&cands[0]).cloned() } else { None }
+            } else {
+                None
             }
-            if cands.len() == 1 { self.functions.get(&cands[0]).cloned() } else { None }
         } {
             // Build argv: pass receiver as first arg (me)
             let recv_vm = self.reg_load(box_val)?;

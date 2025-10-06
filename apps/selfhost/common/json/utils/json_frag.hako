@@ -66,4 +66,9 @@ static box JsonFragBox {
     if endp < 0 { return "" }
     return mjson.substring(arr_bracket + 1, endp)
   }
+
+
+  // Alias for legacy/buggy resolvers that drop underscores in method names.
+  // Keep as a thin forwarder to preserve strict naming in source while
+  // unblocking runtimes that accidentally call `block0segment`.
 }

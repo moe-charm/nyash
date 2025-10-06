@@ -1,3 +1,4 @@
+#![cfg(feature = "mir_refbarrier_unify_poc")]
 /*!
  * Phase 6.1 VM Reference Operations Test
  *

@@ -108,7 +108,9 @@ impl MirBuilder {
         if let Some(pos) = func_name.find('.') {
             let box_name = &func_name[..pos];
             if !box_name.is_empty() {
-                self.current_static_box = Some(box_name.to_string());
+                // Canonicalize alias-alias (X_X -> X)
+                let canon = if let Some((a,b)) = box_name.split_once('_') { if a == b { a } else { box_name } } else { box_name };
+                self.current_static_box = Some(canon.to_string());
             }
         }
         let signature = function_lowering::prepare_static_method_signature(

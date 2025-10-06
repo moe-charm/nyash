@@ -22,7 +22,7 @@ fn jit_readonly_array_push_denied() {
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: a, box_type: "ArrayBox".into(), args: vec![],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let three = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -90,7 +90,7 @@ fn jit_readonly_map_set_denied() {
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: mbox, box_type: "MapBox".into(), args: vec![],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let key = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -142,6 +142,7 @@ fn jit_readonly_map_set_denied() {
 }
 
 // Engine-independent smoke: validate policy denial via host externs
+#[cfg(feature = "cranelift-jit")]
 #[test]
 fn extern_readonly_array_push_denied() {
     use crate::backend::vm::VMValue;
@@ -158,6 +159,7 @@ fn extern_readonly_array_push_denied() {
     assert_eq!(len.to_string(), "0");
 }
 
+#[cfg(feature = "cranelift-jit")]
 #[test]
 fn extern_readonly_map_set_denied() {
     use crate::backend::vm::VMValue;
@@ -175,6 +177,7 @@ fn extern_readonly_map_set_denied() {
     assert_eq!(sz.to_string(), "0");
 }
 
+#[cfg(feature = "cranelift-jit")]
 #[test]
 fn extern_readonly_read_ops_allowed() {
     use crate::backend::vm::VMValue;

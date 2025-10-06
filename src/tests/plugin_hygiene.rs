@@ -1,3 +1,4 @@
+#[cfg(feature = "cranelift-jit")]
 #[test]
 fn plugin_invoke_hygiene_prefers_hostcall_for_mapped() {
     use crate::jit::policy::invoke::{decide_box_method, InvokeDecision};
@@ -17,6 +18,7 @@ fn plugin_invoke_hygiene_prefers_hostcall_for_mapped() {
     }
 }
 
+#[cfg(feature = "cranelift-jit")]
 #[test]
 fn plugin_invoke_hygiene_string_len_is_hostcall() {
     use crate::jit::policy::invoke::{decide_box_method, InvokeDecision};

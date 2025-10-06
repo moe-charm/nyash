@@ -55,6 +55,8 @@ pub struct MirInterpreter {
     pub(super) max_block_exec: Option<usize>,
     // Scope-based lifetime tracker (fini on scope exit)
     pub(super) scope: crate::scope_tracker::ScopeTracker,
+    // Dev-only: naive reentrancy counter per callee (for quick cycle diagnosis)
+    pub(super) reenter_count: std::collections::HashMap<String, usize>,
 }
 
 impl MirInterpreter {
@@ -86,6 +88,7 @@ impl MirInterpreter {
                 raw.and_then(|s| s.parse::<usize>().ok())
             },
             scope: crate::scope_tracker::ScopeTracker::new(),
+            reenter_count: HashMap::new(),
         }
     }
 

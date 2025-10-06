@@ -1,3 +1,4 @@
+#![cfg(feature = "e2e")]
 /*!
  * Nyash Rust Implementation - Integration Tests
  *

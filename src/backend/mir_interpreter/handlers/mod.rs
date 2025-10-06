@@ -33,37 +33,25 @@ impl MirInterpreter {
                     }
                 }
                 // Fallback safety: ensure birth() runs for user/builtin boxes.
-                // This covers cases where the module-level birth function name
-                // was not materialized or auto_birth was omitted. Builtins
-                // treat birth as no-op, user boxes should make birth idempotent.
-                let _ = self.handle_box_call(None, *dst, "birth", args);
+                // Guarded by env so we can bisect issues (NYASH_VM_BIRTH_AFTER_NEW=0 disables).
+                if crate::config::env::vm_birth_after_new_fallback() {
+                    let _ = self.handle_box_call(None, *dst, "birth", args);
+                }
             }
             MirInstruction::PluginInvoke { dst, .. } => {
-                if let Some(res) = self.try_execute_via_callee(inst) {
-                    let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }
-                } else {
-                    if let MirInstruction::PluginInvoke { dst, box_val, method, args, .. } = inst {
-                        self.handle_plugin_invoke(*dst, *box_val, method, args)?
-                    } else { unreachable!() }
-                }
+                if let MirInstruction::PluginInvoke { dst, box_val, method, args, .. } = inst {
+                    self.handle_plugin_invoke(*dst, *box_val, method, args)?
+                } else { unreachable!() }
             }
-            MirInstruction::BoxCall { dst, .. } => {
-                if let Some(res) = self.try_execute_via_callee(inst) {
-                    let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }
-                } else {
-                    if let MirInstruction::BoxCall { dst, box_val, method, args, .. } = inst {
-                        self.handle_box_call(*dst, *box_val, method, args)?
-                    } else { unreachable!() }
-                }
+            MirInstruction::BoxCall { .. } => {
+                if let MirInstruction::BoxCall { dst, box_val, method, args, .. } = inst {
+                    self.handle_box_call(*dst, *box_val, method, args)?
+                } else { unreachable!() }
             }
-            MirInstruction::ExternCall { dst, .. } => {
-                if let Some(res) = self.try_execute_via_callee(inst) {
-                    let v = res?; if let Some(d) = *dst { self.regs.insert(d, v); }
-                } else {
-                    if let MirInstruction::ExternCall { dst, iface_name, method_name, args, .. } = inst {
-                        self.handle_extern_call(*dst, iface_name, method_name, args)?
-                    } else { unreachable!() }
-                }
+            MirInstruction::ExternCall { .. } => {
+                if let MirInstruction::ExternCall { dst, iface_name, method_name, args, .. } = inst {
+                    self.handle_extern_call(*dst, iface_name, method_name, args)?
+                } else { unreachable!() }
             }
             MirInstruction::RefSet {
                 reference,

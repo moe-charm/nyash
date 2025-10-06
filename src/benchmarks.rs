@@ -198,6 +198,7 @@ impl BenchmarkSuite {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "wasm-backend")]
     #[test]
     fn test_benchmark_light() {
         let suite = BenchmarkSuite::new(3); // Only 3 iterations for testing

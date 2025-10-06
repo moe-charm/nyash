@@ -501,6 +501,18 @@ impl MirBuilder {
         }
 
         if let Some(ref mut function) = self.current_function {
+            // Fail-Fast: do not emit any instruction after a terminator in the current block
+            let already_terminated = function
+                .get_block(block_id)
+                .map(|b| b.is_terminated())
+                .unwrap_or(false);
+            if already_terminated {
+                let fname = _dbg_fn_name.as_deref().unwrap_or("<unknown>");
+                return Err(format!(
+                    "Builder emit after terminator forbidden: function='{}' block={}",
+                    fname, block_id
+                ));
+            }
             if let Some(block) = function.get_block_mut(block_id) {
                 if utils::builder_debug_enabled() {
                     eprintln!(

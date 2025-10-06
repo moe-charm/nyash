@@ -113,19 +113,23 @@ impl MirBuilder {
             match self.build_expression(a.clone()) { Ok(v) => arg_values.push(v), Err(e) => return Some(Err(e)) }
         }
         let result_id = self.value_gen.next();
-        let fun_name = format!("{}.{}{}", cls_name, method, format!("/{}", arg_values.len()));
-        let fun_val = match crate::mir::builder::name_const::make_name_const_result(self, &fun_name) {
-            Ok(v) => v,
+        // Canonicalize class for alias-alias form: JsonFragBox_JsonFragBox → JsonFragBox
+        let canon_cls = if let Some((a,b)) = cls_name.split_once('_') { if a == b { a.to_string() } else { cls_name.clone() } } else { cls_name.clone() };
+        // Build canonical function name strictly via normalizer to preserve underscores
+        let fun_name = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::static_name(&canon_cls, method, arg_values.len()) {
+            Ok(n) => n,
             Err(e) => return Some(Err(e)),
         };
+        // Prefer unified ModuleFunction callee to avoid legacy recursion
+        let mut args_local = arg_values.clone();
+        super::super::ssa::local::finalize_args(self, &mut args_local);
         if let Err(e) = self.emit_instruction(MirInstruction::Call {
             dst: Some(result_id),
-            func: fun_val,
-            callee: None, // use legacy module resolution for static helper
-            args: arg_values,
+            func: super::super::ValueId::new(0),
+            callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(fun_name.clone())),
+            args: args_local,
             effects: EffectMask::READ.add(Effect::ReadHeap)
         }) { return Some(Err(e)); }
-        // Annotate from lowered function signature if present
         self.annotate_call_result_from_func_name(result_id, &fun_name);
         Some(Ok(result_id))
     }

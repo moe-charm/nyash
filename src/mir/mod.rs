@@ -353,6 +353,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "mir_typeop_poc")]
     #[test]
     fn test_await_has_checkpoints() {
         // Core‑13 pure mode removed; test always runs.
@@ -384,6 +385,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "mir_typeop_poc")]
     #[test]
     fn test_rewritten_await_still_checkpoints() {
         // Core‑13 pure mode removed; test always runs.

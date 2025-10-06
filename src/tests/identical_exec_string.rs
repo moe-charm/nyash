@@ -23,17 +23,14 @@ mod tests {
                 dst: s,
                 value: ConstValue::String("hello".into()),
             });
+        let sb = f.next_value_id();
+        f.get_block_mut(bb)
+            .unwrap()
+            .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s], auto_birth: None });
         let ln = f.next_value_id();
         f.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::BoxCall {
-                dst: Some(ln),
-                box_val: s,
-                method: "len".into(),
-                args: vec![],
-                method_id: None,
-                effects: EffectMask::PURE,
-            });
+            .add_instruction(MirInstruction::Call { dst: Some(ln), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.len/0".into())), args: vec![sb], effects: EffectMask::PURE });
         f.get_block_mut(bb)
             .unwrap()
             .add_instruction(MirInstruction::Return { value: Some(ln) });

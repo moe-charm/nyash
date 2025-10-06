@@ -34,54 +34,23 @@ impl MirBuilder {
 
 
         // Compose lowered function name: BoxName.method/N
-        let func_name = format!("{}.{}/{}", box_name, method, arg_values.len());
+        let func_name = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::static_name(box_name, method, arg_values.len()) {
+            Ok(n) => n,
+            Err(e) => return Err(format!("static call name error: {}", e)),
+        };
         let dst = self.value_gen.next();
 
         if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
             eprintln!("[builder] static-call {}", func_name);
         }
 
-        // If exact name is not present (aliased prelude renamed to Alias_Top),
-        // try unique tail-match fallback (…<Box>.<method>/<arity>)
+        // Strict: if the exact canonical function is absent in this module,
+        // fall back to the dotted base and let VM handle resolution (and optional legacy).
         let target_name = if let Some(ref module) = self.current_module {
             if module.functions.contains_key(&func_name) {
                 func_name.clone()
             } else {
-                let idx = crate::mir::indexes::functions::FunctionIndex::new(module);
-                match idx.tail_unique(Some(box_name), method, arg_values.len()) {
-                    crate::mir::indexes::functions::TailQueryResult::Unique(n) => n,
-                    crate::mir::indexes::functions::TailQueryResult::Ambiguous(mut cands) => {
-                        if std::env::var("NYASH_MIR_CALL_MODULE_FN_STRICT").ok().as_deref() == Some("1") {
-                            cands.sort();
-                            return Err(format!(
-                                "Ambiguous static method resolution for '{}.{}', arity={} ({} candidates): {}",
-                                box_name, method, arg_values.len(), cands.len(), cands.join(", ")
-                            ));
-                        }
-                        // method-only unique fallback
-                        match idx.tail_unique(None, method, arg_values.len()) {
-                            crate::mir::indexes::functions::TailQueryResult::Unique(n2) => n2,
-                            crate::mir::indexes::functions::TailQueryResult::Ambiguous(c2) => {
-                                if std::env::var("NYASH_MIR_CALL_MODULE_FN_STRICT").ok().as_deref() == Some("1") {
-                                    let mut c2s = c2; let shown = c2s.len().min(10); c2s.sort();
-                                    return Err(format!(
-                                        "Ambiguous static method resolution (method-only) for '{}', arity={} ({} candidates, showing {}): {}",
-                                        method, arg_values.len(), c2s.len(), shown, c2s.iter().take(shown).cloned().collect::<Vec<_>>().join(", ")
-                                    ));
-                                }
-                                func_name.clone()
-                            }
-                            crate::mir::indexes::functions::TailQueryResult::None => func_name.clone(),
-                        }
-                    }
-                    crate::mir::indexes::functions::TailQueryResult::None => {
-                        // method-only unique fallback
-                        match idx.tail_unique(None, method, arg_values.len()) {
-                            crate::mir::indexes::functions::TailQueryResult::Unique(n2) => n2,
-                            _ => func_name.clone(),
-                        }
-                    }
-                }
+                format!("{}.{}", box_name, method)
             }
         } else {
             func_name.clone()
@@ -103,9 +72,9 @@ impl MirBuilder {
             }
         }
 
-        // Fallback: legacy global-call emission to keep behavior identical
+        // Emit Global dotted name and rely on VM strict resolver (and optional tail fallback)
         self.emit_legacy_call(Some(dst), CallTarget::Global(target_name), arg_values)?;
-        Ok(dst)
+        return Ok(dst)
     }
 
     /// Handle TypeOp method calls: value.is("Type") and value.as("Type")

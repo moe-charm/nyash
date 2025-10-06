@@ -3,6 +3,9 @@
 using "apps/selfhost/common/string_ops.hako" as StringOps
 
 static box CfgNavigatorBox {
+  // Provide index_of_from to avoid tail-based fallback/ambiguous resolution
+  index_of_from(text, needle, pos) { return StringOps.index_of_from(text, needle, pos) }
+
   _int_to_str(n) {
     if n == 0 { return "0" }
     if n < 0 { return "-" + me._int_to_str(0 - n) }

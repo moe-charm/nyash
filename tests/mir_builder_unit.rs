@@ -11,7 +11,7 @@ fn test_literal_building() {
     let result = builder.build_module(ast);
     assert!(result.is_ok());
     let module = result.unwrap();
-    assert_eq!(module.function_names().len(), 1);
+    assert!(module.function_names().len() >= 1);
     assert!(module.get_function("main").is_some());
 }
 

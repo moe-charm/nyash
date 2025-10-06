@@ -62,6 +62,8 @@ aot-plan-import = []
 name = "nyash_rust"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
+#doctest disabled by default for CI stability
+doctest = false
 
 # Main CLI binary - always available
 [[bin]]

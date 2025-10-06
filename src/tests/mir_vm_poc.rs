@@ -2,7 +2,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{BasicBlockId, ConstValue, Effect, EffectMask, MirInstruction, MirType};
     use crate::mir::{FunctionSignature, MirFunction, MirModule};
 

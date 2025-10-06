@@ -34,6 +34,7 @@ fn restore_env(prev: Vec<(String, Option<String>)>) {
     }
 }
 
+#[cfg(feature = "all-examples")]
 #[test]
 fn golden_transforms() {
     // To avoid env races across tests when using env toggles

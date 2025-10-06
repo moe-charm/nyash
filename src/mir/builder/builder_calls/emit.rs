@@ -317,7 +317,7 @@ impl MirBuilder {
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(out),
                         func: name_val,
-                        callee: None, // legacy: resolve via function table
+                        callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(fname.clone())),
                         args: call_args,
                         effects: EffectMask::READ.add(Effect::ReadHeap),
                     })?;
@@ -417,7 +417,7 @@ impl MirBuilder {
                 self.emit_instruction(MirInstruction::Call {
                     dst,
                     func: func_val,
-                    callee: None,
+                    callee: Some(crate::mir::definitions::call_unified::Callee::Value(func_val)),
                     args,
                     effects: EffectMask::IO,
                 })

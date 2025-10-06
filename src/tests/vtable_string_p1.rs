@@ -1,10 +1,12 @@
 #[test]
 fn vtable_string_indexof_replace_trim_upper_lower() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
     };
+    use crate::mir::definitions::Callee;
+
     std::env::set_var("NYASH_ABI_VTABLE", "1");
 
     // indexOf("b") in "abc" == 1
@@ -27,7 +29,7 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: sb, box_type: "StringBox".into(), args: vec![s],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let b = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -38,14 +40,7 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     let idx = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(idx),
-            box_val: sb,
-            method: "indexOf".into(),
-            args: vec![b],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(idx), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("StringBox.indexOf/1".into())), args: vec![sb, b], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(idx) });
@@ -75,7 +70,7 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: sb2, box_type: "StringBox".into(), args: vec![s2],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let dash = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -93,14 +88,7 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     let rep = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(rep),
-            box_val: sb2,
-            method: "replace".into(),
-            args: vec![dash, plus],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(rep), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("StringBox.replace/2".into())), args: vec![sb2, dash, plus], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(rep) });
@@ -130,40 +118,19 @@ fn vtable_string_indexof_replace_trim_upper_lower() {
     f3.get_block_mut(bb3)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: sb3, box_type: "StringBox".into(), args: vec![s3],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let t = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(t),
-            box_val: sb3,
-            method: "trim".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(t), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.trim/0".into())), args: vec![sb3], effects: EffectMask::PURE });
     let u = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(u),
-            box_val: t,
-            method: "toUpper".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(u), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.toUpper/0".into())), args: vec![t], effects: EffectMask::PURE });
     let l = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(l),
-            box_val: u,
-            method: "toLower".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(l), func: crate::mir::ValueId::new(0), callee: Some(crate::mir::definitions::Callee::ModuleFunction("StringBox.toLower/0".into())), args: vec![u], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(l) });

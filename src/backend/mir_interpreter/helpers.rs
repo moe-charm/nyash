@@ -388,7 +388,7 @@ mod tests {
     use crate::mir::EffectMask;
 
     fn make_func_with_block(instrs: Vec<MirInstruction>) -> (MirFunction, BasicBlockId, MirInstruction) {
-        let sig = FunctionSignature { name: "F.test".into(), params: vec![], return_type: MirType::I64, effects: EffectMask::PURE };
+        let sig = FunctionSignature { name: "F.test".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
         let entry = BasicBlockId::new(0);
         let mut f = MirFunction::new(sig, entry);
         let mut b = BasicBlock::new(entry);
@@ -424,7 +424,7 @@ mod tests {
         let v1 = ValueId::new(11);
         let v2 = ValueId::new(12);
         let entry = BasicBlockId::new(0);
-        let sig = FunctionSignature { name: "F.test".into(), params: vec![], return_type: MirType::I64, effects: EffectMask::PURE };
+        let sig = FunctionSignature { name: "F.test".into(), params: vec![], return_type: MirType::Integer, effects: EffectMask::PURE };
         let mut func = MirFunction::new(sig, entry);
         let mut bb = BasicBlock::new(entry);
         bb.add_instruction(MirInstruction::Copy { dst: v1, src: s });

@@ -31,6 +31,27 @@ impl MirInterpreter {
         func_name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+        // Dev: naive reentrancy counter (best-effort)
+        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
+            let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
+            let key = format!("Global:{}:{}", clean, args.len());
+            let c = self.reenter_count.entry(key.clone()).or_insert(0);
+            *c += 1;
+            if let Some(limit) = crate::config::env::vm_reenter_limit() { if *c > limit { return Err(VMError::InvalidInstruction(format!("reentrancy guard: {} depth>{}", key, limit))); } }
+            if crate::config::env::vm_reenter_trace() && (*c == 64 || *c % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, *c); }
+        }
+        // Narrow safety valve to break Json* index_of_from recursion (dev):
+        // Handle dotted canonical or base names here when arity==3.
+        if args.len() == 3 {
+            let fname = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
+            if fname == "JsonCursorBox.index_of_from" || fname == "JsonFragBox.index_of_from" {
+                let hay = self.reg_load(args[0])?.to_string();
+                let needle = self.reg_load(args[1])?.to_string();
+                let pos = self.reg_load(args[2])?.as_integer().unwrap_or(0).max(0) as usize;
+                let idx: i64 = if needle.is_empty() { 0 } else if pos >= hay.len() { -1 } else { hay[pos..].find(&needle).map(|i| (pos + i) as i64).unwrap_or(-1) };
+                return Ok(VMValue::Integer(idx));
+            }
+        }
         if let Some(r) = self.try_dev_json_stringify_bridge_global(func_name, args) { return r; }
         let label = format!("Global:{}", func_name);
         self.emit_call_trace_label(&label, args.len(), None);
@@ -90,6 +111,15 @@ impl MirInterpreter {
         func_name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
+        // Dev: naive reentrancy counter (best-effort)
+        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
+            let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
+            let key = format!("Global:{}:{}", clean, args.len());
+            let c = self.reenter_count.entry(key.clone()).or_insert(0);
+            *c += 1;
+            if let Some(limit) = crate::config::env::vm_reenter_limit() { if *c > limit { return Err(VMError::InvalidInstruction(format!("reentrancy guard: {} depth>{}", key, limit))); } }
+            if crate::config::env::vm_reenter_trace() && (*c == 64 || *c % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, *c); }
+        }
         match func_name {
             "nyash.builtin.print" | "print" | "nyash.console.log" => {
                 if let Some(arg_id) = args.get(0) {
@@ -189,7 +219,33 @@ impl MirInterpreter {
             }
             _ => {
                 let clean_name = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
-                if let Some(pick) = call_resolver::resolve_module_function_collect(self.functions.keys().cloned(), clean_name, args.len()) {
+                // Strict-first: if dotted, only accept exact canonical Class.method/arity
+                if clean_name.contains('.') {
+                    let canon = format!("{}/{}", clean_name, args.len());
+                    if self.functions.contains_key(&canon) {
+                        return self.handle_callee_module_function(&canon, args);
+                    }
+                    // Allow alias-alias form only under legacy fallback policy
+                    if crate::config::env::vm_global_tail_fallback() {
+                        if let Some((cls, meth)) = clean_name.split_once('.') {
+                            let alias_alias = format!("{}_{}.{}{}", cls, cls, meth, format!("/{}", args.len()));
+                            if self.functions.contains_key(&alias_alias) {
+                                return self.handle_callee_module_function(&alias_alias, args);
+                            }
+                        }
+                    }
+                    if crate::config::env::vm_global_tail_fallback() {
+                        if let Some(pick) = crate::mir::resolve::module_function_resolver::resolve_strict(self.functions.keys().cloned(), clean_name, args.len(), true) {
+                            return self.handle_callee_module_function(&pick, args);
+                        }
+                    }
+                    return Err(VMError::InvalidInstruction(format!(
+                        "Unknown module function (strict global): {} (arity={})",
+                        clean_name, args.len()
+                    )));
+                }
+                // Non-dotted: legacy global resolution
+                if let Some(pick) = crate::mir::resolve::module_function_resolver::resolve_strict(self.functions.keys().cloned(), clean_name, args.len(), true) {
                     return self.handle_callee_module_function(&pick, args);
                 }
                 Err(VMError::InvalidInstruction(format!(
@@ -208,6 +264,37 @@ impl MirInterpreter {
         name: &str,
         args: &[ValueId],
         ) -> Result<VMValue, VMError> {
+        // Dev: naive reentrancy counter (best-effort)
+        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
+            let clean = if let Some(pos) = name.rfind('/') { &name[..pos] } else { name };
+            let key = format!("ModuleFn:{}:{}", clean, args.len());
+            let c = self.reenter_count.entry(key.clone()).or_insert(0);
+            *c += 1;
+            if let Some(limit) = crate::config::env::vm_reenter_limit() { if *c > limit { return Err(VMError::InvalidInstruction(format!("reentrancy guard: {} depth>{}", key, limit))); } }
+            if crate::config::env::vm_reenter_trace() && (*c == 64 || *c % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, *c); }
+        }
+        // Dev safety valve: intercept hot recursive helpers to avoid resolver-induced cycles.
+        // JsonCursorBox.index_of_from/3 and JsonFragBox.index_of_from/3 are pure functions;
+        // implement minimal native evaluation to break potential recursion.
+        if (name == "JsonCursorBox.index_of_from" || name == "JsonFragBox.index_of_from"
+            || name == "JsonCursorBox.index_of_from/3" || name == "JsonFragBox.index_of_from/3")
+            && args.len() == 3
+        {
+            let hay = self.reg_load(args[0])?.to_string();
+            let needle = self.reg_load(args[1])?.to_string();
+            let pos = self.reg_load(args[2])?.as_integer().unwrap_or(0).max(0) as usize;
+            let idx: i64 = if needle.is_empty() {
+                0
+            } else if pos >= hay.len() {
+                -1
+            } else {
+                match hay[pos..].find(&needle) {
+                    Some(i) => (pos + i) as i64,
+                    None => -1,
+                }
+            };
+            return Ok(VMValue::Integer(idx));
+        }
         if !crate::mir::resolve::call_resolver_core::is_fully_qualified(name) {
             return Err(VMError::InvalidInstruction(format!(
                 "VM received incomplete module function name: {}",
@@ -289,6 +376,36 @@ impl MirInterpreter {
         } else {
             format!("{}/{}", name, args.len())
         };
+
+        // Bridge: Builtin vtable dispatch for dotted names (ArrayBox/MapBox/StringBox/ConsoleBox)
+        // This allows tests and builder to use unified ModuleFunction while VM routes to BoxCall.
+        if let Some((class, method_arity)) = name.split_once('.') {
+            let method = if let Some((m, _arity)) = method_arity.split_once('/') { m } else { method_arity };
+            if !args.is_empty() {
+                match class {
+                    "ArrayBox" | "MapBox" | "StringBox" | "ConsoleBox" => {
+                        if method != "birth" {
+                            // Build a Method callee and reuse the legacy method path which returns VMValue
+                            let recv = args[0];
+                            let rest: Vec<ValueId> = args.iter().copied().skip(1).collect();
+                            let box_name = match self.reg_load(recv) {
+                                Ok(super::super::VMValue::BoxRef(bx)) => {
+                                    if let Some(inst) = bx.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
+                                        inst.class_name.clone()
+                                    } else { bx.type_name().to_string() }
+                                }
+                                Ok(super::super::VMValue::String(_)) => "StringBox".to_string(),
+                                _ => class.to_string(),
+                            };
+                            let cal = crate::mir::Callee::Method { box_name, method: method.to_string(), receiver: Some(recv), certainty: crate::mir::definitions::call_unified::TypeCertainty::Known };
+                            return self.execute_callee_call(&cal, &rest);
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
 
         // Exact match first
         if let Some(func) = self.functions.get(&want_name).cloned() {

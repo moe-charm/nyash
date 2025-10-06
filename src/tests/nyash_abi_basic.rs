@@ -27,7 +27,7 @@ mod tests {
     #[test]
     #[ignore]
     fn vm_vtable_map_set_get_has() {
-        use crate::backend::vm::VM;
+        use crate::backend::VM;
         use crate::mir::{
             BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
             MirModule, MirType, ValueId,
@@ -51,7 +51,7 @@ mod tests {
         f.get_block_mut(bb)
             .unwrap()
             .add_instruction(MirInstruction::NewBox { dst: mapv, box_type: "MapBox".into(), args: vec![],
-            , auto_birth: None });
+                auto_birth: None });
 
         let k = f.next_value_id();
         f.get_block_mut(bb)

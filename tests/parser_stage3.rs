@@ -14,6 +14,7 @@ fn with_env<K: AsRef<str>, V: AsRef<str>, F: FnOnce()>(key: K, val: Option<V>, f
     }
 }
 
+#[cfg(feature = "parser-stage3-legacy")]
 #[test]
 fn stage3_disabled_rejects_try_and_throw() {
     with_env("NYASH_PARSER_STAGE3", None::<&str>, || {

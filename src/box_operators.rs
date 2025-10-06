@@ -513,6 +513,7 @@ impl OperatorResolver {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::operator_traits::{NyashAdd, NyashMul};
 
     #[test]
     fn test_integer_addition() {

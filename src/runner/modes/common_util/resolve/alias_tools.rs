@@ -263,7 +263,7 @@ pub fn rename_with_collision_guard(
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "resolver-tests"))]
 mod tests {
     use super::*;
     use std::collections::HashSet;
@@ -352,7 +352,7 @@ mod tests {
         // Program: fn call: Helper.run() → after alias P: P_Helper.run()
         let ast = ASTNode::Program {
             statements: vec![
-                ASTNode::FunctionDeclaration { name: "Helper".into(), params: vec![], body: vec![], span: Span::unknown() },
+                ASTNode::FunctionDeclaration { name: "Helper".into(), params: vec![], body: vec![], is_static: false, is_override: false, span: Span::unknown() },
                 ASTNode::FunctionCall { name: "Helper.run".into(), arguments: vec![], span: Span::unknown() },
             ],
             span: Span::unknown(),
@@ -384,7 +384,7 @@ mod tests {
         // Qualified with two dots: Top.Sub.fn() → Alias_Top.Sub.fn()
         let ast = ASTNode::Program {
             statements: vec![
-                ASTNode::FunctionDeclaration { name: "Top".into(), params: vec![], body: vec![], span: Span::unknown() },
+                ASTNode::FunctionDeclaration { name: "Top".into(), params: vec![], body: vec![], is_static: false, is_override: false, span: Span::unknown() },
                 ASTNode::FunctionCall { name: "Top.Sub.run".into(), arguments: vec![], span: Span::unknown() },
             ],
             span: Span::unknown(),

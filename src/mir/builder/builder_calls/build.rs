@@ -62,9 +62,9 @@ impl MirBuilder {
         // Phase 2: ModuleFunction unification（envガード）
         // If enabled and current module contains a matching function, emit a Call
         // with callee=ModuleFunction to avoid Global builtin path.
-        let module_fn_unify = std::env::var("NYASH_MIR_CALL_MODULE_FN").ok().as_deref() == Some("1");
+        let module_fn_unify = true;
         // Canonical safe step（envガード・既定OFF）: dotted+arity の完全一致は ModuleFunction を許可
-        let module_fn_canon = std::env::var("NYASH_MIR_CALL_MODULE_FN_CANON").ok().as_deref() == Some("1");
+        let module_fn_canon = true;
         if module_fn_canon {
             if let Some(ref module) = self.current_module {
                 let arity = args.len();
@@ -166,6 +166,11 @@ impl MirBuilder {
                 // - if bare: search unique "*.name/arity"
                 if chosen.is_none() {
                     use crate::mir::indexes::functions::TailQueryResult;
+                    // Strict by default: unless explicitly disabled, ambiguous tail matches are errors.
+                    let strict = match std::env::var("NYASH_MIR_CALL_MODULE_FN_STRICT").ok().as_deref() {
+                        Some("0") | Some("false") | Some("off") => false,
+                        _ => true,
+                    };
                     let tail_res = if let Some((cls, meth)) = name.split_once('.') {
                         idx.tail_unique(Some(cls), meth, arity)
                     } else {
@@ -174,7 +179,7 @@ impl MirBuilder {
                     match tail_res {
                         TailQueryResult::Unique(n) => chosen = Some(n),
                         TailQueryResult::Ambiguous(mut ambig_list) => {
-                            if std::env::var("NYASH_MIR_CALL_MODULE_FN_STRICT").ok().as_deref() == Some("1") {
+                            if strict {
                                 ambig_list.sort();
                                 let shown: usize = ambig_list.len().min(10);
                                 let mut msg = format!(
@@ -234,7 +239,7 @@ impl MirBuilder {
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(result_id),
                         func: fun_val,
-                        callee: None,
+                        callee: Some(crate::mir::Callee::ModuleFunction(fun_name.clone())),
                         args: arg_values,
                         effects: EffectMask::READ.add(Effect::ReadHeap),
                     })?;
@@ -327,17 +332,14 @@ impl MirBuilder {
             // Legacy compatibility: Create dummy func value for old systems
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
 
-            // Emit legacy-compatible Call (do not set callee to keep module/global resolution stable)
+            // Emit strict Global callee to avoid legacy dynamic resolution
             self.emit_instruction(MirInstruction::Call {
                 dst: Some(dst),
-                func: fun_val,                  // Name-based resolution via legacy path
-                callee: None,
+                func: fun_val,                  // Retained for diagnostics/SSA references
+                callee: Some(crate::mir::Callee::Global(name.clone())),
                 args: arg_values,
                 effects: EffectMask::READ.add(Effect::ReadHeap),
             })?;
-            if std::env::var("NYASH_WARN_LEGACY_CALL").ok().as_deref() == Some("1") {
-                eprintln!("[legacy-call] Global('{}') emitted without callee (enable NYASH_MIR_CALL_MODULE_FN* to unify)", name);
-            }
             Ok(dst)
         } else {
             // Unified path for builtins/externs
@@ -420,28 +422,13 @@ impl MirBuilder {
                             Err(e) => return Err(e),
                         };
                         // Prefer ModuleFunction callee when enabled; fallback to legacy (callee=None)
-                        let use_modfn = std::env::var("NYASH_MIR_CALL_MODULE_FN").ok().as_deref() == Some("1");
-                        if use_modfn {
-                            self.emit_instruction(MirInstruction::Call {
+                        self.emit_instruction(MirInstruction::Call {
                                 dst: Some(dst),
                                 func: c,
                                 callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
                                 args: call_args,
                                 effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
                             })?;
-                        } else {
-                            // Legacy path: do NOT set callee to keep legacy NameConst resolution
-                            self.emit_instruction(MirInstruction::Call {
-                                dst: Some(dst),
-                                func: c,
-                                callee: None,
-                                args: call_args,
-                                effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-                            })?;
-                            if std::env::var("NYASH_WARN_LEGACY_CALL").ok().as_deref() == Some("1") {
-                                eprintln!("[legacy-call] Method('{}' via me) lowered to Global('{}') without callee", method, fname);
-                            }
-                        }
                         self.annotate_call_result_from_func_name(dst, &fname);
                         return Ok(dst);
                     }

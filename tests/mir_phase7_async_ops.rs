@@ -1,3 +1,4 @@
+#![cfg(feature = "mir_typeop_poc")]
 /*!
  * Phase 7 MIR Builder & VM Test - Async Operations (nowait/await)
  *

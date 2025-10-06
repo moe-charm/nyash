@@ -270,6 +270,19 @@ pub fn check_contracts() -> bool {
         None => true,
     }
 }
+
+/// Control VM fallback that calls birth() immediately after every NewBox.
+/// Default: ON for backward compatibility. Set NYASH_VM_BIRTH_AFTER_NEW=0 to disable.
+pub fn vm_birth_after_new_fallback() -> bool {
+    match std::env::var("NYASH_VM_BIRTH_AFTER_NEW").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            !(lv == "0" || lv == "false" || lv == "off")
+        }
+        None => true,
+    }
+}
+
 /// Enforce capability declarations for plugin methods (dev/ci only).
 /// Default: OFF. Enable with NYASH_PLUGIN_CAPS_ENFORCE=1
 pub fn plugin_caps_enforce() -> bool {
@@ -507,6 +520,14 @@ pub fn resolve_trace_json() -> bool {
 pub fn import_trace() -> bool {
     std::env::var("NYASH_IMPORT_TRACE").ok().as_deref() == Some("1")
 }
+
+/// Allow accepting pure namespace aliases when modules exist under a prefix.
+/// Default: OFF to avoid accidental alias rebound and cycles.
+/// Enable only for development convenience: NYASH_USING_NAMESPACE_ALIAS=1
+pub fn using_namespace_alias() -> bool {
+    std::env::var("NYASH_USING_NAMESPACE_ALIAS").ok().as_deref() == Some("1")
+}
+
 pub fn enable_using() -> bool {
     // Phase 15: デフォルトON（using systemはメイン機能）
     // 優先順: NYASH_USING → NYASH_ENABLE_USING（後方互換）。0/false/off で明示無効化可能。
@@ -791,3 +812,21 @@ pub fn loopform_normalize() -> bool {
 pub fn macro_selfhost_pre_expand() -> Option<String> {
     std::env::var("NYASH_MACRO_SELFHOST_PRE_EXPAND").ok()
 }
+
+
+/// Allow Global() tail-based fallback for dotted names.
+/// Default: OFF (strict) to prevent cross-module mis-resolution.
+/// Enable with NYASH_VM_GLOBAL_TAIL_FALLBACK=1 for legacy behavior.
+pub fn vm_global_tail_fallback() -> bool {
+    std::env::var("NYASH_VM_GLOBAL_TAIL_FALLBACK").ok().as_deref() == Some("1")
+}
+
+/// Dev: log reentrancy (per-callee) at high depths
+pub fn vm_reenter_trace() -> bool {
+    std::env::var("NYASH_VM_REENTER_TRACE").ok().as_deref() == Some("1")
+}
+/// Dev: abort when a single callee depth exceeds this limit (optional)
+pub fn vm_reenter_limit() -> Option<usize> {
+    std::env::var("NYASH_VM_REENTER_LIMIT").ok().and_then(|s| s.parse().ok())
+}
+

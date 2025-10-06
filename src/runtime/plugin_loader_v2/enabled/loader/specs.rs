@@ -183,14 +183,15 @@ pub(super) fn get_spec<'a>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::runtime::plugin_loader_v2::enabled::types;
 
     extern "C" fn dummy_final_invoke(
         _type_id: u32,
         _method_id: u32,
         _instance_id: u32,
-        _args: *const super::super::types::NyValueFfi,
+        _args: *const types::NyValueFfi,
         _argc: usize,
-        _out: *mut super::super::types::NyResultFfi,
+        _out: *mut types::NyResultFfi,
     ) -> i32 {
         0
     }

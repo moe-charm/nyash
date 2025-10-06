@@ -14,29 +14,13 @@ impl super::MirBuilder {
             arg_ids.push(self.build_expression_impl(a)?);
         }
 
-        // Phase 3.1: Use unified call with CallTarget::Value for indirect calls
-        let use_unified = super::calls::call_unified::is_unified_call_enabled();
-
-        if use_unified {
-            // New unified path - use emit_unified_call with Value target
-            let dst = self.value_gen.next();
-            self.emit_unified_call(
-                Some(dst),
-                super::builder_calls::CallTarget::Value(callee_id),
-                arg_ids,
-            )?;
-            Ok(dst)
-        } else {
-            // Legacy path - keep for compatibility
-            let dst = self.value_gen.next();
-            self.emit_instruction(super::MirInstruction::Call {
-                dst: Some(dst),
-                func: callee_id,
-                callee: None, // legacy dynamic call resolution
-                args: arg_ids,
-                effects: super::EffectMask::PURE,
-            })?;
-            Ok(dst)
-        }
+        // Always use unified call with Value target (legacy callee=None deprecated)
+        let dst = self.value_gen.next();
+        self.emit_unified_call(
+            Some(dst),
+            super::builder_calls::CallTarget::Value(callee_id),
+            arg_ids,
+        )?;
+        Ok(dst)
     }
 }

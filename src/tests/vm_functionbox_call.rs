@@ -1,5 +1,5 @@
 use crate::mir::{MirModule, MirFunction, FunctionSignature, MirInstruction, EffectMask, BasicBlockId, ConstValue};
-use crate::backend::vm::VM;
+use crate::backend::VM;
 use crate::backend::vm::VMValue;
 use crate::boxes::function_box::{FunctionBox, ClosureEnv};
 use crate::box_trait::NyashBox;
@@ -32,7 +32,7 @@ fn vm_call_functionbox_returns_42() {
     f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Const { dst: arg, value: ConstValue::Integer(41) });
     // call
     let res = f.next_value_id();
-    f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Call { dst: Some(res), func: func_id, args: vec![arg], effects: EffectMask::PURE });
+    f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Call { dst: Some(res), func: func_id, callee: Some(crate::mir::definitions::Callee::Value(func_id)), args: vec![arg], effects: EffectMask::PURE });
     f.get_block_mut(bb).unwrap().add_instruction(MirInstruction::Return { value: Some(res) });
 
     let mut m = MirModule::new("vm_funbox".into());

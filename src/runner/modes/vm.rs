@@ -347,7 +347,8 @@ impl NyashRunner {
         nyash_rust::runtime::global_hooks::set_from_runtime(&runtime);
 
         // Execute with VM using prepared runtime
-        let mut vm = VM::with_runtime(runtime);
+        let mut vm = VM::new();
+        // TODO: wire runtime if/when MirInterpreter accepts DI again. For now VM owns a default runtime.
         match vm.execute_module(&module_vm) {
             Ok(result) => {
                 if !quiet_pipe {

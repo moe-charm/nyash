@@ -1,10 +1,12 @@
 #[test]
 fn vtable_array_push_get_len_pop_clear() {
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
     use crate::mir::{
         BasicBlockId, ConstValue, EffectMask, FunctionSignature, MirFunction, MirInstruction,
         MirModule, MirType,
     };
+    use crate::mir::definitions::Callee;
+
     std::env::set_var("NYASH_ABI_VTABLE", "1");
 
     // Case 1: push("x"); get(0)
@@ -20,7 +22,7 @@ fn vtable_array_push_get_len_pop_clear() {
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: arr, box_type: "ArrayBox".into(), args: vec![],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let sval = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -30,14 +32,7 @@ fn vtable_array_push_get_len_pop_clear() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: arr,
-            method: "push".into(),
-            args: vec![sval],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![arr, sval], effects: EffectMask::PURE });
     let idx0 = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
@@ -48,14 +43,7 @@ fn vtable_array_push_get_len_pop_clear() {
     let got = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(got),
-            box_val: arr,
-            method: "get".into(),
-            args: vec![idx0],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(got), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.get/1".into())), args: vec![arr, idx0], effects: EffectMask::PURE });
     f.get_block_mut(bb)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(got) });
@@ -78,7 +66,7 @@ fn vtable_array_push_get_len_pop_clear() {
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: a2, box_type: "ArrayBox".into(), args: vec![],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let y = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
@@ -88,25 +76,11 @@ fn vtable_array_push_get_len_pop_clear() {
         });
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a2,
-            method: "push".into(),
-            args: vec![y],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a2, y], effects: EffectMask::PURE });
     let popped = f2.next_value_id();
     f2.get_block_mut(bb2)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(popped),
-            box_val: a2,
-            method: "pop".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(popped), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.pop/0".into())), args: vec![a2], effects: EffectMask::PURE });
     f2.get_block_mut(bb2)
         .unwrap()
         .add_instruction(MirInstruction::Return {
@@ -131,7 +105,7 @@ fn vtable_array_push_get_len_pop_clear() {
     f3.get_block_mut(bb3)
         .unwrap()
         .add_instruction(MirInstruction::NewBox { dst: a3, box_type: "ArrayBox".into(), args: vec![],
-        , auto_birth: None , auto_birth: None });
+                auto_birth: None });
     let z = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
@@ -141,35 +115,14 @@ fn vtable_array_push_get_len_pop_clear() {
         });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "push".into(),
-            args: vec![z],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.push/1".into())), args: vec![a3, z], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: None,
-            box_val: a3,
-            method: "clear".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.clear/0".into())), args: vec![a3], effects: EffectMask::PURE });
     let ln = f3.next_value_id();
     f3.get_block_mut(bb3)
         .unwrap()
-        .add_instruction(MirInstruction::BoxCall {
-            dst: Some(ln),
-            box_val: a3,
-            method: "len".into(),
-            args: vec![],
-            method_id: None,
-            effects: EffectMask::PURE,
-        });
+        .add_instruction(MirInstruction::Call { dst: Some(ln), func: crate::mir::ValueId::new(0), callee: Some(Callee::ModuleFunction("ArrayBox.len/0".into())), args: vec![a3], effects: EffectMask::PURE });
     f3.get_block_mut(bb3)
         .unwrap()
         .add_instruction(MirInstruction::Return { value: Some(ln) });

@@ -65,7 +65,7 @@ pub enum MirInstruction {
     ///
     /// Phase 1 Migration: Both func and callee fields present
     /// - callee: Some(_) -> Use new type-safe resolution (preferred)
-    /// - callee: None -> Fall back to legacy string-based resolution
+    /// Note: `callee` is set for all builder-emitted calls. The deprecated legacy mode with `callee: None` is no longer used in the builder.
     Call {
         dst: Option<ValueId>,
         func: ValueId,              // Legacy: string-based resolution (deprecated)

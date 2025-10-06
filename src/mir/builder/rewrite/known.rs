@@ -44,7 +44,7 @@ pub(crate) fn try_known_rewrite_to_dst(
     if let Err(e) = builder.emit_instruction(MirInstruction::Call {
         dst: Some(actual_dst),
         func: name_const,
-        callee: None,
+        callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
         args: call_args,
         effects: EffectMask::READ.add(Effect::ReadHeap)
     }) { return Some(Err(e)); }

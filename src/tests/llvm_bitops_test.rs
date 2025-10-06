@@ -1,7 +1,7 @@
 #[test]
 fn llvm_bitops_compile_and_exec() {
     use crate::mir::{MirModule, MirFunction, FunctionSignature, MirInstruction, BasicBlockId, ConstValue, MirType, instruction::BinaryOp};
-    use crate::backend::vm::VM;
+    use crate::backend::VM;
 
     // Build MIR: compute sum of bitwise/shift ops -> 48
     let sig = FunctionSignature { name: "Main.main".into(), params: vec![], return_type: MirType::Integer, effects: Default::default() };

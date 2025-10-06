@@ -36,6 +36,13 @@ static box MirJsonBuilderMin {
     local out = "["
     loop (i < count) {
       if i > 0 { out = out + "," }
+      out = out + me._int_to_str(start + i)
+      i = i + 1
+    }
+    out = out + "]"
+    return out
+  }
+
   _ids_array_from_json_text(arr_text) {
     // Parse a simple JSON int array like "[1,2,3]" into ArrayBox
     local out = new ArrayBox()
@@ -61,12 +68,7 @@ static box MirJsonBuilderMin {
     return out
   }
 
-      out = out + me._int_to_str(start + i)
-      i = i + 1
-    }
-    out = out + "]"
-    return out
-  }
+
   _ensure_phase(st, want) {
     // Fail-fast guard for misuse
     if !st.has("phase") { return st }

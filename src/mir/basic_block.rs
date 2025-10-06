@@ -98,6 +98,14 @@ impl BasicBlock {
             // Update successors based on terminator
             self.update_successors_from_terminator();
         } else {
+            // Fail-Fast: Do not allow non-terminator instructions after a terminator.
+            // This guards against invalid MIR like `ret; const 1` inside the same block.
+            if self.terminator.is_some() {
+                panic!(
+                    "Cannot emit instruction after terminator in block {}",
+                    self.id
+                );
+            }
             self.instructions.push(instruction);
         }
     }

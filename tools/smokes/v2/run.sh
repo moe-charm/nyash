@@ -242,31 +242,43 @@ find_test_files() {
         fi
     fi
 
-    if [ ! -d "$profile_dir" ]; then
+    # 収集対象ディレクトリ
+    local search_dirs=()
+    if [ -d "$profile_dir" ]; then
+        search_dirs+=("$profile_dir")
+    fi
+    if [ "$PROFILE" = "full" ]; then
+        for d in             "$SCRIPT_DIR/profiles/quick"             "$SCRIPT_DIR/profiles/integration"             "$SCRIPT_DIR/profiles/plugins"             "$SCRIPT_DIR/suites/core"             "$SCRIPT_DIR/suites/mir"             "$SCRIPT_DIR/suites/vm"             "$SCRIPT_DIR/suites/llvm"             "$SCRIPT_DIR/suites/plugins"             "$SCRIPT_DIR/suites/experimental" ; do
+            [ -d "$d" ] && search_dirs+=("$d") || true
+        done
+        : "${SMOKES_FAST_FAIL:=0}"; export SMOKES_FAST_FAIL
+    fi
+
+    if [ ${#search_dirs[@]} -eq 0 ]; then
         log_error "Profile directory not found: $profile_dir"
         exit 1
     fi
 
-    # テストファイル検索
-    while IFS= read -r -d '' file; do
+    # テストファイル検索（重複排除）
+    declare -A seen
+    for base in "${search_dirs[@]}"; do
+      while IFS= read -r -d '' file; do
         # フィルタ適用
-        if [ -n "$FILTER" ]; then
-            local relative_path
-            relative_path=$(realpath --relative-to="$profile_dir" "$file")
-            if ! echo "$relative_path" | grep -q "$FILTER"; then
-                continue
-            fi
+        if [ -n "$FILTER" ] && ! echo "$file" | grep -q "$FILTER"; then
+            continue
         fi
         # LLVM未ビルド時は AST(LLVM) 系テストをスキップ
         if [ $have_llvm -eq 0 ] && echo "$file" | grep -q "_ast\.sh$"; then
             log_warn "Skipping (no LLVM): $file"
             continue
         fi
-        test_files+=("$file")
-    done < <(find "$profile_dir" -name "*.sh" -type f -print0)
+        if [ -z "${seen[$file]:-}" ]; then
+            seen[$file]=1
+            test_files+=("$file")
+        fi
+      done < <(find "$base" -name "*.sh" -type f -print0)
+    done
 
-    # Print only when we actually have entries; avoid emitting a lone empty line
-    # which would be interpreted as an empty test path by callers.
     if [ ${#test_files[@]} -gt 0 ]; then
         printf '%s\n' "${test_files[@]}"
     fi

@@ -14,7 +14,6 @@ pub struct VmConfig {
     // --- Call系トレース ---
     pub call_trace: bool,
     pub call_arg_trace: bool,
-    pub call_adapter: bool,
 
     // --- PHI系 ---
     pub phi_trace: bool,
@@ -56,7 +55,6 @@ impl VmConfig {
             // Call系
             call_trace: env_bool("NYASH_VM_CALL_TRACE"),
             call_arg_trace: env_bool("NYASH_VM_CALL_ARG_TRACE"),
-            call_adapter: env_bool("NYASH_VM_CALL_ADAPTER"),
 
             // PHI系
             phi_trace: env_bool("NYASH_VM_PHI_TRACE"),

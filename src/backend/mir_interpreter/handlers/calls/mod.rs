@@ -12,7 +12,6 @@ pub(super) mod function;
 pub(super) mod method;
 pub(super) mod extern_call;
 pub(super) mod box_call;
-pub(super) mod adapter;
 
 // Re-export legacy impl to preserve current API surface
 #[allow(unused_imports)]

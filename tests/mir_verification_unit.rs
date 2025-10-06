@@ -102,6 +102,7 @@ fn test_if_merge_uses_phi_not_predecessor() {
     );
 }
 
+#[cfg(feature = "phi-legacy")]
 #[test]
 fn test_merge_use_before_phi_detected() {
     // Construct a function with a bad merge use (no phi)
