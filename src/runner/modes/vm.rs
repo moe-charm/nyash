@@ -392,79 +392,16 @@ if !paths.is_empty() {
                 // Pretty-print with coercions for plugin-backed values
                 // Prefer MIR signature when available, but fall back to runtime coercions to keep VM/JIT consistent.
                 let (ety, sval) = if let Some(func) = compile_result.module.functions.get("main") {
-                    use nyash_rust::box_trait::{BoolBox, IntegerBox, StringBox};
-                    use nyash_rust::boxes::FloatBox;
                     use nyash_rust::mir::MirType;
-                    match &func.signature.return_type {
-                        MirType::Float => {
-                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
-                                ("Float", format!("{}", fb.value))
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Float", format!("{}", ib.value as f64))
-                            } else if let Some(s) =
-                                nyash_rust::runtime::semantics::coerce_to_string(result.as_ref())
-                            {
-                                ("String", s)
-                            } else {
-                                (result.type_name(), result.to_string_box().value)
-                            }
-                        }
-                        MirType::Integer => {
-                            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Integer", ib.value.to_string())
-                            } else if let Some(i) =
-                                nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref())
-                            {
-                                ("Integer", i.to_string())
-                            } else {
-                                (result.type_name(), result.to_string_box().value)
-                            }
-                        }
-                        MirType::Bool => {
-                            if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
-                                ("Bool", bb.value.to_string())
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Bool", (ib.value != 0).to_string())
-                            } else {
-                                (result.type_name(), result.to_string_box().value)
-                            }
-                        }
-                        MirType::String => {
-                            if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
-                                ("String", sb.value.clone())
-                            } else if let Some(s) =
-                                nyash_rust::runtime::semantics::coerce_to_string(result.as_ref())
-                            {
-                                ("String", s)
-                            } else {
-                                (result.type_name(), result.to_string_box().value)
-                            }
-                        }
-                        _ => {
-                            if let Some(i) =
-                                nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref())
-                            {
-                                ("Integer", i.to_string())
-                            } else if let Some(s) =
-                                nyash_rust::runtime::semantics::coerce_to_string(result.as_ref())
-                            {
-                                ("String", s)
-                            } else {
-                                (result.type_name(), result.to_string_box().value)
-                            }
-                        }
-                    }
+                    crate::runner::modes::common_util::result_conv::convert_box_result_to_string(
+                        result.as_ref(),
+                        &func.signature.return_type,
+                        true,  // vm.rs uses coercion fallbacks
+                    )
                 } else {
-                    if let Some(i) = nyash_rust::runtime::semantics::coerce_to_i64(result.as_ref())
-                    {
-                        ("Integer", i.to_string())
-                    } else if let Some(s) =
-                        nyash_rust::runtime::semantics::coerce_to_string(result.as_ref())
-                    {
-                        ("String", s)
-                    } else {
-                        (result.type_name(), result.to_string_box().value)
-                    }
+                    crate::runner::modes::common_util::result_conv::convert_box_result_fallback(
+                        result.as_ref()
+                    )
                 };
                 if !quiet_pipe {
                     println!("ResultType(MIR): {}", ety);

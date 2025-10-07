@@ -57,35 +57,11 @@ impl NyashRunner {
                 // Pretty-print using MIR return type when available
                 if let Some(func) = module_interp.functions.get("main") {
                     use nyash_rust::mir::MirType;
-                    use nyash_rust::box_trait::{NyashBox, IntegerBox, BoolBox, StringBox};
-                    use nyash_rust::boxes::FloatBox;
-                    let (ety, sval) = match &func.signature.return_type {
-                        MirType::Float => {
-                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
-                                ("Float", format!("{}", fb.value))
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Float", format!("{}", ib.value as f64))
-                            } else { ("Float", result.to_string_box().value) }
-                        }
-                        MirType::Integer => {
-                            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Integer", ib.value.to_string())
-                            } else { ("Integer", result.to_string_box().value) }
-                        }
-                        MirType::Bool => {
-                            if let Some(bb) = result.as_any().downcast_ref::<BoolBox>() {
-                                ("Bool", bb.value.to_string())
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Bool", (ib.value != 0).to_string())
-                            } else { ("Bool", result.to_string_box().value) }
-                        }
-                        MirType::String => {
-                            if let Some(sb) = result.as_any().downcast_ref::<StringBox>() {
-                                ("String", sb.value.clone())
-                            } else { ("String", result.to_string_box().value) }
-                        }
-                        _ => { (result.type_name(), result.to_string_box().value) }
-                    };
+                    let (ety, sval) = crate::runner::modes::common_util::result_conv::convert_box_result_to_string(
+                        result.as_ref(),
+                        &func.signature.return_type,
+                        false,  // mir_interpreter doesn't use coercion fallbacks
+                    );
                     println!("ResultType(MIR): {}", ety);
                     println!("Result: {}", sval);
                 } else {
