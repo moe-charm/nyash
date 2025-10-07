@@ -73,42 +73,32 @@ impl NyashRunner {
             println!("\n🚀 Parsing and executing...\n");
         }
 
-        // Using handling: AST-based prelude collection (legacy inlining removed)
-        let use_ast = crate::config::env::using_ast_enabled();
+        // Using handling: AST-based prelude collection (unified resolver)
         let mut code_ref: &str = &code;
         let cleaned_code_owned;
-        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        let prelude_asts: Vec<nyash_rust::ast::ASTNode>;
+
         if crate::config::env::enable_using() {
-            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
-                self, &code, filename,
+            let options = crate::runner::modes::common_util::resolve::UsingResolveOptions {
+                allow_skip_ast_merge: quiet_pipe,  // Allow quiet pipes to skip AST merge
+                collect_alias_names: false,
+            };
+
+            match crate::runner::modes::common_util::resolve::resolve_using_with_preludes(
+                self, &code, filename, options
             ) {
-                Ok((clean, paths, _alias_pairs)) => {
-                    cleaned_code_owned = clean;
+                Ok(result) => {
+                    cleaned_code_owned = result.cleaned_code;
                     code_ref = &cleaned_code_owned;
-                    if !paths.is_empty() && !use_ast {
-                        // Allow quiet child pipelines to proceed without AST prelude merge
-                        // (modules/aliases have been collected and can be registered by specific modes).
-                        if !quiet_pipe {
-                            eprintln!("❌ Pipeline error: `using` resolution error: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
-                            std::process::exit(1);
-                        }
-                        // quiet_pipe: proceed without AST merge
-                    }
-                    if use_ast && !paths.is_empty() {
-                        match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => {
-                                // Drop paths; legacy interpreter path uses prelude ASTs as-is
-                                prelude_asts = v.into_iter().map(|(_p,a)| a).collect();
-                            }
-                            Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
-                        }
-                    }
+                    prelude_asts = result.prelude_asts;
                 }
                 Err(e) => {
-                    eprintln!("❌ {}", e);
+                    eprintln!("❌ Pipeline error: `using` resolution error: {}", e);
                     std::process::exit(1);
                 }
             }
+        } else {
+            prelude_asts = Vec::new();
         }
         // Optional dev sugar: @name[:T] = expr → local name[:T] = expr (line-head only)
         let preexpanded_owned;
@@ -136,7 +126,7 @@ impl NyashRunner {
                 }
             };
         // When using AST prelude mode, combine prelude ASTs + main AST into one Program
-        let ast = if use_ast && !prelude_asts.is_empty() {
+        let ast = if !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
 

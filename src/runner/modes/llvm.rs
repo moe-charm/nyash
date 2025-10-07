@@ -21,54 +21,33 @@ impl NyashRunner {
             }
         };
 
-        // Using handling (AST prelude merge like common/vm paths)
-        let use_ast = crate::config::env::using_ast_enabled();
-        let mut code_ref: &str = &code;
+        // Using handling (unified resolver)
+        let mut code_ref: &str;
         let cleaned_code_owned;
-        let mut prelude_asts: Vec<nyash_rust::ast::ASTNode> = Vec::new();
+        let prelude_asts: Vec<nyash_rust::ast::ASTNode>;
+
         if crate::config::env::enable_using() {
-            match crate::runner::modes::common_util::resolve::resolve_prelude_paths_profiled(
-                self, &code, filename,
+            let options = crate::runner::modes::common_util::resolve::UsingResolveOptions {
+                allow_skip_ast_merge: false,
+                collect_alias_names: false,
+            };
+
+            match crate::runner::modes::common_util::resolve::resolve_using_with_preludes(
+                self, &code, filename, options
             ) {
-                Ok((clean, paths, alias_pairs)) => {
-                    crate::runner::modes::common_util::resolve::register_aliases_in_modules_registry(&alias_pairs);
-                    cleaned_code_owned = clean;
+                Ok(result) => {
+                    cleaned_code_owned = result.cleaned_code;
                     code_ref = &cleaned_code_owned;
-                    if !paths.is_empty() && !use_ast {
-                        eprintln!("❌ Pipeline error: `using` resolution error: AST prelude merge is disabled in this profile. Enable NYASH_USING_AST=1 or remove 'using' lines.");
-                        std::process::exit(1);
-                    }
-                    if use_ast && !paths.is_empty() {
-                        match crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
-                            Ok(v) => {
-                                use std::collections::HashMap;
-                                let mut alias_map: HashMap<String,String> = HashMap::new();
-                                for (a,p) in alias_pairs { alias_map.insert(p, a); }
-                                let mut used_prefixed: std::collections::HashSet<String> = std::collections::HashSet::new();
-                                for (path, ast) in v.into_iter() {
-                                    let canon = std::fs::canonicalize(&path).ok().map(|pb| pb.to_string_lossy().to_string()).unwrap_or(path.clone());
-                                    if let Some(alias) = alias_map.get(&canon) {
-                                        match crate::runner::modes::common_util::resolve::alias_tools::rename_with_collision_guard(&ast, alias, &mut used_prefixed, &canon) {
-                                            Ok(renamed) => prelude_asts.push(renamed),
-                                            Err(e) => {
-                                                eprintln!("❌ Pipeline error: `using` resolution error: {}", e);
-                                                std::process::exit(1);
-                                            }
-                                        }
-                                    } else {
-                                        prelude_asts.push(ast);
-                                    }
-                                }
-                            }
-                            Err(e) => { eprintln!("❌ {}", e); std::process::exit(1); }
-                        }
-                    }
+                    prelude_asts = result.prelude_asts;
                 }
                 Err(e) => {
                     eprintln!("❌ Pipeline error: `using` resolution error: {}", e);
                     process::exit(1);
                 }
             }
+        } else {
+            code_ref = &code;
+            prelude_asts = Vec::new();
         }
         // Pre-expand '@name[:T] = expr' sugar at line-head (same as common path)
         let preexpanded_owned = crate::runner::modes::common_util::resolve::preexpand_at_local(code_ref);
@@ -85,7 +64,7 @@ impl NyashRunner {
             }
         };
         // Merge preludes + main when enabled
-        let ast = if use_ast && !prelude_asts.is_empty() {
+        let ast = if !prelude_asts.is_empty() {
             crate::runner::modes::common_util::resolve::merge_prelude_asts_with_main(prelude_asts, &main_ast)
         } else { main_ast };
         // Alias desugar (to prefixed form); llvm path ignores alias set for now
