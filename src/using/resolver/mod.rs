@@ -9,6 +9,7 @@ pub mod modules_processor;
 pub mod using_processor;
 pub mod private_patterns;
 pub mod dir_namespace_discovery;
+pub mod sections;
 pub mod core;
 
 // Re-export main function for backwards compatibility

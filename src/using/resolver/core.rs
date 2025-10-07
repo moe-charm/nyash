@@ -34,53 +34,20 @@ pub fn populate_from_toml(
     // Load and parse TOML
     let doc = super::toml_parser::load_and_parse_toml(path)?;
 
-    // [modules] table flatten: supports nested namespaces (a.b.c = "path")
+    // Process [modules] section
     if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
-        // main table: no direct flatten (use workspace/overrides for clarity)
-        // [modules.workspace] — load module.toml manifests and export public entries
-        if let Some(ws_tbl) = mods.get("workspace").and_then(|v| v.as_table()) {
-            let (ws_manifests, ws_versions, mut ws_modules) =
-                super::workspace_loader::load_workspace_members(ws_tbl, path);
-
-            // Append workspace modules
-            pending_modules.append(&mut ws_modules);
-
-            // Analyze dependency graph (cycle detection + version checks)
-            super::dep_graph_analyzer::analyze_dependencies(&ws_manifests, &ws_versions)?;
-        }
-        // [modules.overrides] takes precedence (append; later wins in map usage)
-        if let Some(ovr) = mods.get("overrides").and_then(|v| v.as_table()) {
-            super::modules_processor::process_overrides(ovr, pending_modules);
-        }
-
-        // [modules.aliases] (DEPRECATED)
-        if let Some(alias_tbl) = mods.get("aliases").and_then(|v| v.as_table()) {
-            super::modules_processor::process_aliases(alias_tbl, aliases);
-        }
-
-        // [modules.options] → discovery/env オプション
-        if let Some(opts_tbl) = mods.get("options").and_then(|v| v.as_table()) {
-            super::modules_processor::process_options(opts_tbl);
-        }
-
-        // Namespace conflict detection across accumulated pending_modules (warn/strict)
-        super::conflict_detector::detect_conflicts_from_modules(pending_modules)?;
+        super::sections::process_modules_section(mods, path, pending_modules, aliases)?;
     }
 
-    // [using] section processing
+    // Process [using] section
     if let Some(using_tbl) = doc.get("using").and_then(|v| v.as_table()) {
-        // paths
-        if let Some(paths_arr) = using_tbl.get("paths").and_then(|v| v.as_array()) {
-            super::using_processor::process_paths(paths_arr, using_paths, &mut policy);
-        }
-
-        // aliases
-        if let Some(alias_tbl) = using_tbl.get("aliases").and_then(|v| v.as_table()) {
-            super::using_processor::process_aliases(alias_tbl, aliases);
-        }
-
-        // named packages
-        super::using_processor::process_packages(using_tbl, packages);
+        super::sections::process_using_section(
+            using_tbl,
+            using_paths,
+            aliases,
+            packages,
+            &mut policy,
+        );
     }
 
     // legacy top-level [aliases] also accepted (migration)
