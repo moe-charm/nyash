@@ -1,13 +1,5 @@
 // Minimal self-contained eval (no using): collect the first Print(Literal int) and print it
 static box Main {
-  // helper: find from position
-  index_of_from(hay, needle, pos) {
-    if pos < 0 { pos = 0 }
-    if pos >= hay.length() { return -1 }
-    local tail = hay.substring(pos, hay.length())
-    local rel = tail.indexOf(needle)
-    if rel < 0 { return -1 } else { return pos + rel }
-  }
   main(args) {
     local json = "{\"kind\":\"Program\",\"statements\":[{\"kind\":\"Print\",\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":42}}}]}"
     // naive collect: first Print of Literal int

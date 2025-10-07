@@ -2,17 +2,17 @@
 
 using "apps/selfhost-compiler/pipeline_v2/flow_entry.hako" as FlowEntryBox
 using hakorune.vm.mir_min as MirVmMin
+using "apps/selfhost/common/string_ops.hako" as StringOps
 
 static box FlowRunner {
-  _index_of_from(hay, needle, pos) { if pos < 0 { pos = 0 } local n = hay.length() if pos >= n { return -1 } local m = needle.length() if m <= 0 { return pos } local i = pos local limit = n - m loop(i <= limit) { if hay.substring(i, i + m) == needle { return i } i = i + 1 } return -1 }
   _read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }
   _parse_return_int(ast_json) {
     if ast_json == null { return null }
-    local rt = me._index_of_from(ast_json, "\"type\":\"Return\"", 0)
+    local rt = StringOps.index_of_from(ast_json, "\"type\":\"Return\"", 0)
     if rt < 0 { return null }
-    local it = me._index_of_from(ast_json, "\"type\":\"Int\"", rt)
+    local it = StringOps.index_of_from(ast_json, "\"type\":\"Int\"", rt)
     if it < 0 { return null }
-    local vp = me._index_of_from(ast_json, "\"value\":", it)
+    local vp = StringOps.index_of_from(ast_json, "\"value\":", it)
     if vp < 0 { return null }
     local ds = me._read_digits(ast_json, vp + 8)
     if ds == "" { return null }

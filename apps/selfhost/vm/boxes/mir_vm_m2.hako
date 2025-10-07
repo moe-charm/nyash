@@ -1,23 +1,9 @@
 // mir_vm_m2.nyash — Ny製の最小MIR(JSON v0)実行器（M2: const/binop/ret）
 
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/string_ops.hako" as StringOps
 
 static box MirVmM2 {
-  // Minimal substring search with start position (avoid 2-arg String.indexOf)
-  index_of_from(hay, needle, pos) {
-    if pos < 0 { pos = 0 }
-    local n = hay.length()
-    if pos >= n { return -1 }
-    local m = needle.length()
-    if m <= 0 { return pos }
-    local i = pos
-    local limit = n - m
-    loop(i <= limit) {
-      if hay.substring(i, i + m) == needle { return i }
-      i = i + 1
-    }
-    return -1
-  }
   _str_to_int(s) { return StringHelpers.to_i64(s) }
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _find_int_in(seg, keypat) {
@@ -53,20 +39,20 @@ static box MirVmM2 {
   }
   run(json) {
     local regs = new MapBox()
-    local pos = me.index_of_from(json, ""instructions":[", 0)
+    local pos = StringOps.index_of_from(json, ""instructions":[", 0)
     if pos < 0 {
       print("0")
       return 0
     }
     local cur = pos
     loop(true) {
-      local op_pos = me.index_of_from(json, ""op":"", cur)
+      local op_pos = StringOps.index_of_from(json, ""op":"", cur)
       if op_pos < 0 { break }
       local name_start = op_pos + 6
-      local name_end = me.index_of_from(json, """, name_start)
+      local name_end = StringOps.index_of_from(json, """, name_start)
       if name_end < 0 { break }
       local opname = json.substring(name_start, name_end)
-      local next_pos = me.index_of_from(json, ""op":"", name_end)
+      local next_pos = StringOps.index_of_from(json, ""op":"", name_end)
       if next_pos < 0 { next_pos = json.length() }
       local seg = json.substring(op_pos, next_pos)
       if opname == "const" {
