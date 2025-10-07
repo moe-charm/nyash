@@ -2,6 +2,8 @@
 // Usage: import and call report(text) or analyze_dump_file(path)
 
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/common/mini_vm_scan.hako" as MiniVmScan
 
 static box SeamInspector {
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
@@ -28,50 +30,13 @@ static box SeamInspector {
     }
     return delta
   }
-  _index_of_from(h, needle, pos) {
-    if pos < 0 { pos = 0 }
-    @n = h.length()
-    if pos >= n { return -1 }
-    @m = needle.length()
-    if m <= 0 { return pos }
-    @i = pos
-    @limit = n - m
-    loop (i <= limit) {
-      if h.substring(i, i+m) == needle { return i }
-      i = i + 1
-    }
-    return -1
-  }
-  _find_balanced_object_end(text, idx) {
-    if call("String.substring/2", text, idx, idx+1) != "{" { return -1 }
-    @i = idx
-    @n = text.length()
-    @depth = 0
-    loop (i < n) {
-      @ch = call("String.substring/2", text, i, i+1)
-      if ch == "\"" {
-        i = i + 1
-        loop (i < n) {
-          @c = text.substring(i, i+1)
-          if c == "\\" { i = i + 2  continue }
-          if c == "\"" { i = i + 1  break }
-          i = i + 1
-        }
-        continue
-      }
-      if ch == "{" { depth = depth + 1 }
-      if ch == "}" { depth = depth - 1  if depth == 0 { return i } }
-      i = i + 1
-    }
-    return -1
-  }
   _scan_boxes(text) {
     @i = 0
     @n = text.length()
     @res = new ArrayBox()
     @tok = "static box "
     loop (i < n) {
-      @p = _index_of_from(text, tok, i)
+      @p = StringOps.index_of_from(text, tok, i)
       if p < 0 { break }
       @j = p + tok.length()
       @name = ""
@@ -83,7 +48,7 @@ static box SeamInspector {
         break
       }
       loop (j < n) { @c2 = text.substring(j, j+1) if c2 == "{" { break } j = j + 1 }
-      @end = _find_balanced_object_end(text, j)
+      @end = MiniVmScan.find_balanced_object_end(text, j)
       if end < 0 { end = j }
       @obj = map({})
       obj.set("name", name)
@@ -168,7 +133,7 @@ static box SeamInspector {
               }
             }
           }
-          @nl = _index_of_from(text, "\n", k+1)
+          @nl = StringOps.index_of_from(text, "\n", k+1)
           if nl < 0 || nl > e { break }
           j = nl + 1
         }
@@ -186,7 +151,7 @@ static box SeamInspector {
     return 0
   }
   report(text) {
-    @m = _index_of_from(text, "static box Main {", 0)
+    @m = StringOps.index_of_from(text, "static box Main {", 0)
     @delta = -9999
     if m > 0 { delta = _brace_delta_ignoring_strings(text, 0, m) }
     print("prelude_brace_delta=" + _int_to_str(delta))
