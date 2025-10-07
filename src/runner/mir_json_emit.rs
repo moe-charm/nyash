@@ -7,6 +7,10 @@ use crate::mir::definitions::call_unified::Callee;
 ///
 /// Phase 15.5: Supports both v0 (legacy separate ops) and v1 (unified mir_call) formats
 
+// ============================================================================
+// Shared Helper Functions (Extracted to eliminate duplication)
+// ============================================================================
+
 /// Helper: Create JSON v1 root with schema information
 /// Includes version, capabilities, metadata for advanced MIR features
 fn create_json_v1_root(functions: serde_json::Value) -> serde_json::Value {
@@ -26,6 +30,83 @@ fn create_json_v1_root(functions: serde_json::Value) -> serde_json::Value {
         },
         "functions": functions
     })
+}
+
+/// Configuration for JSON emission behavior
+struct EmitConfig {
+    use_v1_schema: bool,
+    use_unified_call: bool,
+    downgrade_v1: bool,
+    skip_validator: bool,
+    dev_marker: bool,
+}
+
+impl EmitConfig {
+    fn from_env() -> Self {
+        let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+        let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
+
+        let use_v1_schema = if force_v0 {
+            false
+        } else {
+            std::env::var("NYASH_JSON_SCHEMA_V1").unwrap_or_default() == "1"
+                || match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                    Some(s) if s == "0" || s == "false" || s == "off" => false,
+                    _ => true,
+                }
+        };
+
+        let use_unified_call = if downgrade_v1 {
+            false
+        } else {
+            match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
+                Some(s) if s == "0" || s == "false" || s == "off" => false,
+                _ => true,
+            }
+        };
+
+        EmitConfig {
+            use_v1_schema,
+            use_unified_call,
+            downgrade_v1,
+            skip_validator: std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1"),
+            dev_marker: std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1"),
+        }
+    }
+}
+
+/// Helper: Add dev marker if enabled
+fn add_dev_marker(root: &mut serde_json::Value, config: &EmitConfig) {
+    if config.dev_marker {
+        if let serde_json::Value::Object(map) = root {
+            map.insert("__dev__".to_string(), serde_json::Value::from(1));
+        }
+    }
+}
+
+/// Helper: Wrap functions in appropriate schema
+fn wrap_functions(funs: Vec<serde_json::Value>, config: &EmitConfig) -> serde_json::Value {
+    if config.use_v1_schema {
+        create_json_v1_root(json!(funs))
+    } else {
+        json!({"functions": funs})
+    }
+}
+
+/// Helper: Validate and write JSON to file
+fn validate_and_write(
+    root: &serde_json::Value,
+    path: &std::path::Path,
+    config: &EmitConfig,
+) -> Result<(), String> {
+    if !config.skip_validator {
+        if let Err(e) = crate::runner::mir_json_validate::validate_json_root(root) {
+            return Err(format!("MIR JSON validation failed: {}", e));
+        }
+    }
+    std::fs::write(path, serde_json::to_string_pretty(root).unwrap())
+        .map_err(|e| format!("write mir json: {}", e))
 }
 
 /// Helper: Emit unified mir_call JSON (v1 format)
@@ -108,6 +189,8 @@ pub fn emit_mir_json_for_harness(
     path: &std::path::Path,
 ) -> Result<(), String> {
     use nyash_rust::mir::{BinaryOp as B, CompareOp as C, MirInstruction as I, MirType};
+
+    let config = EmitConfig::from_env();
     let mut funs = Vec::new();
     for (name, f) in &module.functions {
         let mut blocks = Vec::new();
@@ -317,17 +400,7 @@ pub fn emit_mir_json_for_harness(
                         } => {
                             // Phase 15.5: Unified Call support with environment variable control
                             // If NYASH_LLVM_DOWNGRADE_V1=1 is set, force v0 and allow extern fallback for unresolved Global
-                            let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
-                            let use_unified = if downgrade_v1 {
-                                false
-                            } else {
-                                match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-                                    Some(s) if s == "0" || s == "false" || s == "off" => false,
-                                    _ => true,
-                                }
-                            };
-
-                            if use_unified && callee.is_some() {
+                            if config.use_unified_call && callee.is_some() {
                                 // v1: Unified mir_call format
                                 let effects_str: Vec<&str> = if effects.is_io() { vec!["IO"] } else { vec![] };
                                 let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
@@ -342,7 +415,7 @@ pub fn emit_mir_json_for_harness(
                                 // v0: Legacy call format (fallback)
                                 // If downgrading from v1 and callee is Global but not defined in this module,
                                 // emit externcall for compile-only harness stability.
-                                if downgrade_v1 {
+                                if config.downgrade_v1 {
                                     if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
                                         let is_defined = module.functions.contains_key(gname);
                                         if !is_defined {
@@ -470,50 +543,9 @@ pub fn emit_mir_json_for_harness(
         funs.push(json!({"name": name, "params": params, "blocks": blocks}));
     }
 
-    // Phase 15.5: JSON v1 schema with environment variable control
-    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
-        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
-    let use_v1_schema = if force_v0 {
-        false
-    } else {
-        std::env::var("NYASH_JSON_SCHEMA_V1").unwrap_or_default() == "1"
-            || match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-                Some(s) if s == "0" || s == "false" || s == "off" => false,
-                _ => true,
-            }
-    };
-
-    let mut root = if use_v1_schema {
-        create_json_v1_root(json!(funs))
-    } else {
-        json!({"functions": funs})  // v0 legacy format
-    };
-    // Optional DEV marker injection for Ny-side Diagnostics bridge
-    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
-        if let serde_json::Value::Object(map) = &mut root {
-            map.insert("__dev__".to_string(), serde_json::Value::from(1));
-        }
-    }
-    // Optional DEV marker injection for Ny-side Diagnostics bridge (bin)
-    let mut root_v = if use_v1_schema {
-        create_json_v1_root(json!(funs))
-    } else {
-        json!({"functions": funs})
-    };
-    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
-        if let serde_json::Value::Object(map) = &mut root_v {
-            map.insert("__dev__".to_string(), serde_json::Value::from(1));
-        }
-    };
-    // Validate before writing (Fail-Fast)
-    let skip_validator = std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1");
-    if !skip_validator {
-        if let Err(e) = crate::runner::mir_json_validate::validate_json_root(&root) {
-            return Err(format!("MIR JSON validation failed: {}", e));
-        }
-    }
-    std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
-        .map_err(|e| format!("write mir json: {}", e))
+    let mut root = wrap_functions(funs, &config);
+    add_dev_marker(&mut root, &config);
+    validate_and_write(&root, path, &config)
 }
 
 /// Variant for the bin crate's local MIR type
@@ -523,10 +555,8 @@ pub fn emit_mir_json_for_harness_bin(
 ) -> Result<(), String> {
     use crate::mir::{BinaryOp as B, CompareOp as C, MirInstruction as I, MirType};
     use crate::mir::definitions::call_unified::TypeCertainty;
-    // Decide schema once for this emission
-    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
-        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
-    let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
+
+    let config = EmitConfig::from_env();
     let mut funs = Vec::new();
     for (name, f) in &module.functions {
         let mut blocks = Vec::new();
@@ -666,7 +696,7 @@ pub fn emit_mir_json_for_harness_bin(
                             emitted_defs.insert(dst.as_u32());
                         }
                         I::Call { dst, func, callee, args, effects } => {
-                            if use_v1_schema {
+                            if config.use_v1_schema {
                                 if let Some(c) = callee.as_ref() {
                                     let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
                                     let eff_names = effects.effect_names();
@@ -685,8 +715,7 @@ pub fn emit_mir_json_for_harness_bin(
                             // v0 or no callee → legacy call payload (func is a NameConst value id)
                             // If we are downgrading v1 (NYASH_LLVM_DOWNGRADE_V1=1) and callee is Global but not defined,
                             // emit externcall for compile-only harness stability.
-                            let downgrade_v1 = std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
-                            if downgrade_v1 {
+                            if config.downgrade_v1 {
                                 if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
                                     let is_defined = module.functions.contains_key(gname);
                                     if !is_defined {
@@ -714,7 +743,7 @@ pub fn emit_mir_json_for_harness_bin(
                             args,
                             effects,
                         } => {
-                            if use_v1_schema {
+                            if config.use_v1_schema {
                                 let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
                                 let eff_names = effects.effect_names();
                                 let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
@@ -742,7 +771,7 @@ pub fn emit_mir_json_for_harness_bin(
                             args,
                             effects, method_id: _
                         } => {
-                            if use_v1_schema {
+                            if config.use_v1_schema {
                                 // Try to infer box name from metadata; fall back gracefully
                                 let box_name = match f.metadata.value_types.get(&box_val) {
                                     Some(MirType::Box(bt)) => bt.clone(),
@@ -779,7 +808,7 @@ pub fn emit_mir_json_for_harness_bin(
                             args,
                             auto_birth,
                         } => {
-                            if use_v1_schema {
+                            if config.use_v1_schema {
                                 let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
                                 let callee = Callee::Constructor { box_type: box_type.clone() };
                                 let obj = emit_unified_mir_call(Some(dst.as_u32()), &callee, &args_u32, &["alloc"]);
@@ -824,44 +853,8 @@ pub fn emit_mir_json_for_harness_bin(
         let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
         funs.push(json!({"name": name, "params": params, "blocks": blocks}));
     }
-    // Optional: v1 schema wrapper (structure is largely compatible as we keep instruction objects unchanged here)
-    let force_v0 = std::env::var("NYASH_JSON_SCHEMA_V0").ok().as_deref() == Some("1")
-        || std::env::var("NYASH_LLVM_DOWNGRADE_V1").ok().as_deref() == Some("1");
-    let use_v1_schema = if force_v0 { false } else { std::env::var("NYASH_JSON_SCHEMA_V1").ok().as_deref() == Some("1") };
-    let mut root = if use_v1_schema {
-        json!({
-            "schema_version": "1.0",
-            "capabilities": ["unified_call","phi","effects","callee_typing"],
-            "metadata": {"generator":"nyash-rust","phase":"15.5","features":["mir_call_unification","json_v1_schema"]},
-            "functions": funs
-        })
-    } else {
-        json!({"functions": funs})
-    };
-    // Optional DEV marker injection for Ny-side Diagnostics bridge
-    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
-        if let serde_json::Value::Object(map) = &mut root {
-            map.insert("__dev__".to_string(), serde_json::Value::from(1));
-        }
-    }
-    // Optional DEV marker injection for Ny-side Diagnostics bridge (bin)
-    let mut root_v = if use_v1_schema {
-        create_json_v1_root(json!(funs))
-    } else {
-        json!({"functions": funs})
-    };
-    if std::env::var("NYASH_DEV_JSON_MARKER").ok().as_deref() == Some("1") {
-        if let serde_json::Value::Object(map) = &mut root_v {
-            map.insert("__dev__".to_string(), serde_json::Value::from(1));
-        }
-    };
-    // Validate before writing (Fail-Fast)
-    let skip_validator = std::env::var("NYASH_MIR_JSON_SKIP_VALIDATOR").ok().as_deref() == Some("1");
-    if !skip_validator {
-        if let Err(e) = crate::runner::mir_json_validate::validate_json_root(&root) {
-            return Err(format!("MIR JSON validation failed: {}", e));
-        }
-    }
-    std::fs::write(path, serde_json::to_string_pretty(&root).unwrap())
-        .map_err(|e| format!("write mir json: {}", e))
+
+    let mut root = wrap_functions(funs, &config);
+    add_dev_marker(&mut root, &config);
+    validate_and_write(&root, path, &config)
 }
