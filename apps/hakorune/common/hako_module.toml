@@ -11,4 +11,4 @@ strings.helpers = "strings/string_helpers_alias.hako"
 # internal helpers can be added here (non-exported)
 
 [dependencies]
-"hakorune.common.json_core" = "^1.0.0"
+# No external dependencies currently
