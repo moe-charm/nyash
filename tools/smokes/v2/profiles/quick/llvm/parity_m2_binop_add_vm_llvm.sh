@@ -15,7 +15,7 @@ TMP_DIR="/tmp/parity_m2_binop_add_vm_llvm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {

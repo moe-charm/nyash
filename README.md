@@ -448,6 +448,22 @@ box DataProcessor {
 - **[Python Integration Guide](docs/development/roadmap/phases/phase-10.7/)** - Python → Nyash transpilation
 - **[Implementation Strategy](docs/private/papers/paper-m-method-postfix-catch/implementation-strategy.md)** - Technical details
 
+#### hako.toml v2 (Modules)
+- Workspace manifests: prefer `hako_module.toml` (legacy `module.toml`), preview `module.hako`.
+- `--list-modules` shows labels: `[workspace:hako_module]`, `[override]`, `[auto]`.
+- Default is discovery under `apps/**/*.hako` with minimal overrides.
+- Start here: docs/design/hako-toml-modules.md (template and migration plan)
+  ```toml
+  [modules.options]
+  enable_discovery = true
+  roots = ["apps"]
+  [modules.aliases]
+  selfhost.vm.entry = "selfhost.vm.boxes.mini_vm_entry"
+  hakorune.vm.entry = "hakorune.vm.boxes.hakorune_vm_entry"
+  # example short alias
+  timer = "core.timer.TimerBox"
+  ```
+
 ---
 
 ## 🔌 **Revolutionary Plugin System (TypeBox Architecture)**

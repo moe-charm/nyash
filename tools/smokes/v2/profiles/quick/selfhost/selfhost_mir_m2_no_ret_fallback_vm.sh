@@ -17,7 +17,7 @@ TMP_DIR="/tmp/selfhost_mir_m2_no_ret_fallback_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -26,7 +26,7 @@ static box Main {
     j = j + "{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":42}},"
     j = j + "{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":7}}]}]}]}"
     local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

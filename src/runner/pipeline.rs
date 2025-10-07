@@ -33,12 +33,72 @@ impl NyashRunner {
         using_paths.extend(["apps", "lib", "."].into_iter().map(|s| s.to_string()));
 
         // nyash.toml: delegate to using resolver (keeps existing behavior)
-        let _ = crate::using::resolver::populate_from_toml(
+        let res = crate::using::resolver::populate_from_toml(
             &mut using_paths,
             &mut pending_modules,
             &mut aliases,
             &mut packages,
         );
+        if let Err(e) = res {
+            let strict = std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1");
+            if strict {
+                eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
+        // Auto-discovery (Option C): discover apps/**/*.hako and register as pending modules when enabled.
+        // Guarded by env NYASH_DISCOVER_MODULES (default on).
+        let discover_on = std::env::var("NYASH_DISCOVER_MODULES").ok().map(|v| v != "0" && v.to_ascii_lowercase() != "off").unwrap_or(true);
+        if discover_on {
+            // Determine roots (priority: NYASH_DISCOVER_ROOTS > using_paths > NYASH_ROOT/apps)
+            let mut roots: Vec<std::path::PathBuf> = Vec::new();
+            if let Some(raw) = std::env::var("NYASH_DISCOVER_ROOTS").ok() {
+                for s in raw.split(|c| c == ':' || c == ';' || c == ',') {
+                    let s = s.trim();
+                    if s.is_empty() { continue; }
+                    roots.push(std::path::Path::new(s).to_path_buf());
+                }
+            }
+            if roots.is_empty() {
+                for p in using_paths.iter() {
+                    let pb = std::path::Path::new(p);
+                    if pb.exists() && pb.is_dir() { roots.push(pb.to_path_buf()); }
+                }
+            }
+            if roots.is_empty() {
+                let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+                roots.push(std::path::Path::new(&root).join("apps"));
+            }
+            // Existing keys set for override precedence
+            use std::collections::HashSet;
+            let mut existing: HashSet<String> = HashSet::new();
+            for (k, _) in pending_modules.iter() { existing.insert(k.clone()); }
+            // Discover each root
+            let mut opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
+            // Apply env overrides from [modules.options]
+            let env_on = |k: &str, dflt: bool| -> bool {
+                match std::env::var(k).ok() {
+                    Some(v) => match v.to_ascii_lowercase().as_str() { "0"|"off"|"false"=>false, _=>true },
+                    None => dflt,
+                }
+            };
+            opts.exclude_archive = env_on("NYASH_DISCOVER_EXCLUDE_ARCHIVE", opts.exclude_archive);
+            opts.exclude_underscore_dirs = env_on("NYASH_DISCOVER_EXCLUDE_UNDERSCORE_DIRS", opts.exclude_underscore_dirs);
+            opts.exclude_test_prefix = env_on("NYASH_DISCOVER_EXCLUDE_TEST_PREFIX", opts.exclude_test_prefix);
+            opts.exclude_example_prefix = env_on("NYASH_DISCOVER_EXCLUDE_EXAMPLE_PREFIX", opts.exclude_example_prefix);
+            for r in roots.iter() {
+                if !r.exists() { continue; }
+                let entries = crate::config::module_discovery::discover_entries_under(r, &opts);
+                for (ns, p) in entries {
+                    if !existing.contains(&ns) {
+                        if let Some(sp) = p.to_str() {
+                            pending_modules.push((ns.clone(), sp.to_string()));
+                            existing.insert(ns);
+                        }
+                    }
+                }
+            }
+        }
         if crate::config::env::resolve_trace() {
             use crate::runner::trace::log as tlog;
             if !crate::config::env::cli_quiet() {

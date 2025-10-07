@@ -57,6 +57,8 @@ impl CallNameResolverBox {
     pub fn normalize(raw_name: &str, argc: usize) -> Result<String, String> {
         crate::mir::resolve::call_resolver_core::normalize(raw_name, argc)
     }
+
+    
 }
 
 
@@ -85,4 +87,5 @@ mod tests {
         assert!(R::static_name("Bad-Name", "x", 0).is_err());
         assert!(R::static_name("X", "bad name", 0).is_err());
     }
+    
 }

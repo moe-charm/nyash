@@ -1,0 +1,13 @@
+[module]
+name = "hakorune.vm"
+version = "1.0.0"
+
+[exports]
+entry = "boxes/hakorune_vm_entry.hako"
+mir_min = "boxes/hakorune_vm_min.hako"
+
+[private]
+# helpers = "internal/helpers.hako"
+
+[dependencies]
+# "hakorune.common.strings" = "^1.0.0"

@@ -19,17 +19,7 @@ impl MirInterpreter {
     ) -> Result<(), VMError> {
         // Unborn guard for plugin instance methods (except birth)
         if method != "birth" {
-            if crate::config::env::check_contracts() {
-                let key = self.object_key_for(box_val);
-                let seen_new = self.contracts_new.contains(&key);
-                let seen_birth =
-                    self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
-                if seen_new && !seen_birth {
-                    return Err(VMError::InvalidInstruction(
-                        "operation on unborn plugin instance (call birth() first)".to_string(),
-                    ));
-                }
-            }
+            self.check_unborn_guard(box_val)?;
         }
 
         // Dev-only call trace for PluginInvoke (parity aid)
@@ -51,7 +41,7 @@ impl MirInterpreter {
         {
             let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
             let host = host.read().unwrap();
-            if method == "birth" { let k = self.object_key_for(box_val); if self.contracts_born.contains(&k) { if let Some(d)=dst { self.regs.insert(d, VMValue::Void);} return Ok(()); } if !self.contracts_in_birth.insert(k) { return Err(VMError::InvalidInstruction("reentrant birth()".into())); } }
+            if method == "birth" { let k = self.object_key_for(box_val); if self.contracts_born.contains(&k) { if let Some(d)=dst { self.regs.insert(d, VMValue::Void);} return Ok(()); } if !self.contracts_in_birth.insert(k) { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::reentrant_birth().into())); } }
             // Auto-birth no-op: if plugin does not provide birth, treat as success(void)
             if method == "birth" {
                 let need_noop = match host.resolve_method(&p.box_type, method) {
@@ -105,10 +95,7 @@ impl MirInterpreter {
             Ok(())
         } else {
             if crate::config::env::check_contracts() {
-                eprintln!(
-                    r#"{{"kind":"contracts_warn","what":"plugin_invoke_non_plugin","method":"{}"}}"#,
-                    method
-                );
+                eprintln!("{}", crate::common::diagnostics::plugin_invoke_non_plugin_warn(method));
             }
             // Fallback: if receiver is a builtin core box (Array/Map/String),
             // route PluginInvoke to the same minimal handlers we use for BoxCall.

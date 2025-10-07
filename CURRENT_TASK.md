@@ -234,6 +234,27 @@ Acceptance（このラウンド）
 - op_handlers.hako: JsonFrag 依存を排除し、自前の軽量スキャナで const を処理（strict プロファイルでも using 依存を減らす）
 - Mini‑VM (mir_vm_min): ret の即値/レジスタ曖昧性に軽いヒューリスティクスを導入（既存 selfhost_m2/m3 の期待に一致）
 
+## 2025-10-07 — hako.toml v2 セクション導入（Phase 1 完了)
+
+目的
+- フラットな [modules] を段階的に縮小し、規約ベースの自動検出（apps/**/*.hako）＋最小の aliases/overrides に移行する。
+
+実施内容（今回）
+- hako.toml に [modules.options] を追加（enable_discovery=true, roots=["apps"], exclude ヒューリスティック）。
+- hako.toml に [modules.aliases] を追加（selfhost.vm.entry / hakorune.vm.entry → *.boxes.* の完全名）。
+- [modules.overrides] セクションを用意（必要時のみ使用）。
+- Runner/Resolver は既存実装を使用（[modules.options]/aliases/overrides を TOML→ENV→Runner へ反映済み）。
+- list-modules の quick/integration スモークで検出結果を確認（既存スクリプト使用）。
+
+確認方法
+- `hako --list-modules` で [auto] 行に selfhost.vm.boxes.mir_vm_min 等が出力されることを確認。
+- using は path-based を推奨。頻用エントリは [modules.aliases] に短縮名を追加。
+
+次の小粒
+1) 冗長なフラット [modules] から overrides 以外を段階削除（スモーク緑を維持しながら）。
+2) docs/design/hako-toml-modules.md に沿って README に最小テンプレを短く追記（任意）。
+
+---
 ## 2025-10-05 — Auto‑birth/Resolver 仕上げ（Phase 1/2）
 
 - Phase 1（完了）: Builder の Global 経路を `CallNameResolverBox::normalize` に統一（短名根絶）
@@ -1599,3 +1620,183 @@ Notes
 - mini_vm_scan.hako: added two more call!(String.substring/2) at character reads in array/object scan loops.
 - string_helpers.hako: numeric string check loop now uses call!(String.substring/2) for per-char read.
 - tools/dep_tree_main: .nyash → .hako rename; updated all references.
+
+
+### 2025-10-06 — Mini‑VM recursion guard + selfhost m2/m3 green
+- VM tail fallback: added immediate cycle guard in ModuleFunction resolver to Fail‑Fast instead of recursing.
+  - File: src/backend/mir_interpreter/handlers/calls/function.rs (tail fallback block)
+- Quick profile env tightened to avoid wide fallbacks that masked bugs and caused recursion:
+  - tools/smokes/v2/configs/env/quick.env: NYASH_VM_GLOBAL_TAIL_FALLBACK=0, NYASH_VM_MODULE_TAIL_WIDE=0; added NYASH_VM_REENTER_LIMIT=2048
+- StringScanBox: fixed infinite recursion in read_char and added find_quote; unblocked JSON scan fast paths used by Mini‑VM.
+  - apps/selfhost/common/json/core/string_scan.hako
+- Selfhost Mini‑VM smokes adjusted to EntryBox wrappers and green:
+  - selfhost_mir_m2_eq_true_vm.sh / eq_false / m3_branch_true / m3_jump
+  - hakorune_vm_m2_eq_true_vm.sh now includes using hakorune.vm.entry
+- Test harness: filter_noise drops trailing "Result:" lines for stable numeric comparison.
+  - tools/smokes/v2/lib/test_runner.sh
+- Next: narrow env fallbacks across remaining profiles (integration/full) after verifying no regressions; consider a stricter builder check to avoid me._run_min → run_min aliasing under wide fallback.
+
+- Env parity: integration/full profiles now set NYASH_VM_GLOBAL_TAIL_FALLBACK=0 and NYASH_VM_MODULE_TAIL_WIDE=0 (plus NYASH_VM_REENTER_LIMIT).
+- Hakorune Mini‑VM smokes shifted to EntryBox across quick suite (branch/jump/phi/ret_undefined + pipeline compare_ret).
+
+
+## Phase 15.7 – Commonization (Lifecycle/Extern/Phi)
+
+- Added common modules under `src/common/`:
+  - `lifecycle_contracts.rs`: unified unborn error message, `is_unborn_violation()`, and `record_birth()` helper.
+  - `extern_registry.rs`: thin facade over MIR extern registry with `exists()` and `effects_for()`.
+  - `mod.rs`: wired new modules.
+- VM integration:
+  - `src/backend/mir_interpreter/helpers.rs`: `check_unborn_guard()` now uses common lifecycle helpers and unified message.
+  - `src/backend/mir_interpreter/handlers/boxes/lifecycle.rs`: birth recording via `record_birth()` (idempotence tracked centrally).
+  - `src/backend/mir_interpreter/handlers/boxes/legacy/plugin_invoke.rs`: uses unified unborn guard (no plugin-specific message divergence).
+  - `src/backend/mir_interpreter/handlers/calls/legacy/{method_handler.rs,legacy_resolver.rs}`: swapped custom unborn checks for `check_unborn_guard()`.
+- Builder integration:
+  - `src/mir/builder/router/call_router.rs`: DirectExtern routes are guarded by `common::extern_registry::exists()` (single source of truth).
+- PHI invariants:
+  - `src/mir/phi_core/common.rs`: added `is_unreachable_pred()` (return/throw treated unreachable for PHI).
+  - `src/mir/builder.rs`: `is_block_ends_with_return_or_throw()` now delegates to PHI core.
+
+Next
+- Extend lifecycle commonization to message emission toggles (if needed) and add a small unit test around `is_unborn_violation()` and `record_birth()`.
+- Consider adopting `extern_registry` in any remaining call mappers (global dotted fallbacks) for stricter validation.
+- If JSON v0 direct lowering paths are reintroduced, call `phi_core::common::is_unreachable_pred()` at merge.
+
+
+## Phase 15.7 – Commonization (Batch-2)
+
+- New common modules:
+  - `common/diagnostics.rs`: shared messages (unborn_op/reentrant_birth/circular_tail/no_method_arity).
+  - `common/reenter_guard.rs`: bump_and_check(map, key, limit) with depth return; VM resolver paths now use it.
+  - `common/using_core.rs`: [modules] flatten helpers; resolver.rs now calls it.
+  - `common/core_box_methods.rs`: fallback known arities for Array/Map/String.
+- Integrations:
+  - VM plugin birth reentry uses diagnostics message.
+  - VM function tail fallback cycle message unified via diagnostics.
+  - Reentrancy counters refactored to `reenter_guard` across three call sites.
+  - Legacy using resolver’s local [modules] flattener removed in favor of `using_core`.
+  - Method arity diagnostics enhanced to consult core_box_methods when runtime registry lacks entries.
+- Build/tests: `cargo build --release` OK; `cargo test --lib` → 187 passed.
+
+Next (optional small):
+- Add unit tests for diagnostics/reenter_guard and using_core.flatten.
+- Replace remaining ad-hoc messages with diagnostics (incremental).
+- Consider pruning unused legacy imports under handlers/* to reduce warnings.
+## 2025-10-07 — Diagnostics 寄せ + Builder 名解決の小整備（小粒）
+
+- DiagnosticsBox 寄せ（安全な範囲のみ）
+  - provider-verify の warn 出力を JSON 化して統一。
+    - 変更: `src/runtime/provider_verify.rs` → `diagnostics::provider_verify_warn()` を使用。
+    - 追加: `src/common/diagnostics.rs` に `provider_verify_warn()` を追加。
+- Builder のドット名（曖昧時の Fail‑Fast 文言）を diagnostics に統一
+  - 変更: `src/mir/builder/builder_calls/build.rs` の曖昧エラー整形を `diagnostics::msg_ambiguous::module_function()` に委譲。
+  - 追加: `src/common/diagnostics.rs` に同メッセージビルダを追加（表示件数は最大10件、Hint 文言を共通化）。
+- 確認
+  - `cargo test --lib` 緑（195 passed / 0 failed）。
+  - 既存仕様に影響なし（warn→JSON 化のみ／エラー文言の出所を一本化）。
+
+Next（小粒）
+- builder/calls 配下の他経路でも `call_resolver_core::normalize` の採用を広げる（段階）。
+- diagnostics への移行候補（情報ノイズを避けつつ）：provider-verify 以外の warn 行や dev fallback の一部。
+- handlers/* の未使用 import は段階掃除（挙動に影響しない範囲で）。
+
+### 2025-10-07 — 追加の小整備（反映済み）
+- Builder normalize の適用拡大
+  - `src/mir/builder/builder_calls/build.rs` の一般ドット名フォールバックを `CallNameResolverBox::normalize` 経由に変更。
+  - 曖昧時メッセージは diagnostics 経由（前項で導入）を使用。
+- Diagnostics 寄せ（やり過ぎない範囲）
+  - Runner（LLVM）: `SMOKES_USE_PYVM=1` かつ `pyvm-bridge` 無効時の警告を JSON 化（`diagnostics::runner_pyvm_bridge_disabled_warn`）。
+  - VM Legacy: ユーザー Instance の BoxCall を VM で受けた dev fallback 警告に JSON 追加（`NYASH_WARN_JSON=1` の時のみ）。
+  - P2P: interpreter-legacy 不在で FunctionBox 実行スキップ時に JSON 追加（`NYASH_WARN_JSON=1` の時のみ）。
+- 検証
+  - `cargo test --lib` 緑（195 passed / 0 failed）。
+
+### 2025-10-07 — Tier‑1 共通化（Entry/Scan/Using）
+- EntryBox 微統一（呼び名の安定化）
+  - 確認: `nyash.toml` / `hako.toml` に `selfhost.vm.entry` / `hakorune.vm.entry` を登録済み。
+  - 既存 smokes は selfhost/hakorune いずれも EntryBox 経由で呼べる状態。
+- String/JSON スキャンの採用（hakorune 側）
+  - 変更: `apps/hakorune/vm/boxes/cfg_navigator.hako` → `JsonCursorBox.seek_array_end` を使用（エスケープ対応）。
+  - 変更: `apps/hakorune/vm/boxes/hakorune_vm_min.hako` → `_seek_obj_end` を `JsonCursorBox.seek_obj_end` へ委譲。
+  - 影響: 文字列内クオート飛び越えやネスト配列/オブジェクトの終端検出が安定化。
+- UsingCore.flatten ランナー経路の E2E 追加（1本）
+  - 追加: `tools/smokes/v2/profiles/quick/core/using_modules_alias_entry_hakorune_vm.sh`
+    - `using hakorune.vm.entry as HakoruneVmEntryBox` → `run_min` の実行を検証（出力 `1` ）。
+
+### 2025-10-07 — 追加の寄せと箱
+- EntryBox 経由のスモーク寄せ（段階）
+  - 更新: quick/selfhost の 4 本を `MirVmMin._run_min` → `MiniVmEntryBox.run_min` に切替。
+    - selfhost_mir_m3_branch_cond_prev_block_vm.sh
+    - selfhost_mir_m3_branch_cmp_true_vm.sh
+    - selfhost_mir_m2_ret_first_vm.sh
+    - selfhost_mir_m3_phi_entry_vm.sh
+- hakorune 側 JSON 走査の微修正（エスケープ対応）
+  - 変更: `apps/hakorune/vm/boxes/hakorune_vm_min.hako`
+    - `cmp` 抽出の `"` 検索を `StringScanBox.find_quote` に置換（2 箇所＋派生 1 箇所）。
+- Using 別 alias の E2E を 1 本追加
+  - 追加: `tools/smokes/v2/profiles/quick/core/using_modules_alias_entry_selfhost_vm.sh`
+    - `using selfhost.vm.entry as MiniVmEntryBox` → 出力 `2` を検証。
+- おすすめ箱の追加（ハコルネ側エイリアス）
+  - 追加: `apps/hakorune/common/json/json_cursor_alias.hako`（selfhost JsonCursor の薄いラッパ）
+  - マッピング: `hako.toml` の `[modules]` に `hakorune.common.json.cursor` を追加。
+
+### 2025-10-07 — Builder normalize 点検（動作差なし）
+- 点検結果（dotted 名処理）
+  - function-call 経路: `build.rs` 先頭で dotted 名の `/arity` 付与（normalize）を適用済み。
+  - emit 経路: `emit.rs` で Global 名に `CallNameResolverBox::normalize` を適用済み。
+  - static-call 経路: `method_call_handlers.rs` は `static_name` で完全修飾を構築（問題なし）。
+  - 残る `split_once('.')` 使用箇所は分岐/推論用で、名前正規化の責務外（動作差が出ないため着手不要）。
+
+### 2025-10-07 — lifecycle dev-verify の JSON 併記（ENVゲート）
+- 追加: `NYASH_WARN_JSON=1` のとき、Builder の NewBox→birth invariant の dev-verify を JSON でも出力。
+  - 追加: `src/common/diagnostics.rs` → `dev_verify_newbox_missing_birth` / `dev_verify_birth_invariant_summary`
+  - 変更: `src/mir/builder/lifecycle.rs`（個別/サマリ出力に JSON 併記）
+  - 既定OFF。人間向け `[warn] ...` は従来通り出力。
+## 2025-10-07 — 共通化ロードマップ（要点整理）
+
+- EntryBox 統一（進捗: 段階寄せ中）
+  - ねらい: Mini‑VM の起動口 run_min/int_to_str を selfhost/hakorune で統一。
+  - 効果: 呼び名の揺れ吸収・スモーク/ドライバ安定化。
+  - 状態: 代表スモークを EntryBox 経由へ移行（合計 6 本寄せ完了）。
+
+- Call 解決ポリシーの一本化（既存実装の再掲）
+  - builder/VM/runner で call_resolver_core + common::call_policy を使用（normalize＋tail）。
+  - 曖昧時の Fail‑Fast 文言は diagnostics へ一本化（msg_ambiguous::module_function）。
+
+- DiagnosticsBox の一本化（既定OFFのJSON併記）
+  - runner_pyvm_bridge_disabled, dev_fallback_instance_boxcall, provider_verify, builder dev‑verify を JSON 化（観測用）。
+  - 既定OFF: NYASH_WARN_JSON=1 で有効化。
+
+- String/JSON スキャンの核共有
+  - StringScanBox（read_char/find_quote/index_of_from）と JsonCursorBox（seek_obj_end/seek_array_end）を両系で共有。
+  - hakorune 側は CfgNavigator/VMMin を委譲化（エスケープ安全）。
+
+- Using/[modules] フラット化（ランナー経路）
+  - [modules] alias E2E を 2 本追加（selfhost/hakorune entry）。
+  - pending_modules の整合はランナー/ビルダーの UsingCore で確認を継続。
+
+### 新規追加Box（今回）
+- apps/hakorune/common/json/json_cursor_alias.hako → `hakorune.common.json.cursor`
+- apps/hakorune/common/json/json_frag_alias.hako → `hakorune.common.json.frag`
+- apps/hakorune/common/strings/string_helpers_alias.hako → `hakorune.common.strings.helpers`
+- apps/hakorune/vm/boxes/inst_scan.hako → `hakorune.vm.inst_scan`
+
+### 次の小粒プラン（提案）
+1) MiniVmIntFmt の置換（_is_numeric_str → HakoruneStringHelpers）
+2) InstScanBox.extract_cmp の実使用を 1 箇所だけ置換
+3) InstValueScanBox（新規）を追加し compare→ret の 1 箇所に適用
+4) EntryBox 経由への寄せをあと 2 本（integration/selfhost）
+
+
+### 2025-10-07 — hako.toml v2 段階削除（Phase 2）
+- 冗長なフラット [modules] を整理（discovery/alias で代替可能なものを削除）。
+  - 削除: selfhost.vm.(json_cur/json/core/prints/seam/mir_min/entry/scanner/handlers)、hakorune.vm.(mir_min/entry)、selfhost.common.*（未参照）
+  - 追加 alias: entry/mir_min/handlers/scanner/prints/json_cur/core/seam/json/timer 等を boxes 実体にリダイレクト。
+- スモーク: alias E2E（timer 短縮）を1本追加し PASS。
+- README: hako.toml v2 テンプレ導線を追記。
+
+### 2025-10-07 — Workspace polish & module.hako preview
+- selfhost.common exports minimized to actual use (json_adapter, mini_vm_*, string_ops, json.core.string_scan, json.utils.json_frag, json.mir_*).
+- list-modules labels extended: [workspace:hako_module]/[workspace:module]/[workspace:module_hako]/[override]/[auto].
+- Added override sample: selfhost.tools.dep_tree_core.
+- module.hako (preview) parsed for name/version/exports (list-modules only). Demo at apps/examples/module_hako_demo.

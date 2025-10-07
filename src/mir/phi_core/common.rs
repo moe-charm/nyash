@@ -9,6 +9,15 @@
 /// Using the same tuple form as MIR Phi instruction inputs.
 pub type PhiInput = (crate::mir::BasicBlockId, crate::mir::ValueId);
 
+
+/// Determine if a predecessor block is unreachable for PHI purposes.
+/// Unreachable when the block ends with Return or Throw (but not Jump/Branch).
+pub fn is_unreachable_pred(function: &crate::mir::MirFunction, pred: crate::mir::BasicBlockId) -> bool {
+    if let Some(block) = function.get_block(pred) {
+        block.ends_with_return() || matches!(block.terminator, Some(crate::mir::MirInstruction::Throw{..}))
+    } else { false }
+}
+
 #[cfg(debug_assertions)]
 pub fn debug_verify_phi_inputs(
     function: &crate::mir::MirFunction,

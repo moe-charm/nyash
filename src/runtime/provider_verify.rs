@@ -21,6 +21,7 @@
  */
 
 use std::collections::HashMap;
+use crate::common::diagnostics;
 
 fn parse_required_methods(spec: &str) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -108,10 +109,14 @@ pub fn verify_from_env() -> Result<(), String> {
     }
 
     if failures.is_empty() { return Ok(()); }
-    let msg = format!(
-        "Provider verify failed ({}): missing methods: {}",
-        mode,
-        failures.join(", ")
-    );
-    if mode == "warn" { eprintln!("[provider-verify][warn] {}", msg); Ok(()) } else { Err(msg) }
+    if mode == "warn" {
+        eprintln!("{}", diagnostics::provider_verify_warn(&failures));
+        Ok(())
+    } else {
+        let msg = format!(
+            "Provider verify failed (strict): missing methods: {}",
+            failures.join(", ")
+        );
+        Err(msg)
+    }
 }

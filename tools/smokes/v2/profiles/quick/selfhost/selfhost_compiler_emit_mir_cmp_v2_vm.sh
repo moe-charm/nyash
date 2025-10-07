@@ -26,7 +26,7 @@ json=$(run_nyash_vm "$APP" --dev | tail -n 1)
 # 2) Embed into a small driver and run with Mini‑VM
 esc=$(printf '%s' "$json" | sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g')
 cat > "$TMP_DIR/driver.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {

@@ -33,7 +33,7 @@ ESCAPED=$(printf '%s' "$JSON" | sed -e 's/\\/\\\\/g' -e 's/"/\\\"/g')
 
 # 2) Build a tiny driver to feed the JSON to MirVmMin
 cat > "$TMP_DIR/driver.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {

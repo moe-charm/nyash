@@ -30,7 +30,7 @@ for i in "${!ops[@]}"; do
   op=${ops[$i]}
   expected=${expect[$i]}
   cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
 static box Main {
@@ -47,7 +47,7 @@ static box Main {
       |> MirJsonBuilderMin.end_all()
       |> MirJsonBuilderMin.to_string()
     local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

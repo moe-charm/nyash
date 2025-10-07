@@ -19,7 +19,7 @@ ops=(Add Sub Mul Div Mod)
 
 for op in "${ops[@]}"; do
   cat > "$TMP_DIR/driver.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -29,8 +29,8 @@ static box Main {
     j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":2,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":3}},"
     j = j + "{\\\"op\\\":\\\"binop\\\",\\\"op_kind\\\":\\\"${op}\\\",\\\"lhs\\\":1,\\\"rhs\\\":2,\\\"dst\\\":3},"
     j = j + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":3}] }]}]}"
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

@@ -16,7 +16,7 @@ TMP_DIR="/tmp/selfhost_mir_m2_compare_ge_builder_vm_llvm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
 static box Main {
@@ -32,8 +32,8 @@ static box Main {
       |> MirJsonBuilderMin.add_ret(3)
       |> MirJsonBuilderMin.end_all()
       |> MirJsonBuilderMin.to_string()
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

@@ -9,11 +9,16 @@ using "apps/hakorune/vm/boxes/phi_wiring.hako" as PhiWiringBox
 using "apps/hakorune/vm/boxes/program_state.hako" as ProgramStateBox
 using "apps/hakorune/vm/boxes/diagnostics.hako" as DiagnosticsBox
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 using "apps/hakorune/vm/boxes/ret_resolver.hako" as RetResolverBox
 using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
 using "apps/selfhost/vm/boxes/guard_box.hako" as GuardBox
 using "apps/selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
+using "apps/selfhost/common/json/core/string_scan.hako" as StringScanBox
+using "apps/hakorune/common/strings/string_helpers_alias.hako" as HakoruneStringHelpers
+using "apps/hakorune/vm/boxes/inst_scan.hako" as InstScanBox
+using "apps/hakorune/vm/boxes/inst_value_scan.hako" as InstValueScanBox
 
 static box HakoruneVmMin {
   _tprint(msg) {
@@ -36,22 +41,16 @@ static box HakoruneVmMin {
   }
 
   // helpers
-  _int_to_str(n) {
-    if n == 0 { return "0" }
-    if n < 0 { return "-" + me._int_to_str(0 - n) }
-    local v=n local out="" local digits="0123456789"
-    loop(v>0){ local d=v%10 local ch=digits.substring(d,d+1) out=ch+out v=v/10 }
-    return out
-  }
-  _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
+  _int_to_str(n) { return HakoruneStringHelpers.int_to_str(n) }
+  _is_numeric_str(s){ return HakoruneStringHelpers.is_numeric_str(s) }
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return 0 }
 
   // block helpers（selfhost版と同等の簡易スキャナ）
   index_of_from(hay,needle,pos){ return CfgNavigatorBox.index_of_from(hay,needle,pos) }
   _block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=me.index_of_from(mjson, key, 0) if p<0 {return -1} local q=me.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
-  _seek_array_end(text, pos){ local i=pos local depth=1 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if ch=="[" {depth=depth+1} else { if ch=="]" {depth=depth-1} } if depth==0 {return i} i=i+1 } return i }
+  _seek_array_end(text, pos){ return JsonCursorBox.seek_array_end(text, pos) }
   _block_insts_end(mjson,insts_start){ return me._seek_array_end(mjson,insts_start) }
-  _seek_obj_end(text, obj_start) { local i=obj_start local depth=0 local in_str=0 loop(i < text.length()){ local ch=text.substring(i,i+1) if ch=="" {break} if in_str==1 { if ch=="\\" { i=i+2 continue } if ch=="\"" { in_str=0 i=i+1 continue } i=i+1 continue } if ch=="\"" { in_str=1 i=i+1 continue } if ch=="{" { depth=depth+1 } else { if ch=="}" { depth=depth-1 } } if depth==0 { return i+1 } i=i+1 } return i }
+  _seek_obj_end(text, obj_start) { return JsonCursorBox.seek_obj_end(text, obj_start) }
 
   _handle_copy(seg, regs){ local dst=JsonFragBox.get_int(seg,"dst") local src=JsonFragBox.get_int(seg,"src") if dst==null || src==null {return} local v=regs.get(""+src) regs.set(""+dst, v) }
 
@@ -92,38 +91,13 @@ static box HakoruneVmMin {
         local cdst0 = JsonFragBox.get_int(inst_seg, "dst")
         local rid0 = JsonFragBox.get_int(inst_seg, "value")
         if cdst0 != null { if rid0 != null { if rid0 == cdst0 {
-          // parse first two typed const values
-          local vals0 = new ArrayBox()
-          local search0 = inst_seg
-          local key0 = "\"value\":{\"type\":\"i64\",\"value\":\""
-          local pos0 = 0
-          loop(true) {
-            local k0 = me.index_of_from(search0, key0, pos0)
-            if k0 < 0 { break }
-            local ds0 = search0.substring(k0 + key0.length(), search0.length())
-            local i0 = 0
-            local out0 = ""
-            loop(true) {
-              local ch0 = ds0.substring(i0, i0+1)
-              if ch0 == "" { break }
-              if ch0 >= "0" && ch0 <= "9" { out0 = out0 + ch0  i0 = i0 + 1 } else { break }
-            }
-            if out0 != "" { vals0.push(out0) }
-            if vals0.size() >= 2 { break }
-            pos0 = k0 + key0.length() + i0
-          }
+          // parse first two typed const values (escape-aware)
+          local vals0 = InstValueScanBox.find_i64_values(inst_seg, 2)
           if vals0.size() >= 2 {
-            local lv0 = 0
-            local rv0 = 0
-            local ii0 = 0
-            loop(ii0 < vals0.get(0).length()) { lv0 = lv0 * 10 + ("0123456789".indexOf(vals0.get(0).substring(ii0,ii0+1)))  ii0 = ii0 + 1 }
-            local ii1 = 0
-            loop(ii1 < vals0.get(1).length()) { rv0 = rv0 * 10 + ("0123456789".indexOf(vals0.get(1).substring(ii1,ii1+1)))  ii1 = ii1 + 1 }
-            // compare op
-            local cmpk0 = "\"cmp\":\""
-            local pk0 = me.index_of_from(inst_seg, cmpk0, 0)
-            local cmp0 = "Eq"
-            if pk0 >= 0 { local i = pk0 + cmpk0.length()  local j = me.index_of_from(inst_seg, "\"", i)  if j > i { cmp0 = inst_seg.substring(i, j) } }
+            local lv0 = JsonFragBox._str_to_int(vals0.get(0))
+            local rv0 = JsonFragBox._str_to_int(vals0.get(1))
+            // compare op (escape-aware via InstScanBox)
+            local cmp0 = InstScanBox.extract_cmp(inst_seg)
             if cmp0 == "Eq" { if lv0 == rv0 { return 1 } else { return 0 } }
             if cmp0 == "Ne" { if lv0 != rv0 { return 1 } else { return 0 } }
             if cmp0 == "Gt" { if lv0 > rv0 { return 1 } else { return 0 } }
@@ -136,36 +110,12 @@ static box HakoruneVmMin {
       }
       // Fast-path: simple compare→ret in a single block (robust)
       if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 && me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
-        local vals = new ArrayBox()
-        local search = inst_seg
-        local key = "\"value\":{\"type\":\"i64\",\"value\":"
-        local pos = 0
-        loop(true) {
-          local k = me.index_of_from(search, key, pos)
-          if k < 0 { break }
-          local ds = search.substring(k + key.length(), search.length())
-          local i = 0
-          local out = ""
-          loop(true) {
-            local ch = ds.substring(i, i+1)
-            if ch == "" { break }
-            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
-          }
-          if out != "" { vals.push(out) }
-          if vals.size() >= 2 { break }
-          pos = k + key.length() + i
-        }
+        local vals = InstValueScanBox.find_i64_values(inst_seg, 2)
         if vals.size() >= 2 {
-          local lv = 0
-          local rv = 0
-          local i0 = 0
-          loop(i0 < vals.get(0).length()) { lv = lv * 10 + ("0123456789".indexOf(vals.get(0).substring(i0,i0+1)))  i0 = i0 + 1 }
-          local i1 = 0
-          loop(i1 < vals.get(1).length()) { rv = rv * 10 + ("0123456789".indexOf(vals.get(1).substring(i1,i1+1)))  i1 = i1 + 1 }
-          local cmp_key = "\"cmp\":\""
-          local pk = me.index_of_from(inst_seg, cmp_key, 0)
-          local cmp = "Eq"
-          if pk >= 0 { local i = pk + cmp_key.length()  local j = me.index_of_from(inst_seg, "\"", i)  if j > i { cmp = inst_seg.substring(i, j) } }
+          local lv = JsonFragBox._str_to_int(vals.get(0))
+          local rv = JsonFragBox._str_to_int(vals.get(1))
+          // compare op
+          local cmp = InstScanBox.extract_cmp(inst_seg)
           local cv = 0
           if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
           else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }
@@ -205,10 +155,8 @@ static box HakoruneVmMin {
           loop(i0 < vals.get(0).length()) { lv = lv * 10 + ("0123456789".indexOf(vals.get(0).substring(i0,i0+1)))  i0 = i0 + 1 }
           local i1 = 0
           loop(i1 < vals.get(1).length()) { rv = rv * 10 + ("0123456789".indexOf(vals.get(1).substring(i1,i1+1)))  i1 = i1 + 1 }
-          local cmp_key = "\"cmp\":\""
-          local pk = me.index_of_from(inst_seg, cmp_key, 0)
-          local cmp = "Eq"
-          if pk >= 0 { local i = pk + cmp_key.length()  local j = me.index_of_from(inst_seg, "\"", i)  if j > i { cmp = inst_seg.substring(i, j) } }
+          // compare op
+          local cmp = InstScanBox.extract_cmp(inst_seg)
           local cv = 0
           if cmp == "Eq" { if lv == rv { cv = 1 } else { cv = 0 } }
           else if cmp == "Ne" { if lv != rv { cv = 1 } else { cv = 0 } }

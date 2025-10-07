@@ -38,7 +38,7 @@ impl MirInterpreter {
                     let _ = self.handle_box_call(None, *dst, "birth", args);
                 }
             }
-            MirInstruction::PluginInvoke { dst, .. } => {
+            MirInstruction::PluginInvoke { .. } => {
                 if let MirInstruction::PluginInvoke { dst, box_val, method, args, .. } = inst {
                     self.handle_plugin_invoke(*dst, *box_val, method, args)?
                 } else { unreachable!() }

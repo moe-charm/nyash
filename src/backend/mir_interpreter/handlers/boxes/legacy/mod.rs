@@ -16,9 +16,6 @@ use crate::backend::mir_interpreter::handlers::{
 mod plugin_invoke;
 mod plugin_bridge;
 
-// Re-export for parent module
-pub(crate) use plugin_invoke::*;
-pub(crate) use plugin_bridge::*;
 
 impl MirInterpreter {
     pub(crate) fn handle_box_call(
@@ -152,11 +149,17 @@ impl MirInterpreter {
         }
         if user_instance_class.is_some() && method != "birth" && crate::config::env::vm_allow_user_instance_boxcall() {
             if crate::config::env::cli_verbose() && !crate::config::env::cli_quiet() {
+                let cls = user_instance_class.as_ref().unwrap();
+                // Human-readable warn (legacy)
                 eprintln!(
                     "[warn] dev fallback: user instance BoxCall {}.{} routed via VM instance-dispatch",
-                    user_instance_class.as_ref().unwrap(),
+                    cls,
                     method
                 );
+                // Optional JSON warn for tooling when enabled
+                if std::env::var("NYASH_WARN_JSON").ok().as_deref() == Some("1") {
+                    eprintln!("{}", crate::common::diagnostics::dev_fallback_instance_boxcall(cls, method));
+                }
             }
         }
         if boxes_instance::try_handle_instance_box(self, dst, box_val, method, args)? {

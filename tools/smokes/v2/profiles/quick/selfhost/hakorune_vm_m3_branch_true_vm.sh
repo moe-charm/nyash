@@ -17,7 +17,7 @@ TMP_DIR="/tmp/hakorune_vm_m3_branch_true_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF_NY'
-using hakorune.vm.mir_min as MirVmMin
+using hakorune.vm.entry as HakoruneVmEntryBox
 
 static box Main {
   main() {
@@ -25,8 +25,8 @@ static box Main {
     j = j + "{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":1}},{\"op\":\"branch\",\"cond\":1,\"then\":1,\"else\":2}]},"
     j = j + "{\"id\":1,\"instructions\":[{\"op\":\"ret\",\"value\":1}]},"
     j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":2}]}]}]}"
-    local v = MirVmMin.run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = HakoruneVmEntryBox.run_min(j)
+    print(HakoruneVmEntryBox.int_to_str(v))
     return 0
   }
 }

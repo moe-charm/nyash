@@ -3,7 +3,6 @@
 //! Behavior-preserving extraction of execute_global_function from legacy.
 
 use super::super::*;
-use crate::backend::mir_interpreter::resolve::call_resolver;
 
 impl MirInterpreter {
     /// Dev-only bridge: JSON.stringify(any) when invoked as a Global callee.
@@ -35,10 +34,11 @@ impl MirInterpreter {
         if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
             let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
             let key = format!("Global:{}:{}", clean, args.len());
-            let c = self.reenter_count.entry(key.clone()).or_insert(0);
-            *c += 1;
-            if let Some(limit) = crate::config::env::vm_reenter_limit() { if *c > limit { return Err(VMError::InvalidInstruction(format!("reentrancy guard: {} depth>{}", key, limit))); } }
-            if crate::config::env::vm_reenter_trace() && (*c == 64 || *c % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, *c); }
+            let depth = match crate::common::reenter_guard::bump_and_check(&mut self.reenter_count, &key, crate::config::env::vm_reenter_limit()) {
+                Ok(d) => d,
+                Err(e) => return Err(VMError::InvalidInstruction(e)),
+            };
+            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, depth); }
         }
         // Narrow safety valve to break Json* index_of_from recursion (dev):
         // Handle dotted canonical or base names here when arity==3.
@@ -115,10 +115,11 @@ impl MirInterpreter {
         if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
             let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
             let key = format!("Global:{}:{}", clean, args.len());
-            let c = self.reenter_count.entry(key.clone()).or_insert(0);
-            *c += 1;
-            if let Some(limit) = crate::config::env::vm_reenter_limit() { if *c > limit { return Err(VMError::InvalidInstruction(format!("reentrancy guard: {} depth>{}", key, limit))); } }
-            if crate::config::env::vm_reenter_trace() && (*c == 64 || *c % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, *c); }
+            let depth = match crate::common::reenter_guard::bump_and_check(&mut self.reenter_count, &key, crate::config::env::vm_reenter_limit()) {
+                Ok(d) => d,
+                Err(e) => return Err(VMError::InvalidInstruction(e)),
+            };
+            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, depth); }
         }
         match func_name {
             "nyash.builtin.print" | "print" | "nyash.console.log" => {
@@ -238,6 +239,15 @@ impl MirInterpreter {
                         if let Some(pick) = crate::mir::resolve::module_function_resolver::resolve_strict(self.functions.keys().cloned(), clean_name, args.len(), true) {
                             return self.handle_callee_module_function(&pick, args);
                         }
+                        let wide = std::env::var("NYASH_VM_GLOBAL_TAIL_WIDE").ok().as_deref() == Some("1");
+                        if let Some((cls, method)) = clean_name.split_once('.') {
+                            let cands = crate::common::call_policy::tail_candidates(self.functions.keys(), cls, method, args.len(), wide);
+                            if let Some(pick) = cands.first() {
+                                if !crate::common::call_policy::is_immediate_cycle(pick.as_str(), clean_name) {
+                                    return self.handle_callee_module_function(pick, args);
+                                }
+                            }
+                        }
                     }
                     return Err(VMError::InvalidInstruction(format!(
                         "Unknown module function (strict global): {} (arity={})",
@@ -268,10 +278,11 @@ impl MirInterpreter {
         if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
             let clean = if let Some(pos) = name.rfind('/') { &name[..pos] } else { name };
             let key = format!("ModuleFn:{}:{}", clean, args.len());
-            let c = self.reenter_count.entry(key.clone()).or_insert(0);
-            *c += 1;
-            if let Some(limit) = crate::config::env::vm_reenter_limit() { if *c > limit { return Err(VMError::InvalidInstruction(format!("reentrancy guard: {} depth>{}", key, limit))); } }
-            if crate::config::env::vm_reenter_trace() && (*c == 64 || *c % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, *c); }
+            let depth = match crate::common::reenter_guard::bump_and_check(&mut self.reenter_count, &key, crate::config::env::vm_reenter_limit()) {
+                Ok(d) => d,
+                Err(e) => return Err(VMError::InvalidInstruction(e)),
+            };
+            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, depth); }
         }
         // Dev safety valve: intercept hot recursive helpers to avoid resolver-induced cycles.
         // JsonCursorBox.index_of_from/3 and JsonFragBox.index_of_from/3 are pure functions;
@@ -429,17 +440,19 @@ impl MirInterpreter {
 
         // Tail-based fallback: collect candidates that end with ".method/arity"
         // if the provided name was not canonical but looked like "Class.method".
-        if let Some((class_or_alias, method)) = name.split_once('.') {
-            let tail = format!(".{}{}", method, format!("/{}", args.len()));
-            let mut cands: Vec<String> = self
-                .functions
-                .keys()
-                .filter(|k| k.ends_with(&tail) && (k.starts_with(&format!("{}.", class_or_alias)) || k.starts_with(&format!("{}_", class_or_alias))))
-                .cloned()
-                .collect();
+        if let Some((class_or_alias, method_part)) = name.split_once('.') {
+            let method_only = match method_part.split_once('/') { Some((m, _)) => m, None => method_part };
+            let wide = std::env::var("NYASH_VM_MODULE_TAIL_WIDE").ok().as_deref() == Some("1");
+            let cands = crate::common::call_policy::tail_candidates(self.functions.keys(), class_or_alias, method_only, args.len(), wide);
             if !cands.is_empty() {
-                cands.sort();
-                let pick = cands.remove(0);
+                let pick = cands[0].clone();
+                if crate::common::call_policy::is_immediate_cycle(&pick, name) {
+                    return Err(VMError::InvalidInstruction(
+                        crate::common::diagnostics::msg::circular_tail_resolution(
+                            crate::common::call_policy::base_without_arity(&pick)
+                        )
+                    ));
+                }
                 if let Some(func) = self.functions.get(&pick).cloned() {
                     let mut argv: Vec<VMValue> = Vec::new();
                     for a in args { argv.push(self.reg_load(*a)?); }

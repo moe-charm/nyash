@@ -31,17 +31,17 @@ impl CallRoutingBox {
             return None;
         }
         let route = match (receiver_origin, method, arg_count) {
-            (Some("TimerBox"), "now_ms", 0) => Some(CallRoute::DirectExtern {
+            (Some("TimerBox"), "now_ms", 0) if crate::common::extern_registry::exists("nyrt.time", "now_ms") => Some(CallRoute::DirectExtern {
                 iface: "nyrt.time",
                 method: "now_ms",
             }),
             (Some("ArrayBox"), "length", 0)
             | (Some("ArrayBox"), "len", 0)
-            | (Some("ArrayBox"), "size", 0) => Some(CallRoute::DirectExtern {
+            | (Some("ArrayBox"), "size", 0) if crate::common::extern_registry::exists("nyrt.array", "size") => Some(CallRoute::DirectExtern {
                 iface: "nyrt.array",
                 method: "size",
             }),
-            (Some("MapBox"), "size", 0) => Some(CallRoute::DirectExtern {
+            (Some("MapBox"), "size", 0) if crate::common::extern_registry::exists("nyrt.map", "size") => Some(CallRoute::DirectExtern {
                 iface: "nyrt.map",
                 method: "size",
             }),

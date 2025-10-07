@@ -19,7 +19,7 @@ TMP_DIR="/tmp/selfhost_pipeline_v2_cmp_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {

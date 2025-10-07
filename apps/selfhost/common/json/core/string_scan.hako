@@ -4,7 +4,18 @@
 using "apps/selfhost/common/string_ops.hako" as StringOps
 
 static box StringScanBox {
-  read_char(text, i) { return me.read_char(text, i) }
+  // Return the single-character string at index i (empty if out of bounds)
+  read_char(text, i) {
+    if text == null { return "" }
+    if i < 0 { return "" }
+    local n = text.length()
+    if i >= n { return "" }
+    return text.substring(i, i+1)
+  }
+  // Find next unescaped double quote starting at or after pos
+  find_quote(text, pos) {
+    return me.find_unescaped(text, "\"", pos)
+  }
   // Find substring starting from position (simple, non-escape-aware)
   index_of_from(text, needle, pos) {
     return StringOps.index_of_from(text, needle, pos)

@@ -1,0 +1,8 @@
+// hakorune_vm_entry.hako — HakoruneVmEntryBox
+// Thin entry wrapper to stabilize static call names.
+using "apps/hakorune/vm/boxes/hakorune_vm_min.hako" as HakoruneVmMin
+
+static box HakoruneVmEntryBox {
+  run_min(j) { return HakoruneVmMin.run_min(j) }
+  int_to_str(v) { return HakoruneVmMin._int_to_str(v) }
+}

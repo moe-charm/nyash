@@ -1,0 +1,13 @@
+// json_cursor_alias.hako — HakoruneJsonCursorBox (alias to selfhost JsonCursorBox)
+// Purpose: provide a stable hakorune namespace for JSON cursor utilities.
+
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+
+static box HakoruneJsonCursorBox {
+  index_of_from(hay, needle, pos) { return JsonCursorBox.index_of_from(hay, needle, pos) }
+  scan_string_end(text, quote_pos) { return JsonCursorBox.scan_string_end(text, quote_pos) }
+  seek_array_end(text, lbracket_pos) { return JsonCursorBox.seek_array_end(text, lbracket_pos) }
+  seek_obj_end(text, start) { return JsonCursorBox.seek_obj_end(text, start) }
+  find_key_dual(text, plain, escaped, pos) { return JsonCursorBox.find_key_dual(text, plain, escaped, pos) }
+}
+

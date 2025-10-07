@@ -276,6 +276,16 @@ impl super::MirBuilder {
                                         dst,
                                         expect_tail
                                     );
+                                    if std::env::var("NYASH_WARN_JSON").ok().as_deref() == Some("1") {
+                                        eprintln!(
+                                            "{}",
+                                            crate::common::diagnostics::dev_verify_newbox_missing_birth(
+                                                box_type,
+                                                &format!("v{}", dst.0),
+                                                &expect_tail,
+                                            )
+                                        );
+                                    }
                                 }
                                 warn_count += 1;
                             }
@@ -286,6 +296,12 @@ impl super::MirBuilder {
             }
             if warn_count > 0 && !crate::config::env::cli_quiet() {
                 eprintln!("[warn] dev verify: NewBox→birth invariant warnings: {}", warn_count);
+                if std::env::var("NYASH_WARN_JSON").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "{}",
+                        crate::common::diagnostics::dev_verify_birth_invariant_summary(warn_count)
+                    );
+                }
             }
         }
 

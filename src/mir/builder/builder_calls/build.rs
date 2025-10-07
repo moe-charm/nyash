@@ -51,9 +51,16 @@ impl MirBuilder {
     // Build function call: name(args)
     pub(in super::super) fn build_function_call(
         &mut self,
-        name: String,
+        mut name: String,
         args: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Normalize dotted names without arity to fully qualified form
+        if name.contains('.') && !name.contains('/') {
+            if let Ok(norm) = crate::mir::resolve::call_resolver_core::normalize(&name, args.len()) {
+                name = norm;
+            }
+        }
+
         // dev trace removed
         if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
             let cur_fun = self.current_function.as_ref().map(|f| f.signature.name.clone()).unwrap_or_else(|| "<none>".to_string());
@@ -64,6 +71,58 @@ impl MirBuilder {
                 cur_fun
             );
         }
+        // Handle built-in dispatcher: call("Box.method/N", recv, args...)
+        // This allows Ny source to explicitly target a ModuleFunction without macro expansion.
+        if name == "call" {
+            if args.is_empty() {
+                return Err("MIR compilation error: Unresolved function: call. Function call not found. Check spelling or add explicit scope qualifier".to_string());
+            }
+            if let Some(target_name) = special_handlers::extract_string_literal(&args[0]) {
+                // Build remaining arguments
+                let mut call_args = Vec::new();
+                for a in args.iter().skip(1) { call_args.push(self.build_expression(a.clone())?); }
+                // Direct extern mapping for Timer.now_ms as a convenience
+                if (target_name == "Timer.now_ms/0" || target_name == "TimerBox.now_ms/0") && call_args.is_empty() {
+                    return self.emit_timer_now_ms_call();
+                }
+                // Normalize builtin names like String.len/1 → StringBox.length/0
+                let normalized = self
+                    .normalize_external_module_function_name(&target_name, call_args.len())
+                    .or_else(|| if target_name.contains(".") { Some(target_name.clone()) } else { None });
+                if let Some(ext_name) = normalized {
+                    let dst = self.value_gen.next();
+                    let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(dst),
+                        func: fun_val,
+                        callee: Some(crate::mir::Callee::ModuleFunction(ext_name.clone())),
+                        args: call_args,
+                        effects: EffectMask::READ.add(Effect::ReadHeap),
+                    })?;
+                    self.annotate_call_result_from_func_name(dst, &ext_name);
+                    return Ok(dst);
+                }
+                return Err(format!(
+                    "MIR compilation error: Unresolved call target: '{}'. Expected dotted+arity like 'String.len/1'",
+                    target_name
+                ));
+            } else {
+                return Err("MIR compilation error: Unresolved function: call. First argument must be a string literal target".to_string());
+            }
+        }
+
+        // Literal wrappers: map({...}) / arr([...]) → treat as literals when macros are disabled
+        if (name == "map" || name == "json") && args.len() == 1 {
+            if let ASTNode::MapLiteral { .. } = &args[0] {
+                return self.build_expression(args[0].clone());
+            }
+        }
+        if name == "arr" && args.len() == 1 {
+            if let ASTNode::ArrayLiteral { .. } = &args[0] {
+                return self.build_expression(args[0].clone());
+            }
+        }
+
         // Minimal TypeOp wiring via function-style: isType(value, "Type"), asType(value, "Type")
         if (name == "isType" || name == "asType") && args.len() == 2 {
             if let Some(type_name) = special_handlers::extract_string_literal(&args[1]) {
@@ -207,6 +266,26 @@ impl MirBuilder {
             return Ok(dst);
         }
 
+        // General dotted fallback: treat any dotted name as a ModuleFunction even if
+        // it is defined in an imported box. Normalize via CallNameResolver to append "/arity".
+        if name.contains(".") {
+            let target = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, arg_values.len()) {
+                Ok(full) => full,
+                Err(_) => if name.contains('/') { name.clone() } else { format!("{}/{}", name, arg_values.len()) },
+            };
+            let dst = self.value_gen.next();
+            let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &target)?;
+            self.emit_instruction(MirInstruction::Call {
+                dst: Some(dst),
+                func: fun_val,
+                callee: Some(crate::mir::Callee::ModuleFunction(target.clone())),
+                args: arg_values,
+                effects: EffectMask::READ.add(Effect::ReadHeap),
+            })?;
+            self.annotate_call_result_from_func_name(dst, &target);
+            return Ok(dst);
+        }
+
         if module_fn_unify {
             if let Some(ref module) = self.current_module {
                 let arity = arg_values.len();
@@ -235,12 +314,6 @@ impl MirBuilder {
                         TailQueryResult::Unique(n) => chosen = Some(n),
                         TailQueryResult::Ambiguous(mut ambig_list) => {
                             if strict {
-                                ambig_list.sort();
-                                let shown: usize = ambig_list.len().min(10);
-                                let mut msg = format!(
-                                    "Ambiguous module function resolution for '{}', arity={} ({} candidates, showing {}):\n",
-                                    name, arity, ambig_list.len(), shown
-                                );
                                 // Stable and informative ordering: prefer current box first, then lexical
                                 let mut display = ambig_list.clone();
                                 display.sort();
@@ -248,9 +321,9 @@ impl MirBuilder {
                                     let preferred = crate::mir::indexes::functions::prefer_current_box(&cur_fn_name, &display);
                                     display = preferred;
                                 }
-                                for k in display.iter().take(shown) { msg.push_str("  - "); msg.push_str(k); msg.push('\n'); }
-                                if ambig_list.len() > shown { msg.push_str(&format!("  ... and {} more\n", ambig_list.len() - shown)); }
-                                msg.push_str("Hint: qualify with Class.method/Arity, or set NYASH_MIR_CALL_MODULE_FN_STRICT=0 to fallback.");
+                                let msg = crate::common::diagnostics::msg_ambiguous::module_function(
+                                    &name, arity, &display, ambig_list.len()
+                                );
                                 return Err(msg);
                             } else {
                                 // Apply common heuristic: prefer current box when it yields a single candidate
@@ -360,22 +433,30 @@ impl MirBuilder {
                             }
                         }
                     }
-                    // Secondary fallback (tail-based) is disabled by default to avoid ambiguous resolution.
+                    // Secondary fallback (tail-based) via common call_policy (dev only)
                     // Enable only when explicitly requested: NYASH_BUILDER_TAIL_RESOLVE=1
                     if std::env::var("NYASH_BUILDER_TAIL_RESOLVE").ok().as_deref() == Some("1") {
                         if let Some(ref module) = self.current_module {
-                            let tail = format!(".{}{}", name, format!("/{}", arg_values.len()));
-                            let mut cands: Vec<String> = module
-                                .functions
-                                .keys()
-                                .filter(|k| k.ends_with(&tail))
-                                .cloned()
-                                .collect();
+                            let (class_or_alias, method_only) = if let Some((cls, m)) = name.split_once('.') {
+                                (cls, m)
+                            } else { ("", name.as_str()) };
+                            // wide=true when no qualifier; otherwise respect qualifier
+                            let wide = class_or_alias.is_empty();
+                            let cands = crate::common::call_policy::tail_candidates(
+                                module.functions.keys(),
+                                class_or_alias,
+                                method_only.split('/').next().unwrap_or(method_only),
+                                arg_values.len(),
+                                wide,
+                            );
                             if cands.len() == 1 {
-                                let func_name = cands.remove(0);
-                                let dst = self.value_gen.next();
-                                self.emit_legacy_call(Some(dst), CallTarget::Global(func_name), arg_values)?;
-                                return Ok(dst);
+                                let pick = cands[0].clone();
+                                // Avoid immediate self-cycle just in case
+                                if !crate::common::call_policy::is_immediate_cycle(&pick, &name) {
+                                    let dst = self.value_gen.next();
+                                    self.emit_legacy_call(Some(dst), CallTarget::Global(pick), arg_values)?;
+                                    return Ok(dst);
+                                }
                             }
                         }
                     }

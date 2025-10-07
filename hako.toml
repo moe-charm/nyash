@@ -40,22 +40,12 @@ selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.hako"
 selfhost.common.json.mir_v1_adapter = "apps/selfhost/common/json/mir_v1_adapter.hako"
 selfhost.compiler.pipeline_v2.emit_compare = "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako"
-selfhost.vm.json_cur = "apps/selfhost/vm/boxes/json_cur.hako"
-selfhost.vm.json = "apps/selfhost/common/json_adapter.hako"
-selfhost.vm.core = "apps/selfhost/vm/boxes/mini_vm_core.hako"
-selfhost.vm.scan = "apps/selfhost/common/mini_vm_scan.hako"
-selfhost.vm.binop = "apps/selfhost/common/mini_vm_binop.hako"
-selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.hako"
-selfhost.vm.prints = "apps/selfhost/vm/boxes/mini_vm_prints.hako"
-selfhost.vm.seam = "apps/selfhost/vm/boxes/seam_inspector.hako"
-selfhost.vm.mir_min = "apps/selfhost/vm/boxes/mir_vm_min.hako"
-hakorune.vm.mir_min = "apps/hakorune/vm/boxes/hakorune_vm_min.hako"
-selfhost.vm.flow_runner = "apps/selfhost/vm/flow_runner.hako"
-selfhost.vm.scanner = "apps/selfhost/vm/boxes/instruction_scanner.hako"
-selfhost.vm.handlers = "apps/selfhost/vm/boxes/op_handlers.hako"
-selfhost.core.timer = "apps/core/timer/TimerBox.hako"
+selfhost.core.timer = "core.timer.TimerBox"
+timer = "core.timer.TimerBox"
 selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
-selfhost.vm.rune_host = "apps/selfhost/vm/boxes/rune_host.hako"
+hakorune.common.json.cursor = "apps/hakorune/common/json/json_cursor_alias.hako"
+hakorune.common.json.frag = "apps/hakorune/common/json/json_frag_alias.hako"
+hakorune.common.strings.helpers = "apps/hakorune/common/strings/string_helpers_alias.hako"
 
 # json_native utility boxes (for resolver-friendly module references)
 selfhost.json.utils.stringify_ops = "apps/lib/json_native/utils/stringify_ops_box.hako"
@@ -68,18 +58,60 @@ selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 
 # Temporary alias keys (migration aid; keys kept stable)
 # selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
-selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
-selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
-selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"
-selfhost.common.string_ops = "apps/selfhost/common/string_ops.hako"
 
 # Tools (dep_tree utilities)
 selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
+
+# v2 sections — discovery + minimal aliases/overrides
+[modules.options]
+# Keep discovery enabled; roots default to apps (can extend per project)
+enable_discovery = true
+roots = ["apps"]
+# Heuristic excludes (simple keywords; no glob engine)
+exclude = [
+  "**/archive/**",
+  "**/_*/*",
+  "**/test_*",
+  "**/example_*",
+]
+
+[modules.aliases]
+# Friendly short names pointing to discovered namespaces
+selfhost.vm.entry = "selfhost.vm.boxes.mini_vm_entry"
+hakorune.vm.entry = "hakorune.vm.boxes.hakorune_vm_entry"
+selfhost.vm.mir_min = "selfhost.vm.boxes.mir_vm_min"
+hakorune.vm.mir_min = "hakorune.vm.boxes.hakorune_vm_min"
+selfhost.vm.handlers = "selfhost.vm.boxes.op_handlers"
+selfhost.vm.scanner = "selfhost.vm.boxes.instruction_scanner"
+selfhost.vm.prints = "selfhost.vm.boxes.mini_vm_prints"
+selfhost.vm.json_cur = "selfhost.vm.boxes.json_cur"
+selfhost.vm.core = "selfhost.vm.boxes.mini_vm_core"
+selfhost.vm.seam = "selfhost.vm.boxes.seam_inspector"
+selfhost.vm.json = "selfhost.common.json_adapter"
+hakorune.vm.inst_scan = "hakorune.vm.boxes.inst_scan"
+hakorune.vm.inst_value_scan = "hakorune.vm.boxes.inst_value_scan"
+# Short alias
+selfhost.core.timer = "core.timer.TimerBox"
+timer = "core.timer.TimerBox"
+
+[modules.overrides]
+# Only place entries here when the source lives outside discovery roots or needs a special path.
+ selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
+
+[modules.workspace]
+members = [
+  "apps/selfhost/vm/hako_module.toml",
+  "apps/hakorune/vm/hako_module.toml",
+  "apps/selfhost-compiler/hako_module.toml",
+  "apps/hakorune/common/hako_module.toml",
+  "apps/selfhost/common/hako_module.toml",
+  "apps/examples/module_hako_demo"
+]
 [libraries]
 [libraries."libnyash_filebox_plugin.so"]
-boxes = ["FileBox"]
+ boxes = ["FileBox"]
 path = "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so"
 
 [libraries."libnyash_filebox_plugin.so".FileBox]

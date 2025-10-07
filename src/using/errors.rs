@@ -6,5 +6,6 @@ pub enum UsingError {
     ReadToml(String),
     #[error("invalid nyash.toml format: {0}")]
     ParseToml(String),
+    #[error("workspace dependency cycle detected: {0}")]
+    Cycle(String),
 }
-

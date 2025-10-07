@@ -124,6 +124,7 @@ filter_noise() {
       | sed -E 's/^❌ Pipeline error: *//' \
   | sed -E 's/^VM execution error: VM fallback error: *//' \
   | grep -v '^VM execution error: ' \
+  | grep -v '^Result: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \

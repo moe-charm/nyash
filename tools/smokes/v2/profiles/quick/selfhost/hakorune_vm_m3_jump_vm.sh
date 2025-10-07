@@ -13,7 +13,7 @@ TMP_DIR="/tmp/hakorune_vm_m3_jump_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF_NY'
-using hakorune.vm.mir_min as MirVmMin
+using hakorune.vm.entry as HakoruneVmEntryBox
 
 static box Main {
   main() {
@@ -21,8 +21,8 @@ static box Main {
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":["
     j = j + "{\"id\":0,\"instructions\":[{\"op\":\"jump\",\"target\":1}]},"
     j = j + "{\"id\":1,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":9}},{\"op\":\"ret\",\"value\":1}]}]}]}"
-    local v = MirVmMin.run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = HakoruneVmEntryBox.run_min(j)
+    print(HakoruneVmEntryBox.int_to_str(v))
     return 0
   }
 }

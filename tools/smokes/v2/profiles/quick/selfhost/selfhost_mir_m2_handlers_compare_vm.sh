@@ -19,8 +19,8 @@ exit 0
 TMP_DIR="/tmp/selfhost_mir_m2_handlers_compare_vm_$$"
 mkdir -p "$TMP_DIR"
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.handlers as OpHandlersBox
-using selfhost.vm.scanner as InstructionScannerBox
+using selfhost.vm.boxes.op_handlers as OpHandlersBox
+using selfhost.vm.boxes.instruction_scanner as InstructionScannerBox
 
 static box Main {
   main() {

@@ -17,7 +17,7 @@ TMP_DIR="/tmp/selfhost_mir_m2_multi_compare_last_ret_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -31,7 +31,7 @@ static box Main {
     j = j + "{\"op\":\"compare\",\"dst\":4,\"operation\":\"==\",\"lhs\":1,\"rhs\":1},"
     j = j + "{\"op\":\"ret\",\"value\":4}]}]}]}"
     local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

@@ -16,7 +16,7 @@ TMP_DIR="/tmp/selfhost_minivm_thin_vs_legacy_ret_undefined_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -24,7 +24,7 @@ static box Main {
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"ret\",\"value\":5}]}]}]}"
     // Legacy (thin=off)
     local v1 = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v1))
+    print(MiniVmEntryBox.int_to_str(v1))
     // Thin (via run_thin wrapper)
     local v2 = MirVmMin.run_thin(j)
     return 0

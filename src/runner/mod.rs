@@ -86,6 +86,152 @@ impl NyashRunner {
             crate::runner::modes::macro_child::run_macro_child(macro_file);
             return;
         }
+        // Dry-run: list discovered modules and exit (spec v2 preview)
+        if std::env::var("NYASH_LIST_MODULES").ok().as_deref() == Some("1") {
+            use std::path::{Path, PathBuf};
+            let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+            let apps = Path::new(&root).join("apps");
+            // 1) Workspace (module.toml) — [workspace]
+            let mut ws_entries: Vec<(String, PathBuf)> = Vec::new();
+            let mut ws_origin: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut ws_versions: std::collections::HashMap<String, String> = std::collections::HashMap::new();
+            let mut ws_manifests: Vec<crate::config::module_workspace::ModuleManifest> = Vec::new();
+            // Find toml: prefer ./hako.toml else NYASH_ROOT/hako.toml
+            let mut cfg_path: Option<PathBuf> = None;
+            let force_env_root = std::env::var("NYASH_USING_TEST_FORCE_ENV_ROOT").ok().as_deref() == Some("1");
+            if !force_env_root {
+                for name in ["hako.toml", "nyash.toml", "hakorune.toml"] {
+                    let p = Path::new(name);
+                    if p.exists() { cfg_path = Some(p.to_path_buf()); break; }
+                }
+            }
+            if cfg_path.is_none() {
+                let rp = Path::new(&root).join("hako.toml");
+                if rp.exists() { cfg_path = Some(rp); }
+            }
+            if let Some(cfg) = cfg_path.clone() {
+                if let Ok(text) = std::fs::read_to_string(&cfg) {
+                    if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                            if let Some(ws_tbl) = mods.get("workspace").and_then(|v| v.as_table()) {
+                                if let Some(arr) = ws_tbl.get("members").and_then(|v| v.as_array()) {
+                                    for m in arr.iter() {
+                                        if let Some(raw) = m.as_str() {
+                                            let mut cand_paths: Vec<PathBuf> = Vec::new();
+                                            if raw.contains('*') {
+                                                cand_paths.extend(crate::config::module_workspace::expand_members_pattern(raw));
+                                            } else {
+                                                let p = Path::new(raw);
+                                                if p.is_dir() { cand_paths.push(p.join("hako_module.toml")); cand_paths.push(p.join("module.toml")); } else { cand_paths.push(p.to_path_buf()); }
+                                            }
+                                            for mp in cand_paths.into_iter() {
+                                                if !mp.exists() { continue; }
+                                                if let Some(man) = crate::config::module_workspace::parse_module_toml(&mp) {
+                                                    let base_ns = man.name.clone();
+                                                    ws_manifests.push(man.clone());
+                                                    if let Some(ver) = man.version.clone() { ws_versions.insert(base_ns.clone(), ver); }
+                                                    let base_dir = mp.parent().unwrap_or(Path::new("."));
+                                                    let origin = mp.file_name().and_then(|s| s.to_str()).unwrap_or("");
+                                                    let origin_label = if origin == "hako_module.toml" { "hako_module" } else { "module" };
+                                                    for (key, rel) in man.exports.into_iter() {
+                                                        let ns = format!("{}.{}", base_ns, key);
+                                                        let sp = base_dir.join(rel);
+                                                        ws_entries.push((ns.clone(), sp));
+                                                        ws_origin.insert(ns, origin_label.to_string());
+                                                    }
+                                                    // light dependency check
+                                                    for (dep, req) in man.dependencies.iter() {
+                                                        if !ws_versions.contains_key(dep) {
+                                                            eprintln!("{}", crate::common::diagnostics::modules_error::missing_dep(&base_ns, dep, req));
+                                                            eprintln!("[deps] missing: {} -> {} {}", base_ns, dep, req);
+                                                        } else if let Some(cur) = ws_versions.get(dep) {
+                                                            if req.starts_with('^') {
+                                                                let want_major = req.trim_start_matches('^').split('.').next().unwrap_or("");
+                                                                let have_major = cur.split('.').next().unwrap_or("");
+                                                                if want_major != have_major {
+                                                                    eprintln!("{}", crate::common::diagnostics::modules_error::missing_dep(&base_ns, dep, req));
+                                                                    eprintln!("[deps] version-mismatch: {} requires {} {} but found {}", base_ns, dep, req, cur);
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                } else {
+                                                    // Try module.hako (preview-only)
+                                                    // If raw points to a directory, check for module.hako inside
+                                                    let pdir = if mp.is_dir() { mp.clone() } else { mp.parent().unwrap_or(Path::new(".")).to_path_buf() };
+                                                    let mh = pdir.join("module.hako");
+                                                    if mh.exists() {
+                                                        if let Some(man) = crate::config::module_workspace::parse_module_hako(&mh) {
+                                                            let base_ns = man.name.clone();
+                                                            ws_manifests.push(man.clone());
+                                                            if let Some(ver) = man.version.clone() { ws_versions.insert(base_ns.clone(), ver); }
+                                                            let base_dir = mh.parent().unwrap_or(Path::new("."));
+                                                            for (key, rel) in man.exports.into_iter() {
+                                                                let ns = format!("{}.{}", base_ns, key);
+                                                                let sp = base_dir.join(rel);
+                                                                ws_entries.push((ns.clone(), sp));
+                                                                ws_origin.insert(ns, "module_hako".to_string());
+                                                            }
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            // Cycle detection (warn)
+            {
+                let g = crate::config::module_workspace::build_dep_graph(&ws_manifests);
+                let cycles = crate::config::module_workspace::detect_cycles_from_graph(&g);
+                for cyc in cycles.iter() {
+                    eprintln!("{}", crate::common::diagnostics::modules_error::cycle(cyc));
+                    eprintln!("[deps] cycle: {}", cyc.join(" -> "));
+                }
+            }
+            // 2) Auto discovery — [auto]
+            let opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
+            let auto_entries = crate::config::module_discovery::discover_entries_under(&apps, &opts);
+            // 3) Overrides — [override]
+            let mut override_entries: Vec<(String, PathBuf)> = Vec::new();
+            if let Some(cfg) = cfg_path {
+                if let Ok(text) = std::fs::read_to_string(&cfg) {
+                    if let Ok(doc) = toml::from_str::<toml::Value>(&text) {
+                        if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
+                            if let Some(ovr) = mods.get("overrides").and_then(|v| v.as_table()) {
+                                let v = crate::common::using_core::flatten_modules_table(ovr);
+                                for (k, v) in v.into_iter() { override_entries.push((k, PathBuf::from(v))); }
+                            }
+                        }
+                    }
+                }
+            }
+            // Print with precedence: workspace > overrides > auto (suppress duplicates)
+            use std::collections::HashSet;
+            let mut seen: HashSet<String> = HashSet::new();
+            for (ns, p) in ws_entries.iter() {
+                let k = ws_origin.get(ns).map(String::as_str).unwrap_or("");
+                if k.is_empty() { println!("[workspace] {} → {}", ns, p.display()); }
+                else { println!("[workspace:{}] {} → {}", k, ns, p.display()); }
+                seen.insert(ns.clone());
+            }
+            for (ns, p) in override_entries.iter() {
+                if !seen.contains(ns) {
+                    println!("[override] {} → {}", ns, p.display());
+                    seen.insert(ns.clone());
+                }
+            }
+            for (ns, p) in auto_entries.iter() {
+                if !seen.contains(ns) {
+                    println!("[auto] {} → {}", ns, p.display());
+                }
+            }
+            return;
+        }
         let groups = self.config.as_groups();
         // Early: build
         if let Some(cfg_path) = groups.build.path.clone() {

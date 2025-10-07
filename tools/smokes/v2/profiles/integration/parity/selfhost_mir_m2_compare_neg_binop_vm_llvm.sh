@@ -19,7 +19,7 @@ ops=(Lt Ge)
 
 for op in "${ops[@]}"; do
   cat > "$TMP_DIR/driver_${op}.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -31,8 +31,8 @@ static box Main {
     j = j + "{\\\"op\\\":\\\"const\\\",\\\"dst\\\":4,\\\"value\\\":{\\\"type\\\":\\\"i64\\\",\\\"value\\\":0}},"
     j = j + "{\\\"op\\\":\\\"compare\\\",\\\"cmp\\\":\\\"${op}\\\",\\\"lhs\\\":3,\\\"rhs\\\":4,\\\"dst\\\":5},"
     j = j + "{\\\"op\\\":\\\"ret\\\",\\\"value\\\":5}] }]}]}"
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

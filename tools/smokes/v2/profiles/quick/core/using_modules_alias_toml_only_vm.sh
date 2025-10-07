@@ -17,7 +17,7 @@ mkdir -p "$TMP_DIR"
 SRC="$TMP_DIR/main.nyash"
 
 cat > "$SRC" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {

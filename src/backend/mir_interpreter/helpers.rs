@@ -368,13 +368,12 @@ impl MirInterpreter {
     pub(super) fn check_unborn_guard(&self, recv_id: ValueId) -> Result<(), VMError> {
         if !crate::config::env::check_contracts() { return Ok(()); }
         let key = self.object_key_for(recv_id);
-        if self.contracts_new.contains(&key) {
-            let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
-            if !seen_birth {
-                return Err(VMError::InvalidInstruction(
-                    "operation on unborn instance (call birth() first)".to_string(),
-                ));
-            }
+        let seen_new = self.contracts_new.contains(&key);
+        let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
+        if crate::common::lifecycle_contracts::is_unborn_violation(seen_new, seen_birth) {
+            return Err(VMError::InvalidInstruction(
+                crate::common::lifecycle_contracts::unborn_error_message().to_string(),
+            ));
         }
         Ok(())
     }

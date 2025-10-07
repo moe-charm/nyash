@@ -10,7 +10,7 @@ TMP_DIR="/tmp/selfhost_mir_m3_throw_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'NYEOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -18,7 +18,7 @@ static box Main {
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[" +
       "{\"id\":0,\"instructions\":[{\"op\":\"throw\",\"value\":{\"type\":\"String\",\"value\":\"boom\"}}]}]}]}"
     local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

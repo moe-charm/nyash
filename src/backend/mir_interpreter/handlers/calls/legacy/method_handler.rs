@@ -37,11 +37,16 @@ impl MirInterpreter {
                             if method != "birth" {
                                 if crate::runtime::type_registry::resolve_typebox_by_name(&tn).is_some() {
                                     if crate::runtime::type_registry::resolve_slot_by_name(&tn, method, arity).is_none() {
-                                        if let Some(known) = crate::runtime::type_registry::known_arities_for(&tn, method) {
+                                        // Prefer runtime registry; if absent, use core_box_methods fallback for a helpful message
+                                        let known_rt = crate::runtime::type_registry::known_arities_for(&tn, method);
+                                        let known_core = crate::common::core_box_methods::known_arities_for(&tn, method)
+                                            .map(|s| s.iter().map(|&u| u as u8).collect::<Vec<u8>>());
+                                        if let Some(known) = known_rt.or(known_core) {
                                             if !known.is_empty() {
-                                                return Err(VMError::InvalidInstruction(format!(
-                                                    "No matching method: {}.{}({} args). Available arities: {:?}", tn, method, arity, known
-                                                )));
+                                                let known_usize: Vec<usize> = known.iter().map(|x| (*x) as usize).collect();
+                                                return Err(VMError::InvalidInstruction(
+                                                    crate::common::diagnostics::msg::no_method_arity(&tn, method, arity, &known_usize)
+                                                ));
                                             }
                                         }
                                     }
@@ -52,20 +57,7 @@ impl MirInterpreter {
 
                     // Fail-Fast: forbid operations on unborn InstanceBox until birth()
                     if method != "birth" {
-                        let is_instance = match self.reg_load(recv_id).ok() {
-                            Some(VMValue::BoxRef(b)) => b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some(),
-                            _ => false,
-                        };
-                        if is_instance {
-                            let key = self.object_key_for(recv_id);
-                            let seen_new = self.contracts_new.contains(&key);
-                            let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
-                            if seen_new && !seen_birth {
-                                return Err(VMError::InvalidInstruction(
-                                    "operation on unborn instance (call birth() first)".to_string(),
-                                ));
-                            }
-                        }
+                        self.check_unborn_guard(recv_id)?;
                     }
                     // LocalSSA for receiver: prefer materialized id within current block
                     let recv_id = self.materialize_recv_in_current_block(recv_id);

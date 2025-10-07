@@ -46,34 +46,19 @@ impl MirBuilder {
 
         // Strict: if the exact canonical function is absent in this module,
         // fall back to the dotted base and let VM handle resolution (and optional legacy).
-        let target_name = if let Some(ref module) = self.current_module {
-            if module.functions.contains_key(&func_name) {
-                func_name.clone()
-            } else {
-                format!("{}.{}", box_name, method)
-            }
-        } else {
-            func_name.clone()
-        };
+        // Use canonical function name produced by resolver (e.g., Box.method/Arity)
+        let target_name = func_name.clone();
 
-        // Prefer ModuleFunction when the function exists in the current module
-        if let Some(ref module) = self.current_module {
-            if module.functions.contains_key(&target_name) {
-                let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
-                self.emit_instruction(MirInstruction::Call {
-                    dst: Some(dst),
-                    func: name_val,
-                    callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
-                    args: arg_values,
-                    effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-                })?;
-                self.annotate_call_result_from_func_name(dst, &target_name);
-                return Ok(dst);
-            }
-        }
-
-        // Emit Global dotted name and rely on VM strict resolver (and optional tail fallback)
-        self.emit_legacy_call(Some(dst), CallTarget::Global(target_name), arg_values)?;
+        // Prefer ModuleFunction emission; VM側の末尾一致フォールバックで alias/宣言名の揺れを吸収
+        let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
+        self.emit_instruction(MirInstruction::Call {
+            dst: Some(dst),
+            func: name_val,
+            callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
+            args: arg_values,
+            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+        })?;
+        self.annotate_call_result_from_func_name(dst, &target_name);
         return Ok(dst)
     }
 

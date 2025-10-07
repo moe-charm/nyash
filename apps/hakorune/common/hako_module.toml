@@ -1,0 +1,14 @@
+[module]
+name = "hakorune.common"
+version = "1.0.0"
+
+[exports]
+json.cursor = "json/json_cursor_alias.hako"
+json.frag = "json/json_frag_alias.hako"
+strings.helpers = "strings/string_helpers_alias.hako"
+
+[private]
+# internal helpers can be added here (non-exported)
+
+[dependencies]
+"hakorune.common.json_core" = "^1.0.0"

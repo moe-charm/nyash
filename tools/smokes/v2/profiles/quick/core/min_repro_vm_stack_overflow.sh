@@ -10,7 +10,7 @@ TMP_DIR="/tmp/min_repro_vm_overflow_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -27,7 +27,7 @@ static box Main {
     j = j + "{\"op\":\"compare\",\"dst\":6,\"cmp\":\"Gt\",\"lhs\":7,\"rhs\":8},"
     j = j + "{\"op\":\"ret\",\"value\":6}]}]}]}"
     local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

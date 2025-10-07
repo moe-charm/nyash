@@ -17,7 +17,7 @@ TMP_DIR="/tmp/selfhost_mir_m2_compare_neg_probe_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 using apps/selfhost/vm/boxes/minivm_probe.hako as MiniVmProbe
 
 static box Main {
@@ -28,9 +28,9 @@ static box Main {
     local a = m.get("a")
     local b = m.get("b")
     local r = m.get("r")
-    print("A="+MirVmMin._int_to_str(a))
-    print("B="+MirVmMin._int_to_str(b))
-    print("R="+MirVmMin._int_to_str(r))
+    print("A="+MiniVmEntryBox.int_to_str(a))
+    print("B="+MiniVmEntryBox.int_to_str(b))
+    print("R="+MiniVmEntryBox.int_to_str(r))
     return 0
   }
 }

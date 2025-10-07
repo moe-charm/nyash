@@ -29,7 +29,7 @@ static box Main {
     local ast = "{\"type\":\"Return\",\"expr\":{\"type\":\"Compare\",\"lhs\":{\"type\":\"Int\",\"value\":2},\"rhs\":{\"type\":\"Int\",\"value\":2},\"op\":\"Eq\"}}"
     // Bypass FlowRunner fast-path; emit MIR(JSON) then execute quietly
     local j = FlowEntryBox.emit_v0_from_ast(ast, 0)
-    local v = MirVmMin.run_min(j)
+    local v = HakoruneVmEntryBox.run_min(j)
     print("" + v)
     return 0
   }

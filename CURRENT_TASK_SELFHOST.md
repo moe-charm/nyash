@@ -234,3 +234,34 @@ Update — 2025‑10‑04 (header emit flag / alias commonization)
 - Using aliases: added common helper to register alias→canonical path in modules registry.
   - Applied in VM/LLVM/VM-fallback modes to persist aliases even in quiet child pipelines.
 - Next: consider making the flag default ON after stability, then retire local emit.
+
+## 2025-10-07 — Self‑Host Prep Recap + Task Outline (Phase 15.7)
+
+Prep done (ready to resume)
+- DepTree: annotate + summary boxes wired; dep_tree_main supports `--summary` (optional).
+- JSON scan: `StringScanBox.read_char/find_quote/read_string_end` added; `seek_obj_end/seek_array_end` use `find_quote` (1箇所ずつ導入)。
+- .hako migration: selfhost/common & tools 完了（mir_v1_adapter を modules に追加、`mir_builder_min.nyash` 削除）。
+- Smokes: quick 集約に `suites/core` を包含。`dep_tree_summary_core.sh` を追加（SKIP既定）。
+- Lint (report‑only): `.nyash` 監視を 2 本用意（boxes/general）。fail トグルは将来ON予定。
+
+Next tasks — Short list (Day 1–3)
+- Front pipeline (Ny→MIR JSON v0) 仕上げ（const/binop/compare/branch/jump/ret/call/newbox/boxcall）。未対応は Fail‑Fast。
+- Mini‑VM parity 強化（ret/phi/branch 代表ケースを `suites/core` に1本ずつ加点 → quick 緑維持）。
+- Builder 外部 ModuleFunction のテスト拡充（String/Array/Map/Console の代表＋Timer.now_ms）。
+- Using resolver E2E を 1 本だけ追加（[modules] alias 経由）。エラーメッセージの統一を継続。
+
+Mid term (Phase 15.7 → 16)
+- Externs Registry→Adapter 分離の後半（LLVM ローダの冪等性/重複宣言対策）。
+- Macro adoption（call!/map({})）を selfhost 内の安全箇所から段階拡大（スモークは SKIP 既定）。
+- Stage‑0/VM ドライバの `.nyash` は最後に一括で `.hako` へ（スモーク置換とセット）。
+
+Guardrails / CI policy（開発中は弱め）
+- CI 最小: `cargo build --release` + quick スモークのサブセット。`dep_tree_summary_core` は SKIP 既定。
+- Lint は report‑only で数サイクル運用→収束後に `LINT_*_FAIL=1` をON。
+- Fail‑Fast: 新規は ENV/flag 既定OFF。観測/ログは最小・既定静音。
+
+Run cheatsheet
+- Build: `cargo build --release`
+- Quick: `tools/smokes/v2/run.sh --profile quick`
+- Summary (on demand): `./target/release/nyash apps/selfhost/tools/dep_tree_main.hako apps/selfhost/ny-parser-nyash/main.nyash --summary`
+

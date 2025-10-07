@@ -3,7 +3,6 @@
 //! Routes Callee variants to appropriate handlers (Global, ModuleFunction, Method, etc.)
 
 use super::super::super::*;
-use super::method_handler::*;
 
 impl MirInterpreter {
     pub(crate) fn execute_callee_call(

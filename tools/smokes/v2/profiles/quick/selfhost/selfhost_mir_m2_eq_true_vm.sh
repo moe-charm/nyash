@@ -27,13 +27,13 @@ export NYASH_USING=1
 TMP_DIR="/tmp/selfhost_mir_m2_eq_true_vm_$$"
 mkdir -p "$TMP_DIR"
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":7}},{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":7}},{\"op\":\"compare\",\"dst\":3,\"cmp\":\"Eq\",\"lhs\":1,\"rhs\":2},{\"op\":\"ret\",\"value\":3}]}]}]}"
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

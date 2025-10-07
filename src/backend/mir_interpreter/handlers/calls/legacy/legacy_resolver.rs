@@ -22,20 +22,7 @@ impl MirInterpreter {
         if let Some((_, method_part)) = raw.split_once('.') {
             let method_only = method_part.split('/').next().unwrap_or(method_part);
             if method_only != "birth" {
-                if let Some(first) = args.get(0) {
-                    if let VMValue::BoxRef(b) = self.reg_load(*first)? {
-                        if b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
-                            let key = self.object_key_for(*first);
-                            let seen_new = self.contracts_new.contains(&key);
-                            let seen_birth = self.contracts_born.contains(&key) || self.contracts_in_birth.contains(&key);
-                            if seen_new && !seen_birth {
-                                return Err(VMError::InvalidInstruction(
-                                    "operation on unborn instance (call birth() first)".to_string(),
-                                ));
-                            }
-                        }
-                    }
-                }
+                if let Some(first) = args.get(0) { self.check_unborn_guard(*first)?; }
             }
         }
 

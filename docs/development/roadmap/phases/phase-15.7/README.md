@@ -1188,3 +1188,64 @@ Unified Call（開発既定ON）
 5) ドキュメントとエコシステム
    - Phase‑15.7 の更新点を継続追記（箱の責務・導線・ゲート説明）。
    - CI は quick 緑維持、重い/環境依存は opt‑in（ゲート付き運用）。
+
+
+## 2025-10-06 Update — 小粒前進（緑維持）
+
+今回の着地（strict化＋箱境界で安定化）
+- VM 再帰ガードの導入（tail fallback）
+  - ModuleFunction の tail フォールバックで即時自己参照を Fail‑Fast（循環検出）。
+  - `NYASH_VM_REENTER_LIMIT` と併用して開発時の暴走を抑止。
+- Wide フォールバックの停止（quick/integration/full）
+  - `NYASH_VM_GLOBAL_TAIL_FALLBACK=0`、`NYASH_VM_MODULE_TAIL_WIDE=0` を各プロファイルの env に設定。
+  - strict 解決を既定に戻し、偶発的な再解決ループを構造的に遮断。
+- EntryBox の導入と浸透（呼び名の安定化）
+  - `selfhost.vm.entry` / `hakorune.vm.entry` を追加。スモークは EntryBox 経由に統一。
+  - 役割: 呼び名固定・解決バグ遮断・観測/契約の入口集約・差替え容易化。
+- String/JSON スキャナの安定化（Ny 実装）
+  - `StringScanBox.read_char` を自己再帰から正常実装へ修正、`find_quote` 追加。
+  - `JsonScanBox.seek_obj_end/seek_array_end` から文字列スキップに `find_quote` を使用。
+- スモーク状況
+  - quick: selfhost m2/m3（eq_true/eq_false/branch/jump）・hakorune m2 eq true → PASS
+  - integration: LLVM ハーネス 30/30 → PASS
+  - full: suites/core（代表） → PASS
+
+仕様/契約まわり（現状）
+- auto‑birth 既定（unbornのみ抑止）。instance.birth() 受理。birthは冪等。
+- プラグイン birth 未定義は移行期 no‑op 合成（1リリース相当）。
+- unborn Fail‑Fast（ユーザーBox）を既定ON（`NYASH_CHECK_CONTRACTS=1`）。
+
+次アクション（Phase 15.7 継続・ブレークダウン）
+1) VM: Throw terminator の最小対応とスモーク有効化（非到達側の PHI 除外は実装済み）
+2) Resolver: [modules] もう1本 E2E 追加＋ログ衛生（dev でのみ詳細）
+3) Macro/call!: .hako 実装の堅牢化（ネスト・エスケープ）と自己ホストへの小規模導入拡張
+4) Mini‑VM: binop/compare カバレッジ拡大と代表スモーク追加（ホットパスのログ抑制）
+5) Lints: report→fail の段階移行（noise管理しつつ）
+
+工数目安（合計 8〜16日）
+- Throw/PHI/LLVM/マクロ/Resolver 小粒を並列に、常に quick 緑を維持する方針。
+
+参照
+- EntryBox: `apps/selfhost/vm/boxes/mini_vm_entry.hako`, `apps/hakorune/vm/boxes/hakorune_vm_entry.hako`
+- 環境: `tools/smokes/v2/configs/env/{quick,integration,full}.env`
+- スモーク: `tools/smokes/v2/profiles/quick/selfhost/*`, `tools/smokes/v2/profiles/integration/*`, `tools/smokes/v2/suites/core/*`
+
+
+共通化（Compiler/VM 共有ポリシーの導入）
+- call_policy（Rust, `src/common/call_policy.rs`）
+  - 即時循環判定（base名一致でFail‑Fast）と tail 候補生成を関数化。
+  - VM の Global/ModuleFunction の末尾一致系をこのポリシーで統一。
+  - 影響ファイル: `src/backend/mir_interpreter/handlers/calls/function.rs`（wide=OFF前提でも安定）。
+- 次段（提案）
+  - LifecycleContracts（birth/unbornの診断メッセージ・Fail‑Fast文言統一）
+  - ExternCallRegistry（Timer.now_ms 等の外部呼び出し名→Externの一元化）
+  - PhiCore（到達不能pred除外の判定を共有化、Bridge/VM/LLVM で共通ルールに）
+
+
+### 2025-10-07 — Commonization (Lifecycle/Extern/Phi)
+
+- Added `src/common/lifecycle_contracts.rs`: unborn diagnostics + birth idempotence helpers.
+- Added `src/common/extern_registry.rs`: facade over MIR extern registry; builder routes check `exists()`.
+- Added `phi_core::common::is_unreachable_pred()` and routed builder to it.
+- VM now uses unified unborn guard/message and birth recording via common helpers.
+- Unit tests: unchanged count but quick run remains green.

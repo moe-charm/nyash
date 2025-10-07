@@ -21,7 +21,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using "apps/selfhost-compiler/builder/ssa/local.hako" as LocalSSA
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -36,7 +36,7 @@ static box Main {
     local jj = LocalSSA.ensure_cond(j)
     local v1 = MirVmMin._run_min(jj)
     // print both results to compare outside
-    print(MirVmMin._int_to_str(v0) + "," + MirVmMin._int_to_str(v1))
+    print(MiniVmEntryBox.int_to_str(v0) + "," + MiniVmEntryBox.int_to_str(v1))
     return 0
   }
 }

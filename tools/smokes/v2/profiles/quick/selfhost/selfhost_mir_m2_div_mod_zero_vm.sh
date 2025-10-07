@@ -16,7 +16,7 @@ TMP_DIR="/tmp/selfhost_mir_m2_div_mod_zero_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -27,7 +27,7 @@ static box Main {
     j1 = j1 + "{\"op\":\"binop\",\"dst\":3,\"op_kind\":\"Div\",\"lhs\":1,\"rhs\":2},"
     j1 = j1 + "{\"op\":\"ret\",\"value\":3}]}]}]}"
     local v1 = MirVmMin._run_min(j1)
-    print(MirVmMin._int_to_str(v1))
+    print(MiniVmEntryBox.int_to_str(v1))
 
     local j2 = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":["
     j2 = j2 + "{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":5}},"
@@ -35,7 +35,7 @@ static box Main {
     j2 = j2 + "{\"op\":\"binop\",\"dst\":3,\"op_kind\":\"Mod\",\"lhs\":1,\"rhs\":2},"
     j2 = j2 + "{\"op\":\"ret\",\"value\":3}]}]}]}"
     local v2 = MirVmMin._run_min(j2)
-    print(MirVmMin._int_to_str(v2))
+    print(MiniVmEntryBox.int_to_str(v2))
     return 0
   }
 }

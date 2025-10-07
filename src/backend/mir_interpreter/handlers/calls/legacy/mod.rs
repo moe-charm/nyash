@@ -17,10 +17,10 @@ mod legacy_resolver;
 mod extern_handler;
 
 // Re-export for parent module
-pub(crate) use callee_dispatcher::*;
-pub(crate) use method_handler::*;
-pub(crate) use legacy_resolver::*;
-pub(crate) use extern_handler::*;
+#[allow(unused_imports)] pub(crate) use callee_dispatcher::*;
+#[allow(unused_imports)] pub(crate) use method_handler::*;
+#[allow(unused_imports)] pub(crate) use legacy_resolver::*;
+#[allow(unused_imports)] pub(crate) use extern_handler::*;
 
 impl MirInterpreter {
     /// Entry point for Call instruction handling

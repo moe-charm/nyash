@@ -186,7 +186,7 @@ impl NyashRunner {
             }
             #[cfg(not(feature = "pyvm-bridge"))]
             {
-                eprintln!("[warn] SMOKES_USE_PYVM=1 but pyvm-bridge feature is disabled; continuing with LLVM path.");
+                eprintln!("{}", crate::common::diagnostics::runner_pyvm_bridge_disabled_warn());
             }
         }
 

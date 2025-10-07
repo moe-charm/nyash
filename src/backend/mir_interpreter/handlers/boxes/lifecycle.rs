@@ -48,7 +48,7 @@ impl MirInterpreter {
     pub(crate) fn lifecycle_contracts_birth(&mut self, recv_val: ValueId, argc_birth: usize) {
         let key = self.object_key_for(recv_val);
         let seen_new = self.contracts_new.contains(&key);
-        let duplicate = !self.contracts_born.insert(key);
+        let duplicate = crate::common::lifecycle_contracts::record_birth(&mut self.contracts_born, key);
         let argc_new = self.contracts_new_argv.get(&key).cloned().unwrap_or(0);
         contracts_policy::emit_birth(seen_new, duplicate, argc_new, argc_birth, key.try_into().unwrap_or(i64::MAX));
     }

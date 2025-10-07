@@ -1,0 +1,14 @@
+[module]
+name = "selfhost.vm"
+version = "1.0.0"
+
+[exports]
+entry = "boxes/mini_vm_entry.hako"
+mir_min = "boxes/mir_vm_min.hako"
+core = "boxes/mini_vm_core.hako"
+
+[private]
+# helpers = "internal/helpers.hako"
+
+[dependencies]
+# "selfhost.common.json" = "^1.0.0"

@@ -715,9 +715,7 @@ impl MirBuilder {
     /// Used for PHI predecessor判定: jump is reachable, return/throw is unreachable
     pub(super) fn is_block_ends_with_return_or_throw(&self, block_id: super::BasicBlockId) -> bool {
         if let Some(ref function) = self.current_function {
-            if let Some(block) = function.get_block(block_id) {
-                return block.ends_with_return() || matches!(block.terminator, Some(super::MirInstruction::Throw { .. }));
-            }
+            return crate::mir::phi_core::common::is_unreachable_pred(function, block_id);
         }
         false
     }

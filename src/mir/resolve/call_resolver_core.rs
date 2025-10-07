@@ -74,3 +74,30 @@ pub fn parse(full: &str) -> Result<(String, String, usize), String> {
 
 /// Return true if name is fully qualified (contains both '.' and '/').
 pub fn is_fully_qualified(name: &str) -> bool { name.contains('.') && name.contains('/') }
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn policy_and_core_tail_resolution_align() {
+        // Available keys
+        let keys = vec![
+            "A.m/2".to_string(),
+            "B.m/2".to_string(),
+            "Alias_Alias.m/2".to_string(),
+            "C.n/1".to_string(),
+        ];
+        // Core resolver
+        let pick = resolve_module_function(keys.clone(), "A.m", 2).unwrap();
+        // Policy candidates (class_or_alias="A") must include A.m/2 first
+        let cands = crate::common::call_policy::tail_candidates(keys.iter(), "A", "m", 2, false);
+        assert_eq!(pick, cands[0]);
+
+        // Alias_Alias heuristic
+        let pick2 = resolve_module_function(keys.clone(), "Alias.m", 2).unwrap();
+        assert_eq!(pick2, "Alias_Alias.m/2");
+        let cands2 = crate::common::call_policy::tail_candidates(keys.iter(), "Alias", "m", 2, false);
+        assert!(cands2.first().map(|s| s.as_str()) == Some("Alias_Alias.m/2"));
+    }
+}

@@ -13,15 +13,15 @@ TMP_DIR="/tmp/hakorune_vm_m2_ret_undefined_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF_NY'
-using hakorune.vm.mir_min as MirVmMin
+using hakorune.vm.entry as HakoruneVmEntryBox
 
 static box Main {
   main() {
     // bb0: ret r9 (never defined) → -1 per RetResolver policy
     local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[" +
       "{\"id\":0,\"instructions\":[{\"op\":\"ret\",\"value\":9}]}]}]}"
-    local v = MirVmMin.run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = HakoruneVmEntryBox.run_min(j)
+    print(HakoruneVmEntryBox.int_to_str(v))
     return 0
   }
 }

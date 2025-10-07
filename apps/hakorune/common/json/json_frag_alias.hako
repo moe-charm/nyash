@@ -1,0 +1,9 @@
+// json_frag_alias.hako — HakoruneJsonFragBox (alias to selfhost JsonFragBox)
+
+using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
+
+static box HakoruneJsonFragBox {
+  _str_to_int(s) { return JsonFragBox._str_to_int(s) }
+  get_int(seg, key) { return JsonFragBox.get_int(seg, key) }
+}
+

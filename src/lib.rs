@@ -69,6 +69,7 @@ pub mod syntax; // syntax sugar config and helpers
 pub mod runner;
 pub mod guards;
 pub mod using; // using resolver scaffolding (Phase 15)
+pub mod common; // shared policies/helpers (builder/VM)
 
 // Expose the macro engine module under a raw identifier; the source lives under `src/macro/`.
 #[path = "macro/mod.rs"]

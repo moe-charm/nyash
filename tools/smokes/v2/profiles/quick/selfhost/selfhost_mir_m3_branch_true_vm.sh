@@ -18,7 +18,7 @@ TMP_DIR="/tmp/selfhost_mir_m3_branch_true_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -27,8 +27,8 @@ static box Main {
     j = j + "{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":1}},{\"op\":\"branch\",\"cond\":1,\"then\":1,\"else\":2}]},"
     j = j + "{\"id\":1,\"instructions\":[{\"op\":\"ret\",\"value\":1}]},"
     j = j + "{\"id\":2,\"instructions\":[{\"op\":\"ret\",\"value\":2}]}]}]}"
-    local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    local v = MiniVmEntryBox.run_min(j)
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }

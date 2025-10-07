@@ -38,6 +38,7 @@ pub fn build_command() -> Command {
         .arg(Arg::new("macro-profile").long("macro-profile").value_name("{dev|ci-fast|strict}").help("Select macro profile"))
         .arg(Arg::new("dump-expanded-ast-json").long("dump-expanded-ast-json").help("Dump AST after macro expansion as JSON v0 and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-ctx-json").long("macro-ctx-json").value_name("JSON").help("Provide MacroCtx as JSON string for macro child routes"))
+        .arg(Arg::new("list-modules").long("list-modules").help("List discovered modules (dry-run) and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("gc").long("gc").value_name("{auto,rc+cycle,minorgen,stw,rc,off}").help("Select GC mode (default: rc+cycle)"))
         .arg(Arg::new("parser").long("parser").value_name("{rust|ny}").help("Choose parser: 'rust' (default) or 'ny' (direct v0 bridge)"))
         .arg(Arg::new("ny-parser-pipe").long("ny-parser-pipe").help("Read Ny JSON IR v0 from stdin and execute via MIR Interpreter").action(clap::ArgAction::SetTrue))
@@ -204,6 +205,10 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
             }
             _ => {}
         }
+    }
+
+    if matches.get_flag("list-modules") {
+        std::env::set_var("NYASH_LIST_MODULES", "1");
     }
 
     // --dev flag (or NYASH_DEV=1) enables safe development defaults

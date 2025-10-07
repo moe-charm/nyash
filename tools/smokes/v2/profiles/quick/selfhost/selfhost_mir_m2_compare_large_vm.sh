@@ -18,7 +18,7 @@ TMP_DIR="/tmp/selfhost_mir_m2_compare_large_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -37,7 +37,7 @@ static box Main {
       local j = "{\"functions\":[{\"name\":\"main\",\"params\":[],\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"type\":\"i64\",\"value\":1000000000}},{\"op\":\"const\",\"dst\":2,\"value\":{\"type\":\"i64\",\"value\":1000000001}},{\"op\":\"compare\",\"cmp\":\"" + op + "\",\"lhs\":1,\"rhs\":2,\"dst\":3},{\"op\":\"ret\",\"value\":3}]}]}]}"
       local v = MirVmMin._run_min(j)
       if i > 0 { out = out + " " }
-      out = out + MirVmMin._int_to_str(v)
+      out = out + MiniVmEntryBox.int_to_str(v)
       i = i + 1
     }
     print(out)

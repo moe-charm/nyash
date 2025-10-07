@@ -22,7 +22,7 @@ for i in "${!ops[@]}"; do
   op=${ops[$i]}
   expected=${expect[$i]}
   cat > "$TMP_DIR/driver.nyash" << EOF
-using selfhost.vm.mir_min as MirVmMin
+using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {
   main() {
@@ -33,7 +33,7 @@ static box Main {
     j = j + "{\\"op\\":\\"binop\\",\\"op_kind\\":\\"${op}\\",\\"lhs\\":1,\\"rhs\\":2,\\"dst\\":3},"
     j = j + "{\\"op\\":\\"ret\\",\\"value\\":3}] }]}]}"
     local v = MirVmMin._run_min(j)
-    print(MirVmMin._int_to_str(v))
+    print(MiniVmEntryBox.int_to_str(v))
     return 0
   }
 }
