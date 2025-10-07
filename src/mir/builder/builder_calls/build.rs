@@ -387,8 +387,8 @@ impl MirBuilder {
 
         // Phase 3.2: Unified call is default ON, but only use it for known builtins/externs.
         let use_unified = call_unified::is_unified_call_enabled()
-            && (super::super::call_resolution::is_builtin_function(&name)
-                || super::super::call_resolution::is_extern_function(&name));
+            && (method_resolution::is_builtin_function(&name)
+                || method_resolution::is_extern_function(&name));
 
         if !use_unified {
             // Legacy path（必要なら警告）
@@ -461,7 +461,7 @@ impl MirBuilder {
                         }
                     }
                     // Propagate original error
-                    return Err(format!("Unresolved function: '{}'. {}", name, super::super::call_resolution::suggest_resolution(&name)));
+                    return Err(format!("Unresolved function: '{}'. {}", name, method_resolution::suggest_resolution(&name)));
                 }
             };
 

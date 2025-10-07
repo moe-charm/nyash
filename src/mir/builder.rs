@@ -15,7 +15,6 @@ use std::sync::OnceLock;
 mod calls; // Call system modules (refactored from builder_calls)
 pub mod birth; // Auto-birth policy/emitter (thin boxes)
 mod builder_calls;
-mod call_resolution; // ChatGPT5 Pro: Type-safe call resolution utilities
 mod method_call_handlers; // Method call handler separation (Phase 3)
 mod decls; // declarations lowering split
 mod exprs; // expression lowering split
