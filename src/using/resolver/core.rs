@@ -1,6 +1,6 @@
 use crate::using::errors::UsingError;
 use crate::using::policy::UsingPolicy;
-use crate::using::spec::{PackageKind, UsingPackage};
+use crate::using::spec::UsingPackage;
 use std::collections::HashMap;
 
 /// Populate using context vectors from configuration file (hako.toml preferred; compat nyash.toml/hakorune.toml).
@@ -50,167 +50,52 @@ pub fn populate_from_toml(
         }
         // [modules.overrides] takes precedence (append; later wins in map usage)
         if let Some(ovr) = mods.get("overrides").and_then(|v| v.as_table()) {
-            let mut v = crate::common::using_core::flatten_modules_table(ovr);
-            pending_modules.append(&mut v);
+            super::modules_processor::process_overrides(ovr, pending_modules);
         }
-        // [modules.aliases] (DEPRECATED): injects alias redirects (recorded in aliases map)
+
+        // [modules.aliases] (DEPRECATED)
         if let Some(alias_tbl) = mods.get("aliases").and_then(|v| v.as_table()) {
-            if !alias_tbl.is_empty() && !crate::config::env::cli_quiet() { eprintln!("[deprecate] [modules.aliases] is deprecated; use [modules.overrides] instead"); }
-            for (k, v) in alias_tbl.iter() {
-                if let Some(target) = v.as_str() {
-                    aliases.insert(k.to_string(), target.to_string());
-                }
-            }
+            super::modules_processor::process_aliases(alias_tbl, aliases);
         }
-        // [modules.options] → discovery/env オプション（簡易実装）
+
+        // [modules.options] → discovery/env オプション
         if let Some(opts_tbl) = mods.get("options").and_then(|v| v.as_table()) {
-            // enable_discovery
-            if let Some(b) = opts_tbl.get("enable_discovery").and_then(|v| v.as_bool()) {
-                std::env::set_var("NYASH_DISCOVER_MODULES", if b { "1" } else { "0" });
-            }
-            // roots (array of strings)
-            if let Some(arr) = opts_tbl.get("roots").and_then(|v| v.as_array()) {
-                let mut roots: Vec<String> = Vec::new();
-                for e in arr.iter() { if let Some(s) = e.as_str() { let s = s.trim(); if !s.is_empty() { roots.push(s.to_string()); } } }
-                if !roots.is_empty() {
-                    std::env::set_var("NYASH_DISCOVER_ROOTS", roots.join(":"));
-                }
-            }
-            // exclude array（ヒューリスティック: キーワードでON）
-            if let Some(arr) = opts_tbl.get("exclude").and_then(|v| v.as_array()) {
-                let mut ex_archive = None;
-                let mut ex_uscore = None;
-                let mut ex_test = None;
-                let mut ex_example = None;
-                for e in arr.iter() {
-                    if let Some(s) = e.as_str() {
-                        let t = s.to_ascii_lowercase();
-                        if t.contains("archive") { ex_archive = Some(true); }
-                        if t.contains("_*/") || t.contains("/_*") { ex_uscore = Some(true); }
-                        if t.contains("test_") { ex_test = Some(true); }
-                        if t.contains("example_") { ex_example = Some(true); }
-                    }
-                }
-                if let Some(b) = ex_archive { std::env::set_var("NYASH_DISCOVER_EXCLUDE_ARCHIVE", if b {"1"} else {"0"}); }
-                if let Some(b) = ex_uscore  { std::env::set_var("NYASH_DISCOVER_EXCLUDE_UNDERSCORE_DIRS", if b {"1"} else {"0"}); }
-                if let Some(b) = ex_test    { std::env::set_var("NYASH_DISCOVER_EXCLUDE_TEST_PREFIX", if b {"1"} else {"0"}); }
-                if let Some(b) = ex_example { std::env::set_var("NYASH_DISCOVER_EXCLUDE_EXAMPLE_PREFIX", if b {"1"} else {"0"}); }
-            }
-            // boolean 個別指定も許可（exclude_*）
-            if let Some(b) = opts_tbl.get("exclude_archive").and_then(|v| v.as_bool()) {
-                std::env::set_var("NYASH_DISCOVER_EXCLUDE_ARCHIVE", if b {"1"} else {"0"});
-            }
-            if let Some(b) = opts_tbl.get("exclude_underscore_dirs").and_then(|v| v.as_bool()) {
-                std::env::set_var("NYASH_DISCOVER_EXCLUDE_UNDERSCORE_DIRS", if b {"1"} else {"0"});
-            }
-            if let Some(b) = opts_tbl.get("exclude_test_prefix").and_then(|v| v.as_bool()) {
-                std::env::set_var("NYASH_DISCOVER_EXCLUDE_TEST_PREFIX", if b {"1"} else {"0"});
-            }
-            if let Some(b) = opts_tbl.get("exclude_example_prefix").and_then(|v| v.as_bool()) {
-                std::env::set_var("NYASH_DISCOVER_EXCLUDE_EXAMPLE_PREFIX", if b {"1"} else {"0"});
-            }
+            super::modules_processor::process_options(opts_tbl);
+        }
+
         // Namespace conflict detection across accumulated pending_modules (warn/strict)
         super::conflict_detector::detect_conflicts_from_modules(pending_modules)?;
-
-        }
     }
 
-    // [using.paths] array
+    // [using] section processing
     if let Some(using_tbl) = doc.get("using").and_then(|v| v.as_table()) {
         // paths
         if let Some(paths_arr) = using_tbl.get("paths").and_then(|v| v.as_array()) {
-            for p in paths_arr {
-                if let Some(s) = p.as_str() {
-                    let s = s.trim();
-                    if !s.is_empty() {
-                        using_paths.push(s.to_string());
-                        policy.search_paths.push(s.to_string());
-                    }
-                }
-            }
+            super::using_processor::process_paths(paths_arr, using_paths, &mut policy);
         }
+
         // aliases
         if let Some(alias_tbl) = using_tbl.get("aliases").and_then(|v| v.as_table()) {
-            if !alias_tbl.is_empty() && !crate::config::env::cli_quiet() { eprintln!("[deprecate] [modules.aliases] is deprecated; use [modules.overrides] instead"); }
-            for (k, v) in alias_tbl.iter() {
-                if let Some(target) = v.as_str() {
-                    aliases.insert(k.to_string(), target.to_string());
-                }
-            }
+            super::using_processor::process_aliases(alias_tbl, aliases);
         }
-        // named packages: any subtable not paths/aliases is a package
-        for (k, v) in using_tbl.iter() {
-            if k == "paths" || k == "aliases" { continue; }
-            if let Some(tbl) = v.as_table() {
-                let kind = tbl.get("kind").and_then(|x| x.as_str()).map(PackageKind::from_str).unwrap_or(PackageKind::Package);
-                // path is required
-                if let Some(path_s) = tbl.get("path").and_then(|x| x.as_str()) {
-                    let path = path_s.to_string();
-                    let main = tbl.get("main").and_then(|x| x.as_str()).map(|s| s.to_string());
-                    let bid = tbl.get("bid").and_then(|x| x.as_str()).map(|s| s.to_string());
-                    packages.insert(k.to_string(), UsingPackage { kind, path, main, bid });
-                }
-            }
-        }
+
+        // named packages
+        super::using_processor::process_packages(using_tbl, packages);
     }
 
     // legacy top-level [aliases] also accepted (migration)
     if let Some(alias_tbl) = doc.get("aliases").and_then(|v| v.as_table()) {
-        for (k, v) in alias_tbl.iter() {
-            if let Some(target) = v.as_str() {
-                aliases.insert(k.to_string(), target.to_string());
-            }
-        }
+        super::using_processor::process_legacy_aliases(alias_tbl, aliases);
     }
 
-    
-    
-    // [private] minimal: record patterns/options into env for pipeline enforcement
+    // [private] section processing
     if let Some(priv_tbl) = doc.get("private").and_then(|v| v.as_table()) {
-        if let Some(arr) = priv_tbl.get("patterns").and_then(|v| v.as_array()) {
-            let mut pats: Vec<String> = Vec::new();
-            for e in arr.iter() { if let Some(s) = e.as_str() { let t = s.trim(); if !t.is_empty() { pats.push(t.to_string()); } } }
-            if !pats.is_empty() {
-                std::env::set_var("NYASH_PRIVATE_PATTERNS", pats.join(";"));
-            }
-        }
-        if let Some(opts) = priv_tbl.get("options").and_then(|v| v.as_table()) {
-            if let Some(mode) = opts.get("on_violation").and_then(|v| v.as_str()) { std::env::set_var("NYASH_PRIVATE_ON_VIOLATION", mode); }
-            if let Some(diag) = opts.get("enable_diagnostics").and_then(|v| v.as_bool()) { std::env::set_var("NYASH_PRIVATE_DIAG", if diag {"1"} else {"0"}); }
-        }
+        super::private_patterns::process_private_section(priv_tbl);
     }
-// Directory-as-Namespace fallback (optional; env-gated)
-    // When NYASH_USING_DIR_NS=1, scan apps/ for *.hako and append (ns->path) pairs as
-    // lowest-precedence candidates. Duplicates are suppressed; conflicts may error in STRICT.
-    if std::env::var("NYASH_USING_DIR_NS").ok().as_deref() == Some("1") {
-        use std::collections::{HashMap as Map, HashSet};
-        let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
-        let apps = std::path::Path::new(&root).join("apps");
-        if apps.exists() {
-            let opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
-            let auto = crate::config::module_discovery::discover_entries_under(&apps, &opts);
-            // build maps of existing namespaces and their paths (for conflict detection)
-            let mut existing: HashSet<String> = HashSet::new();
-            let mut existing_map: Map<String, String> = Map::new();
-            for (ns, p) in pending_modules.iter() { existing.insert(ns.clone()); existing_map.insert(ns.clone(), p.clone()); }
-            // Accumulate multiplicities (ns -> {paths}) for conflict detection
-            let mut multi: Map<String, HashSet<String>> = Map::new();
-            for (ns, p) in pending_modules.iter() { multi.entry(ns.clone()).or_default().insert(p.clone()); }
-            // Merge auto entries; if an ns already exists, record both existing and auto paths for strict conflict check
-            for (ns, p) in auto.into_iter() {
-                if !existing.contains(&ns) {
-                    if let Some(ps) = p.to_str() { pending_modules.push((ns.clone(), ps.to_string())); multi.entry(ns).or_default().insert(ps.to_string()); }
-                } else {
-                    if let Some(ps) = p.to_str() {
-                        multi.entry(ns.clone()).or_default().insert(ps.to_string());
-                        if let Some(prev) = existing_map.get(&ns) { multi.entry(ns.clone()).or_default().insert(prev.clone()); }
-                    }
-                }
-            }
-            // Lightweight conflict check on the accumulated set (warn/strict)
-            super::conflict_detector::detect_conflicts(&multi)?;
-        }
-    }
+
+    // Directory-as-Namespace fallback (optional; env-gated)
+    super::dir_namespace_discovery::discover_and_append_if_enabled(pending_modules)?;
+
     // Final duplicate detection across all accumulated entries (always on; strict -> error)
     super::conflict_detector::detect_conflicts_from_modules(pending_modules)?;
     Ok(policy)
