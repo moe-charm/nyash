@@ -5,19 +5,6 @@ using selfhost.common.mini_vm_compare as MiniVmCompare
 using selfhost.vm.boxes.mini_vm_prints as MiniVmPrints
 
 static box MiniVm {
-  _is_digit(ch) {
-    if ch == "0" { return 1 }
-    if ch == "1" { return 1 }
-    if ch == "2" { return 1 }
-    if ch == "3" { return 1 }
-    if ch == "4" { return 1 }
-    if ch == "5" { return 1 }
-    if ch == "6" { return 1 }
-    if ch == "7" { return 1 }
-    if ch == "8" { return 1 }
-    if ch == "9" { return 1 }
-    return 0
-  }
   _str_to_int(s) { return new MiniVmScan()._str_to_int(s) }
   _int_to_str(n) { return new MiniVmScan()._int_to_str(n) }
   read_digits(json, pos) { return new MiniJsonCur().read_digits_from(json, pos) }

@@ -3,8 +3,6 @@
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box MiniVm {
-  _is_digit(ch) { return ch == "0" || ch == "1" || ch == "2" || ch == "3" || ch == "4" || ch == "5" || ch == "6" || ch == "7" || ch == "8" || ch == "9" }
-
   // Read consecutive digits starting at pos (delegated)
   read_digits(json, pos) { return StringHelpers.read_digits(json, pos) }
 
