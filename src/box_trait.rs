@@ -1,160 +1,21 @@
 /*!
  * Nyash Box Trait System - Everything is Box in Rust
  *
- * This module implements the core "Everything is Box" philosophy using Rust's
- * ownership system and trait system. Every value in Nyash is a Box that
- * implements the NyashBox trait.
+ * This module is now a compatibility layer that re-exports from split modules:
+ * - box_core.rs: Core trait definitions (rarely change)
+ * - box_registry.rs: Built-in box registry (changes when adding new boxes)
+ *
+ * This split reduces compilation cascades - changes to the registry won't
+ * trigger recompilation of files that only need the core traits.
  */
 
-use std::any::Any;
-use std::fmt::Debug;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::Arc;
+// ===== Core Traits & Types (from box_core.rs) =====
+pub use crate::box_core::{
+    BoxBase, BoxCore, NyashBox, SharedNyashBox, next_box_id,
+};
 
-// 🔥 新しい型エイリアス - 将来的にBox<dyn NyashBox>を全て置き換える
-pub type SharedNyashBox = Arc<dyn NyashBox>;
-
-/// 🔥 BoxBase + BoxCore革命 - 統一ID生成システム
-/// CharmFlow教訓を活かした互換性保証の基盤
-pub fn next_box_id() -> u64 {
-    static COUNTER: AtomicU64 = AtomicU64::new(1);
-    COUNTER.fetch_add(1, Ordering::Relaxed)
-}
-
-/// 🔥 Phase 8.8: pack透明化システム - ビルトインBox判定リスト
-/// ユーザーは`pack`を一切意識せず、`from BuiltinBox()`で自動的に内部のpack機能が呼ばれる
-pub const BUILTIN_BOXES: &[&str] = &[
-    "StringBox",
-    "IntegerBox",
-    "BoolBox",
-    "NullBox",
-    "ArrayBox",
-    "MapBox",
-    "MissingBox",
-    "FileBox",
-    "ResultBox",
-    "FutureBox",
-    "ChannelBox",
-    "MathBox",
-    "FloatBox",
-    "TimeBox",
-    "DateTimeBox",
-    "TimerBox",
-    "RandomBox",
-    "SoundBox",
-    "DebugBox",
-    "MethodBox",
-    "ConsoleBox",
-    "BufferBox",
-    "RegexBox",
-    "JSONBox",
-    "StreamBox",
-    "HTTPClientBox",
-    "IntentBox",
-    "P2PBox",
-    "SocketBox",
-    "HTTPServerBox",
-    "HTTPRequestBox",
-    "HTTPResponseBox",
-];
-
-/// 🔥 ビルトインBox判定関数 - pack透明化システムの核心
-/// ユーザー側: `from StringBox()` → 内部的に `StringBox.pack()` 自動呼び出し
-pub fn is_builtin_box(box_name: &str) -> bool {
-    BUILTIN_BOXES.contains(&box_name)
-}
-
-/// 🏗️ BoxBase - 全てのBox型の共通基盤構造体
-/// Phase 2: 統一的な基盤データを提供
-/// 🔥 Phase 1: ビルトインBox継承システム - 最小限拡張
-#[derive(Debug, Clone, PartialEq)]
-pub struct BoxBase {
-    pub id: u64,
-    pub parent_type_id: Option<std::any::TypeId>, // ビルトインBox継承用
-}
-
-impl BoxBase {
-    /// 新しいBoxBase作成 - 安全なID生成
-    pub fn new() -> Self {
-        Self {
-            id: next_box_id(),
-            parent_type_id: None, // ビルトインBox: 継承なし
-        }
-    }
-
-    /// ビルトインBox継承用コンストラクタ
-    pub fn with_parent_type(parent_type_id: std::any::TypeId) -> Self {
-        Self {
-            id: next_box_id(),
-            parent_type_id: Some(parent_type_id),
-        }
-    }
-}
-
-/// 🎯 BoxCore - Box型共通メソッドの統一インターフェース
-/// Phase 2: 重複コードを削減する中核トレイト
-/// 🔥 Phase 2: ビルトインBox継承システム対応
-pub trait BoxCore: Send + Sync {
-    /// ボックスの一意ID取得
-    fn box_id(&self) -> u64;
-
-    /// 継承元の型ID取得（ビルトインBox継承用）
-    fn parent_type_id(&self) -> Option<std::any::TypeId>;
-
-    /// Display実装のための統一フォーマット
-    fn fmt_box(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result;
-
-    /// Any変換（ダウンキャスト用）
-    fn as_any(&self) -> &dyn Any;
-
-    /// Anyミュータブル変換（ダウンキャスト用）  
-    fn as_any_mut(&mut self) -> &mut dyn Any;
-}
-
-/// The fundamental trait that all Nyash values must implement.
-/// This embodies the "Everything is Box" philosophy with Rust's type safety.
-pub trait NyashBox: BoxCore + Debug {
-    /// Convert this box to a string representation (equivalent to Python's toString())
-    fn to_string_box(&self) -> StringBox;
-
-    /// Check equality with another box (equivalent to Python's equals())
-    fn equals(&self, other: &dyn NyashBox) -> BoolBox;
-
-    /// Get the type name of this box for debugging
-    fn type_name(&self) -> &'static str {
-        std::any::type_name::<Self>()
-    }
-
-    /// Clone this box (equivalent to Python's copy())
-    fn clone_box(&self) -> Box<dyn NyashBox>;
-
-    /// Share this box (state-preserving reference sharing)
-    fn share_box(&self) -> Box<dyn NyashBox>;
-
-    /// Identity hint: boxes that wrap external/stateful handles should override to return true.
-    fn is_identity(&self) -> bool {
-        false
-    }
-
-    /// Helper: pick share or clone based on identity semantics.
-    fn clone_or_share(&self) -> Box<dyn NyashBox> {
-        if self.is_identity() {
-            self.share_box()
-        } else {
-            self.clone_box()
-        }
-    }
-
-    /// Arc参照を返す新しいcloneメソッド（参照共有）
-    fn clone_arc(&self) -> SharedNyashBox {
-        Arc::from(self.clone_box())
-    }
-
-    // 🌟 TypeBox革命: Get type information as a Box
-    // Everything is Box極限実現 - 型情報もBoxとして取得！
-    // TODO: 次のステップで完全実装
-    // fn get_type_box(&self) -> std::sync::Arc<crate::type_box::TypeBox>;
-}
+// ===== Built-in Box Registry (from box_registry.rs) =====
+pub use crate::box_registry::{BUILTIN_BOXES, is_builtin_box};
 
 // ===== Basic Box Types (Re-exported from basic module) =====
 

@@ -12,9 +12,11 @@ use wasm_bindgen::prelude::*;
 
 pub mod ast; // using historical ast.rs
 pub mod box_arithmetic;
+pub mod box_core; // Core trait definitions (split from box_trait)
 pub mod box_factory; // unified Box Factory
 pub mod box_operators; // operator implementations for basic Box types
-pub mod box_trait;
+pub mod box_registry; // Built-in box registry (split from box_trait)
+pub mod box_trait; // Re-exports for backward compatibility
 pub mod boxes;
 pub mod channel_box;
 pub mod core; // core models shared by backends
