@@ -20,6 +20,7 @@ pub(super) use crate::mir::{
 
 mod exec;
 mod handlers;
+#[path = "helpers/mod.rs"]
 mod helpers;
 mod method_router;
 mod extern_adapter;
