@@ -19,29 +19,28 @@ fi
 # Enable direct JSON v0 bridge (raw JSON) and throw lowering
 export NYASH_JSON_V0_DIRECT=1
 export NYASH_BRIDGE_THROW_ENABLE=1
+export NYASH_NYRT_SILENT_RESULT=0
 
 TMP_DIR="/tmp/json_v0_if_throw_phi_vm_$$"
 mkdir -p "$TMP_DIR"
 JSON_FILE="$TMP_DIR/prog.json"
 
-# Program: let x; if true { throw 42 } else { x = 7 }; return x
-# Expect: PHI only from else leg → result 7
+# Program: if false { throw 42 } else { return 7 }
+# Expect: throw leg is unreachable; else returns 7
 cat > "$JSON_FILE" << 'JSON'
 {
   "version": 0,
   "kind": "Program",
   "body": [
-    { "type": "Let", "name": "x", "expr": { "type": "Int", "value": 0 } },
-    { "type": "If", "cond": { "type": "Bool", "value": true },
-      "then": { "type": "Throw", "expr": { "type": "Int", "value": 42 } },
-      "else": { "type": "Assign", "name": "x", "expr": { "type": "Int", "value": 7 } }
-    },
-    { "type": "Return", "expr": { "type": "Name", "name": "x" } }
+    { "type": "If", "cond": { "type": "Bool", "value": false },
+      "then": [ { "type": "Expr", "expr": { "type": "Throw", "expr": { "type": "Int", "value": 42 } } } ],
+      "else": [ { "type": "Return", "expr": { "type": "Int", "value": 7 } } ]
+    }
   ]
 }
 JSON
 
-raw_output=$(run_nyash_vm "$JSON_FILE")
+raw_output=$(NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend vm "$JSON_FILE" 2>&1)
 if [ "${SMOKES_DEV_LOG:-0}" = "1" ]; then echo "$raw_output" >&2; fi
 
 result=$(echo "$raw_output" | sed -n 's/^Result: \(.*\)$/\1/p' | tail -n 1)

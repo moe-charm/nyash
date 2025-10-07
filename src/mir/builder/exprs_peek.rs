@@ -85,9 +85,14 @@ impl super::MirBuilder {
 
             // then arm
             self.start_new_block(then_block)?;
+            let cur_then = self.current_block.expect("then block must be current");
             let then_val = self.build_expression_impl(arm_expr)?;
-            phi_inputs.push((then_block, then_val));
-            crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
+            // If arm terminates (Return/Throw), do not contribute to PHI and do not emit jump.
+            let terminated = self.is_block_terminated(cur_then);
+            if !terminated {
+                phi_inputs.push((then_block, then_val));
+                crate::mir::builder::emission::branch::emit_jump(self, merge_block)?;
+            }
 
             // Move to next dispatch or else block
             cur_dispatch = else_target;

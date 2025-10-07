@@ -6,32 +6,19 @@ using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
+using "apps/selfhost-compiler/common/header_emit_box.hako" as HeaderEmitBox
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 
 static box EmitCallBox {
   emit_call_int_args(name, args) {
     name = match name { null => "", _ => name }
     args = match args { null => [], _ => args }
-    // 1..N を引数用の dst として予約（常に文字列解析で正規化）
+    // 1..N を引数用の dst として予約（ArgsParserBoxで正規化）
     local insts = []
-    local s = "" + args
-    local pos = 0
+    local vals = Stage1ArgsParserBox.parse_ints(args)
     local n = 0
-    loop(true) {
-      local ds = RegexFlow.digits_from(s, pos)
-      if ds == "" {
-        pos = pos + 1
-      } else {
-        local pds = RegexFlow.find_from(s, ds, pos)
-        if pds < 0 { pos = pos + 1 } else {
-          local v = RegexFlow.to_int(ds)
-          insts.push(MirEmitBox.make_const((n + 1), v))
-          n = n + 1
-          pos = pds + ds.length()
-        }
-      }
-      if pos >= s.length() { break }
-    }
+    { local i = 0  local m = 0  if vals != null && vals.size != null { m = vals.size() }  loop(i < m) { insts.push(MirEmitBox.make_const((i + 1), vals.get(i)))  i = i + 1 }  n = m }
     // args 配列は 1..N の連番を参照
     local arg_ids = []
     i = 0
@@ -49,19 +36,11 @@ static box EmitCallBox {
   emit_call_int_args_v1(name, args) {
     name = match name { null => "", _ => name }
     args = match args { null => [], _ => args }
-    // materialize r1..rN
+    // materialize r1..rN（ArgsParserBoxで正規化）
     local insts = []
-    local s = "" + args
-    local pos = 0
+    local vals = Stage1ArgsParserBox.parse_ints(args)
     local n = 0
-    loop (true) {
-      local ds = RegexFlow.digits_from(s, pos)
-      if ds == "" { pos = pos + 1 } else {
-        local pds = RegexFlow.find_from(s, ds, pos)
-        if pds < 0 { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + n, RegexFlow.to_int(ds)))  n = n + 1  pos = pds + ds.length() }
-      }
-      if pos >= s.length() { break }
-    }
+    { local i = 0  local m = 0  if vals != null && vals.size != null { m = vals.size() }  loop(i < m) { insts.push(MirEmitBox.make_const(1 + i, vals.get(i)))  i = i + 1 }  n = m }
     local dst = n + 1
     // args array 1..n
     local arg_ids = new ArrayBox()

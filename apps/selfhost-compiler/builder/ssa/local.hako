@@ -118,4 +118,5 @@ static box LocalSSA {
   ensure_args(stage1_json) { return stage1_json }
   ensure_cmp(stage1_json) { return stage1_json }
   ensure_cond(stage1_json) { return stage1_json }
+  ensure_calls(stage1_json) { return stage1_json }
 }

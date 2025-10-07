@@ -33,16 +33,10 @@ path = "apps/lib/json_native/core/node.hako"
 
 [modules]
 # Map logical namespaces to Nyash source paths (consumed by runner)
-selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
-selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser/parser_box.hako"
-selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
-selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
 selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.hako"
 selfhost.common.json.mir_v1_adapter = "apps/selfhost/common/json/mir_v1_adapter.hako"
-selfhost.compiler.pipeline_v2.emit_compare = "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako"
 selfhost.core.timer = "core.timer.TimerBox"
 timer = "core.timer.TimerBox"
-selfhost.compiler.pipeline_v2.flow_entry = "apps/selfhost-compiler/pipeline_v2/flow_entry.hako"
 hakorune.common.json.cursor = "apps/hakorune/common/json/json_cursor_alias.hako"
 hakorune.common.json.frag = "apps/hakorune/common/json/json_frag_alias.hako"
 hakorune.common.strings.helpers = "apps/hakorune/common/strings/string_helpers_alias.hako"
@@ -98,7 +92,11 @@ timer = "core.timer.TimerBox"
 
 [modules.overrides]
 # Only place entries here when the source lives outside discovery roots or needs a special path.
+
  selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
+ # Dev VM utility boxes (for tests that reference them directly)
+ selfhost.vm.boxes.guard_box = "apps/selfhost/vm/boxes/guard_box.hako"
+ selfhost.vm.boxes.scanner_box = "apps/selfhost/vm/boxes/scanner_box.hako"
 
 [modules.workspace]
 members = [
@@ -107,6 +105,7 @@ members = [
   "apps/selfhost-compiler/hako_module.toml",
   "apps/hakorune/common/hako_module.toml",
   "apps/selfhost/common/hako_module.toml",
+  "apps/lib/json_native/hako_module.toml",
   "apps/examples/module_hako_demo"
 ]
 [libraries]
@@ -483,3 +482,26 @@ get    = { method_id = 2 }
 push   = { method_id = 3 }
 set    = { method_id = 4 }
 fini   = { method_id = 4294967295 }
+
+[private]
+# Phase 15.7: 最小の非公開パターン（警告モード）。モジュール経由の using を推奨し、直パス using を抑止。
+patterns = [
+  # Compiler internals（重要どころのみ）
+  "apps/selfhost-compiler/pipeline_v2/stage1_*.hako",
+  "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako",
+  "apps/selfhost-compiler/pipeline_v2/json_minify_box.hako",
+  "apps/selfhost-compiler/boxes/builder/**",
+  "apps/selfhost-compiler/boxes/ssa/**",
+
+  # VM internals（Mini‑VM 内部）
+  "apps/selfhost/vm/boxes/mini_vm_*.hako",
+  "apps/selfhost/vm/boxes/*_internal*.hako",
+
+  # テスト・一時
+  "apps/**/test_*.hako",
+  "apps/**/_*.hako",
+]
+
+[private.options]
+on_violation = "warn"          # 最初は警告のみ
+enable_diagnostics = true       # 安定したJSON診断を1行で出す

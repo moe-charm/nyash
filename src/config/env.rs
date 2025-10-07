@@ -847,3 +847,15 @@ pub fn vm_reenter_trace() -> bool {
 pub fn vm_reenter_limit() -> Option<usize> {
     std::env::var("NYASH_VM_REENTER_LIMIT").ok().and_then(|s| s.parse().ok())
 }
+
+/// Namespace policy: return true when module-first policy is requested.
+/// Values: path-first (default), module-first
+pub fn ns_policy_module_first() -> bool {
+    match std::env::var("NYASH_NS_POLICY").ok() {
+        Some(v) => {
+            let lv = v.to_ascii_lowercase();
+            lv == "module-first" || lv == "module_first" || lv == "module"
+        }
+        None => false,
+    }
+}

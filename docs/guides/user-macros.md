@@ -118,6 +118,7 @@ Notes
 - Built-in child route (stdin JSON -> stdout JSON) remains available when `NYASH_MACRO_BOX_CHILD_RUNNER=0`.
 - Internal child can receive ctx via env: `NYASH_MACRO_CTX_JSON='{"caps":{"io":false,"net":false,"env":true}}'`
 - CLI からも指定可能: `--macro-ctx-json '{"caps":{"io":false,"net":false,"env":true}}'`
+- Child isolation (tests/dev): runner isolates macro‑child from project TOML by setting `NYASH_SKIP_TOML_ENV=1` and `NYASH_USING=0` to avoid ambient modules/env affecting expansion。
 - Strict mode: `NYASH_MACRO_STRICT=1` (default) fails build on macro child error/timeout; set `0` to fallback to identity.
 - Timeout: `NYASH_NY_COMPILER_TIMEOUT_MS` (default `2000`).
 

@@ -17,6 +17,6 @@ static box CfgNavigatorBox {
   // Escape-aware array end finder via JsonCursorBox
   _seek_array_end(text, pos){ return JsonCursorBox.seek_array_end(text, pos) }
 
-  block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=StringOps.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+16 }
+  block_insts_start(mjson,bid){ local key="\"id\":"+me._int_to_str(bid) local p=mjson.indexOf(key) if p<0 {return -1} local q=StringOps.index_of_from(mjson,"\"instructions\":[",p) if q<0 {return -1} return q+15 }
   block_insts_end(mjson,insts_start){ return JsonCursorBox.seek_array_end(mjson,insts_start) }
 }

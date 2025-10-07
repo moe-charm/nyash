@@ -11,21 +11,67 @@ use std::path::{Path, PathBuf};
 use std::fs;
 
 /// Convert a path under `apps/` into a dotted namespace.
-/// apps/selfhost/vm/boxes/mir_vm_min.hako → selfhost.vm.boxes.mir_vm_min
+/// Normalization rules (Dir-as-NS v2.2):
+/// - Directory: replace '-' with '.' (e.g., `selfhost-compiler` → `selfhost.compiler`)
+/// - File: strip `.hako`, then strip optional `_box` suffix (e.g., `json_minify_box.hako` → `json_minify`)
+/// Example: apps/selfhost-compiler/pipeline_v2/json_minify_box.hako → selfhost.compiler.pipeline_v2.json_minify
 pub fn path_to_namespace<P: AsRef<Path>>(apps_root: P, file: P) -> Option<String> {
     let root = apps_root.as_ref();
     let f = file.as_ref();
     let rel = f.strip_prefix(root).ok()?;
+    // Module-first policy: prefer module manifests (hako_module.toml/module.toml)
+    if crate::config::env::ns_policy_module_first() {
+        if let Some(ns) = try_module_manifest_namespace(root, f) { return Some(ns); }
+        // Fallback: simplified Dir-as-NS — join path with dots, only strip .hako and optional _box suffix
+        let mut parts: Vec<String> = Vec::new();
+        for c in rel.components() { parts.push(c.as_os_str().to_str()?.to_string()); }
+        if parts.is_empty() { return None; }
+        if let Some(last) = parts.last_mut() {
+            if last.ends_with(".hako") { *last = last.trim_end_matches(".hako").to_string(); }
+            if last.ends_with("_box") { *last = last.trim_end_matches("_box").to_string(); }
+        }
+        return Some(parts.join("."));
+    }
+    // path-first (default): legacy Dir-as-NS rules
     let mut parts: Vec<String> = Vec::new();
     for c in rel.components() {
         let s = c.as_os_str().to_str()?;
         parts.push(s.to_string());
     }
     if parts.is_empty() { return None; }
+    for i in 0..(parts.len().saturating_sub(1)) {
+        if parts[i].contains('-') { parts[i] = parts[i].replace('-', "."); }
+    }
     if let Some(last) = parts.last_mut() {
         if last.ends_with(".hako") { *last = last.trim_end_matches(".hako").to_string(); }
+        if last.ends_with("_box") { *last = last.trim_end_matches("_box").to_string(); }
     }
     Some(parts.join("."))
+}
+
+/// Try resolve namespace using nearest module manifest around the file.
+fn try_module_manifest_namespace(root: &Path, file: &Path) -> Option<String> {
+    use std::path::PathBuf;
+    let mut dir = file.parent()?;
+    // Walk up to apps_root
+    loop {
+        let cand_hako = dir.join("hako_module.toml");
+        let cand = if cand_hako.exists() { cand_hako } else { dir.join("module.toml") };
+        if cand.exists() {
+            if let Some(man) = crate::config::module_workspace::parse_module_toml(&cand) {
+                // Match export path
+                let base = cand.parent().unwrap_or(dir);
+                let canon_file = std::fs::canonicalize(file).ok()?;
+                for (key, rel) in man.exports.iter() {
+                    let abs = std::fs::canonicalize(base.join(rel)).ok();
+                    if let Some(a) = abs { if a == canon_file { return Some(format!("{}.{}", man.name, key)); } }
+                }
+            }
+        }
+        if dir == root { break; }
+        if let Some(up) = dir.parent() { dir = up; } else { break; }
+    }
+    None
 }
 
 /// Very small recursive discovery without external crates.

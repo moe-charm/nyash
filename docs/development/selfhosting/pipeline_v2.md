@@ -49,3 +49,15 @@ Fail-Fast
 Future Work (post 15.7)
 - Wire MirBuilderBox to output minimal MIR(JSON v0).
 - Introduce guarded externs for backend execution (opt-in, default OFF).
+
+## Recent Updates (2025-10-08)
+
+- Tolerant scanning via Stage1JsonScannerBox
+  - Early paths for Call and Method now use `Stage1JsonScannerBox.extract_name_args()` as a lightweight fallback when strict extractors cannot parse a minimal variant of JSON.
+  - Names are normalized through `NamespaceBox` and verified by `SignatureVerifierBox` before emitting.
+
+- Throw/PHI handling in Builder
+  - `Match` then‑arm that ends with `Throw` no longer contributes a PHI input nor emits a merge jump. This prevents unreachable inputs from forming invalid PHIs.
+
+- Quiet acceptance remains unchanged
+  - In `NYASH_JSON_ONLY=1`, pipeline prints a single JSON line; diagnostics go to stderr. The above changes do not alter this contract.

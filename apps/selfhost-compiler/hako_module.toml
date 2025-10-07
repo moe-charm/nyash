@@ -7,9 +7,17 @@ main = "compiler.hako"
 pipeline = "pipeline_v2/pipeline.hako"
 flow_entry = "pipeline_v2/flow_entry.hako"
 using_resolver = "pipeline_v2/using_resolver_box.hako"
+name_resolve = "pipeline_v2/name_resolve_box.hako"
+emit = "pipeline_v2/pipeline_emit_box.hako"
+debug = "boxes/debug_box.hako"
+parser = "boxes/parser/parser_box.hako"
+emitter = "boxes/emitter_box.hako"
+mir = "boxes/mir_emitter_box.hako"
+pipeline_v2.emit_compare = "pipeline_v2/emit_compare_box.hako"
+pipeline_v2.json_minify = "pipeline_v2/json_minify_box.hako"
 
 [private]
 # internals kept private (builder/ssa/mir/common)
 
 [dependencies]
-# "selfhost.vm" = "^1.0.0"
+"selfhost.vm" = "^1.0.0"

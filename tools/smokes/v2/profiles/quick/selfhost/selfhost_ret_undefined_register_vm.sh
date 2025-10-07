@@ -13,11 +13,7 @@ TEST_main() {
 using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
 static box Main { main(){ local out = MirVmMin._run_min(j) return 0 } }
 '
-  local jstr=$(python3 - << 'PY'
-import json,sys
-print(json.dumps(sys.stdin.read()))
-PY
-<<< "$j")
+  local jstr=$(printf '%s' "$j" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
   prog=${prog/j/$jstr}
   local out
   out=$(run_nyash_vm -c "$prog" 2>&1 | filter_noise)

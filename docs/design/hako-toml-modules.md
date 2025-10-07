@@ -46,6 +46,7 @@ Resolution order
 
 Workspace (module manifests)
 - Preferred file name: `hako_module.toml` (legacy `module.toml` accepted for compatibility)
+- Resolver wiring: also accepts `module.hako` as a fallback manifest when TOML is absent (same priority as shown by `--list-modules`).
 - Declare per‑module boundary and public exports only.
   ```toml
   # apps/selfhost/vm/hako_module.toml
@@ -108,3 +109,11 @@ hako --list-modules
 # [override] selfhost.tools.dep_tree_core → apps/selfhost/tools/dep_tree_core.hako
 # [auto] selfhost.vm.boxes.mir_vm_min → apps/selfhost/vm/boxes/mir_vm_min.hako
 ```
+
+
+Strict checks (gated)
+- Enable `NYASH_USING_CHECKS_STRICT=1` to fail fast on:
+  - `cycle` (workspace dependency cycles)
+  - `missing_dep` (workspace dependency missing or incompatible `^major`)
+  - `conflict` (same namespace exported by multiple paths)
+- `unresolved`/`ambiguous` also honor strict behavior at runtime via `NYASH_USING_STRICT=1` and emit unified diagnostics JSON.

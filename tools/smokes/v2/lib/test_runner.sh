@@ -120,6 +120,7 @@ filter_noise() {
       | grep -v "^\\[vm-trace\\]" \
   | grep -v '^\{"ev":' \
       | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
+      | grep -v '^\[deps\] missing:' \
       | sed -E 's/^❌ VM fallback error: *//' \
       | sed -E 's/^❌ Pipeline error: *//' \
   | sed -E 's/^VM execution error: VM fallback error: *//' \
@@ -132,6 +133,7 @@ filter_noise() {
   | grep -v '^\{"resolve":' \
   | grep -v '^\[deprecate\] CLI name' \
   | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
+  | grep -v '^\[deprecate\] \[modules.aliases\]' \
   | grep -v "plugins/nyash-array-plugin" \
   | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
@@ -219,6 +221,9 @@ run_test() {
     local start_time=$(date +%s.%N)
 
     log_info "Running test: $test_name"
+    if [ "${SMOKES_ENV_STAMP:-0}" = "1" ]; then
+        print_env_stamp
+    fi
 
     if $test_func; then
         local end_time=$(date +%s.%N)
@@ -485,4 +490,31 @@ require_llvm_or_skip() {
     fi
   fi
   return 0
+}
+
+# --- 開発補助: 実行環境スタンプ（同一環境の確認用・任意） ---
+_smokes_env_fingerprint() {
+    (
+      env | grep -E '^(NYASH|SMOKES)_' | sort
+      echo "NYASH_BIN=$NYASH_BIN"
+      echo "GIT_HASH=$(git rev-parse --short HEAD 2>/dev/null || echo nogit)"
+      echo -n "BIN_SHA="; if [ -f "$NYASH_BIN" ]; then sha256sum "$NYASH_BIN" 2>/dev/null | awk '{print $1}'; else echo "none"; fi
+      echo -n "PYTHON_VER="; python3 --version 2>/dev/null | awk '{print $2}' || echo "none"
+      echo -n "LLVMLITE_VER="; python3 -c "import importlib, sys;
+try:\n import importlib.metadata as im; print(im.version('llvmlite'))\nexcept Exception:\n print('none')" 2>/dev/null || echo "none"
+    ) | sha256sum 2>/dev/null | awk '{print $1}'
+}
+
+print_env_stamp() {
+    local git_hash=$(git rev-parse --short HEAD 2>/dev/null || echo nogit)
+    local bin_sha="none"; if [ -f "$NYASH_BIN" ]; then bin_sha=$(sha256sum "$NYASH_BIN" 2>/dev/null | awk '{print $1}'); fi
+    local py_ver=$(python3 --version 2>/dev/null | awk '{print $2}')
+    local llvmlite_ver=$(python3 -c "import importlib, sys;
+try:\n import importlib.metadata as im; print(im.version('llvmlite'))\nexcept Exception:\n print('none')" 2>/dev/null || true)
+    local fpr=$(_smokes_env_fingerprint)
+    echo "[env-stamp] git=$git_hash bin=$NYASH_BIN sha=$bin_sha" >&2
+    echo "[env-stamp] python=$py_ver llvmlite=$llvmlite_ver" >&2
+    echo "[env-stamp] NYASH_LLVM_USE_HARNESS=${NYASH_LLVM_USE_HARNESS:-} NYASH_LLVM_DUMP_IR=${NYASH_LLVM_DUMP_IR:-}" >&2
+    echo "[env-stamp] NYASH_USING=${NYASH_USING:-} NYASH_SKIP_TOML_ENV=${NYASH_SKIP_TOML_ENV:-} SMOKES_CLEAN_ENV=${SMOKES_CLEAN_ENV:-}" >&2
+    echo "[env-fpr] $fpr" >&2
 }

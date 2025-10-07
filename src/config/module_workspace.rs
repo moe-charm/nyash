@@ -16,8 +16,19 @@ pub struct ModuleManifest {
 }
 
 pub fn parse_module_toml(path: &Path) -> Option<ModuleManifest> {
+    if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && std::env::var("NYASH_CLI_QUIET").ok().as_deref() != Some("1") {
+        eprintln!("[using] parse module: {:?}", path);
+    }
     let text = std::fs::read_to_string(path).ok()?;
-    let root: toml::Value = toml::from_str(&text).ok()?;
+    let root: toml::Value = match toml::from_str(&text) {
+        Ok(v) => v,
+        Err(e) => {
+            if std::env::var("NYASH_RESOLVE_TRACE").ok().as_deref() == Some("1") && std::env::var("NYASH_CLI_QUIET").ok().as_deref() != Some("1") {
+                eprintln!("[using] parse TOML error at {:?}: {}", path, e);
+            }
+            return None;
+        }
+    };
     let tbl = root.as_table()?;
     let module_tbl = tbl.get("module").and_then(|v| v.as_table())?;
     let name = module_tbl.get("name").and_then(|v| v.as_str())?.to_string();
@@ -40,9 +51,17 @@ pub fn parse_module_toml(path: &Path) -> Option<ModuleManifest> {
         }
     }
     if let Some(dep_tbl) = tbl.get("dependencies").and_then(|v| v.as_table()) {
-        for (k, v) in dep_tbl.iter() {
-            if let Some(s) = v.as_str() { dependencies.insert(k.to_string(), s.to_string()); }
+        fn flatten(prefix: &str, t: &toml::value::Table, out: &mut HashMap<String, String>) {
+            for (k, v) in t.iter() {
+                let key = if prefix.is_empty() { k.clone() } else { format!("{}.{}", prefix, k) };
+                match v {
+                    toml::Value::String(s) => { out.insert(key, s.clone()); },
+                    toml::Value::Table(child) => { flatten(&key, child, out); },
+                    _ => {}
+                }
+            }
         }
+        flatten("", dep_tbl, &mut dependencies);
     }
     Some(ModuleManifest { name, version, exports, private, dependencies })
 }

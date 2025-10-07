@@ -3,6 +3,7 @@
 
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost-compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/newbox_emit_box.hako" as NewBoxEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
@@ -13,19 +14,11 @@ static box EmitNewBoxBox {
   emit_newbox_int_args(class_name, args) {
     class_name = match class_name { null => "", _ => class_name }
     args = match args { null => [], _ => args }
-    // parse digits → const r1..rN
-    local s = "" + args
-    local pos = 0
-    local n = 0
+    // parse digits → const r1..rN（ArgsParserBoxで正規化）
     local insts = []
-    loop (true) {
-      local ds = RegexFlow.digits_from(s, pos)
-      if ds == "" { pos = pos + 1 } else {
-        local pds = RegexFlow.find_from(s, ds, pos)
-        if pds < 0 { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + n, RegexFlow.to_int(ds)))  n = n + 1  pos = pds + ds.length() }
-      }
-      if pos >= s.length() { break }
-    }
+    local vals = Stage1ArgsParserBox.parse_ints(args)
+    local n = 0
+    { local i = 0  local m = 0  if vals != null && vals.size != null { m = vals.size() }  loop(i < m) { insts.push(MirEmitBox.make_const(1 + i, vals.get(i)))  i = i + 1 }  n = m }
     local dst = n + 1
     // args array [1..n]
     local arg_ids = new ArrayBox()
@@ -42,16 +35,10 @@ static box EmitNewBoxBox {
   emit_newbox_int_args_v1(class_name, args) {
     class_name = match class_name { null => "", _ => class_name }
     args = match args { null => [], _ => args }
-    local s = "" + args
-    local pos = 0
     local n = 0
     local insts = []
-    // materialize r1..rN
-    loop (true) {
-      local ds = RegexFlow.digits_from(s, pos)
-      if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + n, RegexFlow.to_int(ds)))  n = n + 1  pos = pos + ds.length() }
-      if pos >= s.length() { break }
-    }
+    // materialize r1..rN via ArgsParserBox
+    { local vals = Stage1ArgsParserBox.parse_ints(args)  local m = 0  if vals != null && vals.size != null { m = vals.size() }  local i = 0  loop(i < m) { insts.push(MirEmitBox.make_const(1 + i, vals.get(i)))  i = i + 1 }  n = m }
     local dst = n + 1
     // args array 1..n
     local arg_ids = new ArrayBox()

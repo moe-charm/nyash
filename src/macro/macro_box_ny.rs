@@ -385,6 +385,9 @@ impl super::macro_box::MacroBox for NyChildMacroBox {
         cmd.env("NYASH_VM_USE_PY", "1");
         cmd.env("NYASH_DISABLE_PLUGINS", "1");
         cmd.env("NYASH_SYNTAX_SUGAR_LEVEL", "basic");
+        // Isolate from project-level module/env resolution for deterministic macro expansion
+        cmd.env("NYASH_SKIP_TOML_ENV", "1");
+        cmd.env("NYASH_USING", "0");
         // Mark sandbox mode explicitly for PyVM capability hooks
         cmd.env("NYASH_MACRO_SANDBOX", "1");
         // Disable macro system inside child to avoid recursive registration/expansion

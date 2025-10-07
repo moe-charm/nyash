@@ -59,6 +59,21 @@ pub fn collect_using_and_strip(
             }
         }
     }
+    // Helper: prelude path noise filter (tests/benches/examples/dev/archive)
+    fn should_skip_prelude_path(path: &str) -> bool {
+        // Normalize to forward slashes for substring checks
+        let p = if std::path::MAIN_SEPARATOR != '/' {
+            path.replace(std::path::MAIN_SEPARATOR, "/")
+        } else {
+            path.to_string()
+        };
+        let needles = [
+            "/tests/", "/test/", "/benches/", "/bench/", "/examples/", "/example/",
+            "/dev/", "/_/", "/archive/",
+        ];
+        needles.iter().any(|n| p.contains(n))
+    }
+
     for (lineno0, line) in code.lines().enumerate() {
         let line_no = lineno0 + 1;
         let t = line.trim_start();
@@ -147,35 +162,50 @@ pub fn collect_using_and_strip(
                     .map(|pb| pb.to_string_lossy().to_string())
                     .unwrap_or_else(|| path_str.clone());
                 if let Some((prev_alias, prev_line)) = seen_paths.get(&canon) {
-                    return Err(format!(
-                        "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
-                        canon,
-                        filename,
-                        line_no,
-                        prev_alias,
-                        prev_line
-                    ));
+                    if strict {
+                        return Err(format!(
+                            "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
+                            canon,
+                            filename,
+                            line_no,
+                            prev_alias,
+                            prev_line
+                        ));
+                    } else {
+                        eprintln!("{}", crate::common::diagnostics::using_error::duplicate_import(&canon, filename, line_no, prev_alias, *prev_line));
+                        // Skip duplicate silently in non-strict mode
+                        continue;
+                    }
                 } else {
                     seen_paths.insert(canon.clone(), (alias_name.clone().unwrap_or_else(|| "<none>".into()), line_no));
                 }
                 if let Some(alias) = alias_name.clone() {
                     if let Some((prev_path, prev_line)) = seen_aliases.get(&alias) {
                         if prev_path != &canon {
-                            return Err(format!(
-                                "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
-                                alias,
-                                filename,
-                                line_no,
-                                prev_path,
-                                prev_line
-                            ));
+                            if strict {
+                                return Err(format!(
+                                    "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
+                                    alias,
+                                    filename,
+                                    line_no,
+                                    prev_path,
+                                    prev_line
+                                ));
+                            } else {
+                                eprintln!("{}", crate::common::diagnostics::using_error::alias_rebound(&alias, filename, line_no, prev_path, *prev_line));
+                                continue;
+                            }
                         }
                     } else {
                         seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
                         alias_pairs.push((alias, canon));
                     }
                 }
-                prelude_paths.push(path_str);
+                if should_skip_prelude_path(&path_str) {
+                    if verbose { crate::runner::trace::log(format!("[using/prelude] skip path '{}' (noise filter)", path_str)); }
+                } else {
+                    prelude_paths.push(path_str);
+                }
                 continue;
             }
             // Resolve namespaces/packages
@@ -221,24 +251,34 @@ pub fn collect_using_and_strip(
                                 .map(|pb| pb.to_string_lossy().to_string())
                                 .unwrap_or_else(|| out.clone());
                             if let Some((prev_alias, prev_line)) = seen_paths.get(&canon) {
-                                return Err(format!(
-                                    "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
-                                    canon,
-                                    filename,
-                                    line_no,
-                                    prev_alias,
-                                    prev_line
-                                ));
+                                if strict {
+                                    return Err(format!(
+                                        "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
+                                        canon,
+                                        filename,
+                                        line_no,
+                                        prev_alias,
+                                        prev_line
+                                    ));
+                                } else {
+                                    eprintln!("{}", crate::common::diagnostics::using_error::duplicate_import(&canon, filename, line_no, prev_alias, *prev_line));
+                                    continue;
+                                }
                             } else {
                                 seen_paths.insert(canon.clone(), (alias_name.clone().unwrap_or_else(|| "<none>".into()), line_no));
                             }
                             if let Some(alias) = alias_name.clone() {
                                 if let Some((prev_path, prev_line)) = seen_aliases.get(&alias) {
                                     if prev_path != &canon {
-                                        return Err(format!(
-                                            "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
-                                            alias, filename, line_no, prev_path, prev_line
-                                        ));
+                                        if strict {
+                                            return Err(format!(
+                                                "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
+                                                alias, filename, line_no, prev_path, prev_line
+                                            ));
+                                        } else {
+                                            eprintln!("{}", crate::common::diagnostics::using_error::alias_rebound(&alias, filename, line_no, prev_path, *prev_line));
+                                            continue;
+                                        }
                                     }
                                 } else {
                                     seen_aliases.insert(alias, (canon, line_no));
@@ -317,24 +357,34 @@ pub fn collect_using_and_strip(
                                 .map(|pb| pb.to_string_lossy().to_string())
                                 .unwrap_or_else(|| path_str.clone());
                             if let Some((prev_alias, prev_line)) = seen_paths.get(&canon) {
-                                return Err(format!(
-                                    "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
-                                    canon,
-                                    filename,
-                                    line_no,
-                                    prev_alias,
-                                    prev_line
-                                ));
+                                if strict {
+                                    return Err(format!(
+                                        "using: duplicate import of '{}' at {}:{} (previous alias: '{}' first seen at line {})",
+                                        canon,
+                                        filename,
+                                        line_no,
+                                        prev_alias,
+                                        prev_line
+                                    ));
+                                } else {
+                                    eprintln!("{}", crate::common::diagnostics::using_error::duplicate_import(&canon, filename, line_no, prev_alias, *prev_line));
+                                    continue;
+                                }
                             } else {
                                 seen_paths.insert(canon.clone(), (alias_name.clone().unwrap_or_else(|| "<none>".into()), line_no));
                             }
                             if let Some(alias) = alias_name.clone() {
                                 if let Some((prev_path, prev_line)) = seen_aliases.get(&alias) {
                                     if prev_path != &canon {
-                                        return Err(format!(
-                                            "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
-                                            alias, filename, line_no, prev_path, prev_line
-                                        ));
+                                        if strict {
+                                            return Err(format!(
+                                                "using: alias '{}' rebound at {}:{} (was '{}' first seen at line {})",
+                                                alias, filename, line_no, prev_path, prev_line
+                                            ));
+                                        } else {
+                                            eprintln!("{}", crate::common::diagnostics::using_error::alias_rebound(&alias, filename, line_no, prev_path, *prev_line));
+                                            continue;
+                                        }
                                     }
                                 } else {
                                     seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
@@ -349,7 +399,11 @@ pub fn collect_using_and_strip(
                                     }
                                 }
                             }
-                            prelude_paths.push(path_str);
+                            if should_skip_prelude_path(&path_str) {
+                    if verbose { crate::runner::trace::log(format!("[using/prelude] skip path '{}' (noise filter)", path_str)); }
+                } else {
+                    prelude_paths.push(path_str);
+                }
                         } else {
                             // Non-path token. When resolver returns the input unchanged (unresolved),
                             // attempt a dev fallback using alias name to locate a prelude file.
@@ -394,8 +448,14 @@ pub fn collect_using_and_strip(
                                                     let br = BufReader::new(&mut f);
                                                     let needle = format!("static box {}", alias);
                                                     for line in br.lines().flatten().take(400) {
-                                                        if line.contains(&needle) {
-                                                            return Some(p.to_string_lossy().to_string());
+                                                        if let Some(pos) = line.find(&needle) {
+                                                            let next = line.as_bytes().get(pos + needle.len()).copied();
+                                                            let ok_boundary = match next {
+                                                                None => true,
+                                                                Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\n') | Some(b'{') => true,
+                                                                _ => false,
+                                                            };
+                                                            if ok_boundary { return Some(p.to_string_lossy().to_string()); }
                                                         }
                                                     }
                                                 }
@@ -424,7 +484,11 @@ pub fn collect_using_and_strip(
                                             if verbose { eprintln!("[using] alias-trace: alias '{}' -> '{}' (scan)", alias, canon); }
                                             alias_pairs.push((alias, canon));
                                         }
-                                        prelude_paths.push(path_str);
+                                        if should_skip_prelude_path(&path_str) {
+                    if verbose { crate::runner::trace::log(format!("[using/prelude] skip path '{}' (noise filter)", path_str)); }
+                } else {
+                    prelude_paths.push(path_str);
+                }
                                     }
                                 }
                             }
@@ -477,8 +541,15 @@ pub fn collect_using_and_strip(
                                             let br = BufReader::new(&mut f);
                                             let needle = format!("static box {}", alias);
                                             for line in br.lines().flatten().take(400) {
-                                                if line.contains(&needle) {
-                                                    return Some(p.to_string_lossy().to_string());
+                                                if let Some(pos) = line.find(&needle) {
+                                                    // Require a sensible boundary after alias (non-identifier)
+                                                    let next = line.as_bytes().get(pos + needle.len()).copied();
+                                                    let ok_boundary = match next {
+                                                        None => true,
+                                                        Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\n') | Some(b'{') => true,
+                                                        _ => false,
+                                                    };
+                                                    if ok_boundary { return Some(p.to_string_lossy().to_string()); }
                                                 }
                                             }
                                         }
@@ -508,7 +579,11 @@ pub fn collect_using_and_strip(
                                     if verbose { crate::runner::trace::log(format!("[using/fallback] alias='{}' -> '{}'", alias, canon)); }
                                     alias_pairs.push((alias, canon));
                                 }
-                                prelude_paths.push(path_str);
+                                if should_skip_prelude_path(&path_str) {
+                    if verbose { crate::runner::trace::log(format!("[using/prelude] skip path '{}' (noise filter)", path_str)); }
+                } else {
+                    prelude_paths.push(path_str);
+                }
                                 continue;
                             }
                         }

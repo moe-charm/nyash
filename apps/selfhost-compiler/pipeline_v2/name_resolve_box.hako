@@ -1,0 +1,29 @@
+// name_resolve_box.hako — PipelineNameResolveBox
+// Responsibility: normalize raw global call names with using-context
+// - primary: NamespaceBox.normalize_global_name(raw, resolver)
+// - fallback: unique tail match via UsingResolverBox.guess_namespace_from_tail
+
+using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
+using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+
+static box PipelineNameResolveBox {
+  // Returns fully-qualified name or null
+  normalize_call_name(raw_name, r) {
+    if raw_name == null { return null }
+    // Try normalizer first
+    local fq = NamespaceBox.normalize_global_name(raw_name, r)
+    if fq != null { return fq }
+    // Try head.tail composition with modules-based guess (unique only)
+    local dot2 = RegexFlow.find_from(raw_name, ".", 0)
+    if dot2 < 0 { return null }
+    local head2 = raw_name.substring(0, dot2)
+    local tail2 = raw_name.substring(dot2 + 1, raw_name.length())
+    local ns2 = r.resolve_namespace_alias(head2)
+    if ns2 == null { ns2 = r.guess_namespace_from_tail(head2) }
+    if ns2 == null { return null }
+    return ns2 + "." + tail2
+  }
+}
+
+static box PipelineNameResolveMain { main(args) { return 0 } }

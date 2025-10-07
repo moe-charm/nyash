@@ -8,126 +8,24 @@
 
 ## 🔄 **現在の開発状況** (2025-10-06)
 
-**注**: 以下は主に成功報告です。各Phaseの問題点・失敗・学びについては、個別のドキュメントや issue を参照してください。
+**注**: 成功報告中心。失敗・問題点は [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクション参照。
 
-### ⚠️ **Phase 2.1（dep_tree統合）の問題点・失敗** (2025-10-06)
+### 📝 **最近の完了Phase**
 
-#### ❌ **主要な問題点**
+- ✅ **Phase 15.11** (2025-10-05): StringHelpers共通ライブラリ箱化、14ファイル統合で335行削減
+- ✅ **Phase 15.10** (2025-10-05): Legacy Code大掃除、純削減400行
+- ✅ **Phase 15.9** (2025-10-05): VmConfig集約化（42ファイル→1箇所）
+- ✅ **Phase 15.8** (2025-10-04): WASM実装 - MIR16命令完全対応
+- ✅ **Birth Lifecycle統一** (2025-10-05): 58ファイル843行修正、3 calling convention統一
 
-**1️⃣ テスト実行完全失敗**
-- **問題**: 3ファイル統合したが、1回も動作確認できていない
-- **実際**: FileBoxエラー、usingパースエラー、原因調査なし
-- **影響**: commit前に動作検証必須（現在未検証状態）
+### ⚠️ **最近の失敗・問題（学び）**
 
-**2️⃣ 見積もりの大誤算**
-- **見積もり**: 108-150行削減
-- **実際**: 20行削減のみ（**見積もりの18%**）
-- **原因**: Hakoruneの構文制約（セミコロン区切り不可）を考慮せず
-- **内訳**: 重複削減-75行、構文修正+23行、Core追加+55行 → 純削減20行
+**Phase 2.1（dep_tree統合）問題点** (2025-10-06):
+- ❌ テスト実行0回成功（commit前に動作検証必須）
+- ❌ 見積もり大誤算：108-150行削減予測→実際20行（18%）
+- 🎓 学び：構文制約を事前確認、中間テスト必須
 
-**3️⃣ 構文エラー連発（4回修正）**
-- Line 47: `continue` 使用 → Hakoruneは未サポート
-- Line 94, 111, 172, 177, 183, 226: セミコロン区切り → すべて複数行展開
-
-**4️⃣ using文の混乱**
-- `using selfhost.tools.dep_tree_core` → ❌ "Unsupported namespace"
-- `using "./dep_tree_core.hako"` → ❌ "Expected identifier"
-- hako.tomlに追加したのに動かない理由、**調査していない**
-
-**5️⃣ 背景プロセス放置**
-- LLVMベンチマーク（Bash 15351f）実行中のまま、結果確認なし
-
-#### 📊 **実際の成果（客観的）**
-
-**変更ファイル**:
-- 新規: `dep_tree_core.hako` (55行)
-- 変更: `dep_tree.nyash` (253→247行, -6行)
-- 変更: `dep_tree_simple.nyash` (265→233行, -32行)
-- 変更: `dep_tree_min_string.nyash` (159→122行, -37行)
-- 変更: `hako.toml` (+1行エイリアス)
-
-**合計**: 純削減20行（見積もり比18%）
-
-#### 🎓 **学び**
-1. **事前確認**: Hakoruneの構文制約を確認してから見積もるべき
-2. **中間テスト**: コード編集中に最低1回は動作確認すべき
-3. **調査優先**: エラーが出たら、試行錯誤より根本原因調査を優先
-4. **背景プロセス**: 長時間実行プロセスは定期的に確認
-
----
-
-### 🎉 **Phase 15.11完了！StringHelpers共通ライブラリ箱化成功** (2025-10-05)
-**セルフホストコード重複削減 - 14ファイル統合で335行純削減**
-
-#### ✅ **StringHelpers共通ライブラリ作成**
-**新規ファイル**:
-- `apps/selfhost/common/string_helpers.hako` (86行)
-  - `int_to_str(n)` - 整数→文字列変換
-  - `to_i64(x)` - 文字列/数値→i64パース（負数対応）
-  - `json_quote(s)` - JSON文字列エスケープ
-  - `is_numeric_str(s)` - 数値文字列判定
-  - `read_digits(text, pos)` - 連続数字読み取り
-- `apps/selfhost/test_string_helpers.hako` - 包括的テストスイート
-
-#### ✅ **14ファイル更新完了**
-**JSON builders** (3ファイル):
-- mir_builder2.hako
-- mir_builder_min.hako
-- mir_builder_min.hako
-
-**JSON utilities** (2ファイル) - **Phase 15.11.1追加**:
-- json_scan.hako (_str_to_int委譲)
-- json_frag.hako (read_digits + _str_to_int委譲)
-
-**Mini-VM components** (5ファイル):
-- mini_vm_scan.hako
-- mir_vm_min.hako
-- mir_vm_m2.hako
-- op_handlers.hako
-- flow_debugger.hako
-
-**Other tools** (4ファイル):
-- seam_inspector.hako
-- collect_mixed_smoke.hako
-- mini_vm_if_branch.hako
-- mini_vm_lib.hako
-
-#### 📊 **統計**
-- **Phase 15.11**: 319行削減 (380削除 - 61追加)
-- **Phase 15.11.1**: 15行削減 (22削除 - 7追加) - ChatGPT協力
-- **合計削減**: 335行
-- **重複削除**: 7種類のヘルパー関数を統合
-- **コミット**: `6ba6b026` (本体), `d07f3af3` (追加統合), `0de80fa6` (docs)
-
-#### 🎯 **次のステップ（Phase 15.12候補）**
-- `index_of_from` → CfgNavigatorBox統合 (60-100行削減見込み)
-- 詳細: `docs/development/proposals/ideas/improvements/phase-15-12-index-of-from-consolidation.md`
-
-#### 🐛 **既知の問題**
-- `--dump-mir`フラグがusing文でパースエラー（別issue記録済み）
-- 通常実行は完全動作
-
----
-
-### ✅ **Phase 15.10完了** (2025-10-05)
-Legacy Code大掃除 - 2大ファイル→8小ファイル分割、デッドコード470行削除、純削減400行。コミット: `43679766`, `f6cbbf48`, `f1f3b83e`
-
-### ✅ **Phase 15.9完了** (2025-10-05)
-VmConfig集約化 - 環境変数42ファイル散在→1箇所集約、パフォーマンス向上。コミット: `f1874b3b`
-
-### ✅ **Birth Lifecycle完全統合** (2025-10-05)
-3つのcalling convention統一契約化、58ファイル843行修正、production環境バグ解消
-1. ~~BuilderConfigBox実装（MIR Builder用環境変数約15種類）~~ → 保留（現状維持）
-2. ✅ legacy.rs分割（calls:617行 + boxes:518行） → **Phase 15.10で完了**
-3. ~~boxes_* → builtin_boxes/ 移動~~ → 現状維持（移動のメリットなし）
-
----
-
-### ✅ **Phase 15.8** (2025-10-04)
-WASM実装進行中 - MIR16命令完全対応。詳細: [Phase 15.8 README](docs/development/roadmap/phases/phase-15.8/README.md)
-
-### ✅ **Phase 3.4-3.5完了** (2025-10-03~04)
-統合ベンチマーク＋固定時間測定実装。言語対決: Nyash LLVM版39.4M ops/sec（C言語の68%）達成。詳細: [benchmark-implementation.md](docs/development/current/wasm/benchmark-implementation.md)
+詳細は個別Phase docsまたはissue参照。
 
 ### 📚 **重要リソース**
 - **開発マスタープラン**: [00_MASTER_ROADMAP.md](docs/development/roadmap/phases/00_MASTER_ROADMAP.md)
@@ -481,37 +379,65 @@ HAKO_VM_TRACE="op=boxcall;regs=1" ./target/release/hakorune emit_compare_test.hk
 #                                                    ↑ ここで即座に「引数null」発見！
 ```
 
-### 🚨 **重要：2つのトレースレイヤーを混同しない！**
+---
 
-#### 📦 **Layer 1: Rust VMトレース（すけすけ機能）**
+## 🔬 **Mini-VM デバッグトレース**（Selfhost VM専用）
+
+### 🎯 **Selfhost Mini-VMトレースON**
+
+Selfhost Mini-VM（Hakoruneスクリプトで実装されたVM）は `__trace__` フラグでトレース可能：
+
+```hako
+using selfhost.vm.entry as MiniVmEntryBox
+
+static box Main {
+  main() {
+    local json = "{\"functions\":[...]}"  // MIR JSON
+
+    // 方法1: ラッパー使用（推奨）
+    local result = MiniVmEntryBox.run_trace(json)
+
+    // 方法2: 直接注入
+    local json_trace = "{\"__trace__\":1," + json.substring(1, json.length())
+    local result2 = MiniVmEntryBox.run_min(json_trace)
+
+    return result
+  }
+}
+```
+
+**出力例**:
+```
+[DEBUG] start=88
+[DEBUG] compare seg={"op":"compare","dst":3,"cmp":"Gt",...}
+[DEBUG] compare last_cmp_dst=3 last_cmp_val=1
+Result: 1
+```
+
+### 🔧 **スモークテストでトレース**
+
 ```bash
-# ← これが「すけすけ」！Rust VM内部のMIR実行を観測
-export HAKO_VM_TRACE="op=boxcall,externcall;regs=1"
-export NYASH_DISABLE_PLUGINS=1
-./target/release/hakorune test.hkr 2>&1
-
-# 出力例:
-# [vm] bb=380 inst=1 boxcall boxcall method="length"
-# [vm] → v%12(267)
+# 全ログ表示
+SMOKES_DEV_LOG=1 tools/smokes/v2/profiles/quick/selfhost/selfhost_mir_m2_*.sh
 ```
 
-#### 📝 **Layer 2: Mini-VM内部ログ（_tprint）**
+### 📚 **実例スクリプト**
+
+`apps/examples/debug/mini_vm_trace_example.hako` に完全な実例あり：
+
 ```bash
-# Hakoruneスクリプトで書かれたMini-VM内部のprintログ
-# mir_vm_min.hako の _tprint() が出力
-
-# 普通のprint()なので、実行されれば自動で出る
-# （今回はMIRエラーで早期終了したため見えなかった）
+# 実行して確認
+NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/examples/debug/mini_vm_trace_example.hako
 ```
 
-#### ⚠️ **私（Claude）がよく混同するポイント**
-```
-❌ 間違い：「_tprintログを見るためにHAKO_VM_TRACEを使う」
-✅ 正解：
-  - HAKO_VM_TRACE = Rust VMの実行トレース（すけすけ）
-  - _tprint = Mini-VM内部のprintログ（Hakoruneスクリプトレベル）
-  - 別物！
-```
+### 📊 **2つのトレースレイヤー比較**
+
+| レイヤー | 対象 | 有効化方法 | 出力形式 |
+|---------|------|-----------|---------|
+| **Rust VM** | Rust実装VM | `HAKO_VM_TRACE="op=compare"` | `[vm] bb=0 inst=2 compare` |
+| **Mini-VM** | Hakorune実装VM | `MiniVmEntryBox.run_trace()` | `[DEBUG] compare seg=...` |
+
+**重要**: 別レイヤー！混同しないこと
 
 ---
 

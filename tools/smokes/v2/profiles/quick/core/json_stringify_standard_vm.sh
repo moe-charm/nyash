@@ -3,6 +3,7 @@
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
+export NYASH_USING_AST=1
 require_env || exit 2
 preflight_plugins || exit 2
 
@@ -10,6 +11,8 @@ TMP_DIR="/tmp/json_stringify_standard_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
+using selfhost.json.stringify as JSON
+
 static box Main {
   main() {
     // Build nested Map/Array structure
@@ -36,4 +39,3 @@ compare_outputs "$expected" "$out" "json_stringify_standard_vm" || { rm -rf "$TM
 
 rm -rf "$TMP_DIR"
 exit 0
-

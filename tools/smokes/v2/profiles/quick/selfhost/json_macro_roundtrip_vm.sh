@@ -4,6 +4,11 @@
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 
 require_env || exit 2
+export NYASH_MACRO_ENABLE=1
+export NYASH_MACRO_PATHS="apps/macros:self"
+export NYASH_SKIP_TOML_ENV=1
+export NYASH_USING=0
+export NYASH_MACRO_BOX_CHILD_RUNNER=0
 
 test_json_macro_roundtrip() {
   local code

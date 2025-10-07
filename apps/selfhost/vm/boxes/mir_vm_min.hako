@@ -6,10 +6,12 @@ using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
 using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "apps/selfhost/vm/boxes/compare_scan_box.hako" as CompareScanBox
 using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
 using "apps/selfhost/vm/boxes/guard_box.hako" as GuardBox
 using "apps/selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
+using "apps/selfhost/vm/boxes/ret_resolve_simple.hako" as RetResolveSimpleBox
 using "apps/selfhost/vm/boxes/instruction_scanner.hako" as InstructionScannerBox
 
 static box MirVmMin {
@@ -17,6 +19,7 @@ static box MirVmMin {
     // Only emit hard errors by default; avoid env dependencies in Mini‑VM
     if msg.indexOf("[ERROR]") >= 0 { print(msg) }
   }
+  _d(msg, trace) { if trace == 1 { print(msg) } }
   // Compatibility runner (prints and returns). Prefer run_min for quiet return-only.
   run(mjson) { local v = me._run_min(mjson) print(me._int_to_str(v)) return v }
   // New: quiet entry that returns the result without printing.
@@ -52,6 +55,9 @@ static box MirVmMin {
     // thin_mode=0: legacy heuristics（互換）; thin_mode=1: simplified ret
     local thin_mode = 0
     if mjson.indexOf("\"__thin__\":1") >= 0 { thin_mode = 1 }
+    // trace mode for dev: prints [DEBUG] messages
+    local trace = 0
+    if mjson.indexOf("\"__trace__\":1") >= 0 { trace = 1 }
 
     // Safety first: handle simple compare→ret or const→ret in Block 0
     // without allocating any runtime boxes. This avoids interpreter-level
@@ -59,8 +65,11 @@ static box MirVmMin {
     // covers our selfhost M2 minimal cases.
     local b0 = JsonFragBox.block0_segment(mjson)
     if b0 != "" {
-      // 1) Pure const→ret
-      if b0.indexOf("\"op\":\"compare\"") < 0 && b0.indexOf("\"op\":\"ret\"") >= 0 {
+      // 1) Pure const→ret (only when const appears before ret and no other ops present)
+      if b0.indexOf("\"op\":\"compare\"") < 0 && b0.indexOf("\"op\":\"binop\"") < 0 && b0.indexOf("\"op\":\"copy\"") < 0 && b0.indexOf("\"op\":\"jump\"") < 0 && b0.indexOf("\"op\":\"branch\"") < 0 {
+        local ret_pos = b0.indexOf("\"op\":\"ret\"")
+        local const_pos = b0.indexOf("\"op\":\"const\"")
+        if ret_pos >= 0 and const_pos >= 0 and const_pos < ret_pos {
         // Grab the first typed const value and return it
         local key = "\"value\":{\"type\":\"i64\",\"value\":"
         local p = StringOps.index_of_from(b0, key, 0)
@@ -76,44 +85,10 @@ static box MirVmMin {
           }
           if out != "" { return JsonFragBox._str_to_int(out) }
         }
-      }
-      // 2) compare→ret (v0 or v1 symbol)
-      if b0.indexOf("\"op\":\"compare\"") >= 0 && b0.indexOf("\"op\":\"ret\"") >= 0 {
-        // Extract two typed consts from block 0
-        local first = ""
-        local second = ""
-        local key = "\"value\":{\"type\":\"i64\",\"value\":"
-        local pos = 0
-        loop(true) {
-          local k = StringOps.index_of_from(b0, key, pos)
-          if k < 0 { break }
-          local ds = b0.substring(k + key.length(), b0.length())
-          local i = 0
-          local out = ""
-          loop(true) {
-            local ch = ds.substring(i, i+1)
-            if ch == "" { break }
-            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
-          }
-          if out != "" { if first == "" { first = out } else { second = out } }
-          if second != "" { break }
-          pos = k + key.length() + i
-        }
-        if first != "" && second != "" {
-          // parse cmp kind
-          local cmp = JsonFragBox.get_str(b0, "cmp")
-          if cmp == "" { local sym = JsonFragBox.get_str(b0, "operation") if sym != "" { cmp = CompareOpsBox.map_symbol(sym) } else { cmp = "Eq" } }
-          // to_i64
-          local lv = 0
-          local rv = 0
-          local i0 = 0
-          loop(i0 < first.length()) { lv = lv * 10 + ("0123456789".indexOf(first.substring(i0,i0+1)))  i0 = i0 + 1 }
-          local i1 = 0
-          loop(i1 < second.length()) { rv = rv * 10 + ("0123456789".indexOf(second.substring(i1,i1+1)))  i1 = i1 + 1 }
-          return CompareOpsBox.eval(cmp, lv, rv)
         }
       }
-    }
+      // 2) compare→ret fast-path skipped (handled by main scanner)
+
     local regs = new MapBox()
     local last_cmp_dst = -1
     local last_cmp_val = 0
@@ -131,13 +106,13 @@ static box MirVmMin {
       steps = steps + 1
       if steps > max_steps { return 0 }
       local start = me._block_insts_start(mjson, bb)
-      me._tprint("[minivm] start="+me._int_to_str(start))
+      me._d("[DEBUG] start="+me._int_to_str(start), trace)
       if start < 0 { return 0 }
       local endp = JsonCursorBox.seek_array_end(mjson, start)
-      me._tprint("[minivm] endp="+me._int_to_str(endp))
+      me._d("[DEBUG] endp="+me._int_to_str(endp), trace)
       if endp <= start { return 0 }
       local inst_seg = mjson.substring(start, endp)
-      me._tprint("[minivm] seglen="+me._int_to_str(inst_seg.length()))
+      me._d("[DEBUG] seglen="+me._int_to_str(inst_seg.length()), trace)
       // scan objects in this block
       local scan_pos = 0
       local inst_count = 0
@@ -170,19 +145,15 @@ static box MirVmMin {
           if bdst != null { last_binop_dst = bdst  last_binop_val = me._load_reg(regs, bdst) }
         }
         else if op == "compare" {
-          me._tprint("[DEBUG] compare seg=" + seg)
+          me._d("[DEBUG] compare seg=" + seg, trace)
           // Safe fast-path: if this block later contains a ret of this dst,
           // evaluate compare directly from current regs and return immediately.
           // This avoids deeper handler chains that could recurse in edge cases.
-          local kdst_fast = JsonFragBox.get_int(seg, "dst")
-          local klhs_fast = JsonFragBox.get_int(seg, "lhs")
-          local krhs_fast = JsonFragBox.get_int(seg, "rhs")
-          // cmp kind may be v0 (cmp) or v1 (operation)
-          local kcmp_fast = JsonFragBox.get_str(seg, "cmp")
-          if kcmp_fast == "" {
-            local sym = JsonFragBox.get_str(seg, "operation")
-            if sym != "" { kcmp_fast = CompareOpsBox.map_symbol(sym) } else { kcmp_fast = "Eq" }
-          }
+          local rec = CompareScanBox.parse(seg)
+          local kdst_fast = rec.get("dst")
+          local klhs_fast = rec.get("lhs")
+          local krhs_fast = rec.get("rhs")
+          local kcmp_fast = rec.get("kind")
           // Determine if a ret exists after this compare in the same block
           local tail = inst_seg.substring(obj_end, inst_seg.length())
           local ridt = JsonFragBox.get_int(tail, "value")
@@ -194,19 +165,19 @@ static box MirVmMin {
             regs.set("" + kdst_fast, "" + cv_fast)
             last_cmp_dst = kdst_fast
             last_cmp_val = cv_fast
-            me._tprint("[DEBUG] compare early return with val=" + me._int_to_str(cv_fast))
+            me._d("[DEBUG] compare early return with val=" + me._int_to_str(cv_fast), trace)
             return cv_fast
           }
 
           // Fallback to standard handler when early path is not applicable
           OpHandlersBox.handle_compare(seg, regs)
-          local kdst = JsonFragBox.get_int(seg, "dst")
-          me._tprint("[DEBUG] compare kdst=" + me._int_to_str(kdst))
+          local kdst = rec.get("dst")
+          me._d("[DEBUG] compare kdst=" + me._int_to_str(kdst), trace)
           if kdst != null {
             last_cmp_dst = kdst
             last_cmp_val = me._load_reg(regs, kdst)
-            me._tprint("[DEBUG] compare last_cmp_dst=" + me._int_to_str(last_cmp_dst) + " last_cmp_val=" + me._int_to_str(last_cmp_val))
-            me._tprint("[DEBUG] compare reg["+me._int_to_str(kdst)+"]=" + regs.get(""+kdst))
+            me._d("[DEBUG] compare last_cmp_dst=" + me._int_to_str(last_cmp_dst) + " last_cmp_val=" + me._int_to_str(last_cmp_val), trace)
+            me._d("[DEBUG] compare reg["+me._int_to_str(kdst)+"]=" + regs.get(""+kdst), trace)
           }
           // Secondary optimization: if a ret follows and targets this dst, return now
           if ridt != null && kdst != null && ridt == kdst { return last_cmp_val }
@@ -259,61 +230,14 @@ else if op == "ret" {
         scan_pos = obj_end
       }
       if moved == 1 { continue }
-      // Prefer precise compare→ret recompute when both are present in the block
-      // (typed const ×2 + cmp) before falling back to last_cmp
-      if inst_seg.indexOf("\"op\":\"compare\"") >= 0 && inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
-        // Grab first two "value":{"type":"i64","value":X}
-        local first = ""
-        local second = ""
-        local search = inst_seg
-        local key = "\"value\":{\"type\":\"i64\",\"value\":"
-        local pos = 0
-        loop(true) {
-          local k = StringOps.index_of_from(search, key, pos)
-          if k < 0 { break }
-          local ds = search.substring(k + key.length(), search.length())
-          // read consecutive digits as number
-          local i = 0
-          local out = ""
-          loop(true) {
-            local ch = ds.substring(i, i+1)
-            if ch == "" { break }
-            if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
-          }
-          if out != "" { if first == "" { first = out } else { second = out } }
-          if second != "" { break }
-          pos = k + key.length() + i
-        }
-        if first != "" && second != "" {
-          local lv = 0
-          local rv = 0
-          // simple to_i64
-          local i0 = 0
-          loop(i0 < first.length()) { lv = lv * 10 + ("0123456789".indexOf(first.substring(i0,i0+1)))  i0 = i0 + 1 }
-          local i1 = 0
-          loop(i1 < second.length()) { rv = rv * 10 + ("0123456789".indexOf(second.substring(i1,i1+1)))  i1 = i1 + 1 }
-          // cmp: parse cmp op
-          local cmp_key = "\"cmp\":\""
-          local pk = inst_seg.indexOf(cmp_key)
-          local cmp = "Eq"
-          if pk >= 0 {
-            local i = pk + cmp_key.length()
-            local j = StringOps.index_of_from(inst_seg, "\"", i)
-            if j > i { cmp = inst_seg.substring(i, j) }
-          }
-          local cv = CompareOpsBox.eval(cmp, lv, rv)
-          // ret id (ensure it's the compare result or still return computed cv as final)
-          local rstart4 = inst_seg.indexOf("\"op\":\"ret\"")
-          local rseg4 = inst_seg.substring(rstart4, inst_seg.length())
-          local rid4 = JsonFragBox.get_int(rseg4, "value")
-          if rid4 != null {
-            if rid4 == last_cmp_dst { return cv }
-          }
-          // If compare+ret exist but aliasing prevents id match, still return computed cv
-          return cv
-        }
+      // Prefer recent compare result when a ret exists targeting it (no recompute)
+      if inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
+        local rstartX = inst_seg.indexOf("\"op\":\"ret\"")
+        local rsegX = inst_seg.substring(rstartX, inst_seg.length())
+        local ridX = JsonFragBox.get_int(rsegX, "value")
+        if ridX != null { if ridX == last_cmp_dst { return last_cmp_val } }
       }
-      // Fallbacks: prefer recent compare result, else decode explicit ret if present, else first const
+      // Fallbacks: prefer recent compare result, else resolve explicit/v1 ret if present, else first const
       if last_cmp_dst >= 0 { return last_cmp_val }
       // Detect explicit ret in this block and resolve
       if inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
@@ -374,6 +298,10 @@ else if op == "ret" {
           local rid4 = JsonFragBox.get_int(rseg4, "value")
           if rid4 != null { return cv }
         }
+      }
+      {
+      local r = RetResolveSimpleBox.resolve(inst_seg, regs, last_cmp_dst, last_cmp_val)
+      if r != null { return r }
       }
       // Final fallback: return first const (dst=1) if present
       local first = me._load_reg(regs, 1)

@@ -15,11 +15,7 @@ fi
 TEST_main() {
   # Stage-1 JSON: Return(Call name:"StringBox.indexOf", args:[Int 1, Int 2])
   local ast_raw='{"version":0,"kind":"Program","body":[{"type":"Return","expr":{"type":"Call","name":"StringBox.indexOf","args":[{"type":"Int","value":1},{"type":"Int","value":2}]}}]}'
-  local ast=$(python3 - << 'PY'
-import json,sys
-print(json.dumps(sys.stdin.read()))
-PY
-<<< "$ast_raw")
+  local ast=$(printf '%s' "$ast_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 
   local program='
 using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2

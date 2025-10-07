@@ -16,19 +16,18 @@ prog_body=""
 if [ -f "$NYASH_ROOT/plugins/nyash-path-plugin/libnyash_path_plugin.so" ]; then
   pick_box=PathBox
   prog_body='local p = new PathBox()
-    p.birth()
-    p.birth()
+    // auto-birth
     print(p.basename("/a/b/c.txt"))'
 elif [ -f "$NYASH_ROOT/plugins/nyash-regex-plugin/libnyash_regex_plugin.so" ]; then
   pick_box=RegexBox
   prog_body='local r = new RegexBox()
-    r.birth()
+    // auto-birth
     local ok = r.isMatch("abc123", "[a-z]+[0-9]+")
     print(ok)'
 elif [ -f "$NYASH_ROOT/plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so" ]; then
   pick_box=FileBox
   prog_body='local f = new FileBox()
-    f.birth()
+    // auto-birth
     print(f.exists("hako.toml"))'
 else
   log_warn "SKIP: no candidate plugin .so found (path/regex/file)"

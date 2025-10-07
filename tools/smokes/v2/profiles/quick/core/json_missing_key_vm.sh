@@ -15,11 +15,7 @@ using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 static box Main { main(){ local regs = new MapBox() OpHandlersBox.handle_compare(seg, regs) return 0 } }
 '
   # Inject JSON string literal (escaped) into program
-  local jstr=$(python3 - << 'PY'
-import json,sys
-print(json.dumps(sys.stdin.read()))
-PY
-<<< "$seg")
+  local jstr=$(printf '%s' "$seg" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
   prog=${prog/seg/$jstr}
   local out
   out=$(run_nyash_vm -c "$prog" 2>&1 | filter_noise)

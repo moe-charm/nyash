@@ -16,12 +16,16 @@ using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 box UsingResolverBox {
   alias_paths
   alias_names
+  alias_keys
   modules_map
+  modules_keys
 
   birth() {
     me.alias_paths = new MapBox()
     me.alias_names = new MapBox()
+    me.alias_keys = new ArrayBox()
     me.modules_map = new MapBox()
+    me.modules_keys = new ArrayBox()
     return 0
   }
 
@@ -50,15 +54,22 @@ box UsingResolverBox {
         if vend >= 0 {
           local path = s.substring(vstart, vend)
           // path‑based using: alias → path
-          me.alias_paths.set(name, path)
+        me.alias_paths.set(name, path)
+        me.alias_keys.push(name)
         } else {
           // malformed path entry; skip safely
         }
       } else {
-        // ns‑based using: alias (or target) → name itself
+        // ns‑based using: alias (or target) → name itself (tentative)
         // Note: When collected by UsingCollectorBox, `name` is the full ns (without alias)。
         //       When added via ParserBox.add_using(ns, alias), `name` is already the alias.
         me.alias_names.set(name, name)
+        me.alias_keys.push(name)
+        // If modules_map is already loaded, upgrade alias→full namespace when uniquely guessable by tail.
+        if me.modules_map != null {
+          local g = me.guess_namespace_from_tail(name)
+          if g != null { me.alias_names.set(name, g) }
+        }
       }
       pos = obj_end + 1
     }
@@ -86,6 +97,7 @@ box UsingResolverBox {
       if vq2 < 0 { break }
       local val = s.substring(vq + 1, vq2)
       me.modules_map.set(key, val)
+      me.modules_keys.push(key)
       pos = vq2 + 1
     }
     return 0
@@ -108,11 +120,26 @@ box UsingResolverBox {
   resolve_namespace_alias(alias) {
     if alias == null { return null }
     local ns = me.alias_names.get(alias)
-    if ns != null { return ns }
+    if ns != null {
+      local s = "" + ns
+      if RegexFlow.find_from(s, "Key not found:", 0) < 0 { return ns }
+    }
     // fallback: if alias happens to be a full ns key in modules, accept it
     if me.modules_map.has(alias) == 1 { return alias }
     return null
+  
+
+  // Fail-Fast variant: require alias to resolve; otherwise emit a unified message and return null
+  require_namespace_alias(alias) {
+    if alias == null { return null }
+    local ns = me.resolve_namespace_alias(alias)
+    if ns == null {
+      print("using namespace resolution error: unresolved alias: " + alias)
+      return null
+    }
+    return ns
   }
+}
 
   // 3) Namespace alias → file path via modules_map (if available)
   resolve_module_path_from_alias(alias) {
@@ -121,6 +148,65 @@ box UsingResolverBox {
     return me.modules_map.get(ns)
   }
 
+  // 3b) Guess namespace by last segment (unique match)
+  // Returns full namespace when exactly one key in modules_map has last segment == tail
+  // Accepts capitalized-tail match as well (e.g., Timer → selfhost.core.timer)
+  guess_namespace_from_tail(tail) {
+    if tail == null { return null }
+    if me.modules_keys == null { return null }
+    local best = null
+    local i = 0
+    local n = me.modules_keys.length()
+    loop(i < n) {
+      local key = me.modules_keys.get(i)
+      local dot = RegexFlow.last_index_of(key, ".")
+      local last = key
+      if dot >= 0 { last = key.substring(dot + 1, key.length()) }
+      local ok = 0
+      if last == tail { ok = 1 } else {
+        // case-insensitive by first-letter only (ASCII) to match e.g., Timer vs timer
+        if last.length() == tail.length() && last.length() > 0 {
+          local l0 = last.substring(0,1)
+          local t0 = tail.substring(0,1)
+          local restl = last.substring(1, last.length())
+          local restt = tail.substring(1, tail.length())
+          if restl == restt {
+            local U = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            local L = "abcdefghijklmnopqrstuvwxyz"
+            local idxL = L.indexOf(l0)
+            local idxU = U.indexOf(l0)
+            if (idxL >= 0 && U.substring(idxL, idxL+1) == t0) || (idxU >= 0 && L.substring(idxU, idxU+1) == t0) { ok = 1 }
+          }
+        }
+      }
+      if ok == 1 {
+        if best == null { best = key } else { return null }
+      }
+      i = i + 1
+    }
+    return best
+  }
+
+
+
+
+  // Upgrade alias_names entries using modules_map (Module-First):
+  // when alias->alias (collector shape), try tail-unique guess to full namespace.
+  upgrade_aliases() {
+    if me.alias_keys == null || me.modules_map == null { return 0 }
+    local i = 0
+    local n = me.alias_keys.length()
+    loop(i < n) {
+      local alias = me.alias_keys.get(i)
+      local val = me.alias_names.get(alias)
+      if val == alias {
+        local g = me.guess_namespace_from_tail(alias)
+        if g != null { me.alias_names.set(alias, g) }
+      }
+      i = i + 1
+    }
+    return 0
+  }
   // 4) Materialize a compact JSON context for debugging/diagnostics
   // {alias_paths:{...},namespaces:{...},modules:{...}}
   to_context_json() {

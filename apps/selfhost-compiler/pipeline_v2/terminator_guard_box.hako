@@ -1,0 +1,36 @@
+// terminator_guard_box.hako — TerminatorGuardBox
+// Responsibility: Provide a thin, unified guard to prevent emit after terminator.
+// Notes: Operates on an instructions ArrayBox of Map nodes with key "op".
+
+static box TerminatorGuardBox {
+  // Return 1 if the given instructions array ends with ret/throw
+  block_terminated_insts(insts) {
+    if insts == null || insts.size == null { return 0 }
+    local n = insts.size()
+    if n <= 0 { return 0 }
+    local last = insts.get(n - 1)
+    if last == null || last.get == null { return 0 }
+    local op = last.get("op")
+    if op == null { return 0 }
+    if op == "ret" || op == "throw" { return 1 }
+    return 0
+  }
+
+  // Unified message; kept stable for tests
+  print_error(opname) {
+    if opname == null { opname = "op" }
+    print("[ERROR] TerminatorGuard: emit after terminator forbidden (attempt=" + opname + ")")
+  }
+
+  // Check before emit; returns 1 if allowed, 0 if blocked (and prints message)
+  guard_before_emit_insts(insts, opname) {
+    if me.block_terminated_insts(insts) == 1 {
+      me.print_error(opname)
+      return 0
+    }
+    return 1
+  }
+}
+
+static box TerminatorGuardStub { main(args) { return 0 } }
+

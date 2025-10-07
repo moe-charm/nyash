@@ -7,14 +7,10 @@ export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_DEV=1
 # Load both boxes under test
-export NYASH_MODULES="${NYASH_MODULES:+$NYASH_MODULES,}selfhost.vm.handlers=apps/selfhost/vm/boxes/op_handlers.hako,selfhost.vm.scanner=apps/selfhost/vm/boxes/instruction_scanner.hako"
+export NYASH_MODULES="${NYASH_MODULES:+$NYASH_MODULES,}selfhost.vm.boxes.op_handlers=apps/selfhost/vm/boxes/op_handlers.hako,selfhost.vm.boxes.instruction_scanner=apps/selfhost/vm/boxes/instruction_scanner.hako"
 require_env || exit 2
 preflight_plugins || exit 2
 
-# Temporarily skip: op propagation from InstructionScannerBox.next("op") returns empty; 
-# fallback parse for kind is under investigation. Core m2/m3 e2e are green.
-test_skip "selfhost_mir_m2_handlers_compare_vm" "box-only cmp parse under refinement; covered by m2 eq e2e" || true
-exit 0
 
 TMP_DIR="/tmp/selfhost_mir_m2_handlers_compare_vm_$$"
 mkdir -p "$TMP_DIR"

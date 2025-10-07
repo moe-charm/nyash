@@ -10,10 +10,29 @@ static box JsonCursorBox {
   index_of_from(hay, needle, pos) {
     return StringOps.index_of_from(hay, needle, pos)
   }
+  // Alias: find_from (compat)
+  find_from(hay, needle, pos) { return me.index_of_from(hay, needle, pos) }
   scan_string_end(text, quote_pos) { return StringScanBox.scan_string_end(text, quote_pos) }
   seek_array_end(text, lbracket_pos) { return JsonScanBox.seek_array_end(text, lbracket_pos) }
   seek_obj_end(text, start) { return JsonScanBox.seek_obj_end(text, start) }
   find_key_dual(text, plain, escaped, pos) { return JsonScanBox.find_key_dual(text, plain, escaped, pos) }
+  // Extract a sequence of optional sign + digits starting at start_pos
+  digits_from(text, start_pos) {
+    if text == null { return "" }
+    local i = start_pos
+    local n = text.length()
+    local out = ""
+    if i < n {
+      local ch = text.substring(i, i+1)
+      if ch == "-" { out = out + ch  i = i + 1 }
+    }
+    loop(i < n) {
+      local ch = text.substring(i, i+1)
+      if ch == "" { break }
+      if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break }
+    }
+    return out
+  }
 }
 
 static box JsonCursorMain { main(args){ return 0 } }

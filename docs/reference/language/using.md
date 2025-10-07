@@ -371,3 +371,12 @@ Limitations
 Rationale
 - MIR 仕様に変更を入れず、実用的なモジュール分割を提供
 - Everything‑is‑Box に整合（モジュール=Box、メソッド/フィールド=API）
+
+
+## Directory-as-Namespace (opt-in fallback)
+- Env `NYASH_USING_DIR_NS=1` を有効にすると、`apps/` 配下の `*.hako` を自動スキャンし、
+  ディレクトリ構造をドット区切り名前空間に変換して `[modules]` の最終候補として解決に追加する。
+- 優先順位（高→低）: manifest (`hako_module.toml`/`module.toml`) > module.hako > overrides > auto-dir
+- 除外規則（既定）: `archive/`, 先頭が `_` のディレクトリ, `test_*`, `example_*`
+- STRICT（`NYASH_USING_CHECKS_STRICT=1`）では、同一名前空間を複数パスが主張した場合はエラー。
+- quick プロファイルでは `tools/smokes/v2/configs/quick.env` で既定ON（開発向け）。CI/本番は既定OFF。

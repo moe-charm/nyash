@@ -58,6 +58,7 @@ Phase‑15 (2025‑09) update
 
 Developer quickstart: see `docs/guides/build/dev-quickstart.md`. Changelog highlights: `CHANGELOG.md`.
 LLVM quick guide: `docs/tools/llvm-build.md`.
+Modules CLI (Dir‑as‑NS helpers): `docs/tools/modules-cli.md`.
 User Macros (Phase 2): `docs/guides/user-macros.md`
 Exceptions (postfix catch/cleanup): `docs/guides/exception-handling.md`
 ScopeBox & MIR hints: `docs/guides/scopebox.md`
@@ -670,3 +671,73 @@ local cfg = MapBox.unborn()
 ```
 
 Details: see docs/guides/box-lifecycle.md
+
+---
+
+## 🛠️ Troubleshooting & Debugging
+
+### 🔍 **Quick Debug Guide**
+
+#### **1. Enable Verbose Output**
+```bash
+# Basic verbose mode
+NYASH_CLI_VERBOSE=1 ./target/release/hako program.hako
+
+# MIR dump (most useful!)
+./target/release/hako --dump-mir program.hako
+```
+
+#### **2. VM Tracing (Rust VM)**
+```bash
+# Trace specific operations
+HAKO_VM_TRACE="op=compare,binop;regs=1" ./target/release/hako program.hako
+
+# Interactive stepping
+HAKO_VM_STEP=1 ./target/release/hako program.hako
+```
+
+#### **3. Mini-VM Tracing (Selfhost VM)**
+```hako
+// In your Hakoruneスクリプト
+using selfhost.vm.entry as MiniVmEntryBox
+
+static box Main {
+  main() {
+    local json = "{\"functions\":[...]}"
+    local result = MiniVmEntryBox.run_trace(json)  // ← Trace ON!
+    return result
+  }
+}
+```
+
+Or for smoke tests:
+```bash
+SMOKES_DEV_LOG=1 tools/smokes/v2/profiles/quick/selfhost/test_name.sh
+```
+
+#### **4. Common Issues**
+
+| Problem | Solution |
+|---------|----------|
+| "Unknown module function" | Check `hako.toml` modules registration or use Dir-as-NS |
+| Plugin errors | Try `NYASH_DISABLE_PLUGINS=1` |
+| Parser hangs | Use `--debug-fuel 1000` to limit iterations |
+| Using conflicts | Check for duplicate `using` statements (error shows line numbers) |
+
+### 📚 **Debug Examples**
+
+Complete working examples: `apps/examples/debug/`
+
+```bash
+# Run Mini-VM trace example
+NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/examples/debug/mini_vm_trace_example.hako
+```
+
+### 📖 **Full Documentation**
+
+- **Environment Variables**: `docs/guides/env-variables.md`
+- **Execution Modes**: `docs/guides/execution-modes-guide.md`
+- **Debugging Deep Dive**: `docs/guides/namespace-quickstart.md`
+- **Smoke Tests**: `tools/smokes/README.md`
+
+---

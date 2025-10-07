@@ -17,7 +17,7 @@
 ### 👨‍💻 **For Developers (開発者向け)**
 - [CURRENT_TASK.md](../CURRENT_TASK.md) - Current development focus
 - [Development Roadmap](development/roadmap/phases/00_MASTER_ROADMAP.md) - Master plan
-- [Phase 15 README](development/roadmap/phases/phase-15.7/README.md) - Current phase
+- [Phase 15 README](development/roadmap/phases/phase-15.7/README.md) - Current phase（policy 表示・Throw/PHI/Scanner の小更新を含む）
 - [Architecture Overview](development/architecture/) - System design
 
 ### 📚 **For Contributors (コントリビューター向け)**

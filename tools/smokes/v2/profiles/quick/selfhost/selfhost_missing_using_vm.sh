@@ -15,21 +15,9 @@ TEST_main() {
   local mods_raw='{ "selfhost.core.timer": "apps/core/timer/TimerBox.hako" }'
 
   # Escape literals as Nyash strings using Python json.dumps
-  local ast=$(python3 - << 'PY'
-import json,sys
-print(json.dumps(sys.stdin.read()))
-PY
-<<< "$ast_raw")
-  local us=$(python3 - << 'PY'
-import json,sys
-print(json.dumps(sys.stdin.read()))
-PY
-<<< "$us_raw")
-  local mods=$(python3 - << 'PY'
-import json,sys
-print(json.dumps(sys.stdin.read()))
-PY
-<<< "$mods_raw")
+  local ast=$(printf '%s' "$ast_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+  local us=$(printf '%s' "$us_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
+  local mods=$(printf '%s' "$mods_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 
   local program='
 using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox

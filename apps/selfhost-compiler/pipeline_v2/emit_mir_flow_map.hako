@@ -20,7 +20,7 @@ flow EmitMirFlowMap {
     return {op: "compare", cmp: cmp, lhs: EmitMirFlowMap._i(lhs), rhs: EmitMirFlowMap._i(rhs), dst: EmitMirFlowMap._i(dst)}
   }
   _instr_branch(cond, then_id, else_id) {
-    return {op: "branch", cond: EmitMirFlowMap._i(cond), then: EmitMirFlowMap._i(then_id), else: EmitMirFlowMap._i(else_id)}
+    return {op: "branch", cond: EmitMirFlowMap._i(cond), then: EmitMirFlowMap._i(then_id), "else": EmitMirFlowMap._i(else_id)}
   }
   _instr_jump(target) {
     return {op: "jump", target: EmitMirFlowMap._i(target)}

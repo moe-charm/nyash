@@ -1,0 +1,20 @@
+[module]
+name = "selfhost.json"
+version = "1.0.0"
+
+[exports]
+# Utilities (kept stable keys to match prior hako.toml mappings)
+utils.stringify_ops = "utils/stringify_ops_box.hako"
+utils.parse_ops     = "utils/parse_ops_box.hako"
+utils.object_parse  = "utils/object_parse_box.hako"
+utils.array_parse   = "utils/array_parse_box.hako"
+utils.string        = "utils/string.hako"
+
+# Core pieces used by resolvers/tests (optional but handy)
+core.node           = "core/node.hako"
+lexer.scanner       = "lexer/scanner.hako"
+parser.parser       = "parser/parser.hako"
+stringify           = "stringify.hako"
+
+[private]
+# Other files in this directory are internal or legacy variants

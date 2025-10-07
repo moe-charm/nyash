@@ -1,0 +1,25 @@
+// compare_scan_box.hako — CompareScanBox
+// Responsibility: Parse compare instruction (v0/v1) and return dst/lhs/rhs/kind
+// - v0: keys cmp/lhs/rhs/dst
+// - v1: operation:"==" maps to Eq (CompareOpsBox)
+// Returns: map({ dst:int|null, lhs:int|null, rhs:int|null, kind:String }) or null
+
+using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
+using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+
+static box CompareScanBox {
+  parse(seg) {
+    if seg == null { return null }
+    local dst = JsonFragBox.get_int(seg, "dst")
+    local lhs = JsonFragBox.get_int(seg, "lhs")
+    local rhs = JsonFragBox.get_int(seg, "rhs")
+    local kind = JsonFragBox.get_str(seg, "cmp")
+    if kind == "" {
+      local sym = JsonFragBox.get_str(seg, "operation")
+      if sym != "" { kind = CompareOpsBox.map_symbol(sym) } else { kind = "Eq" }
+    }
+    return map({ dst: dst, lhs: lhs, rhs: rhs, kind: kind })
+  }
+}
+
+static box CompareScanMain { main(args){ return 0 } }

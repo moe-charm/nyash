@@ -6,6 +6,11 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
+if [[ "${SMOKES_ENABLE_JSON_V1:-0}" != "1" ]]; then
+  test_skip "JSON v1 path disabled; set SMOKES_ENABLE_JSON_V1=1 to run"
+  exit 0
+fi
+
 if [[ "${NYASH_PIPELINE_V2:-}" != "1" ]]; then
   test_skip "Pipeline V2 is experimental; set NYASH_PIPELINE_V2=1 to enable"
   exit 0

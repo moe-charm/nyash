@@ -3,6 +3,16 @@
 using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
 
 static box MiniVmEntryBox {
+
+  run_trace(j) {
+    if j.substring(0,1) == "{" {
+      local payload = j.substring(1, j.length())
+      local j2 = "{\"__trace__\":1," + payload
+      return MirVmMin.run_min(j2)
+    }
+    return MirVmMin.run_min(j)
+  }
+
   run_min(j) { return MirVmMin.run_min(j) }
   int_to_str(v) { return MirVmMin._int_to_str(v) }
 }

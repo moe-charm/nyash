@@ -6,6 +6,7 @@ using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/common/newbox_emit_box.hako" as NewBoxEmitBox
+using "apps/selfhost/common/json/json_inst_encode_box.hako" as JsonInstEncodeBox
 
 static box MirJsonBuilderMin {
   // Create new builder state (MapBox)
@@ -340,24 +341,7 @@ static box MirJsonBuilderMin {
   emit_to_string(st) { return me.to_string(st) }
 
   // Rebuild JSON text from structured blocks (配列→文字列)
-  _inst_json(node) {
-    if node == null { return "{}" }
-    local op = node.get("op")
-    match op {
-      "const"   => { return "{\"op\":\"const\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"value\":{\"type\":\"i64\",\"value\":" + me._int_to_str(node.get("value").get("value")) + "}}" },
-      "compare" => { return "{\"op\":\"compare\",\"cmp\":" + me._quote(node.get("cmp")) + ",\"lhs\":" + me._int_to_str(node.get("lhs")) + ",\"rhs\":" + me._int_to_str(node.get("rhs")) + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" },
-      "binop"   => { return "{\"op\":\"binop\",\"op_kind\":" + me._quote(node.get("op_kind")) + ",\"lhs\":" + me._int_to_str(node.get("lhs")) + ",\"rhs\":" + me._int_to_str(node.get("rhs")) + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" },
-      "branch"  => { return "{\"op\":\"branch\",\"cond\":" + me._int_to_str(node.get("cond")) + ",\"then\":" + me._int_to_str(node.get("then")) + ",\"else\":" + me._int_to_str(node.get("else_id")) + "}" },
-      "jump"    => { return "{\"op\":\"jump\",\"target\":" + me._int_to_str(node.get("target")) + "}" },
-      "ret"     => { return "{\"op\":\"ret\",\"value\":" + me._int_to_str(node.get("value")) + "}" },
-      "copy"    => { return "{\"op\":\"copy\",\"dst\":" + me._int_to_str(node.get("dst")) + ",\"src\":" + me._int_to_str(node.get("src")) + "}" },
-      "call"    => { return "{\"op\":\"call\",\"name\":" + me._quote(node.get("name")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" },
-      "boxcall" => { return "{\"op\":\"boxcall\",\"method\":" + me._quote(node.get("method")) + ",\"recv\":" + me._int_to_str(node.get("recv")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" },
-      "newbox"  => { return "{\"op\":\"newbox\",\"box_type\":" + me._quote(node.get("box_type")) + ",\"args\":" + node.get("args_text") + ",\"dst\":" + me._int_to_str(node.get("dst")) + "}" },
-      "mir_call"=> { return "{\"op\":\"mir_call\"}" },
-      _         => { return "{}" }
-    }
-  }
+  _inst_json(node) { return JsonInstEncodeBox.encode(node) }
   to_string_rebuild(st) {
     // Serialize single-function module from blocks structure
     local name = st.get("fn_name")

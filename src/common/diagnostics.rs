@@ -162,8 +162,16 @@ pub mod modules_error {
             "candidates": candidates,
         }).to_string()
     }
-}
+    pub fn private_access(path: &str, pattern: &str) -> String {
+        serde_json::json!({
+            "kind": "modules_error",
+            "code": "private_access",
+            "path": path,
+            "pattern": pattern,
+        }).to_string()
+    }
 
+}
 
 #[cfg(test)]
 mod tests {
@@ -188,5 +196,31 @@ mod tests {
         let j = crate::common::diagnostics::plugin_invoke_non_plugin_warn("a\"b");
         let v: serde_json::Value = match serde_json::from_str(&j) { Ok(v)=>v, Err(e)=> panic!("json string invalid: {}\nraw={}", e, j) };
         assert_eq!(v["method"], "a\"b");
+    }
+}
+
+/// Using prelude/collect errors (JSON diagnostics)
+pub mod using_error {
+    pub fn duplicate_import(path: &str, filename: &str, line: usize, prev_alias: &str, prev_line: usize) -> String {
+        serde_json::json!({
+            "kind": "using_error",
+            "code": "duplicate_import",
+            "path": path,
+            "file": filename,
+            "line": line,
+            "prev_alias": prev_alias,
+            "prev_line": prev_line,
+        }).to_string()
+    }
+    pub fn alias_rebound(alias: &str, filename: &str, line: usize, prev_path: &str, prev_line: usize) -> String {
+        serde_json::json!({
+            "kind": "using_error",
+            "code": "alias_rebound",
+            "alias": alias,
+            "file": filename,
+            "line": line,
+            "prev_path": prev_path,
+            "prev_line": prev_line,
+        }).to_string()
     }
 }

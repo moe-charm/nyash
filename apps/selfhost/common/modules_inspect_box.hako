@@ -1,0 +1,39 @@
+// modules_inspect_box.hako — ModulesInspectBox
+// Responsibility: Helpers for Dir-as-NS module inspection from Nyash code.
+// Non‑IO, formatting-only utilities. Caller provides inputs (e.g., lists or JSON).
+
+static box ModulesInspectBox {
+  // Convert apps-relative path to namespace (Dir-as-NS v2.2 rules)
+  path_to_namespace(path) {
+    if path == null { return "" }
+    local s = "" + path
+    // Strip leading ./
+    if s.length() >= 2 && s.substring(0,2) == "./" { s = s.substring(2, s.length()) }
+    // Remove leading apps/
+    local pref = "apps/"
+    if s.length() >= pref.length() && s.substring(0, pref.length()) == pref { s = s.substring(pref.length(), s.length()) }
+    // Replace '-' with '.' in directory parts only
+    local out = ""
+    local i = 0
+    loop(i < s.length()) {
+      local ch = s.substring(i, i+1)
+      if ch == "/" { out = out + "."  i = i + 1  continue }
+      if ch == "-" { out = out + "."  i = i + 1  continue }
+      out = out + ch
+      i = i + 1
+    }
+    // Drop .hako and optional _box suffix
+    if out.length() >= 5 && out.substring(out.length()-5, out.length()) == ".hako" {
+      out = out.substring(0, out.length()-5)
+    }
+    if out.length() >= 4 && out.substring(out.length()-4, out.length()) == "_box" {
+      out = out.substring(0, out.length()-4)
+    }
+    return out
+  }
+  // Pretty single line
+  pretty_line(tag, ns, path) { return "[" + tag + "] " + ns + " → " + path }
+}
+
+static box ModulesInspectMain { main(args){ return 0 } }
+

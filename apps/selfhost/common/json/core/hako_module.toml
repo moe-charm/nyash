@@ -1,0 +1,10 @@
+[module]
+name = "selfhost.common.json.core"
+version = "1.0.0"
+
+[exports]
+json_scan = "json_scan.hako"
+string_scan = "string_scan.hako"
+
+[private]
+# Internal JSON scanning utilities

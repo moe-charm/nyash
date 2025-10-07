@@ -271,6 +271,59 @@ impl NyashRunner {
             rt
         };
 
+        // Dev-only bridge: auto-register user boxes discovered via Dir-as-NS
+        if std::env::var("NYASH_VM_AUTO_REGISTER_DIR_NS").ok().as_deref() == Some("1") {
+            // Gather unique .hako paths from pending_modules and register their box declarations
+            let ctx = self.init_using_context();
+            use std::collections::HashSet;
+            let mut uniq: HashSet<String> = HashSet::new();
+            let mut paths: Vec<String> = Vec::new();
+            for (_ns, p) in ctx.pending_modules.iter() {
+                if !(p.ends_with(".hako") || p.ends_with(".nyash")) { continue; }
+                // Dedup by canonical path when possible
+                let canon = std::fs::canonicalize(p).ok().map(|pb| pb.to_string_lossy().to_string()).unwrap_or_else(|| p.clone());
+                if uniq.insert(canon.clone()) { paths.push(canon); }
+            }
+            
+            // Dev bridge (Module‑First): also sweep builder/ssa boxes to ensure ModuleFunction availability
+            // Minimal, opt‑in only, safe to ignore errors.
+            fn push_hako_under(dir: &str, uniq: &mut std::collections::HashSet<String>, out: &mut Vec<String>) {
+                use std::path::Path;
+                if !Path::new(dir).exists() { return; }
+                let mut stack = vec![dir.to_string()];
+                while let Some(d) = stack.pop() {
+                    if let Ok(rd) = std::fs::read_dir(&d) {
+                        for ent in rd.flatten() {
+                            let p = ent.path();
+                            if p.is_dir() {
+                                if let Some(s) = p.to_str() { stack.push(s.to_string()); }
+                                continue;
+                            }
+                            if let Some(ext) = p.extension() { if ext != "hako" { continue; } }
+                            let canon = std::fs::canonicalize(&p).ok().map(|pb| pb.to_string_lossy().to_string());
+                            if let Some(c) = canon { if uniq.insert(c.clone()) { out.push(c); } }
+                        }
+                    }
+                }
+            }
+            if std::env::var("NYASH_NS_POLICY").ok().as_deref() == Some("module-first") {
+                // Builder/SSA is the minimal set required by many pipeline E2Es
+                push_hako_under("apps/selfhost-compiler/builder/ssa", &mut uniq, &mut paths);
+                // Also include a minimal portion of pipeline_v2 boxes used by with_usings tests
+                push_hako_under("apps/selfhost-compiler/pipeline_v2", &mut uniq, &mut paths);
+            }
+if !paths.is_empty() {
+                if crate::config::env::resolve_trace() && !crate::config::env::cli_quiet() {
+                    eprintln!("[using/dir-ns] auto-register {} module files", paths.len());
+                }
+                if let Ok(parsed) = crate::runner::modes::common_util::resolve::parse_preludes_to_asts(self, &paths) {
+                    for (_path, ast) in parsed.into_iter() {
+                        crate::runner::vm_pipeline::register_user_boxes_from_ast(&ast);
+                    }
+                }
+            }
+        }
+
         // Compile to MIR (opt passes configurable)
         let mut mir_compiler = MirCompiler::with_options(!self.config.no_optimize);
         let compile_result = match mir_compiler.compile(ast) {

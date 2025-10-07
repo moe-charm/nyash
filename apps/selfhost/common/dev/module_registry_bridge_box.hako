@@ -1,0 +1,14 @@
+// module_registry_bridge_box.hako — ModuleRegistryBridgeBox (dev stub)
+// Responsibility: Provide a stable Nyash-side interface for registering
+// Dir-as-NS discovered modules into the VM registry in development profiles.
+// Note: Actual registry wiring is implemented in the Runner (Rust).
+// This box serves as a future integration point and keeps call sites stable.
+
+static box ModuleRegistryBridgeBox {
+  // Accepts a JSON array of pairs: [["ns","apps/.../x.hako"], ...]
+  // Dev-only no-op stub: returns 0.
+  register_pending_modules(pairs_json) { return 0 }
+}
+
+static box ModuleRegistryBridgeMain { main(args){ return 0 } }
+

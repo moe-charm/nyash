@@ -399,7 +399,8 @@ impl MirBuilder {
             Ok(value_id)
         } else {
             // Enhance diagnostics using Using simple registry (Phase 1)
-            let mut msg = format!("Undefined variable: {}", name);
+            let cur_fn = self.current_function.as_ref().map(|f| f.signature.name.clone()).unwrap_or_else(|| "<unknown>".to_string());
+            let mut msg = format!("Undefined variable: {} (in function {})", name, cur_fn);
             let suggest = crate::using::simple_registry::suggest_using_for_symbol(&name);
             if !suggest.is_empty() {
                 msg.push_str("\nHint: symbol appears in using module(s): ");

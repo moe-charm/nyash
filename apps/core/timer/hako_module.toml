@@ -1,0 +1,9 @@
+[module]
+name = "core.timer"
+version = "1.0.0"
+
+[exports]
+TimerBox = "TimerBox.hako"
+
+[private]
+# No private entries

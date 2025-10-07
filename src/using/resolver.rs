@@ -94,49 +94,78 @@ pub fn populate_from_toml(
 
     // [modules] table flatten: supports nested namespaces (a.b.c = "path")
     if let Some(mods) = doc.get("modules").and_then(|v| v.as_table()) {
-        // main table
-        let mut base = crate::common::using_core::flatten_modules_table(mods);
-        pending_modules.append(&mut base);
+        // main table: no direct flatten (use workspace/overrides for clarity)
         // [modules.workspace] — load module.toml manifests and export public entries
         if let Some(ws_tbl) = mods.get("workspace").and_then(|v| v.as_table()) {
             if let Some(arr) = ws_tbl.get("members").and_then(|v| v.as_array()) {
                 let mut ws_manifests: Vec<crate::config::module_workspace::ModuleManifest> = Vec::new();
+                let mut ws_versions: std::collections::HashMap<String, String> = std::collections::HashMap::new();
                 for m in arr.iter() {
                     if let Some(raw) = m.as_str() {
-                        // Accept either a module.toml path or a directory containing it; expand simple patterns like apps/*/module.toml
+                        // Accept a manifest path or a directory; expand simple patterns like apps/*/hako_module.toml
                         let mut cand_paths: Vec<std::path::PathBuf> = Vec::new();
-                        if raw.contains('*') {
-                            cand_paths.extend(crate::config::module_workspace::expand_members_pattern(raw));
+                        if raw.contains('*') || raw.contains('?') {
+                            // Resolve patterns relative to the config file directory when not absolute
+                            let expanded = crate::config::module_workspace::expand_members_pattern(raw);
+                            if let Some(conf_dir) = path.parent() {
+                                for p in expanded.into_iter() {
+                                    let pp = if p.is_absolute() { p } else { conf_dir.join(p) };
+                                    cand_paths.push(pp);
+                                }
+                            } else {
+                                cand_paths.extend(expanded);
+                            }
                         } else {
-                            let p = std::path::Path::new(raw);
+                            let p_rel = std::path::Path::new(raw);
+                            let p = if p_rel.is_absolute() { p_rel.to_path_buf() } else { path.parent().unwrap_or(std::path::Path::new(".")).join(p_rel) };
                             if p.is_dir() {
-                                // Prefer hako_module.toml; accept legacy module.toml
-                                cand_paths.insert(cand_paths.len(), p.join("hako_module.toml"));
-                                cand_paths.insert(cand_paths.len(), p.join("module.toml"));
+                                // Prefer hako_module.toml; accept legacy module.toml; also allow module.hako fallback
+                                cand_paths.push(p.join("hako_module.toml"));
+                                cand_paths.push(p.join("module.toml"));
+                                cand_paths.push(p.join("module.hako"));
                             } else { cand_paths.push(p.to_path_buf()); }
                         }
                         for mp in cand_paths.into_iter() {
+                            if crate::config::env::resolve_trace() && !crate::config::env::cli_quiet() {
+                                eprintln!("[using] ws cand: {:?}", mp);
+                            }
                             if !mp.exists() { continue; }
+                            // Try TOML manifests first
                             if let Some(man) = crate::config::module_workspace::parse_module_toml(&mp) {
-                                ws_manifests.push(man.clone());
-                                let base_ns = man.name;
+                                let base_ns = man.name.clone();
+                                if let Some(ver) = man.version.clone() { ws_versions.insert(base_ns.clone(), ver); }
                                 let base_dir = mp.parent().unwrap_or(std::path::Path::new("."));
-                                for (key, rel) in man.exports.into_iter() {
+                                for (key, rel) in man.exports.iter() {
                                     let ns = format!("{}.{}", base_ns, key);
                                     let sp = base_dir.join(rel);
-                                    if let Some(sp_s) = sp.to_str() {
-                                        pending_modules.push((ns, sp_s.to_string()));
+                                    if let Some(sp_s) = sp.to_str() { pending_modules.push((ns, sp_s.to_string())); }
+                                }
+                                ws_manifests.push(man);
+                            } else {
+                                // Fallback: module.hako (preview) — now wired for resolver
+                                let pdir = if mp.is_dir() { mp.clone() } else { mp.parent().unwrap_or(std::path::Path::new(".")).to_path_buf() };
+                                let mh = if mp.file_name().and_then(|s| s.to_str()) == Some("module.hako") { mp.clone() } else { pdir.join("module.hako") };
+                                if mh.exists() {
+                                    if let Some(man) = crate::config::module_workspace::parse_module_hako(&mh) {
+                                        let base_ns = man.name.clone();
+                                        if let Some(ver) = man.version.clone() { ws_versions.insert(base_ns.clone(), ver); }
+                                        let base_dir = mh.parent().unwrap_or(std::path::Path::new("."));
+                                        for (key, rel) in man.exports.iter() {
+                                            let ns = format!("{}.{}", base_ns, key);
+                                            let sp = base_dir.join(rel);
+                                            if let Some(sp_s) = sp.to_str() { pending_modules.push((ns, sp_s.to_string())); }
+                                        }
+                                        ws_manifests.push(man);
                                     }
                                 }
                             }
                         }
                     }
                 }
-                // Cycle detection (warn only for now)
+                // Cycle detection (warn/strict)
                 let g = crate::config::module_workspace::build_dep_graph(&ws_manifests);
                 let cycles = crate::config::module_workspace::detect_cycles_from_graph(&g);
                 if !cycles.is_empty() {
-                    // Emit diagnostics JSON + optional human-readable
                     for cyc in cycles.iter() {
                         eprintln!("{}", crate::common::diagnostics::modules_error::cycle(cyc));
                         if !crate::config::env::cli_quiet() { eprintln!("[deps] cycle: {}", cyc.join(" -> ")); }
@@ -147,6 +176,31 @@ pub fn populate_from_toml(
                         return Err(crate::using::errors::UsingError::Cycle(joined));
                     }
                 }
+                // Missing dependency/version checks (warn/strict)
+                for man in ws_manifests.iter() {
+                    let base_ns = man.name.clone();
+                    for (dep, req) in man.dependencies.iter() {
+                        if !ws_versions.contains_key(dep) {
+                            eprintln!("{}", crate::common::diagnostics::modules_error::missing_dep(&base_ns, dep, req));
+                            if !crate::config::env::cli_quiet() { eprintln!("[deps] missing: {} -> {} {}", base_ns, dep, req); }
+                            if std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1") {
+                                return Err(crate::using::errors::UsingError::MissingDep { module: base_ns.clone(), dep: dep.clone(), req: req.clone() });
+                            }
+                        } else if let Some(cur) = ws_versions.get(dep) {
+                            if req.starts_with('^') {
+                                let want_major = req.trim_start_matches('^').split('.').next().unwrap_or("");
+                                let have_major = cur.split('.').next().unwrap_or("");
+                                if want_major != have_major {
+                                    eprintln!("{}", crate::common::diagnostics::modules_error::missing_dep(&base_ns, dep, req));
+                                    if !crate::config::env::cli_quiet() { eprintln!("[deps] version-mismatch: {} requires {} {} but found {}", base_ns, dep, req, cur); }
+                                    if std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1") {
+                                        return Err(crate::using::errors::UsingError::MissingDep { module: base_ns.clone(), dep: dep.clone(), req: req.clone() });
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
         // [modules.overrides] takes precedence (append; later wins in map usage)
@@ -154,8 +208,9 @@ pub fn populate_from_toml(
             let mut v = crate::common::using_core::flatten_modules_table(ovr);
             pending_modules.append(&mut v);
         }
-        // [modules.aliases] injects alias redirects (recorded in aliases map)
+        // [modules.aliases] (DEPRECATED): injects alias redirects (recorded in aliases map)
         if let Some(alias_tbl) = mods.get("aliases").and_then(|v| v.as_table()) {
+            if !alias_tbl.is_empty() && !crate::config::env::cli_quiet() { eprintln!("[deprecate] [modules.aliases] is deprecated; use [modules.overrides] instead"); }
             for (k, v) in alias_tbl.iter() {
                 if let Some(target) = v.as_str() {
                     aliases.insert(k.to_string(), target.to_string());
@@ -209,6 +264,25 @@ pub fn populate_from_toml(
             if let Some(b) = opts_tbl.get("exclude_example_prefix").and_then(|v| v.as_bool()) {
                 std::env::set_var("NYASH_DISCOVER_EXCLUDE_EXAMPLE_PREFIX", if b {"1"} else {"0"});
             }
+        // Namespace conflict detection across accumulated pending_modules (warn/strict)
+        {
+            use std::collections::{HashMap, HashSet};
+            let mut map: HashMap<String, HashSet<String>> = HashMap::new();
+            for (ns, p) in pending_modules.iter() {
+                map.entry(ns.clone()).or_default().insert(p.clone());
+            }
+            for (ns, paths_set) in map.iter() {
+                if paths_set.len() > 1 {
+                    let mut paths: Vec<String> = paths_set.iter().cloned().collect();
+                    paths.sort();
+                    eprintln!("{}", crate::common::diagnostics::modules_error::conflict(ns, &paths));
+                    if std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1") {
+                        return Err(crate::using::errors::UsingError::Conflict { ns: ns.clone(), paths: paths.join(",") });
+                    }
+                }
+            }
+        }
+
         }
     }
 
@@ -228,6 +302,7 @@ pub fn populate_from_toml(
         }
         // aliases
         if let Some(alias_tbl) = using_tbl.get("aliases").and_then(|v| v.as_table()) {
+            if !alias_tbl.is_empty() && !crate::config::env::cli_quiet() { eprintln!("[deprecate] [modules.aliases] is deprecated; use [modules.overrides] instead"); }
             for (k, v) in alias_tbl.iter() {
                 if let Some(target) = v.as_str() {
                     aliases.insert(k.to_string(), target.to_string());
@@ -259,6 +334,81 @@ pub fn populate_from_toml(
         }
     }
 
+    
+    
+    // [private] minimal: record patterns/options into env for pipeline enforcement
+    if let Some(priv_tbl) = doc.get("private").and_then(|v| v.as_table()) {
+        if let Some(arr) = priv_tbl.get("patterns").and_then(|v| v.as_array()) {
+            let mut pats: Vec<String> = Vec::new();
+            for e in arr.iter() { if let Some(s) = e.as_str() { let t = s.trim(); if !t.is_empty() { pats.push(t.to_string()); } } }
+            if !pats.is_empty() {
+                std::env::set_var("NYASH_PRIVATE_PATTERNS", pats.join(";"));
+            }
+        }
+        if let Some(opts) = priv_tbl.get("options").and_then(|v| v.as_table()) {
+            if let Some(mode) = opts.get("on_violation").and_then(|v| v.as_str()) { std::env::set_var("NYASH_PRIVATE_ON_VIOLATION", mode); }
+            if let Some(diag) = opts.get("enable_diagnostics").and_then(|v| v.as_bool()) { std::env::set_var("NYASH_PRIVATE_DIAG", if diag {"1"} else {"0"}); }
+        }
+    }
+// Directory-as-Namespace fallback (optional; env-gated)
+    // When NYASH_USING_DIR_NS=1, scan apps/ for *.hako and append (ns->path) pairs as
+    // lowest-precedence candidates. Duplicates are suppressed; conflicts may error in STRICT.
+    if std::env::var("NYASH_USING_DIR_NS").ok().as_deref() == Some("1") {
+        use std::collections::{HashMap as Map, HashSet};
+        let root = std::env::var("NYASH_ROOT").ok().unwrap_or_else(|| ".".to_string());
+        let apps = std::path::Path::new(&root).join("apps");
+        if apps.exists() {
+            let opts = crate::config::module_discovery::ModuleDiscoveryOptions::default();
+            let auto = crate::config::module_discovery::discover_entries_under(&apps, &opts);
+            // build maps of existing namespaces and their paths (for conflict detection)
+            let mut existing: HashSet<String> = HashSet::new();
+            let mut existing_map: Map<String, String> = Map::new();
+            for (ns, p) in pending_modules.iter() { existing.insert(ns.clone()); existing_map.insert(ns.clone(), p.clone()); }
+            // Accumulate multiplicities (ns -> {paths}) for conflict detection
+            let mut multi: Map<String, HashSet<String>> = Map::new();
+            for (ns, p) in pending_modules.iter() { multi.entry(ns.clone()).or_default().insert(p.clone()); }
+            // Merge auto entries; if an ns already exists, record both existing and auto paths for strict conflict check
+            for (ns, p) in auto.into_iter() {
+                if !existing.contains(&ns) {
+                    if let Some(ps) = p.to_str() { pending_modules.push((ns.clone(), ps.to_string())); multi.entry(ns).or_default().insert(ps.to_string()); }
+                } else {
+                    if let Some(ps) = p.to_str() {
+                        multi.entry(ns.clone()).or_default().insert(ps.to_string());
+                        if let Some(prev) = existing_map.get(&ns) { multi.entry(ns.clone()).or_default().insert(prev.clone()); }
+                    }
+                }
+            }
+            // Lightweight conflict check on the accumulated set (warn/strict)
+            for (ns, paths_set) in multi.into_iter() {
+                if paths_set.len() > 1 {
+                    let mut paths: Vec<String> = paths_set.into_iter().collect();
+                    paths.sort();
+                    eprintln!("{}", crate::common::diagnostics::modules_error::conflict(&ns, &paths));
+                    if std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1") {
+                        return Err(crate::using::errors::UsingError::Conflict { ns: ns.clone(), paths: paths.join(",") });
+                    }
+                }
+            }
+        }
+    }
+    // Final duplicate detection across all accumulated entries (always on; strict -> error)
+    {
+        use std::collections::{HashMap as Map, HashSet};
+        let mut multi: Map<String, HashSet<String>> = Map::new();
+        for (ns, p) in pending_modules.iter() {
+            multi.entry(ns.clone()).or_default().insert(p.clone());
+        }
+        for (ns, paths_set) in multi.into_iter() {
+            if paths_set.len() > 1 {
+                let mut paths: Vec<String> = paths_set.into_iter().collect();
+                paths.sort();
+                eprintln!("{}", crate::common::diagnostics::modules_error::conflict(&ns, &paths));
+                if std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1") {
+                    return Err(crate::using::errors::UsingError::Conflict { ns: ns.clone(), paths: paths.join(",") });
+                }
+            }
+        }
+    }
     Ok(policy)
 }
 

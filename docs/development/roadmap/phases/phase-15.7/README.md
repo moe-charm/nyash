@@ -58,6 +58,29 @@ Branch Note (selfhost)
 - AOT最小セマンティクス: `NYASH_HAKO_MIN_SEM=1 NYASH_NYRT_SILENT_RESULT=1 ./app`
 ### 📊 **現状分析（2025-09-30）**
 
+## 🆕 Updates — 2025-10-08（小粒の安定化）
+
+- Namespace CLI の可視性を強化
+  - `--list-modules` / `--modules-show` / `--modules-resolve` で先頭に `[policy] {module-first|path-first}` を表示。
+  - Module‑First 運用時の意図が出力から一目で分かるようにした（dev UX）。
+
+- Strict 診断テンプレ（using/modules）をガイド化
+  - `NYASH_USING_CHECKS_STRICT=1` 時に 1 行で安定出力: 
+    - MissingDep: `workspace missing dependency: <module> → <dep> (<req>)`
+    - Conflict: `workspace namespace conflict: <ns> has multiple paths: <p1,p2,...>`
+  - 併せて JSON 診断（`{"kind":"modules_error",...}`）も出すが、テストは 1 行文字列で安定比較可能。
+
+- Throw/PHI の Builder 側の扱い修正（JSON v0 経路）
+  - Match の then‑arm が Throw で終わる場合、PHI 入力と merge ジャンプを抑止（到達不能の入力を除外）。
+  - 受け入れ: `json_v0_match_throw_phi_vm.sh` を常時ON化し、Result: 7 を確認（else のみが PHI に来る）。
+
+- Stage1JsonScannerBox の適用拡大（取りこぼし減）
+  - 早期経路（Call/Method）で `extract_name_args` を使う軽量フォールバックを追加。微妙な JSON 差異にも耐性。
+
+- Macro 子プロセスの隔離（テスト/開発）
+  - 子に `NYASH_SKIP_TOML_ENV=1` / `NYASH_USING=0` を注入してプロジェクト TOML/using の影響を遮断。ガイドへ追記。
+
+
 #### ✅ **既に実装済み（堅固な基盤）**
 - **Rustコンパイラ**: 完全実装・安定動作（Phase 1-14）
   - Parser（完全実装✅）
@@ -1249,3 +1272,21 @@ Unified Call（開発既定ON）
 - Added `phi_core::common::is_unreachable_pred()` and routed builder to it.
 - VM now uses unified unborn guard/message and birth recording via common helpers.
 - Unit tests: unchanged count but quick run remains green.
+
+## 🆕 Updates (2025-10-07)
+
+- CompareScanBox（v0/v1 正規化）を導入し、Hakorumne VM/自家製 Mini‑VM の compare 抽出を箱に一本化（残差も段階置換）。
+- RetResolveSimpleBox を導入し、Mini‑VM の末尾フォールバック順を明示（last_cmp → ret解決 → first const）。
+- with_usings E2E 緑化（dev / Module‑First）:
+  - VM 自動登録ブリッジ（NYASH_VM_AUTO_REGISTER_DIR_NS=1）を builder/ssa/.hako に拡張（Module‑First 時のみ）。
+  - UsingResolverBox に `upgrade_aliases()` を追加し、modules_map を使って alias→full ns に昇格（tail 一意）。
+  - PipelineV2.with_usings 入口で upgrade_aliases を呼び、NamespaceBox 正規化の前提を強化。
+- Mini‑VM トレース導線（dev）:
+  - `__trace__=1` を JSON 先頭に置くと [DEBUG] を出力。`MiniVmEntryBox.run_trace(json)` が注入を補助。
+  - Docs: Namespace Quickstart に Mini‑VM Debugging を追記。
+
+### Next (small & safe)
+1) Module‑First bridge の対象拡張（exports の広い拾い上げ）と失敗時診断（missing ModuleFunction）を1行で明示。
+2) CompareScanBox の完全適用（Hakorumne 側 compare の残差置換）と最小スモークを1本追加。
+3) with_usings の追加E2E（別 alias）を1本だけ quick に常設（過多回避）。
+4) Mini‑VM Debug の独立ページ（docs/guides/mini-vm-debugging.md）を作成し、CLI/ENV/落とし穴（末尾数値の抽出）を記載。
