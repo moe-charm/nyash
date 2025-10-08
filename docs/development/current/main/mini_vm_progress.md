@@ -165,7 +165,86 @@ NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/ha
 ```
 
 **次のステップ**:
-- [ ] Task Teacher + ultrathinkでRust VMバグ調査
-- [ ] Rust VM exec.rs のローカル変数実装確認
-- [ ] 回避策実装してPhase 1 Day 2完了
-- [ ] Rust VM issueとして報告
+- [x] Task Teacher + ultrathinkでRust VMバグ調査 → **根本原因発見！**
+- [x] Rust VM if_phi.rs のextract_assigned_var修正
+- [x] 修正検証完了（全10テストPASS）
+- [ ] Rust VM issueとして報告（既に修正済み）
+
+---
+
+### 🎉 **Day 2 バグ修正完了！** (2025-10-09)
+
+#### ✅ **根本原因特定**
+
+**場所**: `src/mir/phi_core/if_phi.rs` Line 64-71
+
+**関数**: `extract_assigned_var`
+
+**問題**:
+- else-if は nested IF として解析される
+- nested IF の `then` branch のみに代入がある場合: `(Some("result"), None)`
+- 既存コードは `_ => None` でマッチ → 親 IF が「else branch は変数代入なし」と誤判定
+- PHI merge が pre-if 値（0）を使用してしまう
+
+**修正内容**:
+```rust
+// Before:
+match (tvar, evar) {
+    (Some(tv), Some(ev)) if tv == ev => Some(tv),
+    _ => None,  // ❌ (Some, None) を None 扱い
+}
+
+// After:
+match (tvar, evar) {
+    (Some(tv), Some(ev)) if tv == ev => Some(tv),
+    (Some(tv), None) => Some(tv),  // ✅ Fix
+    (None, Some(ev)) => Some(ev),  // ✅ Fix
+    _ => None,
+}
+```
+
+#### ✅ **修正検証結果**
+
+**実行コマンド**:
+```bash
+source tools/dev_env.sh using
+NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+```
+
+**結果**: 全10テストPASS！ 🎉
+```
+Test 1: const 42 + ret → 42 ✅
+Test 2: 10 + 32 → 42 ✅
+Test 3: copy 42 → 42 ✅
+Test 4: 50 - 8 → 42 ✅ (修正前: 0)
+Test 5: 6 * 7 → 42 ✅ (修正前: 0)
+Test 6: 84 / 2 → 42 ✅ (修正前: 0)
+Test 7: 127 % 85 → 42 ✅ (修正前: 0)
+Test 8: 42 == 42 → 1 ✅ (修正前: 0)
+Test 9: 41 < 42 → 1 ✅ (修正前: 0)
+Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
+[SUCCESS] All Phase 1 Day 2 tests passed! 🎉 (10/10)
+```
+
+#### 📊 **Day 2 最終統計**
+
+- **見積もり**: 4時間
+- **実績**: 約12時間（デバッグ含む）
+- **超過時間**: 8時間（200%超過）
+- **超過理由**: JSON parsing（1.5時間）+ Rust VMバグ調査・修正（6時間）+ その他（0.5時間）
+- **コード行数**: hakorune_vm_core.hako: 389行 (+10行 from Day 1)
+- **実装命令数**: 9/16（Const, BinOp x5, Compare x6, Ret, Copy）
+- **テスト成功率**: 10/10 (100%) ✅
+- **新規バグ発見**: 1件（Rust VM else-if PHI bug）
+- **バグ修正**: 1件（src/mir/phi_core/if_phi.rs）
+
+#### 🎯 **学び**
+
+1. **else-if は nested IF**: パーサーの内部表現を理解することの重要性
+2. **MIR Builder の最適化バグ**: PHI 処理は複雑で、edge case に注意が必要
+3. **Task Teacher 有効性**: 複雑なバグ調査に Task Teacher が非常に有効
+4. **最小再現コード**: バグ調査の基本は最小再現コード作成
+5. **デバッグトレース**: print デバッグは変数の直前/直後に入れるべき
+
+**次のステップ**:
+- [ ] Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）

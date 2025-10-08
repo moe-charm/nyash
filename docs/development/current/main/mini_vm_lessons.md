@@ -356,7 +356,7 @@ regs.set(StringHelpers.int_to_str(dst), result_val)  // 0 が保存される
 
 ---
 
-#### 📊 **Day 2 統計**
+#### 📊 **Day 2 統計（バグ発見時）**
 
 - **見積もり**: 4時間
 - **実績**: 約8時間
@@ -366,3 +366,93 @@ regs.set(StringHelpers.int_to_str(dst), result_val)  // 0 が保存される
 - **実装命令数**: 9/16（Const, BinOp x5, Compare x6, Ret, Copy）
 - **テスト成功率**: 3/10 (30%) ← Rust VMバグにより7テスト失敗
 - **新規バグ発見**: 1件（Rust VM else-if変数消失バグ）
+
+---
+
+### 🎉 **Day 2 バグ解決！** (2025-10-09 同日)
+
+#### ✅ **成功要因3: Task Teacher + Ultrathink による根本原因特定**
+
+**調査方法**:
+1. **Task Teacher 1回目**: 最小再現コードで調査 → 再現せず（using エラーが原因と判明）
+2. **Task Teacher 2回目**: 実際のファイルで調査 → バグ確認、MIR 最適化バグと仮説
+3. **Task Teacher 3回目**: MIR Builder/Optimizer 調査 → **根本原因発見！**
+
+**根本原因**: `src/mir/phi_core/if_phi.rs` Line 64-71
+- **関数**: `extract_assigned_var`
+- **問題**: else-if（nested IF）で片方のbranchのみ変数代入がある場合、`(Some(tv), None)` を `None` 扱い
+- **結果**: 親 IF が「else branch は変数代入なし」と誤判定 → PHI merge が pre-if 値（0）を使用
+
+**修正内容**:
+```rust
+// Before:
+match (tvar, evar) {
+    (Some(tv), Some(ev)) if tv == ev => Some(tv),
+    _ => None,  // ❌ (Some, None) を None 扱い
+}
+
+// After:
+match (tvar, evar) {
+    (Some(tv), Some(ev)) if tv == ev => Some(tv),
+    (Some(tv), None) => Some(tv),  // ✅ Fix: nested IF の then branch のみ
+    (None, Some(ev)) => Some(ev),  // ✅ Fix: nested IF の else branch のみ
+    _ => None,
+}
+```
+
+**修正ファイル**: `src/mir/phi_core/if_phi.rs` (4行追加)
+
+**検証結果**: 全10テストPASS！ 🎉
+```bash
+source tools/dev_env.sh using
+NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+
+Test 4: 50 - 8 → 42 ✅ (修正前: 0)
+Test 5: 6 * 7 → 42 ✅ (修正前: 0)
+Test 6: 84 / 2 → 42 ✅ (修正前: 0)
+Test 7: 127 % 85 → 42 ✅ (修正前: 0)
+Test 8: 42 == 42 → 1 ✅ (修正前: 0)
+Test 9: 41 < 42 → 1 ✅ (修正前: 0)
+Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
+```
+
+**時間損失（調査・修正）**: 約4時間
+
+**学び**:
+1. **Task Teacher の威力**: 複雑なバグ調査に Task Teacher が非常に有効（3回目で根本原因発見）
+2. **最小再現コード vs 実際のコード**: 両方のアプローチが必要（最小版は再現せず、実際版で再現）
+3. **MIR Builder 複雑性**: PHI 処理は複雑で、edge case（nested IF）に注意が必要
+4. **パーサー内部表現**: else-if が nested IF として表現されることを理解する重要性
+5. **デバッグトレース**: すけすけトレース（HAKO_VM_TRACE）があれば一瞬で発見できた可能性
+
+**再発防止策**:
+- [x] **Rust VM修正完了**: `src/mir/phi_core/if_phi.rs` Line 68-69 追加
+- [x] **テスト検証完了**: 全10テストPASS
+- [ ] **Regression Test追加**: MIR Builder用のedge caseテスト追加を検討
+- [ ] **ドキュメント更新**: PHI処理の注意点をドキュメント化
+
+#### 📊 **Day 2 最終統計（修正後）**
+
+- **見積もり**: 4時間
+- **実績**: 約12時間（バグ調査・修正含む）
+- **超過時間**: 8時間（200%超過）
+- **超過理由**: JSON parsing（1.5時間）+ **Rust VMバグ調査・修正（6時間）** + その他（0.5時間）
+- **コード行数**: hakorune_vm_core.hako: 389行 (+10行 from Day 1), Rust VM: +4行
+- **実装命令数**: 9/16（Const, BinOp x5, Compare x6, Ret, Copy）
+- **テスト成功率**: 10/10 (100%) ✅ **完全修正！**
+- **新規バグ発見**: 1件（Rust VM else-if PHI bug）
+- **バグ修正**: 1件（src/mir/phi_core/if_phi.rs）
+
+---
+
+#### ✅ **Phase 1 Day 2 完全完了！** 🎉
+
+**技術的成果**:
+1. BinOp 5種類完全実装（Add/Sub/Mul/Div/Mod）
+2. Compare 6種類完全実装（Eq/Ne/Lt/Le/Gt/Ge）
+3. ゼロ除算エラーハンドリング
+4. JSON parsing修正（seek_obj_end inclusive）
+5. **Rust VM PHI バグ修正**（production環境の品質向上）
+
+**次のステップ**:
+- Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）
