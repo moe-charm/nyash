@@ -621,26 +621,16 @@ impl MirBuilder {
         if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
             eprintln!("[builder] extern timer now_ms emitted → ExternCall(nyrt.time.now_ms)");
         }
-        self.emit_instruction(MirInstruction::ExternCall {
-            dst: Some(dst),
-            iface_name: "nyrt.time".to_string(),
-            method_name: "now_ms".to_string(),
-            args: vec![],
-            effects: EffectMask::READ,
-        })?;
+        #[allow(deprecated)]
+        self.emit_legacy_externcall(Some(dst), "nyrt.time", "now_ms", vec![])?;
         Ok(dst)
     }
 
     fn emit_array_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
         let recv_local = self.local_recv(receiver);
         let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::ExternCall {
-            dst: Some(dst),
-            iface_name: "nyrt.array".to_string(),
-            method_name: "size".to_string(),
-            args: vec![recv_local],
-            effects: EffectMask::READ,
-        })?;
+        #[allow(deprecated)]
+        self.emit_legacy_externcall(Some(dst), "nyrt.array", "size", vec![recv_local])?;
         self.value_types.insert(dst, MirType::Integer);
         Ok(dst)
     }
@@ -648,13 +638,8 @@ impl MirBuilder {
     fn emit_map_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
         let recv_local = self.local_recv(receiver);
         let dst = self.value_gen.next();
-        self.emit_instruction(MirInstruction::ExternCall {
-            dst: Some(dst),
-            iface_name: "nyrt.map".to_string(),
-            method_name: "size".to_string(),
-            args: vec![recv_local],
-            effects: EffectMask::READ,
-        })?;
+        #[allow(deprecated)]
+        self.emit_legacy_externcall(Some(dst), "nyrt.map", "size", vec![recv_local])?;
         self.value_types.insert(dst, MirType::Integer);
         Ok(dst)
     }

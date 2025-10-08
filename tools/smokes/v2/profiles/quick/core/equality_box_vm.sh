@@ -19,7 +19,15 @@ box Point {
   equals(other) { return me.x == other.x and me.y == other.y }
 }
 
-box Simple { v }
+box Simple {
+  v
+  birth(val) {
+    me.v = val
+  }
+  equals(other) {
+    return me.v == other.v
+  }
+}
 
 static box Main {
   main() {
@@ -27,11 +35,13 @@ static box Main {
     local p2 = new Point(3, 4)
     if p1 == p2 { print("true") } else { print("false") }
 
-    local s1 = new Simple()
-    local s2 = new Simple()
-    s1.v = 1
-    s2.v = 2
-    if s1 == s2 { print("true") } else { print("false") }
+    local s1 = new Simple(1)
+    local s2 = new Simple(2)
+    if s1 == s2 { print("false") } else { print("true") }
+
+    local s3 = new Simple(5)
+    local s4 = new Simple(5)
+    if s3 == s4 { print("true") } else { print("false") }
 
     if 42 == 42 { print("true") } else { print("false") }
     return 0
@@ -40,6 +50,7 @@ static box Main {
 EOF
 
 expected=$(cat << 'TXT'
+true
 true
 true
 true

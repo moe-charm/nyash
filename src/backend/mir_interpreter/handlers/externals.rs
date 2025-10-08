@@ -146,12 +146,12 @@ impl MirInterpreter {
     }
 
     /// Phase 3: Handle op_eq() with user-defined equals() support
+    /// Delegates to op_handlers::op_eq_with_interpreter() for logic reuse
     fn handle_op_eq(
         &mut self,
         dst: Option<ValueId>,
         args: &[ValueId],
     ) -> Result<(), VMError> {
-        // eprintln!("[DEBUG-OP-EQ] ENTRY: cur_fn={:?}", self.cur_fn);
         if args.len() < 2 {
             return Err(VMError::InvalidInstruction(
                 "nyrt.ops.op_eq requires 2 arguments".into(),
@@ -160,56 +160,21 @@ impl MirInterpreter {
 
         let a = self.reg_load(args[0])?;
         let b = self.reg_load(args[1])?;
-        // eprintln!("[DEBUG-OP-EQ] a={:?}, b={:?}", a, b);
 
-        use VMValue::*;
-        let result = match (&a, &b) {
-            // Fast path: primitives
-            (Integer(x), Integer(y)) => Bool(x == y),
-            (Float(x), Float(y)) => Bool(x == y),
-            (Bool(x), Bool(y)) => Bool(x == y),
-            (String(x), String(y)) => Bool(x == y),
-            (Void, Void) => Bool(true),
-
-            // Box equality: pointer check first
-            (BoxRef(ax), BoxRef(bx)) => {
-                use std::sync::Arc;
-                if Arc::ptr_eq(ax, bx) {
-                    Bool(true)
-                } else {
-                    // Try user-defined equals() for InstanceBox
-                    if let Some(inst) = ax.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
-                        let class_name = &inst.class_name;
-                        let equals_sig = format!("{}.equals/1", class_name);
-
-                        if let Some(func) = self.functions.get(&equals_sig).cloned() {
-                            // Call with NoOperatorGuard to prevent recursion
-                            let argv = vec![a.clone(), b.clone()];
-                            let result = self.exec_function_inner_with_mode(
-                                &func,
-                                Some(&argv),
-                                super::CallMode::NoOperatorGuard,
-                            )?;
-                            return match crate::backend::abi_util::to_bool_vm(&result) {
-                                Ok(b) => {
-                                    if let Some(d) = dst {
-                                        self.regs.insert(d, Bool(b));
-                                    }
-                                    Ok(())
-                                }
-                                Err(e) => Err(VMError::TypeError(e)),
-                            };
-                        }
-                    }
-
-                    // Fallback: not equal
-                    Bool(false)
-                }
+        // Delegate to op_handlers module with user-defined equals() callback
+        let result = super::handlers::op_handlers::op_eq_with_interpreter(&a, &b, |equals_sig, argv| {
+            if let Some(func) = self.functions.get(equals_sig).cloned() {
+                // Call with NoOperatorGuard to prevent recursion
+                self.exec_function_inner_with_mode(
+                    &func,
+                    Some(&argv),
+                    super::CallMode::NoOperatorGuard,
+                )
+            } else {
+                // No user-defined equals(), fall back to false
+                Ok(VMValue::Bool(false))
             }
-
-            // Cross-type: false
-            _ => Bool(false),
-        };
+        })?;
 
         if let Some(d) = dst {
             self.regs.insert(d, result);

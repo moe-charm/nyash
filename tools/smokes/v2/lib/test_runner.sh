@@ -259,6 +259,10 @@ run_nyash_vm() {
                         -u NYASH_VM_TRACE -u NYASH_VM_VERIFY_MIR -u NYASH_VM_TOLERATE_VOID \
                         -u NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN)
     fi
+    # Ensure AST prelude merge is enabled for quick/integration unless explicitly disabled
+    if [ -z "${NYASH_USING_AST:-}" ]; then
+        export NYASH_USING_AST=1
+    fi
     # -c オプションの場合は一時ファイル経由で実行
     if [ "$program" = "-c" ]; then
         local code="$1"

@@ -169,13 +169,8 @@ impl super::MirBuilder {
         }
         if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
             let v = self.build_expression(expression)?;
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: None,
-                iface_name: "env.debug".to_string(),
-                method_name: "trace".to_string(),
-                args: vec![v],
-                effects: EffectMask::PURE.add(Effect::Debug),
-            })?;
+            #[allow(deprecated)]
+            self.emit_legacy_externcall(None, "env.debug", "trace", vec![v])?;
             return Ok(v);
         }
         let exception_value = self.build_expression(expression)?;

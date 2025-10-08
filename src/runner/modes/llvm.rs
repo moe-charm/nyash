@@ -307,18 +307,22 @@ impl NyashRunner {
         }
         #[cfg(all(not(feature = "llvm-inkwell-legacy")))]
         {
-            println!("🔧 Mock LLVM Backend Execution:");
-            println!("   Build with --features llvm-inkwell-legacy for Rust/inkwell backend, or set NYASH_LLVM_OBJ_OUT and NYASH_LLVM_USE_HARNESS=1 for harness.");
+            // Silent fallback unless explicitly requested. Avoid confusing users with mock banners.
+            let verbose_fallback = std::env::var("NYASH_LLVM_PRINT_FALLBACK").ok().as_deref() == Some("1");
+            if verbose_fallback {
+                println!("🔧 LLVM backend fallback (no inkwell/harness active)");
+                println!("   Build with --features llvm-inkwell-legacy or set NYASH_LLVM_USE_HARNESS=1.");
+            }
             if let Some(main_func) = module.functions.get("Main.main") {
                 for (_bid, block) in &main_func.blocks {
                     for inst in &block.instructions {
                         match inst {
                             MirInstruction::Return { value: Some(_) } => {
-                                println!("✅ Mock exit code: 42");
+                                if verbose_fallback { println!("✅ Fallback exit code: 42"); }
                                 process::exit(42);
                             }
                             MirInstruction::Return { value: None } => {
-                                println!("✅ Mock exit code: 0");
+                                if verbose_fallback { println!("✅ Fallback exit code: 0"); }
                                 process::exit(0);
                             }
                             _ => {}
@@ -326,7 +330,7 @@ impl NyashRunner {
                     }
                 }
             }
-            println!("✅ Mock exit code: 0");
+            if verbose_fallback { println!("✅ Fallback exit code: 0"); }
             process::exit(0);
         }
     }

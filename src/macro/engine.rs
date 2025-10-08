@@ -169,7 +169,11 @@ fn lit_str(s: &str) -> ASTNode { ASTNode::Literal { value: LiteralValue::String(
 fn build_equals_method(_box_name: &str, fields: &Vec<String>) -> ASTNode {
     // equals(other) { return me.f1 == other.f1 && ...; }
     let cond = if fields.is_empty() {
-        ASTNode::Literal { value: LiteralValue::Bool(true), span: Span::unknown() }
+        // Identity equality for empty-field boxes:
+        // - Same instance: handled by op_eq's Arc::ptr_eq check (returns true)
+        // - Different instance: return false (identity inequality)
+        // This avoids infinite recursion if we generated: me == __ny_other
+        ASTNode::Literal { value: LiteralValue::Bool(false), span: Span::unknown() }
     } else {
         let mut it = fields.iter();
         let first = it.next().unwrap();

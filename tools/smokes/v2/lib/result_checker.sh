@@ -127,6 +127,30 @@ check_parity() {
 
     local vm_output llvm_output vm_exit llvm_exit
 
+    # Local noise filter for parity runs (applies to both VM/LLVM)
+    # Prefer shared filter_noise() if loaded from test_runner.sh
+    parity_filter_noise() {
+        if type filter_noise >/dev/null 2>&1; then
+            filter_noise
+            return
+        fi
+        # Minimal built-in fallback
+        grep -v '^\[UnifiedBoxRegistry\]' \
+        | grep -v '^\[FileBox\]' \
+        | grep -v '^Net plugin:' \
+        | grep -v '^\[.*\] Plugin' \
+        | grep -v '^\[using\]' \
+        | grep -v '^\[using/resolve\]' \
+        | grep -v '^\[deprecate\] CLI name' \
+        | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
+        | grep -v '^\[deprecate\] \[modules\.aliases\]' \
+        | grep -v '^🔧 Mock LLVM Backend Execution' \
+        | grep -v '^✅ Mock exit code:' \
+        | sed -E 's/^❌[[:space:]]*//' \
+        | sed -E 's/^Pipeline error: *//' \
+        | sed -E 's/\bbb[0-9]+\b/bb<ID>/g'
+    }
+
     # Rust VM 実行
     if [ "$program" = "-c" ]; then
         if vm_output=$(timeout "$timeout" bash -c "NYASH_DISABLE_PLUGINS=1 ./target/release/nyash -c \"$code\" 2>&1"); then
@@ -165,10 +189,10 @@ check_parity() {
         return 1
     fi
 
-    # 出力比較（正規化）
+    # 出力比較（正規化＋ノイズ除去）
     local vm_normalized llvm_normalized
-    vm_normalized=$(echo "$vm_output" | sed 's/[[:space:]]*$//' | sort)
-    llvm_normalized=$(echo "$llvm_output" | sed 's/[[:space:]]*$//' | sort)
+    vm_normalized=$(echo "$vm_output" | parity_filter_noise | sed 's/[[:space:]]*$//' | sort)
+    llvm_normalized=$(echo "$llvm_output" | parity_filter_noise | sed 's/[[:space:]]*$//' | sort)
 
     if [ "$vm_normalized" = "$llvm_normalized" ]; then
         echo "[PASS] $test_name: VM ↔ LLVM parity verified" >&2

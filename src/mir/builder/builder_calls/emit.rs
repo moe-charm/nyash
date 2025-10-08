@@ -338,7 +338,8 @@ impl MirBuilder {
                 })
             },
             CallTarget::Extern(name) => {
-                // Use existing ExternCall
+                // TODO(Phase 3.2): Migrate to MirCall with Callee::Extern instead of ExternCall
+                // This is the unified call bridge - intentionally emits ExternCall directly
                 let mut args = args;
                 crate::mir::builder::ssa::local::finalize_args(self, &mut args);
                 // Split on the last dot so "nyrt.ops.op_eq" → ("nyrt.ops","op_eq")

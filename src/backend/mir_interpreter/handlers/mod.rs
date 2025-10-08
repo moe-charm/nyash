@@ -11,6 +11,7 @@ mod calls;
 mod externals;
 mod memory;
 mod misc;
+pub(crate) mod op_handlers;
 
 impl MirInterpreter {
     pub(super) fn execute_instruction(&mut self, inst: &MirInstruction) -> Result<(), VMError> {

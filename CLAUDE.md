@@ -14,9 +14,9 @@
 
 **戦略**: Choice A'' (Macro-Only Approach)
 **期間**: 2-3 weeks (9-14 days)
-**状態**: Day 1-3 完了、Day 4 開始可能
+**状態**: Day 1-5 完了、Day 6以降計画中
 
-**進捗**: Day 3/14 完了 (21%)
+**進捗**: Day 5/14 完了 (36%)
 
 **目標**: Pattern matching for selfhost compiler
 - Week 1: @enum macro (constructor generation)
@@ -171,62 +171,179 @@ if opt.is_None() {
 
 ---
 
-### ✅ **Phase 19 Day 4 完了！根本原因特定 + 解決策確定** (2025-10-08)
-**3回の失敗を経て正しいアプローチにたどり着いた - operator guard問題と判明**
+### ✅ **Phase 19 Day 5 完了！VM クリーンアップ + @enum 完全統合テスト** (2025-10-08)
+**技術的負債削除 + 自動生成equals()バグ発見・記録 - 15/15 テストPASS達成**
 
-#### ✅ **調査完了 + 解決策確定**
+#### ✅ **Part 1: VM Backend クリーンアップ** (30分)
+**目的**: op_eq 重複実装の統合
+
+**実装内容**:
+- ✅ 新規モジュール作成: `src/backend/mir_interpreter/handlers/op_handlers.rs` (95行)
+- ✅ 2つの統合関数:
+  - `op_eq_static()`: 基本ポインタ等価性（extern_adapter 用）
+  - `op_eq_with_interpreter()`: user-defined equals() 完全サポート（externals 用）
+- ✅ リファクタリング:
+  - externals.rs: 70行→30行 (-40行)
+  - extern_adapter.rs: 32行→12行 (-20行)
+
+**成果**:
+- -74行 重複コード削除
+- +95行 新規モジュール（ドキュメント込み）
+- 純増: +21行（ドキュメント含む、ロジックは統合）
+
+#### ✅ **Part 2: @enum 完全統合テスト** (2時間)
+**equality_box_vm.sh 更新**:
+- 🔍 **バグ発見**: Auto-generated equals() が const true を返す
+  - 原因: `src/macro/engine.rs:171-173` で public fields なしの場合に true 固定
+  - 影響: すべての Box（public fields なし）
+  - 回避策: 明示的 equals() メソッド定義
+- ✅ テスト更新: 4/4 tests PASS
+  - Test 1: Point equality (user-defined equals)
+  - Test 2: Simple inequality (s1(1) != s2(2))
+  - Test 3: Simple equality (s3(5) == s4(5))
+  - Test 4: Primitive equality (42 == 42)
+
+**@enum テストスイート全実行**:
+- ✅ enum_result_ok, enum_result_err
+- ✅ enum_option_some, enum_option_none
+- ✅ enum_as_value, enum_multi_field
+- ✅ enum_string_fields, enum_tag_comparison
+- ✅ enum_tostring, enum_single_variant
+- **結果**: 10/10 tests PASS ✅
+
+**Selfhost シナリオテスト**:
+- ✅ MirType equality (同variant、異variant)
+- ✅ ValueId equality (同値、異値、異variant)
+- **結果**: 5/5 tests PASS ✅
+
+#### ✅ **Part 3: バグ調査 + ドキュメント化** (1.5時間)
+**根本原因特定**:
+```rust
+// src/macro/engine.rs:171-173
+fn build_equals_method(_box_name: &str, fields: &Vec<String>) -> ASTNode {
+    let cond = if fields.is_empty() {
+        ASTNode::Literal { value: LiteralValue::Bool(true), span: Span::unknown() }
+        //                                          ^^^^ BUG: 常にtrue
+    }
+}
+```
+
+**Issue ドキュメント作成**:
+- ✅ `docs/development/issues/auto-generated-equals-bug.md` (300行)
+  - Severity: MEDIUM（回避策あり、@enum は影響なし）
+  - 2つの問題: (1) 暗黙の @derive 適用、(2) const true 生成
+  - 3つの修正案: (1) 明示的 @derive 必須化、(2) ポインタ等価性実装、(3) 両方
+  - Target: Phase 20+（Phase 19 完了後）
+
+#### 📊 **統計**
+- 修正ファイル: 5ファイル
+- 純変更: -53/+108 lines
+- 新規ドキュメント: 1ファイル (+300行)
+- テスト結果:
+  - ✅ cargo build --release: PASS
+  - ✅ equality_box_vm.sh: 4/4 PASS
+  - ✅ enum_macro_basic.sh: 10/10 PASS
+  - ✅ Selfhost scenario: 5/5 PASS
+  - **合計**: 15/15 tests PASS ✅
+- 実装時間: ~3.5時間（クリーンアップ0.5h + テスト2h + バグ調査1.5h）
+
+#### 🎯 **達成事項**
+- ✅ **技術的負債削除**: op_eq ロジック単一モジュール統合
+- ✅ **完全統合テスト**: @enum macro 全テスト合格
+- ✅ **バグ発見・記録**: Auto-generated equals() 問題を完全記録
+- ✅ **パターン確立**: op_handlers.rs が将来の演算子実装の template に
+
+#### 🎓 **学び**
+1. **テスト駆動調査**: 実行テストから予期しないバグ発見
+2. **ドキュメント優先**: バグを記録してから修正計画（Phase 20+）
+3. **影響範囲の限定**: @enum には影響なし、優先度 MEDIUM 適切
+4. **モジュール化の価値**: 重複削除で保守性向上
+
+#### 📋 **次のステップ（Day 6 以降）**
+1. **@match マクロ設計**（Week 2 開始）
+   - パターンマッチング構文設計
+   - 分岐生成アルゴリズム
+2. **オプション: 比較演算子統一**
+   - operator_helpers.rs 作成（Priority 2）
+   - op_lt/op_gt/op_le/op_ge 実装
+
+---
+
+### ✅ **Phase 19 Day 4 完了！Box Equality 完全実装 + ExternCall隔離** (2025-10-08)
+**3回の失敗を経て完全実装成功 - operator guard問題を根本解決＋技術的負債の整理**
+
+#### ✅ **Part 1: 調査完了 + 解決策確定** (2時間)
 - ✅ 根本原因: `operator_guard_intercept_entry()` が `eval_cmp()` を `cur_fn` 更新前に呼び出し
 - ✅ 影響範囲: すべての Box 型（@enum 限定ではない）
 - ✅ 証拠1: @enum 未使用の SimpleBox でも同じクラッシュ
 - ✅ 証拠2: 手動実装 equals() も呼ばれない（operator guard で停止）
 - ✅ 解決策: MIR レベルでの `op_eq()` 変換（ChatGPT Pro 提案）
 
-#### 🔄 **3回の失敗（ChatGPT Code）**
-1. VM レベル修正（`eq_vm()` に参照等価性チェック）→ スタックオーバーフロー継続
-2. VM レベル修正 v2（ディスパッチロジック改善）→ スタックオーバーフロー継続
-3. VM レベル修正 v3（メソッド検索最適化）→ スタックオーバーフロー継続
-
-**失敗理由**: operator guard は全 boxcall をインターセプトするアーキテクチャ設計。VM レベルで修正すると演算子セマンティクスが壊れる。
-
-#### 💡 **正しい解決策（ChatGPT Pro）**
-
-**アプローチ**: MIR レベル変換（VM 実行前）
-
-**変換内容**:
+#### ✅ **Part 2: VM Bug Fix 完全実装** (4時間)
+**MIR Builder 変換**:
 ```rust
-// 変換前（高レベル MIR）
-boxcall recv=v%1 method="equals" args=[v%2] dst=v%3
-
-// 変換後（低レベル MIR）
-externcall interface="nyrt.ops" method="op_eq" args=[v%1, v%2] dst=v%3
+// MIR Builder (ops.rs:169-194)
+== / != → CallTarget::Extern("nyrt.ops.op_eq")
 ```
 
-**なぜこれが正しい修正か**:
-1. **アーキテクチャ的正解**: 比較はメソッド呼び出しではなく演算子
-2. **全バックエンド対応**: VM/LLVM/WASM すべてで動作
-3. **VM 変更不要**: operator guard ロジックはそのまま維持
-4. **既存パターン**: `op_to_string`, `op_hash` と同じ設計
+**VM Runtime 実装**:
+```rust
+// VM Backend (externals.rs:150-218)
+handle_op_eq() {
+  1. Primitive fast path (integer/string)
+  2. Box pointer equality
+  3. User-defined equals() with CallMode::NoOperatorGuard
+}
+```
 
-#### 📋 **実装計画（4フェーズ、8-12時間）**
+**Backend サポート**:
+- ✅ VM: handle_op_eq() 完全実装
+- ✅ LLVM Python: `nyrt.ops.op_eq` signature 登録済み
+- ✅ Normalize Pass: 既に Callee::Extern 使用（検証済み）
 
-**Phase 1: ランタイム関数** (1-2時間)
-- `op_eq()` を extern call registry に追加
-- VM adapter で実装（構造等価性 or ユーザー定義 equals）
-- テスト: 単純な Box 等価性
+#### ✅ **Part 3: ExternCall 隔離** (2時間)
+**目的**: 将来の Unified Call Migration 準備
 
-**Phase 2: MIR lowering** (2-3時間)
-- MIR builder に変換パス追加
-- `boxcall equals` → `externcall op_eq` 変換
-- テスト: @enum 生成の equals() 呼び出し
+**実装**:
+- ✅ `emit_legacy_externcall()` helper 作成（builder.rs:723-765）
+- ✅ 10箇所の ExternCall emission を集約:
+  - stmts.rs: 5箇所（print/debug paths）
+  - builder_calls/build.rs: 3箇所（timer/array.size/map.size）
+  - control_flow.rs: 1箇所（throw debug trace）
+  - builder_calls/special.rs: 1箇所（env.* methods）
+- ✅ すべて `#[deprecated]` マーク（段階的移行準備）
 
-**Phase 3: LLVM/WASM 対応** (3-4時間)
-- LLVM adapter で `op_eq()` 実装
-- WASM adapter で `op_eq()` 実装
-- テスト: バックエンド間パリティ
+**技術的意義**:
+- 重複排除: 直接 ExternCall 構築を1箇所に集約
+- 移行準備: Phase 3.2 で emit_unified_call へ移行可能
+- パターン確立: op_eq が op_lt/op_gt 等の template に
 
-**Phase 4: 統合テスト** (2-3時間)
-- 完全な @enum テストスイート実行
-- Phase 19 統合テスト実行
+#### ✅ **Part 4: モジュール化調査** (1時間)
+**Task agent 調査結果**:
+- 優先度1: op_handlers.rs（VM重複削除、22行、30分）
+- 優先度2: operator_helpers.rs（比較演算子統一、70行、2時間）
+- 優先度3: operator_framework.rs（全演算子統一、150-200行、8時間）
+
+**発見した技術的負債**:
+- `externals.rs` + `extern_adapter.rs` に op_eq 重複実装
+- 比較演算子の二重経路（ExternCall vs Compare 命令）
+
+#### 📊 **統計**
+- 修正ファイル: 8ファイル
+- 純変更: +67/-66 lines（実質横ばい、構造改善）
+- テスト結果: ✅ cargo build --release PASS
+- テスト結果: ✅ equality_box_vm.sh 3/3 PASS
+- 実装時間: ~9時間（調査2h + 実装4h + 隔離2h + 調査1h）
+
+#### 🎯 **次のステップ（Day 5）**
+1. **VM Backend クリーンアップ**（優先度1、30分）
+   - op_handlers.rs 作成 → 重複削除
+2. **@enum 統合テスト**（2-3時間）
+   - 実際の equals() メソッドでテスト
+   - Selfhost compiler 統合確認
+3. **オプション: 比較演算子統一**（Phase 19 Day 6候補）
+   - operator_helpers.rs 作成
+   - IntegerBox Cast 処理共通化
 - パフォーマンス劣化なし確認
 
 #### 📊 **期待される成果**

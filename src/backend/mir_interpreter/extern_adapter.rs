@@ -116,7 +116,10 @@ fn build_adapter() -> VmExternAdapterBox {
         Ok(VMValue::Integer(-3))
     });
 
-    // nyrt.ops.op_eq(a, b): bool - Equality operator supporting user-defined equals()
+    // nyrt.ops.op_eq(a, b): bool - Equality operator
+    // Delegates to op_handlers::op_eq_static() for logic reuse
+    // Note: This static version only supports pointer equality for boxes,
+    //       not user-defined equals(). For full support, use handlers/externals.rs
     map.insert(("nyrt.ops".into(), "op_eq".into()), |args: &[VMValue]| {
         if args.len() < 2 {
             return Err(VMError::InvalidInstruction(
@@ -124,30 +127,7 @@ fn build_adapter() -> VmExternAdapterBox {
             ));
         }
 
-        use VMValue::*;
-        match (&args[0], &args[1]) {
-            // Fast path: primitives
-            (Integer(x), Integer(y)) => Ok(Bool(x == y)),
-            (Float(x), Float(y)) => Ok(Bool(x == y)),
-            (Bool(x), Bool(y)) => Ok(Bool(x == y)),
-            (String(x), String(y)) => Ok(Bool(x == y)),
-            (Void, Void) => Ok(Bool(true)),
-
-            // Box equality: pointer check first (Phase 1 - basic implementation)
-            (BoxRef(ax), BoxRef(bx)) => {
-                use std::sync::Arc;
-                if Arc::ptr_eq(ax, bx) {
-                    return Ok(Bool(true));
-                }
-
-                // TODO Phase 3: User-defined equals() dispatch
-                // For now, fall back to pointer inequality
-                Ok(Bool(false))
-            }
-
-            // Cross-type: false
-            _ => Ok(Bool(false)),
-        }
+        crate::backend::mir_interpreter::handlers::op_handlers::op_eq_static(&args[0], &args[1])
     });
 
 

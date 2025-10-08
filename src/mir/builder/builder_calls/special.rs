@@ -65,9 +65,10 @@ impl MirBuilder {
             }
             let iface = env_field.as_str();
             let m = method;
-            let mut extern_call = |iface_name: &str, method_name: &str, effects: EffectMask, returns: bool| -> Result<ValueId, String> {
+            let mut extern_call = |iface_name: &str, method_name: &str, _effects: EffectMask, returns: bool| -> Result<ValueId, String> {
                 let result_id = self.value_gen.next();
-                self.emit_instruction(MirInstruction::ExternCall { dst: if returns { Some(result_id) } else { None }, iface_name: iface_name.to_string(), method_name: method_name.to_string(), args: arg_values.clone(), effects })?;
+                #[allow(deprecated)]
+                self.emit_legacy_externcall(if returns { Some(result_id) } else { None }, iface_name, method_name, arg_values.clone())?;
                 if returns {
                     Ok(result_id)
                 } else {

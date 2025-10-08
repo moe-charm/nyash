@@ -6,6 +6,7 @@ source "$(dirname "$0")/../../../lib/result_checker.sh"
 
 require_env || exit 2
 preflight_plugins || exit 2
+export NYASH_USING_AST=1
 
 test_flow_using_alias() {
   export NYASH_ENABLE_FLOW=1
@@ -56,4 +57,3 @@ EOF
 }
 
 run_test "flow_using_alias_vm" test_flow_using_alias
-

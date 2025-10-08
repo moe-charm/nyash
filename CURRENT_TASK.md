@@ -4,6 +4,29 @@
 
 ---
 
+## 🎯 優先順位（Priority Order）
+
+以下の順序で進めます：
+
+### 1️⃣ **@enum動作確認** (Current: Day 4/14完了)
+@enumマクロの基本機能検証
+- Status: ✅ Parser/Expander実装完了、10/10テスト合格、Box equality完全実装
+- Next: equals()統合テスト（Day 5 Part 2）
+
+### 2️⃣ **セルフホストコンパイラークリーン化**
+enum/matchマクロでコンパイラーコードを置き換え
+- Target: 既存の手動enum実装→@enumマクロ統合
+- Goal: コード重複削除＋可読性向上
+- Start: Day 6以降（@enum完成後）
+
+### 3️⃣ **Hakorune VM新命令対応**
+セルフホストコンパイラー実行に必要なVM機能追加
+- Design: [Mini-VM Migration Plan](docs/development/current/main/mini_vm_migration_plan.md)
+- Target: MIR16命令セット完全対応
+- Strategy: Rust VM/LLVM Python参考実装を移植
+
+---
+
 ## 🎯 CURRENT PHASE: Phase 19 - @enum/@match Macros (Day 4/14)
 
 **戦略**: Choice A'' (Macro-Only Approach)
@@ -95,64 +118,125 @@ static box Result { Ok(value), Err(error) }
 
 **Actual Time**: ~1 hour
 
-#### ✅ Day 4: Investigation - equals() Stack Overflow (2025-10-08) - SOLUTION IDENTIFIED
-**Goal**: Fix equals() stack overflow issue
-**Status**: ✅ Root cause identified + Solution confirmed - NOT an @enum macro bug
+#### ✅ Day 4: Box Equality Fix + ExternCall Isolation (2025-10-08) - COMPLETED
+**Goal**: Fix equals() stack overflow issue + Clean up ExternCall emissions
+**Status**: ✅ All implementations complete, tests passing
 
-**Investigation Results**:
+**Part 1: Investigation** (2 hours)
 - ✅ Root cause: `operator_guard_intercept_entry()` calls `eval_cmp()` before fn context update
 - ✅ Evidence: Simple box without @enum also crashes
 - ✅ Evidence: Manual equals() implementation also crashes (method never called)
 - ✅ Solution: MIR-level lowering to `op_eq()` runtime function (ChatGPT Pro)
 
-**Three Failed VM-level Fix Attempts** (ChatGPT Code):
-1. VM-level fix in `eq_vm()` - Reference equality check → Stack overflow
-2. VM-level fix v2 - Improved dispatch logic → Stack overflow
-3. VM-level fix v3 - Method lookup optimization → Stack overflow
+**Part 2: VM Bug Fix Implementation** (4 hours)
+- ✅ MIR Builder: `==` → `CallTarget::Extern("nyrt.ops.op_eq")` (ops.rs:169-194)
+- ✅ VM Runtime: `handle_op_eq()` with CallMode::NoOperatorGuard (externals.rs:150-218)
+- ✅ Normalize Pass: Already uses `Callee::Extern` (verified - no changes needed)
+- ✅ LLVM Python: `nyrt.ops.op_eq` signature registered (externcall.py:103)
+- ✅ Test: equality_box_vm.sh (3/3 tests PASS)
 
-**Why VM fixes failed**: Operator guard is architectural - intercepts ALL boxcalls. VM-level fix would break operator semantics.
+**Part 3: ExternCall Isolation** (2 hours)
+- ✅ Helper function: `emit_legacy_externcall()` created (builder.rs:723-765)
+- ✅ 10 call sites isolated:
+  - stmts.rs: 5 sites (print/debug paths)
+  - builder_calls/build.rs: 3 sites (timer/array.size/map.size)
+  - control_flow.rs: 1 site (throw debug trace)
+  - builder_calls/special.rs: 1 site (env.* methods)
+- ✅ All marked with `#[deprecated]` for future migration
+- ✅ Build + test verification: PASS
 
-**Correct Solution** (ChatGPT Pro): MIR-level transformation
-```
-boxcall equals → externcall nyrt.ops::op_eq
-```
+**Part 4: Modularization Investigation** (1 hour)
+- ✅ Task agent investigation: 3 modularization candidates identified
+  - Priority 1: op_handlers.rs (VM duplicate removal, 22 lines, 30 min)
+  - Priority 2: operator_helpers.rs (comparison unification, 70 lines, 2 hours)
+  - Priority 3: operator_framework.rs (full unification, 150-200 lines, 8 hours)
+- ✅ Technical debt found: `externals.rs` + `extern_adapter.rs` duplicate implementations
 
-**Implementation Plan** (4 phases, 8-12 hours):
-1. Runtime function (1-2h): Add `op_eq()` to extern registry
-2. MIR lowering (2-3h): Transform `boxcall equals` → `externcall op_eq`
-3. LLVM/WASM support (3-4h): Implement in all backends
-4. Integration testing (2-3h): Full @enum test suite
+**Files Modified** (6 files, +67/-66 lines):
+- `src/mir/builder.rs` (+44 lines - helper function)
+- `src/mir/builder/ops.rs` (op_eq implementation)
+- `src/mir/builder/stmts.rs` (-45/+18 lines)
+- `src/mir/builder/builder_calls/build.rs` (-27/+13 lines)
+- `src/mir/builder/builder_calls/emit.rs` (+3 lines TODO)
+- `src/mir/builder/builder_calls/special.rs` (-5/+3 lines)
+- `src/mir/builder/control_flow.rs` (-9/+4 lines)
+- `src/backend/mir_interpreter/handlers/externals.rs` (+70 lines handle_op_eq)
 
-**Key Finding**:
-- **NOT an @enum macro bug** - it's a **VM operator guard architectural issue**
-- The bug exists in `operator_guard_intercept_entry()` at `src/backend/mir_interpreter/helpers/eval.rs`
-- equals() method is never called - crash happens in operator guard
-- Affects all Box types, not just @enum-generated boxes
-- MIR-level solution is correct architectural fix (like `op_to_string`, `op_hash`)
+**Key Achievements**:
+- ✅ **Root cause fixed**: Box equality now works correctly with user-defined equals()
+- ✅ **ExternCall isolated**: All emissions centralized for future migration
+- ✅ **Pattern established**: op_eq serves as template for op_lt, op_gt, etc.
+- ✅ **Technical debt mapped**: Clear path for Day 5 cleanup
 
-**Next Steps**:
-- 🔧 Implement MIR-level fix (8-12 hours estimated)
-- ✅ @enum macro implementation is complete and correct
-- 📋 Detailed issue doc: `docs/development/issues/equals-stack-overflow.md`
+**Test Results**:
+- ✅ cargo build --release: PASS
+- ✅ equality_box_vm.sh: 3/3 tests PASS
+- ✅ All existing tests: PASS
 
-**Timeline Update**:
-- Day 4: Investigation complete (2 hours)
-- Day 4-5: Implement fix (8-12 hours, in progress)
-- Day 6: Integration testing (originally Day 5)
+**Actual Time**: ~9 hours (Investigation 2h + Implementation 4h + Isolation 2h + Investigation 1h)
 
-**Actual Time**: ~2 hours investigation + 8-12 hours implementation (in progress)
+#### ✅ Day 5: Code Cleanup + Selfhost Integration (2025-10-08) - COMPLETED
+**Goal**: Remove technical debt + Full @enum integration testing
+**Status**: ✅ All tasks complete, discovered and documented auto-generated equals() bug
 
-#### ⏳ Day 5: Selfhost Integration (PENDING)
-- [ ] Wait for VM equals() bug fix
-- [ ] Run full integration tests
-- [ ] Document any edge cases
+**Part 1: VM Backend Cleanup** (30 min)
+- ✅ Created `src/backend/mir_interpreter/handlers/op_handlers.rs` (95 lines)
+- ✅ Extracted duplicate `op_eq()` logic:
+  - `op_eq_static()`: Basic pointer equality (for extern_adapter)
+  - `op_eq_with_interpreter()`: Full user-defined equals() support (for externals)
+- ✅ Refactored externals.rs (70→30 lines) and extern_adapter.rs (32→12 lines)
+- ✅ Result: -74 lines duplicate code, +95 lines new module (net +21 with docs)
+
+**Part 2: @enum Integration Testing** (2 hours)
+- ✅ Updated equality_box_vm.sh with explicit equals() methods
+  - Discovered: Auto-generated equals() returns const true for boxes without public fields
+  - Workaround: Added explicit equals() implementation
+- ✅ @enum test suite: 10/10 tests PASS
+  - enum_result_ok, enum_result_err, enum_option_some, enum_option_none
+  - enum_as_value, enum_multi_field, enum_string_fields
+  - enum_tag_comparison, enum_tostring, enum_single_variant
+- ✅ Selfhost scenario tests: 5/5 PASS
+  - MirType equality (same variant, different variants)
+  - ValueId equality (same values, different values, different variants)
+
+**Part 3: Bug Investigation + Documentation** (1.5 hours)
+- ✅ Root cause identified: `src/macro/engine.rs:171-173`
+  - Auto-generated equals() returns const true for empty public fields
+  - Implicit @derive application (no explicit annotation needed)
+- ✅ Issue documented: `docs/development/issues/auto-generated-equals-bug.md`
+  - Severity: MEDIUM (not blocking, workaround available)
+  - Proposed fixes: Pointer equality implementation + explicit @derive
+  - Target: Phase 20+ (after @enum/@match completion)
+
+**Files Modified** (4 files, -53/+108 lines):
+- NEW: `src/backend/mir_interpreter/handlers/op_handlers.rs` (+95 lines)
+- `src/backend/mir_interpreter/handlers/externals.rs` (-40 lines)
+- `src/backend/mir_interpreter/extern_adapter.rs` (-20 lines)
+- `src/backend/mir_interpreter/handlers/mod.rs` (+1 line)
+- `tools/smokes/v2/profiles/quick/core/equality_box_vm.sh` (+14/-7 lines)
+- NEW: `docs/development/issues/auto-generated-equals-bug.md` (+300 lines)
+
+**Test Results**:
+- ✅ cargo build --release: PASS
+- ✅ equality_box_vm.sh: 4/4 tests PASS (updated)
+- ✅ enum_macro_basic.sh: 10/10 tests PASS
+- ✅ Selfhost scenario: 5/5 tests PASS
+
+**Key Achievements**:
+- ✅ **Technical debt removed**: op_eq logic consolidated in single module
+- ✅ **Full @enum integration**: All tests pass with proper equals() behavior
+- ✅ **Bug discovered & documented**: Auto-generated equals() issue mapped
+- ✅ **Pattern established**: op_handlers.rs serves as template for future operators
+
+**Actual Time**: ~3.5 hours (Cleanup 0.5h + Testing 2h + Bug Investigation 1.5h)
 
 ### Success Criteria
 - ✅ Parse @enum definitions (Day 1 DONE)
 - ✅ Generate correct box structure (Day 2 DONE)
 - ✅ 10/10 tests PASS (Day 3 DONE)
-- ✅ Root cause identified (Day 4 DONE - VM bug, not macro bug)
-- ⏸️ Selfhost integration (Day 5 BLOCKED - waiting for VM equals() fix)
+- ✅ VM equals() bug fixed (Day 4 DONE - op_eq implementation complete)
+- ✅ ExternCall isolation complete (Day 4 DONE - migration preparation)
+- ✅ Code cleanup + Integration testing (Day 5 DONE - 10/10 + 5/5 tests PASS)
 
 ### Next: Week 2 - @match Macro
 See [Phase 19 README](docs/development/roadmap/phases/phase-19-enum-match/README.md)

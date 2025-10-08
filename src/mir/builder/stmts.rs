@@ -19,13 +19,8 @@ impl super::MirBuilder {
                     let op = if call.name == "isType" { TypeOpKind::Check } else { TypeOpKind::Cast };
                     super::utils::builder_debug_log(&format!("emit TypeOp {:?} value={} dst= {}", op, val, dst));
                     self.emit_instruction(MirInstruction::TypeOp { dst, op, value: val, ty })?;
-                    self.emit_instruction(MirInstruction::ExternCall {
-                        dst: None,
-                        iface_name: "env.console".to_string(),
-                        method_name: "log".to_string(),
-                        args: vec![dst],
-                        effects: EffectMask::PURE.add(Effect::Io),
-                    })?;
+                    #[allow(deprecated)]
+                    self.emit_legacy_externcall(None, "env.console", "log", vec![dst])?;
                     return Ok(dst);
                 } else {
                     super::utils::builder_debug_log("extract_string_literal FAIL [via wrapper]");
@@ -62,13 +57,8 @@ impl super::MirBuilder {
                         value: val,
                         ty,
                     })?;
-                    self.emit_instruction(MirInstruction::ExternCall {
-                        dst: None,
-                        iface_name: "env.console".to_string(),
-                        method_name: "log".to_string(),
-                        args: vec![dst],
-                        effects: EffectMask::PURE.add(Effect::Io),
-                    })?;
+                    #[allow(deprecated)]
+                    self.emit_legacy_externcall(None, "env.console", "log", vec![dst])?;
                     return Ok(dst);
                 } else {
                     super::utils::builder_debug_log("extract_string_literal FAIL");
@@ -105,13 +95,8 @@ impl super::MirBuilder {
                         value: obj_val,
                         ty,
                     })?;
-                    self.emit_instruction(MirInstruction::ExternCall {
-                        dst: None,
-                        iface_name: "env.console".to_string(),
-                        method_name: "log".to_string(),
-                        args: vec![dst],
-                        effects: EffectMask::PURE.add(Effect::Io),
-                    })?;
+                    #[allow(deprecated)]
+                    self.emit_legacy_externcall(None, "env.console", "log", vec![dst])?;
                     return Ok(dst);
                 } else {
                     super::utils::builder_debug_log("extract_string_literal FAIL");
@@ -135,13 +120,8 @@ impl super::MirBuilder {
             )?;
         } else {
             // Legacy path - use ExternCall
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: None,
-                iface_name: "env.console".to_string(),
-                method_name: "log".to_string(),
-                args: vec![value],
-                effects: EffectMask::PURE.add(Effect::Io),
-            })?;
+            #[allow(deprecated)]
+            self.emit_legacy_externcall(None, "env.console", "log", vec![value])?;
         }
         Ok(value)
     }
@@ -255,13 +235,8 @@ impl super::MirBuilder {
                 arg_vals.push(self.build_expression(a)?);
             }
             let future_id = self.value_gen.next();
-            self.emit_instruction(MirInstruction::ExternCall {
-                dst: Some(future_id),
-                iface_name: "env.future".to_string(),
-                method_name: "spawn_instance".to_string(),
-                args: arg_vals,
-                effects: crate::mir::effect::EffectMask::PURE.add(crate::mir::effect::Effect::Io),
-            })?;
+            #[allow(deprecated)]
+            self.emit_legacy_externcall(Some(future_id), "env.future", "spawn_instance", arg_vals)?;
             self.variable_map.insert(variable.clone(), future_id);
             return Ok(future_id);
         }

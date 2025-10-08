@@ -1,8 +1,10 @@
 # Issue: equals() Stack Overflow - Rust VM Equality Comparison Bug
 
 **Created**: 2025-10-08
-**Status**: OPEN
-**Severity**: HIGH
+**Updated**: 2025-10-08
+**Status**: ✅ RESOLVED
+**Resolution**: MIR-level op_eq() implementation complete
+**Severity**: HIGH (was)
 **Component**: Rust VM - Equality Comparison Layer
 **Root Cause File**: `src/backend/mir_interpreter/helpers/eval.rs:224`
 
@@ -391,13 +393,58 @@ externcall interface="nyrt.ops" method="op_eq" args=[v%1, v%2] dst=v%3
 - Follows existing pattern (`op_to_string`, `op_hash`, etc.)
 - Backend-agnostic solution
 
+---
+
+## ✅ Resolution (2025-10-08)
+
+**Status**: RESOLVED - Full implementation complete
+
+### Implementation Summary
+
+**Phase 1: MIR Builder** (src/mir/builder/ops.rs:169-194)
+```rust
+// Transform == operator to op_eq extern call
+== / != → CallTarget::Extern("nyrt.ops.op_eq")
+```
+
+**Phase 2: VM Runtime** (src/backend/mir_interpreter/handlers/)
+- **externals.rs:148-183**: `handle_op_eq()` with user-defined equals() support
+- **op_handlers.rs**: Consolidated op_eq logic (NEW)
+  - `op_eq_static()`: Basic pointer equality
+  - `op_eq_with_interpreter()`: Full user-defined equals() dispatch
+- **extern_adapter.rs:119-131**: Static adapter registration
+
+**Phase 3: Backend Support**
+- ✅ VM: Full implementation with CallMode::NoOperatorGuard
+- ✅ LLVM Python: `nyrt.ops.op_eq` signature registered (externcall.py:103)
+- ✅ Normalize Pass: Already uses Callee::Extern (verified)
+
+### Test Results
+```bash
+✅ cargo build --release: PASS
+✅ equality_box_vm.sh: 3/3 tests PASS
+✅ All @enum tests: Compatible
+```
+
+### Code Changes
+- **Modified**: 8 files
+- **New**: `src/backend/mir_interpreter/handlers/op_handlers.rs` (95 lines)
+- **Deleted**: 74 lines duplicate code
+- **Added**: 95 lines new module
+- **Net change**: +21 lines (with documentation)
+
 ### References
 
 **Related Design Docs**:
 - ExternCall Registry: `docs/development/architecture/externs_registry.md`
 - Operator Lowering Patterns: (to be created)
 
-**Related Code**:
-- Operator Guard: `src/backend/mir_interpreter/helpers/eval.rs:200`
-- MIR Lowering: `src/mir/` (transformation passes)
-- ExternCall Registry: `src/backend/mir_interpreter/extern_registry.rs`
+**Implementation Files**:
+- MIR Builder: `src/mir/builder/ops.rs`
+- VM Handler: `src/backend/mir_interpreter/handlers/externals.rs`
+- Op Handlers: `src/backend/mir_interpreter/handlers/op_handlers.rs` (NEW)
+- Extern Adapter: `src/backend/mir_interpreter/extern_adapter.rs`
+
+**Related Issues**:
+- Phase 19 Day 4: Box Equality Fix (CURRENT_TASK.md)
+- @enum macro integration (Phase 19 README)
