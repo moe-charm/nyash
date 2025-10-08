@@ -2,10 +2,12 @@
 // 責務: φ の適用（dst レジスタに vin の値をロードして書き込む）
 // 非責務: φ のデコードやスキャン（呼び出し元で行う）
 
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
 static box PhiApplyBox {
   // 内部: 文字列が整数表現かを緩く判定
-  _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
-  _str_to_int(s){ local i=0 local n=s.length() local acc=0 local neg=0 if s.substring(0,1)=="-" {neg=1 i=1} loop(i<n){ local ch=s.substring(i,i+1) local d=match ch {"0"=>0,"1"=>1,"2"=>2,"3"=>3,"4"=>4,"5"=>5,"6"=>6,"7"=>7,"8"=>8,"9"=>9,_=>-1} if d<0 {break} acc=acc*10+d i=i+1 } if neg==1 {return 0-acc} return acc }
+  _is_numeric_str(s){ if s==null {return 0} return StringHelpers.is_numeric_str(s) }
+  _str_to_int(s){ return StringHelpers.to_i64(s) }
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return me._str_to_int(s) } return 0 }
 
   apply(dst, vin, regs) {
