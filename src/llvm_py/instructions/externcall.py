@@ -99,6 +99,8 @@ def lower_externcall(
         "nyash.string.lastIndexOf_ss": (i64, [i8p, i8p]),
         # Boxing helpers
         "nyash.box.from_i8_string": (i64, [i8p]),
+        # Operators (Phase 19: Box equality fix)
+        "nyrt.ops.op_eq": (i64, [i64, i64]),
         # Console (string pointer expected)
         # Many call sites pass handles or pointers; we coerce below.
     }

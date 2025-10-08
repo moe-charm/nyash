@@ -218,17 +218,18 @@ static box Result {
 #### Day 4: Investigation - equals() Stack Overflow ✅ COMPLETED (2025-10-08)
 
 **Goal**: Fix equals() stack overflow issue
-**Status**: ✅ Root cause identified - NOT an @enum macro bug
+**Status**: ✅ Root cause identified + Solution confirmed - NOT an @enum macro bug
 
 **Investigation Process**:
 1. Created minimal test case without @enum → Same crash
 2. Implemented manual equals() → Method never called
 3. Traced to VM layer → eq_vm() infinite recursion
-4. Documented findings
+4. ChatGPT Code: 3 VM-level fix attempts → All failed
+5. ChatGPT Pro: Root cause analysis + MIR-level solution → Correct approach
 
 **Key Findings**:
-- **Root Cause**: `src/backend/mir_interpreter/helpers/eval.rs:224` - eq_vm() function
-- **Bug Type**: Infinite recursion when comparing BoxRef instances
+- **Root Cause**: `operator_guard_intercept_entry()` calls `eval_cmp()` before fn context update
+- **Bug Type**: Architectural issue - operator guard intercepts ALL boxcalls
 - **Scope**: ALL Box types (not @enum-specific)
 - **Evidence**: Simple box without @enum crashes identically
 
@@ -252,17 +253,52 @@ box SimpleBox {
 }
 ```
 
+### Resolution Path
+
+**Three Failed Attempts** (ChatGPT Code):
+1. VM-level fix in `eq_vm()` - Reference equality check
+2. VM-level fix v2 - Improved dispatch logic
+3. VM-level fix v3 - Method lookup optimization
+
+**Result**: All still caused stack overflow
+
+**Why VM fixes failed**: Operator guard is architectural - intercepts ALL boxcalls for operator checking. VM-level fix would break operator semantics or require complex recursion detection.
+
+**Correct Solution** (ChatGPT Pro): MIR-level transformation
+
+**Approach**: Lower `equals()` calls to `op_eq()` runtime function
+```
+// Before (high-level MIR)
+boxcall recv=v%1 method="equals" args=[v%2] dst=v%3
+
+// After (lowered MIR)
+externcall interface="nyrt.ops" method="op_eq" args=[v%1, v%2] dst=v%3
+```
+
+**Why this is correct**:
+- Separates comparison semantics from method dispatch
+- Works for VM, LLVM, and WASM backends
+- No VM changes needed (operator guard stays intact)
+- Follows existing pattern (`op_to_string`, `op_hash`)
+
+**Implementation Plan** (4 phases, 8-12 hours):
+1. Runtime function (1-2h): Add `op_eq()` to extern registry
+2. MIR lowering (2-3h): Transform `boxcall equals` → `externcall op_eq`
+3. LLVM/WASM support (3-4h): Implement in all backends
+4. Integration testing (2-3h): Full @enum test suite
+
 **Conclusion**:
 - ✅ @enum macro implementation is CORRECT
-- ✅ Bug is in Rust VM equality comparison layer
-- 📋 Separate issue created: `docs/development/issues/equals-stack-overflow.md`
+- ✅ Bug is in VM operator guard architecture
+- ✅ Solution identified: MIR-level lowering (correct architectural fix)
+- 📋 Detailed issue doc: `docs/development/issues/equals-stack-overflow.md`
 
-**Recommendation**:
-- Fix VM bug first (separate from Phase 19)
-- @enum macro is complete and ready for integration
-- Day 5 integration tests blocked until VM fix
+**Timeline Update**:
+- Day 4: Investigation complete (2 hours)
+- Day 4-5: Implement fix (8-12 hours estimated)
+- Day 6: Integration testing (originally Day 5)
 
-**Actual Time**: ~2 hours
+**Actual Time**: ~2 hours investigation + 8-12 hours implementation (in progress)
 
 #### Day 5: Selfhost Integration ⏸️ BLOCKED
 

@@ -95,29 +95,52 @@ static box Result { Ok(value), Err(error) }
 
 **Actual Time**: ~1 hour
 
-#### ✅ Day 4: Investigation - equals() Stack Overflow (2025-10-08) - ROOT CAUSE FOUND
+#### ✅ Day 4: Investigation - equals() Stack Overflow (2025-10-08) - SOLUTION IDENTIFIED
 **Goal**: Fix equals() stack overflow issue
-**Status**: ✅ Root cause identified - NOT an @enum macro bug
+**Status**: ✅ Root cause identified + Solution confirmed - NOT an @enum macro bug
 
 **Investigation Results**:
-- ✅ Root cause: Rust VM layer bug in equality comparison (`src/backend/mir_interpreter/helpers/eval.rs:224`)
+- ✅ Root cause: `operator_guard_intercept_entry()` calls `eval_cmp()` before fn context update
 - ✅ Evidence: Simple box without @enum also crashes
 - ✅ Evidence: Manual equals() implementation also crashes (method never called)
-- ✅ Conclusion: eq_vm() has infinite recursion when comparing BoxRef instances
+- ✅ Solution: MIR-level lowering to `op_eq()` runtime function (ChatGPT Pro)
+
+**Three Failed VM-level Fix Attempts** (ChatGPT Code):
+1. VM-level fix in `eq_vm()` - Reference equality check → Stack overflow
+2. VM-level fix v2 - Improved dispatch logic → Stack overflow
+3. VM-level fix v3 - Method lookup optimization → Stack overflow
+
+**Why VM fixes failed**: Operator guard is architectural - intercepts ALL boxcalls. VM-level fix would break operator semantics.
+
+**Correct Solution** (ChatGPT Pro): MIR-level transformation
+```
+boxcall equals → externcall nyrt.ops::op_eq
+```
+
+**Implementation Plan** (4 phases, 8-12 hours):
+1. Runtime function (1-2h): Add `op_eq()` to extern registry
+2. MIR lowering (2-3h): Transform `boxcall equals` → `externcall op_eq`
+3. LLVM/WASM support (3-4h): Implement in all backends
+4. Integration testing (2-3h): Full @enum test suite
 
 **Key Finding**:
-- **NOT an @enum macro bug** - it's a **Rust VM layer bug**
-- The bug exists in `eq_vm()` function at `src/backend/mir_interpreter/helpers/eval.rs:224`
-- equals() method is never called - crash happens before method entry
+- **NOT an @enum macro bug** - it's a **VM operator guard architectural issue**
+- The bug exists in `operator_guard_intercept_entry()` at `src/backend/mir_interpreter/helpers/eval.rs`
+- equals() method is never called - crash happens in operator guard
 - Affects all Box types, not just @enum-generated boxes
+- MIR-level solution is correct architectural fix (like `op_to_string`, `op_hash`)
 
-**Recommendation**:
-- ⏸️ Pause @enum work until VM bug is fixed
-- 🔧 Fix VM equality comparison first (separate task)
+**Next Steps**:
+- 🔧 Implement MIR-level fix (8-12 hours estimated)
 - ✅ @enum macro implementation is complete and correct
-- 📋 Created issue doc: `docs/development/issues/equals-stack-overflow.md`
+- 📋 Detailed issue doc: `docs/development/issues/equals-stack-overflow.md`
 
-**Actual Time**: ~2 hours investigation
+**Timeline Update**:
+- Day 4: Investigation complete (2 hours)
+- Day 4-5: Implement fix (8-12 hours, in progress)
+- Day 6: Integration testing (originally Day 5)
+
+**Actual Time**: ~2 hours investigation + 8-12 hours implementation (in progress)
 
 #### ⏳ Day 5: Selfhost Integration (PENDING)
 - [ ] Wait for VM equals() bug fix

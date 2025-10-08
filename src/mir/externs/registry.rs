@@ -58,6 +58,14 @@ impl ExternCallRegistryBox {
             returns: MirType::Integer, // skeleton mock returns integer
             effects: EffectMask::READ,
         });
+        // Ops.op_eq (equality operator for Box types)
+        self.register(ExternCallSpec {
+            interface: "nyrt.ops".into(),
+            method: "op_eq".into(),
+            args: vec![MirType::Unknown, MirType::Unknown], // accepts any type pair
+            returns: MirType::Bool,
+            effects: EffectMask::READ, // may call user-defined equals()
+        });
         // 今後: env.console.log などを必要に応じて追記
 
         // nykernel.* (dev stub) — gated at call site by env `NYASH_ENABLE_NYKERNEL_STUB=1`

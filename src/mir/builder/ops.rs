@@ -140,38 +140,147 @@ impl super::MirBuilder {
             }
             // Comparison operations
             BinaryOpType::Comparison(op) => {
-                // Root-fix: always use native compare path (no operator-box lowering)
-                let (lhs2_raw, rhs2_raw) = if self
-                    .origin_get(lhs)
-                    .map(|s| s == "IntegerBox")
-                    .unwrap_or(false)
-                    && self
-                        .origin_get(rhs)
+                // 🎯 Phase 2: Transform Box == Box into ExternCall to op_eq() (NEW PATH)
+                // or BoxCall to .equals() method (OLD PATH, gated by flag)
+
+                // Check if both operands are Box types (not primitives)
+                let lhs_is_box = matches!(self.value_types.get(&lhs), Some(MirType::Box(_)));
+                let rhs_is_box = matches!(self.value_types.get(&rhs), Some(MirType::Box(_)));
+
+                // Debug: log the types
+                if std::env::var("NYASH_DEBUG_BOX_COMPARE").is_ok() {
+                    eprintln!("[DEBUG] Box comparison check: lhs={:?} lhs_type={:?} rhs={:?} rhs_type={:?}",
+                        lhs, self.value_types.get(&lhs), rhs, self.value_types.get(&rhs));
+                }
+
+                // Guard: Don't transform inside equals() methods to prevent infinite recursion
+                let in_equals_method = self
+                    .current_function
+                    .as_ref()
+                    .map(|f| f.signature.name.contains(".equals/"))
+                    .unwrap_or(false);
+
+                if std::env::var("NYASH_DEBUG_BOX_COMPARE").is_ok() && in_equals_method {
+                    eprintln!("[DEBUG] SKIPPING transform inside .equals/ method: {:?}",
+                        self.current_function.as_ref().map(|f| &f.signature.name));
+                }
+
+                // SAFETY: Only transform if we have CONFIRMED type information for BOTH operands
+                // If type is None, conservatively use Compare (primitives path)
+                let lhs_type_known = self.value_types.get(&lhs).is_some();
+                let rhs_type_known = self.value_types.get(&rhs).is_some();
+
+                // Phase 2: NEW op_eq() ExternCall path (default ON, safer than BoxCall)
+                let eq_to_op_eq = std::env::var("NYASH_BUILDER_BOX_EQ_TO_OP_EQ").ok().as_deref() != Some("0");
+
+                // Gate old BoxCall transform behind an environment flag (default OFF) to avoid conflicts.
+                let eq_to_equals = std::env::var("NYASH_BUILDER_BOX_EQ_TO_EQUALS").ok().as_deref() == Some("1");
+
+                // NEW PATH: Transform == and != to op_eq() ExternCall
+                // Always use op_eq for equality, even if types unknown (handles runtime dispatch correctly)
+                if eq_to_op_eq && !in_equals_method && matches!(op, CompareOp::Eq | CompareOp::Ne) {
+                    // Transform to ExternCall: nyrt.ops.op_eq(lhs, rhs)
+                    let mut lhs_copy = lhs;
+                    let mut rhs_copy = rhs;
+                    crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs_copy, &mut rhs_copy);
+
+                    // Call op_eq() and get the result
+                    let eq_result = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::ExternCall {
+                        dst: Some(eq_result),
+                        iface_name: "nyrt.ops".to_string(),
+                        method_name: "op_eq".to_string(),
+                        args: vec![lhs_copy, rhs_copy],
+                        effects: crate::mir::EffectMask::READ,
+                    })?;
+                    self.value_types.insert(eq_result, MirType::Bool);
+
+                    // Handle Ne by negating the result
+                    if matches!(op, CompareOp::Ne) {
+                        self.emit_instruction(MirInstruction::UnaryOp {
+                            dst,
+                            op: UnaryOp::Not,
+                            operand: eq_result,
+                        })?;
+                        self.value_types.insert(dst, MirType::Bool);
+                        return Ok(dst);
+                    }
+
+                    // Eq case: return eq_result directly
+                    self.value_types.insert(dst, MirType::Bool);
+                    return Ok(eq_result);
+                } else if eq_to_equals && !in_equals_method && lhs_is_box && rhs_is_box && lhs_type_known && rhs_type_known && matches!(op, CompareOp::Eq | CompareOp::Ne) {
+                    // Transform to BoxCall: lhs.equals(rhs)
+                    let mut lhs_copy = lhs;
+                    let mut rhs_copy = rhs;
+                    crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs_copy, &mut rhs_copy);
+
+                    // Call equals() and get the result in a temp register
+                    let equals_result = self.value_gen.next();
+                    self.emit_instruction(MirInstruction::BoxCall {
+                        dst: Some(equals_result),
+                        box_val: lhs_copy,
+                        method: "equals".to_string(),
+                        method_id: None,
+                        args: vec![rhs_copy],
+                        effects: crate::mir::EffectMask::READ,
+                    })?;
+                    self.value_types.insert(equals_result, MirType::Bool);
+
+                    // Handle Ne by comparing equals_result == false
+                    if matches!(op, CompareOp::Ne) {
+                        let cfalse = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::Const {
+                            dst: cfalse,
+                            value: crate::mir::ConstValue::Bool(false),
+                        })?;
+                        self.value_types.insert(cfalse, MirType::Bool);
+                        let mut l = equals_result;
+                        let mut r = cfalse;
+                        crate::mir::builder::ssa::local::finalize_compare(self, &mut l, &mut r);
+                        crate::mir::builder::emission::compare::emit_to(self, dst, CompareOp::Eq, l, r)?;
+                        self.value_types.insert(dst, MirType::Bool);
+                        return Ok(dst);
+                    }
+
+                    // Eq case: return equals_result directly (no extra compare)
+                    self.value_types.insert(dst, MirType::Bool);
+                    return Ok(equals_result);
+                } else {
+                    // Primitive comparison or other compare ops (Lt, Gt, etc.)
+                    // Keep existing logic
+                    let (lhs2_raw, rhs2_raw) = if self
+                        .origin_get(lhs)
                         .map(|s| s == "IntegerBox")
                         .unwrap_or(false)
-                {
-                    let li = self.value_gen.next();
-                    let ri = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::TypeOp {
-                        dst: li,
-                        op: TypeOpKind::Cast,
-                        value: lhs,
-                        ty: MirType::Integer,
-                    })?;
-                    self.emit_instruction(MirInstruction::TypeOp {
-                        dst: ri,
-                        op: TypeOpKind::Cast,
-                        value: rhs,
-                        ty: MirType::Integer,
-                    })?;
-                    (li, ri)
-                } else {
-                    (lhs, rhs)
-                };
-                let mut lhs2 = lhs2_raw;
-                let mut rhs2 = rhs2_raw;
-                crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs2, &mut rhs2);
-                crate::mir::builder::emission::compare::emit_to(self, dst, op, lhs2, rhs2)?;
+                        && self
+                            .origin_get(rhs)
+                            .map(|s| s == "IntegerBox")
+                            .unwrap_or(false)
+                    {
+                        let li = self.value_gen.next();
+                        let ri = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::TypeOp {
+                            dst: li,
+                            op: TypeOpKind::Cast,
+                            value: lhs,
+                            ty: MirType::Integer,
+                        })?;
+                        self.emit_instruction(MirInstruction::TypeOp {
+                            dst: ri,
+                            op: TypeOpKind::Cast,
+                            value: rhs,
+                            ty: MirType::Integer,
+                        })?;
+                        (li, ri)
+                    } else {
+                        (lhs, rhs)
+                    };
+                    let mut lhs2 = lhs2_raw;
+                    let mut rhs2 = rhs2_raw;
+                    crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs2, &mut rhs2);
+                    crate::mir::builder::emission::compare::emit_to(self, dst, op, lhs2, rhs2)?;
+                }
             }
         }
 

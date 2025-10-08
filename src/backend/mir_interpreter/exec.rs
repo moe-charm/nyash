@@ -13,14 +13,35 @@ impl MirInterpreter {
         func: &MirFunction,
         arg_vals: Option<&[VMValue]>,
     ) -> Result<VMValue, VMError> {
-        // Centralized OperatorBox guard: intercept before any frame setup
-        if let Some(r) = self.operator_guard_intercept_entry(func.signature.name.as_str(), arg_vals) { return r; }
+        self.exec_function_inner_with_mode(func, arg_vals, super::CallMode::Normal)
+    }
 
-        // Phase 1: delegate cross-class reroute / narrow fallbacks to method_router
-        if let Some(r) = super::method_router::pre_exec_reroute(self, func, arg_vals) { return r; }
+    pub(super) fn exec_function_inner_with_mode(
+        &mut self,
+        func: &MirFunction,
+        arg_vals: Option<&[VMValue]>,
+        mode: super::CallMode,
+    ) -> Result<VMValue, VMError> {
+        eprintln!("[DEBUG-EXEC-ENTRY] About to call function: {}", func.signature.name);
+        // Centralized OperatorBox guard: intercept before any frame setup (skip in NoOperatorGuard mode)
+        if mode == super::CallMode::Normal {
+            if let Some(r) = self.operator_guard_intercept_entry(func.signature.name.as_str(), arg_vals) {
+                eprintln!("[DEBUG-EXEC-ENTRY] Early return from operator_guard");
+                return r;
+            }
+        }
+
+        // Phase 1: delegate cross-class reroute / narrow fallbacks to method_router (skip in NoOperatorGuard mode)
+        if mode == super::CallMode::Normal {
+            if let Some(r) = super::method_router::pre_exec_reroute(self, func, arg_vals) {
+                eprintln!("[DEBUG-EXEC-ENTRY] Early return from pre_exec_reroute");
+                return r;
+            }
+        }
         let saved_regs = mem::take(&mut self.regs);
         let saved_fn = self.cur_fn.clone();
         self.cur_fn = Some(func.signature.name.clone());
+        eprintln!("[DEBUG-EXEC] Entering function: {:?}, prev_fn: {:?}", self.cur_fn, saved_fn);
 
         // Enter a new scope for this function frame (lifetime management)
         self.scope.push_scope();

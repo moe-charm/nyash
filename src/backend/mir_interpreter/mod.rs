@@ -31,6 +31,15 @@ pub mod contracts;
 
 pub use vm_config::VmConfig;
 
+/// Call mode for function execution
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CallMode {
+    /// Normal call with operator guard
+    Normal,
+    /// Skip operator guard to prevent recursion (used by op_eq)
+    NoOperatorGuard,
+}
+
 pub struct MirInterpreter {
     pub(super) regs: HashMap<ValueId, VMValue>,
     pub(super) mem: HashMap<ValueId, VMValue>,

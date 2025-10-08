@@ -65,8 +65,8 @@ class NyashLLVMBuilder:
         self.target = target  # Keep for backward compatibility
         self.target_triple = self.target_obj.get_triple()
 
-        # Initialize LLVM core (required for optimization passes)
-        llvm.initialize()
+        # Initialize LLVM core (automatically handled by llvmlite now)
+        # llvm.initialize()  # Deprecated - removed per llvmlite warning
 
         # Initialize target-specific components
         if target == "wasm32":

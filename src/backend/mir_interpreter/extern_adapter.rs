@@ -116,7 +116,41 @@ fn build_adapter() -> VmExternAdapterBox {
         Ok(VMValue::Integer(-3))
     });
 
-    
+    // nyrt.ops.op_eq(a, b): bool - Equality operator supporting user-defined equals()
+    map.insert(("nyrt.ops".into(), "op_eq".into()), |args: &[VMValue]| {
+        if args.len() < 2 {
+            return Err(VMError::InvalidInstruction(
+                "nyrt.ops.op_eq requires 2 arguments".into(),
+            ));
+        }
+
+        use VMValue::*;
+        match (&args[0], &args[1]) {
+            // Fast path: primitives
+            (Integer(x), Integer(y)) => Ok(Bool(x == y)),
+            (Float(x), Float(y)) => Ok(Bool(x == y)),
+            (Bool(x), Bool(y)) => Ok(Bool(x == y)),
+            (String(x), String(y)) => Ok(Bool(x == y)),
+            (Void, Void) => Ok(Bool(true)),
+
+            // Box equality: pointer check first (Phase 1 - basic implementation)
+            (BoxRef(ax), BoxRef(bx)) => {
+                use std::sync::Arc;
+                if Arc::ptr_eq(ax, bx) {
+                    return Ok(Bool(true));
+                }
+
+                // TODO Phase 3: User-defined equals() dispatch
+                // For now, fall back to pointer inequality
+                Ok(Bool(false))
+            }
+
+            // Cross-type: false
+            _ => Ok(Bool(false)),
+        }
+    });
+
+
 
     // --- nykernel.* (dev stub for wasm std Array) ---
     // Enabled only when NYASH_ENABLE_NYKERNEL_STUB=1

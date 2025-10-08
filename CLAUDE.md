@@ -171,30 +171,84 @@ if opt.is_None() {
 
 ---
 
-### ✅ **Phase 19 Day 4 完了！equals() バグ根本原因特定** (2025-10-08)
-**@enum マクロではなく Rust VM レイヤーのバグと判明**
+### ✅ **Phase 19 Day 4 完了！根本原因特定 + 解決策確定** (2025-10-08)
+**3回の失敗を経て正しいアプローチにたどり着いた - operator guard問題と判明**
 
-#### ✅ **調査完了**
-- ✅ 根本原因: Rust VM の eq_vm() 関数に無限再帰バグ
+#### ✅ **調査完了 + 解決策確定**
+- ✅ 根本原因: `operator_guard_intercept_entry()` が `eval_cmp()` を `cur_fn` 更新前に呼び出し
 - ✅ 影響範囲: すべての Box 型（@enum 限定ではない）
 - ✅ 証拠1: @enum 未使用の SimpleBox でも同じクラッシュ
-- ✅ 証拠2: 手動実装 equals() も呼ばれない（メソッド呼出前にクラッシュ）
-- ✅ バグ箇所: `src/backend/mir_interpreter/helpers/eval.rs:224` の eq_vm()
+- ✅ 証拠2: 手動実装 equals() も呼ばれない（operator guard で停止）
+- ✅ 解決策: MIR レベルでの `op_eq()` 変換（ChatGPT Pro 提案）
 
-#### 📊 **調査結果**
-- **マクロバグではない**: @enum マクロ実装は完全に正しい
-- **VM バグ**: BoxRef 比較時の無限再帰が原因
-- **影響**: すべての Box インスタンス比較（==演算子）が失敗
-- 調査時間: ~2時間
+#### 🔄 **3回の失敗（ChatGPT Code）**
+1. VM レベル修正（`eq_vm()` に参照等価性チェック）→ スタックオーバーフロー継続
+2. VM レベル修正 v2（ディスパッチロジック改善）→ スタックオーバーフロー継続
+3. VM レベル修正 v3（メソッド検索最適化）→ スタックオーバーフロー継続
 
-#### 🎯 **推奨アクション**
-1. **VM バグ修正を優先** - @enum とは独立したタスク
-2. **@enum マクロは完成** - Day 5 の統合テスト待機
-3. **Issue ドキュメント作成**: `docs/development/issues/equals-stack-overflow.md`
+**失敗理由**: operator guard は全 boxcall をインターセプトするアーキテクチャ設計。VM レベルで修正すると演算子セマンティクスが壊れる。
 
-#### 📋 **次のステップ（Day 5）**
-- ⏸️ VM equals() バグ修正待ち
-- Day 5: Selfhost compiler 統合（VM 修正後）
+#### 💡 **正しい解決策（ChatGPT Pro）**
+
+**アプローチ**: MIR レベル変換（VM 実行前）
+
+**変換内容**:
+```rust
+// 変換前（高レベル MIR）
+boxcall recv=v%1 method="equals" args=[v%2] dst=v%3
+
+// 変換後（低レベル MIR）
+externcall interface="nyrt.ops" method="op_eq" args=[v%1, v%2] dst=v%3
+```
+
+**なぜこれが正しい修正か**:
+1. **アーキテクチャ的正解**: 比較はメソッド呼び出しではなく演算子
+2. **全バックエンド対応**: VM/LLVM/WASM すべてで動作
+3. **VM 変更不要**: operator guard ロジックはそのまま維持
+4. **既存パターン**: `op_to_string`, `op_hash` と同じ設計
+
+#### 📋 **実装計画（4フェーズ、8-12時間）**
+
+**Phase 1: ランタイム関数** (1-2時間)
+- `op_eq()` を extern call registry に追加
+- VM adapter で実装（構造等価性 or ユーザー定義 equals）
+- テスト: 単純な Box 等価性
+
+**Phase 2: MIR lowering** (2-3時間)
+- MIR builder に変換パス追加
+- `boxcall equals` → `externcall op_eq` 変換
+- テスト: @enum 生成の equals() 呼び出し
+
+**Phase 3: LLVM/WASM 対応** (3-4時間)
+- LLVM adapter で `op_eq()` 実装
+- WASM adapter で `op_eq()` 実装
+- テスト: バックエンド間パリティ
+
+**Phase 4: 統合テスト** (2-3時間)
+- 完全な @enum テストスイート実行
+- Phase 19 統合テスト実行
+- パフォーマンス劣化なし確認
+
+#### 📊 **期待される成果**
+- ✅ Box 等価性が正しく動作
+- ✅ @enum マクロの equals() が動作
+- ✅ VM operator guard は変更なし
+- ✅ 全バックエンド（VM/LLVM/WASM）で動作
+
+#### 🎓 **学び**
+1. **アーキテクチャ理解の重要性**: VM レベル修正は設計意図に反する
+2. **失敗からの学習**: 3回の失敗で問題の本質が明確になった
+3. **適切な抽象レイヤー**: 演算子は MIR レベルで解決すべき
+4. **既存パターンの活用**: `op_to_string` パターンを踏襲
+
+#### 📋 **タイムライン更新**
+- Day 4: 調査完了（2時間）
+- Day 4-5: 修正実装（8-12時間見積もり、進行中）
+- Day 6: 統合テスト（元 Day 5）
+
+#### 📚 **詳細ドキュメント**
+- Issue doc: `docs/development/issues/equals-stack-overflow.md`
+- Phase 19 README: 更新済み（Resolution Path セクション追加）
 
 ---
 

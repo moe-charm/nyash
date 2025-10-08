@@ -289,7 +289,115 @@ After fix, verify:
 ---
 
 **Next Steps**:
-1. Examine `eval.rs:224` - eq_vm() implementation
-2. Fix infinite recursion
+1. ~~Examine `eval.rs:224` - eq_vm() implementation~~ ✅ DONE
+2. ~~Fix infinite recursion~~ → MIR-level solution identified
 3. Add Box equality tests
 4. Unblock Phase 19 Day 5
+
+---
+
+## Resolution (2025-10-08)
+
+### Investigation Summary
+
+**Three attempted fixes** by ChatGPT Code (all failed):
+1. VM-level fix in `eq_vm()` - Added reference equality check
+2. VM-level fix v2 - Improved dispatch logic
+3. VM-level fix v3 - Method lookup optimization
+
+**Result**: All three attempts still caused stack overflow
+
+### Root Cause Analysis
+
+**Actual Problem**: `operator_guard_intercept_entry()` intercepts `equals()` call
+
+**Call Chain** (corrected):
+1. User code: `s1.equals(s2)`
+2. VM: `boxcall` instruction dispatch
+3. VM: `operator_guard_intercept_entry()` checks for operator methods
+4. **BUG**: Calls `eval_cmp()` to compare arguments BEFORE `cur_fn` update
+5. `eval_cmp()` calls `eq_vm()`
+6. `eq_vm()` calls `operator_guard_intercept_entry()` recursively
+7. Stack overflow
+
+**Critical Point**: The operator guard intercepts ALL box method calls for operator checking, creating infinite recursion when comparing BoxRef instances.
+
+**File**: `src/backend/mir_interpreter/helpers/eval.rs`
+**Functions**:
+- `operator_guard_intercept_entry()` (line ~200)
+- `eval_cmp()` (called before fn context update)
+
+### ChatGPT Pro's Solution (Correct Approach)
+
+**Why VM fixes failed**: Operator guard is architectural - it intercepts ALL boxcalls. Fixing at VM level would break operator semantics or require complex recursion detection.
+
+**Correct Solution**: MIR-level transformation (before VM execution)
+
+**Approach**: Lower `equals()` calls to `op_eq()` runtime function
+```
+// Before (high-level MIR)
+boxcall recv=v%1 method="equals" args=[v%2] dst=v%3
+
+// After (lowered MIR)
+externcall interface="nyrt.ops" method="op_eq" args=[v%1, v%2] dst=v%3
+```
+
+**Why this is correct**:
+1. **Architectural**: Separates comparison semantics from method dispatch
+2. **Universal**: Works for VM, LLVM, and WASM backends
+3. **No VM changes**: Keeps operator guard logic intact
+4. **Precedent**: Similar to how `toString()` → `op_to_string()` works
+
+### Implementation Plan (4 Phases)
+
+**Phase 1: Runtime function (1-2 hours)**
+- Add `op_eq()` to extern call registry
+- Implement in VM adapter (structural equality or user-defined equals)
+- Test: Simple box equality
+
+**Phase 2: MIR lowering (2-3 hours)**
+- Add transformation pass in MIR builder
+- Transform `boxcall equals` → `externcall op_eq`
+- Test: @enum generated equals() calls
+
+**Phase 3: LLVM/WASM support (3-4 hours)**
+- Implement `op_eq()` in LLVM adapter
+- Implement `op_eq()` in WASM adapter
+- Test: Cross-backend parity
+
+**Phase 4: Integration testing (2-3 hours)**
+- Run full @enum test suite
+- Run Phase 19 integration tests
+- Verify no performance regression
+
+**Total estimated time**: 8-12 hours
+
+**Expected outcome**:
+- ✅ Box equality works correctly
+- ✅ @enum macro `equals()` works
+- ✅ VM operator guard unchanged
+- ✅ Works across all backends (VM/LLVM/WASM)
+
+### Why This is the Right Fix
+
+**VM-level fixes are wrong because**:
+- Operator guard is intentional design (checks all boxcalls)
+- Recursion detection would add complexity to hot path
+- Would need special casing for every comparison operator
+
+**MIR-level lowering is right because**:
+- Comparison is NOT a method call - it's an operator
+- Separates concerns: operators vs user methods
+- Follows existing pattern (`op_to_string`, `op_hash`, etc.)
+- Backend-agnostic solution
+
+### References
+
+**Related Design Docs**:
+- ExternCall Registry: `docs/development/architecture/externs_registry.md`
+- Operator Lowering Patterns: (to be created)
+
+**Related Code**:
+- Operator Guard: `src/backend/mir_interpreter/helpers/eval.rs:200`
+- MIR Lowering: `src/mir/` (transformation passes)
+- ExternCall Registry: `src/backend/mir_interpreter/extern_registry.rs`
