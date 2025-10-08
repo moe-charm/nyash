@@ -33,13 +33,15 @@ static box MiniVmCompare {
     if !a || !b { return -1 }
     local ai = scan._str_to_int(a)
     local bi = scan._str_to_int(b)
-    local res = 0
-    if op == "<"  { if ai <  bi { res = 1 } }
-    if op == "==" { if ai == bi { res = 1 } }
-    if op == "<=" { if ai <= bi { res = 1 } }
-    if op == ">"  { if ai >  bi { res = 1 } }
-    if op == ">=" { if ai >= bi { res = 1 } }
-    if op == "!=" { if ai != bi { res = 1 } }
+    local res = match op {
+      "<"  => { if ai <  bi { 1 } else { 0 } }
+      "==" => { if ai == bi { 1 } else { 0 } }
+      "<=" => { if ai <= bi { 1 } else { 0 } }
+      ">"  => { if ai >  bi { 1 } else { 0 } }
+      ">=" => { if ai >= bi { 1 } else { 0 } }
+      "!=" => { if ai != bi { 1 } else { 0 } }
+      _ => 0
+    }
     print(res)
     // advance after rhs object (coarsely)
     return rv + 1

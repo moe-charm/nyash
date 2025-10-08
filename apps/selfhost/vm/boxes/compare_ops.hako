@@ -4,21 +4,25 @@
 
 static box CompareOpsBox {
   map_symbol(sym) {
-    if sym == "==" { return "Eq" }
-    if sym == "!=" { return "Ne" }
-    if sym == "<"  { return "Lt" }
-    if sym == "<=" { return "Le" }
-    if sym == ">"  { return "Gt" }
-    if sym == ">=" { return "Ge" }
-    return ""
+    return match sym {
+      "==" => "Eq"
+      "!=" => "Ne"
+      "<"  => "Lt"
+      "<=" => "Le"
+      ">"  => "Gt"
+      ">=" => "Ge"
+      _ => ""
+    }
   }
   eval(kind, a, b) {
-    if kind == "Eq" { if a == b { return 1 } else { return 0 } }
-    if kind == "Ne" { if a != b { return 1 } else { return 0 } }
-    if kind == "Lt" { if a <  b { return 1 } else { return 0 } }
-    if kind == "Gt" { if a >  b { return 1 } else { return 0 } }
-    if kind == "Le" { if a <= b { return 1 } else { return 0 } }
-    if kind == "Ge" { if a >= b { return 1 } else { return 0 } }
-    return 0
+    return match kind {
+      "Eq" => { if a == b { 1 } else { 0 } }
+      "Ne" => { if a != b { 1 } else { 0 } }
+      "Lt" => { if a <  b { 1 } else { 0 } }
+      "Gt" => { if a >  b { 1 } else { 0 } }
+      "Le" => { if a <= b { 1 } else { 0 } }
+      "Ge" => { if a >= b { 1 } else { 0 } }
+      _ => 0
+    }
   }
 }
