@@ -1,184 +1,171 @@
-# Hakorune Selfhost Development - 進捗記録（Strategy C）
+# Mini-VM Implementation Progress (Daily Log)
 
-**開始日**: 2025-10-XX（Step 1開始時に更新）
-**最終更新**: 2025-10-08（Strategy C採用）
-**戦略**: Strategy C（段階的統合）- enum MVP → Mini-VM → 完全enum化
-**計画書**: [mini_vm_migration_plan.md](mini_vm_migration_plan.md)
-**失敗記録**: [mini_vm_lessons.md](mini_vm_lessons.md)
+**開始日**: 2025-10-09
+**戦略**: Choice A'' (Macro-Only) - Step 2: Mini-VM実装 with @match
+**期間見積もり**: 10-15人日
 
 ---
 
-## 📊 進捗サマリー（Strategy C）
+## 📋 Phase 概要
 
-### 全体スケジュール
-
-| Step | Phase | ステータス | 完了日 | 所要日数 | 成果 |
-|------|-------|----------|--------|----------|------|
-| **Step 1** | enum MVP | ⏸️ 未開始 | - | 見込3-5日 | - |
-| **Step 2** | Mini-VM Phase 1-5 | ⏸️ 未開始 | - | 見込10-15日 | - |
-| **Step 3** | 統合・検証 | ⏸️ 未開始 | - | 見込3-5日 | - |
-| **Step 4** | Phase 20完全enum化 | ⏸️ 未開始 | - | 見込10-15日 | - |
-
-**合計進捗**: 0% (0/4 Step完了)
-**総見込**: 25-35人日（5-7週間）
-
-### Step 2（Mini-VM）詳細
-
-| Phase | ステータス | 完了日 | 所要日数 | 成果 |
-|-------|----------|--------|----------|------|
-| Phase 1: 基盤構築 | ⏸️ 未開始 | - | 見込2-3日 | - |
-| Phase 2: 演算・比較 | ⏸️ 未開始 | - | 見込2-3日 | - |
-| Phase 3: 制御フロー | ⏸️ 未開始 | - | 見込3-4日 | - |
-| Phase 4: 呼び出し | ⏸️ 未開始 | - | 見込3-5日 | - |
-| Phase 5: 完全対応 | ⏸️ 未開始 | - | 見込2-3日 | - |
-
-**Step 2進捗**: 0% (0/5 Phase完了)
+- **Phase 1**: 基盤構築（3-5人日）- Const/Ret/基本演算
+- **Phase 2**: 演算・比較（2-3人日）- BinOp/Compare/TypeOp
+- **Phase 3**: 制御フロー（2-3人日）- Branch/Jump/Phi
+- **Phase 4**: 呼び出し（2-3人日）- MirCall統一
+- **Phase 5**: 残り命令（1-2人日）- Load/Store/GC
 
 ---
 
-## 📅 日次進捗（最新が上）
+## 🎯 Phase 1: 基盤構築（Day 1-5）
 
-### 2025-10-08 (戦略決定期間)
+### Day 0: 準備（2025-10-09）
 
-#### ✅ 完了
-- 📋 Mini-VM移植実行計画書作成完了（mini_vm_migration_plan.md、674行）
-- 📋 進捗記録ファイル準備（mini_vm_progress.md）
-- 📋 失敗記録ファイル準備（mini_vm_lessons.md）
-- 🎯 **Strategy C（段階的統合）採用決定**
-  - ultrathink 長期コード品質分析完了
-  - 10年技術的負債モデル構築
-  - 3戦略比較（A: enum-first, B: Mini-VM-first, C: 段階統合）
-  - ユーザー意思決定: 長期品質優先（「全ての開発にかかわってきますにゃ」）
-- 📋 計画書Strategy C版へ更新完了（+230行）
-  - Section 0: 戦略的意思決定追加
-  - Section 6: Strategy C全体スケジュール追加
-  - Section 11: Step 1（enum MVP）実装詳細追加
-  - Section 14: 技術的負債管理モデル追加
+**完了事項**:
+- ✅ INSTRUCTION_SET.md 精読
+- ✅ LLVM Python phi.py 精読（197行）
+- ✅ Rust VM exec.rs PHI処理精読
+- ✅ 既存 Mini-VM 構造調査（1,802行）
+- ✅ 失敗記録テンプレート作成
 
-#### ❌ 失敗・問題
-- なし（計画策定・戦略決定のみ）
+**戦略決定**:
+- ✅ 新規実装アプローチ採用（既存リファクタリングでなく）
+- ✅ ディレクトリ: `apps/selfhost/hakorune-vm/`（Mini-VM v2 → Hakorune VM に命名変更）
+- ✅ @match 最大限活用（@enum Result での error handling）
 
-#### 🎯 戦略的意思決定の経緯
-1. **初期提案**: Strategy B（Mini-VM-first、13-20人日、最速）
-2. **第1分析**: ROI比較（1ヶ月視点でB有利）
-3. **ユーザー重要発言**: 「コード綺麗にするのとても大切」「10年Bootstrap Chain」
-4. **第2分析（ultrathink）**: 10年技術的負債累積モデル
-   - Strategy B: 100 → 800-1000 debt points（10年後）
-   - Strategy C: 100 → 200-300 debt points（70%削減）
-5. **最終決定**: **Strategy C採用**（25-35人日、但し10年で50-100人日節約）
-
-#### 📊 統計
-- 計画書: 674行 → 905行（+231行、Strategy C版）
-- 所要時間:
-  - 初期計画書: 20分
-  - 戦略分析: 20分（ultrathink）
-  - 計画書更新: 15分
-- 分析深度: 4戦略次元（1ヶ月、3ヶ月、1年、10年）
-
-#### 🎯 次のアクション
-- **Step 1: enum MVP実装**（3-5人日）
-  - Option<T> 基本実装
-  - Result<T,E> 基本実装
-  - 基本パターンマッチング
-- Step 2以降はenum MVP完了後に開始
+**次のステップ**:
+- ✅ Phase 1 Day 1 完了: HakoruneVmCore実装＋テスト成功
 
 ---
 
-## 📈 統計グラフ（Strategy C）
+### Day 1: JSON MIRパーサー基盤（2025-10-09 完了✅）
 
-### 全体進捗
-```
-Step 1 (enum MVP):        [          ] 0%
-Step 2 (Mini-VM Phase1-5):[          ] 0%
-Step 3 (統合・検証):      [          ] 0%
-Step 4 (完全enum化):      [          ] 0%
-```
+**目標**: JsonCursorBox活用で block/instructions 構造解析
 
-### Step 1（enum MVP）進捗
-```
-Option<T> 実装:  [          ] 0%
-Result<T,E> 実装:[          ] 0%
-テスト作成:      [          ] 0%
-統合準備:        [          ] 0%
-```
+**完了事項**:
+- ✅ HakoruneVmCore 骨格作成（288行）
+- ✅ JSON block/instructions パーサー実装（JsonCursorBox.seek_obj_end/seek_array_end活用）
+- ✅ レジスタMap初期化（MapBox使用）
+- ✅ テストケース作成: test_phase1_minimal.hako
+- ✅ 4命令実装: Const/BinOp(Add)/Ret/Copy
+- ✅ @match命令ディスパッチ実装
+- ✅ Result @enum エラーハンドリング実装
+- ✅ 3テスト全PASS: const 42, 10+32, copy 42
 
-### Step 2（Mini-VM）進捗
-```
-Phase 1: [          ] 0%
-Phase 2: [          ] 0%
-Phase 3: [          ] 0%
-Phase 4: [          ] 0%
-Phase 5: [          ] 0%
-```
+**実装ファイル**:
+- `apps/selfhost/hakorune-vm/hakorune_vm_core.hako` (288行)
+- `apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako` (43行)
 
-### テスト通過率
-```
-Step 1:
-  test_option_basic:  0/10 (0%)
-  test_result_basic:  0/10 (0%)
+**技術的成果**:
+- @match でのinstruction dispatch成功（"const"/"binop"/"ret"/"copy" → handler関数）
+- Result.Ok()/Result.Err() によるエラー伝播
+- JsonCursorBox による JSON traversal（seek_obj_end/seek_array_end）
+- StringHelpers/StringOps 統合活用（int_to_str, to_i64, index_of_from, read_digits）
 
-Step 2:
-  phase1_basic:       0/1  (0%)
-  phase2_arithmetic:  0/1  (0%)
-  phase3_if:          0/1  (0%)
-  phase3_loop:        0/1  (0%)
-  phase4_call:        0/1  (0%)
-  phase5_full:        0/1  (0%)
-```
+**見積もり**: 4時間
+**実績**: 約6時間（using system問題で+2時間）
 
----
+**失敗記録**:
+1. **Using system設定ミス**: hako.toml の NYASH_USING="0" により using が完全無効化されていた
+   - 解決: HAKO_USING="1" + HAKO_ALLOW_USING_FILE="1" + HAKO_ROOT設定
+   - 時間損失: 約1時間
 
-## 🎯 次のタスク（Strategy C）
+2. **@match制約（return文禁止）**: match arm内でreturn文を使うとterminator errorになる
+   - 原因: @matchは式評価、returnは文（terminator）
+   - 回避策: early returnが必要な場合はif-elseを使う
+   - 影響箇所: run() の Result処理、_handle_binop() のエラーケース
+   - 時間損失: 約30分
 
-### ⚠️ 実行順序: Step 1（enum MVP）が最優先
+3. **StringOps vs StringHelpers混同**: index_of_from を StringHelpers で探していた
+   - 正: StringOps.index_of_from
+   - 修正箇所: 4箇所
+   - 時間損失: 約10分
 
-### Step 1 開始前（準備、0.5日）
-- [ ] Hakoruneビルド確認（`cargo build --release`）
-- [ ] スモークテスト実行（`tools/smokes/v2/run.sh --profile quick`）
-- [ ] Phase 20 VariantBox設計書精読（`docs/development/roadmap/phases/phase-20-variant-box/DESIGN.md`）
-- [ ] 既存ResultBox実装精読（`apps/selfhost/vm/boxes/result_box.hako`、34行）
-- [ ] 言語仕様確認（Box継承、birth lifecycle）
+**学び**:
+- @match は純粋な式評価に最適、制御フロー（early return）には if-else が必要
+- using system の環境変数は HAKO_* が優先（NYASH_* より）
+- hako.toml の [env] 設定がすべてのフラグより強い
 
-### Step 1 Day 1-2（Option<T> 実装）
-- [ ] OptionBox Box定義（2時間）
-- [ ] some/none コンストラクタ実装（1時間）
-- [ ] is_some/is_none/unwrap 実装（1時間）
-- [ ] test_option_basic.hako 作成（10パターン、2時間）
-- [ ] スモークテスト実行・PASS確認（1時間）
-- [ ] **失敗記録更新**（必須）
-
-### Step 1 Day 2-3（Result<T,E> 実装）
-- [ ] ResultBox Box定義（2時間）
-- [ ] ok/err コンストラクタ実装（1時間）
-- [ ] is_ok/is_err/unwrap 実装（1時間）
-- [ ] test_result_basic.hako 作成（10パターン、2時間）
-- [ ] スモークテスト実行・PASS確認（1時間）
-- [ ] **失敗記録更新**（必須）
-
-### Step 1 Day 4-5（統合・検証）
-- [ ] 使用ガイドドキュメント作成（2時間）
-- [ ] 統合テスト（Option + Result組み合わせ、2時間）
-- [ ] Mini-VMコードサンプル作成（使用例、2時間）
-- [ ] **Step 1完了レビュー**
-
-### Step 2以降
-**注**: Step 1完了後に開始。Mini-VM Phase 1-5の詳細は計画書参照。
+**次のステップ**:
+- ✅ Day 2: BinOp全種・Compare全種実装完了（Rust VMバグ発見）
 
 ---
 
-## 📝 メモ
+### Day 2: BinOp全種・Compare全種実装（2025-10-09 完了✅ - Rust VMバグ発見）
 
-### 重要リンク
-- 計画書: [mini_vm_migration_plan.md](mini_vm_migration_plan.md)
-- 失敗記録: [mini_vm_lessons.md](mini_vm_lessons.md)
-- MIR命令セット: [INSTRUCTION_SET.md](../../../reference/mir/INSTRUCTION_SET.md)
+**目標**: BinOp全種（Sub/Mul/Div/Mod）+ Compare全種（Eq/Ne/Lt/Le/Gt/Ge）実装
 
-### 開発ルール
-1. **80/20ルール**: 各Phaseで80%動作優先、20%は後回し
-2. **失敗記録必須**: 成功より失敗の記録が重要
-3. **段階検証**: Phase完了ごとにテスト実行
-4. **ドキュメント精読**: 実装前に参考資料を完全理解
+**完了事項**:
+- ✅ BinOp全種実装: Add（既存）, Sub, Mul, Div, Mod
+- ✅ ゼロ除算エラーハンドリング（Div/Mod）
+- ✅ Compare全種実装: Eq, Ne, Lt, Le, Gt, Ge
+- ✅ 比較結果を0/1で返す（false/true）
+- ✅ テストケース拡張: 10テスト作成（Test 1-10）
+- ✅ @match命令ディスパッチに"compare"追加
+- ✅ JSON parsing修正: `seek_obj_end()` はinclusive → `substring(pos, end+1)`必要
+- ✅ instruction loop位置更新: `pos = inst_end + 1`
 
----
+**実装ファイル**:
+- `apps/selfhost/hakorune-vm/hakorune_vm_core.hako` (377行 → 387行, +10行)
+- `apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako` (43行 → 113行, +70行)
 
-**最終更新**: 2025-10-08（計画書作成完了）
+**技術的成果**:
+- BinOp 5種類実装完了（Add/Sub/Mul/Div/Mod）
+- Compare 6種類実装完了（Eq/Ne/Lt/Le/Gt/Ge）
+- JSON parsing修正（seek_obj_end inclusiveバグ修正）
+- Instruction loop修正（position更新ミス修正）
+
+**見積もり**: 4時間
+**実績**: 約8時間（+100%超過）
+
+**❌ 重大な問題発見: Rust VM result_val変数消失バグ**:
+
+**現象**:
+```hako
+// Line 219: Sub計算実行
+result_val = lhs_val - rhs_val  // 50 - 8 = 42
+
+// 直後のprint（デバッグ時）: ✅ 正常
+print("Sub result: 50 - 8 = 42")
+
+// 次の行のprint: ❌ 異常
+print("Before set: result_val=0")  // result_val が 0 に変わっている！
+```
+
+**詳細デバッグログ**:
+```
+[DEBUG binop] kind=[Sub] len=3 lhs=50 rhs=8
+[DEBUG binop] Matched Sub
+[DEBUG binop] Sub result: 50 - 8 = 42      ← ✅ 正常
+[DEBUG binop] Before set: result_val=0     ← ❌ 異常！
+[DEBUG binop] After set: result_val=0
+[DEBUG binop] Stored v%3 = 0
+```
+
+**問題箇所**: `apps/selfhost/hakorune-vm/hakorune_vm_core.hako:219-237`
+
+**影響範囲**:
+- ✅ Test 1-3 PASS (Add/Copy): `kind == "Add"` は動作
+- ❌ Test 4-10 FAIL (Sub/Mul/Div/Mod/Compare): すべて0を返す
+
+**原因仮説**:
+1. **Rust VM ローカル変数スコープバグ** - else-ifブロック内のローカル変数が正しく保持されない
+2. **StringHelpers.int_to_str() 副作用** - print内の関数呼び出しがresult_valを破壊？
+3. **レジスタMap.set() 副作用** - regs.set()呼び出しがスタックを破壊？
+
+**回避策候補**:
+- [ ] result_valを別変数に保存してからregs.set()
+- [ ] if-elseの代わりに@matchを使う（Day 1で制約発見したが再検討）
+- [ ] 計算結果を直接regs.set()に渡す
+
+**再現手順**:
+```bash
+source tools/dev_env.sh using
+NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+# Test 4-10 すべてFAIL（expected 42/1, got 0）
+```
+
+**次のステップ**:
+- [ ] Task Teacher + ultrathinkでRust VMバグ調査
+- [ ] Rust VM exec.rs のローカル変数実装確認
+- [ ] 回避策実装してPhase 1 Day 2完了
+- [ ] Rust VM issueとして報告

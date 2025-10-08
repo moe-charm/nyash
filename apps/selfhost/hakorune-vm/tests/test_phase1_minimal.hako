@@ -1,0 +1,112 @@
+// test_phase1_minimal.hako — Phase 1 最小テスト: return 42
+// Expected: Hakorune-VM実行 → 42
+
+using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    // Test 1: Simple const + ret
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1: const 42 + ret → " + StringHelpers.int_to_str(result1))
+    if result1 != 42 {
+      print("[FAIL] Test 1: expected 42, got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: BinOp Add
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":10}},{"op":"const","dst":2,"value":{"type":"i64","value":32}},{"op":"binop","op_kind":"Add","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}"#
+
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2: 10 + 32 → " + StringHelpers.int_to_str(result2))
+    if result2 != 42 {
+      print("[FAIL] Test 2: expected 42, got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: Copy instruction
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"copy","dst":2,"src":1},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3: copy 42 → " + StringHelpers.int_to_str(result3))
+    if result3 != 42 {
+      print("[FAIL] Test 3: expected 42, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: BinOp Sub (50 - 8 = 42)
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":50}},{"op":"const","dst":2,"value":{"type":"i64","value":8}},{"op":"binop","op_kind":"Sub","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4: 50 - 8 → " + StringHelpers.int_to_str(result4))
+    if result4 != 42 {
+      print("[FAIL] Test 4: expected 42, got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    // Test 5: BinOp Mul (6 * 7 = 42)
+    local mir5 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":6}},{"op":"const","dst":2,"value":{"type":"i64","value":7}},{"op":"binop","op_kind":"Mul","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result5 = HakoruneVmCore.run(mir5)
+    print("Test 5: 6 * 7 → " + StringHelpers.int_to_str(result5))
+    if result5 != 42 {
+      print("[FAIL] Test 5: expected 42, got " + StringHelpers.int_to_str(result5))
+      return 1
+    }
+
+    // Test 6: BinOp Div (84 / 2 = 42)
+    local mir6 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":84}},{"op":"const","dst":2,"value":{"type":"i64","value":2}},{"op":"binop","op_kind":"Div","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result6 = HakoruneVmCore.run(mir6)
+    print("Test 6: 84 / 2 → " + StringHelpers.int_to_str(result6))
+    if result6 != 42 {
+      print("[FAIL] Test 6: expected 42, got " + StringHelpers.int_to_str(result6))
+      return 1
+    }
+
+    // Test 7: BinOp Mod (127 % 85 = 42)
+    local mir7 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":127}},{"op":"const","dst":2,"value":{"type":"i64","value":85}},{"op":"binop","op_kind":"Mod","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result7 = HakoruneVmCore.run(mir7)
+    print("Test 7: 127 % 85 → " + StringHelpers.int_to_str(result7))
+    if result7 != 42 {
+      print("[FAIL] Test 7: expected 42, got " + StringHelpers.int_to_str(result7))
+      return 1
+    }
+
+    // Test 8: Compare Eq (42 == 42 → 1)
+    local mir8 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"const","dst":2,"value":{"type":"i64","value":42}},{"op":"compare","kind":"Eq","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result8 = HakoruneVmCore.run(mir8)
+    print("Test 8: 42 == 42 → " + StringHelpers.int_to_str(result8))
+    if result8 != 1 {
+      print("[FAIL] Test 8: expected 1, got " + StringHelpers.int_to_str(result8))
+      return 1
+    }
+
+    // Test 9: Compare Lt (41 < 42 → 1)
+    local mir9 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":41}},{"op":"const","dst":2,"value":{"type":"i64","value":42}},{"op":"compare","kind":"Lt","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result9 = HakoruneVmCore.run(mir9)
+    print("Test 9: 41 < 42 → " + StringHelpers.int_to_str(result9))
+    if result9 != 1 {
+      print("[FAIL] Test 9: expected 1, got " + StringHelpers.int_to_str(result9))
+      return 1
+    }
+
+    // Test 10: Compare Ge (42 >= 42 → 1)
+    local mir10 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"const","dst":2,"value":{"type":"i64","value":42}},{"op":"compare","kind":"Ge","dst":3,"lhs":1,"rhs":2},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}]}"#
+
+    local result10 = HakoruneVmCore.run(mir10)
+    print("Test 10: 42 >= 42 → " + StringHelpers.int_to_str(result10))
+    if result10 != 1 {
+      print("[FAIL] Test 10: expected 1, got " + StringHelpers.int_to_str(result10))
+      return 1
+    }
+
+    print("[SUCCESS] All Phase 1 Day 2 tests passed! 🎉 (10/10)")
+    return 0
+  }
+}

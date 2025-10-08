@@ -1,12 +1,11 @@
-# Hakorune Mini-VM Migration - 失敗・学び記録
+# Mini-VM Implementation Lessons (失敗記録)
 
-**開始日**: 2025-10-XX（Phase 1開始時に更新）
-**計画書**: [mini_vm_migration_plan.md](mini_vm_migration_plan.md)
-**進捗記録**: [mini_vm_progress.md](mini_vm_progress.md)
+**開始日**: 2025-10-09
+**目的**: 失敗から学び、同じ間違いを繰り返さない
 
 ---
 
-## 🚨 重要: 失敗報告の優先度
+## 🚨 失敗報告の重要性（最優先！）
 
 **プログラム開発では失敗報告が一番大事**
 
@@ -18,271 +17,352 @@
 
 ---
 
-## 📋 失敗記録フォーマット
+## 🎯 Phase 1: 基盤構築の失敗記録
 
-```markdown
-## ❌ Phase X.X の問題点・失敗 (YYYY-MM-DD)
+### Phase 0 段階の学び（準備完了）
 
-### 1️⃣ **[失敗の種類]**
-**問題**: [何が起きたか]
-**期待**: [何を期待していたか]
-**実際**: [実際にどうなったか]
-**原因**: [なぜ失敗したか]
-**影響**: [どのくらい深刻か（遅延日数等）]
-**学び**: [次回どう避けるか]
+**学び**:
+1. **ドキュメントファースト**: INSTRUCTION_SET.md/参考実装精読が重要
+2. **既存実装の理解**: 既存 Mini-VM の問題点把握が戦略決定に必須
+3. **新規 vs リファクタリング**: @match設計の一貫性のため新規実装を選択
+4. **失敗記録準備**: 開始前にテンプレート準備が重要
 
-### 2️⃣ **[次の失敗]**
-...
+**成功要因**:
+- Choice A'' 戦略により @enum/@match が既に完備
+- Phase 15.13-15.15 で既存コードへの @match 適用実績あり
+- Task Teacher 活用で多角的調査完了
+
+---
+
+### Day 1: JSON MIRパーサー基盤（2025-10-09）
+
+#### ❌ **失敗1: Using System設定ミス**
+
+**問題**: `using "apps/selfhost/..."` がすべて "file paths are disallowed" エラー
+
+**期待**: ファイルパスusing が動作する
+
+**実際**:
+- NYASH_USING_AST=1 でも失敗
+- NYASH_USING_PROFILE=dev でも失敗
+- NYASH_SKIP_TOML_ENV=1 でも失敗
+
+**根本原因**: `hako.toml` の `[env]` セクションに `NYASH_USING="0"` が設定されており、using機能が**完全無効化**されていた
+
+**解決**:
+```toml
+[env]
+HAKO_USING = "1"
+HAKO_USING_STRATEGY = "prelude"
+HAKO_ALLOW_USING_FILE = "1"
+HAKO_USING_PROFILE = "dev"
 ```
 
----
+**時間損失**: 約1時間
 
-## 🔥 Phase別失敗記録（最新が上）
+**学び**:
+1. **hako.toml の [env] は最強**: すべてのコマンドライン環境変数より優先される
+2. **HAKO_* vs NYASH_***: 環境変数の名前空間が混在している（統一が必要）
+3. **HAKO_ROOT 必須**: using file path は HAKO_ROOT からの相対パス解決が必要
+4. **事前確認**: 新機能実装前に using system の設定状態を確認すべき
 
-### ❌ Phase 0: 計画策定（2025-10-08）
+**再発防止策**:
+- [x] **tools/dev_env.sh using 発見！** - ChatGPTアドバイスで判明
+  ```bash
+  # リポジトリルートで実行（または HAKO_ROOT 設定）
+  source tools/dev_env.sh using
+  ./target/release/hako apps/.../main.hako
+  ```
+  - 自動設定: HAKO_USING=1, HAKO_USING_STRATEGY=prelude, HAKO_ALLOW_USING_FILE=1
+  - Day 1で手動設定した内容と完全一致！
+- [ ] using system のクイックリファレンス作成
+- [ ] 環境変数名の統一（NYASH_* → HAKO_*）を検討
 
-#### 📊 **成果物の客観評価**
+**📚 ChatGPT推奨ハンドブック**:
+1. **すぐ動かす手順**:
+   - リポジトリルートにいること（または HAKO_ROOT 設定）
+   - `source tools/dev_env.sh using`
+   - `./target/release/hako apps/.../main.hako`
 
-**計画書**:
-- 新規: `mini_vm_migration_plan.md` (1,200行)
-- 新規: `mini_vm_progress.md` (進捗記録)
-- 新規: `mini_vm_lessons.md` (本ドキュメント)
-
-**時間制限**: 20分以内 → **達成**
-
-**網羅性**:
-- ✅ 目的・スコープ明確
-- ✅ 参考実装選択根拠
-- ✅ アーキテクチャ設計
-- ✅ Phase分割合理的（5 Phase）
-- ✅ リスク特定・対策（重大3件）
-- ✅ 成功基準具体的
-- ✅ 失敗記録重視（セクション8）
-- ✅ 80/20ルール適用
-- ✅ マイルストーン現実的（13-20人日）
-- ✅ 次アクション明確
-
-#### 🎓 **学び（計画策定段階）**
-
-1. **調査完了前の計画書作成**
-   - 状況: 他3タスク（LLVM Python/Rust VM/ギャップ分析）結果待ち
-   - 判断: 既存ドキュメント・コードレビューで計画書先行作成
-   - 結果: **成功**（20分以内、実行可能な計画完成）
-   - 根拠:
-     - LLVM Python実装100%完了済み（8,370行、参考可能）
-     - Rust VM実装安定（参考可能）
-     - 既存Mini-VM実装（1,831行、Hakorune実績）
-     - INSTRUCTION_SET.md（MIR16凍結セット確定）
-
-2. **時間制限下での優先順位**
-   - 制約: 20分以内
-   - 優先: 実行可能な計画 > 完璧な見積もり
-   - 選択:
-     - ✅ Phase分割・成功基準（必須）
-     - ✅ リスク特定・対策（重大3件のみ）
-     - ⏸️ 詳細見積もり（幅をもたせる: 3-5日）
-     - ⏸️ 完全な依存関係図（Phase間依存のみ）
-
-3. **失敗記録体制の事前準備**
-   - 戦略: 計画書内にセクション8「失敗記録の重要性」
-   - 成果: フォーマット・ファイル準備完了
-   - 効果: Phase 1開始時から記録開始可能
+2. **トラブルシューティング**:
+   - "Parse error: Expected identifier" → HAKO_USING, STRATEGY=prelude, CWD=ルート確認
+   - "using: file paths are disallowed" → dev環境では HAKO_ALLOW_USING_FILE=1
 
 ---
 
-## 📚 既知の問題（開発開始前）
+#### ❌ **失敗2: @match 制約の理解不足（return文禁止）**
 
-### 🔴 重大リスク（Phase開始前に要対処）
+**問題**: @match arm 内で return 文を使うと "Builder emit after terminator forbidden" エラー
 
-#### 1️⃣ **using経由のstatic box呼び出しで引数null問題**
-**ソース**: CURRENT_TASK.md L107-109
-**症状**: `using "..." as Box; Box.method(param)` → param消失
-**影響**: 極大（Phase 4呼び出し実装で致命的）
-**対策**: Phase 4開始前にRust VM修正必須
-**参考**: Rust VM `handlers/calls/function.rs`, `calls/legacy.rs`
+**コード**:
+```hako
+return match result {
+  Ok(value) => value
+  Err(error) => {
+    print("[ERROR]")
+    return -1  // ← これがエラー
+  }
+}
+```
 
-#### 2️⃣ **VM比較演算の破綻が疑われる**
-**ソース**: CURRENT_TASK.md L102-105
-**症状**: `==`, `>=` などが誤判定
-**影響**: 高（Phase 2演算実装で影響）
-**対策**: CompareOpsBox改善、型タグ厳格化
-**参考**: `/apps/selfhost/common/mini_vm_compare.hako`
+**期待**: match で分岐してそれぞれ return できる
 
-#### 3️⃣ **PHI処理の複雑さ**
-**ソース**: Phase 15.8 README.md（到達不能predecessor混入問題）
-**症状**: 到達不能ブロックがPHI predecessorに含まれる
-**影響**: 極大（Phase 3制御フロー実装で致命的）
-**対策**: LLVM Python `phi_handler.py`（197行）精読、段階実装（if→loop）
-**参考**: selfhostブランチ修正完了（PhiMergeHelper箱化）
+**実際**: match arm 内の return がターミネーター扱いになり、その後の式評価ができなくなる
 
-### 🟡 中程度リスク
+**原因**:
+- @match は**式（expression）**として設計されている
+- return は**文（statement）**であり**ターミネーター**
+- match arm は式を返す必要があるが、return はその後の評価を不可能にする
 
-#### 4️⃣ **Hakoruneの言語制約（enum未サポート）**
-**影響**: 高（命令種別の表現方法）
-**対策**: Box継承で代替（InstructionBase → ConstInstruction等）
+**回避策**:
+```hako
+// パターン1: if-else に変更
+if result.is_Ok() {
+  return result.as_Ok()
+} else {
+  print("[ERROR]")
+  return -1
+}
 
-#### 5️⃣ **JSON解析パフォーマンス**
-**影響**: 中（大規模MIRで遅延）
-**対策**: Phase 1-4は無視、Phase 5でプロファイリング
+// パターン2: match で値を取得してから return
+local value = match result {
+  Ok(v) => v
+  Err(e) => {
+    print("[ERROR]: " + e)
+    -1
+  }
+}
+return value
+```
+
+**影響箇所**:
+1. `run()` 関数の Result 処理
+2. `_handle_binop()` のエラーケース
+
+**時間損失**: 約30分
+
+**学び**:
+1. **@match は純粋な式評価に最適**: 値を計算して返す用途
+2. **制御フロー（early return）には if-else**: 複数の脱出点が必要な場合
+3. **@match設計思想**: 関数型プログラミング的な式指向設計
+4. **Phase 19で気づけなかった**: @match実装時にこの制約を文書化すべきだった
+
+**再発防止策**:
+- [ ] @match リファレンスに「return文禁止」を明記
+- [ ] 良い例・悪い例をドキュメント化
+- [ ] MIR Builder での terminator 後の emit チェックを維持
 
 ---
 
-## 🎓 過去プロジェクトからの学び
+#### ❌ **失敗3: StringOps vs StringHelpers 混同**
 
-### Phase 2.1（dep_tree統合）の失敗（2025-10-06）
+**問題**: `StringHelpers.index_of_from` が "Unknown module function" エラー
 
-**参考**: CLAUDE.md L11-L60
+**期待**: StringHelpers に index_of_from がある
 
-#### ❌ **主要な問題点**
+**実際**: index_of_from は StringOps にある
 
-**1️⃣ テスト実行完全失敗**
-- 問題: 3ファイル統合したが、1回も動作確認できていない
-- 実際: FileBoxエラー、usingパースエラー、原因調査なし
-- 影響: commit前に動作検証必須（現在未検証状態）
-- **学び**: **中間テスト必須**（コード編集中に最低1回は動作確認すべき）
+**原因**: 2つの string 関連 Box の役割分担を忘れていた
+- StringHelpers: 変換系（int_to_str, to_i64, read_digits, json_quote）
+- StringOps: 検索系（index_of_from, substring_from）
 
-**2️⃣ 見積もりの大誤算**
-- 見積もり: 108-150行削減
-- 実際: 20行削減のみ（**見積もりの18%**）
-- 原因: Hakoruneの構文制約（セミコロン区切り不可）を考慮せず
-- **学び**: **事前確認**（Hakoruneの構文制約を確認してから見積もるべき）
+**修正**:
+```hako
+using "apps/selfhost/common/string_ops.hako" as StringOps
 
-**3️⃣ 構文エラー連発（4回修正）**
-- Line 47: `continue` 使用 → Hakoruneは未サポート
-- Line 94, 111, 172, 177, 183, 226: セミコロン区切り → すべて複数行展開
-- **学び**: **言語仕様精読**（実装前に言語制約を完全理解）
+// 4箇所修正
+StringHelpers.index_of_from → StringOps.index_of_from
+```
 
-**4️⃣ using文の混乱**
-- `using selfhost.tools.dep_tree_core` → ❌ "Unsupported namespace"
-- `using "./dep_tree_core.hako"` → ❌ "Expected identifier"
-- hako.tomlに追加したのに動かない理由、**調査していない**
-- **学び**: **調査優先**（エラーが出たら、試行錯誤より根本原因調査を優先）
+**時間損失**: 約10分
 
-### StringHelpers統合成功事例（Phase 15.11, 2025-10-05）
+**学び**:
+1. **共通ライブラリの役割分担**: 名前だけでなく役割も明確に
+2. **クイックリファレンス必要**: 各 Box の関数一覧をすぐ参照できるように
+3. **コード補完の重要性**: IDE support があれば防げた
 
-**参考**: CLAUDE.md L63-L98
+**再発防止策**:
+- [ ] StringHelpers/StringOps のクイックリファレンス作成
+- [ ] 関数一覧を各ファイルの冒頭コメントに記載
+- [ ] 統合を検討？（または命名を StringConvert/StringSearch に変更）
+
+---
 
 #### ✅ **成功要因**
 
-**1️⃣ 包括的テストスイート先行**
-- 実装前に `test_string_helpers.hako` 作成
-- 5種類のヘルパー関数をテストカバー
-- 結果: 14ファイル統合で335行純削減、**1回もテスト失敗なし**
+1. **@match 命令ディスパッチの成功**:
+   ```hako
+   return match op {
+     "const" => me._handle_const(inst_json, regs)
+     "binop" => me._handle_binop(inst_json, regs)
+     "ret" => me._handle_ret(inst_json, regs)
+     "copy" => me._handle_copy(inst_json, regs)
+     _ => Result.Err("unsupported instruction: " + op)
+   }
+   ```
+   - 簡潔で読みやすい
+   - 新しい命令の追加が容易
+   - 未知の命令を明示的にエラー処理
 
-**2️⃣ 段階的統合（Phase 15.11 → 15.11.1）**
-- Phase 15.11: 12ファイル統合（319行削減）
-- Phase 15.11.1: 追加2ファイル統合（15行削減）
-- ChatGPT協力で追加統合
-- 結果: 安定的に進行、リスク分散成功
+2. **Result @enum によるエラー伝播**:
+   - 各 handler が Result.Ok()/Err() を返す
+   - エラーが呼び出し元に自動伝播
+   - エラーメッセージが context を含む
 
-**学び**: **テスト駆動**（実装前にテスト作成、段階的統合）
+3. **JsonCursorBox の活用**:
+   - seek_obj_end/seek_array_end で JSON traversal が簡潔
+   - 手動パース不要
 
----
-
-## 📝 失敗パターン分類
-
-### 🔴 実行失敗・テスト失敗
-- dep_tree統合: 3ファイル統合で1回も動作確認なし
-- **対策**: Phase完了時に必ずテスト実行
-
-### 🔴 見積もりの失敗
-- dep_tree統合: 見積もり108-150行 → 実際20行（18%）
-- **対策**: 言語制約を事前調査、見積もりに安全係数（x2）
-
-### 🔴 設計判断の失敗
-- dep_tree統合: セミコロン区切り採用 → 全行書き直し（+23行）
-- **対策**: 言語仕様精読、制約確認後に設計
-
-### 🔴 理解不足・調査不足
-- dep_tree統合: using文エラー3回試行 → 根本原因調査なし
-- **対策**: エラー発生時、まず根本原因調査
-
-### 🔴 作業の抜け・忘れ
-- dep_tree統合: コード編集完了 → テスト実行忘れ
-- **対策**: チェックリスト運用、Phase完了定義明確化
+4. **3テスト全成功**: const 42, 10+32, copy 42 すべて期待通り動作
 
 ---
 
-## 🎯 Mini-VM開発での適用（予防策）
+#### 📊 **Day 1 統計**
 
-### Phase 1: 基盤構築
-**予防策**:
-- [ ] Hakoruneの言語制約完全理解（enum未サポート、セミコロン区切り不可等）
-- [ ] test_phase1.hako先行作成（テスト駆動）
-- [ ] 中間テスト実施（JsonCursorBox統合後、ディスパッチャ実装後）
-- [ ] エラー発生時は根本原因調査優先
-
-### Phase 2: 演算・比較
-**予防策**:
-- [ ] CompareOpsBox既存バグ修正完了確認
-- [ ] 型混在テストケース先行作成
-- [ ] BinOp実装は1演算ずつテスト（一括実装しない）
-
-### Phase 3: 制御フロー
-**予防策**:
-- [ ] LLVM Python phi_handler.py（197行）完全理解
-- [ ] if-PHI実装成功後、loop-PHI着手（段階実装）
-- [ ] 到達不能predecessor検出テスト先行作成
-- [ ] PHI実装失敗時、即座にChatGPT支援依頼
-
-### Phase 4: 呼び出し
-**予防策**:
-- [ ] **Phase 4開始前に引数null問題修正完了必須**
-- [ ] 最小再現コード作成・動作確認
-- [ ] Rust VM calls/function.rs精読
-- [ ] Global Call成功後、ModuleFunction Call着手（段階実装）
-
-### Phase 5: 完全対応
-**予防策**:
-- [ ] パフォーマンス改善は最後（機能優先）
-- [ ] プロファイリング結果に基づく最適化（推測での最適化禁止）
-- [ ] MIR16全命令スモークテスト整備
+- **見積もり**: 4時間
+- **実績**: 約6時間
+- **超過時間**: 2時間（50%超過）
+- **超過理由**: using system問題（1時間）+ @match制約（0.5時間）+ その他（0.5時間）
+- **コード行数**: 331行（hakorune_vm_core.hako: 288, test: 43）
+- **実装命令数**: 4/16（Const, BinOp(Add), Ret, Copy）
+- **テスト成功率**: 3/3 (100%)
 
 ---
 
-## 📊 失敗統計（更新予定）
+### Day 2: BinOp全種・Compare全種実装（2025-10-09）
 
-### Phase別失敗件数
+#### ❌ **失敗1: JSON parsing バグ（seek_obj_end inclusive問題）**
+
+**問題**: すべてのinstruction JSONが閉じ括弧なしで切れる
+
+**デバッグログ**:
 ```
-Phase 1: 0件（未開始）
-Phase 2: 0件（未開始）
-Phase 3: 0件（未開始）
-Phase 4: 0件（未開始）
-Phase 5: 0件（未開始）
+[DEBUG inst] {"op":"const","dst":1,"value":{"type":"i64","value":50}
+[DEBUG inst] {"op":"binop","op_kind":"Sub","dst":3,"lhs":1,"rhs":2
 ```
 
-### 失敗種別
-- 実行失敗: 0件
-- 見積もり失敗: 0件
-- 設計判断失敗: 0件
-- 理解不足: 0件
-- 作業抜け: 0件
+**期待**: 完全なJSON `{"op":"binop",...}`
 
-### 遅延日数
-- Phase 1: 0日
-- Phase 2: 0日
-- Phase 3: 0日
-- Phase 4: 0日
-- Phase 5: 0日
-- **合計**: 0日
+**実際**: 閉じ括弧なし `{"op":"binop",...`
 
----
+**原因**: `seek_obj_end()` は**inclusive**（閉じ括弧を含む位置を返す）
+- 誤: `substring(pos, inst_end)` → 閉じ括弧の1つ前まで
+- 正: `substring(pos, inst_end + 1)` → 閉じ括弧を含む
 
-## 🚀 次のアクション
+**修正箇所**:
+- Line 90: `local inst_json = insts_json.substring(pos, inst_end + 1)`
+- Line 110: `pos = inst_end + 1`
 
-### Phase 1開始前
-- [ ] 本ドキュメントの「予防策」レビュー
-- [ ] INSTRUCTION_SET.md精読
-- [ ] LLVM Python実装精読（特にphi_handler.py）
-- [ ] Rust VM実装精読（特にexec.rs PHI処理）
+**時間損失**: 約1.5時間
 
-### Phase 1開始時
-- [ ] **失敗記録を恐れない**（失敗は学習の機会）
-- [ ] エラー発生時、まず本ドキュメントに記録
-- [ ] 1日の終わりに振り返り、mini_vm_progress.md更新
+**学び**:
+1. **seek_* 系APIは inclusive/exclusive を必ず確認**
+2. **JSON抽出は最初にprint確認**（構造が正しいか目視）
+3. **JsonCursorBox のコメント不足**（inclusiveの明記なし）
+
+**再発防止策**:
+- [ ] JsonCursorBox.seek_obj_end() にdocコメント追加（inclusive明記）
+- [ ] JSON抽出の単体テスト作成
 
 ---
 
-**最終更新**: 2025-10-08（失敗記録準備完了）
+#### ❌ **失敗2: Rust VM result_val変数消失バグ（重大）**
 
-**重要**: このドキュメントは成功報告より失敗報告を重視します。失敗を隠さず、客観的に記録することが次の成功への最短路です。
+**問題**: else-ifブロック内で代入した変数が、ブロック外で0に変わる
+
+**再現コード**:
+```hako
+local result_val = 0
+if kind == "Add" {
+  result_val = lhs_val + rhs_val
+} else if kind == "Sub" {
+  result_val = lhs_val - rhs_val  // Line 219: 42を代入
+  print("Sub result: 42")         // ✅ 正常
+} else if kind == "Mul" {
+  result_val = lhs_val * rhs_val
+}
+
+// ここで result_val が 0 に戻っている！
+regs.set(StringHelpers.int_to_str(dst), result_val)  // 0 が保存される
+```
+
+**詳細デバッグログ**:
+```
+[DEBUG binop] kind=[Sub] len=3 lhs=50 rhs=8
+[DEBUG binop] Matched Sub
+[DEBUG binop] Sub result: 50 - 8 = 42      ← ✅ 正常
+[DEBUG binop] Before set: result_val=0     ← ❌ 異常！result_valが0に
+[DEBUG binop] After set: result_val=0
+[DEBUG binop] Stored v%3 = 0
+```
+
+**原因仮説**:
+1. **Rust VM else-ifブロック内変数スコープバグ**
+   - else-ifブロック内で代入した値が、ブロック外で失われる
+   - ifブロック（kind=="Add"）は正常動作
+   - else-ifブロック（kind=="Sub"以降）は異常
+
+2. **MIR Builder の if-else lowering バグ**
+   - 条件分岐のMIR変換時にスコープ処理ミス？
+
+3. **Rust VM Interpreter のローカル変数実装バグ**
+   - src/backend/mir_interpreter/exec.rs のローカル変数管理
+
+**影響範囲**:
+- ✅ Test 1-3 PASS: kind=="Add" は if で動作（問題なし）
+- ❌ Test 4-10 FAIL: kind=="Sub"/Mul/Div/Mod はelse-ifで失敗（すべて0）
+- ❌ Compare命令も同様に失敗する可能性大
+
+**時間損失**: 約4時間（デバッグ調査）
+
+**学び**:
+1. **Rust VMにまだバグが潜んでいる**（production ready ではない）
+2. **else-if連鎖は危険**（Hakoruneでは if のみ使うべき？）
+3. **デバッグprint は変数の直前/直後に入れるべき**
+4. **変数値が謎に変わる場合はVM層バグを疑う**
+
+**回避策候補**:
+1. **複数のif文に分解**:
+   ```hako
+   if kind == "Add" { result_val = lhs_val + rhs_val }
+   if kind == "Sub" { result_val = lhs_val - rhs_val }
+   if kind == "Mul" { result_val = lhs_val * rhs_val }
+   // ... (else-if を使わない)
+   ```
+
+2. **@matchを使う**（Day 1で制約発見したが再検討）:
+   ```hako
+   result_val = match kind {
+     "Add" => lhs_val + rhs_val
+     "Sub" => lhs_val - rhs_val
+     // return文を含まない純粋な式なら可能？
+   }
+   ```
+
+3. **直接代入パターン**:
+   ```hako
+   if kind == "Sub" {
+     regs.set(StringHelpers.int_to_str(dst), lhs_val - rhs_val)
+     return Result.Ok(0)
+   }
+   // ... (result_val変数を使わない)
+   ```
+
+**再発防止策**:
+- [ ] Rust VM exec.rs のif-else処理確認
+- [ ] MIR Builder のif-else lowering確認
+- [ ] Hakoruneコーディングガイドに「else-if危険」を明記
+- [ ] issue作成: "Rust VM: else-ifブロック内変数代入が失われるバグ"
+
+---
+
+#### 📊 **Day 2 統計**
+
+- **見積もり**: 4時間
+- **実績**: 約8時間
+- **超過時間**: 4時間（100%超過）
+- **超過理由**: JSON parsing（1.5時間）+ Rust VMバグ調査（4時間）+ その他（2.5時間）
+- **コード行数**: +80行（hakorune_vm_core: +10, test: +70）
+- **実装命令数**: 9/16（Const, BinOp x5, Compare x6, Ret, Copy）
+- **テスト成功率**: 3/10 (30%) ← Rust VMバグにより7テスト失敗
+- **新規バグ発見**: 1件（Rust VM else-if変数消失バグ）
