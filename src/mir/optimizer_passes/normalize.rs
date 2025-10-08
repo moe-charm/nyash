@@ -122,10 +122,12 @@ pub fn normalize_legacy_instructions(
                     }
                     I::Print { value, .. } => {
                         let v = *value;
-                        *inst = I::ExternCall {
+                        *inst = I::Call {
                             dst: None,
-                            iface_name: "env.console".to_string(),
-                            method_name: "log".to_string(),
+                            func: ValueId::new(0),
+                            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                                "env.console.log".to_string(),
+                            )),
                             args: vec![v],
                             effects: crate::mir::EffectMask::PURE.add(crate::mir::Effect::Io),
                         };
@@ -198,10 +200,12 @@ pub fn normalize_legacy_instructions(
                     I::FutureNew { dst, value } if rw_future => {
                         let d = *dst;
                         let v = *value;
-                        *inst = I::ExternCall {
+                        *inst = I::Call {
                             dst: Some(d),
-                            iface_name: "env.future".to_string(),
-                            method_name: "new".to_string(),
+                            func: ValueId::new(0),
+                            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                                "env.future.new".to_string(),
+                            )),
                             args: vec![v],
                             effects: crate::mir::EffectMask::PURE.add(crate::mir::Effect::Io),
                         };
@@ -209,10 +213,12 @@ pub fn normalize_legacy_instructions(
                     I::FutureSet { future, value } if rw_future => {
                         let f = *future;
                         let v = *value;
-                        *inst = I::ExternCall {
+                        *inst = I::Call {
                             dst: None,
-                            iface_name: "env.future".to_string(),
-                            method_name: "set".to_string(),
+                            func: ValueId::new(0),
+                            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                                "env.future.set".to_string(),
+                            )),
                             args: vec![f, v],
                             effects: crate::mir::EffectMask::PURE.add(crate::mir::Effect::Io),
                         };
@@ -220,10 +226,12 @@ pub fn normalize_legacy_instructions(
                     I::Await { dst, future } if rw_future => {
                         let d = *dst;
                         let f = *future;
-                        *inst = I::ExternCall {
+                        *inst = I::Call {
                             dst: Some(d),
-                            iface_name: "env.future".to_string(),
-                            method_name: "await".to_string(),
+                            func: ValueId::new(0),
+                            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                                "env.future.await".to_string(),
+                            )),
                             args: vec![f],
                             effects: crate::mir::EffectMask::PURE.add(crate::mir::Effect::Io),
                         };

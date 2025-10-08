@@ -341,9 +341,9 @@ impl MirBuilder {
                 // Use existing ExternCall
                 let mut args = args;
                 crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                let parts: Vec<&str> = name.splitn(2, '.').collect();
-                let (iface, method) = if parts.len() == 2 {
-                    (parts[0].to_string(), parts[1].to_string())
+                // Split on the last dot so "nyrt.ops.op_eq" → ("nyrt.ops","op_eq")
+                let (iface, method) = if let Some((i, m)) = name.rsplit_once('.') {
+                    (i.to_string(), m.to_string())
                 } else {
                     ("nyash".to_string(), name)
                 };

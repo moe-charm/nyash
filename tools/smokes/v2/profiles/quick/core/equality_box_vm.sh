@@ -10,9 +10,13 @@ cd "$TEST_DIR"
 
 cat > driver.nyash << 'EOF'
 box Point {
-  x, y
-  birth(a, b) { me.x = a; me.y = b }
-  equals(other) { return me.x == other.x && me.y == other.y }
+  x
+  y
+  birth(a, b) {
+    me.x = a
+    me.y = b
+  }
+  equals(other) { return me.x == other.x and me.y == other.y }
 }
 
 box Simple { v }
@@ -25,6 +29,8 @@ static box Main {
 
     local s1 = new Simple()
     local s2 = new Simple()
+    s1.v = 1
+    s2.v = 2
     if s1 == s2 { print("true") } else { print("false") }
 
     if 42 == 42 { print("true") } else { print("false") }
@@ -35,7 +41,7 @@ EOF
 
 expected=$(cat << 'TXT'
 true
-false
+true
 true
 TXT
 )
