@@ -19,26 +19,29 @@ static box MiniVmProbe {
       local i = mm.get("end")
       local obj = seg.substring(s, i)
       local op = JsonFragBox.get_str(obj, "op")
-      if op == "const" {
-        OpHandlersBox.handle_const(obj, regs)
-      } else if op == "binop" {
-        OpHandlersBox.handle_binop(obj, regs)
-      } else if op == "compare" {
-        local kind = JsonFragBox.get_str(obj, "cmp")
-        local lhs = JsonFragBox.get_int(obj, "lhs")
-        local rhs = JsonFragBox.get_int(obj, "rhs")
-        local as2 = "" + regs.get(""+lhs)
-        local bs2 = "" + regs.get(""+rhs)
-        local a = JsonFragBox._str_to_int(as2)
-        local b = JsonFragBox._str_to_int(bs2)
-        local r = 0
-        if kind == "Eq" { if a == b { r = 1 } }
-        else if kind == "Ne" { if a != b { r = 1 } }
-        else if kind == "Lt" { if a < b { r = 1 } }
-        else if kind == "Gt" { if a > b { r = 1 } }
-        else if kind == "Le" { if a <= b { r = 1 } }
-        else if kind == "Ge" { if a >= b { r = 1 } }
-        return map({ a: a, b: b, r: r })
+      match op {
+        "const" => { OpHandlersBox.handle_const(obj, regs) }
+        "binop" => { OpHandlersBox.handle_binop(obj, regs) }
+        "compare" => {
+          local kind = JsonFragBox.get_str(obj, "cmp")
+          local lhs = JsonFragBox.get_int(obj, "lhs")
+          local rhs = JsonFragBox.get_int(obj, "rhs")
+          local as2 = "" + regs.get(""+lhs)
+          local bs2 = "" + regs.get(""+rhs)
+          local a = JsonFragBox._str_to_int(as2)
+          local b = JsonFragBox._str_to_int(bs2)
+          local r = match kind {
+            "Eq" => { if a == b { 1 } else { 0 } }
+            "Ne" => { if a != b { 1 } else { 0 } }
+            "Lt" => { if a < b { 1 } else { 0 } }
+            "Gt" => { if a > b { 1 } else { 0 } }
+            "Le" => { if a <= b { 1 } else { 0 } }
+            "Ge" => { if a >= b { 1 } else { 0 } }
+            _ => 0
+          }
+          return map({ a: a, b: b, r: r })
+        }
+        _ => {}
       }
       pos = i
     }

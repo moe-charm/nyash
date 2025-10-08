@@ -207,8 +207,8 @@ static box MirVmMin {
         }
         else if op == "phi" {
           local res = PhiDecodeBox.decode_result(seg, prev_bb)
-          if res.is_ok() == 1 {
-            local pair = res.value()
+          if res.is_Ok() == 1 {
+            local pair = res.as_Ok()
             PhiApplyBox.apply(pair.get(0), pair.get(1), regs)
           }
         }

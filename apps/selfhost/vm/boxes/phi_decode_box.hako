@@ -106,18 +106,18 @@ static box PhiDecodeBox {
     return out
   }
 
-  // Public: decode seg and wrap into Result.ok([dst,vin]) or Result.err(msg)
+  // Public: decode seg and wrap into Result.Ok([dst,vin]) or Result.Err(msg)
   decode_result(seg, prev_bb) {
     // Prefer array-form; if not present, fall back to single-form
     local arr = me._decode_array(seg, prev_bb)
     if arr != null {
       local typ = arr.get("type")
-      if typ == "ok" { return Result.ok(arr.get("pair")) }
-      return Result.err(arr.get("code"))
+      if typ == "ok" { return Result.Ok(arr.get("pair")) }
+      return Result.Err(arr.get("code"))
     }
     local one = me._decode_single(seg)
     local typ2 = one.get("type")
-    if typ2 == "ok" { return Result.ok(one.get("pair")) }
-    return Result.err(one.get("code"))
+    if typ2 == "ok" { return Result.Ok(one.get("pair")) }
+    return Result.Err(one.get("code"))
   }
 }
