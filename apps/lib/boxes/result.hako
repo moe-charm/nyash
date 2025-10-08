@@ -1,0 +1,103 @@
+// result.hako — Result / ResultBox
+// 責務: 処理結果の統一表現（成功値 or エラーメッセージ）
+// 使い方: Result.ok(val) / Result.err(msg) → ResultBox
+// Box-First原則: すべてのフィールドがBox型
+// Phase 1: 既存互換100% + 5つの新メソッド（is_err/unwrap/expect/unwrap_err/debug）
+
+box ResultBox {
+  _val: Box
+  _err: StringBox
+  _ok: IntegerBox  // 1=ok, 0=err（BoolBox 非依存）
+
+  birth() {
+    me._val = null
+    me._err = ""
+    me._ok = 0
+  }
+
+  // === 既存API（互換性100%維持） ===
+
+  is_ok() {
+    return me._ok
+  }
+
+  value() {
+    return me._val
+  }
+
+  error() {
+    return me._err
+  }
+
+  unwrap_or(def) {
+    if me._ok == 1 {
+      return me._val
+    }
+    return def
+  }
+
+  // === Phase 1 新規追加メソッド ===
+
+  // エラー判定
+  is_err() {
+    if me._ok == 1 {
+      return 0
+    }
+    return 1
+  }
+
+  // 値取得（エラー時panic）
+  unwrap() {
+    if me._ok == 0 {
+      print("[PANIC] Result.unwrap() called on Err: " + me._err)
+      return null
+    }
+    return me._val
+  }
+
+  // カスタムメッセージ付きpanic
+  expect(msg) {
+    if me._ok == 0 {
+      print("[PANIC] " + msg + ": " + me._err)
+      return null
+    }
+    return me._val
+  }
+
+  // エラー取得（成功時panic）
+  unwrap_err() {
+    if me._ok == 1 {
+      print("[PANIC] Result.unwrap_err() called on Ok value")
+      return null
+    }
+    return me._err
+  }
+
+  // デバッグ文字列表現
+  debug() {
+    if me._ok == 1 {
+      local v_str = me._val
+      if me._val == null {
+        v_str = "null"
+      }
+      return "Ok(" + v_str + ")"
+    }
+    return "Err(" + me._err + ")"
+  }
+}
+
+static box Result {
+  ok(v) {
+    local r = new ResultBox()
+    r._val = v
+    r._ok = 1
+    return r
+  }
+
+  err(msg) {
+    local r = new ResultBox()
+    r._err = msg
+    r._ok = 0
+    return r
+  }
+}

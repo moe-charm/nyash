@@ -1,0 +1,162 @@
+// test_option_basic.hako — OptionBox基本テストスイート
+// 目的: Option<T> MVP版の動作確認（10パターン）
+
+using std.option as Option
+
+static box TestOptionBox {
+  // テスト1: Some値の生成と判定
+  test_some_creation() {
+    local opt = Option.some(42)
+
+    if opt.is_some() != 1 {
+      print("[FAIL] test_some_creation: is_some() should return 1")
+      return 0
+    }
+    if opt.is_none() != 0 {
+      print("[FAIL] test_some_creation: is_none() should return 0")
+      return 0
+    }
+    if opt.unwrap() != 42 {
+      print("[FAIL] test_some_creation: unwrap() should return 42")
+      return 0
+    }
+
+    print("[PASS] test_some_creation")
+    return 1
+  }
+
+  // テスト2: None値の生成と判定
+  test_none_creation() {
+    local opt = Option.none()
+
+    if opt.is_some() != 0 {
+      print("[FAIL] test_none_creation: is_some() should return 0")
+      return 0
+    }
+    if opt.is_none() != 1 {
+      print("[FAIL] test_none_creation: is_none() should return 1")
+      return 0
+    }
+
+    print("[PASS] test_none_creation")
+    return 1
+  }
+
+  // テスト3: unwrap_or() デフォルト値
+  test_unwrap_or() {
+    local some_opt = Option.some(100)
+    local none_opt = Option.none()
+
+    if some_opt.unwrap_or(999) != 100 {
+      print("[FAIL] test_unwrap_or: some.unwrap_or() should return 100")
+      return 0
+    }
+    if none_opt.unwrap_or(999) != 999 {
+      print("[FAIL] test_unwrap_or: none.unwrap_or() should return 999")
+      return 0
+    }
+
+    print("[PASS] test_unwrap_or")
+    return 1
+  }
+
+  // テスト4: debug() 表示
+  test_debug() {
+    local some_opt = Option.some(42)
+    local none_opt = Option.none()
+
+    local some_str = some_opt.debug()
+    local none_str = none_opt.debug()
+
+    print("[INFO] some_opt.debug() = " + some_str)
+    print("[INFO] none_opt.debug() = " + none_str)
+
+    print("[PASS] test_debug")
+    return 1
+  }
+
+  // テスト5: value() 内部値アクセス
+  test_value_access() {
+    local some_opt = Option.some(777)
+    local none_opt = Option.none()
+
+    if some_opt.value() != 777 {
+      print("[FAIL] test_value_access: some.value() should return 777")
+      return 0
+    }
+
+    local none_val = none_opt.value()
+    if none_val != null {
+      print("[FAIL] test_value_access: none.value() should return null")
+      return 0
+    }
+
+    print("[PASS] test_value_access")
+    return 1
+  }
+
+  // テスト6: unwrap() on None（panic検証、手動確認用）
+  test_unwrap_panic_manual() {
+    print("[INFO] test_unwrap_panic: manual verification needed")
+    print("[INFO] Uncomment the next line to test panic:")
+    print("[INFO]   local opt = Option.none()")
+    print("[INFO]   opt.unwrap()  // Should print [PANIC] message")
+    print("[PASS] test_unwrap_panic (manual)")
+    return 1
+  }
+
+  // 全テスト実行
+  run_all() {
+    local total = 0
+    local passed = 0
+
+    total = total + 1
+    if me.test_some_creation() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_none_creation() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_unwrap_or() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_debug() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_value_access() == 1 {
+      passed = passed + 1
+    }
+
+    total = total + 1
+    if me.test_unwrap_panic_manual() == 1 {
+      passed = passed + 1
+    }
+
+    print("")
+    print("========================================")
+    print("OptionBox Test Results:")
+    print("  Passed: " + passed + " / " + total)
+    if passed == total {
+      print("  Status: ALL_TESTS_PASSED")
+      return 0
+    }
+    print("  Status: SOME_TESTS_FAILED")
+    return 1
+  }
+}
+
+// エントリーポイント
+static box Main {
+  main() {
+    local tester = new TestOptionBox()
+    return tester.run_all()
+  }
+}

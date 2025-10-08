@@ -97,6 +97,9 @@ timer = "core.timer.TimerBox"
  # Dev VM utility boxes (for tests that reference them directly)
  selfhost.vm.boxes.guard_box = "apps/selfhost/vm/boxes/guard_box.hako"
  selfhost.vm.boxes.scanner_box = "apps/selfhost/vm/boxes/scanner_box.hako"
+ # Option/Result boxes (Step 1: enum MVP)
+ std.option = "apps/lib/boxes/option.hako"
+ std.result = "apps/lib/boxes/result.hako"
 
 [modules.workspace]
 members = [
