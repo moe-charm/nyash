@@ -186,6 +186,14 @@ pub struct CatchClause {
     pub span: Span,                     // ソースコード位置
 }
 
+/// Enum variant for @enum macro - e.g., Ok(value), None
+#[derive(Debug, Clone, PartialEq)]
+pub struct EnumVariant {
+    pub name: String,           // Variant name (e.g., "Ok", "Some", "None")
+    pub fields: Vec<String>,    // Field names (empty for None, single for Ok(value))
+    pub span: Span,
+}
+
 /// リテラル値の型 (Clone可能)
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiteralValue {
@@ -474,6 +482,14 @@ pub enum ASTNode {
         body: Vec<ASTNode>,
         is_static: bool,   // 🔥 静的メソッドフラグ
         is_override: bool, // 🔥 オーバーライドフラグ
+        span: Span,
+    },
+
+    /// @enum macro declaration: @enum Name { Variant1(field) Variant2 ... }
+    /// Generates EnumNameBox + static box EnumName with constructors
+    EnumDeclaration {
+        name: String,
+        variants: Vec<EnumVariant>,
         span: Span,
     },
 

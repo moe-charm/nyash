@@ -6,9 +6,145 @@
 
 ---
 
-## 🔄 **現在の開発状況** (2025-10-06)
+## 🔄 **現在の開発状況** (2025-10-08)
 
 **注**: 成功報告中心。失敗・問題点は [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクション参照。
+
+### 🔥 **現在進行中: Phase 19 - @enum/@match Macros** (2025-10-08~)
+
+**戦略**: Choice A'' (Macro-Only Approach)
+**期間**: 2-3 weeks (9-14 days)
+**状態**: Day 1-2 完了、Day 3 開始可能
+
+**進捗**: Day 2/14 完了 (14%)
+
+**目標**: Pattern matching for selfhost compiler
+- Week 1: @enum macro (constructor generation)
+- Week 2-3: @match macro (pattern matching)
+- Integration: 3-5 Mini-VM files with @match
+
+**ユーザー意図**: "ガチガチ大作戦" - 中途半端（half-baked）回避
+
+**Out of Scope** (→ Phase 20):
+- VariantBox Core
+- EnumSchemaBox
+- SymbolBox
+- Static exhaustiveness checking
+
+詳細: [Phase 19 README](docs/development/roadmap/phases/phase-19-enum-match/README.md)
+
+---
+
+### ✅ **Phase 19 Day 1 完了！@enum パーサー実装成功** (2025-10-08)
+**@enum マクロ構文パース完全対応 - AST拡張 + パーサー統合**
+
+#### ✅ **実装完了**
+- **TokenType 拡張**: AT トークン追加（@ 認識）
+- **AST 拡張**: EnumVariant struct + ASTNode::EnumDeclaration
+- **パーサー実装**: enum_parser.rs（150行、綺麗なモジュール化）
+- **動作確認**: @enum Result/Option 構文のパース成功
+
+#### 📊 **統計**
+- 新規ファイル: 1（enum_parser.rs）
+- 修正ファイル: 6
+- 追加コード: 約150行
+- テスト結果: PASS ✅
+
+#### 🎯 **次のステップ（Day 2）**
+マクロ展開実装 - EnumDeclaration → Box生成
+- enum_expander.rs 作成
+- 静的コンストラクタ生成（Result.Ok(), Result.Err()）
+- ヘルパーメソッド生成（is_*/as_*）
+
+#### 📝 **テスト済み構文**
+```hakorune
+@enum Result {
+  Ok(value)
+  Err(error)
+}
+
+@enum Option {
+  Some(value)
+  None
+}
+```
+
+---
+
+### ✅ **Phase 19 Day 2 完了！@enum マクロ展開実装成功** (2025-10-08)
+**EnumDeclaration → Box + Static Box 自動生成 - マクロエンジン統合完了**
+
+#### ✅ **実装完了**
+- **flat_map 対応**: Program の multi-node expansion サポート
+- **expand_enum_to_boxes()**: メイン展開関数（BoxDecl + StaticBox 生成）
+- **4つのヘルパー関数**:
+  - `build_enum_birth_method()` - フィールド null 初期化
+  - `build_enum_is_method()` - is_Ok()/is_Err() 判定メソッド
+  - `build_enum_as_method()` - as_Ok()/as_Err() 抽出メソッド
+  - `build_enum_constructor()` - Ok(v)/Err(e)/None() コンストラクタ
+
+#### 📊 **統計**
+- 修正ファイル: 1（src/macro/engine.rs）
+- 追加コード: +323行（メイン関数 + 4ヘルパー）
+- スモークテスト: 5/5 PASS ✅
+- マニュアルテスト: 3/3 PASS ✅
+
+#### 🎯 **マクロ展開例**
+```hakorune
+@enum Result { Ok(value) Err(error) }
+↓ 自動展開 ↓
+box ResultBox {
+  _tag: StringBox
+  value: any
+  error: any
+
+  birth() { /* null init */ }
+  is_Ok() { return me._tag == "Ok" }
+  is_Err() { return me._tag == "Err" }
+  as_Ok() { return me.value }
+  as_Err() { return me.error }
+}
+
+static box Result {
+  Ok(value) {
+    local r = new ResultBox()
+    r._tag = "Ok"
+    r.value = value
+    return r
+  }
+  Err(error) {
+    local r = new ResultBox()
+    r._tag = "Err"
+    r.error = error
+    return r
+  }
+}
+```
+
+#### 🧪 **動作確認済み**
+```hakorune
+local r1 = Result.Ok(42)
+if r1.is_Ok() {
+  print(r1.as_Ok())  // → 42
+}
+
+local r2 = Result.Err("failed")
+if r2.is_Err() {
+  print(r2.as_Err())  // → "failed"
+}
+
+local opt = Option.None()
+if opt.is_None() {
+  print("None!")  // → "None!"
+}
+```
+
+#### 🎯 **次のステップ（Day 3-5）**
+- Day 3: 追加テストパターン拡充（10パターン目標）
+- Day 4: エッジケース対応（multi-field variants, nested enum）
+- Day 5: Selfhost compiler 統合テスト
+
+---
 
 ### 📝 **最近の完了Phase**
 
@@ -134,6 +270,7 @@ bash tools/smokes/v2/run_phi.sh
 ```
 
 📖 **スモークテスト完全ガイド**: [tools/smokes/README.md](tools/smokes/README.md)
+🐛 **デバッグガイド**: [docs/guides/smoke-test-debugging.md](docs/guides/smoke-test-debugging.md)
 
 ---
 

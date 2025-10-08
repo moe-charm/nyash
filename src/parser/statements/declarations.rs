@@ -20,6 +20,22 @@ impl NyashParser {
             TokenType::GLOBAL => self.parse_global_var(),
             TokenType::FUNCTION => self.parse_function_declaration(),
             TokenType::STATIC => self.parse_static_declaration(),
+            TokenType::AT => {
+                // Consume @
+                self.advance();
+                // Check for "enum"
+                match &self.current_token().token_type {
+                    TokenType::IDENTIFIER(s) if s == "enum" => {
+                        self.advance(); // consume "enum"
+                        self.parse_enum_declaration()
+                    }
+                    _ => Err(ParseError::UnexpectedToken {
+                        found: self.current_token().token_type.clone(),
+                        expected: "macro name (enum)".to_string(),
+                        line: self.current_token().line,
+                    }),
+                }
+            }
             TokenType::IDENTIFIER(s) if s == "flow" => {
                 if crate::config::env::parser_flow_enabled() {
                     self.parse_flow_declaration()

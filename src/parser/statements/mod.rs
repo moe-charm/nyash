@@ -193,7 +193,8 @@ impl NyashParser {
             | TokenType::INTERFACE
             | TokenType::GLOBAL
             | TokenType::FUNCTION
-            | TokenType::STATIC => self.parse_declaration_statement(),
+            | TokenType::STATIC
+            | TokenType::AT => self.parse_declaration_statement(),
 
             // Control flow
             TokenType::IF

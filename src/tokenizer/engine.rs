@@ -126,6 +126,10 @@ impl NyashTokenizer {
                 self.advance();
                 return Ok(Token::new(TokenType::QUESTION, start_line, start_column));
             }
+            Some('@') => {
+                self.advance();
+                return Ok(Token::new(TokenType::AT, start_line, start_column));
+            }
             Some('+') if self.peek_char() == Some('=') => {
                 self.advance();
                 self.advance();

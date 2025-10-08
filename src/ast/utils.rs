@@ -19,6 +19,7 @@ impl ASTNode {
             ASTNode::ImportStatement { .. } => "ImportStatement",
             ASTNode::BoxDeclaration { .. } => "BoxDeclaration",
             ASTNode::FunctionDeclaration { .. } => "FunctionDeclaration",
+            ASTNode::EnumDeclaration { .. } => "EnumDeclaration",
             ASTNode::GlobalVar { .. } => "GlobalVar",
             ASTNode::Literal { .. } => "Literal",
             ASTNode::Variable { .. } => "Variable",
@@ -59,6 +60,7 @@ impl ASTNode {
             // Structure nodes - 言語の基本構造
             ASTNode::BoxDeclaration { .. } => ASTNodeType::Structure,
             ASTNode::FunctionDeclaration { .. } => ASTNodeType::Structure,
+            ASTNode::EnumDeclaration { .. } => ASTNodeType::Structure,
             ASTNode::If { .. } => ASTNodeType::Structure,
             ASTNode::Loop { .. } => ASTNodeType::Structure,
             ASTNode::TryCatch { .. } => ASTNodeType::Structure,
@@ -209,6 +211,9 @@ impl ASTNode {
                     body.len()
                 )
             }
+            ASTNode::EnumDeclaration { name, variants, .. } => {
+                format!("EnumDeclaration({}, {} variants)", name, variants.len())
+            }
             ASTNode::GlobalVar { name, .. } => {
                 format!("GlobalVar({})", name)
             }
@@ -335,6 +340,7 @@ impl ASTNode {
             ASTNode::Throw { span, .. } => *span,
             ASTNode::BoxDeclaration { span, .. } => *span,
             ASTNode::FunctionDeclaration { span, .. } => *span,
+            ASTNode::EnumDeclaration { span, .. } => *span,
             ASTNode::GlobalVar { span, .. } => *span,
             ASTNode::Literal { span, .. } => *span,
             ASTNode::Variable { span, .. } => *span,

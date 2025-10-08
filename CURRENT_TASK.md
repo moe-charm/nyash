@@ -4,9 +4,118 @@
 
 ---
 
+## 🎯 CURRENT PHASE: Phase 19 - @enum/@match Macros (Day 3/14)
+
+**戦略**: Choice A'' (Macro-Only Approach)
+**期間**: 2-3 weeks (9-14 days)
+**目標**: Pattern matching for selfhost compiler
+
+### ✅ Week 1: @enum Macro Implementation
+
+#### ✅ Day 1: Parser Extension (2025-10-08) - COMPLETED
+**Goal**: @enum syntax parsing works
+**Status**: ✅ All tests passing
+
+**Deliverables**:
+- ✅ TokenType::AT added to tokenizer
+- ✅ EnumVariant struct + ASTNode::EnumDeclaration
+- ✅ enum_parser.rs (150 lines, clean modular design)
+- ✅ Integration with parse_declaration_statement()
+- ✅ Test execution successful (@enum Result/Option)
+
+**Files Modified**:
+- `src/tokenizer/kinds.rs` - AT token
+- `src/tokenizer/engine.rs` - @ character recognition
+- `src/ast.rs` - EnumVariant struct + EnumDeclaration variant
+- `src/ast/utils.rs` - Pattern matching (4 locations)
+- `src/parser/declarations/enum_parser.rs` - NEW (150 lines)
+- `src/parser/declarations/mod.rs` - Module export
+- `src/parser/statements/declarations.rs` - @ dispatch
+- `src/parser/statements/mod.rs` - TokenType::AT recognition
+
+**Test Results**:
+- ✅ cargo check: PASS
+- ✅ cargo build --release: PASS
+- ✅ Runtime test: @enum Result/Option parses correctly
+
+#### ✅ Day 2: Macro Expansion (2025-10-08) - COMPLETED
+**Goal**: EnumDeclaration → Box + Static Box generation
+**Status**: ✅ All tests passing
+
+**Deliverables**:
+- ✅ Program flat_map support for multi-node expansion
+- ✅ expand_enum_to_boxes() main expansion function
+- ✅ build_enum_birth_method() - null initialization
+- ✅ build_enum_is_method() - is_Ok()/is_Err() predicates
+- ✅ build_enum_as_method() - as_Ok()/as_Err() extractors
+- ✅ build_enum_constructor() - Ok(v)/Err(e)/None() constructors
+- ✅ Integration with MacroEngine::expand_node()
+- ✅ Smoke test suite (5 tests)
+
+**Files Modified**:
+- `src/macro/engine.rs` - EnumDeclaration expansion (+323 lines)
+  - expand_node() flat_map support
+  - expand_enum_to_boxes() - main expansion
+  - 4 helper functions (birth/is/as/constructor)
+
+**Test Results**:
+- ✅ cargo build --release: PASS
+- ✅ Manual test 1: Result.Ok/Err with is_*/as_* - PASS
+- ✅ Manual test 2: Option.Some/None (zero-field) - PASS
+- ✅ Smoke test: enum_macro_basic.sh (5/5 tests) - PASS
+
+**Macro Expansion Example**:
+```hakorune
+@enum Result { Ok(value) Err(error) }
+↓
+box ResultBox { _tag, value, error, birth(), is_Ok(), is_Err(), as_Ok(), as_Err() }
+static box Result { Ok(value), Err(error) }
+```
+
+**Actual Time**: ~4 hours
+
+#### ⏳ Remaining Days 3-5: Testing & Finalization
+- [ ] Day 3: Constructor + helper generation refinement
+- [ ] Day 4: Test suite (10 patterns)
+- [ ] Day 5: Smoke tests + integration
+
+### Success Criteria
+- ✅ Parse @enum definitions (Day 1 DONE)
+- ✅ Generate correct box structure (Day 2 DONE)
+- ⏳ 10/10 tests PASS (Day 3-4)
+- ⏳ Selfhost integration (Day 5)
+
+### Next: Week 2 - @match Macro
+See [Phase 19 README](docs/development/roadmap/phases/phase-19-enum-match/README.md)
+
+---
+
 ## 🎯 NOW — 今すぐやるべきこと（優先順）
 
-### 🔥 P0: Namespace/Using 厳格化の完成（最優先）
+### 🔥 P0: Phase 19 Day 2 実装（最優先）
+
+**Current Task**: Macro Expansion実装
+
+#### Day 2 Tasks (今日)
+1. **enum_expander.rs 作成** (2-3時間)
+   - EnumDeclaration → BoxDeclaration + StaticBox 変換
+   - 参考: `src/macro/` 既存実装
+
+2. **コンストラクタ生成** (2-3時間)
+   - Result.Ok(value) / Result.Err(error) 静的メソッド
+   - _tag フィールド設定
+
+3. **ヘルパーメソッド生成** (1-2時間)
+   - is_ok() / is_err() 判定メソッド
+   - unwrap_ok() / unwrap_err() 取り出しメソッド
+
+4. **統合テスト** (1-2時間)
+   - MacroEngine::expand_node() 統合
+   - 基本動作確認
+
+---
+
+### 🔄 P1: Namespace/Using 厳格化の完成（並行作業）
 
 **現在進行中**: with_usings 限定フォールバック（モジュール推測）
 
