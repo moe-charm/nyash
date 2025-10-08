@@ -1,68 +1,17 @@
 // Mini-VM scanning and numeric helpers
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 
 static box MiniVmScan {
   // helper: find needle from position pos
   index_of_from(hay, needle, pos) { return CfgNavigatorBox.index_of_from(hay, needle, pos) }
 
   // helper: find balanced bracket range [ ... ] starting at idx (points to '[')
-  find_balanced_array_end(json, idx) {
-    @n = json.length()
-    if json.substring(idx, idx+1) != "[" { return -1 }
-    @depth = 0
-    @i = idx
-    @in_str = 0
-    @guard = 0
-    loop (i < n) {
-      guard = guard + 1
-      if guard > 50000 { return -1 }
-      @ch = call("String.substring/2", json, i, i+1)
-      if in_str == 1 {
-        if ch == "\\" { i = i + 2  continue }
-        if ch == "\"" { in_str = 0  i = i + 1  continue }
-        i = i + 1
-        continue
-      }
-      if ch == "\"" { in_str = 1  i = i + 1  continue }
-      if ch == "[" { depth = depth + 1 }
-      if ch == "]" {
-        depth = depth - 1
-        if depth == 0 { return i }
-      }
-      i = i + 1
-    }
-    return -1
-  }
+  find_balanced_array_end(json, idx) { return JsonCursorBox.seek_array_end(json, idx) }
 
   // helper: find balanced object range { ... } starting at idx (points to '{')
-  find_balanced_object_end(json, idx) {
-    @n = json.length()
-    if json.substring(idx, idx+1) != "{" { return -1 }
-    @depth = 0
-    @i = idx
-    @in_str = 0
-    @guard = 0
-    loop (i < n) {
-      guard = guard + 1
-      if guard > 50000 { return -1 }
-      @ch = call("String.substring/2", json, i, i+1)
-      if in_str == 1 {
-        if ch == "\\" { i = i + 2  continue }
-        if ch == "\"" { in_str = 0  i = i + 1  continue }
-        i = i + 1
-        continue
-      }
-      if ch == "\"" { in_str = 1  i = i + 1  continue }
-      if ch == "{" { depth = depth + 1 }
-      if ch == "}" {
-        depth = depth - 1
-        if depth == 0 { return i }
-      }
-      i = i + 1
-    }
-    return -1
-  }
+  find_balanced_object_end(json, idx) { return JsonCursorBox.seek_obj_end(json, idx) }
 
   _str_to_int(s) { return StringHelpers.to_i64(s) }
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
