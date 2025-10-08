@@ -1,0 +1,26 @@
+// End-to-End Test: Full pipeline (@enum → parse → execute)
+//
+// Day 1: Should parse without errors (enum not expanded)
+// Day 2: Should expand @enum to box code
+// Day 3+: Generated code should execute correctly
+
+@enum Result {
+  Ok(value)
+}
+
+// Minimal E2E test: verify parser doesn't crash
+
+static box Main {
+  console: ConsoleBox
+
+  main() {
+    me.console = new ConsoleBox()
+    me.console.log("[ENUM_E2E] Parser didn't crash!")
+
+    // Day 1: Just verify parsing works
+    // Day 2+: Test actual enum usage
+    // e.g., local result = Result.Ok(42)
+
+    return 0
+  }
+}

@@ -203,6 +203,43 @@ pub(super) fn resolve_using_target(
 ) -> Result<String, String> {
     // Invalidate and rebuild index/cache if env or nyash.toml changed
     super::box_index::rebuild_if_env_changed();
+    // Heuristic: when target looks like a direct file path, enforce private patterns as well
+    // (even if is_path == false). This protects dev/prelude flows that pass raw strings.
+    {
+        let looks_like_path = tgt.ends_with(".hako") || tgt.ends_with(".nyash") || tgt.contains('/') || tgt.contains('\\');
+        if looks_like_path {
+            if let Some(list) = std::env::var("NYASH_PRIVATE_PATTERNS").ok() {
+                let patterns: Vec<&str> = list.split(';').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                fn wild_match(pat: &str, text: &str) -> bool {
+                    if pat == "**" || pat == "*" { return true; }
+                    let mut cur: usize = 0;
+                    let anchored_start = !pat.starts_with('*');
+                    let anchored_end = !pat.ends_with('*');
+                    let parts: Vec<&str> = pat.split('*').collect();
+                    if anchored_start {
+                        if let Some(first) = parts.first() { if !text.starts_with(first) { return false; } cur = first.len(); }
+                    }
+                    for (i, part) in parts.iter().enumerate() {
+                        if part.is_empty() { continue; }
+                        if i == 0 && anchored_start { continue; }
+                        if let Some(pos) = text[cur..].find(part) { cur += pos + part.len(); } else { return false; }
+                    }
+                    if anchored_end { if let Some(last) = parts.last() { return text.ends_with(last); } }
+                    true
+                }
+                for p in patterns.iter() {
+                    if wild_match(p, tgt) {
+                        let diag_on = std::env::var("NYASH_PRIVATE_DIAG").ok().as_deref() != Some("0");
+                        if diag_on { eprintln!("{}", crate::common::diagnostics::modules_error::private_access(tgt, p)); }
+                        let onv = std::env::var("NYASH_PRIVATE_ON_VIOLATION").ok();
+                        let strict_env = std::env::var("NYASH_USING_CHECKS_STRICT").ok().as_deref() == Some("1");
+                        if strict || strict_env || matches!(onv.as_deref(), Some("error")) { return Err(format!("private access: '{}' matches '{}'", tgt, p)); }
+                        break;
+                    }
+                }
+            }
+        }
+    }
     if is_path {
         // Enforce minimal [private] patterns (warn by default; strict/error via env/flag)
         if let Some(list) = std::env::var("NYASH_PRIVATE_PATTERNS").ok() {

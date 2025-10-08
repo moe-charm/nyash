@@ -167,6 +167,26 @@ fn check_layer_boundary() {
 }
 ```
 
+### 6.1 Operators Ownership（演算子の責務の明文化）
+
+目的
+- VM/JIT/LLVM の実装差やフォールバックで挙動が分岐しないよう、演算子の意味論を「MIRで確定」する。
+
+原則（MIRで意味論を確定）
+- 算術（+, -, *, / など）: 原則 MIR で BinOp を発行。オペレータBox化は実験フラグ配下。
+- 比較（==, !=, <, …）:
+  - プリミティブ: MIR Compare を発行。
+  - Box同士: MIRで Compare(Eq/Ne) を発行しない。必ず呼び出しに正規化する。
+    - 優先: `lhs.equals/1(rhs)`（`.equals/` 実装内では自己再帰防止のため変換禁止）
+    - 代替（ユニバーサル）: `MirCall::external("nyrt.ops.op_eq")`（ExternCall系は MirCall 統一で表現）
+
+検証（Fail‑Fast）
+- MIR Verify で「両辺が Box 型の Compare(Eq/Ne)」を禁止し、検出時はエラーにする。
+
+備考
+- VM 側の equals ディスパッチは“安全弁（互換）”。既定は MIR で意味論確定に従う。
+- LLVM/AOT とのパリティは MIR の形状で担保する。
+
 ### 7. ドキュメント駆動開発
 
 **実装前に必ずドキュメントを書く**：
@@ -228,6 +248,37 @@ fn check_layer_boundary() {
 補足（適用例）
 - エントリ解決は Strict（`Main.main` のみ）。便利 ENV による自動推測はしない。例外は CLI `--entry` のみ。
 - 観測やデバッグ（例: 詳細トレース）は ENV で短命運用OK。ただし既定OFF・影響は局所。
+
+#### 8.1 ENV 整理・昇格ポリシー（今回の論点）
+
+- （削除済）`NYASH_BUILDER_BOX_EQ_TO_EQUALS`
+  - 理由: 等価は `nyrt.ops.op_eq`（MirCall::Extern）へ統一。`.equals/1` 呼び出しは op_eq 側が担保する。
+  - 代替: 既定で Eq/Ne は op_eq へ降格（型不明/Box/プリミティブを統一経路で処理）。
+
+- `NYASH_USING_AST`
+  - 役割: using の AST プレリュード結合（安定化のための互換ルート）。
+  - 既定: OFF（テストプロファイルでは ON で走ることあり）。将来撤退予定。docs/config/env.md に従う。
+  - 方針: デフォルト昇格はしない（意味論を揺らすため）。必要なスモークはプロファイル側でON。
+
+- `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN`
+  - 既定: ON（未指定時 true。src/config/env/features.rs を参照）。
+  - 別名: `HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN` などブランド別接頭辞は自動で `NYASH_` にマップ（alias_prefixes_bootstrap）。
+  - 方針: ドキュメント上は `NYASH_…` に統一表記。エイリアスは互換のみ。
+
+- そのほか昇格候補
+  - using 系: 既に `NYASH_USING=1` が既定。`NYASH_ENABLE_USING` は非推奨（警告のみ）。
+  - MirCall 統一系: `NYASH_MIR_UNIFIED_CALL` はプロファイルで制御。安定後は既定ONを検討（段階導入）。
+
+軽い書き方の指針（AI向け）
+- ENV は“作業を助ける道具”。既定挙動の切替には使わないこと。
+- 互換・実験フラグは TTL を決めて `docs/guides/env-variables.md` に理由と戻し方を書く。
+- 迷ったら CLI/プロファイル先行 → ENV は観測用/一時ガードに限定。
+
+### 8.2 Call 統一（ExternCall 撤退方針）
+
+- 方針: 呼び出しは MirCall に統一（Callee で Global/Extern/ModuleFunction/Method/Constructor/Closure/Value を表現）。
+- `ExternCall` は互換のため残るが、ビルダー/プリンタ/JSON は MirCall 優先。文書: `docs/reference/mir/call-unified.md`。
+- LLVM ハーネス/VM は Callee に従って解釈。新規機能は MirCall を直接使う。
 
 ---
 

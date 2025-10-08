@@ -246,19 +246,33 @@ Hakoruneにenum的な表現を追加（MIR16維持、Everything-is-Box原則を�
 
 ## 📚 参考資料
 
-**設計提案**:
+### Phase 20設計書
+- **[DESIGN.md](./DESIGN.md)** - VariantBox完全設計（主要文書）
+- **[RESULT_BOX_COMPLETE_DESIGN.md](./RESULT_BOX_COMPLETE_DESIGN.md)** - Result<T,E> Box完全設計（2025-10-08新規）
+- **[RESULT_BOX_SUMMARY.md](./RESULT_BOX_SUMMARY.md)** - Result Box 1分サマリー
+- **[RESULT_BOX_MIGRATION_PLAN.md](./RESULT_BOX_MIGRATION_PLAN.md)** - Result Box段階移行計画
+- **[result_box_v2_reference.hako](./result_box_v2_reference.hako)** - Result Box参照実装（467行）
+
+### 実装計画書（2025-10-08新規）
+- **[ENUM_MATCH_PROJECT_PLAN.md](./ENUM_MATCH_PROJECT_PLAN.md)** - @enum/@match完全プロジェクト計画（12-17日）
+  - 日次タスク詳細、リスク分析、成功基準、ロールバック計画
+- **[ENUM_MATCH_QUICK_START.md](./ENUM_MATCH_QUICK_START.md)** - クイックスタートガイド（要約版）
+  - 3週間スケジュール、重要リスク、日次チェックリスト
+
+### 設計提案元
 - ChatGPT Pro提案（2025-10-08）
 - VariantBox設計完全分析（ultrathink 4タスク）
 
-**関連Phase**:
+### 関連Phase
 - Phase 16: マクロ革命（@derive実装）
 - Phase 20.0-20.5: マクロフル機能（基盤整備）
 - Phase 25: 型パス（静的網羅性チェック）
 
-**実装参考**:
+### 実装参考
 - `apps/macros/loop_normalize_macro.nyash` (393行)
 - `apps/macros/if_match_normalize_macro.nyash` (404行)
 - `src/macro/pattern.rs` (252行)
+- `apps/selfhost/vm/boxes/result_box.hako` (34行、既存実装)
 
 ---
 

@@ -1,0 +1,23 @@
+// Integration Test 1: Basic @enum parsing
+//
+// Purpose: Verify that basic @enum syntax is parsed correctly
+// Expected: No parse errors (Day 1: parsing only, no execution)
+
+@enum Result {
+  Ok(value)
+  Err(error)
+}
+
+// For Day 1: This should parse without errors
+// For Day 2+: This will expand to box code
+// For now, just a minimal main to make it a valid program
+
+static box Main {
+  console: ConsoleBox
+
+  main() {
+    me.console = new ConsoleBox()
+    me.console.log("[ENUM_BASIC] Parser accepted @enum syntax!")
+    return 0
+  }
+}

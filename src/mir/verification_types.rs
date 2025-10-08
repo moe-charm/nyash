@@ -73,6 +73,13 @@ pub enum VerificationError {
         pred_block: Option<BasicBlockId>,
         reason: String,
     },
+    /// Forbid Compare(Eq/Ne) on Box-typed operands (semantic is fixed via op_eq at MIR)
+    BoxCompareForbidden {
+        block: BasicBlockId,
+        instruction_index: usize,
+        lhs: ValueId,
+        rhs: ValueId,
+    },
 }
 
 impl std::fmt::Display for VerificationError {
@@ -210,6 +217,13 @@ impl std::fmt::Display for VerificationError {
                         value, block, reason
                     )
                 }
+            }
+            VerificationError::BoxCompareForbidden { block, instruction_index, lhs, rhs } => {
+                write!(
+                    f,
+                    "Box Compare forbidden in block {} at {} (lhs=%{:?}, rhs=%{:?}); use nyrt.ops.op_eq via MirCall::Extern",
+                    block, instruction_index, lhs, rhs
+                )
             }
         }
     }

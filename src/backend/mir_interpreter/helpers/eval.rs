@@ -24,14 +24,17 @@ impl MirInterpreter {
     ///
     /// Strategy:
     /// 1. Fast path: Pointer equality for same instance (Arc::ptr_eq)
-    /// 2. Smart path: Call user-defined equals() method if exists
-    /// 3. Fallback: Reference inequality for different instances
-    /// 4. Special cases: VoidBox/MissingBox comparisons
+    /// 2. Smart path: For user InstanceBox, call lowered `Class.equals/1` when available
+    ///    - Reentrancy guard: if currently executing an `.equals/` function, do not dispatch
+    ///      equals recursively; fall back to primitive/pointer semantics to avoid loops.
+    /// 3. Special cases: VoidBox/MissingBox comparisons
+    /// 4. Fallback: Reference inequality for different instances
     pub(in crate::backend::mir_interpreter) fn eval_equals(
         &mut self,
         a: &VMValue,
         b: &VMValue
     ) -> Result<bool, VMError> {
+        // eprintln!("[DEBUG-EVAL-EQUALS] ENTRY: a={:?}, b={:?}, cur_fn={:?}", a, b, self.cur_fn);
         use VMValue::*;
 
         match (a, b) {
@@ -54,21 +57,53 @@ impl MirInterpreter {
                 if a_is_missing && b_is_missing {
                     return Ok(true);
                 }
+                // Reentrancy guard: do NOT dispatch equals() while executing any `.equals/` method
+                // to prevent accidental infinite recursion via user code.
+                let in_equals = self
+                    .cur_fn
+                    .as_ref()
+                    .map(|n| n.contains(".equals/"))
+                    .unwrap_or(false);
 
-                // TODO: Method dispatch for InstanceBox with user-defined equals()
-                // Temporarily disabled due to stack overflow issue - needs investigation
-                // See: https://github.com/hakorune/hakorune/issues/XXX
-                if false {
-                    if let Some(inst) = ax.as_any().downcast_ref::<InstanceBox>() {
-                        let class_name = &inst.class_name;
+                eprintln!("[DEBUG] eval_equals: in_equals={}, cur_fn={:?}", in_equals, self.cur_fn);
+
+                // User InstanceBox: try lowered `Class.equals/1` if present (guarded)
+                if !in_equals {
+                    if let Some(lhs_inst) = ax.as_any().downcast_ref::<InstanceBox>() {
+                        eprintln!("[DEBUG] LHS is InstanceBox, class={}", lhs_inst.class_name);
+                        // Only consider equals where both sides are InstanceBox (user-defined classes)
+                        let _rhs_is_inst = bx
+                            .as_any()
+                            .downcast_ref::<InstanceBox>()
+                            .is_some();
+                        // Even if rhs isn't InstanceBox, user may implement coercion; try only when available
+                        let class_name = &lhs_inst.class_name;
                         let method_sig = format!("{}.equals/1", class_name);
-                        if let Some(_func) = self.functions.get(&method_sig) {
-                            eprintln!("[vm-warn] equals() method found for {} but dispatch is disabled", class_name);
+                        eprintln!("[DEBUG] Looking for function: {}", method_sig);
+                        eprintln!("[DEBUG] Function exists: {}", self.functions.contains_key(&method_sig));
+                        if let Some(func) = self.functions.get(&method_sig).cloned() {
+                            eprintln!("[DEBUG] Dispatching to {}, saving cur_fn={:?}", method_sig, self.cur_fn);
+                            // Build argv: me=lhs, other=rhs
+                            let argv = vec![VMValue::BoxRef(ax.clone()), VMValue::BoxRef(bx.clone())];
+                            if VmConfig::global().general_trace {
+                                eprintln!(
+                                    "[vm-trace] equals-dispatch fn={} me={} other={}",
+                                    method_sig, ax.type_name(), bx.type_name()
+                                );
+                            }
+                            let out = self.exec_function_inner(&func, Some(&argv))?;
+                            return crate::backend::abi_util::to_bool_vm(&out)
+                                .map_err(VMError::TypeError);
                         }
                     }
+                } else if VmConfig::global().general_trace {
+                    eprintln!(
+                        "[vm-trace] equals-dispatch skipped (in .equals/): fn={:?}",
+                        self.cur_fn
+                    );
                 }
 
-                // Fallback: different instances without equals() method
+                // Fallback: different instances without equals() method → not equal
                 Ok(false)
             }
             // Primitives and other types: use existing eq_vm logic
@@ -279,6 +314,7 @@ impl MirInterpreter {
         } else { (a4.clone(), b4.clone()) };
 
         let result = match (op, &a5, &b5) {
+            // Box-aware equality: delegate to eval_equals (supports user-defined equals())
             (Eq, _, _) => self.eval_equals(&a5, &b5)?,
             (Ne, _, _) => !self.eval_equals(&a5, &b5)?,
             (Lt, Integer(x), Integer(y)) => x < y,

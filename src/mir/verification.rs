@@ -12,6 +12,7 @@ mod dom;
 mod awaits;
 mod barrier;
 mod legacy;
+mod compare;
 mod utils;
 mod ssa;
 
@@ -91,7 +92,12 @@ impl MirVerifier {
             local_errors.append(&mut await_cp);
         }
 
-        // 9. PHI-off strict edge-copy policy (optional)
+        // 9. Forbid Box Compare(Eq/Ne): equality must route via op_eq() at MIR
+        if let Err(mut cmp_errors) = compare::check_no_box_compare(function) {
+            local_errors.append(&mut cmp_errors);
+        }
+
+        // 10. PHI-off strict edge-copy policy (optional)
         if crate::config::env::mir_no_phi() && crate::config::env::verify_edge_copy_strict() {
             if let Err(mut ecs) = self.verify_edge_copy_strict(function) {
                 local_errors.append(&mut ecs);

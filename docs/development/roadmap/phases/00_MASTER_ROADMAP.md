@@ -6,10 +6,13 @@ Purpose: Claude×Copilot×ChatGPT×Gemini協調開発の総合ロードマップ
 
 ## 📍 現在位置
 
-- **現在フェーズ**: Phase 15.7 セルフホスティング実現への道筋
-- **進捗**: 85-90%完成（残り10-15%、1-2週間）
-- **次フェーズ**: Phase 15.7完了 → セルフホスティング達成！
-- **備考**: Hakorune言語で Hakorune をコンパイル・実行する完全なセルフホスティングへ
+- **現在フェーズ**: Phase 19 - @enum/@match Macros (Choice A'')
+- **進捗**: Day 1/14 完了 (7%) ✅ → Day 2 進行中 🔄
+- **期間**: 2-3 weeks (9-14 days)
+- **次フェーズ**: Phase 19 完了 → Mini-VM Migration (with @match)
+- **備考**: Pattern matching for selfhost compiler ("ガチガチ大作戦")
+
+**最新完了**: Day 1 - @enum Parser Extension (2025-10-08)
 
 ---
 
@@ -130,7 +133,50 @@ Purpose: Claude×Copilot×ChatGPT×Gemini協調開発の総合ロードマップ
 - **暫定対応**: `.hako`で単純置き換えマクロ実装中（`apps/macros/`）
 - **詳細**: [phase-16-macro-revolution/README.md](phase-16-macro-revolution/README.md)
 
-#### 📋 **Phase 20: マクロフル機能（Hakorune実装版）** (Phase 15.7完了後)
+#### 🔥 **Phase 19: @enum/@match Macros (Choice A'')** (2025-10-08~ 進行中)
+- **状態**: 進行中（Day 1 ✅ → Day 2 🔄）
+- **進捗**: Day 1/14 (7% complete)
+- **期間**: 2-3 weeks (9-14 days)
+- **戦略**: Macro-Only Approach (NO VariantBox Core)
+- **目標**: Pattern matching for selfhost compiler
+- **Day 1 完了内容** (2025-10-08):
+  - ✅ TokenType::AT 追加（@ 文字認識）
+  - ✅ AST拡張（EnumVariant struct + ASTNode::EnumDeclaration）
+  - ✅ enum_parser.rs 実装（150行）
+  - ✅ パーサー統合完了
+  - ✅ テスト実行成功（@enum Result/Option パース成功）
+- **Day 2 予定** (2025-10-09):
+  - 🔄 enum_expander.rs 作成
+  - 🔄 EnumDeclaration → Box 変換実装
+  - 🔄 静的コンストラクタ生成
+  - 🔄 ヘルパーメソッド生成（is_*/as_*）
+- **成果目標**:
+  - @enum macro implementation (Week 1)
+  - @match macro implementation (Week 2-3)
+  - Option/Result @enum version
+  - 3-5 Mini-VM files migrated to @match
+- **Out of Scope**: VariantBox Core, EnumSchemaBox, SymbolBox (→ Phase 20+)
+- **詳細**: [phase-19-enum-match/README.md](phase-19-enum-match/README.md)
+- **ユーザー意図**: "ガチガチ大作戦" - 中途半端（half-baked）回避
+
+#### 📋 **Phase 20: Advanced Enum Features (Post-Selfhost)**
+- **状態**: 計画中（Phase 19 完了後）
+- **目的**: VariantBox Core + 高度な enum 機能実装
+
+**Phase 20.X: VariantBox + enum/match 完全実装** (18-27人日)
+- **Phase 20.6**: VariantBox Core（3-5人日）← Phase 19 から延期
+- **Phase 20.7**: @enum マクロ拡張（VariantBox 版）（5-7人日）
+- **Phase 20.8**: @match マクロ拡張（高度パターン）（7-10人日）
+- **Phase 20.9**: Option/Result 移行（3-5人日）
+
+**延期された機能**（Phase 19 から）:
+- ✅ VariantBox Core 実装
+- ✅ EnumSchemaBox
+- ✅ SymbolBox（タグ最適化）
+- ✅ コンパイル時網羅性チェック
+- ✅ 高度パターン（ガード、リテラル、ネスト）
+
+**Phase 20.0-20.5: マクロフル機能（Hakorune実装版）**
 - **状態**: 計画中（セルフホスティング完了後に開始）
 - **目的**: Phase 16のRust実装をHakoruneでセルフホスト実装に書き直す
 - **優先機能**:
@@ -140,6 +186,17 @@ Purpose: Claude×Copilot×ChatGPT×Gemini協調開発の総合ロードマップ
   4. Quote/Unquote - テンプレート生成
 - **詳細**: [phase-20-macro-full-features/README.md](phase-20-macro-full-features/README.md)
 - **移行ガイド**: [phase-20-macro-full-features/MIGRATION.md](phase-20-macro-full-features/MIGRATION.md)
+
+**Phase 20 内優先順位**:
+```
+Phase 20.0-20.3（マクロ基盤＋derive＋test）← 🔴 P1（最優先）
+    ↓
+Phase 20.6-20.9（VariantBox）← 🟢 P2（推奨）
+    ↓
+Phase 20.4-20.5（Pattern/Quote）← 🟡 P3（必要時）
+    ↓
+Python統合（Plan B）← 🔵 P4（長期計画）
+```
 
 ### 🌟 **Phase 17以降（将来計画）**
 

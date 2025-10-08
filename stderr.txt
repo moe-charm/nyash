@@ -1,1 +1,0 @@
-[UnifiedBoxRegistry] 🎯 Factory Policy: StrictPluginFirst (Phase 15.5: Everything is Plugin!)

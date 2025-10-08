@@ -53,3 +53,15 @@ CLI first
 Removal plan
 - Show one-line deprecation when verbose; keep default OFF; remove code path after one release.
 
+Equality & Operators (Box)
+- NYASH_BUILDER_BOX_EQ_TO_EQUALS — Retired
+  - Replaced by unified `nyrt.ops.op_eq` path at MIR via MirCall::Extern.
+  - Rationale: single entry guarantees VM/LLVM parity; op_eq internally invokes `.equals/1` when present.
+
+Using/Entry defaults
+- NYASH_USING — default 1 (enabled). Prefer this over deprecated NYASH_ENABLE_USING.
+- NYASH_USING_AST — default 0. Dev/test overlay may set 1 for stability in nested alias tests. Planned retirement.
+- NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN — default ON (unset = true). Aliases `HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN` etc. are mapped to NYASH_ prefixes automatically.
+
+Call Unification
+- Prefer MirCall (see docs/reference/mir/call-unified.md). Legacy ExternCall may still appear in transitional JSON/harness paths but should not be the primary emission target.

@@ -6,6 +6,7 @@ Quick Links
 - Mini‑VM（自己ホスト最小実行器の設計）: minivm.md
 - Operator Guard（演算子ボックスの境界・採用方針）: operator-guard.md
 - Docsの書き方（小さく・リンク駆動・3層）: contributing-docs.md
+- Smoke Test Debugging（スモークテスト失敗時のデバッグ）: smoke-test-debugging.md
 
 ## 🚀 はじめに
 - `getting-started.md` - Nyashを始めるためのクイックガイド

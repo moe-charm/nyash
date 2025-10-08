@@ -131,6 +131,7 @@ impl MirInterpreter {
     ) -> Result<(), VMError> {
         let a = self.reg_load(lhs)?;
         let b = self.reg_load(rhs)?;
+        eprintln!("[DEBUG-COMPARE] op={:?}, a={:?}, b={:?}", op, a, b);
         // Operator Box (Compare) — adopt gated; do NOT execute when adopt is OFF
         if let Some(op_fn) = self.functions.get("CompareOperator.apply/3").cloned() {
             let in_guard = self

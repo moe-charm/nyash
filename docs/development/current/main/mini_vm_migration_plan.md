@@ -1,63 +1,94 @@
 # Hakorune Mini-VM Migration Plan
 
 **作成日**: 2025-10-08
-**最終更新**: 2025-10-08（Strategy C採用）
+**最終更新**: 2025-10-08（Choice A'' 採用）
 **目的**: HakoruneでセルフホストMini-VMを実装し、MIR16凍結セット完全対応
-**戦略**: **Strategy C（段階的統合）** - enum MVP → Mini-VM実装 → 完全enum化
+**戦略**: **Choice A'' (Macro-Only)** - @enum/@match マクロ実装 → Mini-VM実装 → セルフホスト達成
+
+**⚠️ 戦略変更**: Strategy C → Choice A'' に変更（2025-10-08）
 
 ---
 
 ## 🎯 0. 戦略的意思決定（重要！）
 
-### Strategy C（段階的統合）採用の背景
+### ⚠️ **UPDATED: Choice A'' (Macro-Only) 採用**
 
-**分析結果**: 10年間の技術的負債を考慮した結果、**Strategy C（段階的統合）**を採用
+**最新決定**: 2025-10-08（午後）
+**戦略変更**: Strategy C → **Choice A'' (Macro-Only Approach)**
 
-#### 採用理由
-1. **長期コード品質が最優先**
-   - セルフホストコードは10年以上メンテナンス対象
-   - Rust VM → Hakorune Selfhost Compiler → MIR JSON → VM実行（Bootstrap Chain）
-   - 技術的負債の複利的増加を回避（100 → 800-1000 debt points）
+#### 変更の理由
 
-2. **現状の技術的負債**
-   - 既存Mini-VM: 66箇所のnullチェック
-   - 既存Mini-VM: 34箇所のエラーコード（-1/-2/0）
-   - 品質スコア: 5/10（中〜高レベルの技術的負債）
+**ユーザーの重要質問**:
+> **「enum なしで セルフホスティング　めざすの？　綺麗にできるにゃ？」**
+> **「ガチガチに作ってきたからセルフホスティングもガチガチ大作戦だにゃ」**
 
-3. **3つの戦略比較**（10年スパン）
-   - **Strategy A（enum-first）**: 28-42人日、品質★★★★★、10年後最優
-   - **Strategy B（Mini-VM-first）**: 13-20人日、品質★☆☆☆☆、10年後最悪
-   - **Strategy C（段階統合）**: 25-35人日、品質★★★★☆、**バランス最良**
+**問題認識**:
+- Strategy C では enum MVP（基本実装）でスタートするが、@match マクロは Phase 20 以降
+- セルフホストコードで pattern matching なしは「**中途半端（half-baked）**」
+- 最悪のケース: VariantBox あり + @match なし → 手動で `if box.is_tag("Ok")` を書く
 
-### Strategy C 実行計画
+**Choice A'' の解決**:
+- @enum/@match マクロを**同時に**実装
+- VariantBox Core は**実装しない**（Phase 20+ に延期）
+- パターンマッチングの品質を**半分の時間**で達成（9-14日 vs 25-35日）
+
+---
+
+### Choice A'' 実行計画
 
 ```
-Step 1: enum MVP実装（3-5人日）
-  ├─ Option<T> 基本実装
-  ├─ Result<T,E> 基本実装
-  └─ 基本パターンマッチング（@enum/@matchマクロなし）
+Step 1: @enum/@match マクロ実装（9-14人日）← Phase 19
+  Week 1: @enum マクロ（4-5日）
+    ├─ パーサー拡張（@enum 構文）
+    ├─ コンストラクタ自動生成
+    └─ Option/Result @enum 版実装
 
-Step 2: Mini-VM実装 with enum MVP（10-15人日）← 本ドキュメントのPhase 1-5
-  ├─ **新規コードのみ** Option<T>/Result<T,E> 使用
-  ├─ 既存コードは最小限の修正（リファクタリングしない）
-  └─ 技術的負債の新規追加を防ぐ
+  Week 2-3: @match マクロ（5-9日）
+    ├─ パーサー拡張（@match 構文）
+    ├─ if-else への脱糖
+    └─ 実行時網羅性チェック（panic）
 
-Step 3: セルフホスト達成（6-7週間合計）
-  └─ Phase 15.7完了
+Step 2: Mini-VM実装 with @match（10-15人日）← 本ドキュメントのPhase 1-5
+  ├─ **新規コードは 100% @match 使用**
+  ├─ null チェック → @match Option に置き換え
+  ├─ エラーコード → @match Result に置き換え
+  └─ 技術的負債の新規追加を防ぐ + 既存負債削減
 
-Step 4: enum完全実装（Phase 20、10-15人日）
-  ├─ @enum/@matchマクロ実装
-  ├─ 既存コード段階的リファクタリング
-  │   ├─ 66箇所のnullチェック → Option<T>
-  │   └─ 34箇所のエラーコード → Result<T,E>
-  └─ 技術的負債の段階的解消
+Step 3: セルフホスト達成（3-4週間合計）
+  └─ Phase 15.7完了（@match 統一コード）
+
+Step 4: VariantBox Core実装（Phase 20+、オプショナル）
+  ├─ @enum/@match の内部実装を VariantBox に切り替え
+  ├─ 外部インターフェースは変更なし（透過的）
+  └─ 高度なパターン・静的チェック追加
 ```
+
+**合計期間**: 19-29人日（4-6週間） ← **Strategy C より 6-6人日短縮！**
+
+---
+
+### 戦略比較（更新版）
+
+| 戦略 | 期間 | Pattern Matching | セルフホストコード品質 | 中途半端リスク |
+|------|------|-----------------|---------------------|-------------|
+| **Choice A'' (Macro)** | **9-14日** | **Week 2-3** ⭐ | **★★★★☆** ⭐ | **なし** ⭐ |
+| Strategy C（段階統合） | 25-35日 | Week 5-7 | ★★★☆☆ | 中（MVP期間） |
+| Choice A（Full enum） | 28-42日 | Week 4-6 | ★★★★★ | なし |
+| Strategy B（Mini-VM先行） | 13-20日 | ❌ Never | ★☆☆☆☆ | 高 |
+
+**⭐ = Choice A'' の優位点**
+
+---
 
 ### ユーザーの決定的発言
 
 > **「hakoruneセルフホスティング　コードは　綺麗にするのとても大切とおもいますにゃ　一番大本のrust vmからの立上げで　何かあったとき　ここからビルドする事も想定しますにゃ　全ての開発にかかわってきますにゃ」**
+>
+> **「じゃあ　ultrathinkで計画修正　enum match だけ実装　これでいこう」**
+>
+> **「ガチガチに作ってきたからセルフホスティングもガチガチ大作戦だにゃ」**
 
-この発言により、短期的スピード（Strategy B）より長期的品質（Strategy C）を優先する戦略に転換。
+この発言により、「中途半端」を完全に回避する **Choice A'' (Macro-Only)** を採用。
 
 ---
 
@@ -638,105 +669,166 @@ tools/smokes/v2/run.sh --profile quick
 
 ---
 
-## 🚀 11. 次のアクション（Strategy C実行）
+## 🚀 11. 次のアクション（Choice A'' 実行）
 
-### ⚠️ 重要: 実行順序
+### ⚠️ 重要: 実行順序（更新版）
 
-**Strategy C により、実行順序は以下の通り**:
-1. **Step 1: enum MVP実装**（3-5人日）← 最優先
+**Choice A'' により、実行順序は以下の通り**:
+1. **Step 1: @enum/@match マクロ実装**（9-14人日、Phase 19）← 最優先
 2. Step 2: Mini-VM実装（10-15人日）← 本ドキュメントのPhase 1-5
-3. Step 3: セルフホスト達成
-4. Step 4: enum完全実装（Phase 20）
+3. Step 3: セルフホスト達成（@match 統一コード）
+4. Step 4: VariantBox Core実装（Phase 20+、オプショナル）
 
-### Step 1: enum MVP実装（最優先）
+### Step 1: @enum/@match マクロ実装（Phase 19、最優先）
 
-#### 準備（0.5日）
+**詳細**: [phase-19-enum-match/README.md](../../roadmap/phases/phase-19-enum-match/README.md)
+
+#### 準備フェーズ（Day 0、半日）
+
 1. **環境確認**
    - [ ] Hakoruneビルド確認（`cargo build --release`）
-   - [ ] スモークテスト実行（`tools/smokes/v2/run.sh --profile quick`）
+   - [ ] スモークテスト実行（baseline測定）
+   - [ ] Phase 16 マクロシステム動作確認
 
-2. **ドキュメント精読**
-   - [ ] Phase 20 VariantBox設計書（`docs/development/roadmap/phases/phase-20-variant-box/DESIGN.md`）
-   - [ ] 既存ResultBox実装（`apps/selfhost/vm/boxes/result_box.hako`、34行）
-   - [ ] 言語仕様確認（Box継承、birth lifecycle）
+2. **設計レビュー**
+   - [ ] Phase 20 VariantBox 設計精読
+   - [ ] 既存 @derive 実装精読（`src/macro/`）
+   - [ ] loop_normalize_macro.nyash 精読（脱糖パターン学習）
 
-3. **失敗記録準備**
-   - [ ] enum_mvp_progress.md作成（日次更新用）
-   - [ ] enum_mvp_lessons.md作成（失敗記録用）
+3. **タスク準備**
+   - [ ] phase-19-enum-match/README.md 作成
+   - [ ] Week 1 タスクリスト作成
+   - [ ] 進捗記録ファイル準備
 
-#### 実装（3-5人日）
-1. **Day 1-2: Option<T> 基本実装**
-   ```hakorune
-   box OptionBox {
-       is_some: BoolBox
-       value: Box  // null または実値
+#### Week 1: @enum マクロ実装（4-5日）
 
-       birth() {
-           me.is_some = new BoolBox(0)  // None
-           me.value = null
-       }
+**Day 1-2**: パーサー拡張（Rust側）
+- [ ] `@enum` 構文解析
+- [ ] AST ノード: `EnumDeclaration`
+- [ ] 既存の `@derive` 実装を参考
 
-       some(v) {
-           me.is_some = new BoolBox(1)
-           me.value = v
-       }
+**Day 3-4**: マクロエンジン（Hakorune側）
+```hakorune
+// 入力
+@enum Result {
+    Ok(value)
+    Err(error)
+}
 
-       is_some() { return me.is_some }
-       is_none() { return !me.is_some }
-       unwrap() {
-           if !me.is_some {
-               panic("Called unwrap on None")
-           }
-           return me.value
-       }
-   }
-   ```
+// 出力（自動生成）
+static box Result {
+    Ok(v) {
+        local r = new ResultBox()
+        r._tag = "Ok"
+        r._value = v
+        return r
+    }
 
-2. **Day 2-3: Result<T,E> 基本実装**
-   ```hakorune
-   box ResultBox {
-       is_ok: BoolBox
-       value: Box
-       error: Box
+    Err(e) {
+        local r = new ResultBox()
+        r._tag = "Err"
+        r._error = e
+        return r
+    }
 
-       ok(v) {
-           me.is_ok = new BoolBox(1)
-           me.value = v
-           me.error = null
-       }
+    is_ok(r) { return r._tag == "Ok" }
+    is_err(r) { return r._tag == "Err" }
+    unwrap_ok(r) {
+        if r._tag != "Ok" { panic("unwrap_ok on Err") }
+        return r._value
+    }
+    unwrap_err(r) {
+        if r._tag != "Err" { panic("unwrap_err on Ok") }
+        return r._error
+    }
+}
+```
 
-       err(e) {
-           me.is_ok = new BoolBox(0)
-           me.value = null
-           me.error = e
-       }
+**Day 5**: テスト・スモークテスト
+- [ ] 10パターンの @enum テスト
+- [ ] Option/Result の @enum 版実装
 
-       is_ok() { return me.is_ok }
-       is_err() { return !me.is_ok }
-       unwrap() {
-           if !me.is_ok {
-               panic("Called unwrap on Err: " + me.error)
-           }
-           return me.value
-       }
-   }
-   ```
+**成果物**:
+- `apps/macros/enum/enum_macro.hako` (100-150行)
+- `apps/lib/boxes/option_enum.hako` (使用例)
+- `apps/lib/boxes/result_enum.hako` (使用例)
 
-3. **Day 4-5: テスト・統合**
-   - [ ] test_option_basic.hako（10パターン）
-   - [ ] test_result_basic.hako（10パターン）
-   - [ ] スモークテスト追加
-   - [ ] ドキュメント作成（使用ガイド）
+#### Week 2-3: @match マクロ実装（5-9日）
 
-#### 成功基準（Step 1完了）
-- [ ] Option<T> 基本操作すべて動作
-- [ ] Result<T,E> 基本操作すべて動作
-- [ ] スモークテスト PASS
-- [ ] Mini-VMコードで使用可能な状態
+**Day 1-3**: パーサー拡張（Rust側）
+- [ ] `@match` 構文解析
+- [ ] パターン構文: `Tag(bindings)` のみ
+- [ ] AST ノード: `MatchExpression`
+
+**Day 4-7**: マクロエンジン（Hakorune側）
+```hakorune
+// 入力
+@match result {
+    Ok(value) => {
+        console.log("Success: " + value)
+        return value
+    }
+    Err(error) => {
+        console.error("Error: " + error)
+        return null
+    }
+}
+
+// 出力（脱糖）
+local __match_result = result
+if __match_result._tag == "Ok" {
+    local value = __match_result._value
+    console.log("Success: " + value)
+    return value
+} else if __match_result._tag == "Err" {
+    local error = __match_result._error
+    console.error("Error: " + error)
+    return null
+} else {
+    panic("Non-exhaustive match: unknown tag " + __match_result._tag)
+}
+```
+
+**Day 8-9**: 統合テスト
+- [ ] 15パターンの @match テスト
+- [ ] Option/Result の実用例
+- [ ] Mini-VM エラーハンドリングへの適用
+
+**成果物**:
+- `apps/macros/match/match_macro.hako` (150-200行)
+- `apps/tests/match_patterns.hako` (テストスイート)
+- Mini-VM の 3-5ファイルを @match で書き換え（実証）
+
+#### 成功基準（Step 1 = Phase 19 完了）
+
+1. **@enum マクロ動作**
+   - [ ] 10/10 @enum テスト PASS
+   - [ ] Option/Result を @enum で定義可能
+   - [ ] コンストラクタ自動生成動作
+
+2. **@match マクロ動作**
+   - [ ] 15/15 @match テスト PASS
+   - [ ] if-else への正しい脱糖
+   - [ ] 非網羅パターンで panic 動作
+
+3. **セルフホストコード適用**
+   - [ ] Mini-VM の 3-5ファイルを @match で書き換え
+   - [ ] null チェック → @match Option に置き換え
+   - [ ] エラーコード → @match Result に置き換え
+
+4. **スモークテスト**
+   - [ ] Quick profile 全 PASS
+   - [ ] Integration profile 全 PASS
+   - [ ] 性能劣化なし
+
+5. **ドキュメント**
+   - [ ] @enum/@match 使用ガイド
+   - [ ] マイグレーションガイド
+   - [ ] Phase 20 への移行計画
 
 ---
 
-### Step 2: Mini-VM実装（enum MVP完了後）
+### Step 2: Mini-VM実装（@enum/@match完了後）
 
 #### Phase 1開始前（準備、0.5日）
 1. **ドキュメント精読**
@@ -750,12 +842,12 @@ tools/smokes/v2/run.sh --profile quick
    - [ ] テンプレート準備（上記フォーマット）
 
 #### Phase 1開始（Day 1）
-1. **JsonCursorBox統合** → 4時間（**Result<T,E>活用**）
-2. **InstructionDispatcherBox実装** → 3時間（**Option<T>活用**）
+1. **JsonCursorBox統合** → 4時間（**@match Result活用**）
+2. **InstructionDispatcherBox実装** → 3時間（**@match Option活用**）
 3. **test_phase1.hako作成・実行** → 1時間
 4. **失敗記録更新** → 必須（所要時間問わず）
 
-**重要**: 新規コードは**必ず**Option<T>/Result<T,E>を使用。nullチェック・エラーコード（-1/-2/0）の新規追加を禁止。
+**重要**: 新規コードは**必ず** @match を使用。手動 nullチェック・エラーコード（-1/-2/0）・`if box.is_tag()` の新規追加を禁止。
 
 ---
 
