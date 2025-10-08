@@ -780,6 +780,32 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
                 pass
         return vmap.get(vid)
 
+    # Special-case: inline nyrt.ops.op_eq to avoid requiring a kernel symbol.
+    # Semantics: compare as i64 values (handle identity for boxes), return i64 0|1.
+    # Note: deep user-defined equals() is VM-only; AOT/harness keeps minimal parity.
+    if extern_name == "nyrt.ops.op_eq":
+        i64 = ir.IntType(64)
+        def _to_i64(val):
+            if val is None:
+                return ir.Constant(i64, 0)
+            # pointer -> i64
+            if getattr(val.type, 'is_pointer', False):
+                return builder.ptrtoint(val, i64, name='op_eq_p2i')
+            # widen/trunc integers to i64
+            if isinstance(val.type, ir.IntType) and val.type.width != 64:
+                if val.type.width < 64:
+                    return builder.zext(val, i64, name='op_eq_zext')
+                else:
+                    return builder.trunc(val, i64, name='op_eq_trunc')
+            return val
+        a = _to_i64(_resolve_arg(args[0]) if args else None)
+        b = _to_i64(_resolve_arg(args[1]) if len(args) > 1 else None)
+        cmpv = builder.icmp_signed('==', a, b, name='op_eq_cmp')
+        res = builder.zext(cmpv, i64, name='op_eq_zext_i1')
+        if dst_vid is not None:
+            vmap[dst_vid] = res
+        return
+
     # Look up extern function in module
     func = None
     for f in module.functions:
