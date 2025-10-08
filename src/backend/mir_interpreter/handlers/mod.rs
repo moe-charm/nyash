@@ -49,11 +49,7 @@ impl MirInterpreter {
                     self.handle_box_call(*dst, *box_val, method, args)?
                 } else { unreachable!() }
             }
-            MirInstruction::ExternCall { .. } => {
-                return Err(VMError::InvalidInstruction(
-                    "ExternCall is retired; use Call with callee=Extern(\"iface.method\")".into()
-                ));
-            }
+            // ExternCall retired
             MirInstruction::RefSet {
                 reference,
                 field,

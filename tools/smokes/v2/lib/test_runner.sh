@@ -126,6 +126,7 @@ filter_noise() {
   | sed -E 's/^VM execution error: VM fallback error: *//' \
   | grep -v '^VM execution error: ' \
   | grep -v '^\[DEBUG-' \
+  | grep -v '^\[warn\] dev verify:' \
   | grep -v '^Result: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
@@ -224,6 +225,15 @@ run_test() {
     log_info "Running test: $test_name"
     if [ "${SMOKES_ENV_STAMP:-0}" = "1" ]; then
         print_env_stamp
+    fi
+
+    # Optional: plugin-missing skip gate (set by preflight_plugins)
+    if [ "${SMOKES_SKIP_CUR_TEST:-0}" = "1" ]; then
+        log_warn "SKIP $test_name (${SMOKES_SKIP_REASON:-plugins missing})"
+        # reset skip flag for next test
+        unset SMOKES_SKIP_CUR_TEST || true
+        unset SMOKES_SKIP_REASON || true
+        return 0
     fi
 
     if $test_func; then
@@ -342,11 +352,13 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | \
+            grep -v '^\[deprecate\] \[modules\.aliases\]' | \
+            grep -v '^\[warn\] dev verify:' | \
             grep -v '^🔧 Mock LLVM Backend Execution' | grep -v '^✅ Mock exit code:' | \
             grep -v '^Build with --features ' | \
             sed -E 's/^❌[[:space:]]*//' | sed -E 's/^Pipeline error: *//' | sed -E 's/\bbb[0-9]+\b/bb<ID>/g' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'
@@ -361,11 +373,13 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | \
+            grep -v '^\[deprecate\] \[modules\.aliases\]' | \
+            grep -v '^\[warn\] dev verify:' | \
             grep -v '^🔧 Mock LLVM Backend Execution' | grep -v '^✅ Mock exit code:' | \
             grep -v '^Build with --features ' | \
             sed -E 's/^❌[[:space:]]*//' | sed -E 's/^Pipeline error: *//' | sed -E 's/\bbb[0-9]+\b/bb<ID>/g' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'

@@ -618,19 +618,24 @@ impl MirBuilder {
 
     fn emit_timer_now_ms_call(&mut self) -> Result<ValueId, String> {
         let dst = self.value_gen.next();
-        if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[builder] extern timer now_ms emitted → ExternCall(nyrt.time.now_ms)");
-        }
-        #[allow(deprecated)]
-        self.emit_legacy_externcall(Some(dst), "nyrt.time", "now_ms", vec![])?;
+        let mut args: Vec<ValueId> = vec![];
+        crate::mir::builder::ssa::local::finalize_args(self, &mut args);
+        self.emit_unified_call(
+            Some(dst),
+            super::super::builder_calls::CallTarget::Extern("nyrt.time.now_ms".to_string()),
+            args,
+        )?;
         Ok(dst)
     }
 
     fn emit_array_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
         let recv_local = self.local_recv(receiver);
         let dst = self.value_gen.next();
-        #[allow(deprecated)]
-        self.emit_legacy_externcall(Some(dst), "nyrt.array", "size", vec![recv_local])?;
+        self.emit_unified_call(
+            Some(dst),
+            super::super::builder_calls::CallTarget::Extern("nyrt.array.size".to_string()),
+            vec![recv_local],
+        )?;
         self.value_types.insert(dst, MirType::Integer);
         Ok(dst)
     }
@@ -638,8 +643,11 @@ impl MirBuilder {
     fn emit_map_size_call(&mut self, receiver: ValueId) -> Result<ValueId, String> {
         let recv_local = self.local_recv(receiver);
         let dst = self.value_gen.next();
-        #[allow(deprecated)]
-        self.emit_legacy_externcall(Some(dst), "nyrt.map", "size", vec![recv_local])?;
+        self.emit_unified_call(
+            Some(dst),
+            super::super::builder_calls::CallTarget::Extern("nyrt.map.size".to_string()),
+            vec![recv_local],
+        )?;
         self.value_types.insert(dst, MirType::Integer);
         Ok(dst)
     }

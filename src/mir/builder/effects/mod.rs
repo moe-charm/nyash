@@ -44,7 +44,7 @@ pub fn resolve_effects_for_callee(callee: &Callee) -> Option<EffectMask> {
     }
 }
 
-/// 軽量検証: Call/BoxCall/ExternCall で PURE 判定が混入した場合に警告する。
+/// 軽量検証: Call/BoxCall で PURE 判定が混入した場合に警告する。
 pub fn verify_instruction_effects(inst: &MirInstruction) {
     if !verify_effects_enabled() {
         return;
@@ -56,11 +56,7 @@ pub fn verify_instruction_effects(inst: &MirInstruction) {
             format!("recv=%{} method={}", box_val, method),
             effects,
         ),
-        MirInstruction::ExternCall { effects, iface_name, method_name, .. } => (
-            "ExternCall",
-            format!("{}.{}", iface_name, method_name),
-            effects,
-        ),
+        // ExternCall retired — external calls are represented as Call with callee=Extern
         _ => return,
     };
     if effects.is_pure() {

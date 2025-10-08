@@ -291,16 +291,7 @@ pub enum MirInstruction {
     /// `%dst = await %future`
     Await { dst: ValueId, future: ValueId },
 
-    // === Phase 9.7: External Function Calls (Box FFI/ABI) ===
-    /// External function call through Box FFI/ABI
-    /// `%dst = extern_call interface.method(%args...)`
-    ExternCall {
-        dst: Option<ValueId>,
-        iface_name: String,  // e.g., "env.console"
-        method_name: String, // e.g., "log"
-        args: Vec<ValueId>,
-        effects: EffectMask,
-    },
+    // (ExternCall retired) — use Call with callee=Extern("iface.method")
 }
 
 

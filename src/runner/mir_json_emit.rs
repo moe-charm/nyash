@@ -208,7 +208,6 @@ pub fn emit_mir_json_for_harness(
                         | I::BinOp { dst, .. }
                         | I::Compare { dst, .. }
                         | I::Call { dst: Some(dst), .. }
-                        | I::ExternCall { dst: Some(dst), .. }
                         | I::BoxCall { dst: Some(dst), .. }
                         | I::NewBox { dst, .. }
                         | I::Phi { dst, .. } => {
@@ -435,20 +434,7 @@ pub fn emit_mir_json_for_harness(
                                 insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             }
                         }
-                        I::ExternCall { dst, iface_name, method_name, args, effects } => {
-                            // Map legacy ExternCall → unified mir_call JSON (Callee::Extern)
-                            let name = if iface_name == "env.console" {
-                                format!("nyash.console.{}", method_name)
-                            } else {
-                                format!("{}.{}", iface_name, method_name)
-                            };
-                            let callee = Callee::Extern(name);
-                            let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
-                            // Best-effort effects strings (IO for externs by default)
-                            let eff: Vec<&str> = vec!["io"]; // externs: assume IO for harness purposes
-                            let obj = emit_unified_mir_call(dst.map(|d| d.as_u32()), &callee, &args_u32, &eff);
-                            insts.push(obj);
-                        }
+                        // ExternCall retired — no emission expected here
                         I::BoxCall {
                             dst,
                             box_val,
@@ -559,7 +545,6 @@ pub fn emit_mir_json_for_harness_bin(
                         | I::BinOp { dst, .. }
                         | I::Compare { dst, .. }
                         | I::Call { dst: Some(dst), .. }
-                        | I::ExternCall { dst: Some(dst), .. }
                         | I::BoxCall { dst: Some(dst), .. }
                         | I::NewBox { dst, .. }
                         | I::Phi { dst, .. } => { block_defines.insert(dst.as_u32()); }
@@ -721,34 +706,7 @@ pub fn emit_mir_json_for_harness_bin(
                             insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
                         }
-                        I::ExternCall {
-                            dst,
-                            iface_name,
-                            method_name,
-                            args,
-                            effects,
-                        } => {
-                            if config.use_v1_schema {
-                                let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
-                                let eff_names = effects.effect_names();
-                                let eff_slices: Vec<&str> = eff_names.iter().map(|s| *s).collect();
-                                let callee = Callee::Extern(format!("{}.{}", iface_name, method_name));
-                                let obj = emit_unified_mir_call(dst.map(|v| v.as_u32()), &callee, &args_u32, &eff_slices);
-                                insts.push(obj);
-                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
-                            } else {
-                                let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                                let full_name = format!("{}.{}", iface_name, method_name);
-                                let mut obj = json!({
-                                    "op":"externcall","func": full_name.clone(), "name": full_name,
-                                    "args": args_a,
-                                    "dst": dst.map(|d| d.as_u32()),
-                                });
-                                if iface_name == "env.console" { if dst.is_some() { obj["dst_type"] = json!("i64"); } }
-                                insts.push(obj);
-                                if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
-                            }
-                        }
+                        // ExternCall retired — no emission expected here
                         I::BoxCall {
                             dst,
                             box_val,

@@ -22,9 +22,8 @@ fn cse_in_function(function: &mut MirFunction) -> usize {
 
     for (_bid, block) in &mut function.blocks {
         for inst in &mut block.instructions {
-            // Safety: never CSE external boundary calls (ExternCall or Call→Callee::Extern)
+            // Safety: never CSE external boundary calls (Call→Callee::Extern)
             match inst {
-                MirInstruction::ExternCall { .. } => { continue; }
                 MirInstruction::Call { callee: Some(Callee::Extern(_)), .. } => { continue; }
                 _ => {}
             }

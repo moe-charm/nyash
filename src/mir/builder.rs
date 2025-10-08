@@ -720,49 +720,7 @@ impl MirBuilder {
         false
     }
 
-    // ============================================================================
-    // ExternCall Isolation Helper (Legacy → Unified Call Migration)
-    // ============================================================================
-
-    /// Emit legacy ExternCall instruction (DEPRECATED - use emit_unified_call instead)
-    ///
-    /// This helper isolates all remaining ExternCall emissions for future migration.
-    /// TODO: Replace all usages with emit_unified_call(CallTarget::Extern(...))
-    ///
-    /// # Arguments
-    /// * `dst` - Optional destination register
-    /// * `iface` - Interface name (e.g., "env.console", "nyrt.ops")
-    /// * `method` - Method name (e.g., "log", "op_eq")
-    /// * `args` - Argument value IDs
-    ///
-    /// # Example Migration
-    /// ```rust
-    /// // Before (Legacy):
-    /// self.emit_legacy_externcall(None, "env.console", "log", vec![value])?;
-    ///
-    /// // After (Unified):
-    /// self.emit_unified_call(
-    ///     None,
-    ///     CallTarget::Extern("env.console.log".to_string()),
-    ///     vec![value],
-    /// )?;
-    /// ```
-    #[deprecated(note = "Use emit_unified_call with CallTarget::Extern instead")]
-    pub(super) fn emit_legacy_externcall(
-        &mut self,
-        dst: Option<ValueId>,
-        iface: &str,
-        method: &str,
-        args: Vec<ValueId>,
-    ) -> Result<(), String> {
-        self.emit_instruction(MirInstruction::ExternCall {
-            dst,
-            iface_name: iface.to_string(),
-            method_name: method.to_string(),
-            args,
-            effects: EffectMask::PURE.add(Effect::Io),
-        })
-    }
+    // Note: Legacy ExternCall helper removed; use emit_unified_call with CallTarget::Extern instead.
 
 }
 

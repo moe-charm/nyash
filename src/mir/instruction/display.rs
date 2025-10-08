@@ -97,40 +97,6 @@ impl fmt::Display for MirInstruction {
                     write!(f, "ret void")
                 }
             }
-            MirInstruction::ExternCall {
-                dst,
-                iface_name,
-                method_name,
-                args,
-                effects,
-            } => {
-                if let Some(dst) = dst {
-                    write!(
-                        f,
-                        "{} = extern_call {}.{}({}); effects: {}",
-                        dst,
-                        iface_name,
-                        method_name,
-                        args.iter()
-                            .map(|v| format!("{}", v))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        effects
-                    )
-                } else {
-                    write!(
-                        f,
-                        "extern_call {}.{}({}); effects: {}",
-                        iface_name,
-                        method_name,
-                        args.iter()
-                            .map(|v| format!("{}", v))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        effects
-                    )
-                }
-            }
             _ => write!(f, "{:?}", self), // Fallback for other instructions
         }
     }

@@ -308,12 +308,14 @@ pub fn normalize_legacy_instructions(
                     }
                     I::Print { value, .. } => {
                         let v = *value;
-                        *term = I::ExternCall {
+                        *term = I::Call {
                             dst: None,
-                            iface_name: "env.console".to_string(),
-                            method_name: "log".to_string(),
+                            func: ValueId::new(0),
+                            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                                "env.console.log".to_string(),
+                            )),
                             args: vec![v],
-                            effects: crate::mir::EffectMask::PURE,
+                            effects: crate::mir::EffectMask::PURE.add(crate::mir::Effect::Io),
                         };
                         stats.intrinsic_optimizations += 1;
                     }

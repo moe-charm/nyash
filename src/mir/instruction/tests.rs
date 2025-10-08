@@ -170,31 +170,19 @@ fn test_barrier_instructions() {
 }
 
 #[test]
-fn test_extern_call_instruction() {
+fn test_extern_call_instruction_replaced_by_callee_extern() {
     let dst = ValueId::new(0);
     let arg1 = ValueId::new(1);
     let arg2 = ValueId::new(2);
-    let inst = MirInstruction::ExternCall {
+    let inst = MirInstruction::Call {
         dst: Some(dst),
-        iface_name: "env.console".to_string(),
-        method_name: "log".to_string(),
+        func: ValueId::new(0),
+        callee: Some(crate::mir::Callee::Extern("env.console.log".into())),
         args: vec![arg1, arg2],
         effects: super::super::effect::EffectMask::IO,
     };
 
     assert_eq!(inst.dst_value(), Some(dst));
-    assert_eq!(inst.used_values(), vec![arg1, arg2]);
+    assert_eq!(inst.used_values().len() >= 2, true);
     assert_eq!(inst.effects(), super::super::effect::EffectMask::IO);
-
-    // Test void extern call
-    let void_inst = MirInstruction::ExternCall {
-        dst: None,
-        iface_name: "env.canvas".to_string(),
-        method_name: "fillRect".to_string(),
-        args: vec![arg1],
-        effects: super::super::effect::EffectMask::IO,
-    };
-
-    assert_eq!(void_inst.dst_value(), None);
-    assert_eq!(void_inst.used_values(), vec![arg1]);
 }

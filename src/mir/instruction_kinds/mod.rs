@@ -558,7 +558,6 @@ pub enum CallLikeInst {
     Call { dst: Option<ValueId>, func: ValueId, args: Vec<ValueId> },
     BoxCall { dst: Option<ValueId>, box_val: ValueId, args: Vec<ValueId> },
     PluginInvoke { dst: Option<ValueId>, box_val: ValueId, args: Vec<ValueId> },
-    ExternCall { dst: Option<ValueId>, args: Vec<ValueId> },
 }
 
 impl CallLikeInst {
@@ -570,8 +569,6 @@ impl CallLikeInst {
                 Some(CallLikeInst::BoxCall { dst: *dst, box_val: *box_val, args: args.clone() }),
             MirInstruction::PluginInvoke { dst, box_val, args, .. } =>
                 Some(CallLikeInst::PluginInvoke { dst: *dst, box_val: *box_val, args: args.clone() }),
-            MirInstruction::ExternCall { dst, args, .. } =>
-                Some(CallLikeInst::ExternCall { dst: *dst, args: args.clone() }),
             _ => None,
         }
     }
@@ -580,8 +577,7 @@ impl CallLikeInst {
         match self {
             CallLikeInst::Call { dst, .. }
             | CallLikeInst::BoxCall { dst, .. }
-            | CallLikeInst::PluginInvoke { dst, .. }
-            | CallLikeInst::ExternCall { dst, .. } => *dst,
+            | CallLikeInst::PluginInvoke { dst, .. } => *dst,
         }
     }
 
@@ -594,7 +590,6 @@ impl CallLikeInst {
             | CallLikeInst::PluginInvoke { box_val, args, .. } => {
                 let mut v = vec![*box_val]; v.extend(args.iter().copied()); v
             }
-            CallLikeInst::ExternCall { args, .. } => args.clone(),
         }
     }
 }

@@ -90,8 +90,7 @@ impl MirInstruction {
             MirInstruction::FutureSet { .. } => EffectMask::WRITE, // Setting future has write effects
             MirInstruction::Await { .. } => EffectMask::READ.add(Effect::Async), // Await blocks and reads
 
-            // Phase 9.7: External Function Calls
-            MirInstruction::ExternCall { effects, .. } => *effects, // Use provided effect mask
+            // (ExternCall retired) — handled via Call callee=Extern with effects computed upstream
             // Function value construction: treat as pure with allocation
             MirInstruction::NewClosure { .. } => EffectMask::PURE.add(Effect::Alloc),
         }
@@ -126,8 +125,7 @@ impl MirInstruction {
 
             MirInstruction::Call { dst, .. }
             | MirInstruction::BoxCall { dst, .. }
-            | MirInstruction::PluginInvoke { dst, .. }
-            | MirInstruction::ExternCall { dst, .. } => *dst,
+            | MirInstruction::PluginInvoke { dst, .. } => *dst,
 
             MirInstruction::Store { .. }
             | MirInstruction::Branch { .. }
@@ -238,8 +236,7 @@ impl MirInstruction {
             MirInstruction::FutureSet { future, value } => vec![*future, *value],
             MirInstruction::Await { future, .. } => vec![*future],
 
-            // Phase 9.7: External Function Calls
-            MirInstruction::ExternCall { args, .. } => args.clone(),
+            // External calls are represented via Call with callee=Extern
         }
     }
 }

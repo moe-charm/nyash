@@ -393,9 +393,7 @@ impl TraceCfg {
             }
             I::Call { callee, .. } => { if let Some(c)=callee { s.push_str(&format!(" callee={:?}", c)); } }
             I::BoxCall { method, .. } => { s.push_str(&format!(" boxcall method=\"{}\"", method)); }
-            I::ExternCall { iface_name, method_name, .. } => {
-                s.push_str(&format!(" externcall {}.{}", iface_name, method_name));
-            }
+            // ExternCall retired
             I::Return { value } => { if let Some(v)=value { s.push_str(&format!(" ret=v%{}", v.as_u32())); } }
             I::Branch { condition, then_bb, else_bb } => {
                 let cv = m.regs.get(condition).map(val_preview).unwrap_or("?".into());
@@ -437,7 +435,7 @@ fn op_name(i: &crate::mir::MirInstruction) -> &'static str {
         I::Call { .. } => "call",
         I::BoxCall { .. } => "boxcall",
         I::PluginInvoke { .. } => "boxcall",
-        I::ExternCall { .. } => "externcall",
+        // ExternCall retired
         I::Return { .. } => "ret",
         I::Branch { .. } => "branch",
         I::Jump { .. } => "jump",

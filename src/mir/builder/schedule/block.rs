@@ -36,8 +36,7 @@ impl BlockScheduleBox {
             matches!(mi,
                 MirInstruction::Call { .. } |
                 MirInstruction::BoxCall { .. } |
-                MirInstruction::PluginInvoke { .. } |
-                MirInstruction::ExternCall { .. }
+                MirInstruction::PluginInvoke { .. }
             )
         };
         for w in bb.instructions.windows(2) {

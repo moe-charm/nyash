@@ -18,6 +18,14 @@ impl MirInterpreter {
                 let ok = self.eval_equals(&a, &b)?;
                 return Ok(VMValue::Bool(ok));
             }
+            // Generic VM extern adapter (nyrt.time.now_ms, nyrt.array.size, nyrt.map.size, ...)
+            {
+                let mut loaded: Vec<VMValue> = Vec::with_capacity(args.len());
+                for a in args { loaded.push(self.reg_load(*a)?); }
+                if let Some(r) = crate::backend::mir_interpreter::extern_adapter::try_call(iface, method, &loaded) {
+                    return r;
+                }
+            }
             // Unknown dotted extern — return error (use legacy ExternCall path only for supported iface.method)
             return Err(VMError::InvalidInstruction(format!(
                 "ExternCall {}.{} not supported",

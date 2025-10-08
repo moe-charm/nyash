@@ -338,23 +338,18 @@ impl MirBuilder {
                 })
             },
             CallTarget::Extern(name) => {
-                // TODO(Phase 3.2): Migrate to MirCall with Callee::Extern instead of ExternCall
-                // This is the unified call bridge - intentionally emits ExternCall directly
+                // Unified path: emit Call with callee=Extern("iface.method")
                 let mut args = args;
                 crate::mir::builder::ssa::local::finalize_args(self, &mut args);
-                // Split on the last dot so "nyrt.ops.op_eq" → ("nyrt.ops","op_eq")
-                let (iface, method) = if let Some((i, m)) = name.rsplit_once('.') {
-                    (i.to_string(), m.to_string())
-                } else {
-                    ("nyash".to_string(), name)
-                };
-
-                // Compute accurate extern effects (READ/IO/CONTROL…)
-                let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects(&iface, &method);
-                self.emit_instruction(MirInstruction::ExternCall {
+                // Normalize dotted name; accept bare as "nyash.<name>"
+                let full_name = if name.contains('.') { name } else { format!("nyash.{}", name) };
+                // Compute effects for extern
+                let (iface, method) = full_name.rsplit_once('.').unwrap_or(("nyash", full_name.as_str()));
+                let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects(iface, method);
+                self.emit_instruction(MirInstruction::Call {
                     dst,
-                    iface_name: iface,
-                    method_name: method,
+                    func: ValueId::new(0),
+                    callee: Some(crate::mir::definitions::call_unified::Callee::Extern(full_name)),
                     args,
                     effects,
                 })

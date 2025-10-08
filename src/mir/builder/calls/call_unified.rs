@@ -13,10 +13,8 @@ use super::extern_calls;
 
 /// Check if unified call system is enabled
 pub fn is_unified_call_enabled() -> bool {
-    match std::env::var("NYASH_MIR_UNIFIED_CALL").ok().as_deref().map(|s| s.to_ascii_lowercase()) {
-        Some(s) if s == "1" || s == "true" || s == "on" => true,
-        _ => false, // default OFF (Unified Call has bugs with recursion - see tmp/bench_results/CRITICAL_NEW_DEFAULTS_BROKEN_2025-10-05.md)
-    }
+    // Unified call is the only allowed path (ExternCall retired)
+    true
 }
 
 /// Convert CallTarget to Callee

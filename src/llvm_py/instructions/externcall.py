@@ -53,6 +53,46 @@ def lower_externcall(
                 bb_map = ctx.bb_map
         except Exception:
             pass
+    # Special-case: nyrt.ops.op_eq — inline implementation (no kernel symbol)
+    # Rationale: MIR normalizes Eq/Ne to op_eq() to keep VM/LLVM parity.
+    #            In the harness we do i64 equality and return i64 0|1.
+    try:
+        if func_name == "nyrt.ops.op_eq":
+            i64 = ir.IntType(64)
+            # Resolve both operands to i64 (pred-aware when resolver provided)
+            def _resolve_i64(vid: int):
+                if resolver is not None and preds is not None and block_end_values is not None and bb_map is not None:
+                    try:
+                        return PhiDispatchPoint.resolve_i64(builder, resolver, int(vid), builder.block, preds, block_end_values, vmap, bb_map)
+                    except Exception:
+                        pass
+                v = vmap.get(vid)
+                if v is None:
+                    return ir.Constant(i64, 0)
+                # ptr→i64 if necessary
+                if hasattr(v, 'type') and isinstance(v.type, ir.PointerType):
+                    return builder.ptrtoint(v, i64, name="op_eq_p2i")
+                if hasattr(v, 'type') and isinstance(v.type, ir.IntType) and v.type.width != 64:
+                    return builder.zext(v, i64, name="op_eq_zext")
+                return v
+            a = _resolve_i64(args[0]) if len(args) >= 1 else ir.Constant(i64, 0)
+            b = _resolve_i64(args[1]) if len(args) >= 2 else ir.Constant(i64, 0)
+            cmp = builder.icmp_signed('==', a, b, name='op_eq_icmp')
+            res = builder.zext(cmp, i64, name='op_eq_zext')
+            if dst_vid is not None:
+                vmap[dst_vid] = res
+            # Optional safepoint after extern-like operation
+            try:
+                import os
+                if os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
+                    insert_automatic_safepoint(builder, module, "extern_call")
+            except Exception:
+                pass
+            return
+    except Exception:
+        # Fall through to generic extern handling
+        pass
+
     # Normalize extern target names
     # Accept full symbol names (e.g., "nyash.console.log", "nyash.string.len_h").
     # Also accept legacy/environment names and map them to kernel exports.

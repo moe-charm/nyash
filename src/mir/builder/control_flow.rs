@@ -170,7 +170,12 @@ impl super::MirBuilder {
         if std::env::var("NYASH_BUILDER_DISABLE_THROW").ok().as_deref() == Some("1") {
             let v = self.build_expression(expression)?;
             #[allow(deprecated)]
-            self.emit_legacy_externcall(None, "env.debug", "trace", vec![v])?;
+            // Route to unified global print for debug traces as well
+            self.emit_unified_call(
+                None,
+                super::builder_calls::CallTarget::Global("print".to_string()),
+                vec![v],
+            )?;
             return Ok(v);
         }
         let exception_value = self.build_expression(expression)?;

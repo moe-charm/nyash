@@ -132,11 +132,7 @@ impl NyashRunner {
                                     let bb = bb_id.as_u32();
                                     eprintln!("{{\"kind\":\"call_static\",\"callee\":\"PluginInvoke:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(method), args.len(), esc(fname), bb);
                                 }
-                                MirInstruction::ExternCall { iface_name, method_name, args, .. } => {
-                                    let bb = bb_id.as_u32();
-                                    let full = format!("{}.{}", iface_name, method_name);
-                                    eprintln!("{{\"kind\":\"call_static\",\"callee\":\"Extern:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(&full), args.len(), esc(fname), bb);
-                                }
+                                // ExternCall retired: represented as Call with callee=Extern in unified path
                                 _ => {}
                             }
                         }

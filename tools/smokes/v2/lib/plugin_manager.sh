@@ -44,7 +44,12 @@ check_dynamic_plugins() {
     if [ ${#missing_plugins[@]} -ne 0 ]; then
         echo "[WARN] Missing dynamic plugins: ${missing_plugins[*]}" >&2
         echo "[INFO] Run: tools/plugin-tester/target/release/plugin-tester build-all" >&2
-        return 0  # 警告のみ
+        # Export skip hint for test runner when requested
+        if [ "${SMOKES_SKIP_WHEN_PLUGINS_MISSING:-0}" = "1" ]; then
+            export SMOKES_SKIP_CUR_TEST=1
+            export SMOKES_SKIP_REASON="plugins missing: ${missing_plugins[*]}"
+        fi
+        return 0  # 警告のみ（skipはランナー側で処理）
     fi
 
     echo "[INFO] Dynamic plugins check passed" >&2

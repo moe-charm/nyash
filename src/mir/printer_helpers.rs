@@ -403,28 +403,6 @@ pub fn format_instruction(
             format!("{} await {}", format_dst(dst, types), future)
         }
 
-        // Phase 9.7: External Function Calls
-        MirInstruction::ExternCall { dst, iface_name, method_name, args, effects } => {
-            let args_str = args
-                .iter()
-                .map(|v| format!("{}", v))
-                .collect::<Vec<_>>()
-                .join(", ");
-            if let Some(dst) = dst {
-                format!(
-                    "{} extern_call {}.{}({}) [effects: {}]",
-                    format_dst(dst, types),
-                    iface_name,
-                    method_name,
-                    args_str,
-                    effects
-                )
-            } else {
-                format!(
-                    "extern_call {}.{}({}) [effects: {}]",
-                    iface_name, method_name, args_str, effects
-                )
-            }
-        }
+        // (ExternCall retired) — handled by Call with callee=Extern in printer elsewhere
     }
 }

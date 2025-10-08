@@ -29,10 +29,10 @@ fn vtable_console_log_clear_smoke() {
         });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".into(), method_name: "log".into(), args: vec![msg], effects: EffectMask::IO });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::Callee::Extern("env.console.log".into())), args: vec![msg], effects: EffectMask::IO });
     f.get_block_mut(bb)
         .unwrap()
-        .add_instruction(MirInstruction::ExternCall { dst: None, iface_name: "env.console".into(), method_name: "clear".into(), args: vec![], effects: EffectMask::IO });
+        .add_instruction(MirInstruction::Call { dst: None, func: crate::mir::ValueId::new(0), callee: Some(crate::mir::Callee::Extern("env.console.clear".into())), args: vec![], effects: EffectMask::IO });
     let zero = f.next_value_id();
     f.get_block_mut(bb)
         .unwrap()

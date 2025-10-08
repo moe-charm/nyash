@@ -66,15 +66,14 @@ impl MirBuilder {
             let iface = env_field.as_str();
             let m = method;
             let mut extern_call = |iface_name: &str, method_name: &str, _effects: EffectMask, returns: bool| -> Result<ValueId, String> {
-                let result_id = self.value_gen.next();
-                #[allow(deprecated)]
-                self.emit_legacy_externcall(if returns { Some(result_id) } else { None }, iface_name, method_name, arg_values.clone())?;
-                if returns {
-                    Ok(result_id)
-                } else {
-                    let void_id = crate::mir::builder::emission::constant::emit_void(self);
-                    Ok(void_id)
-                }
+                let result_id = if returns { Some(self.value_gen.next()) } else { None };
+                let full = format!("{}.{}", iface_name, method_name);
+                self.emit_unified_call(
+                    result_id,
+                    super::super::builder_calls::CallTarget::Extern(full),
+                    arg_values.clone(),
+                )?;
+                Ok(result_id.unwrap_or_else(|| crate::mir::builder::emission::constant::emit_void(self)))
             };
             if env_name == "env" {
                 if let Some((iface_name, method_name, effects, returns)) =
