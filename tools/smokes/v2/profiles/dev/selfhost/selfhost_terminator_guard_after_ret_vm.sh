@@ -22,15 +22,15 @@ using selfhost.vm.entry as MiniVmEntryBox
 static box Main {
   main() {
     // add_const → ret → add_const (should be blocked with unified error)
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, 42)
-      |> MirJsonBuilderMin.add_ret(1)
-      |> MirJsonBuilderMin.add_const(2, 7)  // should be blocked
-      |> MirJsonBuilderMin.end_all()
-    local j = MirJsonBuilderMin.to_string(b)
+    local b = new MirJsonBuilderMin()
+    b.start_module()
+    b.start_function("main")
+    b.start_block(0)
+    b.add_const(1, 42)
+    b.add_ret(1)
+    b.add_const(2, 7)
+    b.end_all()
+    local j = b.to_string()
     return MirVmMin.run(j)
   }
 }

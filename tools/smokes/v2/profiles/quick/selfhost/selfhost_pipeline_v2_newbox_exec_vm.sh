@@ -24,16 +24,16 @@ using selfhost.vm.entry as MiniVmEntryBox
 static box Main {
   main() {
     // Build: const 1->r1; const 2->r2; newbox Counter([1,2])->r3; ret r3; expect 3
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, 1)
-      |> MirJsonBuilderMin.add_const(2, 2)
-      |> MirJsonBuilderMin.add_newbox_range("Counter", 1, 2, 3)
-      |> MirJsonBuilderMin.add_ret(3)
-      |> MirJsonBuilderMin.end_all()
-    local j = MirJsonBuilderMin.to_string(b)
+    local b = new MirJsonBuilderMin()
+    b.start_module()
+    b.start_function("main")
+    b.start_block(0)
+    b.add_const(1, 1)
+    b.add_const(2, 2)
+    b.add_newbox_range("Counter", 1, 2, 3)
+    b.add_ret(3)
+    b.end_all()
+    local j = b.to_string()
     return MirVmMin.run(j)
   }
 }

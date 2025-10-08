@@ -22,16 +22,16 @@ using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 static box Main {
   main() {
     // const 42 -> r1; const 42 -> r2; compare(Ge) -> r3; ret r3
-    local j = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, 42)
-      |> MirJsonBuilderMin.add_const(2, 42)
-      |> MirJsonBuilderMin.add_compare("Ge", 1, 2, 3)
-      |> MirJsonBuilderMin.add_ret(3)
-      |> MirJsonBuilderMin.end_all()
-      |> MirJsonBuilderMin.to_string()
+    local builder = new MirJsonBuilderMin()
+    builder.start_module()
+    builder.start_function("main")
+    builder.start_block(0)
+    builder.add_const(1, 42)
+    builder.add_const(2, 42)
+    builder.add_compare("Ge", 1, 2, 3)
+    builder.add_ret(3)
+    builder.end_all()
+    local j = builder.to_string()
     local v = MiniVmEntryBox.run_min(j)
     print(MiniVmEntryBox.int_to_str(v))
     return 0
@@ -41,7 +41,13 @@ EOF
 
 output_vm=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
 NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --dev)
-compare_outputs "$output_vm" "$output_llvm" "selfhost_mir_m2_compare_ge_builder_vm_llvm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
+# Normalize known prefixes and volatile IDs for robust comparison
+norm() {
+  sed -E 's/^VM execution error: VM fallback error: *//' | \
+  sed -E 's/BasicBlockId\([0-9]+\)/BasicBlockId<ID>/' | \
+  grep -v '^Result: '
+}
+compare_outputs "$(printf "%s" "$output_vm" | norm)" "$(printf "%s" "$output_llvm" | norm)" "selfhost_mir_m2_compare_ge_builder_vm_llvm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0

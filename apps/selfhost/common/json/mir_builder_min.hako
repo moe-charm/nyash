@@ -8,31 +8,40 @@ using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/common/newbox_emit_box.hako" as NewBoxEmitBox
 using "apps/selfhost/common/json/json_inst_encode_box.hako" as JsonInstEncodeBox
 
-static box MirJsonBuilderMin {
-  // Create new builder state (MapBox)
-  make() {
-    local st = map({
-      buf: "",
-      phase: 0,           // 0:init, 1:module, 2:function, 3:block, 4:insts, 5:closed
-      first_inst: 1,      // 1=true, next add_* is first item (no comma)
-      blocks: new ArrayBox(),    // Array of { id, instructions:Array }
-      cur_block_index: -1,
-      fn_name: ""
-    })
-    return st
+box MirJsonBuilderMin {
+  buf: StringBox
+  phase: IntegerBox
+  first_inst: IntegerBox
+  blocks: ArrayBox
+  cur_block_index: IntegerBox
+  fn_name: StringBox
+  trace: IntegerBox
+  verify: IntegerBox
+
+  birth() {
+    me.buf = ""
+    me.phase = 0
+    me.first_inst = 1
+    me.blocks = new ArrayBox()
+    me.cur_block_index = -1
+    me.fn_name = ""
+    me.trace = 0
+    me.verify = 0
   }
 
   // Internal helpers
-  _get_buf(st) { if st.has("buf") { return st.get("buf") } return "" }
-  _set_buf(st, s) { st.set("buf", s) return st }
-  _append(st, s) { local b = me._get_buf(st)  b = b + s  return me._set_buf(st, b) }
+  _get_buf() { return me.buf }
+  _set_buf(s) { me.buf = s return me }
+  _append(s) {
+    me.buf = me.buf + s
+    return me
+  }
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _to_i64(x) { return StringHelpers.to_i64(x) }
 
   _quote(s) { return StringHelpers.json_quote(s) }
 
   _ids_range_json(start, count) {
-    // Build JSON array text like [start, start+1, ..., start+count-1]
     local i = 0
     local out = "["
     loop (i < count) {
@@ -45,7 +54,6 @@ static box MirJsonBuilderMin {
   }
 
   _ids_array_from_json_text(arr_text) {
-    // Parse a simple JSON int array like "[1,2,3]" into ArrayBox
     local out = new ArrayBox()
     if arr_text == null { return out }
     local s = "" + arr_text
@@ -69,283 +77,313 @@ static box MirJsonBuilderMin {
     return out
   }
 
-
-  _ensure_phase(st, want) {
-    // Fail-fast guard for misuse
-    if !st.has("phase") { return st }
-    local p = st.get("phase")
-    if p + 1 < want { return st } // tolerant minimal guard
-    return st
+  _ensure_phase(want) {
+    if me.phase + 1 < want { return me }
+    return me
   }
 
-  // Public builder steps (pipeline-friendly: first arg is state)
-  start_module(st) {
-    local has_buf = "no"
-    if st != null && st.has != null && st.has("buf") { has_buf = "yes" }
-    if me._trace_enabled(st) { print("[DEBUG start_module] st.has(buf)=" + has_buf) }
-    st.set("phase", 1)
-    return me._append(st, "{\"functions\":[")
+  // Public builder steps
+  start_module() {
+    if me.trace == 1 { print("[DEBUG start_module] starting") }
+    me.phase = 1
+    return me._append("{\"functions\":[")
   }
-  start_function(st, name) {
-    local has_fn = "no"
-    if st != null && st.has != null && st.has("fn_name") { has_fn = "yes" }
-    if me._trace_enabled(st) { print("[DEBUG start_function] name=" + name + " st.has(fn_name)=" + has_fn) }
-    st.set("phase", 2)
-    // Dual API: record function name and reset blocks
-    st.set("fn_name", name)
-    st.set("blocks", new ArrayBox())
-    st.set("cur_block_index", -1)
-    if me._trace_enabled(st) { print("[DEBUG start_function] after set, st.get(fn_name)=" + st.get("fn_name")) }
-    // We support a single function in minimal builder
+
+  start_function(name) {
+    if me.trace == 1 { print("[DEBUG start_function] name=" + name) }
+    me.phase = 2
+    me.fn_name = name
+    me.blocks = new ArrayBox()
+    me.cur_block_index = -1
+    if me.trace == 1 { print("[DEBUG start_function] after set, fn_name=" + me.fn_name) }
     local b = "{\"name\":" + me._quote(name) + ",\"params\":[],\"blocks\":["
-    return me._append(st, b)
+    return me._append(b)
   }
-  start_block(st, id) {
-    st.set("phase", 3)
-    st.set("first_inst", 1)
-    // Dual API: create block record and append
-    {
-      local blk = map({ id: id, instructions: new ArrayBox() })
-      local blks = st.get("blocks")
-      blks.push(blk)
-      st.set("cur_block_index", blks.size() - 1)
-    }
+
+  start_block(id) {
+    me.phase = 3
+    me.first_inst = 1
+    local blk = map({ id: id, instructions: new ArrayBox() })
+    me.blocks.push(blk)
+    me.cur_block_index = me.blocks.size() - 1
     local b = "{\"id\":" + me._int_to_str(id) + ",\"instructions\":["
-    return me._append(st, b)
+    return me._append(b)
   }
-  // Close current block and continue blocks array (adds "]},")
-  end_block_continue(st) {
-    // Close instructions array and block object, then add comma to continue
-    return me._append(st, "]},")
+
+  end_block_continue() {
+    return me._append("]},")
   }
-  _comma_if_needed(st) {
-    local first = 1
-    if st.has("first_inst") { first = st.get("first_inst") }
-    if first == 1 {
-      st.set("first_inst", 0)
-      return st
+
+  _comma_if_needed() {
+    if me.first_inst == 1 {
+      me.first_inst = 0
+      return me
     }
-    return me._append(st, ",")
+    return me._append(",")
   }
-  add_const(st, dst, val) {
-    st = me._comma_if_needed(st)
-    // Dual API: push structured inst + Map→to_json 出力
+
+  add_const(dst, val) {
+    me._comma_if_needed()
     local node = MirEmitBox.make_const(dst, val)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_compare(st, kind, lhs, rhs, dst) {
-    st = me._comma_if_needed(st)
+
+  add_compare(kind, lhs, rhs, dst) {
+    me._comma_if_needed()
     local node = MirEmitBox.make_compare(kind, lhs, rhs, dst)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_binop(st, kind, lhs, rhs, dst) {
-    st = me._comma_if_needed(st)
+
+  add_binop(kind, lhs, rhs, dst) {
+    me._comma_if_needed()
     local node = { op:"binop", op_kind:kind, lhs:lhs, rhs:rhs, dst:dst }
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_ret(st, val) {
-    st = me._comma_if_needed(st)
+
+  add_ret(val) {
+    me._comma_if_needed()
     local node = MirEmitBox.make_ret(val)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_call_ids(st, name, args_json_text, dst) {
-    st = me._comma_if_needed(st)
+
+  add_call_ids(name, args_json_text, dst) {
+    me._comma_if_needed()
     local args = me._ids_array_from_json_text(args_json_text)
     local node = CallEmitBox.make_call(name, args, dst)
     node.set("args_text", args_json_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_call_range(st, name, start, count, dst) {
-    st = me._comma_if_needed(st)
+
+  add_call_range(name, start, count, dst) {
+    me._comma_if_needed()
     local args = new ArrayBox()
-    { local i = 0  loop(i < count) { args.push(start + i)  i = i + 1 } }
+    local i = 0
+    loop(i < count) {
+      args.push(start + i)
+      i = i + 1
+    }
     local args_text = me._ids_range_json(start, count)
     local node = CallEmitBox.make_call(name, args, dst)
     node.set("args_text", args_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_boxcall_range(st, method, recv_id, args_start, count, dst) {
-    st = me._comma_if_needed(st)
+
+  add_boxcall_range(method, recv_id, args_start, count, dst) {
+    me._comma_if_needed()
     local args = new ArrayBox()
-    { local i = 0  loop(i < count) { args.push(args_start + i)  i = i + 1 } }
+    local i = 0
+    loop(i < count) {
+      args.push(args_start + i)
+      i = i + 1
+    }
     local args_text = me._ids_range_json(args_start, count)
     local node = CallEmitBox.make_boxcall(method, recv_id, args, dst)
     node.set("args_text", args_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_newbox_range(st, box_type, args_start, count, dst) {
-    st = me._comma_if_needed(st)
-    // Build args array [args_start .. args_start+count-1]
+
+  add_newbox_range(box_type, args_start, count, dst) {
+    me._comma_if_needed()
     local args = new ArrayBox()
-    { local i = 0  loop(i < count) { args.push(args_start + i)  i = i + 1 } }
-    // Prefer helper that also snapshots args_text
+    local i = 0
+    loop(i < count) {
+      args.push(args_start + i)
+      i = i + 1
+    }
     local node = NewBoxEmitBox.with_args_array(NewBoxEmitBox.make_new(box_type, args, dst), args)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  // New: ids-based newbox emission via Map→to_json (keeps args_text for rebuild)
-  add_newbox_ids(st, box_type, args_json_text, dst) {
-    st = me._comma_if_needed(st)
+
+  add_newbox_ids(box_type, args_json_text, dst) {
+    me._comma_if_needed()
     local args = me._ids_array_from_json_text(args_json_text)
     local node = NewBoxEmitBox.make_new(box_type, args, dst)
     node = NewBoxEmitBox.with_args_text(node, args_json_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  // --- JSON v1 (MirCall) helpers: experimental minimal emission ---
+
   _args_array_json_from_ids(ids_start, count) {
     return me._ids_range_json(ids_start, count)
   }
-  add_mir_call_global_ids(st, name, args_json_text, dst) {
-    st = me._comma_if_needed(st)
+
+  add_mir_call_global_ids(name, args_json_text, dst) {
+    me._comma_if_needed()
     local args = me._ids_array_from_json_text(args_json_text)
     local node = CallEmitBox.make_mir_call_global(name, args, dst)
     node.set("args_text", args_json_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_mir_call_method_ids(st, method, recv_id, args_json_text, dst) {
-    st = me._comma_if_needed(st)
+
+  add_mir_call_method_ids(method, recv_id, args_json_text, dst) {
+    me._comma_if_needed()
     local args = me._ids_array_from_json_text(args_json_text)
     local node = CallEmitBox.make_mir_call_method(method, recv_id, args, dst)
     node.set("args_text", args_json_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_mir_call_constructor_ids(st, box_type, args_json_text, dst) {
-    st = me._comma_if_needed(st)
+
+  add_mir_call_constructor_ids(box_type, args_json_text, dst) {
+    me._comma_if_needed()
     local args = me._ids_array_from_json_text(args_json_text)
     local node = CallEmitBox.make_mir_call_constructor(box_type, args, dst)
     node.set("args_text", args_json_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_mir_call_global_range(st, name, start, count, dst) {
-    st = me._comma_if_needed(st)
+
+  add_mir_call_global_range(name, start, count, dst) {
+    me._comma_if_needed()
     local args = new ArrayBox()
-    { local i = 0  loop(i < count) { args.push(start + i)  i = i + 1 } }
+    local i = 0
+    loop(i < count) {
+      args.push(start + i)
+      i = i + 1
+    }
     local args_text = me._ids_range_json(start, count)
     local node = CallEmitBox.make_mir_call_global(name, args, dst)
     node.set("args_text", args_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_mir_call_method_range(st, method, recv_id, args_start, count, dst) {
-    st = me._comma_if_needed(st)
+
+  add_mir_call_method_range(method, recv_id, args_start, count, dst) {
+    me._comma_if_needed()
     local args = new ArrayBox()
-    { local i = 0  loop(i < count) { args.push(args_start + i)  i = i + 1 } }
+    local i = 0
+    loop(i < count) {
+      args.push(args_start + i)
+      i = i + 1
+    }
     local args_text = me._ids_range_json(args_start, count)
     local node = CallEmitBox.make_mir_call_method(method, recv_id, args, dst)
     node.set("args_text", args_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_mir_call_constructor_range(st, box_type, args_start, count, dst) {
-    st = me._comma_if_needed(st)
+
+  add_mir_call_constructor_range(box_type, args_start, count, dst) {
+    me._comma_if_needed()
     local args = new ArrayBox()
-    { local i = 0  loop(i < count) { args.push(args_start + i)  i = i + 1 } }
+    local i = 0
+    loop(i < count) {
+      args.push(args_start + i)
+      i = i + 1
+    }
     local args_text = me._ids_range_json(args_start, count)
     local node = CallEmitBox.make_mir_call_constructor(box_type, args, dst)
     node.set("args_text", args_text)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
   }
-  add_branch(st, cond, then_id, else_id) {
-    st = me._comma_if_needed(st)
-    local node = MirEmitBox.make_branch(cond, then_id, else_id)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
-  }
-  add_jump(st, target) {
-    st = me._comma_if_needed(st)
-    local node = MirEmitBox.make_jump(target)
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
-  }
-  // Minimal: append a copy instruction (dst <- src)
-  add_copy(st, dst, src) {
-    st = me._comma_if_needed(st)
-    local node = { op:"copy", dst:dst, src:src }
-    me._push_inst_map(st, node)
-    return me._append(st, JsonEmitBox.to_json(node))
-  }
-  end_all(st) {
-    st.set("phase", 5)
-    // Close: instructions ], blocks ]}, functions ]}
-    return me._append(st, "]}]}]}")
-  }
-  to_string(st) { return me._get_buf(st) }
 
-  // ---- Dual API helpers (配列/構造体アクセス) ----
-  _cur_insts(st) {
-    if !st.has("blocks") { return null }
-    local blks = st.get("blocks")
+  add_branch(cond, then_id, else_id) {
+    me._comma_if_needed()
+    local node = MirEmitBox.make_branch(cond, then_id, else_id)
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
+  }
+
+  add_jump(target) {
+    me._comma_if_needed()
+    local node = MirEmitBox.make_jump(target)
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
+  }
+
+  add_copy(dst, src) {
+    me._comma_if_needed()
+    local node = { op:"copy", dst:dst, src:src }
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
+  }
+
+  end_all() {
+    me.phase = 5
+    return me._append("]}]}]}")
+  }
+
+  to_string() { return me._get_buf() }
+
+  _cur_insts() {
+    local blks = me.blocks
     if blks == null { return null }
     local n = 0
     if blks != null && blks.size != null { n = blks.size() } else { return null }
     if n <= 0 { return null }
-    // Prefer explicit cur_block_index to avoid ambiguity
-    local idx = -1
-    if st.has("cur_block_index") { idx = st.get("cur_block_index") }
+    local idx = me.cur_block_index
     if idx == null { idx = -1 }
     if idx < 0 || idx >= n { idx = n - 1 }
     local blk = blks.get(idx)
     if blk == null { return null }
     return blk.get("instructions")
   }
-  verify_builder_state(st) { return 0 }
-  // Opt-in verify/trace (builder state flags)
-  _verify_enabled(st) {
-    if st != null && st.has != null && st.has("verify") { return st.get("verify") }
-    return 0
+
+  verify_builder_state() { return 0 }
+
+  _verify_enabled() {
+    return me.verify
   }
-  _trace_enabled(st) {
-    if st != null && st.has != null && st.has("trace") { return st.get("trace") }
-    return 0
+
+  _trace_enabled() {
+    return me.trace
   }
-  _push_inst(st, node) {
-    // central push with optional verify/trace
+
+  _push_inst(node) {
     local before = 0
-    local insts0 = me._cur_insts(st)
+    local insts0 = me._cur_insts()
     if insts0 != null && insts0.size != null { before = insts0.size() }
-    // actual push
     if insts0 == null || insts0.push == null { return }
     insts0.push(node)
-    if me._verify_enabled(st) {
+    if me._verify_enabled() == 1 {
       local after = 0
-      local insts1 = me._cur_insts(st)
+      local insts1 = me._cur_insts()
       if insts1 != null && insts1.size != null { after = insts1.size() }
       if after != before + 1 { print("[builder-verify] size mismatch before=" + before + " after=" + after + " op=" + node.get("op")) }
     }
-    if me._trace_enabled(st) { print("[builder-trace] push op=" + node.get("op")) }
+    if me._trace_enabled() == 1 { print("[builder-trace] push op=" + node.get("op")) }
   }
-  _push_inst_map(st, node) { return me._push_inst(st, node) }
 
-  // Public toggles
-  enable_trace(st, on) { if on == null { on = 1 } st.set("trace", on) return st }
-  enable_verify(st, on) { if on == null { on = 1 } st.set("verify", on) return st }
-  // Public Dual API
-  get_current_instructions(st) { return me._cur_insts(st) }
-  get_blocks_array(st) { if st.has("blocks") { return st.get("blocks") } return null }
-  get_function_structure(st) {
-    local blks = me.get_blocks_array(st)
-    return map({ name: st.get("fn_name"), params: new ArrayBox(), blocks: blks })
+  _push_inst_map(node) { return me._push_inst(node) }
+
+  enable_trace(on) {
+    if on == null { on = 1 }
+    me.trace = on
+    return me
   }
-  emit_to_string(st) { return me.to_string(st) }
 
-  // Rebuild JSON text from structured blocks (配列→文字列)
+  enable_verify(on) {
+    if on == null { on = 1 }
+    me.verify = on
+    return me
+  }
+
+  get_current_instructions() { return me._cur_insts() }
+
+  get_blocks_array() { return me.blocks }
+
+  get_function_structure() {
+    local blks = me.get_blocks_array()
+    return map({ name: me.fn_name, params: new ArrayBox(), blocks: blks })
+  }
+
+  emit_to_string() { return me.to_string() }
+
   _inst_json(node) { return JsonInstEncodeBox.encode(node) }
-  to_string_rebuild(st) {
-    // Serialize single-function module from blocks structure
-    local name = st.get("fn_name")
-    local blks = me.get_blocks_array(st)
+
+  to_string_rebuild() {
+    local name = me.fn_name
+    local blks = me.get_blocks_array()
     local blks_size_str = "null"
     if blks != null && blks.size != null { blks_size_str = me._int_to_str(blks.size()) }
     print("[DEBUG rebuild] fn_name=" + name + " blks.size()=" + blks_size_str)

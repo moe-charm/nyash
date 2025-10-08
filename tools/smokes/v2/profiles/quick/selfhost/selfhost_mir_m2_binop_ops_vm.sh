@@ -36,16 +36,16 @@ using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 static box Main {
   main() {
     // const 7 -> r1; const 3 -> r2; binop(OPKIND) -> r3; ret r3
-    local j = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, 7)
-      |> MirJsonBuilderMin.add_const(2, 3)
-      |> MirJsonBuilderMin.add_binop("OPKIND", 1, 2, 3)
-      |> MirJsonBuilderMin.add_ret(3)
-      |> MirJsonBuilderMin.end_all()
-      |> MirJsonBuilderMin.to_string()
+    local builder = new MirJsonBuilderMin()
+    builder.start_module()
+    builder.start_function("main")
+    builder.start_block(0)
+    builder.add_const(1, 7)
+    builder.add_const(2, 3)
+    builder.add_binop("OPKIND", 1, 2, 3)
+    builder.add_ret(3)
+    builder.end_all()
+    local j = builder.to_string()
     local v = MirVmMin._run_min(j)
     print(MiniVmEntryBox.int_to_str(v))
     return 0
