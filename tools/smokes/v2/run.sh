@@ -205,6 +205,12 @@ setup_environment() {
         source "$env_overlay"
     fi
 
+    # Fast-fail policy per profile (explicit defaults)
+    # quick/integration should run all tests and report summary
+    if [ "$PROFILE" = "quick" ] || [ "$PROFILE" = "integration" ]; then
+        export SMOKES_FAST_FAIL=0
+    fi
+
     # 作業ディレクトリ移動（Nyashプロジェクトルートへ）
     cd "$SCRIPT_DIR/../../.."
     log_info "Working directory: $(pwd)"

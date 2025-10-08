@@ -53,6 +53,16 @@ Backend policy
 - Extern(String) maps to host ABI/import layer.
 - ModuleFunction(String) resolves via function table (exact name; arity in suffix).
 
+Common mappings (LLVM harness convenience)
+- StringBox.substring/1 → Extern("nyash.string.substring_hii") with end=len(recv).
+- StringBox.substring/2 → Extern("nyash.string.substring_hii").
+- StringBox.indexOf/1   → Extern("nyash.string.indexOf_hh").
+- JSON.stringify/1      → Extern("nyash.json.stringify_h").
+
+Notes
+- These mappings are minimal shims to keep VM/LLVM parity in harness-first mode.
+- `nyash.json.stringify_h` is not a full JSON serializer; it delegates to `to_string_box()`.
+
 Retirement (ExternCall)
 - ExternCall instruction has been removed (no backward compatibility).
 - Builders/normalizers emit only MirCall. External calls use `Callee::Extern("iface.method")`.

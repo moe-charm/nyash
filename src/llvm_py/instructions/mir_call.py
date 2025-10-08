@@ -166,6 +166,44 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
     except Exception:
         pass
 
+    # Special-case: ModuleFunction shims → extern (StringBox.* minimal set)
+    # Support both static-call shape (recv,arg) and direct-global arity where applicable.
+    try:
+        from call_resolver import CallArgResolverBox, ArgResolveContext
+        context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+        arg_resolver = CallArgResolverBox(context)
+
+        def _declare(name: str, ret, args_types):
+            for f in owner.module.functions:
+                if f.name == name:
+                    return f
+            fnty = ir.FunctionType(ret, args_types)
+            return ir.Function(owner.module, fnty, name=name)
+
+        # StringBox.indexOf/1 → nyash.string.indexOf_hh(recv_h, needle_h)
+        if func_name == 'StringBox.indexOf/1' and len(args) >= 2:
+            i64 = ir.IntType(64)
+            recv = arg_resolver.resolve_i64_or_zero(args[0])
+            needle = arg_resolver.resolve_i64_or_zero(args[1])
+            callee = _declare('nyash.string.indexOf_hh', i64, [i64, i64])
+            result = builder.call(callee, [recv, needle], name='unified_StringBox_indexOf')
+            if dst_vid is not None:
+                vmap[dst_vid] = result
+            return
+        # StringBox.substring/2 → nyash.string.substring_hii(recv_h, start_i, end_i)
+        if func_name == 'StringBox.substring/2' and len(args) >= 3:
+            i64 = ir.IntType(64)
+            recv = arg_resolver.resolve_i64_or_zero(args[0])
+            a1 = arg_resolver.resolve_i64_or_zero(args[1])
+            a2 = arg_resolver.resolve_i64_or_zero(args[2])
+            callee = _declare('nyash.string.substring_hii', i64, [i64, i64, i64])
+            result = builder.call(callee, [recv, a1, a2], name='unified_StringBox_substring')
+            if dst_vid is not None:
+                vmap[dst_vid] = result
+            return
+    except Exception:
+        pass
+
     # Special mapping for built-in globals via a simple map
     # Normalize names: strip arity suffix ("/N") and take last dotted segment
     base_name = func_name
@@ -237,7 +275,22 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
         call_args.append(arg_val)
 
     # Make the call - TRUE UNIFIED
-    result = builder.call(func, call_args, name=f"unified_global_{func_name}")
+    # Special mapping: JSON.stringify/1 → nyash.json.stringify_h
+    base_global = func_name.split('/')[0]
+    if base_global == 'JSON.stringify':
+        i64 = ir.IntType(64)
+        target = None
+        for f in module.functions:
+            if f.name == 'nyash.json.stringify_h':
+                target = f
+                break
+        if target is None:
+            target = ir.Function(module, ir.FunctionType(i64, [i64]), name='nyash.json.stringify_h')
+        # Allow either direct arity1 or pass first arg only
+        arg0 = call_args[0] if len(call_args) >= 1 else ir.Constant(i64, 0)
+        result = builder.call(target, [arg0], name='global_json_stringify')
+    else:
+        result = builder.call(func, call_args, name=f"unified_global_{func_name}")
     # Optional: tail call hint (env or hints)
     try:
         hint_tail = os.getenv('NYASH_LLVM_TAILCALL', '0') in ('1','true','on') or \
@@ -359,6 +412,13 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
             e = arg_resolver.resolve_i64_or_zero(args[1])
             callee = _declare("nyash.string.substring_hii", i64, [i64, i64, i64])
             result = builder.call(callee, [recv_h, s, e], name="unified_substring")
+        elif len(args) == 1:
+            # substring(start) → substring(start, len(recv))
+            s = arg_resolver.resolve_i64_or_zero(args[0])
+            len_decl = _declare("nyash.string.len_h", i64, [i64])
+            n = builder.call(len_decl, [recv_h], name="str_len")
+            callee = _declare("nyash.string.substring_hii", i64, [i64, i64, i64])
+            result = builder.call(callee, [recv_h, s, n], name="unified_substring_1")
         else:
             result = recv_h
 
@@ -368,6 +428,15 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
             needle_h = _ensure_handle(needle)
             callee = _declare("nyash.string.lastIndexOf_hh", i64, [i64, i64])
             result = builder.call(callee, [recv_h, needle_h], name="unified_lastIndexOf")
+        else:
+            result = ir.Constant(i64, -1)
+
+    elif method == "indexOf":
+        if args:
+            needle = arg_resolver.resolve_i64_or_zero(args[0])
+            needle_h = _ensure_handle(needle)
+            callee = _declare("nyash.string.indexOf_hh", i64, [i64, i64])
+            result = builder.call(callee, [recv_h, needle_h], name="unified_indexOf")
         else:
             result = ir.Constant(i64, -1)
 
@@ -727,6 +796,26 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
 
         cmpv = builder.icmp_signed('==', a, b, name='op_eq_cmp')
         res = builder.zext(cmpv, i64, name='op_eq_zext_i1')
+        if dst_vid is not None:
+            vmap[dst_vid] = res
+        return
+
+    # Bridge: JSON.stringify/1 → nyash.json.stringify_h(any)
+    # Accept both fully-qualified and arity-marked names in Global lowering path,
+    # but here we catch Extern form if emitted as such.
+    if extern_name == "nyash.json.stringify_h":
+        # Just resolve args and call the extern; the symbol will be provided by kernel.
+        i64 = ir.IntType(64)
+        func = None
+        for f in module.functions:
+            if f.name == extern_name:
+                func = f
+                break
+        if not func:
+            func_type = ir.FunctionType(i64, [i64])
+            func = ir.Function(module, func_type, name=extern_name)
+        arg0 = arg_resolver.resolve_i64_or_zero(args[0]) if args else ir.Constant(i64, 0)
+        res = builder.call(func, [arg0], name='unified_json_stringify')
         if dst_vid is not None:
             vmap[dst_vid] = res
         return

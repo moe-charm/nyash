@@ -7,6 +7,7 @@ Profiles
 - `quick`: small, fast checks for core paths. Expected runtime: ~1–2 minutes.
 - `integration`: VM ↔ LLVM parity set. Expected runtime: ~5–10 minutes.
 - `full`: Aggregates quick + integration + plugins + suites/* (if present). Expected runtime: 15–30 minutes depending on env.
+  - `integration-core`: Core-only parity (no plugins). Includes short-circuit, type ops, equality, and basic compare.
 
 How to run
 - `tools/smokes/v2/run.sh --profile quick`

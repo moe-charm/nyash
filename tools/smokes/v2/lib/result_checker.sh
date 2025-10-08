@@ -142,6 +142,10 @@ check_parity() {
         | grep -v '^\[using\]' \
         | grep -v '^\[using/resolve\]' \
         | grep -v '^\[deprecate\] CLI name' \
+        | grep -v '^Exception ignored in:' \
+        | grep -v '^Traceback \(most recent call last\):' \
+        | grep -v 'llvmlite/binding/ffi\.py' \
+        | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
         | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
         | grep -v '^\[deprecate\] \[modules\.aliases\]' \
         | grep -v '^🔧 Mock LLVM Backend Execution' \

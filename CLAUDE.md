@@ -259,11 +259,87 @@ fn build_equals_method(_box_name: &str, fields: &Vec<String>) -> ASTNode {
 3. **影響範囲の限定**: @enum には影響なし、優先度 MEDIUM 適切
 4. **モジュール化の価値**: 重複削除で保守性向上
 
+#### ✅ **Part 4: Auto-generated equals() Bug Fix + LLVM Implementation** (3時間)
+**根本原因修正 + LLVM Backend op_eq 実装 + ExternCall完全撤退**
+
+**equals() Bug Fix**:
+- ✅ `src/macro/engine.rs:171-176` 修正
+  - `Bool(true)` → `Bool(false)` に変更（empty-field boxes）
+  - Identity equality: 同一インスタンスは `Arc::ptr_eq`、異なるインスタンスは false
+  - 無限再帰回避（ChatGPT Pro ガイダンス）
+
+**LLVM op_eq Inline実装**:
+- ✅ `src/llvm_py/instructions/externcall.py:56-94` (+40行)
+  - PHI-aware `resolve_i64()` ヘルパー関数
+  - Inline IR実装（icmp + zext）、C kernel依存なし
+  - ptr→i64変換、型変換、safepoint自動挿入
+
+**ExternCall→Call+Callee::Extern統一**:
+- ✅ `src/mir/builder/builder_calls/emit.rs:340-356`
+  - 統一パス: `CallTarget::Extern` → `MirInstruction::Call` with `Callee::Extern`
+  - Dotted name正規化（"nyrt.ops.op_eq"）
+  - Effects計算統合
+
+**テスト結果**:
+- ✅ VM: 19/19 equality tests PASS
+- ✅ LLVM: ビルド・リンク成功、実行正常（exit code 0）
+- ⚠️ 既知の問題: PHI値解決（別調査）
+
+**Commit**: `49c4d10d` - "refactor(mir): ExternCall完全撤退 + op_eq inline改良"
+- 42 files changed, +423/-286 lines
+- integration-core プロファイル追加、plugins テスト追加
+
+#### ✅ **Part 5: PHI Bug Investigation + Documentation** (1.5時間)
+**LLVM PHI値解決バグの発見・根本原因特定・ドキュメント化**
+
+**バグ発見**:
+```llvm
+bb4:
+  %"phi_21" = phi  i64 [42, %"bb3"]
+  %"phi_18" = phi  i64 [10, %"bb3"]
+  %"op_eq_cmp.1" = icmp eq i64 0, 0  ; ← Should be: icmp eq i64 %phi_21, %phi_18
+```
+
+**根本原因特定**:
+- ✅ Silent exception swallowing: `externcall.py:67` の `except Exception: pass`
+- ✅ `PhiDispatchPoint.resolve_i64()` が例外を投げるが隠蔽される
+- ✅ フォールバック: `vmap.get(vid)` → `None` (vmap scope mismatch)
+- ✅ 結果: `ir.Constant(i64, 0)` を返す → **BUG!**
+
+**Impact**:
+- Severity: MEDIUM（不正なIR生成、結果は偶然正しい）
+- 異なるテスト値では失敗する可能性
+- PHI + copy chain シナリオに影響
+
+**ドキュメント作成**:
+- ✅ `docs/development/issues/llvm-phi-resolution-bug.md`
+  - 3つの修正案（silent exception除去/global vmap fallback/debug logging）
+  - 再現テストケース提供
+  - 関連コード位置マップ
+- ✅ Task agent 総動員: vmap フロー追跡、完全な根本原因分析
+
+#### 📊 **Day 5 Complete 統計**
+- 実装時間: ~8時間（クリーンアップ0.5h + テスト2h + 調査1.5h + Fix 3h + PHI 1.5h）
+- Commit: 2回（equals fix込みcommit、ExternCall撤退commit）
+- ファイル変更: 50+ files
+- 純変更: +423/-286 lines
+- Issue ドキュメント: 2ファイル (+600行)
+- テスト結果: 19/19 VM PASS, LLVM build SUCCESS
+
+#### 🎯 **Day 5 達成事項**
+- ✅ **Auto-generated equals() bug RESOLVED**: Identity equality実装
+- ✅ **LLVM op_eq実装完了**: Inline IR、C kernel依存なし
+- ✅ **ExternCall migration完了**: -286行、統一Callee::Externパス
+- ✅ **PHI bugドキュメント化**: Phase 20修正への明確な道筋
+
 #### 📋 **次のステップ（Day 6 以降）**
 1. **@match マクロ設計**（Week 2 開始）
    - パターンマッチング構文設計
    - 分岐生成アルゴリズム
-2. **オプション: 比較演算子統一**
+2. **オプション: PHI Bug修正**（Phase 20）
+   - Silent exception除去
+   - vmap scope unification
+3. **オプション: 比較演算子統一**
    - operator_helpers.rs 作成（Priority 2）
    - op_lt/op_gt/op_le/op_ge 実装
 

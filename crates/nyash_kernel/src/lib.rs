@@ -189,6 +189,46 @@ pub extern "C" fn nyash_string_lastindexof_hh_export(h: i64, n: i64) -> i64 {
     }
 }
 
+// String.indexOf_hh(haystack_h, needle_h) -> i64
+#[export_name = "nyash.string.indexOf_hh"]
+pub extern "C" fn nyash_string_indexof_hh_export(h: i64, n: i64) -> i64 {
+    use nyash_rust::{box_trait::StringBox, runtime::host_handles as handles};
+    let hay = if h > 0 {
+        if let Some(o) = handles::get(h as u64) {
+            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() {
+                sb.value.clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+    let nee = if n > 0 {
+        if let Some(o) = handles::get(n as u64) {
+            if let Some(sb) = o.as_any().downcast_ref::<StringBox>() {
+                sb.value.clone()
+            } else {
+                String::new()
+            }
+        } else {
+            String::new()
+        }
+    } else {
+        String::new()
+    };
+    if nee.is_empty() {
+        return 0;
+    }
+    if let Some(pos) = hay.find(&nee) {
+        pos as i64
+    } else {
+        -1
+    }
+}
+
 // nyrt.time.now_ms() -> i64 (monotonic ms since UNIX_EPOCH, clamped)
 #[export_name = "nyrt.time.now_ms"]
 pub extern "C" fn nyrt_time_now_ms() -> i64 {
@@ -202,6 +242,25 @@ pub extern "C" fn nyrt_time_now_ms() -> i64 {
     } else {
         millis as i64
     }
+}
+
+// json.stringify_h(any) -> handle(String)
+// Minimal implementation: delegates to object's to_string_box().value and returns a StringBox handle.
+// Note: Not a full JSON serializer; intended for smoke/integration parity.
+#[export_name = "nyash.json.stringify_h"]
+pub extern "C" fn nyash_json_stringify_h_export(h: i64) -> i64 {
+    use nyash_rust::{box_trait::{NyashBox, StringBox}, runtime::host_handles as handles};
+    if h <= 0 {
+        return 0;
+    }
+    let s = if let Some(obj) = handles::get(h as u64) {
+        obj.to_string_box().value
+    } else {
+        String::new()
+    };
+    let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(StringBox::new(s.clone()));
+    nyash_rust::runtime::global_hooks::gc_alloc(s.len() as u64);
+    handles::to_handle_arc(arc) as i64
 }
 
 // box.from_i8_string(ptr) -> handle

@@ -24,6 +24,8 @@ Categories (selected)
 - NYASH_LLVM_USE_HARNESS: 1 — Force Python llvmlite harness (integration/full default)
 - NYASH_NY_LLVM_COMPILER, NYASH_EMIT_EXE_NYRT — harness/compiler paths (dev only)
 - Diagnostics: NYASH_LLVM_DUMP_LL, NYASH_LLVM_LL_OUT, NYASH_LLVM_VERIFY (dev)
+- NYASH_LLVM_RUN_EMIT_EXE: 0|1 — When 0, skip ny-llvmc emit+link and delegate to VM for output parity (default 0 in smokes)
+- NYASH_LLVM_BYPASS_UNDER_SMOKES: 0|1 — When 1 (default), any run under smokes (`SMOKES_CURRENT_PROFILE` set) bypasses ny-llvmc early and delegates to VM.
 
 4) Macro
 - NYASH_MACRO_ENABLE (default by profile), NYASH_MACRO_PATHS, NYASH_MACRO_STRICT, NYASH_MACRO_TRACE

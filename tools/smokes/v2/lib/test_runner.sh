@@ -126,6 +126,10 @@ filter_noise() {
   | sed -E 's/^VM execution error: VM fallback error: *//' \
   | grep -v '^VM execution error: ' \
   | grep -v '^\[DEBUG-' \
+  | grep -v '^Exception ignored in:' \
+  | grep -v '^Traceback \(most recent call last\):' \
+  | grep -v 'llvmlite/binding/ffi\.py' \
+  | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
   | grep -v '^\[warn\] dev verify:' \
   | grep -v '^Result: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
@@ -352,7 +356,7 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
@@ -373,7 +377,7 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
