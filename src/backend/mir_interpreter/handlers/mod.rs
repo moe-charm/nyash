@@ -50,9 +50,9 @@ impl MirInterpreter {
                 } else { unreachable!() }
             }
             MirInstruction::ExternCall { .. } => {
-                if let MirInstruction::ExternCall { dst, iface_name, method_name, args, .. } = inst {
-                    self.handle_extern_call(*dst, iface_name, method_name, args)?
-                } else { unreachable!() }
+                return Err(VMError::InvalidInstruction(
+                    "ExternCall is retired; use Call with callee=Extern(\"iface.method\")".into()
+                ));
             }
             MirInstruction::RefSet {
                 reference,

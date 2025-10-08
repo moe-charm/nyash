@@ -53,10 +53,10 @@ Backend policy
 - Extern(String) maps to host ABI/import layer.
 - ModuleFunction(String) resolves via function table (exact name; arity in suffix).
 
-Retirement plan (ExternCall)
-- Prefer emitting MirCall directly from builders and normalizers.
-- Legacy `ExternCall` remains for backward compatibility and some harness JSON outputs but is on a deprecation path.
-- When emitting external calls, use `Callee::Extern("iface.method")` via MirCall. Migrations should convert legacy ExternCall → MirCall early in the pipeline.
+Retirement (ExternCall)
+- ExternCall instruction has been removed (no backward compatibility).
+- Builders/normalizers emit only MirCall. External calls use `Callee::Extern("iface.method")`.
+- JSON schema: only unified `{"op":"mir_call", ...}` is produced.
 
 Diagnostics
 - Use `NYASH_OPT_DIAG=1` to report legacy instructions.

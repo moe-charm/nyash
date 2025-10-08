@@ -274,11 +274,11 @@ fn check_layer_boundary() {
 - 互換・実験フラグは TTL を決めて `docs/guides/env-variables.md` に理由と戻し方を書く。
 - 迷ったら CLI/プロファイル先行 → ENV は観測用/一時ガードに限定。
 
-### 8.2 Call 統一（ExternCall 撤退方針）
+### 8.2 Call 統一（ExternCall 撤退完了）
 
-- 方針: 呼び出しは MirCall に統一（Callee で Global/Extern/ModuleFunction/Method/Constructor/Closure/Value を表現）。
-- `ExternCall` は互換のため残るが、ビルダー/プリンタ/JSON は MirCall 優先。文書: `docs/reference/mir/call-unified.md`。
-- LLVM ハーネス/VM は Callee に従って解釈。新規機能は MirCall を直接使う。
+- 呼び出しは MirCall に統一（Callee で Global/Extern/ModuleFunction/Method/Constructor/Closure/Value を表現）。
+- `ExternCall` 命令は撤退済み（後方互換なし）。ビルダー/プリンタ/JSON は MirCall のみを出力する。
+- LLVM ハーネス/VM は Callee に従って解釈。`nyrt.ops.op_eq` 等の演算子は `Callee::Extern` で表現する。
 
 ---
 

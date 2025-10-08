@@ -616,18 +616,6 @@ pub extern "C" fn ny_check_safepoint() { /* no-op */
 pub extern "C" fn ny_safepoint(_live_count: i64, _live_values: *const i64) { /* no-op */
 }
 
-// --- Operators (minimal) ---
-// nyrt.ops.op_eq(a, b) -> i64 (0|1)
-// Minimal semantics suitable for harness/AOT linking:
-// - Treat values as i64 and return (a == b) ? 1 : 0
-// - This covers primitive integer equality and pointer/handle identity for boxes.
-// - Deep user-defined equals() is NOT invoked here (VM handles that path).
-// - String content equality should use nyash.string.eq_hh in builder paths when needed.
-#[export_name = "nyrt.ops.op_eq"]
-pub extern "C" fn nyrt_ops_op_eq(a: i64, b: i64) -> i64 {
-    if a == b { 1 } else { 0 }
-}
-
 // --- Process entry (driver) ---
 // Provide a minimal C entry point that calls ny_main() if present.
 #[cfg(not(test))]

@@ -64,4 +64,4 @@ Using/Entry defaults
 - NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN — default ON (unset = true). Aliases `HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN` etc. are mapped to NYASH_ prefixes automatically.
 
 Call Unification
-- Prefer MirCall (see docs/reference/mir/call-unified.md). Legacy ExternCall may still appear in transitional JSON/harness paths but should not be the primary emission target.
+- MirCall only (see docs/reference/mir/call-unified.md). Legacy ExternCall has been removed.

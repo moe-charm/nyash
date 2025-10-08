@@ -435,33 +435,18 @@ pub fn emit_mir_json_for_harness(
                                 insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             }
                         }
-                        I::ExternCall {
-                            dst,
-                            iface_name,
-                            method_name,
-                            args,
-                            ..
-                        } => {
-                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                            let func_name = if iface_name == "env.console" {
+                        I::ExternCall { dst, iface_name, method_name, args, effects } => {
+                            // Map legacy ExternCall → unified mir_call JSON (Callee::Extern)
+                            let name = if iface_name == "env.console" {
                                 format!("nyash.console.{}", method_name)
                             } else {
                                 format!("{}.{}", iface_name, method_name)
                             };
-                            let mut obj = json!({
-                                "op": "externcall",
-                                "func": func_name,
-                                "name": func_name,
-                                "args": args_a,
-                                "dst": dst.map(|d| d.as_u32()),
-                            });
-                            // Minimal dst_type hints for known externs
-                            if iface_name == "env.console" {
-                                // console.* returns i64 status (ignored by user code)
-                                if dst.is_some() {
-                                    obj["dst_type"] = json!("i64");
-                                }
-                            }
+                            let callee = Callee::Extern(name);
+                            let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
+                            // Best-effort effects strings (IO for externs by default)
+                            let eff: Vec<&str> = vec!["io"]; // externs: assume IO for harness purposes
+                            let obj = emit_unified_mir_call(dst.map(|d| d.as_u32()), &callee, &args_u32, &eff);
                             insts.push(obj);
                         }
                         I::BoxCall {
