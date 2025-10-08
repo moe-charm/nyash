@@ -7,7 +7,6 @@ import llvmlite.ir as ir
 from typing import Dict, Optional, Any
 from utils.values import resolve_i64_strict
 from dispatch import PhiDispatchPoint
-from .externcall import lower_externcall
 from trace import values as trace_values
 
 def lower_compare(

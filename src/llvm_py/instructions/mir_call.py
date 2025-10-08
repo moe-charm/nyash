@@ -121,11 +121,16 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
     """Lower global function call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
+    from call_resolver import CallArgResolverBox, ArgResolveContext
     import os
 
     # Insert automatic safepoint
     if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
         insert_automatic_safepoint(builder, module, "function_call")
+
+    # NEW: Use CallArgResolverBox (Box Theory: 箱化)
+    context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+    arg_resolver = CallArgResolverBox(context)
 
     # Phase 1: self-recursive direct call (env-gated)
     try:
@@ -146,19 +151,8 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
                     if target is None:
                         fty = ir.FunctionType(i64, [i64] * want_arity)
                         target = ir.Function(module, fty, name=expect_full)
-                    def _resolve_arg_i64(vid: int):
-                        if resolver and hasattr(resolver, 'resolve_i64'):
-                            try:
-                                return resolver.resolve_i64(vid, builder.block, owner.preds, owner.block_end_values, vmap, owner.bb_map)
-                            except Exception:
-                                pass
-                        return vmap.get(vid)
-                    call_args = []
-                    for a in args:
-                        av = _resolve_arg_i64(a)
-                        if av is None:
-                            av = ir.Constant(i64, 0)
-                        call_args.append(av)
+                    # NEW: Use arg_resolver instead of _resolve_arg_i64
+                    call_args = [arg_resolver.resolve_i64_or_zero(a) for a in args]
                     # Optional trace
                     if os.getenv('NYASH_MIR_OPTIMIZE_TRACE', '0') in ('1','true','on'):
                         try:
@@ -171,16 +165,6 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
                     return
     except Exception:
         pass
-
-    # Resolver helpers
-    def _resolve_arg(vid: int):
-        if resolver and hasattr(resolver, 'resolve_i64'):
-            try:
-                return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                          owner.block_end_values, vmap, owner.bb_map)
-            except:
-                pass
-        return vmap.get(vid)
 
     # Special mapping for built-in globals via a simple map
     # Normalize names: strip arity suffix ("/N") and take last dotted segment
@@ -237,12 +221,10 @@ def lower_global_call(builder, module, func_name, args, dst_vid, vmap, resolver,
         func_type = ir.FunctionType(ret_type, arg_types)
         func = ir.Function(module, func_type, name=func_name)
 
-    # Prepare arguments with type conversion
+    # Prepare arguments with type conversion (NEW: using arg_resolver)
     call_args = []
     for i, arg_id in enumerate(args):
-        arg_val = _resolve_arg(arg_id)
-        if arg_val is None:
-            arg_val = ir.Constant(ir.IntType(64), 0)
+        arg_val = arg_resolver.resolve_i64_or_zero(arg_id)
 
         # Type conversion for function signature matching
         if i < len(func.args):
@@ -286,11 +268,16 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
     """Lower box method call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
+    from call_resolver import CallArgResolverBox, ArgResolveContext
     import os
 
     i64 = ir.IntType(64)
     i8 = ir.IntType(8)
     i8p = i8.as_pointer()
+
+    # NEW: Use CallArgResolverBox (Box Theory: 箱化)
+    context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+    arg_resolver = CallArgResolverBox(context)
 
     # Optional fast-path: direct self-call for methods within the same static box
     # Guarded by env NYASH_LLVM_DIRECT_SELF=1 to allow staged rollout.
@@ -315,20 +302,9 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
                 if target is None:
                     fty = ir.FunctionType(i64, [i64] * want_arity)
                     target = ir.Function(module, fty, name=f"{expect_base}/{want_arity}")
-                def _resolve_arg(vid: int):
-                    if resolver and hasattr(resolver, 'resolve_i64'):
-                        try:
-                            return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                                      owner.block_end_values, vmap, owner.bb_map)
-                        except:
-                            pass
-                    return vmap.get(vid)
-                call_args = []
-                rv = _resolve_arg(receiver) or ir.Constant(i64, 0)
-                call_args.append(rv)
-                for a in args:
-                    av = _resolve_arg(a) or ir.Constant(i64, 0)
-                    call_args.append(av)
+                # NEW: Use arg_resolver
+                call_args = [arg_resolver.resolve_i64_or_zero(receiver)]
+                call_args.extend([arg_resolver.resolve_i64_or_zero(a) for a in args])
                 result = builder.call(target, call_args, name=f"direct_self_{method}")
                 if dst_vid is not None:
                     vmap[dst_vid] = result
@@ -362,27 +338,8 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
             return builder.zext(v, i64) if v.type.width < 64 else builder.trunc(v, i64)
         return v
 
-    # Resolve to i64 with robust fallback: vmap → coerce (ptr→handle, int→i64)
-    def _resolve_arg(vid: int):
-        if resolver and hasattr(resolver, 'resolve_i64'):
-            try:
-                return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                          owner.block_end_values, vmap, owner.bb_map)
-            except:
-                pass
-        val = vmap.get(vid)
-        if val is None:
-            return ir.Constant(i64, 0)
-        # Pointer → handle via boxer
-        if hasattr(val, 'type') and val.type.is_pointer:
-            callee = _declare("nyash.box.from_i8_string", i64, [i8p])
-            return builder.call(callee, [val], name="unified_ptr2h")
-        # Int → i64 width normalize
-        if hasattr(val, 'type') and isinstance(val.type, ir.IntType) and val.type.width != 64:
-            return builder.zext(val, i64) if val.type.width < 64 else builder.trunc(val, i64)
-        return val
-
-    recv_val = _resolve_arg(receiver)
+    # Use CallArgResolverBox for unified argument resolution
+    recv_val = arg_resolver.resolve_i64_or_zero(receiver)
     if recv_val is None:
         recv_val = ir.Constant(i64, 0)
     recv_h = _ensure_handle(recv_val)
@@ -398,8 +355,8 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "substring":
         if len(args) >= 2:
-            s = _resolve_arg(args[0]) or ir.Constant(i64, 0)
-            e = _resolve_arg(args[1]) or ir.Constant(i64, 0)
+            s = arg_resolver.resolve_i64_or_zero(args[0])
+            e = arg_resolver.resolve_i64_or_zero(args[1])
             callee = _declare("nyash.string.substring_hii", i64, [i64, i64, i64])
             result = builder.call(callee, [recv_h, s, e], name="unified_substring")
         else:
@@ -407,7 +364,7 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "lastIndexOf":
         if args:
-            needle = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            needle = arg_resolver.resolve_i64_or_zero(args[0])
             needle_h = _ensure_handle(needle)
             callee = _declare("nyash.string.lastIndexOf_hh", i64, [i64, i64])
             result = builder.call(callee, [recv_h, needle_h], name="unified_lastIndexOf")
@@ -416,7 +373,7 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "get":
         if args:
-            k = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            k = arg_resolver.resolve_i64_or_zero(args[0])
             callee = _declare("nyash.map.get_hh", i64, [i64, i64])
             result = builder.call(callee, [recv_h, k], name="unified_map_get")
         else:
@@ -424,7 +381,7 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "push":
         if args:
-            v = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            v = arg_resolver.resolve_i64_or_zero(args[0])
             callee = _declare("nyash.array.push_h", i64, [i64, i64])
             result = builder.call(callee, [recv_h, v], name="unified_array_push")
         else:
@@ -432,8 +389,8 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "set":
         if len(args) >= 2:
-            k = _resolve_arg(args[0]) or ir.Constant(i64, 0)
-            v = _resolve_arg(args[1]) or ir.Constant(i64, 0)
+            k = arg_resolver.resolve_i64_or_zero(args[0])
+            v = arg_resolver.resolve_i64_or_zero(args[1])
             callee = _declare("nyash.map.set_hh", i64, [i64, i64, i64])
             result = builder.call(callee, [recv_h, k, v], name="unified_map_set")
         else:
@@ -441,7 +398,7 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "has":
         if args:
-            k = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            k = arg_resolver.resolve_i64_or_zero(args[0])
             callee = _declare("nyash.map.has_hh", i64, [i64, i64])
             result = builder.call(callee, [recv_h, k], name="unified_map_has")
         else:
@@ -449,7 +406,7 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
 
     elif method == "log":
         if args:
-            arg0 = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            arg0 = arg_resolver.resolve_i64_or_zero(args[0])
             if isinstance(arg0.type, ir.IntType) and arg0.type.width == 64:
                 bridge = _declare("nyash.string.to_i8p_h", i8p, [i64])
                 p = builder.call(bridge, [arg0], name="unified_str_h2p")
@@ -470,8 +427,8 @@ def lower_method_call(builder, module, box_name, method, receiver, args, dst_vid
         mptr = builder.gep(method_global, [ir.Constant(ir.IntType(32), 0), ir.Constant(ir.IntType(32), 0)])
 
         argc = ir.Constant(i64, len(args))
-        a1 = _resolve_arg(args[0]) if args else ir.Constant(i64, 0)
-        a2 = _resolve_arg(args[1]) if len(args) > 1 else ir.Constant(i64, 0)
+        a1 = arg_resolver.resolve_i64_or_zero(args[0]) if args else ir.Constant(i64, 0)
+        a2 = arg_resolver.resolve_i64_or_zero(args[1]) if len(args) > 1 else ir.Constant(i64, 0)
 
         callee = _declare("nyash.plugin.invoke_by_name_i64", i64, [i64, i8p, i64, i64, i64])
         result = builder.call(callee, [recv_h, mptr, argc, a1, a2], name="unified_plugin_invoke")
@@ -506,6 +463,7 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
     """Lower box constructor - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
+    from call_resolver import CallArgResolverBox, ArgResolveContext
     import os
 
     # Insert automatic safepoint for constructor
@@ -516,15 +474,9 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
     i8 = ir.IntType(8)
     i8p = i8.as_pointer()
 
-    # Helper to resolve arguments
-    def _resolve_arg(vid: int):
-        if resolver and hasattr(resolver, 'resolve_i64'):
-            try:
-                return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                          owner.block_end_values, vmap, owner.bb_map)
-            except:
-                pass
-        return vmap.get(vid)
+    # Use CallArgResolverBox for unified argument resolution
+    context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+    arg_resolver = CallArgResolverBox(context)
 
     # Helper to declare function
     def _declare(name: str, ret, args_types):
@@ -538,7 +490,7 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
     if box_type == "StringBox":
         if args and len(args) > 0:
             # String constructor with initial value
-            arg0 = _resolve_arg(args[0])
+            arg0 = arg_resolver.resolve_i64_or_zero(args[0])
             if arg0 and isinstance(arg0.type, ir.IntType) and arg0.type.width == 64:
                 # Already a handle, return as-is
                 result = arg0
@@ -565,7 +517,7 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
 
     elif box_type == "IntegerBox":
         if args and len(args) > 0:
-            arg0 = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            arg0 = arg_resolver.resolve_i64_or_zero(args[0])
             callee = _declare("nyash.integer.new", i64, [i64])
             result = builder.call(callee, [arg0], name="unified_int_new")
         else:
@@ -574,7 +526,7 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
 
     elif box_type == "BoolBox":
         if args and len(args) > 0:
-            arg0 = _resolve_arg(args[0]) or ir.Constant(i64, 0)
+            arg0 = arg_resolver.resolve_i64_or_zero(args[0])
             callee = _declare("nyash.bool.new", i64, [i64])
             result = builder.call(callee, [arg0], name="unified_bool_new")
         else:
@@ -585,7 +537,7 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
         # Generic box constructor or plugin box
         constructor_name = f"nyash.{box_type.lower()}.new"
         if args:
-            arg_vals = [_resolve_arg(arg_id) or ir.Constant(i64, 0) for arg_id in args]
+            arg_vals = [arg_resolver.resolve_i64_or_zero(arg_id) for arg_id in args]
             arg_types = [i64] * len(arg_vals)
             callee = _declare(constructor_name, i64, arg_types)
             result = builder.call(callee, arg_vals, name=f"unified_{box_type.lower()}_new")
@@ -601,20 +553,15 @@ def lower_constructor_call(builder, module, box_type, args, dst_vid, vmap, resol
 def lower_closure_creation(builder, module, params, captures, me_capture, dst_vid, vmap, resolver, owner):
     """Lower closure creation - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
+    from call_resolver import CallArgResolverBox, ArgResolveContext
 
     i64 = ir.IntType(64)
     i8 = ir.IntType(8)
     i8p = i8.as_pointer()
 
-    # Helper to resolve arguments
-    def _resolve_arg(vid: int):
-        if resolver and hasattr(resolver, 'resolve_i64'):
-            try:
-                return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                          owner.block_end_values, vmap, owner.bb_map)
-            except:
-                pass
-        return vmap.get(vid)
+    # Use CallArgResolverBox for unified argument resolution
+    context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+    arg_resolver = CallArgResolverBox(context)
 
     # Helper to declare function
     def _declare(name: str, ret, args_types):
@@ -633,16 +580,16 @@ def lower_closure_creation(builder, module, params, captures, me_capture, dst_vi
     if captures:
         for capture in captures:
             if isinstance(capture, dict) and 'id' in capture:
-                cap_val = _resolve_arg(capture['id']) or ir.Constant(i64, 0)
+                cap_val = arg_resolver.resolve_i64_or_zero(capture['id'])
             elif isinstance(capture, int):
-                cap_val = _resolve_arg(capture) or ir.Constant(i64, 0)
+                cap_val = arg_resolver.resolve_i64_or_zero(capture)
             else:
                 cap_val = ir.Constant(i64, 0)
             capture_vals.append(cap_val)
 
     # Add me_capture if present
     if me_capture is not None:
-        me_val = _resolve_arg(me_capture) if isinstance(me_capture, int) else ir.Constant(i64, 0)
+        me_val = arg_resolver.resolve_i64_or_zero(me_capture) if isinstance(me_capture, int) else ir.Constant(i64, 0)
         capture_vals.append(me_val)
         num_captures += 1
 
@@ -666,6 +613,7 @@ def lower_value_call(builder, module, func_vid, args, dst_vid, vmap, resolver, o
     """Lower dynamic function value call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
+    from call_resolver import CallArgResolverBox, ArgResolveContext
     import os
 
     i64 = ir.IntType(64)
@@ -676,15 +624,9 @@ def lower_value_call(builder, module, func_vid, args, dst_vid, vmap, resolver, o
     if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
         insert_automatic_safepoint(builder, module, 'value_call')
 
-    # Helper to resolve arguments
-    def _resolve_arg(vid: int):
-        if resolver and hasattr(resolver, 'resolve_i64'):
-            try:
-                return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                          owner.block_end_values, vmap, owner.bb_map)
-            except:
-                pass
-        return vmap.get(vid)
+    # Use CallArgResolverBox for unified argument resolution
+    context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+    arg_resolver = CallArgResolverBox(context)
 
     # Helper to declare function
     def _declare(name: str, ret, args_types):
@@ -695,14 +637,12 @@ def lower_value_call(builder, module, func_vid, args, dst_vid, vmap, resolver, o
         return ir.Function(module, fnty, name=name)
 
     # Resolve the function value (handle to function or closure)
-    func_val = _resolve_arg(func_vid)
-    if func_val is None:
-        func_val = ir.Constant(i64, 0)
+    func_val = arg_resolver.resolve_i64_or_zero(func_vid)
 
     # Resolve arguments
     arg_vals = []
     for arg_id in args:
-        arg_val = _resolve_arg(arg_id) or ir.Constant(i64, 0)
+        arg_val = arg_resolver.resolve_i64_or_zero(arg_id)
         arg_vals.append(arg_val)
 
     # Dynamic dispatch based on function value type
@@ -760,6 +700,7 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
     """Lower external C ABI call - TRUE UNIFIED IMPLEMENTATION"""
     from llvmlite import ir
     from instructions.safepoint import insert_automatic_safepoint
+    from call_resolver import CallArgResolverBox, TypeCoercerBox, ArgResolveContext
     import os
 
     i64 = ir.IntType(64)
@@ -770,36 +711,20 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
     if allow_safepoint and os.environ.get('NYASH_LLVM_AUTO_SAFEPOINT', '1') == '1':
         insert_automatic_safepoint(builder, module, "externcall")
 
-    # Helper to resolve arguments
-    def _resolve_arg(vid: int):
-        if resolver and hasattr(resolver, 'resolve_i64'):
-            try:
-                return resolver.resolve_i64(vid, builder.block, owner.preds,
-                                          owner.block_end_values, vmap, owner.bb_map)
-            except:
-                pass
-        return vmap.get(vid)
+    # NEW: Use CallArgResolverBox (Box Theory: 箱化)
+    # This replaces 47 lines of duplicated _resolve_arg() with 4 lines
+    context = ArgResolveContext(builder=builder, vmap=vmap, resolver=resolver, owner=owner, module=module)
+    arg_resolver = CallArgResolverBox(context)
+    type_coercer = TypeCoercerBox(builder, module)
 
     # Special-case: inline nyrt.ops.op_eq to avoid requiring a kernel symbol.
     # Semantics: compare as i64 values (handle identity for boxes), return i64 0|1.
     # Note: deep user-defined equals() is VM-only; AOT/harness keeps minimal parity.
     if extern_name == "nyrt.ops.op_eq":
-        i64 = ir.IntType(64)
-        def _to_i64(val):
-            if val is None:
-                return ir.Constant(i64, 0)
-            # pointer -> i64
-            if getattr(val.type, 'is_pointer', False):
-                return builder.ptrtoint(val, i64, name='op_eq_p2i')
-            # widen/trunc integers to i64
-            if isinstance(val.type, ir.IntType) and val.type.width != 64:
-                if val.type.width < 64:
-                    return builder.zext(val, i64, name='op_eq_zext')
-                else:
-                    return builder.trunc(val, i64, name='op_eq_trunc')
-            return val
-        a = _to_i64(_resolve_arg(args[0]) if args else None)
-        b = _to_i64(_resolve_arg(args[1]) if len(args) > 1 else None)
+        # Resolve and coerce arguments (NEW: unified via TypeCoercerBox)
+        a = type_coercer.to_i64_handle(arg_resolver.resolve_i64_or_zero(args[0])) if args else ir.Constant(i64, 0)
+        b = type_coercer.to_i64_handle(arg_resolver.resolve_i64_or_zero(args[1])) if len(args) > 1 else ir.Constant(i64, 0)
+
         cmpv = builder.icmp_signed('==', a, b, name='op_eq_cmp')
         res = builder.zext(cmpv, i64, name='op_eq_zext_i1')
         if dst_vid is not None:

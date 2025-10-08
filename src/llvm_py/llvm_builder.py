@@ -26,11 +26,7 @@ from instructions.controlflow.branch import lower_branch
 from instructions.ret import lower_return
 from instructions.copy import lower_copy
 # PHI are deferred; finalize_phis wires incoming edges after snapshots
-from instructions.call import lower_call
-from instructions.boxcall import lower_boxcall
-from instructions.externcall import lower_externcall
 from instructions.typeop import lower_typeop, lower_convert
-from instructions.newbox import lower_newbox
 from instructions.safepoint import lower_safepoint, insert_automatic_safepoint
 from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform

@@ -15,11 +15,7 @@ from instructions.controlflow.jump import lower_jump
 from instructions.controlflow.branch import lower_branch
 from instructions.ret import lower_return
 from instructions.copy import lower_copy
-from instructions.call import lower_call
-from instructions.boxcall import lower_boxcall
-from instructions.externcall import lower_externcall
 from instructions.typeop import lower_typeop
-from instructions.newbox import lower_newbox
 from instructions.safepoint import lower_safepoint
 from instructions.barrier import lower_barrier
 from instructions.loopform import lower_while_loopform
@@ -115,53 +111,10 @@ def lower_instruction(owner, builder: ir.IRBuilder, inst: Dict[str, Any], func: 
                    owner.preds, owner.block_end_values, owner.bb_map, ctx=getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "mir_call":
-        # Unified MIR Call handling
+        # Unified MIR Call handling (Phase 19: call_resolver/ Box Theory)
         mir_call = inst.get("mir_call", {})
         dst = inst.get("dst")
         _call_lower(lower_mir_call, owner, builder, mir_call, dst, vmap_ctx, owner.resolver, inst_ctx=inst_ctx)
-
-    elif op == "call":
-        func_name = inst.get("func")
-        args = inst.get("args", [])
-        dst = inst.get("dst")
-        _call_lower(lower_call, builder, owner.module, func_name, args, dst, vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
-
-    elif op == "boxcall":
-        box_vid = inst.get("box")
-        method = inst.get("method")
-        args = inst.get("args", [])
-        dst = inst.get("dst")
-        _call_lower(lower_boxcall, builder, owner.module, box_vid, method, args, dst,
-                      vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
-        # Optional: honor explicit dst_type for tagging (string handle)
-        try:
-            dst_type = inst.get("dst_type")
-            if dst is not None and isinstance(dst_type, dict):
-                if dst_type.get("kind") == "handle" and dst_type.get("box_type") == "StringBox":
-                    if hasattr(owner.resolver, 'mark_string'):
-                        owner.resolver.mark_string(int(dst))
-            # Track last substring for optional esc_json fallback
-            try:
-                if isinstance(method, str) and method == 'substring' and isinstance(dst, int):
-                    owner._last_substring_vid = int(dst)
-            except Exception:
-                pass
-        except Exception:
-            pass
-
-    elif op == "externcall":
-        func_name = inst.get("func")
-        args = inst.get("args", [])
-        dst = inst.get("dst")
-        _call_lower(lower_externcall, builder, owner.module, func_name, args, dst,
-                         vmap_ctx, owner.resolver, owner.preds, owner.block_end_values, owner.bb_map, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
-
-    elif op == "newbox":
-        box_type = inst.get("type")
-        args = inst.get("args", [])
-        dst = inst.get("dst")
-        _call_lower(lower_newbox, builder, owner.module, box_type, args, dst,
-                     vmap_ctx, owner.resolver, getattr(owner, 'ctx', None), inst_ctx=inst_ctx)
 
     elif op == "typeop":
         operation = inst.get("operation")
