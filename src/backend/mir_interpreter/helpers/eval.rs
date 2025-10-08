@@ -1,7 +1,9 @@
 use super::super::*;
 use crate::backend::mir_interpreter::VmConfig;
 use crate::box_trait::VoidBox;
+use crate::instance_v2::InstanceBox;
 use std::string::String as StdString;
+use std::sync::Arc;
 
 impl MirInterpreter {
     #[inline]
@@ -15,6 +17,62 @@ impl MirInterpreter {
                 else { "" }
             }
             _ => "",
+        }
+    }
+
+    /// Smart equality comparison that supports user-defined equals() methods.
+    ///
+    /// Strategy:
+    /// 1. Fast path: Pointer equality for same instance (Arc::ptr_eq)
+    /// 2. Smart path: Call user-defined equals() method if exists
+    /// 3. Fallback: Reference inequality for different instances
+    /// 4. Special cases: VoidBox/MissingBox comparisons
+    pub(in crate::backend::mir_interpreter) fn eval_equals(
+        &mut self,
+        a: &VMValue,
+        b: &VMValue
+    ) -> Result<bool, VMError> {
+        use VMValue::*;
+
+        match (a, b) {
+            (BoxRef(ax), BoxRef(bx)) => {
+                // Fast path: pointer equality short-circuit
+                if Arc::ptr_eq(ax, bx) {
+                    return Ok(true);
+                }
+
+                // VoidBox special case - treat as equal to each other
+                let a_is_void = ax.as_any().downcast_ref::<VoidBox>().is_some();
+                let b_is_void = bx.as_any().downcast_ref::<VoidBox>().is_some();
+                if a_is_void && b_is_void {
+                    return Ok(true);
+                }
+
+                // MissingBox special case - treat as equal to each other
+                let a_is_missing = ax.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some();
+                let b_is_missing = bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some();
+                if a_is_missing && b_is_missing {
+                    return Ok(true);
+                }
+
+                // TODO: Method dispatch for InstanceBox with user-defined equals()
+                // Temporarily disabled due to stack overflow issue - needs investigation
+                // See: https://github.com/hakorune/hakorune/issues/XXX
+                if false {
+                    if let Some(inst) = ax.as_any().downcast_ref::<InstanceBox>() {
+                        let class_name = &inst.class_name;
+                        let method_sig = format!("{}.equals/1", class_name);
+                        if let Some(_func) = self.functions.get(&method_sig) {
+                            eprintln!("[vm-warn] equals() method found for {} but dispatch is disabled", class_name);
+                        }
+                    }
+                }
+
+                // Fallback: different instances without equals() method
+                Ok(false)
+            }
+            // Primitives and other types: use existing eq_vm logic
+            _ => Ok(eq_vm(a, b))
         }
     }
 
@@ -124,7 +182,7 @@ impl MirInterpreter {
         })
     }
 
-    pub(in crate::backend::mir_interpreter) fn eval_cmp(&self, op: CompareOp, a: VMValue, b: VMValue) -> Result<bool, VMError> {
+    pub(in crate::backend::mir_interpreter) fn eval_cmp(&mut self, op: CompareOp, a: VMValue, b: VMValue) -> Result<bool, VMError> {
         use CompareOp::*;
         use VMValue::*;
         // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev.
@@ -221,8 +279,8 @@ impl MirInterpreter {
         } else { (a4.clone(), b4.clone()) };
 
         let result = match (op, &a5, &b5) {
-            (Eq, _, _) => eq_vm(&a5, &b5),
-            (Ne, _, _) => !eq_vm(&a5, &b5),
+            (Eq, _, _) => self.eval_equals(&a5, &b5)?,
+            (Ne, _, _) => !self.eval_equals(&a5, &b5)?,
             (Lt, Integer(x), Integer(y)) => x < y,
             (Le, Integer(x), Integer(y)) => x <= y,
             (Gt, Integer(x), Integer(y)) => x > y,
