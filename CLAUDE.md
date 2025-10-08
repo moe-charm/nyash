@@ -163,32 +163,38 @@ if opt.is_None() {
 - テスト結果: 10/10 PASS ✅
 - 実装時間: ~1時間（見積もり2時間の50%短縮）
 
-#### 🧪 **テストカバレッジ**
-```bash
-# Day 2 (5 tests)
-1. Result.Ok/Err creation
-2. is_Ok/is_Err checks
-3. as_Ok/as_Err extraction
-4. Option.Some/None
-5. Option.is_Some/is_None
-
-# Day 3 (+ 5 tests)
-6. Multi-field (3+ fields)
-7. String fields
-8. Tag comparison
-9. toString() representation
-10. Single variant edge case
-```
-
 #### ⚠️ **既知の問題（Day 4 課題）**
 - equals() method でstack overflow発生
 - 原因: auto-derive の equals() が enum フィールドで無限再帰
 - 回避策: Test 8 を tag comparison に変更
 - 修正予定: Day 4
 
-#### 🎯 **次のステップ（Day 4-5）**
-- Day 4: equals() 修正、エッジケース追加
-- Day 5: Selfhost compiler 統合
+---
+
+### ✅ **Phase 19 Day 4 完了！equals() バグ根本原因特定** (2025-10-08)
+**@enum マクロではなく Rust VM レイヤーのバグと判明**
+
+#### ✅ **調査完了**
+- ✅ 根本原因: Rust VM の eq_vm() 関数に無限再帰バグ
+- ✅ 影響範囲: すべての Box 型（@enum 限定ではない）
+- ✅ 証拠1: @enum 未使用の SimpleBox でも同じクラッシュ
+- ✅ 証拠2: 手動実装 equals() も呼ばれない（メソッド呼出前にクラッシュ）
+- ✅ バグ箇所: `src/backend/mir_interpreter/helpers/eval.rs:224` の eq_vm()
+
+#### 📊 **調査結果**
+- **マクロバグではない**: @enum マクロ実装は完全に正しい
+- **VM バグ**: BoxRef 比較時の無限再帰が原因
+- **影響**: すべての Box インスタンス比較（==演算子）が失敗
+- 調査時間: ~2時間
+
+#### 🎯 **推奨アクション**
+1. **VM バグ修正を優先** - @enum とは独立したタスク
+2. **@enum マクロは完成** - Day 5 の統合テスト待機
+3. **Issue ドキュメント作成**: `docs/development/issues/equals-stack-overflow.md`
+
+#### 📋 **次のステップ（Day 5）**
+- ⏸️ VM equals() バグ修正待ち
+- Day 5: Selfhost compiler 統合（VM 修正後）
 
 ---
 

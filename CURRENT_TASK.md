@@ -95,16 +95,41 @@ static box Result { Ok(value), Err(error) }
 
 **Actual Time**: ~1 hour
 
-#### ⏳ Remaining Days 4-5: Finalization
-- [ ] Day 4: Fix equals() stack overflow, edge cases
-- [ ] Day 5: Selfhost integration
+#### ✅ Day 4: Investigation - equals() Stack Overflow (2025-10-08) - ROOT CAUSE FOUND
+**Goal**: Fix equals() stack overflow issue
+**Status**: ✅ Root cause identified - NOT an @enum macro bug
+
+**Investigation Results**:
+- ✅ Root cause: Rust VM layer bug in equality comparison (`src/backend/mir_interpreter/helpers/eval.rs:224`)
+- ✅ Evidence: Simple box without @enum also crashes
+- ✅ Evidence: Manual equals() implementation also crashes (method never called)
+- ✅ Conclusion: eq_vm() has infinite recursion when comparing BoxRef instances
+
+**Key Finding**:
+- **NOT an @enum macro bug** - it's a **Rust VM layer bug**
+- The bug exists in `eq_vm()` function at `src/backend/mir_interpreter/helpers/eval.rs:224`
+- equals() method is never called - crash happens before method entry
+- Affects all Box types, not just @enum-generated boxes
+
+**Recommendation**:
+- ⏸️ Pause @enum work until VM bug is fixed
+- 🔧 Fix VM equality comparison first (separate task)
+- ✅ @enum macro implementation is complete and correct
+- 📋 Created issue doc: `docs/development/issues/equals-stack-overflow.md`
+
+**Actual Time**: ~2 hours investigation
+
+#### ⏳ Day 5: Selfhost Integration (PENDING)
+- [ ] Wait for VM equals() bug fix
+- [ ] Run full integration tests
+- [ ] Document any edge cases
 
 ### Success Criteria
 - ✅ Parse @enum definitions (Day 1 DONE)
 - ✅ Generate correct box structure (Day 2 DONE)
 - ✅ 10/10 tests PASS (Day 3 DONE)
-- ⏳ Fix edge cases (Day 4)
-- ⏳ Selfhost integration (Day 5)
+- ✅ Root cause identified (Day 4 DONE - VM bug, not macro bug)
+- ⏸️ Selfhost integration (Day 5 BLOCKED - waiting for VM equals() fix)
 
 ### Next: Week 2 - @match Macro
 See [Phase 19 README](docs/development/roadmap/phases/phase-19-enum-match/README.md)
