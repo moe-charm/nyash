@@ -52,8 +52,16 @@ static box BoxCallHandlerBox {
       result_val = receiver.to_lower()
     } else if method_sig == "size/0" {
       result_val = receiver.size()
+    } else if method_sig == "length/0" {
+      result_val = receiver.size()
     } else if method_sig == "isEmpty/0" {
       result_val = receiver.isEmpty()
+    } else if method_sig == "substring/2" {
+      result_val = receiver.substring(args_array.get(0), args_array.get(1))
+    } else if method_sig == "charAt/1" {
+      result_val = receiver.charAt(args_array.get(0))
+    } else if method_sig == "indexOf/1" {
+      result_val = receiver.indexOf(args_array.get(0))
     }
 
     // ArrayBox methods
@@ -63,6 +71,12 @@ static box BoxCallHandlerBox {
       result_val = receiver.get(args_array.get(0))
     } else if method_sig == "set/2" {
       result_val = receiver.set(args_array.get(0), args_array.get(1))
+    } else if method_sig == "length/0" {
+      result_val = receiver.size()
+    } else if method_sig == "size/0" {
+      result_val = receiver.size()
+    } else if method_sig == "isEmpty/0" {
+      result_val = receiver.isEmpty()
     }
 
     // MapBox methods
@@ -72,9 +86,22 @@ static box BoxCallHandlerBox {
       result_val = receiver.set(args_array.get(0), args_array.get(1))
     } else if method_sig == "has/1" {
       result_val = receiver.has(args_array.get(0))
+    } else if method_sig == "size/0" {
+      result_val = receiver.size()
+    } else if method_sig == "isEmpty/0" {
+      result_val = receiver.isEmpty()
+    } else if method_sig == "delete/1" {
+      result_val = receiver.delete(args_array.get(0))
+    } else if method_sig == "keys/0" {
+      result_val = receiver.keys()
+    } else if method_sig == "values/0" {
+      result_val = receiver.values()
     }
 
     // Fallback: unknown method
+    // Note: Method resolution depends on Rust VM's plugin switching mechanism
+    // (NYASH_VM_DISABLE_STRING_HANDLERS, NYASH_USE_PLUGIN_BUILTINS, etc.)
+    // Future: Add Selfhost VM's own plugin resolution here
     else {
       return Result.Err("boxcall: unknown method: " + method_sig)
     }

@@ -1,5 +1,24 @@
 use super::*;
 use crate::box_trait::NyashBox;
+use std::sync::OnceLock;
+
+#[inline]
+fn array_handlers_disable() -> bool {
+    matches!(std::env::var("NYASH_VM_DISABLE_ARRAY_HANDLERS").ok().as_deref(), Some("1"|"true"|"on"))
+}
+
+#[inline]
+fn array_handlers_deprecate() -> bool {
+    matches!(std::env::var("NYASH_VM_ARRAY_HANDLERS_DEPRECATE").ok().as_deref(), Some("1"|"true"|"on"))
+}
+
+fn warn_once() {
+    static WARNED: OnceLock<bool> = OnceLock::new();
+    if *WARNED.get_or_init(|| false) == false {
+        eprintln!("[deprecate] VM array handlers are deprecated and will be removed (prefer plugin/User route)");
+        WARNED.set(true).ok();
+    }
+}
 
 pub(super) fn try_handle_array_box(
     this: &mut MirInterpreter,
@@ -17,6 +36,8 @@ pub(super) fn try_handle_array_box(
             .as_any()
             .downcast_ref::<crate::boxes::array::ArrayBox>()
         {
+            if array_handlers_disable() { return Ok(false); }
+            if array_handlers_deprecate() { warn_once(); }
             match method {
                 "birth" => {
                     // No-op constructor init

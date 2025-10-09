@@ -12,6 +12,9 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Option<Result<VMValue, VMError>> {
+        if matches!(std::env::var("NYASH_VM_DISABLE_BOXCALL_ARRAY_FASTPATH").ok().as_deref(), Some("1"|"true"|"on")) {
+            return None;
+        }
         match method {
             "birth" => Some(Ok(VMValue::Void)),
             "push" => {
@@ -57,6 +60,9 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Option<Result<VMValue, VMError>> {
+        if matches!(std::env::var("NYASH_VM_DISABLE_BOXCALL_MAP_FASTPATH").ok().as_deref(), Some("1"|"true"|"on")) {
+            return None;
+        }
         match method {
             "birth" => Some(Ok(VMValue::Void)),
             "set" => {
@@ -118,6 +124,9 @@ impl MirInterpreter {
         method: &str,
         args: &[ValueId],
     ) -> Option<Result<VMValue, VMError>> {
+        if matches!(std::env::var("NYASH_VM_DISABLE_BOXCALL_STRING_FASTPATH").ok().as_deref(), Some("1"|"true"|"on")) {
+            return None;
+        }
         match method {
             "birth" => Some(Ok(VMValue::Void)),
             "upper" => {

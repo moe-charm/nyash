@@ -48,6 +48,13 @@ Plugins
   - force: plugin-only execution（互換: NYASH_PLUGIN_ONLY=1）
   備考: Loader は常に同梱（オプトインで有効化）。解決順は User > Plugin > Kernel。
 
+VM convenience handlers (deprecation/disable gates; default OFF)
+- NYASH_VM_STRING_HANDLERS_DEPRECATE=1: warn once when String VM handlers are used（撤退予告）
+- NYASH_VM_DISABLE_STRING_HANDLERS=1: disable String VM handlers（Plugin/User 経路のみ）
+- NYASH_VM_ARRAY_HANDLERS_DEPRECATE=1 / NYASH_VM_DISABLE_ARRAY_HANDLERS=1: Array VM handlers 同様
+- NYASH_VM_MAP_HANDLERS_DEPRECATE=1 / NYASH_VM_DISABLE_MAP_HANDLERS=1: Map VM handlers 同様
+- NYASH_VM_DISABLE_BOXCALL_{ARRAY|MAP|STRING}_FASTPATH=1: BoxCall fast‑path を無効化（Plugin/vtable/extern 経路のみ）
+
 Syntax sugar (default ON)
 - NYASH_SYNTAX_SUGAR_LEVEL={basic|full}（unset=ON）。
   - basic: pipeline/raw/numeric separators/trailing comma など基本糖衣

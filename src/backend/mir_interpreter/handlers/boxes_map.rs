@@ -1,5 +1,24 @@
 use super::*;
 use crate::box_trait::NyashBox;
+use std::sync::OnceLock;
+
+#[inline]
+fn map_handlers_disable() -> bool {
+    matches!(std::env::var("NYASH_VM_DISABLE_MAP_HANDLERS").ok().as_deref(), Some("1"|"true"|"on"))
+}
+
+#[inline]
+fn map_handlers_deprecate() -> bool {
+    matches!(std::env::var("NYASH_VM_MAP_HANDLERS_DEPRECATE").ok().as_deref(), Some("1"|"true"|"on"))
+}
+
+fn warn_once() {
+    static WARNED: OnceLock<bool> = OnceLock::new();
+    if *WARNED.get_or_init(|| false) == false {
+        eprintln!("[deprecate] VM map handlers are deprecated and will be removed (prefer plugin/User route)");
+        WARNED.set(true).ok();
+    }
+}
 
 pub(super) fn try_handle_map_box(
     this: &mut MirInterpreter,
@@ -17,6 +36,8 @@ pub(super) fn try_handle_map_box(
             .as_any()
             .downcast_ref::<crate::boxes::map_box::MapBox>()
         {
+            if map_handlers_disable() { return Ok(false); }
+            if map_handlers_deprecate() { warn_once(); }
             match method {
                 "birth" => {
                     // No-op constructor init for MapBox
