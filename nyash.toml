@@ -53,6 +53,7 @@ hakorune.vm.callee_parser = "apps/selfhost/hakorune-vm/callee_parser.hako"
 hakorune.vm.args_extractor = "apps/selfhost/hakorune-vm/args_extractor.hako"
 hakorune.vm.global_call_handler = "apps/selfhost/hakorune-vm/global_call_handler.hako"
 hakorune.vm.extern_call_handler = "apps/selfhost/hakorune-vm/extern_call_handler.hako"
+hakorune.vm.boxcall_handler = "apps/selfhost/hakorune-vm/boxcall_handler.hako"
 # Map logical namespaces to Nyash source paths (consumed by runner)
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"

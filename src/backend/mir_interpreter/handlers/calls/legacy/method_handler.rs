@@ -190,6 +190,24 @@ impl MirInterpreter {
                                 return res;
                             }
                         }
+                        if let Some(s) = bx
+                            .as_any()
+                            .downcast_ref::<crate::boxes::string_box::StringBox>()
+                        {
+                            if let Some(res) =
+                                self.box_string_fastpath(s, method, args)
+                            {
+                                return res;
+                            }
+                        }
+                    }
+                    // Fast bridge for VMValue::String (primitive string)
+                    if let VMValue::String(s_inner) = &recv_val {
+                        // Convert to StringBox temporarily for fastpath
+                        let temp_sbox = crate::boxes::string_box::StringBox::new(s_inner.clone());
+                        if let Some(res) = self.box_string_fastpath(&temp_sbox, method, args) {
+                            return res;
+                        }
                     }
                     // Minimal bridge for birth(): delegate to BoxCall handler and return Void
                     if method == "birth" {

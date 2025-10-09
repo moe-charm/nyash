@@ -33,6 +33,28 @@ pub(super) fn try_handle_string_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::Bool(is_empty)); }
                     return Ok(true);
                 }
+                "upper" | "to_upper" => {
+                    if !args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"StringBox","method":"{}","expected":0,"got":{}}}"#, method, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction(format!("{} expects 0 args", method)));
+                    }
+                    let upper = sb.value.to_uppercase();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(upper)))); }
+                    return Ok(true);
+                }
+                "lower" | "to_lower" => {
+                    if !args.is_empty() {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"StringBox","method":"{}","expected":0,"got":{}}}"#, method, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction(format!("{} expects 0 args", method)));
+                    }
+                    let lower = sb.value.to_lowercase();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(lower)))); }
+                    return Ok(true);
+                }
                 "indexOf" => {
                     // Enforce arity=1 (Fail‑Fast). Previously a dev-only 2-arg form existed but was inconsistent.
                     if args.len() != 1 {

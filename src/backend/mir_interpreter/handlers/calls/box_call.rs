@@ -110,4 +110,37 @@ impl MirInterpreter {
             _ => None,
         }
     }
+
+    /// Handle common StringBox fast‑paths. Returns Some(result) if handled.
+    pub(crate) fn box_string_fastpath(
+        &mut self,
+        s: &crate::boxes::string_box::StringBox,
+        method: &str,
+        args: &[ValueId],
+    ) -> Option<Result<VMValue, VMError>> {
+        match method {
+            "birth" => Some(Ok(VMValue::Void)),
+            "upper" => {
+                if !args.is_empty() { return None; }
+                let ret = s.to_upper();
+                Some(Ok(VMValue::from_nyash_box(ret)))
+            }
+            "lower" => {
+                if !args.is_empty() { return None; }
+                let ret = s.to_lower();
+                Some(Ok(VMValue::from_nyash_box(ret)))
+            }
+            "size" | "length" => {
+                if !args.is_empty() { return None; }
+                let ret = s.size();
+                Some(Ok(VMValue::from_nyash_box(ret)))
+            }
+            "isEmpty" => {
+                if !args.is_empty() { return None; }
+                let ret = s.isEmpty();
+                Some(Ok(VMValue::from_nyash_box(ret)))
+            }
+            _ => None,
+        }
+    }
 }

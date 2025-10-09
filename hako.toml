@@ -121,6 +121,7 @@ timer = "core.timer.TimerBox"
  selfhost.hakorune_vm.args_extractor = "apps/selfhost/hakorune-vm/args_extractor.hako"
  selfhost.hakorune_vm.global_call_handler = "apps/selfhost/hakorune-vm/global_call_handler.hako"
  selfhost.hakorune_vm.extern_call_handler = "apps/selfhost/hakorune-vm/extern_call_handler.hako"
+ selfhost.hakorune_vm.boxcall_handler = "apps/selfhost/hakorune-vm/boxcall_handler.hako"
 
  selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
  # Dev VM utility boxes (for tests that reference them directly)

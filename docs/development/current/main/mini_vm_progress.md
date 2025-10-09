@@ -617,3 +617,187 @@ Test 1 result: 0
 
 **次の目標**:
 - MirCall Phase 2: Method/ModuleFunction 実装（selfhost compiler 完全動作に必須）
+
+---
+
+## 🎉 **Phase 4 Day 10: BoxCall実装成功！** (2025-10-09)
+
+**目標**: boxcall 命令実装（Box動的メソッド呼び出し）
+
+### ✅ **実装完了事項**
+
+#### 📦 **新規箱作成** (1箱)
+
+**BoxCallHandlerBox** (125行)
+- 役割: Box動的メソッド呼び出しディスパッチャー
+- サポートメソッド:
+  - **StringBox**: upper/to_upper, lower/to_lower, size, isEmpty
+  - **ArrayBox**: push, get, set
+  - **MapBox**: get, set, has
+- 引数抽出: `_extract_args()` ヘルパー（ArgsExtractorBox 再利用）
+- エラーハンドリング: 未知メソッド → `Result.Err("boxcall: unknown method: ...")`
+
+#### 🔧 **Rust VM StringBox拡張**
+
+**boxes_string.rs 更新**:
+- `upper` | `to_upper` メソッド追加（36-46行）
+- `lower` | `to_lower` メソッド追加（47-57行）
+- arity チェック実装（0引数必須）
+
+**box_call.rs 更新**:
+- `box_string_fastpath()` 関数追加（114-145行）
+- StringBox/VMValue::String 両対応
+
+**method_handler.rs 更新**:
+- StringBox fastpath呼び出し追加（193-202行, 204-211行）
+- BoxRef + String primitive 両方サポート
+
+#### 🧪 **テストスイート作成**
+
+**test_boxcall.hako** (42行):
+- Test 1: StringBox.upper() → "hello" → "HELLO" ✅
+
+**MIR JSON**:
+```json
+{
+  "functions": [{
+    "name": "Main.main",
+    "blocks": [{
+      "id": 0,
+      "instructions": [
+        {"op": "const", "dst": 2, "value": {"String": "hello"}},
+        {"op": "boxcall", "dst": 1, "box": 2, "method": "upper", "args": []},
+        {"op": "copy", "dst": 3, "src": 1}
+      ],
+      "terminator": {"op": "ret", "value": 3}
+    }]
+  }]
+}
+```
+
+### 🐛 **バグ修正プロセス**
+
+#### バグ1: ConstHandlerBox String値未サポート
+
+**問題**: `const: i64 value not found`
+- ConstHandlerBox が String const 値をサポートしていなかった
+
+**修正**:
+```hako
+// String value pattern追加
+local key_str = "\"value\":{\"String\":\""
+local val_str_start = inst_json.indexOf(key_str)
+if val_str_start >= 0 {
+  val_str_start = val_str_start + key_str.size()
+  local val_str_end = StringOps.index_of_from(inst_json, "\"}", val_str_start)
+  local str_value = inst_json.substring(val_str_start, val_str_end)
+  ValueManagerBox.set(regs, dst, str_value)
+  return Result.Ok(0)
+}
+```
+
+#### バグ2: indexOf arity mismatch
+
+**問題**: `indexOf expects 1 arg, got 2`
+- StringBox.indexOf() は1引数のみ
+- StringOps.index_of_from() は2引数
+
+**修正**:
+- ConstHandlerBox: `inst_json.indexOf("\"}", val_str_start)` → `StringOps.index_of_from(inst_json, "\"}", val_str_start)`
+- BoxCallHandlerBox: `inst_json.indexOf("]", args_start)` → `StringOps.index_of_from(inst_json, "]", args_start)`
+
+#### バグ3: Rust VM BoxCall StringBox未サポート
+
+**問題**: `BoxCall unsupported on StringBox.to_upper`
+- Rust VMのboxes_string.rsに upper/lower メソッドがなかった
+- BoxCallHandlerBoxがreceiver.to_upper()を呼ぶ → Rust VMが処理できない
+
+**修正**:
+1. boxes_string.rsに upper/lower メソッド追加
+2. box_call.rsに box_string_fastpath() 追加
+3. method_handler.rsで fastpath 呼び出し
+
+### 📊 **テスト結果**
+
+**実行コマンド**:
+```bash
+env HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev \
+  NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
+  NYASH_QUIET=1 ./target/release/hako \
+  apps/selfhost/hakorune-vm/tests/test_boxcall.hako
+```
+
+**結果**: ✅ All BoxCall tests PASSED!
+```
+[Test 1] StringBox.upper() - result: 0
+✅ All BoxCall tests PASSED!
+Result: 0
+```
+
+### 📂 **実装ファイル**
+
+**新規ファイル**:
+- `apps/selfhost/hakorune-vm/boxcall_handler.hako` (125行)
+- `apps/selfhost/hakorune-vm/tests/test_boxcall.hako` (42行)
+
+**更新ファイル**:
+- `apps/selfhost/hakorune-vm/instruction_dispatcher.hako`: +1 using, +1 case
+- `apps/selfhost/hakorune-vm/const_handler.hako`: String値サポート追加
+- `src/backend/mir_interpreter/handlers/boxes_string.rs`: upper/lower追加
+- `src/backend/mir_interpreter/handlers/calls/box_call.rs`: StringBox fastpath追加
+- `src/backend/mir_interpreter/handlers/calls/legacy/method_handler.rs`: fastpath呼び出し追加
+- `hako.toml`: +1 module override
+- `nyash.toml`: +1 module
+
+### 📈 **統計**
+
+- **新規箱**: 1箱（125行）
+- **実装済み命令**: boxcall 追加
+- **総箱数**: 20箱
+- **Rust VM拡張**: 3ファイル（+67行）
+- **テスト成功率**: 1/1 (100%) ✅
+
+### 🎯 **技術的成果**
+
+1. **Selfhost VM ↔ Rust VM連携**:
+   - Selfhost VMがboxcall命令を処理
+   - 内部でRust VMのStringBox.to_upper()を呼び出し
+   - 2レイヤー間の完全な連携動作確認
+
+2. **動的メソッドディスパッチ**:
+   - method名 + 引数数で method signature 生成（"upper/0", "push/1"等）
+   - 統一的なディスパッチテーブル
+
+3. **引数抽出の再利用**:
+   - ArgsExtractorBox をboxcallでも再利用
+   - fake mir_call JSON生成で統一処理
+
+### 🎓 **学び**
+
+1. **2レイヤーVM連携**:
+   - Selfhost VM（Hakoruneスクリプト）がRust VM上で動作
+   - Selfhost VMがBoxCallを処理 → Rust VMのメソッドを呼ぶ
+   - 正しい連携にはRust VM側のサポートが必須
+
+2. **StringBox API確認の重要性**:
+   - upper() → to_upper() (実装名が違う)
+   - indexOf() vs index_of_from() (arity違い)
+   - ドキュメントと実装のギャップ確認が重要
+
+3. **Rust VM拡張パターン**:
+   - boxes_string.rs: メソッド実装
+   - box_call.rs: fastpath関数
+   - method_handler.rs: fastpath呼び出し
+   - 3箇所セットで拡張
+
+### 🚀 **次のステップ**
+
+- **MirCall Phase 2 続き**: ModuleFunction実装（call 命令）
+- **テスト拡張**: ArrayBox/MapBoxのboxcallテスト追加
+- **ドキュメント**: boxcall実装詳細記録
+
+**見積もり**: 4-6時間
+**実績**: 約3時間（効率: 50-75%）
+**効率向上要因**: 箱化モジュール化＋既存パターン活用
+
+---

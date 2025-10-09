@@ -17,6 +17,19 @@ Branch Note (selfhost)
   - A3（任意）: 生成 EXE で小サンプルを解析→Rust VM での実行結果と等価（quick スモークで 1 本確認）
 - スモーク: `tools/smokes/v2/profiles/quick/selfhost/selfhost_bootstrap_llvm.sh`（既定 SKIP、`SMOKES_ENABLE_SELFHOST_BOOT=1` で有効）
 
+### 🧱 Baseline → Selfhost → Legacy Removal（段階）
+- Baseline（本ドキュメントの前段）
+  - デフォルト: 最小 Kernel 埋め込み、Plugins 既定OFF（オプトイン）
+  - 解決順: User > Plugin > Kernel
+  - ドキュメント: `docs/guides/kernel-plugin-baseline.md`, `docs/guides/build-runtime-defaults.md`
+- Selfhost（M1 以降）
+  - M2（計画）: 生成 EXE で compiler.hako を再ビルド → JSON ヘッダ/簡易 MIR を比較
+  - M3（計画）: VM/LLVM の E2E 差分ゼロ（代表アプリ 1 本）
+- Legacy Removal（M*）
+  - VM 便宜 boxes_* の段階撤退（Plugin 実装へ移管）
+  - 旧 CoreBox の Kernel 残骸を削減（Null/Missing 以外の stateful 実装を撤去）
+  - 文字列エラー依存（"Key not found:") の完全廃止（null チェック統一）
+
 
 ## 🛣️ 実行ルート（道）— 小さく進めて確実に緑にする
 

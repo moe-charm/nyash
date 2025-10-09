@@ -41,9 +41,12 @@ Dev one‑knob
 - `source tools/dev_env.sh using` — HAKO_USING=1 / STRATEGY=prelude / ALLOW_FILE=1 / PROFILE=dev を一括ON
 
 Plugins
-- HAKO_PLUGIN_POLICY（互換: NYASH_PLUGIN_POLICY）={auto|off|force} (default auto)
-  - off: disable external plugins (compat: NYASH_DISABLE_PLUGINS=1)
-  - force: plugin-only execution (compat: NYASH_PLUGIN_ONLY=1)
+- HAKO_PLUGIN_POLICY（互換: NYASH_PLUGIN_POLICY）={auto|off|force}
+  - default: off（Hakorune ビルド既定。ローカル/CI はプラグイン無効で安定化）
+  - off: disable external plugins（互換: NYASH_DISABLE_PLUGINS=1）
+  - auto: runtime でプラグインを検出し、存在時のみ有効化
+  - force: plugin-only execution（互換: NYASH_PLUGIN_ONLY=1）
+  備考: Loader は常に同梱（オプトインで有効化）。解決順は User > Plugin > Kernel。
 
 Syntax sugar (default ON)
 - NYASH_SYNTAX_SUGAR_LEVEL={basic|full}（unset=ON）。
