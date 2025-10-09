@@ -6,9 +6,9 @@ export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
 
-# Gate in quick by opt-in
-if [ "${SMOKES_ENABLE_SELFHOST_BOOT:-0}" != "1" ]; then
-  echo "SKIP: selfhost_bootstrap_llvm (set SMOKES_ENABLE_SELFHOST_BOOT=1 to run)" >&2
+# Skip gracefully when LLVM toolchain is not available
+if ! command -v llvm-config-18 >/dev/null 2>&1; then
+  echo "SKIP: selfhost_bootstrap_llvm (llvm-config-18 not found)" >&2
   exit 0
 fi
 
@@ -40,4 +40,3 @@ echo "$HEAD_LINE" | grep -E -q '\{"version":|\"kind\":' || {
 
 log_success "selfhost bootstrap M1 passed (EXE built and header emitted)"
 exit 0
-
