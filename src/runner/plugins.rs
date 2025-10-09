@@ -22,7 +22,15 @@ impl NyashRunner {
         // Unified registry
         runtime::init_global_unified_registry();
         // Plugins (guarded)
-        let disable_by_policy = std::env::var("NYASH_PLUGIN_POLICY").ok().map(|v| v.eq_ignore_ascii_case("off")).unwrap_or(false);
+        // Default policy: OFF (plugins disabled) unless explicitly set to auto/force.
+        // Aliases handled by env core bootstrap (HAKO_* → NYASH_*), but we defensively read both.
+        let policy = std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok());
+        let disable_by_policy = match policy.as_deref() {
+            None => true, // default OFF in Hakorune build
+            Some(s) if s.eq_ignore_ascii_case("off") => true,
+            Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => false,
+            _ => true, // unknown → OFF
+        };
         if !disable_by_policy && std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
             runner_plugin_init::init_bid_plugins();
             crate::runner::box_index::refresh_box_index();
