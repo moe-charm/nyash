@@ -90,8 +90,8 @@ local len = text.size()  // → 13 ✅
 
 **Current Behavior**:
 ```hako
-map.set("key", "value")  // → StringBox("Set key: key")
-map.clear()              // → StringBox("Map cleared")
+map.set("key", "value")  // → null
+map.clear()              // → null
 array.push(item)         // → StringBox("ok")
 ```
 

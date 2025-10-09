@@ -319,10 +319,10 @@ static box ConfigManager {
     update() {
         // 😱 Useless return messages!
         local r1 = me.settings.set("timeout", 30)
-        // r1 = StringBox("Set key: timeout")
+        // r1 = null
 
         local r2 = me.settings.clear()
-        // r2 = StringBox("Map cleared")
+        // r2 = null
 
         local r3 = me.values.push(42)
         // r3 = StringBox("ok")
@@ -332,8 +332,8 @@ static box ConfigManager {
         // - Check them? (how?)
         // - Print them? (useless noise)
 
-        print(r1)  // "Set key: timeout" (useless!)
-        print(r2)  // "Map cleared" (useless!)
+        print(r1)  // null
+        print(r2)  // null
         print(r3)  // "ok" (useless!)
     }
 }

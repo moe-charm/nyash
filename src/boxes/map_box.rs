@@ -125,14 +125,14 @@ impl MapBox {
         }
     }
 
-    /// 値を設定
+    /// 値を設定（戻り値: null）
     pub fn set(&self, key: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         if map_trace_enabled() {
             eprintln!("[MapBox] set: key=\"{}\" value={}", key_str, value.to_string_box().value);
         }
         self.data.write().unwrap().insert(key_str.clone(), value);
-        Box::new(StringBox::new(&format!("Set key: {}", key_str)))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 値を取得（存在しないキーは null）
@@ -233,10 +233,10 @@ impl MapBox {
         Box::new(IntegerBox::new(self.data.read().unwrap().len() as i64))
     }
 
-    /// 全てクリア
+    /// 全てクリア（戻り値: null）
     pub fn clear(&self) -> Box<dyn NyashBox> {
         self.data.write().unwrap().clear();
-        Box::new(StringBox::new("Map cleared"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 各要素に対して関数を実行
