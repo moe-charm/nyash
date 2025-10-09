@@ -1,15 +1,17 @@
 //! Garbage collector configuration
 
+use crate::config::env_helpers::{env_flag, env_or};
+
 pub fn gc_trace() -> bool {
-    std::env::var("NYASH_GC_TRACE").ok().as_deref() == Some("1")
+    env_flag("NYASH_GC_TRACE")
 }
 
 pub fn gc_barrier_trace() -> bool {
-    std::env::var("NYASH_GC_BARRIER_TRACE").ok().as_deref() == Some("1")
+    env_flag("NYASH_GC_BARRIER_TRACE")
 }
 
 pub fn gc_barrier_strict() -> bool {
-    std::env::var("NYASH_GC_BARRIER_STRICT").ok().as_deref() == Some("1")
+    env_flag("NYASH_GC_BARRIER_STRICT")
 }
 
 pub fn gc_trace_level() -> u8 {
@@ -20,19 +22,19 @@ pub fn gc_trace_level() -> u8 {
 }
 
 pub fn gc_mode() -> String {
-    std::env::var("NYASH_GC_MODE").unwrap_or_else(|_| "counting".to_string())
+    env_or("NYASH_GC_MODE", "counting")
 }
 
 pub fn gc_metrics() -> bool {
-    std::env::var("NYASH_GC_METRICS").ok().as_deref() == Some("1")
+    env_flag("NYASH_GC_METRICS")
 }
 
 pub fn gc_metrics_json() -> bool {
-    std::env::var("NYASH_GC_METRICS_JSON").ok().as_deref() == Some("1")
+    env_flag("NYASH_GC_METRICS_JSON")
 }
 
 pub fn gc_leak_diag() -> bool {
-    std::env::var("NYASH_GC_LEAK_DIAG").ok().as_deref() == Some("1")
+    env_flag("NYASH_GC_LEAK_DIAG")
 }
 
 pub fn gc_alloc_threshold() -> Option<u64> {

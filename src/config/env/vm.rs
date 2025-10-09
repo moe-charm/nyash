@@ -1,35 +1,29 @@
 //! VM runtime configuration
 
+use crate::config::env_helpers::{env_bool_ci, env_flag, env_u32, env_usize};
+
 pub fn vm_birth_after_new_fallback() -> bool {
-    match std::env::var("NYASH_VM_BIRTH_AFTER_NEW").ok() {
-        Some(v) => {
-            let on = matches!(v.as_str(), "1" | "true" | "on" | "TRUE" | "ON");
-            if on && std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[deprecated] NYASH_VM_BIRTH_AFTER_NEW is deprecated; Builder/Bridge emits birth(). Disable this flag to match production path.");
-            }
-            on
-        }
-        None => false,
+    let on = env_bool_ci("NYASH_VM_BIRTH_AFTER_NEW");
+    if on && env_flag("NYASH_CLI_VERBOSE") {
+        eprintln!("[deprecated] NYASH_VM_BIRTH_AFTER_NEW is deprecated; Builder/Bridge emits birth(). Disable this flag to match production path.");
     }
+    on
 }
 
 pub fn vm_pic_stats() -> bool {
-    std::env::var("NYASH_VM_PIC_STATS").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_PIC_STATS")
 }
 
 pub fn vm_vt_trace() -> bool {
-    std::env::var("NYASH_VM_VT_TRACE").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_VT_TRACE")
 }
 
 pub fn vm_pic_trace() -> bool {
-    std::env::var("NYASH_VM_PIC_TRACE").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_PIC_TRACE")
 }
 
 pub fn vm_pic_threshold() -> u32 {
-    std::env::var("NYASH_VM_PIC_THRESHOLD")
-        .ok()
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(8)
+    env_u32("NYASH_VM_PIC_THRESHOLD", 8)
 }
 
 pub fn vm_allow_user_instance_boxcall() -> bool {
@@ -41,31 +35,31 @@ pub fn vm_allow_user_instance_boxcall() -> bool {
 }
 
 pub fn vm_use_py() -> bool {
-    std::env::var("NYASH_VM_USE_PY").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_USE_PY")
 }
 
 pub fn vm_use_dispatch() -> bool {
-    std::env::var("NYASH_VM_USE_DISPATCH").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_USE_DISPATCH")
 }
 
 pub fn vm_resolve_trace() -> bool {
-    std::env::var("NYASH_VM_RESOLVE_TRACE").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_RESOLVE_TRACE")
 }
 
 pub fn vm_global_tail_fallback() -> bool {
-    std::env::var("NYASH_VM_GLOBAL_TAIL_FALLBACK").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_GLOBAL_TAIL_FALLBACK")
 }
 
 pub fn vm_plugin_prefer_string() -> bool {
-    std::env::var("NYASH_PLUGIN_PREFER_STRING").ok().as_deref() == Some("1")
+    env_flag("NYASH_PLUGIN_PREFER_STRING")
 }
 
 pub fn vm_plugin_prefer_array() -> bool {
-    std::env::var("NYASH_PLUGIN_PREFER_ARRAY").ok().as_deref() == Some("1")
+    env_flag("NYASH_PLUGIN_PREFER_ARRAY")
 }
 
 pub fn vm_plugin_prefer_map() -> bool {
-    std::env::var("NYASH_PLUGIN_PREFER_MAP").ok().as_deref() == Some("1")
+    env_flag("NYASH_PLUGIN_PREFER_MAP")
 }
 
 pub fn vm_reenter_limit() -> Option<usize> {
@@ -75,5 +69,5 @@ pub fn vm_reenter_limit() -> Option<usize> {
 }
 
 pub fn vm_reenter_trace() -> bool {
-    std::env::var("NYASH_VM_REENTER_TRACE").ok().as_deref() == Some("1")
+    env_flag("NYASH_VM_REENTER_TRACE")
 }
