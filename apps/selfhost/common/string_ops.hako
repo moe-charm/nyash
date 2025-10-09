@@ -8,9 +8,9 @@ static box StringOps {
   index_of_from(text, needle, pos) {
     if text == null { return -1 }
     if pos < 0 { pos = 0 }
-    local n = text.length()
+    local n = text.size()
     if pos >= n { return -1 }
-    local m = needle.length()
+    local m = needle.size()
     if m <= 0 { return pos }
     local i = pos
     local limit = n - m

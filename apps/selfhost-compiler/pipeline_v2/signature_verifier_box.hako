@@ -63,9 +63,9 @@ static box SignatureVerifierBox {
         n = n + 1
         // advance to the end of this digit run
         local p2 = RegexFlow.find_from(s, ds, pos)
-        if p2 < 0 { pos = pos + ds.length() } else { pos = p2 + ds.length() }
+        if p2 < 0 { pos = pos + ds.size() } else { pos = p2 + ds.size() }
       }
-      if pos >= s.length() { break }
+      if pos >= s.size() { break }
     }
     return n
   }
@@ -90,13 +90,13 @@ static box SignatureVerifierBox {
     // Split at last '.' for method name
     local last = RegexFlow.last_index_of(s, ".")
     if last < 0 { return 1 }
-    local method = s.substring(last + 1, s.length())
+    local method = s.substring(last + 1, s.size())
     // Determine class token just before method (penultimate segment)
     local head_all = s.substring(0, last)
     local prev = RegexFlow.last_index_of(head_all, ".")
     local head = head_all
     if prev >= 0 {
-      head = head_all.substring(prev + 1, head_all.length())
+      head = head_all.substring(prev + 1, head_all.size())
     }
     // Normalize head to Box name
     local bxname = head

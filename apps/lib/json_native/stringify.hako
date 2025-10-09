@@ -28,7 +28,7 @@ static box JSON {
     if s == "true" || s == "false" { return s }
     // Integer-like? Accept leading '-' and digits
     local i = 0
-    local n = s.length()
+    local n = s.size()
     local neg = 0
     if n > 0 && s.substring(0,1) == "-" { neg = 1  i = 1 }
     local ok = (n > neg)
@@ -45,7 +45,7 @@ static box JSON {
     if a == null { return "[]" }
     // Assume ArrayBox API: length(), get(i)
     local out = "["
-    local n = a.length()
+    local n = a.size()
     local i = 0
     loop(i < n) {
       if i > 0 { out = out + "," }
@@ -58,20 +58,20 @@ static box JSON {
         keys_val = e.keys()
         if keys_val != null {
           local ks = keys_val.toString()
-          if ks.length() >= 1 && ks.substring(0,1) == "[" { is_map = 1 }
+          if ks.size() >= 1 && ks.substring(0,1) == "[" { is_map = 1 }
         }
       }
       if is_map == 1 {
         out = out + me._stringify_map(e)
       } else {
-        // Array detection: e.length() numeric
-        local l = e.length()
+        // Array detection: e.size() numeric
+        local l = e.size()
         local ls = l.toString()
         local is_num = 1
         local j = 0
-        if ls.length() == 0 { is_num = 0 }
-        if ls.length() > 0 && ls.substring(0,1) == "-" { if ls.length() == 1 { is_num = 0 } else { j = 1 } }
-        loop(j < ls.length()) {
+        if ls.size() == 0 { is_num = 0 }
+        if ls.size() > 0 && ls.substring(0,1) == "-" { if ls.size() == 1 { is_num = 0 } else { j = 1 } }
+        loop(j < ls.size()) {
           local ch = ls.substring(j,j+1)
           if !(ch >= "0" && ch <= "9") { is_num = 0  break }
           j = j + 1
@@ -89,7 +89,7 @@ static box JSON {
     // MapBox API: keys() -> ArrayBox of string keys (sorted), get(key)
     local out = "{"
     local ks = m.keys()
-    local n = ks.length()
+    local n = ks.size()
     local i = 0
     loop(i < n) {
       if i > 0 { out = out + "," }
@@ -102,18 +102,18 @@ static box JSON {
       local keys_val_v = v.keys()
       if keys_val_v != null {
         local ksvs = keys_val_v.toString()
-        if ksvs.length() >= 1 && ksvs.substring(0,1) == "[" { is_map_v = 1 }
+        if ksvs.size() >= 1 && ksvs.substring(0,1) == "[" { is_map_v = 1 }
       }
       if is_map_v == 1 {
         out = out + me._stringify_map(v)
       } else {
-        local lv = v.length()
+        local lv = v.size()
         local lvs = lv.toString()
         local is_num_v = 1
         local t = 0
-        if lvs.length() == 0 { is_num_v = 0 }
-        if lvs.length() > 0 && lvs.substring(0,1) == "-" { if lvs.length() == 1 { is_num_v = 0 } else { t = 1 } }
-        loop(t < lvs.length()) {
+        if lvs.size() == 0 { is_num_v = 0 }
+        if lvs.size() > 0 && lvs.substring(0,1) == "-" { if lvs.size() == 1 { is_num_v = 0 } else { t = 1 } }
+        loop(t < lvs.size()) {
           local ch = lvs.substring(t,t+1)
           if !(ch >= "0" && ch <= "9") { is_num_v = 0  break }
           t = t + 1

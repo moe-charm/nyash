@@ -6,7 +6,7 @@ static box ParserPeekBox {
   parse(src, i, ctx) {
     // ctx is ParserBox for delegation
     local j = i
-    local n = src.length()
+    local n = src.size()
 
     // Parse scrutinee expression
     local scr = ctx.parse_expr2(src, j)

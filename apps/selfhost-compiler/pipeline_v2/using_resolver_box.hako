@@ -154,20 +154,20 @@ box UsingResolverBox {
     if me.modules_keys == null { return null }
     local best = null
     local i = 0
-    local n = me.modules_keys.length()
+    local n = me.modules_keys.size()
     loop(i < n) {
       local key = me.modules_keys.get(i)
       local dot = RegexFlow.last_index_of(key, ".")
       local last = key
-      if dot >= 0 { last = key.substring(dot + 1, key.length()) }
+      if dot >= 0 { last = key.substring(dot + 1, key.size()) }
       local ok = 0
       if last == tail { ok = 1 } else {
         // case-insensitive by first-letter only (ASCII) to match e.g., Timer vs timer
-        if last.length() == tail.length() && last.length() > 0 {
+        if last.size() == tail.size() && last.size() > 0 {
           local l0 = last.substring(0,1)
           local t0 = tail.substring(0,1)
-          local restl = last.substring(1, last.length())
-          local restt = tail.substring(1, tail.length())
+          local restl = last.substring(1, last.size())
+          local restt = tail.substring(1, tail.size())
           if restl == restt {
             local U = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
             local L = "abcdefghijklmnopqrstuvwxyz"
@@ -193,7 +193,7 @@ box UsingResolverBox {
   upgrade_aliases() {
     if me.alias_keys == null || me.modules_map == null { return 0 }
     local i = 0
-    local n = me.alias_keys.length()
+    local n = me.alias_keys.size()
     loop(i < n) {
       local alias = me.alias_keys.get(i)
       local val = me.alias_names.get(alias)
@@ -239,9 +239,9 @@ static box UsingResolverBoxMain {
   main(args) {
     local r = new UsingResolverBox()
     // Optional: args[0]=usings_json, args[1]=modules_json
-    if args != null && args.length() > 0 {
+    if args != null && args.size() > 0 {
       r.load_usings_json(args.get(0))
-      if args.length() > 1 { r.load_modules_json(args.get(1)) }
+      if args.size() > 1 { r.load_modules_json(args.get(1)) }
     }
     print(r.to_context_json())
     return 0

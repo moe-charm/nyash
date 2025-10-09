@@ -32,13 +32,13 @@ static box SeamInspector {
   }
   _scan_boxes(text) {
     @i = 0
-    @n = text.length()
+    @n = text.size()
     @res = new ArrayBox()
     @tok = "static box "
     loop (i < n) {
       @p = StringOps.index_of_from(text, tok, i)
       if p < 0 { break }
-      @j = p + tok.length()
+      @j = p + tok.size()
       @name = ""
       loop (j < n) {
         @c = text.substring(j, j+1)

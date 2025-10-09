@@ -40,7 +40,7 @@ box ExecutionPipelineBox {
     local ast = p.parse_program2(src)
     // Emit Stage‑1 JSON with meta.usings
     local json = EmitterBox.emit_program(ast, usings)
-    if json == null || json.length() == 0 { return 1 }
+    if json == null || json.size() == 0 { return 1 }
     print(json)
     return 0
   }

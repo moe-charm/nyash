@@ -12,8 +12,8 @@ static box ArrayParseBox {
     if !(StringUtils.starts_with(s, "[") and StringUtils.ends_with(s, "]")) {
       return JsonNode.create_array()
     }
-    local inner = s.substring(1, s.length()-1)
-    local n = inner.length()
+    local inner = s.substring(1, s.size()-1)
+    local n = inner.size()
     local i = 0
     local parts = new ArrayBox()
     local current = ""
@@ -38,7 +38,7 @@ static box ArrayParseBox {
       if ch == "\"" { in_str = 1 current = current + ch i = i + 1 continue }
       if ch == "," {
         local tok = StringUtils.trim(current)
-        if tok.length() > 0 {
+        if tok.size() > 0 {
           local node = ParseOpsBox.parse_primitive(tok)
           if node == null { node = JsonNode.create_null() }
           parts.push(node)
@@ -52,7 +52,7 @@ static box ArrayParseBox {
     }
     // last token
     local tok = StringUtils.trim(current)
-    if tok.length() > 0 {
+    if tok.size() > 0 {
       local node = ParseOpsBox.parse_primitive(tok)
       if node == null { node = JsonNode.create_null() }
       parts.push(node)
@@ -60,7 +60,7 @@ static box ArrayParseBox {
     // build result
     local out = JsonNode.create_array()
     local k = 0
-    loop(k < parts.length()) { out.array_push(parts.get(k)) k = k + 1 }
+    loop(k < parts.size()) { out.array_push(parts.get(k)) k = k + 1 }
     return out
   }
 }

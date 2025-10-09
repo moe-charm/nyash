@@ -33,7 +33,7 @@ static box Main {
   // ---- Arg helper ----
   has_arg(args, name) {
     if args == null { return 0 }
-    local n = args.length()
+    local n = args.size()
     local i = 0
     loop(i < n) {
       if args.get(i) == name { return 1 }
@@ -103,7 +103,7 @@ static box Main {
 
   decode_hex_inline(hex) {
     if hex == null { return null }
-    local n = hex.length()
+    local n = hex.size()
     if n % 2 == 1 { return null }
     local out = ""
     local i = 0
@@ -124,7 +124,7 @@ static box Main {
   esc_json(s) {
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\\" { out = out + "\\\\" } else {
@@ -150,7 +150,7 @@ static box Main {
     // This avoids touching using/prelude and keeps child pipelines stable.
     local early_min = 0
     if args != null {
-      local alen = args.length()
+      local alen = args.size()
       local i = 0
       loop(i < alen) { if args.get(i) == "--min-json" { early_min = 1 } i = i + 1 }
     }
@@ -179,7 +179,7 @@ static box Main {
     local inline_hex = null
     // Phase A: compiler-track/ssa-trace are not used (min-json only)
     if args != null {
-      local alen = args.length()
+      local alen = args.size()
       local i = 0
       loop(i < alen) {
         local a = args.get(i)
@@ -305,7 +305,7 @@ static box Main {
     // Dev debug (opt-in): show ast_json size and head
     if me.has_arg(args, "--debug") == 1 {
       if ast_json != null {
-        print("DBG ast_len=" + ast_json.length())
+        print("DBG ast_len=" + ast_json.size())
         local dbg_head = ast_json.substring(0, 100)
         print("DBG ast_head=" + dbg_head)
       } else {

@@ -20,7 +20,7 @@ static box RetResolveSimpleBox {
   _resolve_explicit(inst_seg, regs, last_cmp_dst, last_cmp_val) {
     local rpos = inst_seg.indexOf("\"op\":\"ret\"")
     if rpos < 0 { return null }
-    local rseg = inst_seg.substring(rpos, inst_seg.length())
+    local rseg = inst_seg.substring(rpos, inst_seg.size())
     local rid = JsonFragBox.get_int(rseg, "value")
     if rid == null { return null }
     if rid == last_cmp_dst { return last_cmp_val }
@@ -30,7 +30,7 @@ static box RetResolveSimpleBox {
   _resolve_kind(inst_seg, regs, last_cmp_dst, last_cmp_val) {
     local kpos = inst_seg.indexOf("\"kind\":\"Ret\"")
     if kpos < 0 { return null }
-    local kseg = inst_seg.substring(kpos, inst_seg.length())
+    local kseg = inst_seg.substring(kpos, inst_seg.size())
     local rid = JsonFragBox.get_int(kseg, "value")
     if rid == null { return null }
     if rid == last_cmp_dst { return last_cmp_val }

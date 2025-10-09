@@ -13,8 +13,8 @@ static box Stage1ArgsParserBox {
     local n = 0
     loop(true) {
       local ds = RegexFlow.digits_from(s, pos)
-      if ds == "" { pos = pos + 1 } else { n = n + 1  pos = pos + ds.length() }
-      if pos >= s.length() { break }
+      if ds == "" { pos = pos + 1 } else { n = n + 1  pos = pos + ds.size() }
+      if pos >= s.size() { break }
     }
     return n
   }
@@ -32,9 +32,9 @@ static box Stage1ArgsParserBox {
         out.push(RegexFlow.to_int(ds))
         // advance to end of this token to avoid re-matching
         local p2 = RegexFlow.find_from(s, ds, pos)
-        if p2 < 0 { pos = pos + ds.length() } else { pos = p2 + ds.length() }
+        if p2 < 0 { pos = pos + ds.size() } else { pos = p2 + ds.size() }
       }
-      if pos >= s.length() { break }
+      if pos >= s.size() { break }
     }
     return out
   }

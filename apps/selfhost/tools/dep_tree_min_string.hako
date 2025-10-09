@@ -6,8 +6,8 @@ static box Main {
   has_in_stack(stack, p) {
     // check if stack contains "\n" + p + "\n"
     local t = "\n" + p + "\n"
-    local n = stack.length()
-    local m = t.length()
+    local n = stack.size()
+    local m = t.size()
     if m == 0 { return 0 }
     local i = 0
     loop(i + m <= n) {
@@ -32,7 +32,7 @@ static box Main {
     local children = ""
     local child_first = 1
     local i = 0
-    local n = src.length()
+    local n = src.size()
     local in_str = 0
     local in_cmt = 0
     loop(i < n) {
@@ -112,7 +112,7 @@ static box Main {
     local console = new ConsoleBox()
     // Determine entry path (avoid stdin to keep VM path simple)
     local entry = null
-    if args != null && args.length() >= 1 { entry = args.get(0) }
+    if args != null && args.size() >= 1 { entry = args.get(0) }
     if entry == null || entry == "" { entry = "apps/selfhost/ny-parser-nyash/main.nyash" }
     local tree = me.node_json(entry, "\n" + entry + "\n", 0)
     local out = "{\\\"version\\\":1,\\\"root_path\\\":\\\"" + Core.esc_json(entry) + "\\\",\\\"tree\\\":" + tree + "}"

@@ -20,7 +20,7 @@ static box JsonCursorBox {
   digits_from(text, start_pos) {
     if text == null { return "" }
     local i = start_pos
-    local n = text.length()
+    local n = text.size()
     local out = ""
     if i < n {
       local ch = text.substring(i, i+1)

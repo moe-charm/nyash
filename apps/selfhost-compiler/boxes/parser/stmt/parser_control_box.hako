@@ -22,7 +22,7 @@ static box ParserControlBox {
     local then_res = me.parse_block(src, j, ctx)
     local at1 = then_res.lastIndexOf("@")
     local then_json = then_res.substring(0, at1)
-    j = ctx.to_int(then_res.substring(at1+1, then_res.length()))
+    j = ctx.to_int(then_res.substring(at1+1, then_res.size()))
     j = ctx.skip_ws(src, j)
 
     local else_json = null
@@ -32,11 +32,11 @@ static box ParserControlBox {
       local else_res = me.parse_block(src, j, ctx)
       local at2 = else_res.lastIndexOf("@")
       else_json = else_res.substring(0, at2)
-      j = ctx.to_int(else_res.substring(at2+1, else_res.length()))
+      j = ctx.to_int(else_res.substring(at2+1, else_res.size()))
     }
 
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
 
@@ -62,10 +62,10 @@ static box ParserControlBox {
     local body_res = me.parse_block(src, j, ctx)
     local at3 = body_res.lastIndexOf("@")
     local body_json = body_res.substring(0, at3)
-    j = ctx.to_int(body_res.substring(at3+1, body_res.length()))
+    j = ctx.to_int(body_res.substring(at3+1, body_res.size()))
 
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return "{\"type\":\"Loop\",\"cond\":" + cond + ",\"body\":" + body_json + "}"
@@ -78,14 +78,14 @@ static box ParserControlBox {
     if ctx.stage3_enabled() == 1 {
       j = ctx.skip_ws(src, j)
       if j <= stmt_start {
-        if j < src.length() { j = j + 1 } else { j = src.length() }
+        if j < src.size() { j = j + 1 } else { j = src.size() }
       }
       ctx.gpos_set(j)
       return "{\"type\":\"Break\"}"
     }
 
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
@@ -98,14 +98,14 @@ static box ParserControlBox {
     if ctx.stage3_enabled() == 1 {
       j = ctx.skip_ws(src, j)
       if j <= stmt_start {
-        if j < src.length() { j = j + 1 } else { j = src.length() }
+        if j < src.size() { j = j + 1 } else { j = src.size() }
       }
       ctx.gpos_set(j)
       return "{\"type\":\"Continue\"}"
     }
 
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"
@@ -124,7 +124,7 @@ static box ParserControlBox {
     loop(cont_block == 1) {
       j = ctx.skip_ws(src, j)
 
-      if j >= src.length() {
+      if j >= src.size() {
         cont_block = 0
       } else {
         if src.substring(j, j+1) == "}" {
@@ -137,7 +137,7 @@ static box ParserControlBox {
 
           // Progress guard: ensure forward movement to avoid infinite loop on malformed input
           if j <= start_j {
-            if j < src.length() { j = j + 1 } else { j = src.length() }
+            if j < src.size() { j = j + 1 } else { j = src.size() }
             ctx.gpos_set(j)
           }
 
@@ -149,11 +149,11 @@ static box ParserControlBox {
             if guard > max { done = 1 } else { guard = guard + 1 }
             local before = j
             j = ctx.skip_ws(src, j)
-            if j < src.length() && src.substring(j, j+1) == ";" { j = j + 1 } else { done = 1 }
+            if j < src.size() && src.substring(j, j+1) == ";" { j = j + 1 } else { done = 1 }
             if j == before { done = 1 }
           }
 
-          if s.length() > 0 {
+          if s.size() > 0 {
             if first == 1 {
               body = body + s
               first = 0

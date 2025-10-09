@@ -20,7 +20,7 @@ static box MethodExtractBox {
     local args = []
     if ak >= 0 {
       local lb = RegexFlow.find_from(ast_json, "[", ak)
-      local rb = ast_json.length()
+      local rb = ast_json.size()
       if lb >= 0 {
         local i2 = lb + 1
         local depth = 1
@@ -40,7 +40,7 @@ static box MethodExtractBox {
         if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
         local ds = RegexFlow.digits_from(ast_json, vpos + 8)
         if ds != "" { args.push(RegexFlow.to_int(ds)) }
-        i = vpos + 8 + ds.length()
+        i = vpos + 8 + ds.size()
       }
     }
     return { method: mname, args: args }

@@ -10,9 +10,9 @@ static box JsonScanBox {
   // Seek the end index (inclusive) of an object starting at `start` (must be '{').
   seek_obj_end(text, start) {
     if text == null { return -1 }
-    if start < 0 || start >= text.length() { return -1 }
+    if start < 0 || start >= text.size() { return -1 }
     if call("String.substring/2", text, start, start+1) != "{" { return -1 }
-    local n = text.length()
+    local n = text.size()
     local depth = 0
     local i = start
     local in_str = 0
@@ -43,7 +43,7 @@ static box JsonScanBox {
       // Normalize start to integer (defensive against stringified input)
       local start_s = "" + start
       local start_i = me._str_to_int(start_s)
-      local n = text.length()
+      local n = text.size()
       if start_i < 0 || start_i >= n { return -1 }
       local first_ch = text.substring(start_i, start_i+1)
       if first_ch != "[" { return -1 }

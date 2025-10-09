@@ -27,6 +27,40 @@ pub(super) fn try_handle_map_method<'ctx, 'b>(
     }
     let i64t = codegen.context.i64_type();
     match method {
+        "isEmpty" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Map.isEmpty (core)");
+            }
+            if !args.is_empty() {
+                return Err("MapBox.isEmpty expects 0 arg".to_string());
+            }
+            // size == 0 → 1 else 0
+            let fnty = i64t.fn_type(&[i64t.into()], false);
+            let callee = codegen
+                .module
+                .get_function("nyash.map.size_h")
+                .unwrap_or_else(|| codegen.module.add_function("nyash.map.size_h", fnty, None));
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "msize_for_empty"))
+                .map_err(|e| e.to_string())?;
+            if let Some(d) = dst {
+                let rv = call
+                    .try_as_basic_value()
+                    .left()
+                    .ok_or("map.size_h returned void".to_string())?;
+                let zero = i64t.const_zero();
+                let eq = codegen
+                    .builder
+                    .build_int_compare(inkwell::IntPredicate::EQ, rv.into_int_value(), zero, "mempty_cmp")
+                    .map_err(|e| e.to_string())?;
+                let as_i64 = codegen
+                    .builder
+                    .build_int_z_extend(eq, i64t, "mempty_zext")
+                    .map_err(|e| e.to_string())?;
+                vmap.insert(*d, as_i64.into());
+            }
+            Ok(true)
+        }
         "size" => {
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
                 eprintln!("[LLVM] lower Map.size (core)");

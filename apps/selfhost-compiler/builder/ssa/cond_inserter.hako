@@ -47,15 +47,15 @@ static box CondInserter {
     if mjson == null { return "" }
     local blocks_key = "\"blocks\":["
     local pb = me._index_of_from(mjson, blocks_key, 0)
-    local used_bk_len = blocks_key.length()
-    if pb < 0 { blocks_key = "\\\"blocks\\\":["  pb = me._index_of_from(mjson, blocks_key, 0)  used_bk_len = blocks_key.length() }
+    local used_bk_len = blocks_key.size()
+    if pb < 0 { blocks_key = "\\\"blocks\\\":["  pb = me._index_of_from(mjson, blocks_key, 0)  used_bk_len = blocks_key.size() }
     if pb < 0 { return mjson }
     local blocks_start = pb + used_bk_len
     local blocks_end = me._seek_array_end(mjson, blocks_start)
     if blocks_end <= blocks_start { return mjson }
     local head = mjson.substring(0, blocks_start)
     local arr = mjson.substring(blocks_start, blocks_end)
-    local tail = mjson.substring(blocks_end, mjson.length())
+    local tail = mjson.substring(blocks_end, mjson.size())
 
     // Rebuild blocks array with potential edits
     local out_arr = ""
@@ -84,8 +84,8 @@ static box CondInserter {
             local pat_plain = "\"cond\":"
             local pat_esc = "\\\"cond\\\":"
             local pc = me._index_of_from(instr_seg, pat_plain, pbranch)
-            local used_pat_len = pat_plain.length()
-            if pc < 0 { pc = me._index_of_from(instr_seg, pat_esc, pbranch)  used_pat_len = pat_esc.length() }
+            local used_pat_len = pat_plain.size()
+            if pc < 0 { pc = me._index_of_from(instr_seg, pat_esc, pbranch)  used_pat_len = pat_esc.size() }
             if pc >= 0 {
               local cond_txt = me._read_digits(instr_seg, pc + used_pat_len)
               if cond_txt != "" {
@@ -97,9 +97,9 @@ static box CondInserter {
                   local copy_node = "{\"op\":\"copy\",\"dst\":" + me._int_to_str(cond) + ",\"src\":" + me._int_to_str(cond) + "}"
                   if escaped_mode == 1 { copy_node = "{\\\"op\\\":\\\"copy\\\",\\\"dst\\\":" + me._int_to_str(cond) + ",\\\"src\\\":" + me._int_to_str(cond) + "}" }
                   local sep = ""
-                  if instr_seg.length() > 0 { sep = "," }
+                  if instr_seg.size() > 0 { sep = "," }
                   instr_seg = copy_node + sep + instr_seg
-                  block = block.substring(0, instr_start) + instr_seg + block.substring(instr_end, block.length())
+                  block = block.substring(0, instr_start) + instr_seg + block.substring(instr_end, block.size())
                 }
               }
             }

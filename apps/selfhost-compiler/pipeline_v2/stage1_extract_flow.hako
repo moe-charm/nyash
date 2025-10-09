@@ -124,7 +124,7 @@ flow Stage1ExtractFlow {
     local args = []
     if ak >= 0 {
       local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
-      if rb < 0 { rb = ast_json.length() }
+      if rb < 0 { rb = ast_json.size() }
       local i = ak
       loop(true) {
         local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
@@ -133,7 +133,7 @@ flow Stage1ExtractFlow {
         if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
         local ds = RegexFlow.digits_from(ast_json, vpos + 8)
         if ds != "" { args.push(RegexFlow.to_int(ds)) }
-        i = vpos + 8 + ds.length()
+        i = vpos + 8 + ds.size()
       }
     }
     return { method: mname, args: args }
@@ -156,7 +156,7 @@ flow Stage1ExtractFlow {
     local args = []
     if ak >= 0 {
       local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
-      if rb < 0 { rb = ast_json.length() }
+      if rb < 0 { rb = ast_json.size() }
       local i = ak
       loop(true) {
         local tpos = Stage1ExtractFlow._idx_from(ast_json, "\"type\":\"Int\"", i)
@@ -165,7 +165,7 @@ flow Stage1ExtractFlow {
         if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
         local ds = RegexFlow.digits_from(ast_json, vpos + 8)
         if ds != "" { args.push(RegexFlow.to_int(ds)) }
-        i = vpos + 8 + ds.length()
+        i = vpos + 8 + ds.size()
       }
     }
     return { class: cname, args: args }
@@ -189,7 +189,7 @@ flow Stage1ExtractFlow {
     local ak = Stage1ExtractFlow._idx_from(ast_json, "\"args\":[", q)
     if ak < 0 { return { name: name, args: [] } }
     local rb = Stage1ExtractFlow._idx_from(ast_json, "]", ak)
-    if rb < 0 { rb = ast_json.length() }
+    if rb < 0 { rb = ast_json.size() }
     local args = []
     local i = ak
     loop(true) {
@@ -199,7 +199,7 @@ flow Stage1ExtractFlow {
       if vpos < 0 || vpos >= rb { i = tpos + 1  continue }
       local ds = RegexFlow.digits_from(ast_json, vpos + 8)
       if ds != "" { args.push(RegexFlow.to_int(ds)) }
-      i = vpos + 8 + ds.length()
+      i = vpos + 8 + ds.size()
     }
     return { name: name, args: args }
   }

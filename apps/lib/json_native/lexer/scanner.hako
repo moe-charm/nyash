@@ -20,7 +20,7 @@ box JsonScanner {
     birth(input_text) {
         me.text = input_text
         me.position = 0
-        me.length = input_text.length()
+        me.length = input_text.size()
         me.line = 1
         me.column = 1
     }
@@ -29,7 +29,7 @@ box JsonScanner {
     reset_text(input_text) {
         me.text = input_text
         me.position = 0
-        me.length = input_text.length()
+        me.length = input_text.size()
         me.line = 1
         me.column = 1
     }
@@ -181,13 +181,13 @@ box JsonScanner {
     
     // 指定文字列にマッチするかチェック（マッチしたら消費）
     match_string(expected) {
-        if me.remaining() < expected.length() {
+        if me.remaining() < expected.size() {
             return false
         }
         
-        local actual = me.text.substring(me.position, me.position + expected.length())
+        local actual = me.text.substring(me.position, me.position + expected.size())
         if actual == expected {
-            me.advance_by(expected.length())
+            me.advance_by(expected.size())
             return true
         }
         return false
@@ -195,11 +195,11 @@ box JsonScanner {
     
     // 指定文字列の先読みチェック（位置は移動しない）
     starts_with(prefix) {
-        if me.remaining() < prefix.length() {
+        if me.remaining() < prefix.size() {
             return false
         }
         
-        local actual = me.text.substring(me.position, me.position + prefix.length())
+        local actual = me.text.substring(me.position, me.position + prefix.size())
         return actual == prefix
     }
     

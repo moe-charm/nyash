@@ -20,8 +20,8 @@ static box MirCallBox {
     // materialize const args r1..rN
     loop (true) {
       local ds = RegexFlow.digits_from(s, pos)
-      if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + n, RegexFlow.to_int(ds)))  n = n + 1  pos = pos + ds.length() }
-      if pos >= s.length() { break }
+      if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + n, RegexFlow.to_int(ds)))  n = n + 1  pos = pos + ds.size() }
+      if pos >= s.size() { break }
     }
     local dst = n + 1
     // args 1..n
@@ -46,8 +46,8 @@ static box MirCallBox {
     // materialize args r2..r(n+1)
     { local i = 0  loop(true) {
         local ds = RegexFlow.digits_from(s, pos)
-        if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(2 + i, RegexFlow.to_int(ds)))  i = i + 1  n = i  pos = pos + ds.length() }
-        if pos >= s.length() { break }
+        if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(2 + i, RegexFlow.to_int(ds)))  i = i + 1  n = i  pos = pos + ds.size() }
+        if pos >= s.size() { break }
       }
     }
     local dst = n + 2
@@ -72,8 +72,8 @@ static box MirCallBox {
     // materialize args r1..rN
     { local i = 0  loop(true) {
         local ds = RegexFlow.digits_from(s, pos)
-        if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + i, RegexFlow.to_int(ds)))  i = i + 1  n = i  pos = pos + ds.length() }
-        if pos >= s.length() { break }
+        if ds == "" { pos = pos + 1 } else { insts.push(MirEmitBox.make_const(1 + i, RegexFlow.to_int(ds)))  i = i + 1  n = i  pos = pos + ds.size() }
+        if pos >= s.size() { break }
       }
     }
     local dst = n + 1

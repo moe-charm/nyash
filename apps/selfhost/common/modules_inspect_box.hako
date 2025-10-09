@@ -8,14 +8,14 @@ static box ModulesInspectBox {
     if path == null { return "" }
     local s = "" + path
     // Strip leading ./
-    if s.length() >= 2 && s.substring(0,2) == "./" { s = s.substring(2, s.length()) }
+    if s.size() >= 2 && s.substring(0,2) == "./" { s = s.substring(2, s.size()) }
     // Remove leading apps/
     local pref = "apps/"
-    if s.length() >= pref.length() && s.substring(0, pref.length()) == pref { s = s.substring(pref.length(), s.length()) }
+    if s.size() >= pref.size() && s.substring(0, pref.size()) == pref { s = s.substring(pref.size(), s.size()) }
     // Replace '-' with '.' in directory parts only
     local out = ""
     local i = 0
-    loop(i < s.length()) {
+    loop(i < s.size()) {
       local ch = s.substring(i, i+1)
       if ch == "/" { out = out + "."  i = i + 1  continue }
       if ch == "-" { out = out + "."  i = i + 1  continue }
@@ -23,11 +23,11 @@ static box ModulesInspectBox {
       i = i + 1
     }
     // Drop .hako and optional _box suffix
-    if out.length() >= 5 && out.substring(out.length()-5, out.length()) == ".hako" {
-      out = out.substring(0, out.length()-5)
+    if out.size() >= 5 && out.substring(out.size()-5, out.size()) == ".hako" {
+      out = out.substring(0, out.size()-5)
     }
-    if out.length() >= 4 && out.substring(out.length()-4, out.length()) == "_box" {
-      out = out.substring(0, out.length()-4)
+    if out.size() >= 4 && out.substring(out.size()-4, out.size()) == "_box" {
+      out = out.substring(0, out.size()-4)
     }
     return out
   }

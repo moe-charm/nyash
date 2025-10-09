@@ -57,7 +57,7 @@ flow PipelineV2 {
   _parse_int_after_prefix(s, prefix, search_pos) {
     local p = RegexFlow.find_from(s, prefix, search_pos)
     if p < 0 { return null }
-    local res = PipelineV2._parse_int_at(s, p + prefix.length())
+    local res = PipelineV2._parse_int_at(s, p + prefix.size())
     return res
   }
 

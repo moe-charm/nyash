@@ -9,7 +9,7 @@ static box MirVmM2 {
   _find_int_in(seg, keypat) {
     local p = seg.indexOf(keypat)
     if p < 0 { return null }
-    p = p + keypat.length()
+    p = p + keypat.size()
     local i = p
     local out = ""
     loop(true) {
@@ -23,7 +23,7 @@ static box MirVmM2 {
   _find_str_in(seg, keypat) {
     local p = seg.indexOf(keypat)
     if p < 0 { return "" }
-    p = p + keypat.length()
+    p = p + keypat.size()
     local q = seg.indexOf(""", p)
     if q < 0 { return "" }
     return seg.substring(p, q)
@@ -53,7 +53,7 @@ static box MirVmM2 {
       if name_end < 0 { break }
       local opname = json.substring(name_start, name_end)
       local next_pos = StringOps.index_of_from(json, ""op":"", name_end)
-      if next_pos < 0 { next_pos = json.length() }
+      if next_pos < 0 { next_pos = json.size() }
       local seg = json.substring(op_pos, next_pos)
       if opname == "const" {
         local dst = me._find_int_in(seg, ""dst":")

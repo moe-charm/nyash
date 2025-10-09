@@ -18,7 +18,7 @@ static box StringifyOpsBox {
     if arr == null { return "[]" }
     local parts = new ArrayBox()
     local i = 0
-    local n = arr.length()
+    local n = arr.size()
     loop(i < n) {
       local e = arr.get(i)
       parts.push(e.stringify())
@@ -31,7 +31,7 @@ static box StringifyOpsBox {
     if map == null { return "{}" }
     local keys = map.keys()
     // simple bubble sort for stable order
-    local n = keys.length()
+    local n = keys.size()
     local i = 0
     loop(i < n) {
       local j = 0
@@ -45,7 +45,7 @@ static box StringifyOpsBox {
     }
     local parts = new ArrayBox()
     local k = 0
-    loop(k < keys.length()) {
+    loop(k < keys.size()) {
       local key = keys.get(k)
       local val = map.get(key)
       local pair = EscUtils.quote_string(key) + ":" + val.stringify()

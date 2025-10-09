@@ -41,7 +41,7 @@ box ParserBox {
   esc_json(s) {
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\\" { out = out + "\\\\" }
@@ -81,7 +81,7 @@ box ParserBox {
     local at = pair.lastIndexOf("@")
     local content = pair.substring(0, at)
     local pos = 0
-    if at >= 0 { pos = me.to_int(pair.substring(at+1, pair.length())) }
+    if at >= 0 { pos = me.to_int(pair.substring(at+1, pair.size())) }
     else { pos = i }
     me.gpos_set(pos)
     return content
@@ -90,7 +90,7 @@ box ParserBox {
   // === using system ===
   add_using(kind, target, alias) {
     local cur = me.usings_json
-    if cur == null || cur.length() == 0 { cur = "[]" }
+    if cur == null || cur.size() == 0 { cur = "[]" }
 
     local name = ""
     local path = null
@@ -103,17 +103,17 @@ box ParserBox {
         local p = target
         local idx = -1
         local t = 0
-        loop(t < p.length()) {
+        loop(t < p.size()) {
           if p.substring(t,t+1) == "/" { idx = t }
           t = t + 1
         }
-        if idx >= 0 { p = p.substring(idx+1, p.length()) }
+        if idx >= 0 { p = p.substring(idx+1, p.size()) }
 
-        if p.length() > 5 && me.starts_with(p, p.length()-5, ".hako") == 1 {
-          p = p.substring(0, p.length()-5)
+        if p.size() > 5 && me.starts_with(p, p.size()-5, ".hako") == 1 {
+          p = p.substring(0, p.size()-5)
         } else {
-          if p.length() > 6 && me.starts_with(p, p.length()-6, ".nyash") == 1 {
-            p = p.substring(0, p.length()-6)
+          if p.size() > 6 && me.starts_with(p, p.size()-6, ".nyash") == 1 {
+            p = p.substring(0, p.size()-6)
           }
         }
         name = p
@@ -179,7 +179,7 @@ box ParserBox {
     loop(cont_prog == 1) {
       i = me.skip_ws(src, i)
 
-      if i >= src.length() {
+      if i >= src.size() {
         cont_prog = 0
       } else {
         local start_i = i
@@ -188,8 +188,8 @@ box ParserBox {
 
         // Progress guard
         if i <= start_i {
-          if i < src.length() { i = i + 1 }
-          else { i = src.length() }
+          if i < src.size() { i = i + 1 }
+          else { i = src.size() }
           me.gpos_set(i)
         }
 
@@ -205,7 +205,7 @@ box ParserBox {
           local before2 = i
           i = me.skip_ws(src, i)
 
-          if i < src.length() && src.substring(i, i+1) == ";" {
+          if i < src.size() && src.substring(i, i+1) == ";" {
             i = i + 1
           } else {
             done2 = 1
@@ -214,7 +214,7 @@ box ParserBox {
           if i == before2 { done2 = 1 }
         }
 
-        if s.length() > 0 {
+        if s.size() > 0 {
           if first == 1 {
             body = body + s
             first = 0

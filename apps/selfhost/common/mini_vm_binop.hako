@@ -32,17 +32,17 @@ static box MiniVmBinOp {
       local k_sval = "\"value\":\""
       local lvp = scan.index_of_from(json, k_sval, lhdr)
       if lvp > 0 && lvp < obj_end {
-        local li = lvp + k_sval.length()
+        local li = lvp + k_sval.size()
         local lval = cur.read_quoted_from(json, li)
         if lval {
           local k_right_lit = "\"right\":{\"kind\":\"Literal\""
-          local rhdr = scan.index_of_from(json, k_right_lit, li + lval.length())
+          local rhdr = scan.index_of_from(json, k_right_lit, li + lval.size())
           if rhdr > 0 && rhdr < obj_end {
             local rvp = scan.index_of_from(json, k_sval, rhdr)
             if rvp > 0 && rvp < obj_end {
-              local ri = rvp + k_sval.length()
+              local ri = rvp + k_sval.size()
               local rval = cur.read_quoted_from(json, ri)
-              if rval { print(lval + rval)  return ri + rval.length() + 1 }
+              if rval { print(lval + rval)  return ri + rval.size() + 1 }
             }
           }
         }
@@ -55,7 +55,7 @@ static box MiniVmBinOp {
     local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
     local li2 = scan.index_of_from(json, k_lint, opos)
     if li2 <= 0 || li2 >= obj_end { return -1 }
-    local ldigits = scan.read_digits(json, li2 + k_lint.length())
+    local ldigits = scan.read_digits(json, li2 + k_lint.size())
     if ldigits == "" { return -1 }
     local k_r = "\"right\":{\"kind\":\"Literal\""
     local rpos = scan.index_of_from(json, k_r, lpos)
@@ -63,7 +63,7 @@ static box MiniVmBinOp {
     local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
     local ri2 = scan.index_of_from(json, k_rint, lpos)
     if ri2 <= 0 || ri2 >= obj_end { return -1 }
-    local rdigits = scan.read_digits(json, ri2 + k_rint.length())
+    local rdigits = scan.read_digits(json, ri2 + k_rint.size())
     if rdigits == "" { return -1 }
     local ai = scan._str_to_int(ldigits)
     local bi = scan._str_to_int(rdigits)
@@ -92,11 +92,11 @@ static box MiniVmBinOp {
       if scan.index_of_from(json, "\"kind\":\"BinaryOp\"", print_pos) > 0 {
       local lp = scan.index_of_from(json, k_lint, print_pos)
       if lp > 0 { if lp < slice_end {
-        local ld = scan.read_digits(json, lp + k_lint.length())
+        local ld = scan.read_digits(json, lp + k_lint.size())
         if ld != "" {
-          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.size())
           if rp > 0 { if rp < slice_end {
-            local rd = scan.read_digits(json, rp + k_rint.length())
+            local rd = scan.read_digits(json, rp + k_rint.size())
             if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
           }}
         }
@@ -117,11 +117,11 @@ static box MiniVmBinOp {
       local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
       local lp = scan.index_of_from(json, k_lint, obj_start)
       if lp > 0 { if lp < obj_end2 {
-        local ld = scan.read_digits(json, lp + k_lint.length())
+        local ld = scan.read_digits(json, lp + k_lint.size())
         if ld != "" {
-          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.size())
           if rp > 0 { if rp < obj_end2 {
-            local rd = scan.read_digits(json, rp + k_rint.length())
+            local rd = scan.read_digits(json, rp + k_rint.size())
             if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
           }}
         }
@@ -136,11 +136,11 @@ static box MiniVmBinOp {
       local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
       local lp = scan.index_of_from(json, k_lint, obj_start)
       if lp > 0 { if lp < obj_end {
-        local ld = scan.read_digits(json, lp + k_lint.length())
+        local ld = scan.read_digits(json, lp + k_lint.size())
         if ld != "" {
-          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.size())
           if rp > 0 { if rp < obj_end {
-            local rd = scan.read_digits(json, rp + k_rint.length())
+            local rd = scan.read_digits(json, rp + k_rint.size())
             if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
           }}
         }
@@ -155,11 +155,11 @@ static box MiniVmBinOp {
       local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
       local lp = scan.index_of_from(json, k_lint, obj_start)
       if lp > 0 { if lp < obj_end {
-        local ld = scan.read_digits(json, lp + k_lint.length())
+        local ld = scan.read_digits(json, lp + k_lint.size())
         if ld != "" {
-          local rp = scan.index_of_from(json, k_rint, lp + k_lint.length())
+          local rp = scan.index_of_from(json, k_rint, lp + k_lint.size())
           if rp > 0 { if rp < obj_end {
-            local rd = scan.read_digits(json, rp + k_rint.length())
+            local rd = scan.read_digits(json, rp + k_rint.size())
             if rd != "" { print(scan._int_to_str(scan._str_to_int(ld) + scan._str_to_int(rd)))  return 1 }
           }}
         }
@@ -176,7 +176,7 @@ static box MiniVmBinOp {
         continue
       }
       local d = scan.read_digits(json, i)
-      if d { nums.push(d)  i = i + d.length()  continue }
+      if d { nums.push(d)  i = i + d.size()  continue }
       i = i + 1
     }
     local nsz = nums.size()
@@ -209,7 +209,7 @@ static box MiniVmBinOp {
     local a = 0
     local pos = scan.index_of_from(json, k_v, obj_start)
     loop (pos > 0 && pos < obj_end) {
-      local di = cur.read_digits_from(json, pos + k_v.length())
+      local di = cur.read_digits_from(json, pos + k_v.size())
       if di != "" {
         if found == 0 { a = scan._str_to_int(di)  found = 1 } else {
           local b = scan._str_to_int(di)
@@ -217,7 +217,7 @@ static box MiniVmBinOp {
           return obj_end + 1
         }
       }
-      pos = scan.index_of_from(json, k_v, pos + k_v.length())
+      pos = scan.index_of_from(json, k_v, pos + k_v.size())
       if pos <= 0 || pos >= obj_end { break }
     }
     return -1
@@ -236,19 +236,19 @@ static box MiniVmBinOp {
     local p = opos
     p = scan.index_of_from(json, k_v, p)
     if p < 0 { return -1 }
-    p = scan.index_of_from(json, k_v, p + k_v.length())
+    p = scan.index_of_from(json, k_v, p + k_v.size())
     if p < 0 { return -1 }
     local end1 = scan.index_of_from(json, "}", p)
     if end1 < 0 { return -1 }
-    local d1 = scan.read_digits(json, p + k_v.length())
+    local d1 = scan.read_digits(json, p + k_v.size())
     if d1 == "" { return -1 }
     p = scan.index_of_from(json, k_v, end1)
     if p < 0 { return -1 }
-    p = scan.index_of_from(json, k_v, p + k_v.length())
+    p = scan.index_of_from(json, k_v, p + k_v.size())
     if p < 0 { return -1 }
     local end2 = scan.index_of_from(json, "}", p)
     if end2 < 0 { return -1 }
-    local d2 = scan.read_digits(json, p + k_v.length())
+    local d2 = scan.read_digits(json, p + k_v.size())
     if d2 == "" { return -1 }
     local ai = scan._str_to_int(d1)
     local bi = scan._str_to_int(d2)
@@ -265,11 +265,11 @@ static box MiniVmBinOp {
     local k_typed = "\"type\":\"int\",\"value\":"
     local p1 = scan.index_of_from(json, k_typed, bpos)
     if p1 < 0 { return "" }
-    local d1 = scan.read_digits(json, p1 + k_typed.length())
+    local d1 = scan.read_digits(json, p1 + k_typed.size())
     if d1 == "" { return "" }
-    local p2 = scan.index_of_from(json, k_typed, p1 + k_typed.length())
+    local p2 = scan.index_of_from(json, k_typed, p1 + k_typed.size())
     if p2 < 0 { return "" }
-    local d2 = scan.read_digits(json, p2 + k_typed.length())
+    local d2 = scan.read_digits(json, p2 + k_typed.size())
     if d2 == "" { return "" }
     return scan._int_to_str(scan._str_to_int(d1) + scan._str_to_int(d2))
   }

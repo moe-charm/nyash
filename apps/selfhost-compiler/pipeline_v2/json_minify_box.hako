@@ -7,7 +7,7 @@ static box JsonMinifyBox {
     local s = "" + text
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     local in_str = 0
     loop(i < n) {
       local ch = s.substring(i, i+1)

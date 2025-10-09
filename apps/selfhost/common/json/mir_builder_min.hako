@@ -58,11 +58,11 @@ box MirJsonBuilderMin {
     if arr_text == null { return out }
     local s = "" + arr_text
     local i = 0
-    loop (i < s.length()) {
+    loop (i < s.size()) {
       local ch = s.substring(i, i+1)
       if ch >= "0" && ch <= "9" {
         local j = i
-        loop (j < s.length()) {
+        loop (j < s.size()) {
           local cj = s.substring(j, j+1)
           if !(cj >= "0" && cj <= "9") { break }
           j = j + 1

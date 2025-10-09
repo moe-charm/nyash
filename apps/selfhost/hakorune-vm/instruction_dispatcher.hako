@@ -24,7 +24,7 @@ static box InstructionDispatcherBox {
     if op_start < 0 {
       return Result.Err("op field not found")
     }
-    op_start = op_start + key_op.length()
+    op_start = op_start + key_op.size()
 
     local op_end = StringOps.index_of_from(inst_json, "\"", op_start)
     if op_end < 0 {

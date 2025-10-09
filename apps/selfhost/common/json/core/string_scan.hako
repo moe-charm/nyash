@@ -8,7 +8,7 @@ static box StringScanBox {
   read_char(text, i) {
     if text == null { return "" }
     if i < 0 { return "" }
-    local n = text.length()
+    local n = text.size()
     if i >= n { return "" }
     return text.substring(i, i+1)
   }
@@ -25,7 +25,7 @@ static box StringScanBox {
   find_unescaped(text, ch, pos) {
     if text == null { return -1 }
     if pos < 0 { pos = 0 }
-    local n = text.length()
+    local n = text.size()
     local i = pos
     loop (i < n) {
       local c = me.read_char(text, i)
@@ -44,10 +44,10 @@ static box StringScanBox {
   // respecting escape sequences; returns -1 if unterminated.
   scan_string_end(text, start) {
     if text == null { return -1 }
-    if start < 0 || start >= text.length() { return -1 }
+    if start < 0 || start >= text.size() { return -1 }
     if text.substring(start, start+1) != "\"" { return -1 }
     local i = start + 1
-    local n = text.length()
+    local n = text.size()
     loop (i < n) {
       local c = me.read_char(text, i)
       if c == "\\" { i = i + 2  continue }

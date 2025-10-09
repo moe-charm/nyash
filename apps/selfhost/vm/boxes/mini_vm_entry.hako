@@ -6,7 +6,7 @@ static box MiniVmEntryBox {
 
   run_trace(j) {
     if j.substring(0,1) == "{" {
-      local payload = j.substring(1, j.length())
+      local payload = j.substring(1, j.size())
       local j2 = "{\"__trace__\":1," + payload
       return MirVmMin.run_min(j2)
     }

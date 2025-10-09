@@ -33,34 +33,34 @@ static box MacroBoxSpec {
     local p_json = "\"kind\":\"FunctionCall\",\"name\":\"json\",\"arguments\":["
     local p_map  = "\"kind\":\"FunctionCall\",\"name\":\"map\",\"arguments\":["
     local p_arr  = "\"kind\":\"FunctionCall\",\"name\":\"arr\",\"arguments\":["
-    loop(i < s.length()) {
-      if i + p_json.length() <= s.length() && s.substring(i, i + p_json.length()) == p_json {
-        local j = i + p_json.length()
+    loop(i < s.size()) {
+      if i + p_json.size() <= s.size() && s.substring(i, i + p_json.size()) == p_json {
+        local j = i + p_json.size()
         local lit = self._read_value(s, j)
-        local endp = j + lit.length()
+        local endp = j + lit.size()
         // skip closing ]}
-        if endp < s.length() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
-        if endp < s.length() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
         out = out + lit
         i = endp
         continue
       }
-      if i + p_map.length() <= s.length() && s.substring(i, i + p_map.length()) == p_map {
-        local j = i + p_map.length()
+      if i + p_map.size() <= s.size() && s.substring(i, i + p_map.size()) == p_map {
+        local j = i + p_map.size()
         local lit = self._read_value(s, j)
-        local endp = j + lit.length()
-        if endp < s.length() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
-        if endp < s.length() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
+        local endp = j + lit.size()
+        if endp < s.size() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
         out = out + lit
         i = endp
         continue
       }
-      if i + p_arr.length() <= s.length() && s.substring(i, i + p_arr.length()) == p_arr {
-        local j = i + p_arr.length()
+      if i + p_arr.size() <= s.size() && s.substring(i, i + p_arr.size()) == p_arr {
+        local j = i + p_arr.size()
         local lit = self._read_value(s, j)
-        local endp = j + lit.length()
-        if endp < s.length() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
-        if endp < s.length() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
+        local endp = j + lit.size()
+        if endp < s.size() && s.substring(endp, endp+1) == "]" { endp = endp + 1 }
+        if endp < s.size() && s.substring(endp, endp+1) == "}" { endp = endp + 1 }
         out = out + lit
         i = endp
         continue
@@ -78,16 +78,16 @@ static box MacroBoxSpec {
     local i = 0
     local p_call = "\"kind\":\"FunctionCall\",\"name\":\"call\",\"arguments\":["
     local lit_prefix = "{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\""
-    loop(i < s.length()) {
-      if i + p_call.length() <= s.length() && s.substring(i, i + p_call.length()) == p_call {
-        local j = i + p_call.length()
+    loop(i < s.size()) {
+      if i + p_call.size() <= s.size() && s.substring(i, i + p_call.size()) == p_call {
+        local j = i + p_call.size()
         // Expect string literal as first argument
-        if j + lit_prefix.length() <= s.length() && s.substring(j, j + lit_prefix.length()) == lit_prefix {
+        if j + lit_prefix.size() <= s.size() && s.substring(j, j + lit_prefix.size()) == lit_prefix {
           // Extract method name until unescaped quote
-          local k = j + lit_prefix.length()
+          local k = j + lit_prefix.size()
           local name = ""
           local esc = 0
-          loop(k < s.length()) {
+          loop(k < s.size()) {
             local ch = s.substring(k, k+1)
             if esc == 1 { name = name + ch
  esc = 0
@@ -102,17 +102,17 @@ static box MacroBoxSpec {
           }
           // Close literal JSON value fully
           local lit_json = self._read_value(s, j)
-          local after_lit = j + lit_json.length()
+          local after_lit = j + lit_json.size()
           // after_lit now at char after the first argument JSON
           // Capture remaining arguments (if any) until the closing ']'
           local rest = ""
           local pos = after_lit
-          if pos < s.length() && s.substring(pos, pos+1) == "," { pos = pos + 1 }
+          if pos < s.size() && s.substring(pos, pos+1) == "," { pos = pos + 1 }
           // Read until matching ']' at top-level
           local depth = 1
           local in_str = 0
           local esc2 = 0
-          loop(pos < s.length()) {
+          loop(pos < s.size()) {
             local ch2 = s.substring(pos, pos+1)
             if in_str == 1 {
               if esc2 == 1 { esc2 = 0 }
@@ -130,8 +130,8 @@ static box MacroBoxSpec {
             pos = pos + 1
           }
           // Skip ']' and optional '}' of FunctionCall
-          if pos < s.length() && s.substring(pos, pos+1) == "]" { pos = pos + 1 }
-          if pos < s.length() && s.substring(pos, pos+1) == "}" { pos = pos + 1 }
+          if pos < s.size() && s.substring(pos, pos+1) == "]" { pos = pos + 1 }
+          if pos < s.size() && s.substring(pos, pos+1) == "}" { pos = pos + 1 }
           // Emit new FunctionCall JSON
           out = out + "{\"kind\":\"FunctionCall\",\"name\":\"" + name + "\",\"arguments\":[" + rest + "]}"
           i = pos
@@ -148,7 +148,7 @@ static box MacroBoxSpec {
   // Read a balanced JSON value starting at index `start` (expects '{' or '[')
   // Returns substring only (caller computes end as start + len)
   _read_value(s, start) {
-    local n = s.length()
+    local n = s.size()
     if start >= n { return "" }
     local ch0 = s.substring(start, start+1)
     local is_obj = 0

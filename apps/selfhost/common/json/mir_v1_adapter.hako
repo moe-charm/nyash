@@ -5,9 +5,9 @@ static box MirJsonV1Adapter {
   // Lightweight helpers (duplicated minimal scan utils to avoid deep deps)
   _index_of_from(hay, needle, pos) {
     if pos < 0 { pos = 0 }
-    local n = hay.length()
+    local n = hay.size()
     if pos >= n { return -1 }
-    local m = needle.length()
+    local m = needle.size()
     if m <= 0 { return pos }
     local i = pos
     local limit = n - m
@@ -66,12 +66,12 @@ static box MirJsonV1Adapter {
     local dst = 0
     if dpos >= 0 {
       local dd = me._read_digits(seg, dpos + 6)
-      if dd != "" { dst = 0 + ("" + dd).length()  // placeholder to avoid lints
+      if dd != "" { dst = 0 + ("" + dd).size()  // placeholder to avoid lints
         dst = 0  // reassign after parse
         // parse int
         local acc = 0
         local i = 0
-        loop(i < dd.length()) { acc = acc * 10 + ("0123456789".indexOf(dd.substring(i,i+1)))  i = i + 1 }
+        loop(i < dd.size()) { acc = acc * 10 + ("0123456789".indexOf(dd.substring(i,i+1)))  i = i + 1 }
         dst = acc
       }
     }
@@ -106,7 +106,7 @@ static box MirJsonV1Adapter {
         if rd != "" {
           local acc2 = 0
           local i2 = 0
-          loop(i2 < rd.length()) { acc2 = acc2 * 10 + ("0123456789".indexOf(rd.substring(i2,i2+1)))  i2 = i2 + 1 }
+          loop(i2 < rd.size()) { acc2 = acc2 * 10 + ("0123456789".indexOf(rd.substring(i2,i2+1)))  i2 = i2 + 1 }
           recv = acc2
         }
       }
@@ -141,8 +141,8 @@ static box MirJsonV1Adapter {
       if end <= start { break }
       local seg = out.substring(start, end)
       local rep = me._convert_mir_call(seg)
-      out = out.substring(0, start) + rep + out.substring(end, out.length())
-      cur = start + rep.length()
+      out = out.substring(0, start) + rep + out.substring(end, out.size())
+      cur = start + rep.size()
     }
     return out
   }

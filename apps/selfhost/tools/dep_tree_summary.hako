@@ -23,7 +23,7 @@ static box DepTreeSummaryBox {
     if n.has("using") {
       local us = n.get("using")
       local i = 0
-      loop(i < us.length()) {
+      loop(i < us.size()) {
         local u = us.get(i)
         if u != null {
           if u.get != null && u.get("resolved") != null { acc.set("using_resolved", acc.get("using_resolved") + 1) }
@@ -36,7 +36,7 @@ static box DepTreeSummaryBox {
     if n.has("children") {
       local ch = n.get("children")
       local i = 0
-      loop(i < ch.length()) { acc = me._merge(acc, me.summarize_node(ch.get(i)))  i = i + 1 }
+      loop(i < ch.size()) { acc = me._merge(acc, me.summarize_node(ch.get(i)))  i = i + 1 }
     }
     return acc
   }

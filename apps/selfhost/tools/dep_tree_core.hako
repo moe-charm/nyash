@@ -42,7 +42,7 @@ static box DepTreeCore {
   esc_json(s) {
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\\" { out = out + "\\\\" } else {

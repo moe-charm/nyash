@@ -145,12 +145,12 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
                 .map_err(|e| e.to_string())?;
             Ok(true)
         }
-        "length" => {
+        "length" | "size" => {
             if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-                eprintln!("[LLVM] lower Array.length (core)");
+                eprintln!("[LLVM] lower Array.length/size (core)");
             }
             if !args.is_empty() {
-                return Err("ArrayBox.length expects 0 arg".to_string());
+                return Err("ArrayBox.length/size expects 0 arg".to_string());
             }
             let fnty = i64t.fn_type(&[i64t.into()], false);
             let callee = codegen
@@ -170,6 +170,40 @@ pub(super) fn try_handle_array_method<'ctx, 'b>(
                     .left()
                     .ok_or("array_length_h returned void".to_string())?;
                 vmap.insert(*d, rv);
+            }
+            Ok(true)
+        }
+        "isEmpty" => {
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("[LLVM] lower Array.isEmpty (core)");
+            }
+            if !args.is_empty() {
+                return Err("ArrayBox.isEmpty expects 0 arg".to_string());
+            }
+            // length == 0 → 1 else 0
+            let fnty = i64t.fn_type(&[i64t.into()], false);
+            let callee = codegen
+                .module
+                .get_function("nyash_array_length_h")
+                .unwrap_or_else(|| codegen.module.add_function("nyash_array_length_h", fnty, None));
+            let call = cursor
+                .emit_instr(cur_bid, |b| b.build_call(callee, &[recv_h.into()], "alen_for_empty"))
+                .map_err(|e| e.to_string())?;
+            if let Some(d) = dst {
+                let rv = call
+                    .try_as_basic_value()
+                    .left()
+                    .ok_or("array_length_h returned void".to_string())?;
+                let zero = i64t.const_zero();
+                let eq = codegen
+                    .builder
+                    .build_int_compare(inkwell::IntPredicate::EQ, rv.into_int_value(), zero, "aempty_cmp")
+                    .map_err(|e| e.to_string())?;
+                let as_i64 = codegen
+                    .builder
+                    .build_int_z_extend(eq, i64t, "aempty_zext")
+                    .map_err(|e| e.to_string())?;
+                vmap.insert(*d, as_i64.into());
             }
             Ok(true)
         }

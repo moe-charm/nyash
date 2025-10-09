@@ -18,7 +18,7 @@ static box PipelineNameResolveBox {
     local dot2 = RegexFlow.find_from(raw_name, ".", 0)
     if dot2 < 0 { return null }
     local head2 = raw_name.substring(0, dot2)
-    local tail2 = raw_name.substring(dot2 + 1, raw_name.length())
+    local tail2 = raw_name.substring(dot2 + 1, raw_name.size())
     local ns2 = r.resolve_namespace_alias(head2)
     if ns2 == null { ns2 = r.guess_namespace_from_tail(head2) }
     if ns2 == null { return null }

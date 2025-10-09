@@ -13,7 +13,7 @@ static box MiniVmPrints {
     local k_val = "\"value\":\""
     local s = scan.index_of_from(json, k_val, print_pos)
     if s < 0 || s >= end { return -1 }
-    local i = s + k_val.length()
+    local i = s + k_val.size()
     local j = scan.index_of_from(json, "\"", i)
     if j <= 0 || j > end { return -1 }
     print(json.substring(i, j))
@@ -35,7 +35,7 @@ static box MiniVmPrints {
     local k_val2 = "\"value\":"
     local v2 = scan.index_of_from(json, k_val2, tpos)
     if v2 <= 0 || v2 >= obj_end { return -1 }
-    local digits = scan.read_digits(json, v2 + k_val2.length())
+    local digits = scan.read_digits(json, v2 + k_val2.size())
     if digits == "" { return -1 }
     print(digits)
     return obj_end + 1
@@ -49,7 +49,7 @@ static box MiniVmPrints {
     local k_name = "\"name\":\""
     local npos = scan.index_of_from(json, k_name, fcp)
     if npos <= 0 || npos >= end { return -1 }
-    local ni = npos + k_name.length()
+    local ni = npos + k_name.size()
     local nj = scan.index_of_from(json, "\"", ni)
     if nj <= 0 || nj > end { return -1 }
     local fname = json.substring(ni, nj)
@@ -76,7 +76,7 @@ static box MiniVmPrints {
       if fname == "itoa" { print("0")  return arr_end + 1 }
       return -1
     }
-    atpos = atpos + k_t.length()
+    atpos = atpos + k_t.size()
     local at_end = scan.index_of_from(json, "\"", atpos)
     if at_end <= 0 || at_end > arr_end { return -1 }
     local aty = json.substring(atpos, at_end)
@@ -84,7 +84,7 @@ static box MiniVmPrints {
       local k_sval = "\"value\":\""
       local svalp = scan.index_of_from(json, k_sval, at_end)
       if svalp <= 0 || svalp >= arr_end { return -1 }
-      local si = svalp + k_sval.length()
+      local si = svalp + k_sval.size()
       local sj = scan.index_of_from(json, "\"", si)
       if sj <= 0 || sj > arr_end { return -1 }
       local sval = json.substring(si, sj)
@@ -95,8 +95,8 @@ static box MiniVmPrints {
       local k_ival = "\"value\":"
       local ivalp = scan.index_of_from(json, k_ival, at_end)
       if ivalp <= 0 || ivalp >= arr_end { return -1 }
-      local digits = scan.read_digits(json, ivalp + k_ival.length())
-      if fname == "itoa" || fname == "echo" { print(digits)  return ivalp + k_ival.length() }
+      local digits = scan.read_digits(json, ivalp + k_ival.size())
+      if fname == "itoa" || fname == "echo" { print(digits)  return ivalp + k_ival.size() }
       return -1
     }
     return -1

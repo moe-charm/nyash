@@ -36,10 +36,10 @@ static box PhiDecodeBox {
     local key = me._dq()+"values"+me._dq()+":"+me._lsq()
     local p = seg.indexOf(key)
     if p < 0 { return null }
-    local arr_br = p + key.length() - 1  // points at '['
+    local arr_br = p + key.size() - 1  // points at '['
     local i = arr_br + 1
     local endp = JsonCursorBox.seek_array_end(seg, arr_br)
-    local n = seg.length()
+    local n = seg.size()
     if endp >= 0 { n = endp }
     local best_dst = JsonFragBox.get_int(seg, "dst")
     if best_dst == null { return { type: "err", code: "phi:invalid-object:dst-missing" } }

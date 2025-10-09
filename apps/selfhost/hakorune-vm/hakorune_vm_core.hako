@@ -111,7 +111,7 @@ static box HakoruneVmCore {
       // No instructions (empty block)
       return Result.Ok(0)
     }
-    insts_start = insts_start + key_insts.length()
+    insts_start = insts_start + key_insts.size()
 
     // Find instructions array end
     local insts_end = JsonCursorBox.seek_array_end(block_json, insts_start - 1)
@@ -128,7 +128,7 @@ static box HakoruneVmCore {
   // Execute instructions sequentially
   _execute_instructions(insts_json, regs, mem) {
     local pos = 0
-    local len = insts_json.length()
+    local len = insts_json.size()
     local last_ret_value = 0
 
     loop(pos < len) {

@@ -24,7 +24,7 @@ static box Main {
     print("Result: " + MiniVmEntryBox.int_to_str(result2))
 
     print("\n--- With Trace (Method 2: Direct Injection) ---")
-    local json_with_trace = "{\"__trace__\":1," + json.substring(1, json.length())
+    local json_with_trace = "{\"__trace__\":1," + json.substring(1, json.size())
     local result3 = MiniVmEntryBox.run_min(json_with_trace)
     print("Result: " + MiniVmEntryBox.int_to_str(result3))
 

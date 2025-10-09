@@ -30,7 +30,7 @@ static box HakoruneVmMin {
   run_min(mjson) { return me._run_min(mjson) }
   run_thin(mjson) {
     if mjson.substring(0,1) == "{" {
-      local payload = mjson.substring(1, mjson.length())
+      local payload = mjson.substring(1, mjson.size())
       local j2 = "{\"__thin__\":1," + payload
       local v = me._run_min(j2)
       print(me._int_to_str(v))
@@ -86,7 +86,7 @@ static box HakoruneVmMin {
       DiagnosticsBox.debug("[minivm] endp=" + me._int_to_str(endp))
       if endp <= start { return 0 }
       local inst_seg = mjson.substring(start, endp)
-      DiagnosticsBox.debug("[minivm] seglen=" + me._int_to_str(inst_seg.length()))
+      DiagnosticsBox.debug("[minivm] seglen=" + me._int_to_str(inst_seg.size()))
       // Eager minimal resolver for compare→ret when ret targets compare dst
       if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 {
         local cdst0 = JsonFragBox.get_int(inst_seg, "dst")
@@ -137,7 +137,7 @@ static box HakoruneVmMin {
         loop(true) {
           local k = me.index_of_from(search, key, pos)
           if k < 0 { break }
-          local ds = search.substring(k + key.length(), search.length())
+          local ds = search.substring(k + key.size(), search.size())
           local i = 0
           local out = ""
           loop(true) {
@@ -147,15 +147,15 @@ static box HakoruneVmMin {
           }
           if out != "" { vals.push(out) }
           if vals.size() >= 2 { break }
-          pos = k + key.length() + i
+          pos = k + key.size() + i
         }
         if vals.size() >= 2 {
           local lv = 0
           local rv = 0
           local i0 = 0
-          loop(i0 < vals.get(0).length()) { lv = lv * 10 + ("0123456789".indexOf(vals.get(0).substring(i0,i0+1)))  i0 = i0 + 1 }
+          loop(i0 < vals.get(0).size()) { lv = lv * 10 + ("0123456789".indexOf(vals.get(0).substring(i0,i0+1)))  i0 = i0 + 1 }
           local i1 = 0
-          loop(i1 < vals.get(1).length()) { rv = rv * 10 + ("0123456789".indexOf(vals.get(1).substring(i1,i1+1)))  i1 = i1 + 1 }
+          loop(i1 < vals.get(1).size()) { rv = rv * 10 + ("0123456789".indexOf(vals.get(1).substring(i1,i1+1)))  i1 = i1 + 1 }
           // compare op
           local cmp = InstScanBox.extract_cmp(inst_seg)
           local cv = 0
@@ -171,7 +171,7 @@ static box HakoruneVmMin {
       local scan_pos = 0
       local moved = 0
       loop(true){
-        if scan_pos >= inst_seg.length() { break }
+        if scan_pos >= inst_seg.size() { break }
         // Delegate object decode to InstrDecoderBox (thin wrapper over InstructionScannerBox)
         local nxt = InstrDecoderBox.next(inst_seg, scan_pos)
         if nxt == null { break }
@@ -206,7 +206,7 @@ static box HakoruneVmMin {
           local kdst = (rec != null ? rec.get("dst") : JsonFragBox.get_int(seg, "dst"))
           if kdst != null { last_cmp_dst = kdst  last_cmp_val = me._load_reg(regs, kdst) }
           // Early-return optimization for simple compare→ret in same block
-          local tail = inst_seg.substring(obj_end, inst_seg.length())
+          local tail = inst_seg.substring(obj_end, inst_seg.size())
           if me.index_of_from(tail, "\"op\":\"ret\"", 0) >= 0 {
             local ridt = JsonFragBox.get_int(tail, "value")
             if ridt != null { if ridt == last_cmp_dst { return last_cmp_val } }
@@ -261,7 +261,7 @@ static box HakoruneVmMin {
       // Detect explicit op:"ret"
       if me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
         local rstart = me.index_of_from(inst_seg, "\"op\":\"ret\"", 0)
-        local rseg = inst_seg.substring(rstart, inst_seg.length())
+        local rseg = inst_seg.substring(rstart, inst_seg.size())
         local rid = JsonFragBox.get_int(rseg, "value")
         if rid != null { return RetResolverBox.resolve(regs, rid, last_cmp_dst, last_cmp_val) }
       }
@@ -274,7 +274,7 @@ static box HakoruneVmMin {
       if me.index_of_from(inst_seg, "\"op\":\"compare\"", 0) >= 0 && me.index_of_from(inst_seg, "\"op\":\"ret\"", 0) >= 0 {
         // Extract compare segment (from first compare occurrence)
         local cstart = me.index_of_from(inst_seg, "\"op\":\"compare\"", 0)
-        local cseg = inst_seg.substring(cstart, inst_seg.length())
+        local cseg = inst_seg.substring(cstart, inst_seg.size())
         // Normalize fields via CompareScanBox (v0/v1 tolerant)
         local rec = CompareScanBox.parse(cseg)
         // Fallback to direct ints only if parse failed
@@ -293,7 +293,7 @@ static box HakoruneVmMin {
         // Read fields
         // Extract ret id
         local rstart3 = me.index_of_from(inst_seg, "\"op\":\"ret\"", 0)
-        local rseg3 = inst_seg.substring(rstart3, inst_seg.length())
+        local rseg3 = inst_seg.substring(rstart3, inst_seg.size())
         local rid3 = JsonFragBox.get_int(rseg3, "value")
         if rid3 != null {
           if rid3 == cdst { return cv }

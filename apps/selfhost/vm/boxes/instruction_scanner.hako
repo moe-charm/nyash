@@ -16,7 +16,7 @@ static box InstructionScannerBox {
     if seg == null { return "" }
     local out = ""
     local i = 0
-    local n = seg.length()
+    local n = seg.size()
     loop (i < n) {
       local ch = seg.substring(i, i+1)
       if i+2 <= n {
@@ -36,7 +36,7 @@ static box InstructionScannerBox {
     local k1 = "\"op\":\""
     local p1 = obj.indexOf(k1)
     if p1 >= 0 {
-      local i = p1 + k1.length()           // start of value (right after opening quote)
+      local i = p1 + k1.size()           // start of value (right after opening quote)
       local j = JsonCursorBox.scan_string_end(obj, i - 1)
       if j > i { return obj.substring(i, j) }
     }
@@ -44,7 +44,7 @@ static box InstructionScannerBox {
     local kk = "\"kind\":\""
     local pk = obj.indexOf(kk)
     if pk >= 0 {
-      local i2 = pk + kk.length()
+      local i2 = pk + kk.size()
       local j2 = JsonCursorBox.scan_string_end(obj, i2 - 1)
       if j2 > i2 {
         local k = obj.substring(i2, j2)

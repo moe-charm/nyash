@@ -8,10 +8,10 @@ static box MiniVmProbe {
   probe_compare(mjson) {
     local regs = map({})
     local seg = JsonFragBox.block0_segment(mjson)
-    if seg.length() == 0 { return map({}) }
+    if seg.size() == 0 { return map({}) }
     local pos = 0
     loop(true) {
-      if pos >= seg.length() { break }
+      if pos >= seg.size() { break }
       // Use escape-aware scanner to get next instruction object
       local mm = InstructionScannerBox.next(seg, pos)
       if mm == null { break }

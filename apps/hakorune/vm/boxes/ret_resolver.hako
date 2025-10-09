@@ -4,7 +4,7 @@ using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
 using "apps/hakorune/vm/boxes/diagnostics.hako" as DiagnosticsBox
 
 static box RetResolverBox {
-  _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
+  _is_numeric_str(s){ if s==null {return 0} local n=s.size() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return null} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return null }
 
   // Resolve return value. Inputs:

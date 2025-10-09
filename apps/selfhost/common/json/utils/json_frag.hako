@@ -16,7 +16,7 @@ static box JsonFragBox {
     local pat1 = "\"" + key + "\":"
     local p = me.index_of_from(seg, pat1, 0)
     if p >= 0 {
-      local v = me.read_digits(seg, p + pat1.length())
+      local v = me.read_digits(seg, p + pat1.size())
       if v != "" { return me._str_to_int(v) }
     }
     return null
@@ -27,7 +27,7 @@ static box JsonFragBox {
     local pat = "\"" + key + "\":\""
     local p = me.index_of_from(seg, pat, 0)
     if p >= 0 {
-      local vstart = p + pat.length()              // start of value (right after opening quote)
+      local vstart = p + pat.size()              // start of value (right after opening quote)
       local vend = JsonCursorBox.scan_string_end(seg, vstart - 1)
       if vend > vstart { return seg.substring(vstart, vend) }
     }
@@ -60,7 +60,7 @@ static box JsonFragBox {
     local pk = call("String.indexOf/2", mjson, key)
     if pk < 0 { return "" }
     // '[' position
-    local arr_bracket = pk + key.length() - 1
+    local arr_bracket = pk + key.size() - 1
     // Use escape-aware scanner to find matching ']'
     local endp = JsonCursorBox.seek_array_end(mjson, arr_bracket)
     if endp < 0 { return "" }

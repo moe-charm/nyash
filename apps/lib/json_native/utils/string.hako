@@ -13,18 +13,18 @@ static box StringUtils {
     // 先頭空白をトリム
     trim_start(s) {
         local i = 0
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             if not this.is_whitespace(s.substring(i, i + 1)) {
                 break
             }
             i = i + 1
         }
-        return s.substring(i, s.length())
+        return s.substring(i, s.size())
     }
     
     // 末尾空白をトリム
     trim_end(s) {
-        local i = s.length() - 1
+        local i = s.size() - 1
         loop(i >= 0) {
             if not this.is_whitespace(s.substring(i, i + 1)) {
                 break
@@ -66,7 +66,7 @@ static box StringUtils {
     // 文字が最初に現れる位置を取得（見つからない場合は-1）
     index_of(s, ch) {
         local i = 0
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             if s.substring(i, i + 1) == ch {
                 return i
             }
@@ -77,7 +77,7 @@ static box StringUtils {
     
     // 文字が最後に現れる位置を取得（見つからない場合は-1）
     last_index_of(s, ch) {
-        local i = s.length() - 1
+        local i = s.size() - 1
         loop(i >= 0) {
             if s.substring(i, i + 1) == ch {
                 return i
@@ -94,16 +94,16 @@ static box StringUtils {
     
     // 部分文字列の位置を取得（見つからない場合は-1）
     index_of_string(s, substr) {
-        if substr.length() == 0 {
+        if substr.size() == 0 {
             return 0
         }
-        if substr.length() > s.length() {
+        if substr.size() > s.size() {
             return -1
         }
         
         local i = 0
-        loop(i <= s.length() - substr.length()) {
-            if s.substring(i, i + substr.length()) == substr {
+        loop(i <= s.size() - substr.size()) {
+            if s.substring(i, i + substr.size()) == substr {
                 return i
             }
             i = i + 1
@@ -117,7 +117,7 @@ static box StringUtils {
     to_upper(s) {
         local result = ""
         local i = 0
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             result = result + this.char_to_upper(ch)
             i = i + 1
@@ -129,7 +129,7 @@ static box StringUtils {
     to_lower(s) {
         local result = ""
         local i = 0
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             result = result + this.char_to_lower(ch)
             i = i + 1
@@ -183,7 +183,7 @@ static box StringUtils {
     join(arr, separator) {
         local result = ""
         local i = 0
-        loop(i < arr.length()) {
+        loop(i < arr.size()) {
             if i > 0 {
                 result = result + separator
             }
@@ -196,17 +196,17 @@ static box StringUtils {
     // 文字列を指定された区切り文字で分割（簡易版）
     split(s, separator) {
         local result = new ArrayBox()
-        if separator.length() == 0 {
+        if separator.size() == 0 {
             result.push(s)
             return result
         }
         
         local start = 0
         local i = 0
-        loop(i <= s.length() - separator.length()) {
-            if s.substring(i, i + separator.length()) == separator {
+        loop(i <= s.size() - separator.size()) {
+            if s.substring(i, i + separator.size()) == separator {
                 result.push(s.substring(start, i))
-                start = i + separator.length()
+                start = i + separator.size()
                 i = start
             } else {
                 i = i + 1
@@ -214,8 +214,8 @@ static box StringUtils {
         }
         
         // 最後の部分を追加
-        if start <= s.length() {
-            result.push(s.substring(start, s.length()))
+        if start <= s.size() {
+            result.push(s.substring(start, s.size()))
         }
         
         return result
@@ -229,20 +229,20 @@ static box StringUtils {
 
     // 文字列が数値表現かどうか判定（整数のみ、簡易版）
     is_integer(s) {
-        if s.length() == 0 {
+        if s.size() == 0 {
             return false
         }
         
         local start = 0
         if s.substring(0, 1) == "-" {
-            if s.length() == 1 {
+            if s.size() == 1 {
                 return false
             }
             start = 1
         }
 
         // 先頭ゼロの禁止（"0" 単独は許可、符号付きの "-0" も許可）
-        if s.length() - start > 1 and s.substring(start, start + 1) == "0" {
+        if s.size() - start > 1 and s.substring(start, start + 1) == "0" {
             // 2文字目以降が数字なら先頭ゼロ（不正）
             if this.is_digit(s.substring(start + 1, start + 2)) {
                 return false
@@ -250,7 +250,7 @@ static box StringUtils {
         }
         
         local i = start
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             if not this.is_digit(s.substring(i, i + 1)) {
                 return false
             }
@@ -261,23 +261,23 @@ static box StringUtils {
     
     // 文字列が空または空白のみかどうか判定（ユーティリティ）
     is_empty_or_whitespace(s) {
-        return this.trim(s).length() == 0
+        return this.trim(s).size() == 0
     }
 
     // 文字列の先頭が指定された文字列で始まるか判定
     starts_with(s, prefix) {
-        if prefix.length() > s.length() {
+        if prefix.size() > s.size() {
             return false
         }
-        return s.substring(0, prefix.length()) == prefix
+        return s.substring(0, prefix.size()) == prefix
     }
 
     // 文字列の末尾が指定された文字列で終わるか判定
     ends_with(s, suffix) {
-        if suffix.length() > s.length() {
+        if suffix.size() > s.size() {
             return false
         }
-        return s.substring(s.length() - suffix.length(), s.length()) == suffix
+        return s.substring(s.size() - suffix.size(), s.size()) == suffix
     }
 
     // 文字列を整数に変換（簡易版）
@@ -296,7 +296,7 @@ static box StringUtils {
 
         local acc = 0
         local digits = "0123456789"
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             // '0'..'9' → 位置で数値化
             local d = this.index_of(digits, ch)

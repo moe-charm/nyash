@@ -17,7 +17,7 @@ static box DepTree {
     local out = new ArrayBox()
     if src == null { return out }
     local i = 0
-    local n = src.length()
+    local n = src.size()
     loop(i < n) {
       local j = new StringStd().index_of_from(src, "include \"", i)
       if j < 0 { break }
@@ -40,16 +40,16 @@ static box DepTree {
     if src == null { return out }
     local lines = me.split_lines(src)
     local i = 0
-    loop(i < lines.length()) {
+    loop(i < lines.size()) {
       local line = lines.get(i).trim()
       local t = line
       local matched = false
-      if t.startsWith("// @using ") { t = t.substring(10, t.length()).trim() matched = true }
-      else if t.startsWith("using ") { t = t.substring(6, t.length()).trim() matched = true }
+      if t.startsWith("// @using ") { t = t.substring(10, t.size()).trim() matched = true }
+      else if t.startsWith("using ") { t = t.substring(6, t.size()).trim() matched = true }
 
       if matched {
         // optional trailing semicolon
-        if t.endsWith(";") { t = t.substring(0, t.length()-1).trim() }
+        if t.endsWith(";") { t = t.substring(0, t.size()-1).trim() }
 
         local rec = map({})
         // Split alias
@@ -58,7 +58,7 @@ static box DepTree {
         local alias = null
         if as_pos >= 0 {
           target = t.substring(0, as_pos).trim()
-          alias = t.substring(as_pos+4, t.length()).trim()
+          alias = t.substring(as_pos+4, t.size()).trim()
         }
         rec.set("target", target)
         if alias != null { rec.set("alias", alias) }
@@ -66,7 +66,7 @@ static box DepTree {
         if target.startsWith("\"") || target.startsWith("./") || target.startsWith("/") || target.endsWith(".nyash") {
           rec.set("kind", "path")
           // strip quotes
-          if target.startsWith("\"") { rec.set("target", target.substring(1, target.length()-1)) }
+          if target.startsWith("\"") { rec.set("target", target.substring(1, target.size()-1)) }
         } else {
           rec.set("kind", "ns")
         }
@@ -83,14 +83,14 @@ static box DepTree {
     if src != null {
       local lines = me.split_lines(src)
       local i = 0
-      loop(i < lines.length()) {
+      loop(i < lines.size()) {
         local line = lines.get(i).trim()
         if line.startsWith("// @module ") {
-          local rest = line.substring(11, line.length()).trim()
+          local rest = line.substring(11, line.size()).trim()
           local eq = new StringStd().index_of_from(rest, "=", 0)
           if eq > 0 {
             local ns = rest.substring(0, eq).trim()
-            local path = rest.substring(eq+1, rest.length()).trim()
+            local path = rest.substring(eq+1, rest.size()).trim()
             path = me.strip_quotes(path)
             local m = map({ ns: ns, path: path })
             out.push(m)
@@ -127,7 +127,7 @@ static box DepTree {
     local children = new ArrayBox()
     // include children
     local i = 0
-    loop(i < incs.length()) {
+    loop(i < incs.size()) {
       local p = incs.get(i)
       local child_path = me.resolve_path(base_dir, p)
       if Core.file_exists(child_path) { DepTreeAnnotatorBox.annotate_include_resolved(m, p, child_path) }
@@ -137,7 +137,7 @@ static box DepTree {
     }
     // using(path) children
     i = 0
-    loop(i < us.length()) {
+    loop(i < us.size()) {
       local u = us.get(i)
       if u.get("kind") == "path" {
         local p = u.get(\"target\")
@@ -149,7 +149,7 @@ static box DepTree {
     // using(ns) children resolved via search paths
     local search = me.default_using_paths()
     i = 0
-    loop(i < us.length()) {
+    loop(i < us.size()) {
       local u = us.get(i)
       if u.get("kind") == "ns" {
         local ns = u.get("target")
@@ -191,7 +191,7 @@ static box DepTree {
   split_lines(src) {
     local out = new ArrayBox()
     local i = 0
-    local n = src.length()
+    local n = src.size()
     local start = 0
     loop(i <= n) {
       if i == n || src.substring(i, i+1) == "\n" {
@@ -205,8 +205,8 @@ static box DepTree {
 
   strip_quotes(s) {
     if s == null { return null }
-    if s.length() >= 2 && s.substring(0,1) == "\"" && s.substring(s.length()-1, s.length()) == "\"" {
-      return s.substring(1, s.length()-1)
+    if s.size() >= 2 && s.substring(0,1) == "\"" && s.substring(s.size()-1, s.size()) == "\"" {
+      return s.substring(1, s.size()-1)
     }
     return s
   }
@@ -225,7 +225,7 @@ static box DepTree {
     if Core.file_exists(j) { return j }
     // then search list
     local i = 0
-    loop(i < paths.length()) {
+    loop(i < paths.size()) {
       local p = paths.get(i)
       local cand = Core.join(p, rel)
       if Core.file_exists(cand) { return cand }

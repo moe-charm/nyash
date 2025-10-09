@@ -7,7 +7,7 @@ static box ParserNumberScanBox {
 
   scan_int(src, i) {
     if src == null { return "{"type":"Int","value":0}@" + me._i2s(i) }
-    local n = src.length()
+    local n = src.size()
     local j = i
     local cont = 1
     local guard = 0
@@ -19,7 +19,7 @@ static box ParserNumberScanBox {
       } else { cont = 0 }
     }
     local s = src.substring(i, j)
-    if s.length() == 0 { s = "0" }
+    if s.size() == 0 { s = "0" }
     return "{"type":"Int","value":" + s + "}@" + me._i2s(j)
   }
 }

@@ -8,7 +8,7 @@ static box ParserStringScanBox {
 
   scan(src, i) {
     if src == null { return "@" + me._i2s(i) }
-    local n = src.length()
+    local n = src.size()
     local j = i
     if j >= n || src.substring(j, j+1) != "\"" { return "@" + me._i2s(i) }
     j = j + 1

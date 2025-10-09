@@ -11,7 +11,7 @@ static box InstScanBox {
     local cmp_key = "\"cmp\":\""
     local pk = HakoruneJsonCursorBox.index_of_from(inst_seg, cmp_key, 0)
     if pk < 0 { return "Eq" } // default
-    local i = pk + cmp_key.length()
+    local i = pk + cmp_key.size()
     local j = StringScanBox.find_quote(inst_seg, i)
     if j > i { return inst_seg.substring(i, j) }
     return "Eq"

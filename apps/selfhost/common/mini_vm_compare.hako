@@ -11,7 +11,7 @@ static box MiniVmCompare {
     local k_op = "\"operation\":\""
     local opos = scan.index_of_from(json, k_op, cpos)
     if opos <= 0 || opos >= end { return -1 }
-    local oi = opos + k_op.length()
+    local oi = opos + k_op.size()
     local oj = scan.index_of_from(json, "\"", oi)
     if oj <= 0 || oj > end { return -1 }
     local op = json.substring(oi, oj)
@@ -22,14 +22,14 @@ static box MiniVmCompare {
     local k_v = "\"value\":"
     local hv = scan.index_of_from(json, k_v, hl)
     if hv <= 0 || hv >= end { return -1 }
-    local a = scan.read_digits(json, hv + k_v.length())
+    local a = scan.read_digits(json, hv + k_v.size())
     // rhs value
     local k_rhs = "\"rhs\":{\"kind\":\"Literal\""
     local hr = scan.index_of_from(json, k_rhs, hl)
     if hr <= 0 || hr >= end { return -1 }
     local rv = scan.index_of_from(json, k_v, hr)
     if rv <= 0 || rv >= end { return -1 }
-    local b = scan.read_digits(json, rv + k_v.length())
+    local b = scan.read_digits(json, rv + k_v.size())
     if !a || !b { return -1 }
     local ai = scan._str_to_int(a)
     local bi = scan._str_to_int(b)

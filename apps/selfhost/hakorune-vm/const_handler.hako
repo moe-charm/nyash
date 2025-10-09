@@ -23,7 +23,7 @@ static box ConstHandlerBox {
     if val_start < 0 {
       return Result.Err("const: i64 value not found")
     }
-    val_start = val_start + key_val.length()
+    val_start = val_start + key_val.size()
 
     local digits = StringHelpers.read_digits(inst_json, val_start)
     if digits == "" {

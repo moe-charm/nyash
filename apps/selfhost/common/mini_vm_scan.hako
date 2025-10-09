@@ -20,7 +20,7 @@ static box MiniVmScan {
   // Linear pass: sum all numbers outside of quotes
   sum_numbers_no_quotes(json) {
     @i = 0
-    @n = json.length()
+    @n = json.size()
     @total = 0
     loop (i < n) {
       @ch = call("String.substring/2", json, i, i+1)
@@ -31,7 +31,7 @@ static box MiniVmScan {
         continue
       }
       @d = me.read_digits(json, i)
-      if d { total = total + me._str_to_int(d)  i = i + d.length()  continue }
+      if d { total = total + me._str_to_int(d)  i = i + d.size()  continue }
       i = i + 1
     }
     return me._int_to_str(total)
@@ -40,11 +40,11 @@ static box MiniVmScan {
   // Naive: sum all digit runs anywhere
   sum_all_digits_naive(json) {
     @i = 0
-    @n = json.length()
+    @n = json.size()
     @total = 0
     loop (i < n) {
       @d = me.read_digits(json, i)
-      if d { total = total + me._str_to_int(d)  i = i + d.length()  continue }
+      if d { total = total + me._str_to_int(d)  i = i + d.size()  continue }
       i = i + 1
     }
     return me._int_to_str(total)
@@ -53,7 +53,7 @@ static box MiniVmScan {
   // Sum first two integers outside quotes; returns string or empty
   sum_first_two_numbers(json) {
     @i = 0
-    @n = json.length()
+    @n = json.size()
     @total = 0
     local found = 0
     loop (i < n) {
@@ -68,7 +68,7 @@ static box MiniVmScan {
       if d {
         total = total + me._str_to_int(d)
         found = found + 1
-        i = i + d.length()
+        i = i + d.size()
         if found >= 2 { return me._int_to_str(total) }
         continue
       }

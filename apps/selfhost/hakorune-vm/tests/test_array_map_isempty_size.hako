@@ -1,0 +1,21 @@
+static box Main {
+  main() {
+    // Array
+    local a = new ArrayBox()
+    if a.isEmpty() != 1 { print("FAIL: empty array not empty") return 1 }
+    a.push(1)
+    if a.isEmpty() != 0 { print("FAIL: non-empty array empty") return 1 }
+    if a.size() != 1 { print("FAIL: array size!=1") return 1 }
+
+    // Map
+    local m = new MapBox()
+    if m.isEmpty() != 1 { print("FAIL: empty map not empty") return 1 }
+    m.set("k", 10)
+    if m.isEmpty() != 0 { print("FAIL: non-empty map empty") return 1 }
+    if m.size() != 1 { print("FAIL: map size!=1") return 1 }
+
+    print("OK: Array/Map size/isEmpty")
+    return 0
+  }
+}
+

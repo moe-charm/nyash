@@ -18,7 +18,7 @@ static box BlockMapperBox {
     if blocks_start < 0 {
       return Result.Err("blocks array not found")
     }
-    blocks_start = blocks_start + key_blocks.length()
+    blocks_start = blocks_start + key_blocks.size()
 
     // Find blocks array end
     local blocks_end = JsonCursorBox.seek_array_end(mir_json, blocks_start - 1)
@@ -30,7 +30,7 @@ static box BlockMapperBox {
 
     // Parse each block
     local pos = 0
-    local len = blocks_json.length()
+    local len = blocks_json.size()
 
     loop(pos < len) {
       // Skip whitespace and comma
@@ -55,7 +55,7 @@ static box BlockMapperBox {
         if id_start < 0 {
           return Result.Err("block id not found")
         }
-        id_start = id_start + key_id.length()
+        id_start = id_start + key_id.size()
 
         local id_digits = StringHelpers.read_digits(block_json, id_start)
         if id_digits == "" {

@@ -10,7 +10,7 @@ static box EscapeUtils {
         local result = ""
         local i = 0
         
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             result = result + this.escape_char(ch)
             i = i + 1
@@ -117,10 +117,10 @@ static box EscapeUtils {
         local result = ""
         local i = 0
         
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             
-            if ch == "\\" and i + 1 < s.length() {
+            if ch == "\\" and i + 1 < s.size() {
                 local next_ch = s.substring(i + 1, i + 2)
                 local unescaped = this.unescape_sequence(next_ch, s, i)
                 result = result + unescaped.value
@@ -179,7 +179,7 @@ static box EscapeUtils {
         }
         if next_ch == "u" {
             // Unicodeエスケープ \\uXXXX
-            if pos + 5 < full_string.length() {
+            if pos + 5 < full_string.size() {
                 local hex = full_string.substring(pos + 2, pos + 6)
                 if this.is_valid_hex4(hex) {
                     out.set("value", this.hex_to_char(hex))
@@ -204,7 +204,7 @@ static box EscapeUtils {
     
     // 4桁の16進数文字列が有効かどうか判定
     is_valid_hex4(s) {
-        if s.length() != 4 {
+        if s.size() != 4 {
             return false
         }
         
@@ -345,7 +345,7 @@ static box EscapeUtils {
     validate_string(s) {
         local i = 0
         
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             
             // 制御文字のチェック
@@ -355,7 +355,7 @@ static box EscapeUtils {
             
             // エスケープシーケンスのチェック
             if ch == "\\" {
-                if i + 1 >= s.length() {
+                if i + 1 >= s.size() {
                     return false  // 不完全なエスケープ
                 }
                 
@@ -366,7 +366,7 @@ static box EscapeUtils {
                 
                 // Unicodeエスケープの特別処理
                 if next_ch == "u" {
-                    if i + 5 >= s.length() {
+                    if i + 5 >= s.size() {
                         return false  // 不完全なUnicodeエスケープ
                     }
                     local hex = s.substring(i + 2, i + 6)
@@ -401,8 +401,8 @@ static box EscapeUtils {
     
     // JSON文字列リテラルからクォートを除去してアンエスケープ
     unquote_string(s) {
-        if s.length() >= 2 and s.substring(0, 1) == "\"" and s.substring(s.length() - 1, s.length()) == "\"" {
-            local content = s.substring(1, s.length() - 1)
+        if s.size() >= 2 and s.substring(0, 1) == "\"" and s.substring(s.size() - 1, s.size()) == "\"" {
+            local content = s.substring(1, s.size() - 1)
             return this.unescape_string(content)
         } else {
             return s  // クォートされていない場合はそのまま
@@ -414,7 +414,7 @@ static box EscapeUtils {
         local result = "\""
         local i = 0
         
-        loop(i < s.length()) {
+        loop(i < s.size()) {
             local ch = s.substring(i, i + 1)
             if this.is_printable(ch) {
                 result = result + ch

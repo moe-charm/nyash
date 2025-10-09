@@ -12,9 +12,9 @@ static box LocalSSA {
   _last_index_of(hay, needle) { return hay.lastIndexOf(needle) }
   _index_of_from(hay, needle, pos) {
     if pos < 0 { pos = 0 }
-    local n = hay.length()
+    local n = hay.size()
     if pos >= n { return -1 }
-    local m = needle.length()
+    local m = needle.size()
     if m <= 0 { return pos }
     local i = pos
     local limit = n - m
@@ -35,13 +35,13 @@ static box LocalSSA {
       local p = hay.indexOf(needle)
       if p < 0 { break }
       n = n + 1
-      hay = hay.substring(p + needle.length(), hay.length())
+      hay = hay.substring(p + needle.size(), hay.size())
     }
     return n
   }
   _to_int(digits) {
     if digits == null { return 0 }
-    local n = digits.length()
+    local n = digits.size()
     if n == 0 { return 0 }
     local i = 0
     local acc = 0

@@ -19,7 +19,7 @@ static box OpHandlersBox {
   _find_int_in(seg, keypat) {
     local p = seg.indexOf(keypat)
     if p < 0 { return null }
-    p = p + keypat.length()
+    p = p + keypat.size()
     local i = p
     local out = ""
     loop(true) {
@@ -36,9 +36,9 @@ static box OpHandlersBox {
   _find_str_in(seg, keypat) {
     local p = seg.indexOf(keypat)
     if p < 0 { return "" }
-    p = p + keypat.length()
+    p = p + keypat.size()
     // Use substring to work around indexOf not supporting start position
-    local rest = seg.substring(p, seg.length())
+    local rest = seg.substring(p, seg.size())
     local q = rest.indexOf("\"")
     if q < 0 { return "" }
     return rest.substring(0, q)
@@ -76,7 +76,7 @@ static box OpHandlersBox {
       local p = seg.indexOf(pat)
       if p >= 0 {
         // Minimal digit read (inline)
-        local i = p + pat.length()
+        local i = p + pat.size()
         local out = ""
         loop(true) {
           local ch = seg.substring(i, i+1)

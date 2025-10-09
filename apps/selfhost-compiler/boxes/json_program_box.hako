@@ -21,14 +21,14 @@ static box JsonProgramBox {
     }
     local payload = usings_json
     if payload == null { payload = "[]" }
-    if payload.length() == 0 { payload = "[]" }
+    if payload.size() == 0 { payload = "[]" }
     local n = json.lastIndexOf("}")
     if n < 0 { return json }
     local head = json.substring(0, n)
-    local tail = json.substring(n, json.length())
+    local tail = json.substring(n, json.size())
     local needs_comma = 1
-    if head.length() == 0 { needs_comma = 0 } else {
-      local last = head.substring(head.length() - 1, head.length())
+    if head.size() == 0 { needs_comma = 0 } else {
+      local last = head.substring(head.size() - 1, head.size())
       if last == "{" || last == "," { needs_comma = 0 }
     }
     if needs_comma == 1 { head = head + "," }
@@ -54,18 +54,18 @@ static box JsonProgramBox {
   normalize_stmt_array(array_json) {
     if array_json == null { return "[]" }
     local trimmed = me.trim(array_json)
-    if trimmed.length() == 0 { return "[]" }
+    if trimmed.size() == 0 { return "[]" }
     if trimmed == "null" { return "[]" }
-    if trimmed.length() < 2 { return "[]" }
+    if trimmed.size() < 2 { return "[]" }
     if trimmed.substring(0, 1) != "[" { return trimmed }
     if trimmed == "[]" { return "[]" }
 
     local parts = me.split_top_level(trimmed)
     local out = new ArrayBox()
     local i = 0
-    loop(i < parts.length()) {
+    loop(i < parts.size()) {
       local item = me.trim(parts.get(i))
-      if item.length() > 0 {
+      if item.size() > 0 {
         out.push(me.normalize_stmt(item))
       }
       i = i + 1
@@ -139,18 +139,18 @@ static box JsonProgramBox {
   normalize_expr_array(array_json) {
     if array_json == null { return "[]" }
     local trimmed = me.trim(array_json)
-    if trimmed.length() == 0 { return "[]" }
+    if trimmed.size() == 0 { return "[]" }
     if trimmed == "null" { return "[]" }
-    if trimmed.length() < 2 { return "[]" }
+    if trimmed.size() < 2 { return "[]" }
     if trimmed.substring(0, 1) != "[" { return trimmed }
     if trimmed == "[]" { return "[]" }
 
     local parts = me.split_top_level(trimmed)
     local out = new ArrayBox()
     local i = 0
-    loop(i < parts.length()) {
+    loop(i < parts.size()) {
       local item = me.trim(parts.get(i))
-      if item.length() > 0 {
+      if item.size() > 0 {
         local norm = me.normalize_expr(item)
         if norm == null { norm = item }
         out.push(norm)
@@ -239,7 +239,7 @@ static box JsonProgramBox {
 
   split_top_level(array_json) {
     local out = new ArrayBox()
-    local n = array_json.length()
+    local n = array_json.size()
     local i = 1
     local start = 1
     local depth = 0
@@ -280,7 +280,7 @@ static box JsonProgramBox {
     local pattern = "\"" + key + "\""
     local idx = me.index_of(json, 0, pattern)
     if idx < 0 { return null }
-    idx = idx + pattern.length()
+    idx = idx + pattern.size()
     idx = me.skip_ws(json, idx)
     if json.substring(idx, idx + 1) != ":" { return null }
     idx = me.skip_ws(json, idx + 1)
@@ -294,14 +294,14 @@ static box JsonProgramBox {
     local raw = me.extract_value(json, key)
     if raw == null { return default_value }
     local trimmed = me.trim(raw)
-    if trimmed.length() >= 2 && trimmed.substring(0,1) == "\"" && trimmed.substring(trimmed.length()-1, trimmed.length()) == "\"" {
-      return me.unescape_string(trimmed.substring(1, trimmed.length()-1))
+    if trimmed.size() >= 2 && trimmed.substring(0,1) == "\"" && trimmed.substring(trimmed.size()-1, trimmed.size()) == "\"" {
+      return me.unescape_string(trimmed.substring(1, trimmed.size()-1))
     }
     return default_value
   }
 
   read_value(json, idx) {
-    local n = json.length()
+    local n = json.size()
     if idx >= n { return "@" + me.i2s(idx) }
     local ch = json.substring(idx, idx + 1)
     if ch == "\"" { return me.read_string(json, idx) }
@@ -312,7 +312,7 @@ static box JsonProgramBox {
 
   read_string(json, idx) {
     local i = idx + 1
-    local n = json.length()
+    local n = json.size()
     local done = 0
     loop(done == 0 && i < n) {
       local ch = json.substring(i, i + 1)
@@ -327,7 +327,7 @@ static box JsonProgramBox {
 
   skip_string(json, idx) {
     local i = idx + 1
-    local n = json.length()
+    local n = json.size()
     local done = 0
     loop(done == 0 && i < n) {
       local ch = json.substring(i, i + 1)
@@ -340,7 +340,7 @@ static box JsonProgramBox {
   read_object(json, idx) {
     local depth = 0
     local i = idx
-    local n = json.length()
+    local n = json.size()
     loop(i < n) {
       local ch = json.substring(i, i + 1)
       if ch == "\"" {
@@ -360,7 +360,7 @@ static box JsonProgramBox {
   read_array(json, idx) {
     local depth = 0
     local i = idx
-    local n = json.length()
+    local n = json.size()
     loop(i < n) {
       local ch = json.substring(i, i + 1)
       if ch == "\"" {
@@ -378,7 +378,7 @@ static box JsonProgramBox {
   }
 
   read_literal(json, idx) {
-    local n = json.length()
+    local n = json.size()
     local i = idx
     loop(i < n) {
       local ch = json.substring(i, i + 1)
@@ -389,8 +389,8 @@ static box JsonProgramBox {
   }
 
   index_of(s, start, pat) {
-    local n = s.length()
-    local m = pat.length()
+    local n = s.size()
+    local m = pat.size()
     if m == 0 { return start }
     local i = start
     loop(i + m <= n) {
@@ -407,8 +407,8 @@ static box JsonProgramBox {
   }
 
   last_index_of(s, pat) {
-    local n = s.length()
-    local m = pat.length()
+    local n = s.size()
+    local m = pat.size()
     if m == 0 { return n }
     local i = n - m
     loop(i >= 0) {
@@ -426,7 +426,7 @@ static box JsonProgramBox {
 
   skip_ws(s, idx) {
     local i = idx
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i + 1)
       if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1 } else { break }
@@ -436,7 +436,7 @@ static box JsonProgramBox {
 
   trim(s) {
     if s == null { return "" }
-    local n = s.length()
+    local n = s.size()
     local i = 0
     loop(i < n && (s.substring(i, i + 1) == " " || s.substring(i, i + 1) == "\n" || s.substring(i, i + 1) == "\r" || s.substring(i, i + 1) == "\t")) { i = i + 1 }
     local j = n
@@ -448,7 +448,7 @@ static box JsonProgramBox {
     if parts == null { return "" }
     local out = ""
     local i = 0
-    local n = parts.length()
+    local n = parts.size()
     loop(i < n) {
       local item = parts.get(i)
       if i == 0 { out = out + item } else { out = out + "," + item }
@@ -466,7 +466,7 @@ static box JsonProgramBox {
     if s == null { return "" }
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i + 1)
       if ch == "\\" { out = out + "\\\\" } else {
@@ -487,7 +487,7 @@ static box JsonProgramBox {
     if s == null { return "" }
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i + 1)
       if ch == "\\" && i + 1 < n {

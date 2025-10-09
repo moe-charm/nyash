@@ -53,8 +53,8 @@ flow RegexFlow {
     if s == null { return -1 }
     if needle == null { return -1 }
     if pos < 0 { pos = 0 }
-    local n = s.length()
-    local m = needle.length()
+    local n = s.size()
+    local m = needle.size()
     if m == 0 { return pos }
     local i = pos
     local limit = n - m
@@ -83,7 +83,7 @@ flow RegexFlow {
 
   to_int(digits) {
     if digits == null { return 0 }
-    local n = digits.length()
+    local n = digits.size()
     if n == 0 { return 0 }
     local i = 0
     local neg = 0

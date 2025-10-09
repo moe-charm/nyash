@@ -22,12 +22,12 @@ box StatsBox {
 
   // Get number of samples
   count() {
-    return me.samples.length()
+    return me.samples.size()
   }
 
   // Calculate mean (average)
   mean() {
-    local n = me.samples.length()
+    local n = me.samples.size()
     if n == 0 { return 0 }
 
     local sum = 0
@@ -47,7 +47,7 @@ box StatsBox {
 
   // Calculate standard deviation
   stddev() {
-    local n = me.samples.length()
+    local n = me.samples.size()
     if n == 0 { return 0 }
     if n == 1 { return 0 }
 
@@ -78,7 +78,7 @@ box StatsBox {
 
   // Generic percentile calculation (p: 0-100)
   percentile(p) {
-    local n = me.samples.length()
+    local n = me.samples.size()
     if n == 0 { return 0 }
 
     // Create sorted copy (simple bubble sort for now)
@@ -94,7 +94,7 @@ box StatsBox {
 
   // Internal: Sort samples (bubble sort - good enough for benchmarks)
   _sort_samples() {
-    local n = me.samples.length()
+    local n = me.samples.size()
     local sorted = new ArrayBox()
 
     // Copy samples to sorted array

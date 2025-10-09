@@ -56,7 +56,7 @@ box JsonParser {
         if tokenizer.has_errors() {
             local lexer_errors = tokenizer.get_errors()
             local i = 0
-            loop(i < lexer_errors.length()) {
+            loop(i < lexer_errors.size()) {
                 me.errors.push(lexer_errors.get(i))
                 i = i + 1
             }
@@ -281,7 +281,7 @@ box JsonParser {
     
     // 現在のトークンを取得
     current_token() {
-        if me.position >= me.tokens.length() {
+        if me.position >= me.tokens.size() {
             return null
         }
         return me.tokens.get(me.position)
@@ -289,7 +289,7 @@ box JsonParser {
     
     // 次のトークンを先読み
     peek_token() {
-        if me.position + 1 >= me.tokens.length() {
+        if me.position + 1 >= me.tokens.size() {
             return null
         }
         return me.tokens.get(me.position + 1)
@@ -297,7 +297,7 @@ box JsonParser {
     
     // 位置を1つ進める
     advance() {
-        if me.position < me.tokens.length() {
+        if me.position < me.tokens.size() {
             me.position = me.position + 1
         }
     }
@@ -352,7 +352,7 @@ box JsonParser {
     
     // エラーがあるかチェック
     has_errors() {
-        return me.errors.length() > 0
+        return me.errors.size() > 0
     }
     
     // エラー情報を取得
@@ -365,7 +365,7 @@ box JsonParser {
         local messages = new ArrayBox()
         local i = 0
         
-        loop(i < me.errors.length()) {
+        loop(i < me.errors.size()) {
             local error = me.errors.get(i)
             local message = "Error at line " + error.get("line") + ", column " + error.get("column") + ": " + error.get("message")
             messages.push(message)
@@ -409,10 +409,10 @@ box JsonParser {
             return
         }
         
-        print("❌ Parsing errors (" + me.errors.length() + "):")
+        print("❌ Parsing errors (" + me.errors.size() + "):")
         local messages = me.get_error_messages()
         local i = 0
-        loop(i < messages.length()) {
+        loop(i < messages.size()) {
             print("  " + messages.get(i))
             i = i + 1
         }
@@ -421,12 +421,12 @@ box JsonParser {
     get_parse_statistics() {
         local stats = new MapBox()
         stats.set("tokens_processed", me.position)
-        stats.set("total_tokens", me.tokens.length())
-        stats.set("error_count", me.errors.length())
+        stats.set("total_tokens", me.tokens.size())
+        stats.set("error_count", me.errors.size())
         stats.set("success", not me.has_errors())
         
-        if me.tokens.length() > 0 {
-            stats.set("completion_rate", me.position / me.tokens.length())
+        if me.tokens.size() > 0 {
+            stats.set("completion_rate", me.position / me.tokens.size())
         } else {
             stats.set("completion_rate", 0)
         }

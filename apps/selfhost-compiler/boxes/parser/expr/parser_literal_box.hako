@@ -5,7 +5,7 @@
 static box ParserLiteralBox {
   // Map literal: {"k": v, ...} (string keys only) → Call{name:"map.of", args:[Str(k1), v1, Str(k2), v2, ...]}
   parse_map(src, i, ctx) {
-    local n = src.length()
+    local n = src.size()
     local j = i + 1  // skip opening '{'
     local out = "["
     local first = 1
@@ -67,7 +67,7 @@ static box ParserLiteralBox {
 
   // Array literal: [e1, e2, ...] → Call{name:"array.of", args:[...]}
   parse_array(src, i, ctx) {
-    local n = src.length()
+    local n = src.size()
     local j = i + 1  // skip opening '['
     local out = "["
     local first = 1

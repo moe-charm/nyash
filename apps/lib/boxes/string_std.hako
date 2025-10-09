@@ -3,12 +3,12 @@
 static box StringStd {
   length(s) {
     if s == null { return 0 }
-    return s.length()
+    return s.size()
   }
   substring(s, start, end) {
     if s == null { return "" }
     if start == null { start = 0 }
-    if end == null { end = s.length() }
+    if end == null { end = s.size() }
     return s.substring(start, end)
   }
   indexOf(s, needle, start) {
@@ -27,7 +27,7 @@ static box StringStd {
     if s == null { return "" }
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\\" { out = out + "\\\\" } else { if ch == "\"" { out = out + "\\\"" } else { out = out + ch } }

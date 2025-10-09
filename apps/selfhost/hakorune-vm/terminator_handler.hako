@@ -22,7 +22,7 @@ static box TerminatorHandlerBox {
       return Result.Err("terminator not found")
     }
 
-    local term_json_start = term_start + key_term.length() - 1
+    local term_json_start = term_start + key_term.size() - 1
     local term_end = me._find_terminator_end(block_json, term_json_start)
     if term_end < 0 {
       return Result.Err("terminator end not found")
@@ -36,7 +36,7 @@ static box TerminatorHandlerBox {
     if op_start < 0 {
       return Result.Err("terminator op not found")
     }
-    op_start = op_start + key_op.length()
+    op_start = op_start + key_op.size()
 
     local op_end = StringOps.index_of_from(term_json, "\"", op_start)
     if op_end < 0 {
@@ -74,7 +74,7 @@ static box TerminatorHandlerBox {
       result_map.set("value", 0)
       return Result.Ok(result_map)
     }
-    val_start = val_start + key_val.length()
+    val_start = val_start + key_val.size()
 
     local val_digits = StringHelpers.read_digits(term_json, val_start)
     if val_digits == "" {
@@ -105,7 +105,7 @@ static box TerminatorHandlerBox {
     if target_start < 0 {
       return Result.Err("jump: target not found")
     }
-    target_start = target_start + key_target.length()
+    target_start = target_start + key_target.size()
 
     local target_digits = StringHelpers.read_digits(term_json, target_start)
     if target_digits == "" {
@@ -128,7 +128,7 @@ static box TerminatorHandlerBox {
     if cond_start < 0 {
       return Result.Err("branch: condition not found")
     }
-    cond_start = cond_start + key_cond.length()
+    cond_start = cond_start + key_cond.size()
 
     local cond_digits = StringHelpers.read_digits(term_json, cond_start)
     if cond_digits == "" {
@@ -150,7 +150,7 @@ static box TerminatorHandlerBox {
     if then_start < 0 {
       return Result.Err("branch: then_bb not found")
     }
-    then_start = then_start + key_then.length()
+    then_start = then_start + key_then.size()
 
     local then_digits = StringHelpers.read_digits(term_json, then_start)
     if then_digits == "" {
@@ -165,7 +165,7 @@ static box TerminatorHandlerBox {
     if else_start < 0 {
       return Result.Err("branch: else_bb not found")
     }
-    else_start = else_start + key_else.length()
+    else_start = else_start + key_else.size()
 
     local else_digits = StringHelpers.read_digits(term_json, else_start)
     if else_digits == "" {
@@ -190,7 +190,7 @@ static box TerminatorHandlerBox {
   _find_terminator_end(json, start) {
     local depth = 0
     local pos = start
-    local len = json.length()
+    local len = json.size()
 
     loop(pos < len) {
       local ch = json.substring(pos, pos + 1)

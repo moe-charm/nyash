@@ -16,23 +16,23 @@ static box ParserStmtBox {
     }
 
     // assignment: IDENT '=' expr
-    if j < src.length() && ctx.is_alpha(src.substring(j, j+1)) {
+    if j < src.size() && ctx.is_alpha(src.substring(j, j+1)) {
       local idp0 = ctx.read_ident2(src, j)
       local at0 = idp0.lastIndexOf("@")
       if at0 > 0 {
         local name0 = idp0.substring(0, at0)
-        local k0 = ctx.to_int(idp0.substring(at0+1, idp0.length()))
+        local k0 = ctx.to_int(idp0.substring(at0+1, idp0.size()))
         k0 = ctx.skip_ws(src, k0)
-        if k0 < src.length() && src.substring(k0, k0+1) == "=" {
+        if k0 < src.size() && src.substring(k0, k0+1) == "=" {
           local eq_two = "="
-          if k0 + 1 < src.length() { eq_two = src.substring(k0, k0+2) }
+          if k0 + 1 < src.size() { eq_two = src.substring(k0, k0+2) }
           if eq_two != "==" {
             k0 = k0 + 1
             k0 = ctx.skip_ws(src, k0)
             local default_local = "{\"type\":\"Int\",\"value\":0}"
             local expr_json0 = default_local
             local end_pos0 = k0
-            if k0 < src.length() {
+            if k0 < src.size() {
               local ahead = src.substring(k0, k0+1)
               if ahead != "}" && ahead != ";" {
                 expr_json0 = ctx.parse_expr2(src, k0)
@@ -41,7 +41,7 @@ static box ParserStmtBox {
             }
             k0 = end_pos0
             if k0 <= stmt_start {
-              if k0 < src.length() { k0 = k0 + 1 } else { k0 = src.length() }
+              if k0 < src.size() { k0 = k0 + 1 } else { k0 = src.size() }
             }
             ctx.gpos_set(k0)
             return "{\"type\":\"Local\",\"name\":\"" + name0 + "\",\"expr\":" + expr_json0 + "}"
@@ -57,7 +57,7 @@ static box ParserStmtBox {
       local default_ret = "{\"type\":\"Int\",\"value\":0}"
       local expr_json_ret = default_ret
       local end_pos_ret = j
-      if j < src.length() {
+      if j < src.size() {
         local ahead_ret = src.substring(j, j+1)
         if ahead_ret != "}" && ahead_ret != ";" {
           expr_json_ret = ctx.parse_expr2(src, j)
@@ -66,7 +66,7 @@ static box ParserStmtBox {
       }
       j = end_pos_ret
       if j <= stmt_start {
-        if j < src.length() { j = j + 1 } else { j = src.length() }
+        if j < src.size() { j = j + 1 } else { j = src.size() }
       }
       ctx.gpos_set(j)
       return "{\"type\":\"Return\",\"expr\":" + expr_json_ret + "}"
@@ -79,14 +79,14 @@ static box ParserStmtBox {
       local idp = ctx.read_ident2(src, j)
       local at = idp.lastIndexOf("@")
       local name = idp.substring(0, at)
-      j = ctx.to_int(idp.substring(at+1, idp.length()))
+      j = ctx.to_int(idp.substring(at+1, idp.size()))
       j = ctx.skip_ws(src, j)
-      if j < src.length() && src.substring(j, j+1) == "=" { j = j + 1 }
+      if j < src.size() && src.substring(j, j+1) == "=" { j = j + 1 }
       j = ctx.skip_ws(src, j)
       local default_local = "{\"type\":\"Int\",\"value\":0}"
       local expr_json_local = default_local
       local end_pos_local = j
-      if j < src.length() {
+      if j < src.size() {
         local ahead_local = src.substring(j, j+1)
         if ahead_local != "}" && ahead_local != ";" {
           expr_json_local = ctx.parse_expr2(src, j)
@@ -95,7 +95,7 @@ static box ParserStmtBox {
       }
       j = end_pos_local
       if j <= stmt_start {
-        if j < src.length() { j = j + 1 } else { j = src.length() }
+        if j < src.size() { j = j + 1 } else { j = src.size() }
       }
       ctx.gpos_set(j)
       return "{\"type\":\"Local\",\"name\":\"" + name + "\",\"expr\":" + expr_json_local + "}"
@@ -131,7 +131,7 @@ static box ParserStmtBox {
     local e = ctx.parse_expr2(src, j)
     j = ctx.gpos_get()
     if j <= expr_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return "{\"type\":\"Expr\",\"expr\":" + e + "}"
@@ -153,7 +153,7 @@ static box ParserStmtBox {
         local idp = ctx.read_ident2(src, j)
         local at = idp.lastIndexOf("@")
         alias = idp.substring(0, at)
-        j = ctx.to_int(idp.substring(at+1, idp.length()))
+        j = ctx.to_int(idp.substring(at+1, idp.size()))
       }
       ctx.add_using("path", p, alias)
     } else {
@@ -161,7 +161,7 @@ static box ParserStmtBox {
         local idp = ctx.read_ident2(src, j)
         local at = idp.lastIndexOf("@")
         local name = idp.substring(0, at)
-        j = ctx.to_int(idp.substring(at+1, idp.length()))
+        j = ctx.to_int(idp.substring(at+1, idp.size()))
         local cont = 1
         loop(cont == 1) {
           j = ctx.skip_ws(src, j)
@@ -171,7 +171,7 @@ static box ParserStmtBox {
             idp = ctx.read_ident2(src, j)
             at = idp.lastIndexOf("@")
             name = name + "." + idp.substring(0, at)
-            j = ctx.to_int(idp.substring(at+1, idp.length()))
+            j = ctx.to_int(idp.substring(at+1, idp.size()))
           } else {
             cont = 0
           }
@@ -184,7 +184,7 @@ static box ParserStmtBox {
           idp = ctx.read_ident2(src, j)
           at = idp.lastIndexOf("@")
           alias2 = idp.substring(0, at)
-          j = ctx.to_int(idp.substring(at+1, idp.length()))
+          j = ctx.to_int(idp.substring(at+1, idp.size()))
         }
         ctx.add_using("ns", name, alias2)
       }
@@ -192,7 +192,7 @@ static box ParserStmtBox {
 
     // ensure progress
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return ""

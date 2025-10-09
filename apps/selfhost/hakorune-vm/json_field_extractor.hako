@@ -15,7 +15,7 @@ static box JsonFieldExtractor {
     if start < 0 {
       return null
     }
-    start = start + key.length()
+    start = start + key.size()
 
     local digits = StringHelpers.read_digits(json, start)
     if digits == "" {
@@ -35,7 +35,7 @@ static box JsonFieldExtractor {
     if start < 0 {
       return null
     }
-    start = start + key.length()
+    start = start + key.size()
 
     local end_pos = StringOps.index_of_from(json, "\"", start)
     if end_pos < 0 {

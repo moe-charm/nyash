@@ -20,7 +20,7 @@ static box NamespaceBox {
     local pos = RegexFlow.find_from(s, ".", 0)
     if pos < 0 { return s }
     local head = s.substring(0, pos)
-    local tail = s.substring(pos + 1, s.length())
+    local tail = s.substring(pos + 1, s.size())
     if resolver == null { return s }
     local ns = resolver.resolve_namespace_alias(head)
     if ns == null {
@@ -47,7 +47,7 @@ static box NamespaceBox {
       return null
     }
     local head = s.substring(0, pos)
-    local tail = s.substring(pos + 1, s.length())
+    local tail = s.substring(pos + 1, s.size())
     if resolver == null { return s }
     local ns2 = resolver.resolve_namespace_alias(head)
     if ns2 == null {

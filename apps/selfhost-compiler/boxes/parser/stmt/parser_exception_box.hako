@@ -12,14 +12,14 @@ static box ParserExceptionBox {
 
     if ctx.stage3_enabled() == 1 {
       if j <= stmt_start {
-        if j < src.length() { j = j + 1 } else { j = src.length() }
+        if j < src.size() { j = j + 1 } else { j = src.size() }
       }
       ctx.gpos_set(j)
       return "{\"type\":\"Throw\",\"expr\":" + e_throw + "}"
     }
 
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return "{\"type\":\"Expr\",\"expr\":" + e_throw + "}"
@@ -34,7 +34,7 @@ static box ParserExceptionBox {
     local try_res = ctx.parse_block2(src, j)
     local at_t = try_res.lastIndexOf("@")
     local try_json = try_res.substring(0, at_t)
-    j = ctx.to_int(try_res.substring(at_t+1, try_res.length()))
+    j = ctx.to_int(try_res.substring(at_t+1, try_res.size()))
 
     local catches_json = "["
     local catch_first = 1
@@ -62,7 +62,7 @@ static box ParserExceptionBox {
             local id1 = ctx.read_ident2(src, j)
             local at1 = id1.lastIndexOf("@")
             catch_type = id1.substring(0, at1)
-            j = ctx.to_int(id1.substring(at1+1, id1.length()))
+            j = ctx.to_int(id1.substring(at1+1, id1.size()))
             j = ctx.skip_ws(src, j)
           }
 
@@ -70,7 +70,7 @@ static box ParserExceptionBox {
             local id2 = ctx.read_ident2(src, j)
             local at2 = id2.lastIndexOf("@")
             catch_param = id2.substring(0, at2)
-            j = ctx.to_int(id2.substring(at2+1, id2.length()))
+            j = ctx.to_int(id2.substring(at2+1, id2.size()))
             j = ctx.skip_ws(src, j)
           }
 
@@ -82,18 +82,18 @@ static box ParserExceptionBox {
         // catch body
         local c_res = ctx.parse_block2(src, j)
         local atc = c_res.lastIndexOf("@")
-        j = ctx.to_int(c_res.substring(atc+1, c_res.length()))
+        j = ctx.to_int(c_res.substring(atc+1, c_res.size()))
 
         if ctx.stage3_enabled() == 1 {
           local entry = "{"
           local wrote = 0
 
-          if catch_param != null && catch_param.length() > 0 {
+          if catch_param != null && catch_param.size() > 0 {
             entry = entry + "\"param\":\"" + ctx.esc_json(catch_param) + "\""
             wrote = 1
           }
 
-          if catch_type != null && catch_type.length() > 0 {
+          if catch_type != null && catch_type.size() > 0 {
             if wrote == 1 { entry = entry + "," }
             entry = entry + "\"typeHint\":\"" + ctx.esc_json(catch_type) + "\""
             wrote = 1
@@ -126,13 +126,13 @@ static box ParserExceptionBox {
       j = ctx.skip_ws(src, j)
       local f_res = ctx.parse_block2(src, j)
       local atf = f_res.lastIndexOf("@")
-      j = ctx.to_int(f_res.substring(atf+1, f_res.length()))
+      j = ctx.to_int(f_res.substring(atf+1, f_res.size()))
       finally_json = f_res.substring(0, atf)
     }
 
     if ctx.stage3_enabled() == 1 {
       if j <= stmt_start {
-        if j < src.length() { j = j + 1 } else { j = src.length() }
+        if j < src.size() { j = j + 1 } else { j = src.size() }
       }
       ctx.gpos_set(j)
       local node = "{\"type\":\"Try\",\"try\":" + try_json + ",\"catches\":" + catches_json
@@ -142,7 +142,7 @@ static box ParserExceptionBox {
     }
 
     if j <= stmt_start {
-      if j < src.length() { j = j + 1 } else { j = src.length() }
+      if j < src.size() { j = j + 1 } else { j = src.size() }
     }
     ctx.gpos_set(j)
     return "{\"type\":\"Expr\",\"expr\":{\"type\":\"Int\",\"value\":0}}"

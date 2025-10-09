@@ -24,16 +24,16 @@ static box Stage1JsonScannerBox {
     local escaped = "\\\"" + key + "\\\":\\\""
     local p1 = JsonCursorBox.find_key_dual(s, plain, escaped, start_pos)
     if p1 >= 0 { return p1 }
-    if plain.length() >= 2 {
-      local head = plain.substring(0, plain.length() - 1)
-      local last = plain.substring(plain.length() - 1, plain.length())
+    if plain.size() >= 2 {
+      local head = plain.substring(0, plain.size() - 1)
+      local last = plain.substring(plain.size() - 1, plain.size())
       local spaced = head + " " + last
       local p2 = JsonCursorBox.find_from(s, spaced, start_pos)
       if p2 >= 0 { return p2 }
       // Escaped + spaced: tolerate JSON embedded as string with colon-space
-      if escaped.length() >= 2 {
-        local ehead = escaped.substring(0, escaped.length() - 1)
-        local elast = escaped.substring(escaped.length() - 1, escaped.length())
+      if escaped.size() >= 2 {
+        local ehead = escaped.substring(0, escaped.size() - 1)
+        local elast = escaped.substring(escaped.size() - 1, escaped.size())
         local espaced = ehead + " " + elast
         local p3 = JsonCursorBox.find_from(s, espaced, start_pos)
         if p3 >= 0 { return p3 }
@@ -45,7 +45,7 @@ static box Stage1JsonScannerBox {
   value_start_after_key_pos(s, key_pos) {
     if s == null { return -1 }
     local i = key_pos
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i,i+1)
       if ch == ":" { i = i + 1  break }
@@ -76,7 +76,7 @@ static box Stage1JsonScannerBox {
     if nend <= vstart { return null }
     local label = s.substring(vstart, nend)
     local lb = JsonCursorBox.find_from(s, "[", apos)
-    local rb = s.length()
+    local rb = s.size()
     if lb >= 0 {
       local i = lb + 1
       local depth = 1

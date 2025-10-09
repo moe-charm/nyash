@@ -14,7 +14,7 @@ box ReleaseManagerBox {
     if arr == null { return 0 }
     // Defensive: tolerate both ArrayBox and array-like values
     local n = 0
-    if arr.length != null { n = arr.length() } else { return 0 }
+    if arr.length != null { n = arr.size() } else { return 0 }
     local i = 0
     loop(i < n) {
       local v = arr.get(i)

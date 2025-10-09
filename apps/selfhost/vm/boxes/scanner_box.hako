@@ -11,7 +11,7 @@ box ScannerBox {
     me._src = source
     me._pos = 0
     me._max = 0
-    if source != null { me._max = source.length() }
+    if source != null { me._max = source.size() }
   }
 
   at_end() {

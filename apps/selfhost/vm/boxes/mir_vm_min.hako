@@ -28,7 +28,7 @@ static box MirVmMin {
   run_thin(mjson) {
     // Inject a lightweight marker into JSON to toggle thin mode inside _run_min
     if mjson.substring(0,1) == "{" {
-      local payload = mjson.substring(1, mjson.length())
+      local payload = mjson.substring(1, mjson.size())
       local j2 = "{\"__thin__\":1," + payload
       local v = me._run_min(j2)
       print(me._int_to_str(v))
@@ -42,7 +42,7 @@ static box MirVmMin {
 
   // helpers
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
-  _is_numeric_str(s){ if s==null {return 0} local n=s.length() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
+  _is_numeric_str(s){ if s==null {return 0} local n=s.size() if n==0 {return 0} local i=0 if s.substring(0,1)=="-" { if n==1 {return 0} i=1 } loop(i<n){ local ch=s.substring(i,i+1) if ch<"0"||ch>"9" {return 0} i=i+1 } return 1 }
   _load_reg(regs,id){ local v=regs.get(""+id) if v==null {return 0} local s=""+v if me._is_numeric_str(s)==1 { return JsonFragBox._str_to_int(s) } return 0 }
 
   // block helpers
@@ -74,7 +74,7 @@ static box MirVmMin {
         local key = "\"value\":{\"type\":\"i64\",\"value\":"
         local p = StringOps.index_of_from(b0, key, 0)
         if p >= 0 {
-          local ds = b0.substring(p + key.length(), b0.length())
+          local ds = b0.substring(p + key.size(), b0.size())
           // read consecutive digits
           local i = 0
           local out = ""
@@ -112,13 +112,13 @@ static box MirVmMin {
       me._d("[DEBUG] endp="+me._int_to_str(endp), trace)
       if endp <= start { return 0 }
       local inst_seg = mjson.substring(start, endp)
-      me._d("[DEBUG] seglen="+me._int_to_str(inst_seg.length()), trace)
+      me._d("[DEBUG] seglen="+me._int_to_str(inst_seg.size()), trace)
       // scan objects in this block
       local scan_pos = 0
       local inst_count = 0
       local moved = 0
       loop(true){
-        if scan_pos >= inst_seg.length() { break }
+        if scan_pos >= inst_seg.size() { break }
         local nxt = InstructionScannerBox.next(inst_seg, scan_pos)
         if nxt == null { break }
         local obj_start = nxt.get("start")
@@ -155,7 +155,7 @@ static box MirVmMin {
           local krhs_fast = rec.get("rhs")
           local kcmp_fast = rec.get("kind")
           // Determine if a ret exists after this compare in the same block
-          local tail = inst_seg.substring(obj_end, inst_seg.length())
+          local tail = inst_seg.substring(obj_end, inst_seg.size())
           local ridt = JsonFragBox.get_int(tail, "value")
           if kdst_fast != null && klhs_fast != null && krhs_fast != null && ridt != null && ridt == kdst_fast {
             local a = me._load_reg(regs, klhs_fast)
@@ -233,7 +233,7 @@ else if op == "ret" {
       // Prefer recent compare result when a ret exists targeting it (no recompute)
       if inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
         local rstartX = inst_seg.indexOf("\"op\":\"ret\"")
-        local rsegX = inst_seg.substring(rstartX, inst_seg.length())
+        local rsegX = inst_seg.substring(rstartX, inst_seg.size())
         local ridX = JsonFragBox.get_int(rsegX, "value")
         if ridX != null { if ridX == last_cmp_dst { return last_cmp_val } }
       }
@@ -242,7 +242,7 @@ else if op == "ret" {
       // Detect explicit ret in this block and resolve
       if inst_seg.indexOf("\"op\":\"ret\"") >= 0 {
         local rstart = inst_seg.indexOf("\"op\":\"ret\"")
-        local rseg = inst_seg.substring(rstart, inst_seg.length())
+        local rseg = inst_seg.substring(rstart, inst_seg.size())
         local rid = JsonFragBox.get_int(rseg, "value")
         if rid != null {
           if rid == last_cmp_dst { return last_cmp_val }
@@ -261,7 +261,7 @@ else if op == "ret" {
         loop(true) {
           local k = StringOps.index_of_from(search, key, pos)
           if k < 0 { break }
-          local ds = search.substring(k + key.length(), search.length())
+          local ds = search.substring(k + key.size(), search.size())
           // read consecutive digits as number
           local i = 0
           local out = ""
@@ -272,29 +272,29 @@ else if op == "ret" {
           }
           if out != "" { if first == "" { first = out } else { second = out } }
           if second != "" { break }
-          pos = k + key.length() + i
+          pos = k + key.size() + i
         }
         if first != "" && second != "" {
           local lv = 0
           local rv = 0
           // simple to_i64
           local i0 = 0
-          loop(i0 < first.length()) { lv = lv * 10 + ("0123456789".indexOf(first.substring(i0,i0+1)))  i0 = i0 + 1 }
+          loop(i0 < first.size()) { lv = lv * 10 + ("0123456789".indexOf(first.substring(i0,i0+1)))  i0 = i0 + 1 }
           local i1 = 0
-          loop(i1 < second.length()) { rv = rv * 10 + ("0123456789".indexOf(second.substring(i1,i1+1)))  i1 = i1 + 1 }
+          loop(i1 < second.size()) { rv = rv * 10 + ("0123456789".indexOf(second.substring(i1,i1+1)))  i1 = i1 + 1 }
           // cmp: parse cmp op
           local cmp_key = "\"cmp\":\""
           local pk = inst_seg.indexOf(cmp_key)
           local cmp = "Eq"
           if pk >= 0 {
-            local i = pk + cmp_key.length()
+            local i = pk + cmp_key.size()
             local j = StringOps.index_of_from(inst_seg, "\"", i)
             if j > i { cmp = inst_seg.substring(i, j) }
           }
           local cv = CompareOpsBox.eval(cmp, lv, rv)
           // ret id
           local rstart4 = inst_seg.indexOf("\"op\":\"ret\"")
-          local rseg4 = inst_seg.substring(rstart4, inst_seg.length())
+          local rseg4 = inst_seg.substring(rstart4, inst_seg.size())
           local rid4 = JsonFragBox.get_int(rseg4, "value")
           if rid4 != null { return cv }
         }
