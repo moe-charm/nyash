@@ -166,6 +166,7 @@ impl MapBox {
                 if map_trace_enabled() {
                     eprintln!("[MapBox] get: key=\"{}\" -> miss", key_str);
                 }
+                // Phase 15.7: missing → null（legacy suggestion/error strings removed）
                 Box::new(crate::boxes::null_box::NullBox::new())
             }
         }
@@ -302,11 +303,7 @@ fn map_trace_enabled() -> bool {
     *FLAG.get_or_init(|| matches!(std::env::var("HAKO_MAP_TRACE").ok().as_deref(), Some("1"|"true"|"on")))
 }
 
-#[inline]
-fn map_suggest_enabled() -> bool {
-    static FLAG: OnceLock<bool> = OnceLock::new();
-    *FLAG.get_or_init(|| matches!(std::env::var("HAKO_MAP_SUGGEST").ok().as_deref(), Some("1"|"true"|"on")))
-}
+// legacy suggestion (did-you-mean) removed in Phase 15.7
 
 #[inline]
 fn suggest_score(q: &str, cand: &str) -> i32 {

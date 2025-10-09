@@ -17,6 +17,16 @@ Branch Note (selfhost)
   - A3（任意）: 生成 EXE で小サンプルを解析→Rust VM での実行結果と等価（quick スモークで 1 本確認）
 - スモーク: `tools/smokes/v2/profiles/quick/selfhost/selfhost_bootstrap_llvm.sh`（既定 SKIP、`SMOKES_ENABLE_SELFHOST_BOOT=1` で有効）
 
+### 🎯 Milestone M2 — Self‑Rebuild
+- 目的: 生成した自己ホストコンパイラ EXE で compiler.hako を解析し、Stage‑1 JSON を出力できること
+- 受け入れ: EXE の標準出力1行目が `"kind":"Program"` を含む
+- スモーク: `tools/smokes/v2/profiles/quick/selfhost/selfhost_rebuild_vm.sh`（LLVM未導入時は自動SKIP）
+
+### 🎯 Milestone M3 — E2E Parity（VM ↔ LLVM, selfhost compiler）
+- 目的: ランナーから子プロセスに selfhost compiler を使い、VM/LLVM の結果が一致する
+- 受け入れ: 代表サンプル（const_ret 等）で `Result:` 行が一致
+- スモーク: `tools/smokes/v2/profiles/quick/selfhost/selfhost_e2e_vm_llvm.sh`（LLVM未導入時はVMのみ通過）
+
 ### 🧱 Baseline → Selfhost → Legacy Removal（段階）
 - Baseline（本ドキュメントの前段）
   - デフォルト: 最小 Kernel 埋め込み、Plugins 既定OFF（オプトイン）
