@@ -38,7 +38,7 @@ Transition Note（要点）
 - Phi
 - Return
 - Call
-- ExternCall
+- ExternCall（Retired — use MirCall::external("iface.method")）
 - BoxCall
   - Note: BoxCall carries optional `method_id` (numeric slot) when the builder can resolve the receiver type; otherwise falls back to name-only late bind. Universal methods use reserved slots: 0=toString, 1=type, 2=equals, 3=clone.
 - NewBox
@@ -48,7 +48,7 @@ Transition Note（要点）
 - RefGet
 - RefSet
 - Await
-- Print（Deprecated: ビルダーは発行しない。代わりに `ExternCall env.console.log` を使用）
+- Print（Deprecated: ビルダーは発行しない。代わりに `MirCall::external("env.console.log")` を使用）
 - TypeOp（TypeCheck/Cast統合）
 - WeakRef（WeakNew/WeakLoad統合）
 - Barrier（Read/Write統合）

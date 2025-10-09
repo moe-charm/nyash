@@ -89,6 +89,15 @@ activate_opbox() {
 }
 
 case "${1:-pyvm}" in
+  using|using_dev)
+    ensure_app_bin_dir
+    export HAKO_USING=1
+    export HAKO_USING_STRATEGY=prelude
+    export HAKO_ALLOW_USING_FILE=1
+    export HAKO_USING_PROFILE=dev
+    export HAKO_DEV_AT_LOCAL=${HAKO_DEV_AT_LOCAL:-1}
+    echo "[dev-env] Using(prelude) profile activated (file-using allowed; dev)" >&2
+    ;;
   selfhost)
     ensure_app_bin_dir
     # Focus on self-hosting workflows; keep toggles minimal and reversible
@@ -102,5 +111,5 @@ case "${1:-pyvm}" in
   phi_off) activate_phi_off ;;
   opbox) activate_opbox ;;
   reset) reset_env ;;
-  *) echo "usage: source tools/dev_env.sh [pyvm|bridge|phi_off|opbox|reset]" >&2 ;;
+  *) echo "usage: source tools/dev_env.sh [using|pyvm|bridge|phi_off|opbox|selfhost|reset]" >&2 ;;
 esac

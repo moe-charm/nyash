@@ -64,3 +64,14 @@ Statement Separation (Semicolons)
 - Newline separates statements by default; semicolons are optional.
 - Use semicolons only when placing multiple statements on one line.
 - Minimal ASI rules: newline does not end a statement when the line ends with an operator/dot/comma, or while inside grouping.
+- Static box fields
+  ```nyash
+  static box Main {
+    // Field declarations accept optional type annotations in header-first form.
+    // Type names are currently accepted then ignored by the compiler.
+    console: ConsoleBox
+    main() { return 0 }
+  }
+  ```
+  - Supported forms: `name`, `name: Type`, `name: Type = expr` (initializer parsed, may be discarded at P0).
+  - Computed properties (`name: Type => expr`) are not supported inside static boxes in this phase.

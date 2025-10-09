@@ -8,7 +8,8 @@ export NYASH_DISABLE_PLUGINS=1
 export NYASH_USING_STRICT=0
 export NYASH_USING_NAMESPACE_ALIAS=1
 export SMOKES_USE_DEV=1
-export NYASH_USING_AST=0
+# Enable AST prelude to resolve nested aliases under quick
+export NYASH_USING_AST=1
 require_env || exit 2
 preflight_plugins || exit 2
 
@@ -30,8 +31,12 @@ static box Main {
 }
 NYEOF
 
-out=$(run_nyash_vm "$SRC" | tail -n 1 | tr -d '
-' | xargs)
+out_full=$(run_nyash_vm "$SRC")
+if echo "$out_full" | grep -qi 'using: file paths are disallowed\|AST prelude merge is disabled'; then
+  log_warn "SKIP using_nested_alias_selfhost_common_vm (using resolver disabled)"
+  rm -rf "$TMP_DIR"; exit 0
+fi
+out=$(echo "$out_full" | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)
 if [ "$out" = "ok" ]; then
   log_success "using_nested_alias_selfhost_common_vm nested alias resolved"
   rm -rf "$TMP_DIR"

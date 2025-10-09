@@ -140,11 +140,11 @@ parse_arguments() {
 
     # プロファイル検証
     case "$PROFILE" in
-        quick|integration|integration-core|full|plugins)
+        quick|integration|integration-core|full|plugins|quick-selfhost)
             ;;
         *)
             log_error "Invalid profile: $PROFILE"
-            log_error "Valid profiles: quick, integration, integration-core, full, plugins"
+            log_error "Valid profiles: quick, integration, integration-core, full, plugins, quick-selfhost"
             exit 1
             ;;
     esac
@@ -253,6 +253,11 @@ find_test_files() {
     if [ -d "$profile_dir" ]; then
         search_dirs+=("$profile_dir")
     fi
+    # For quick-selfhost, also include original quick/selfhost directory
+    if [ "$PROFILE" = "quick-selfhost" ]; then
+        local extra_dir="$SCRIPT_DIR/profiles/quick/selfhost"
+        [ -d "$extra_dir" ] && search_dirs+=("$extra_dir") || true
+    fi
     # Also collect curated core suites for quick aggregation (tests are SKIP-gated)
     if [ "$PROFILE" = "quick" ]; then
         local core_suite="$SCRIPT_DIR/suites/core"
@@ -274,6 +279,10 @@ find_test_files() {
     declare -A seen
     for base in "${search_dirs[@]}"; do
       while IFS= read -r -d '' file; do
+        # Exclude quick/selfhost tests from quick profile (moved to quick-selfhost)
+        if [ "$PROFILE" = "quick" ] && echo "$file" | grep -q "/profiles/quick/selfhost/"; then
+            continue
+        fi
         # フィルタ適用
         if [ -n "$FILTER" ] && ! echo "$file" | grep -q "$FILTER"; then
             continue

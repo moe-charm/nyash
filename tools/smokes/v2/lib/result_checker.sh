@@ -10,6 +10,25 @@ if [ -n "${RESULT_CHECKER_SH_LOADED:-}" ]; then
 fi
 RESULT_CHECKER_SH_LOADED=1
 
+# Failure capture helper (optional)
+_smokes_capture_failure() {
+    local kind="$1"; shift
+    local test_name="$1"; shift
+    local expected="$1"; shift
+    local actual="$1"; shift
+    if [ "${SMOKES_CAPTURE:-0}" != "1" ]; then return 0; fi
+    local ts dir
+    ts=$(date +%Y%m%d_%H%M%S)
+    dir="tmp/smokes_capture/${test_name}_${kind}_${ts}"
+    mkdir -p "$dir" 2>/dev/null || true
+    # Save minimal bundle
+    printf "%s" "$expected" > "$dir/expected.txt" 2>/dev/null || true
+    printf "%s" "$actual"   > "$dir/actual.txt"   2>/dev/null || true
+    # ENV stamp (limited)
+    { env | grep -E '^(HAKO|NYASH|SMOKES)=' | sort; echo "NYASH_BIN=${NYASH_BIN:-}"; } > "$dir/env.txt" 2>/dev/null || true
+    echo "[capture] saved failure bundle → $dir" >&2
+}
+
 # 結果比較種別
 readonly EXACT_MATCH="exact"
 readonly REGEX_MATCH="regex"
@@ -28,6 +47,7 @@ check_exact() {
         echo "[FAIL] $test_name: Exact match failed" >&2
         echo "  Expected: '$expected'" >&2
         echo "  Actual:   '$actual'" >&2
+        _smokes_capture_failure exact "$test_name" "$expected" "$actual"
         return 1
     fi
 }
@@ -44,6 +64,7 @@ check_regex() {
         echo "[FAIL] $test_name: Regex match failed" >&2
         echo "  Pattern:  '$pattern'" >&2
         echo "  Actual:   '$actual'" >&2
+        _smokes_capture_failure regex "$test_name" "$pattern" "$actual"
         return 1
     fi
 }
@@ -62,6 +83,7 @@ check_numeric_range() {
     if [ -z "$number" ]; then
         echo "[FAIL] $test_name: No number found in output" >&2
         echo "  Actual: '$actual'" >&2
+        _smokes_capture_failure numeric "$test_name" "$min..$max" "$actual"
         return 1
     fi
 
@@ -72,6 +94,7 @@ check_numeric_range() {
         echo "[FAIL] $test_name: Number out of range" >&2
         echo "  Range:    [$min, $max]" >&2
         echo "  Actual:   $number" >&2
+        _smokes_capture_failure numeric "$test_name" "$min..$max" "$actual"
         return 1
     fi
 }
@@ -85,12 +108,14 @@ check_json() {
     # JSONパース可能性チェック
     if ! echo "$expected_json" | jq . >/dev/null 2>&1; then
         echo "[FAIL] $test_name: Expected JSON is invalid" >&2
+        _smokes_capture_failure json "$test_name" "$expected_json" "$actual_json"
         return 1
     fi
 
     if ! echo "$actual_json" | jq . >/dev/null 2>&1; then
         echo "[FAIL] $test_name: Actual JSON is invalid" >&2
         echo "  Actual: '$actual_json'" >&2
+        _smokes_capture_failure json "$test_name" "$expected_json" "$actual_json"
         return 1
     fi
 
@@ -105,6 +130,7 @@ check_json() {
         echo "[FAIL] $test_name: JSON comparison failed" >&2
         echo "  Expected: $expected_normalized" >&2
         echo "  Actual:   $actual_normalized" >&2
+        _smokes_capture_failure json "$test_name" "$expected_normalized" "$actual_normalized"
         return 1
     fi
 }
@@ -190,6 +216,7 @@ check_parity() {
         echo "[FAIL] $test_name: Exit code mismatch" >&2
         echo "  VM exit:   $vm_exit" >&2
         echo "  LLVM exit: $llvm_exit" >&2
+        _smokes_capture_failure parity "$test_name" "exit=$vm_exit" "exit=$llvm_exit"
         return 1
     fi
 
@@ -207,6 +234,7 @@ check_parity() {
         echo "$vm_output" | sed 's/^/    /' >&2
         echo "  LLVM output:" >&2
         echo "$llvm_output" | sed 's/^/    /' >&2
+        _smokes_capture_failure parity "$test_name" "$vm_output" "$llvm_output"
         return 1
     fi
 }

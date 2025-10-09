@@ -9,10 +9,10 @@ Status: Adopted (non‑breaking)
 ## Compatibility rules
 
 - Environment variables
-  - Official brand prefix: `HAKO_*`
-  - Aliases are accepted automatically: `HAKO_*`, `HAKU_*`, and `HRN_*` mirror into `NYASH_*` when the latter is unset.
-  - Example: `HAKO_CLI_VERBOSE=1` is equivalent to `NYASH_CLI_VERBOSE=1`.
-  - Root path alias: `NYASH_ROOT` falls back to `HAKO_ROOT`/`HAKU_ROOT`/`HRN_ROOT`.
+  - Preferred prefix in docs/scripts: `HAKO_*`
+  - Compatibility: `NYASH_*` is accepted; when only `HAKO_*` is set, it is mirrored internally into `NYASH_*` for consumers that still read NYASH_*.
+  - Example: `HAKO_CLI_VERBOSE=1` ≡ `NYASH_CLI_VERBOSE=1`。
+  - Root path alias: `NYASH_ROOT` falls back to `HAKO_ROOT` / `HAKU_ROOT` / `HRN_ROOT`.
 
 - Configuration file
   - Preferred: `hako.toml`

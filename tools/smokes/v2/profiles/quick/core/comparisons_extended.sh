@@ -15,7 +15,7 @@ if 5 == 5 {
   } else { print("NG") }
 } else { print("NG") }
 '
-  local out; out=$(run_nyash_vm -c "$script" 2>&1)
+  local out; out=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "OK" "$out" "eq_neq"
 }
 
@@ -27,10 +27,9 @@ if 5 >= 5 {
   } else { print("NG") }
 } else { print("NG") }
 '
-  local out; out=$(run_nyash_vm -c "$script" 2>&1)
+  local out; out=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "OK" "$out" "le_ge"
 }
 
 run_test "eq_neq" test_eq_neq
 run_test "le_ge" test_le_ge
-

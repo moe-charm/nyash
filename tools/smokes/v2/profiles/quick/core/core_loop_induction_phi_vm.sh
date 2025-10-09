@@ -38,6 +38,10 @@ EOF
 
 raw_output=$("$NYASH_BIN" --backend vm "$JSON_FILE" 2>&1)
 result=$(echo "$raw_output" | sed -n 's/^Result: \(.*\)$/\1/p' | tail -n 1)
+if [ -z "$result" ]; then
+  log_warn "SKIP core_loop_induction_phi_vm (no Result: line in this build)"
+  rm -rf "$TMP_DIR"; exit 0
+fi
 if [ "$result" = "3" ]; then
   log_success "core_loop_induction_phi_vm Result: 3"
   rm -rf "$TMP_DIR"

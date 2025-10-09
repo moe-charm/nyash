@@ -27,6 +27,7 @@ Execution Status (Feature Additions Pause)
 
 Quick pointers
 - Preferred config is `hako.toml` (compat: `nyash.toml` is still accepted).
+  - Quick start for using/aliases: see `docs/tools/using-quickstart.md`.
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
 - Run VM: `./target/release/hakorune --backend vm apps/APP/main.hako` (aliases `hako`/`nyash` also available).
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.

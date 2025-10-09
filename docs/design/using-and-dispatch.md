@@ -21,7 +21,8 @@ Environment Knobs (Summary)
 - Using system
   - `NYASH_USING=0|1` (default ON; alias: `NYASH_ENABLE_USING`)
   - `NYASH_USING_PROFILE={dev|ci|prod}` (default dev)
-  - `NYASH_USING_STRATEGY={resolver|prelude}`（alias: `NYASH_USING_IMPL`、fallback: `NYASH_USING_AST`）
+  - `NYASH_USING_STRATEGY={resolver|prelude}`（alias: `NYASH_USING_IMPL`、compat: `NYASH_USING_AST`）
+    - Preferred: `prelude`（dev/ci プロファイルで既定ON。prod は toml パッケージ/エイリアス前提で必要時のみON）
   - `NYASH_ALLOW_USING_FILE=1|0` (default OFF; dev only when needed)
 - Builder
   - `NYASH_BUILDER_REWRITE_INSTANCE=1|0` (default ON across profiles)

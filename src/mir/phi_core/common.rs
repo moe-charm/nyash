@@ -68,3 +68,18 @@ pub fn debug_verify_phi_inputs(
     _inputs: &[(crate::mir::BasicBlockId, crate::mir::ValueId)],
 ) {
 }
+
+/// Determine assigned variable name from branch-local results.
+/// If both sides assign the same name, return it; if only one side assigns,
+/// return that one; otherwise None.
+pub fn determine_assigned_name(
+    then_var: &Option<String>,
+    else_var: &Option<String>,
+) -> Option<String> {
+    match (then_var, else_var) {
+        (Some(tv), Some(ev)) if tv == ev => Some(tv.clone()),
+        (Some(tv), None) => Some(tv.clone()),
+        (None, Some(ev)) => Some(ev.clone()),
+        _ => None,
+    }
+}

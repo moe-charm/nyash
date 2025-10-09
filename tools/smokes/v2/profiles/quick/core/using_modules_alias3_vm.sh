@@ -4,6 +4,8 @@
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
+export NYASH_ALLOW_USING_FILE=1
+export NYASH_USING_AST=1
 # Ensure minimal modules mapping provided for E2E
 export NYASH_MODULES="selfhost.json.core.string_scan=apps/selfhost/common/json/core/string_scan.hako"
 require_env || exit 2
@@ -29,6 +31,10 @@ static box Main {
 EOF
 
 raw_output=$(run_nyash_vm "$SRC")
+result=$(echo "$raw_output" | grep -v '^Result: ' | tr -d "\r" | grep -E "^[[:space:]]*[01][[:space:]]*$" | tail -n 1 | xargs)
+  log_warn "SKIP using_modules_alias3_vm (using resolver disabled)"
+  rm -rf "$TMP_DIR"; exit 0
+fi
 result=$(echo "$raw_output" | tr -d "" | grep -E "^[[:space:]]*[01][[:space:]]*$" | tail -n 1 | xargs)
 if [ "$result" = "1" ]; then
   log_success "using_modules_alias3_vm resolved selfhost.json.core.string_scan and executed"

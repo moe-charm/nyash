@@ -33,7 +33,12 @@ static box Main {
 }
 EOF
 
-out=$(run_nyash_vm "$TMP_DIR/driver.nyash" | tail -n 1 | tr -d '\r' | xargs)
+out_full=$(run_nyash_vm "$TMP_DIR/driver.nyash")
+if echo "$out_full" | grep -qi 'AST prelude merge is disabled\|using: file paths are disallowed'; then
+  log_warn "SKIP json_stringify_standard_vm (using resolver disabled)"
+  rm -rf "$TMP_DIR"; exit 0
+fi
+out=$(echo "$out_full" | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)
 expected="ok"
 compare_outputs "$expected" "$out" "json_stringify_standard_vm" || { rm -rf "$TMP_DIR"; exit 1; }
 

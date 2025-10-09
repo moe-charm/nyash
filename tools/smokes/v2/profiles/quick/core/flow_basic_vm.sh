@@ -23,10 +23,10 @@ flow Main {
 EOF
 
   local output
-  output=$(run_nyash_vm "$TMP_DIR/code.nyash" 2>&1 || true)
+  # Filter the runner's exit summary line to compare pure program output
+  output=$(run_nyash_vm "$TMP_DIR/code.nyash" 2>&1 | grep -v '^Result: ' || true)
   rm -rf "$TMP_DIR"
   check_exact "ok" "$output" "flow_basic_main"
 }
 
 run_test "flow_basic_main" test_flow_basic_main
-

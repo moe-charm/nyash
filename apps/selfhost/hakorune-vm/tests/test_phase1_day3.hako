@@ -1,0 +1,81 @@
+// test_phase1_day3.hako — Phase 1 Day 3 テスト: 制御フロー（Branch/Jump/Phi）
+// Expected: Hakorune-VM実行 → 各テストが期待値を返す
+
+using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    local total_tests = 0
+    local passed_tests = 0
+
+    // Test 1: Simple Jump (block 0 → block 1)
+    total_tests = total_tests + 1
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}}],"terminator":{"op":"jump","target":1}},{"id":1,"instructions":[],"terminator":{"op":"ret","value":1}}]}]}"#
+
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1: Simple Jump (42) → " + StringHelpers.int_to_str(result1))
+    if result1 == 42 {
+      passed_tests = passed_tests + 1
+    } else {
+      print("[FAIL] Test 1: expected 42, got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: Branch (true path: 1 == 1)
+    total_tests = total_tests + 1
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":1}},{"op":"const","dst":2,"value":{"type":"i64","value":1}},{"op":"compare","kind":"Eq","dst":3,"lhs":1,"rhs":2}],"terminator":{"op":"branch","condition":3,"then_bb":1,"else_bb":2}},{"id":1,"instructions":[{"op":"const","dst":4,"value":{"type":"i64","value":100}}],"terminator":{"op":"ret","value":4}},{"id":2,"instructions":[{"op":"const","dst":5,"value":{"type":"i64","value":200}}],"terminator":{"op":"ret","value":5}}]}]}"#
+
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2: Branch (true: 1 == 1 → 100) → " + StringHelpers.int_to_str(result2))
+    if result2 == 100 {
+      passed_tests = passed_tests + 1
+    } else {
+      print("[FAIL] Test 2: expected 100, got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: Branch (false path: 1 == 2)
+    total_tests = total_tests + 1
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":1}},{"op":"const","dst":2,"value":{"type":"i64","value":2}},{"op":"compare","kind":"Eq","dst":3,"lhs":1,"rhs":2}],"terminator":{"op":"branch","condition":3,"then_bb":1,"else_bb":2}},{"id":1,"instructions":[{"op":"const","dst":4,"value":{"type":"i64","value":100}}],"terminator":{"op":"ret","value":4}},{"id":2,"instructions":[{"op":"const","dst":5,"value":{"type":"i64","value":200}}],"terminator":{"op":"ret","value":5}}]}]}"#
+
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3: Branch (false: 1 == 2 → 200) → " + StringHelpers.int_to_str(result3))
+    if result3 == 200 {
+      passed_tests = passed_tests + 1
+    } else {
+      print("[FAIL] Test 3: expected 200, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: PHI merge (if x > 10 then 42 else 24)
+    total_tests = total_tests + 1
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":15}},{"op":"const","dst":2,"value":{"type":"i64","value":10}},{"op":"compare","kind":"Gt","dst":3,"lhs":1,"rhs":2}],"terminator":{"op":"branch","condition":3,"then_bb":1,"else_bb":2}},{"id":1,"instructions":[{"op":"const","dst":4,"value":{"type":"i64","value":42}}],"terminator":{"op":"jump","target":3}},{"id":2,"instructions":[{"op":"const","dst":5,"value":{"type":"i64","value":24}}],"terminator":{"op":"jump","target":3}},{"id":3,"instructions":[{"op":"phi","dst":6,"inputs":[[1,4],[2,5]]}],"terminator":{"op":"ret","value":6}}]}]}"#
+
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4: PHI merge (15 > 10 → 42) → " + StringHelpers.int_to_str(result4))
+    if result4 == 42 {
+      passed_tests = passed_tests + 1
+    } else {
+      print("[FAIL] Test 4: expected 42, got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    // Test 5: PHI merge (else path: 5 > 10 → 24)
+    total_tests = total_tests + 1
+    local mir5 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":5}},{"op":"const","dst":2,"value":{"type":"i64","value":10}},{"op":"compare","kind":"Gt","dst":3,"lhs":1,"rhs":2}],"terminator":{"op":"branch","condition":3,"then_bb":1,"else_bb":2}},{"id":1,"instructions":[{"op":"const","dst":4,"value":{"type":"i64","value":42}}],"terminator":{"op":"jump","target":3}},{"id":2,"instructions":[{"op":"const","dst":5,"value":{"type":"i64","value":24}}],"terminator":{"op":"jump","target":3}},{"id":3,"instructions":[{"op":"phi","dst":6,"inputs":[[1,4],[2,5]]}],"terminator":{"op":"ret","value":6}}]}]}"#
+
+    local result5 = HakoruneVmCore.run(mir5)
+    print("Test 5: PHI merge (5 > 10 → 24) → " + StringHelpers.int_to_str(result5))
+    if result5 == 24 {
+      passed_tests = passed_tests + 1
+    } else {
+      print("[FAIL] Test 5: expected 24, got " + StringHelpers.int_to_str(result5))
+      return 1
+    }
+
+    print("")
+    print("[SUCCESS] All Phase 1 Day 3 tests passed! 🎉 (" + StringHelpers.int_to_str(passed_tests) + "/" + StringHelpers.int_to_str(total_tests) + ")")
+    return 0
+  }
+}

@@ -1,11 +1,15 @@
 [env]
 # Put environment defaults used by tools or examples if needed
 # Enable using resolver by default (can be disabled with NYASH_SKIP_TOML_ENV=1)
-NYASH_USING = "1"
+# Hakorune VM Phase 1 development: allow file path using
+HAKO_USING = "1"
+HAKO_USING_STRATEGY = "prelude"
+HAKO_ALLOW_USING_FILE = "1"
+HAKO_USING_PROFILE = "dev"
 # Enable dev sugar preexpand for @ local alias (line-head) during parsing
-NYASH_DEV_AT_LOCAL = "1"
+HAKO_DEV_AT_LOCAL = "1"
 # Macros: enable minimal macro engine and built-in selfhost micro macros (dev)
-NYASH_MACRO_ENABLE = "1"
+HAKO_MACRO_ENABLE = "1"
 # Note: Macro PATHS are opt-in per test/profile to avoid argv overflows in child runner.
 # Set NYASH_MACRO_PATHS in specific smokes or profiles as needed.
 # Enable contracts checks by default (unborn guard/diagnostics)
@@ -92,6 +96,9 @@ timer = "core.timer.TimerBox"
 
 [modules.overrides]
 # Only place entries here when the source lives outside discovery roots or needs a special path.
+
+ # Hakorune VM (Phase 1)
+ selfhost.hakorune_vm.hakorune_vm_core = "apps/selfhost/hakorune-vm/hakorune_vm_core.hako"
 
  selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
  # Dev VM utility boxes (for tests that reference them directly)

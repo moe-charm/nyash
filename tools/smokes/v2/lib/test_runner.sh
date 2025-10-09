@@ -131,7 +131,6 @@ filter_noise() {
   | grep -v 'llvmlite/binding/ffi\.py' \
   | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
   | grep -v '^\[warn\] dev verify:' \
-  | grep -v '^Result: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
@@ -140,6 +139,7 @@ filter_noise() {
   | grep -v '^\[deprecate\] CLI name' \
   | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
   | grep -v '^\[deprecate\] \[modules.aliases\]' \
+  | grep -v '^\[deprecate\]' \
   | grep -v "plugins/nyash-array-plugin" \
   | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
@@ -384,8 +384,10 @@ run_nyash_llvm() {
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | \
             grep -v '^\[deprecate\] \[modules\.aliases\]' | \
             grep -v '^\[warn\] dev verify:' | \
+            grep -v '^\[DEBUG-' | \
             grep -v '^🔧 Mock LLVM Backend Execution' | grep -v '^✅ Mock exit code:' | \
             grep -v '^Build with --features ' | \
+            grep -v '^Result: ' | \
             sed -E 's/^❌[[:space:]]*//' | sed -E 's/^Pipeline error: *//' | sed -E 's/\bbb[0-9]+\b/bb<ID>/g' | sed -E 's/^❌ VM fallback error: *//' | sed -E 's/^❌ Pipeline error: *//'
         return ${PIPESTATUS[0]}
     fi

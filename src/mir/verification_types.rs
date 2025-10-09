@@ -80,6 +80,12 @@ pub enum VerificationError {
         lhs: ValueId,
         rhs: ValueId,
     },
+    /// Forbid getField/setField on a constant Name (static box self) — indicates invalid static field semantics
+    StaticSelfFieldForbidden {
+        block: BasicBlockId,
+        instruction_index: usize,
+        method: String,
+    },
 }
 
 impl std::fmt::Display for VerificationError {
@@ -223,6 +229,13 @@ impl std::fmt::Display for VerificationError {
                     f,
                     "Box Compare forbidden in block {} at {} (lhs=%{:?}, rhs=%{:?}); use nyrt.ops.op_eq via MirCall::Extern",
                     block, instruction_index, lhs, rhs
+                )
+            }
+            VerificationError::StaticSelfFieldForbidden { block, instruction_index, method } => {
+                write!(
+                    f,
+                    "Static box field access is forbidden in block {} at {} via {} (use methods or instance boxes)",
+                    block, instruction_index, method
                 )
             }
         }

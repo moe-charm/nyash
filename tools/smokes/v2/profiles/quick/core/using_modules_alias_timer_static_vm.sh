@@ -36,7 +36,7 @@ static box Main {
 NYEOF
 
 raw_output=$(run_nyash_vm "$SRC")
-result=$(echo "$raw_output" | tr -d '\r' | tail -n 1 | xargs)
+result=$(echo "$raw_output" | grep -v '^Result: ' | tr -d '\r' | tail -n 1 | xargs)
 if [ "$result" = "ok" ]; then
   log_success "using_modules_alias_timer_static_vm resolved selfhost.core.timer"
   rm -rf "$TMP_DIR"

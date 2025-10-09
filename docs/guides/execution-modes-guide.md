@@ -1,5 +1,10 @@
 # Hakorune 実行モード完全ガイド
 
+注記（ブランド/エイリアス）
+- 新規のスクリプト/ドキュメントでは HAKO_* を優先してください。
+- 互換として NYASH_* も受理されます（NYASH_* が未設定の場合は HAKO_* を内部でマップします）。
+  - 例: `HAKO_CLI_VERBOSE ≡ NYASH_CLI_VERBOSE`, `HAKO_LLVM_USE_HARNESS ≡ NYASH_LLVM_USE_HARNESS`。
+
 **最終更新**: 2025-10-04
 **対象**: 開発者・ユーザー
 

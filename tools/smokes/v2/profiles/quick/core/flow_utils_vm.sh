@@ -29,10 +29,9 @@ flow Main {
 EOF
 
   local output
-  output=$(run_nyash_vm "$TMP_DIR/code.nyash" 2>&1 || true)
+  output=$(run_nyash_vm "$TMP_DIR/code.nyash" 2>&1 | grep -v '^Result: ' || true)
   rm -rf "$TMP_DIR"
   check_exact "5" "$output" "flow_utils_call"
 }
 
 run_test "flow_utils_call" test_flow_utils_call
-

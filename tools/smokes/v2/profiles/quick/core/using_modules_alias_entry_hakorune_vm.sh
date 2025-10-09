@@ -26,10 +26,14 @@ static box Main {
 }
 EOF
 
-out=$(run_nyash_vm "$SRC" --dev | tail -n 1 | tr -d '\r' | xargs)
+out_full=$(run_nyash_vm "$SRC" --dev)
+if echo "$out_full" | grep -qi 'AST prelude merge is disabled\|using: file paths are disallowed'; then
+  log_warn "SKIP using_modules_alias_entry_hakorune_vm (using resolver disabled)"
+  cd /; rm -rf "$TMP_DIR"; exit 0
+fi
+out=$(echo "$out_full" | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)
 expected="1"
 compare_outputs "$expected" "$out" "using_modules_alias_entry_hakorune_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0
-

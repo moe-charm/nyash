@@ -27,11 +27,11 @@ enum/matchマクロでコンパイラーコードを置き換え
 
 ---
 
-## 🎯 CURRENT PHASE: Phase 19 - @enum/@match Macros (Day 4/14)
+## 🎯 CURRENT PHASE: Phase 15.15完了、次はMini-VM Migration Plan Step 2
 
-**戦略**: Choice A'' (Macro-Only Approach)
-**期間**: 2-3 weeks (9-14 days)
-**目標**: Pattern matching for selfhost compiler
+**完了**: Phase 19（@enum/@match）、Phase 15.13-15.15（マクロ適用＋共通化）
+**次のステップ**: Mini-VM Migration Plan Step 2 - Mini-VM実装 with @match（10-15人日）
+**戦略**: Choice A'' (Macro-Only Approach) - @match完全活用
 
 ### ✅ Week 1: @enum Macro Implementation
 
@@ -479,6 +479,16 @@ See [Phase 19 README](docs/development/roadmap/phases/phase-19-enum-match/README
 ---
 
 ## ✅ RECENTLY DONE — 最近完了（1週間以内）
+
+### 2025-10-09
+- ✅ **Phase 15.15完了**: 共通化綺麗綺麗大作戦（-48行純削減）
+  - 15.15.1: MirJsonBuilderMin instance box化（+38行、品質投資）
+  - 15.15.2: find_balanced_* 統合（-53行）→ JsonCursorBox
+  - 15.15.3: _str_to_int 統合（-33行）→ StringHelpers
+  - コミット: `7630bc1f`, `88d0038e`, `f340a15b`
+  - テスト: 302/302 PASS ✅
+- ✅ **Phase 15.13-15.15 累計**: -94行（-52 + 6 - 48）、可読性・保守性大幅向上
+- ✅ **@enum/@match適用完了**: マクロ化綺麗綺麗大作戦成功
 
 ### 2025-10-07
 - ✅ **hako.toml v2 セクション導入**: [modules.options]/aliases/overrides 追加、自動検出（apps/**/*.hako）導入

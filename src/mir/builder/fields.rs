@@ -10,6 +10,23 @@ impl super::MirBuilder {
         object: ASTNode,
         field: String,
     ) -> Result<ValueId, String> {
+        // Guard: static box does not support `me.field` access
+        if let Some(cls) = self.current_static_box.clone() {
+            let is_box_self = match &object {
+                ASTNode::Variable { name, .. } => {
+                    let alias_alias = format!("{}_{}", cls, cls);
+                    name == "me" || name == &cls || name == &alias_alias
+                }
+                ASTNode::Me { .. } => true,
+                _ => false,
+            };
+            if is_box_self {
+                return Err(format!(
+                    "Static box field access is not supported: use methods or instance boxes (found `me.{}`)",
+                    field
+                ));
+            }
+        }
         let object_clone = object.clone();
         let object_value = self.build_expression(object.clone())?;
         let object_value = self.local_field_base(object_value);
@@ -111,6 +128,23 @@ impl super::MirBuilder {
         field: String,
         value: ASTNode,
     ) -> Result<ValueId, String> {
+        // Guard: static box does not support `me.field = ...` assignment
+        if let Some(cls) = self.current_static_box.clone() {
+            let is_box_self = match &object {
+                ASTNode::Variable { name, .. } => {
+                    let alias_alias = format!("{}_{}", cls, cls);
+                    name == "me" || name == &cls || name == &alias_alias
+                }
+                ASTNode::Me { .. } => true,
+                _ => false,
+            };
+            if is_box_self {
+                return Err(format!(
+                    "Static box field assignment is not supported: use methods or instance boxes (found `me.{}`)",
+                    field
+                ));
+            }
+        }
         let object_value = self.build_expression(object)?;
         let object_value = self.local_field_base(object_value);
         let mut value_result = self.build_expression(value)?;

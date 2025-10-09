@@ -26,7 +26,7 @@ static box Main {
 
 EOF
 
-out=$(run_nyash_vm "$SRC" | tail -n 1 | tr -d '' | xargs)
+out=$(run_nyash_vm "$SRC" | grep -v '^Result: ' | tail -n 1 | tr -d "\r" | xargs)
 expected="1"
 compare_outputs "$expected" "$out" "namespace_module_first_json_utils_string_vm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 

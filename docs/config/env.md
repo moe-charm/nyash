@@ -19,6 +19,12 @@ Using / AST merge
 - HAKO_ALLOW_USING_FILE（互換: NYASH_ALLOW_USING_FILE）=0|1: ファイル経路 using の許可
   - 既定: dev/ci は ON、prod は OFF（SSOT: nyash.toml を優先。必要時のみ明示許可）
 
+Retired / Unified (2025 Phase‑19)
+- NYASH_BUILDER_BOX_EQ_TO_EQUALS: retired. Equality is normalized to `Callee::Extern("nyrt.ops.op_eq")` at MIR; `.equals/1` dispatch is handled behind op_eq.
+- ExternCall instruction: retired. Use unified `MirCall` with `callee=Extern("iface.method")` across builder/optimizer/JSON/backends.
+- HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN: default ON. Alias `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN` is accepted; docs/examples prefer the HAKO_* prefix.
+- NYASH_USING_AST: compatibility only. Prefer `NYASH_USING_STRATEGY=prelude` (use HAKO_USING_STRATEGY in examples). Default remains OFF globally; profiles may enable it.
+
 Plugins
 - HAKO_PLUGIN_POLICY（互換: NYASH_PLUGIN_POLICY）={auto|off|force} (default auto)
   - off: disable external plugins (compat: NYASH_DISABLE_PLUGINS=1)

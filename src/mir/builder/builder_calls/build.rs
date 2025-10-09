@@ -496,6 +496,18 @@ impl MirBuilder {
         method: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // Guard: static box does not support field emulation via getField/setField on the box itself
+        if let Some(cls) = self.current_static_box.clone() {
+            let is_box_self = match &object {
+                ASTNode::Variable { name, .. } => name == "me" || name == &cls || name == &format!("{}_{}", cls, cls),
+                ASTNode::Me { .. } => true,
+                ASTNode::Literal { value: crate::ast::LiteralValue::String(s), .. } => s == &cls,
+                _ => false,
+            };
+            if is_box_self && (method == "setField" || method == "getField") {
+                return Err("Static box fields are not supported: use methods or instance boxes (getField/setField)".to_string());
+            }
+        }
         if std::env::var("NYASH_STATIC_CALL_TRACE").ok().as_deref() == Some("1") {
             let kind = match &object {
                 ASTNode::Variable { .. } => "Variable",

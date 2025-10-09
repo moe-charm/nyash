@@ -19,7 +19,7 @@ test_mapbox_min_ops() {
   print(v)
   '
   local output
-  output=$(NYASH_VM_PLUGIN_PREFER_MAP=1 NYASH_CLI_VERBOSE=0 run_nyash_vm -c "$script" 2>&1)
+  output=$(NYASH_VM_PLUGIN_PREFER_MAP=1 NYASH_CLI_VERBOSE=0 run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   # Expect size then value
   local last2
   last2=$(echo "$output" | tail -n 2 | tr '\n' '|')
@@ -31,4 +31,3 @@ test_mapbox_min_ops() {
 }
 
 run_test "mapbox_min_ops" test_mapbox_min_ops
-

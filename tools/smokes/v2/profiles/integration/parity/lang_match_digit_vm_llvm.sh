@@ -59,8 +59,8 @@ static box Main {
 }
 EOF
 
-output_vm=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev)
-NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --dev)
+output_vm=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev | grep -v '^Result: ')
+NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --dev | grep -v '^Result: ')
 compare_outputs "$output_vm" "$output_llvm" "lang_match_digit_vm_llvm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"

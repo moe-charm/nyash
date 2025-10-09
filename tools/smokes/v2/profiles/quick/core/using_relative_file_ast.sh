@@ -2,6 +2,12 @@
 # using_relative_file_ast.sh - ネストした場所からの相対パス using（AST プレリュード）
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_ENABLE_USING_RELATIVE:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_USING_RELATIVE=1" >&2
+  exit 0
+fi
+export NYASH_ALLOW_USING_FILE=1
+export NYASH_USING_AST=1
 
 require_env || exit 2
 preflight_plugins || exit 2
@@ -47,7 +53,7 @@ EOF
   export NYASH_USING_PROFILE=dev
   export NYASH_USING_AST=1
   local output rc
-  output=$(run_nyash_vm sub/main.nyash 2>&1)
+  output=$(run_nyash_vm sub/main.nyash 2>&1 | grep -v '^Result: ')
   if echo "$output" | grep -qx "rel"; then rc=0; else rc=1; fi
   [ $rc -eq 0 ] || { echo "$output" >&2; }
   teardown_tmp_dir

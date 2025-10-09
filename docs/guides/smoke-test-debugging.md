@@ -1,5 +1,10 @@
 # Smoke Test Debugging Guide
 
+注記（ブランド/エイリアス）
+- 新規ドキュメントやスクリプトでは HAKO_* を優先してください。
+- 互換として NYASH_* も受理されます（未設定時に HAKO_* をマップ）。
+- 例: `HAKO_VM_TRACE ≡ NYASH_VM_TRACE`, `HAKO_CLI_VERBOSE ≡ NYASH_CLI_VERBOSE`。
+
 ## Overview
 
 このガイドでは、スモークテスト失敗時のデバッグ・トラブルシューティング手順を説明します。

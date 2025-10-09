@@ -19,9 +19,8 @@ test_var_merge_delta() {
   print(a)
   '
   local output
-  output=$(run_nyash_vm -c "$script" 2>&1)
+  output=$(run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "2" "$output" "var_merge_delta"
 }
 
 run_test "var_merge_delta" test_var_merge_delta
-

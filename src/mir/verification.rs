@@ -13,6 +13,8 @@ mod awaits;
 mod barrier;
 mod legacy;
 mod compare;
+mod static_self_fields;
+mod phi_inputs;
 mod utils;
 mod ssa;
 
@@ -95,6 +97,20 @@ impl MirVerifier {
         // 9. Forbid Box Compare(Eq/Ne): equality must route via op_eq() at MIR
         if let Err(mut cmp_errors) = compare::check_no_box_compare(function) {
             local_errors.append(&mut cmp_errors);
+        }
+
+        // 9.5. Forbid static self field emulation: getField/setField on constant class name
+        if let Err(mut static_field_errors) = static_self_fields::check_no_static_self_field_calls(function) {
+            local_errors.append(&mut static_field_errors);
+        }
+
+        // 9.6. PHI inputs coverage (dev-first): ensure PHI inputs cover reachable predecessors
+        if std::env::var("NYASH_VERIFY_PHI_STRICT").ok().as_deref() == Some("1")
+            || std::env::var("NYASH_VM_VERIFY_MIR").ok().as_deref() == Some("1")
+        {
+            if let Err(mut phi_cov) = phi_inputs::check_phi_inputs_cover_predecessors(function) {
+                local_errors.append(&mut phi_cov);
+            }
         }
 
         // 10. PHI-off strict edge-copy policy (optional)

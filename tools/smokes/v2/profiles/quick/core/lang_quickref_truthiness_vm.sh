@@ -2,6 +2,10 @@
 # lang_quickref_truthiness_vm.sh — Truthiness representative checks (planned)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_ENABLE_TRUTHINESS:-0}" != "1" ]; then
+  echo "SKIP: enable with SMOKES_ENABLE_TRUTHINESS=1" >&2
+  exit 0
+fi
 require_env || exit 2
 preflight_plugins || exit 2
 

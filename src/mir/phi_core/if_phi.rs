@@ -61,10 +61,7 @@ pub fn extract_assigned_var(ast: &ASTNode) -> Option<String> {
                 };
                 extract_assigned_var(&ep)
             });
-            match (tvar, evar) {
-                (Some(tv), Some(ev)) if tv == ev => Some(tv),
-                _ => None,
-            }
+            crate::mir::phi_core::common::determine_assigned_name(&tvar, &evar)
         }
         _ => None,
     }

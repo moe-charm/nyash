@@ -18,9 +18,8 @@ test_plugin_first_noop_array() {
   print(a.size())
   '
   local output
-  output=$(NYASH_VM_BOXCALL_PLUGIN_FIRST=1 NYASH_VM_PLUGIN_PREFER_ARRAY=1 run_nyash_vm -c "$script" 2>&1)
+  output=$(NYASH_VM_BOXCALL_PLUGIN_FIRST=1 NYASH_VM_PLUGIN_PREFER_ARRAY=1 run_nyash_vm -c "$script" 2>&1 | grep -v '^Result: ')
   check_exact "2" "$output" "plugin_first_noop_array"
 }
 
 run_test "plugin_first_noop_array" test_plugin_first_noop_array
-

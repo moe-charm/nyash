@@ -178,14 +178,29 @@ fn check_layer_boundary() {
   - プリミティブ: MIR Compare を発行。
   - Box同士: MIRで Compare(Eq/Ne) を発行しない。必ず呼び出しに正規化する。
     - 優先: `lhs.equals/1(rhs)`（`.equals/` 実装内では自己再帰防止のため変換禁止）
-    - 代替（ユニバーサル）: `MirCall::external("nyrt.ops.op_eq")`（ExternCall系は MirCall 統一で表現）
+    - 代替（ユニバーサル）: `Call{ callee=Extern("nyrt.ops.op_eq") }`（ExternCall は撤退。MirCall 統一）
 
 検証（Fail‑Fast）
 - MIR Verify で「両辺が Box 型の Compare(Eq/Ne)」を禁止し、検出時はエラーにする。
 
 備考
 - VM 側の equals ディスパッチは“安全弁（互換）”。既定は MIR で意味論確定に従う。
-- LLVM/AOT とのパリティは MIR の形状で担保する。
+  - LLVM ハーネスは `nyrt.ops.op_eq` を inlining（i64 icmp→zext）で処理。C カーネルは不要。
+  - LLVM/AOT とのパリティは MIR の形状で担保する。
+
+### 6.2 ExternCall 撤退と MirCall 統一
+
+- Builder/Optimizer は `Call{ callee=Extern("iface.method") }` を発行する。`ExternCall` 命令は撤退済み。
+- 正規化パスはレガシー表現を見つけたら `callee=Extern` に書き換える（互換受け）。
+- VM/LLVM/WASM の各バックエンドは `callee=Extern` を単一起点として実装する。
+
+### 6.3 Static Box の意味論（Namespace 固定）
+
+- 許可: `me.method()`（= `BoxName.method()` の糖衣）。
+- 禁止: `me.field` の参照/代入（実行時状態を持たない）。
+  - Builder で `me.field` / `me.field =` を Fail‑Fast。
+  - MIR Verifier で `BoxCall(getField|setField)` の受けが「定数文字列（Box名）」になっていないかを検出して Fail。
+- フィールド注釈 `name: Type [= expr]` は宣言メタ（将来の型に活用）。実行時状態は持たない。
 
 ### 7. ドキュメント駆動開発
 
@@ -260,10 +275,10 @@ fn check_layer_boundary() {
   - 既定: OFF（テストプロファイルでは ON で走ることあり）。将来撤退予定。docs/config/env.md に従う。
   - 方針: デフォルト昇格はしない（意味論を揺らすため）。必要なスモークはプロファイル側でON。
 
-- `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN`
+- `HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN`
   - 既定: ON（未指定時 true。src/config/env/features.rs を参照）。
-  - 別名: `HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN` などブランド別接頭辞は自動で `NYASH_` にマップ（alias_prefixes_bootstrap）。
-  - 方針: ドキュメント上は `NYASH_…` に統一表記。エイリアスは互換のみ。
+  - 互換: `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN` も受理。実装では `HAKO_*` が未設定時に `NYASH_*` をミラー（alias_prefixes_bootstrap）。
+  - 方針: ドキュメント上は `HAKO_…` に統一表記。NYASH_* は互換のみ。
 
 - そのほか昇格候補
   - using 系: 既に `NYASH_USING=1` が既定。`NYASH_ENABLE_USING` は非推奨（警告のみ）。

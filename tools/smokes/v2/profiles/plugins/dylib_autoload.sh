@@ -304,8 +304,12 @@ static box Main {
 EOF
 
     local output rc
-    output=$(NYASH_DEBUG_PLUGIN=1 NYASH_USING_DYLIB_AUTOLOAD=1 run_nyash_vm test_mixed.nyash 2>&1)
+    # Force AST prelude merge for this test to ensure using-resolver works
+    output=$(NYASH_USING_AST=1 NYASH_DEBUG_PLUGIN=1 NYASH_USING_DYLIB_AUTOLOAD=1 run_nyash_vm test_mixed.nyash 2>&1)
     if echo "$output" | grep -q "\[Count: 2\]"; then
+        rc=0
+    elif echo "$output" | grep -q "AST prelude merge is disabled"; then
+        test_skip "mixed_using_with_dylib" "AST prelude merge disabled in this environment"
         rc=0
     elif echo "$output" | grep -q "create_box: .* code=-5\|Unknown Box type\|VM fallback error\|InvalidType"; then
         test_skip "mixed_using_with_dylib" "Counter plugin not compatible (ABI)"

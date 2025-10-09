@@ -10,6 +10,27 @@
 
 **注**: 成功報告中心。失敗・問題点は [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクション参照。
 
+### 🎉 **Phase 15.15完了！共通化綺麗綺麗大作戦成功** (2025-10-09)
+**インスタンスBox化＋重複削除＋統合 - 純削減48行、全テストPASS**
+
+#### ✅ **成果サマリー**
+- **15.15.1**: `mir_builder_min.hako` instance box化（+38行、品質投資）
+- **15.15.2**: `find_balanced_*` 統合（-53行）→ JsonCursorBox集約
+- **15.15.3**: `_str_to_int` 統合（-33行）→ StringHelpers集約
+- **総計**: -48行（-86削減 + 38品質投資）
+- **テスト結果**: 302/302 PASS ✅（0エラー）
+
+#### 💡 **主な改善**
+1. **Static→Instance Box変換**: MirJsonBuilderMin MapBox状態管理→内部フィールド
+2. **重複実装削除**: JsonCursorBox/StringHelpers に一元化
+3. **品質優先**: 行数より保守性・カプセル化重視
+
+詳細: [Phase 15.15 README](docs/development/roadmap/phases/phase-15.15/README.md)
+
+コミット: `7630bc1f`, `88d0038e`, `f340a15b`
+
+---
+
 ### 🎉 **Phase 15.13完了！マクロ化綺麗綺麗大作戦成功** (2025-10-09)
 **@enum/@matchマクロを既存コードに適用 - 52行純削減、全テストPASS**
 

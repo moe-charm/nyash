@@ -30,7 +30,7 @@ static box Main {
 }
 EOF
 
-raw_output=$(run_nyash_vm "$SRC")
+raw_output=$(run_nyash_vm "$SRC" | grep -v '^Result: ')
 echo "$raw_output" | sed -n '1,120p' >&2
 result=$(echo "$raw_output" | tail -n 1 | tr -d '\r' | xargs)
 if [ "$result" = "OK" ]; then
@@ -38,7 +38,7 @@ if [ "$result" = "OK" ]; then
   rm -rf "$TMP_DIR"
   exit 0
 else
-  log_error "userbox_unborn_then_birth_ok_vm expected 'Alice', got: ${result:-<empty>}"
+  log_error "userbox_unborn_then_birth_ok_vm expected 'OK', got: ${result:-<empty>}"
   rm -rf "$TMP_DIR"
   exit 1
 fi

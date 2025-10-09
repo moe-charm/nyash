@@ -1,0 +1,80 @@
+// block_mapper.hako — Phase 1 Day 3: MIR Block Map Builder
+// Strategy: 箱化モジュール化 - ブロック解析を分離
+
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+
+static box BlockMapperBox {
+  // Build a map of block_id -> block_json
+  // Returns: Result.Ok(MapBox) or Result.Err(message)
+  build_map(mir_json) {
+    local block_map = new MapBox()
+
+    // Find blocks array
+    local key_blocks = "\"blocks\":["
+    local blocks_start = mir_json.indexOf(key_blocks)
+    if blocks_start < 0 {
+      return Result.Err("blocks array not found")
+    }
+    blocks_start = blocks_start + key_blocks.length()
+
+    // Find blocks array end
+    local blocks_end = JsonCursorBox.seek_array_end(mir_json, blocks_start - 1)
+    if blocks_end < 0 {
+      return Result.Err("blocks array end not found")
+    }
+
+    local blocks_json = mir_json.substring(blocks_start, blocks_end)
+
+    // Parse each block
+    local pos = 0
+    local len = blocks_json.length()
+
+    loop(pos < len) {
+      // Skip whitespace and comma
+      local ch = blocks_json.substring(pos, pos + 1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" || ch == "," {
+        pos = pos + 1
+        continue
+      }
+
+      // Find block object
+      if ch == "{" {
+        local block_end = JsonCursorBox.seek_obj_end(blocks_json, pos)
+        if block_end < 0 {
+          return Result.Err("block object end not found")
+        }
+
+        local block_json = blocks_json.substring(pos, block_end + 1)
+
+        // Extract block id
+        local key_id = "\"id\":"
+        local id_start = block_json.indexOf(key_id)
+        if id_start < 0 {
+          return Result.Err("block id not found")
+        }
+        id_start = id_start + key_id.length()
+
+        local id_digits = StringHelpers.read_digits(block_json, id_start)
+        if id_digits == "" {
+          return Result.Err("invalid block id")
+        }
+
+        local block_id = StringHelpers.to_i64(id_digits)
+
+        // Store in map
+        block_map.set(StringHelpers.int_to_str(block_id), block_json)
+
+        pos = block_end + 1
+        continue
+      }
+
+      // Skip other characters
+      pos = pos + 1
+    }
+
+    return Result.Ok(block_map)
+  }
+}
