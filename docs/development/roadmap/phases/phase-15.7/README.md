@@ -8,6 +8,15 @@ Branch Note (selfhost)
 
 **「Hakorune で Hakorune をコンパイルする」完全なセルフホスティングの実現**
 
+### 🎯 First Goal（Milestone M1 — Bootstrap）
+- 目的: 「Hakorune コンパイラー（apps/selfhost-compiler/compiler.hako）を Hakorune でビルドし、LLVMで実行ファイル化」
+- 成果物: 自己ホスト版コンパイラー実行ファイル（例: /tmp/hako_selfhost_compiler）
+- 受け入れ基準（Acceptances）
+  - A1: `tools/build_llvm.sh apps/selfhost-compiler/compiler.hako -o /tmp/hako_selfhost_compiler` が 0 終了
+  - A2: `/tmp/hako_selfhost_compiler -- --min-json` の標準出力先頭行が非空 JSON ヘッダ（`{"version": …, "kind": …}` を含む）
+  - A3（任意）: 生成 EXE で小サンプルを解析→Rust VM での実行結果と等価（quick スモークで 1 本確認）
+- スモーク: `tools/smokes/v2/profiles/quick/selfhost/selfhost_bootstrap_llvm.sh`（既定 SKIP、`SMOKES_ENABLE_SELFHOST_BOOT=1` で有効）
+
 
 ## 🛣️ 実行ルート（道）— 小さく進めて確実に緑にする
 

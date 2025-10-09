@@ -1,0 +1,62 @@
+// test_mircall_phase1.hako — MirCall Phase 1 tests (Global + Extern)
+// Expected: MirCall Global print() works correctly
+
+using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== MirCall Phase 1 Tests (Global) ===")
+
+    // Test 1: Simple Global call - print(42)
+    // Block 0: const 42 → v1, mir_call print(v1), const 0 → v2, ret v2
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"mir_call","dst":null,"mir_call":{"callee":{"type":"Global","name":"print"},"args":[1],"effects":["IO"],"flags":{}}},{"op":"const","dst":2,"value":{"type":"i64","value":0}},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    print("[Test 1] Global print(42) - should print: 42")
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1 result: " + StringHelpers.int_to_str(result1))
+    if result1 != 0 {
+      print("[FAIL] Test 1: expected 0, got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: Global call with arithmetic - print(10 + 32)
+    // Block 0: const 10 → v1, const 32 → v2, binop Add v1+v2 → v3, mir_call print(v3), const 0 → v4, ret v4
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":10}},{"op":"const","dst":2,"value":{"type":"i64","value":32}},{"op":"binop","op_kind":"Add","dst":3,"lhs":1,"rhs":2},{"op":"mir_call","dst":null,"mir_call":{"callee":{"type":"Global","name":"print"},"args":[3],"effects":["IO"],"flags":{}}},{"op":"const","dst":4,"value":{"type":"i64","value":0}},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    print("[Test 2] Global print(10 + 32) - should print: 42")
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2 result: " + StringHelpers.int_to_str(result2))
+    if result2 != 0 {
+      print("[FAIL] Test 2: expected 0, got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: Multiple Global calls
+    // Block 0: const 1 → v1, print(v1), const 2 → v2, print(v2), const 3 → v3, print(v3), const 0 → v4, ret v4
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":1}},{"op":"mir_call","dst":null,"mir_call":{"callee":{"type":"Global","name":"print"},"args":[1],"effects":["IO"],"flags":{}}},{"op":"const","dst":2,"value":{"type":"i64","value":2}},{"op":"mir_call","dst":null,"mir_call":{"callee":{"type":"Global","name":"print"},"args":[2],"effects":["IO"],"flags":{}}},{"op":"const","dst":3,"value":{"type":"i64","value":3}},{"op":"mir_call","dst":null,"mir_call":{"callee":{"type":"Global","name":"print"},"args":[3],"effects":["IO"],"flags":{}}},{"op":"const","dst":4,"value":{"type":"i64","value":0}},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    print("[Test 3] Multiple prints (1, 2, 3) - should print: 1, 2, 3")
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3 result: " + StringHelpers.int_to_str(result3))
+    if result3 != 0 {
+      print("[FAIL] Test 3: expected 0, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: Global call with multiplication
+    // Block 0: const 7 → v1, const 6 → v2, binop Mul v1*v2 → v3, print(v3), const 0 → v4, ret v4
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":7}},{"op":"const","dst":2,"value":{"type":"i64","value":6}},{"op":"binop","op_kind":"Mul","dst":3,"lhs":1,"rhs":2},{"op":"mir_call","dst":null,"mir_call":{"callee":{"type":"Global","name":"print"},"args":[3],"effects":["IO"],"flags":{}}},{"op":"const","dst":4,"value":{"type":"i64","value":0}},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    print("[Test 4] Global print(7 * 6) - should print: 42")
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4 result: " + StringHelpers.int_to_str(result4))
+    if result4 != 0 {
+      print("[FAIL] Test 4: expected 0, got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    print("✅ All MirCall Phase 1 tests PASSED!")
+    return 0
+  }
+}

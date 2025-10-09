@@ -1,0 +1,79 @@
+// CalleeParserBox - Extract callee information from MirCall JSON
+// Single Responsibility: Parse callee field and extract type/name
+
+using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+
+static box CalleeParserBox {
+  // Extract callee type from mir_call object
+  // mir_call_json: JSON string like '{"callee":{"type":"Global","name":"print"},...}'
+  // Returns: "Global" / "Extern" / "Method" / "ModuleFunction" / null on error
+  extract_type(mir_call_json) {
+    // Find "callee" field
+    local callee_key = "\"callee\":"
+    local callee_start = mir_call_json.indexOf(callee_key)
+    if callee_start < 0 {
+      return null
+    }
+    callee_start = callee_start + callee_key.size()
+
+    // Find callee object end (simplified: find next "type" field)
+    local type_key = "\"type\":\""
+    local type_start = StringOps.index_of_from(mir_call_json, type_key, callee_start)
+    if type_start < 0 {
+      return null
+    }
+    type_start = type_start + type_key.size()
+
+    // Extract type value
+    local type_end = StringOps.index_of_from(mir_call_json, "\"", type_start)
+    if type_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(type_start, type_end)
+  }
+
+  // Extract callee name from mir_call object
+  // mir_call_json: JSON string like '{"callee":{"type":"Global","name":"print"},...}'
+  // Returns: function name string / null on error
+  extract_name(mir_call_json) {
+    // Find "name" field (within callee object)
+    local name_key = "\"name\":\""
+    local name_start = mir_call_json.indexOf(name_key)
+    if name_start < 0 {
+      return null
+    }
+    name_start = name_start + name_key.size()
+
+    // Extract name value
+    local name_end = StringOps.index_of_from(mir_call_json, "\"", name_start)
+    if name_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(name_start, name_end)
+  }
+
+  // Extract full callee object as JSON string (for complex cases)
+  // mir_call_json: JSON string like '{"callee":{...},"args":[...],...}'
+  // Returns: callee JSON substring
+  extract_callee_object(mir_call_json) {
+    // Find "callee" field
+    local callee_key = "\"callee\":"
+    local callee_start = mir_call_json.indexOf(callee_key)
+    if callee_start < 0 {
+      return null
+    }
+    local obj_start = callee_start + callee_key.size()
+
+    // Find object end (simple: find matching })
+    // Note: This is simplified and assumes no nested objects in callee
+    local obj_end = StringOps.index_of_from(mir_call_json, "}", obj_start)
+    if obj_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(obj_start, obj_end + 1)
+  }
+}

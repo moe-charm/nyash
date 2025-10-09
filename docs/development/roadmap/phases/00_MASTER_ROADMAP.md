@@ -58,6 +58,11 @@ Purpose: Claude×Copilot×ChatGPT×Gemini協調開発の総合ロードマップ
 - **目標**: Hakorune言語で Hakorune をコンパイル・実行する
 - **詳細**: [phase-15.7/README.md](phase-15.7/README.md)
 
+**First Goal（M1 — Bootstrap）**
+- Hakorune コンパイラー（apps/selfhost-compiler/compiler.hako）を Hakorune でビルドし、LLVM で EXE 化
+- 受け入れ: build_llvm.sh で EXE 生成 → `-- --min-json` 実行で JSON ヘッダ非空
+- スモーク: `selfhost_bootstrap_llvm.sh`（quick/selfhost、既定SKIP）
+
 **完了済み（85-90%）**:
 - ✅ P2-A/B/C（Using解決系）完全実装
   - UsingResolverBox実装（1日で完了、見積もり7日 → **85%短縮！**）

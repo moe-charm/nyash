@@ -1,0 +1,65 @@
+// test_typeop.hako — Phase 2 Day 3 TypeOp tests
+// Expected: TypeOp instruction handles type checks and casts
+
+using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    // Test 1: TypeOp Check (type check returns 1)
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"typeop","op_kind":"Check","dst":2,"value":1,"ty":"IntegerBox"},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1: typeop Check (IntegerBox) → " + StringHelpers.int_to_str(result1))
+    if result1 != 1 {
+      print("[FAIL] Test 1: expected 1, got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: TypeOp Cast (copies value)
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":100}},{"op":"typeop","op_kind":"Cast","dst":2,"value":1,"ty":"IntegerBox"},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2: typeop Cast (100) → " + StringHelpers.int_to_str(result2))
+    if result2 != 100 {
+      print("[FAIL] Test 2: expected 100, got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: TypeOp Check + use in condition
+    // const 5 → v1, typeop Check v1 → v2, const 10 → v3, binop Mul v2 * v3 → v4, ret v4
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":5}},{"op":"typeop","op_kind":"Check","dst":2,"value":1,"ty":"IntegerBox"},{"op":"const","dst":3,"value":{"type":"i64","value":10}},{"op":"binop","op_kind":"Mul","dst":4,"lhs":2,"rhs":3},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3: typeop Check (1) * 10 → " + StringHelpers.int_to_str(result3))
+    if result3 != 10 {
+      print("[FAIL] Test 3: expected 10, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: TypeOp Cast + arithmetic
+    // const 7 → v1, typeop Cast v1 → v2, const 3 → v3, binop Add v2 + v3 → v4, ret v4
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":7}},{"op":"typeop","op_kind":"Cast","dst":2,"value":1,"ty":"IntegerBox"},{"op":"const","dst":3,"value":{"type":"i64","value":3}},{"op":"binop","op_kind":"Add","dst":4,"lhs":2,"rhs":3},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4: typeop Cast + add (7 + 3) → " + StringHelpers.int_to_str(result4))
+    if result4 != 10 {
+      print("[FAIL] Test 4: expected 10, got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    // Test 5: Multiple TypeOps
+    // const 3 → v1, typeop Check v1 → v2, typeop Cast v2 → v3, binop Mul v3 * v1 → v4, ret v4
+    local mir5 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":3}},{"op":"typeop","op_kind":"Check","dst":2,"value":1,"ty":"IntegerBox"},{"op":"typeop","op_kind":"Cast","dst":3,"value":2,"ty":"IntegerBox"},{"op":"binop","op_kind":"Mul","dst":4,"lhs":3,"rhs":1},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    local result5 = HakoruneVmCore.run(mir5)
+    print("Test 5: Check + Cast + mul (1 * 3) → " + StringHelpers.int_to_str(result5))
+    if result5 != 3 {
+      print("[FAIL] Test 5: expected 3, got " + StringHelpers.int_to_str(result5))
+      return 1
+    }
+
+    print("✅ All TypeOp tests PASSED!")
+    return 0
+  }
+}

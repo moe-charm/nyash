@@ -1,0 +1,60 @@
+// TypeOpHandlerBox - Type operation instruction handler
+// Handles: typeop (type check and type cast)
+
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+
+static box TypeOpHandlerBox {
+  // Handle typeop instruction
+  // inst_json: {"op":"typeop","op_kind":"Check|Cast","dst":X,"value":Y,"ty":...}
+  // regs: register MapBox
+  // mem: memory MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  // Phase 1: Simplified implementation
+  // - Check: Always returns 1 (assume type matches)
+  // - Cast: Copies value from src to dst (no actual conversion)
+  handle(inst_json, regs, mem) {
+    // Extract op_kind
+    local kind = JsonFieldExtractor.extract_string(inst_json, "op_kind")
+    if kind == null {
+      return Result.Err("typeop: op_kind not found")
+    }
+
+    // Validate op_kind (must be "Check" or "Cast")
+    if kind != "Check" && kind != "Cast" {
+      return Result.Err("typeop: invalid op_kind: " + kind)
+    }
+
+    // Extract dst
+    local dst = JsonFieldExtractor.extract_int(inst_json, "dst")
+    if dst == null {
+      return Result.Err("typeop: dst not found")
+    }
+
+    // Extract value (source register)
+    local src_reg = JsonFieldExtractor.extract_int(inst_json, "value")
+    if src_reg == null {
+      return Result.Err("typeop: value not found")
+    }
+
+    // Get source value from register
+    local src_value = ValueManagerBox.get(regs, src_reg)
+
+    if kind == "Check" {
+      // Phase 1: Type check - always return 1 (assume type matches)
+      // Future: Implement actual runtime type checking
+      ValueManagerBox.set(regs, dst, 1)
+      return Result.Ok(0)
+    }
+
+    if kind == "Cast" {
+      // Phase 1: Type cast - just copy value (no conversion)
+      // Future: Implement actual type conversion
+      ValueManagerBox.set(regs, dst, src_value)
+      return Result.Ok(0)
+    }
+
+    return Result.Err("typeop: unreachable")
+  }
+}
