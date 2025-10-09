@@ -31,11 +31,10 @@ static box Main {
 
     local result3 = HakoruneVmCore.run(mir3)
     print("Test 3: load from uninitialized mem[99] → " + StringHelpers.int_to_str(result3))
-    // TODO: Debug null comparison issue
-    // if result3 != 0 {
-    //   print("[FAIL] Test 3: expected 0, got " + StringHelpers.int_to_str(result3))
-    //   return 1
-    // }
+    if result3 != 0 {
+      print("[FAIL] Test 3: expected 0, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
 
     // Test 4: Overwrite memory location (Store 5, then Store 42, then Load → 42)
     local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":5}},{"op":"const","dst":2,"value":{"type":"i64","value":42}},{"op":"store","value":1,"ptr":30},{"op":"store","value":2,"ptr":30},{"op":"load","dst":3,"ptr":30},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}"#

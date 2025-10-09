@@ -28,10 +28,10 @@ static box LoadHandlerBox {
     local ptr_key = StringHelpers.int_to_str(ptr)
 
     // Default to 0 for uninitialized memory
+    // Fix: MapBox.get() returns StringBox("Key not found") instead of null
     local value = 0
-    local mem_value = mem.get(ptr_key)
-    if mem_value != null {
-      value = mem_value
+    if mem.has(ptr_key) {
+      value = mem.get(ptr_key)
     }
 
     // Store to destination register

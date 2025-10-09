@@ -1,0 +1,81 @@
+// test_vm_return_compare.hako — Test comparison with VM-returned values
+// Phase 2: VM return value comparison tests
+
+using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== Phase 2: VM Return Value Comparison Tests ===")
+
+    // Test 2.1: VM returns 0, compare directly
+    print("\nTest 2.1: VM returns const 0")
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":0}},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+    local result1 = HakoruneVmCore.run(mir1)
+    print("VM returned: " + StringHelpers.int_to_str(result1))
+    print("Type check: calling int_to_str succeeded, so it's a number")
+
+    if result1 != 0 {
+      print("[FAIL] VM returned 0 but (result1 != 0) is true!")
+      print("Debug: result1 value = " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+    print("[PASS] VM returned 0 and comparison works")
+
+    // Test 2.2: VM returns 0 from Load (uninitialized memory)
+    print("\nTest 2.2: VM returns 0 from Load (uninitialized)")
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"load","dst":1,"ptr":99},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+    local result2 = HakoruneVmCore.run(mir2)
+    print("VM returned: " + StringHelpers.int_to_str(result2))
+
+    if result2 != 0 {
+      print("[FAIL] VM returned 0 from Load but (result2 != 0) is true!")
+      print("Debug: result2 value = " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+    print("[PASS] VM returned 0 from Load and comparison works")
+
+    // Test 2.3: VM returns 42, then compare
+    print("\nTest 2.3: VM returns const 42")
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+    local result3 = HakoruneVmCore.run(mir3)
+    print("VM returned: " + StringHelpers.int_to_str(result3))
+
+    if result3 != 42 {
+      print("[FAIL] VM returned 42 but comparison failed!")
+      return 1
+    }
+    print("[PASS] VM returned 42 and comparison works")
+
+    // Test 2.4: Check equality direction
+    print("\nTest 2.4: Equality check (== 0)")
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":0}},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+    local result4 = HakoruneVmCore.run(mir4)
+    print("VM returned: " + StringHelpers.int_to_str(result4))
+
+    if result4 == 0 {
+      print("[PASS] VM returned 0 and (result4 == 0) is true")
+    }
+    if result4 == 0 == false {
+      print("[FAIL] VM returned 0 but (result4 == 0) is false!")
+      return 1
+    }
+
+    // Test 2.5: Store result in variable, then compare
+    print("\nTest 2.5: Store VM result in variable, then compare")
+    local mir5 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"load","dst":1,"ptr":99},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+    local result5 = HakoruneVmCore.run(mir5)
+    local copy5 = result5
+    print("VM returned: " + StringHelpers.int_to_str(result5))
+    print("Copied to: " + StringHelpers.int_to_str(copy5))
+
+    if copy5 != 0 {
+      print("[FAIL] Copied value is 0 but (copy5 != 0) is true!")
+      return 1
+    }
+    print("[PASS] Copied value comparison works")
+
+    print("\n✅ All Phase 2 tests PASSED!")
+    return 0
+  }
+}

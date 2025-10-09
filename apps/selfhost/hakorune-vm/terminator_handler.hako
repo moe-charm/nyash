@@ -82,9 +82,13 @@ static box TerminatorHandlerBox {
     }
 
     local val_id = StringHelpers.to_i64(val_digits)
-    local val = regs.get(StringHelpers.int_to_str(val_id))
-    if val == null {
-      val = 0
+    local reg_key = StringHelpers.int_to_str(val_id)
+
+    // Fix: MapBox.get() returns StringBox("Key not found") instead of null
+    // Must use has() to check existence first
+    local val = 0
+    if regs.has(reg_key) {
+      val = regs.get(reg_key)
     }
 
     result_map.set("value", val)
@@ -133,9 +137,12 @@ static box TerminatorHandlerBox {
     }
 
     local cond_id = StringHelpers.to_i64(cond_digits)
-    local cond_val = regs.get(StringHelpers.int_to_str(cond_id))
-    if cond_val == null {
-      cond_val = 0
+    local cond_key = StringHelpers.int_to_str(cond_id)
+
+    // Fix: MapBox.get() returns StringBox("Key not found") instead of null
+    local cond_val = 0
+    if regs.has(cond_key) {
+      cond_val = regs.get(cond_key)
     }
 
     // Extract then_bb
