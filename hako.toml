@@ -99,6 +99,16 @@ timer = "core.timer.TimerBox"
 
  # Hakorune VM (Phase 1)
  selfhost.hakorune_vm.hakorune_vm_core = "apps/selfhost/hakorune-vm/hakorune_vm_core.hako"
+ selfhost.hakorune_vm.block_mapper = "apps/selfhost/hakorune-vm/block_mapper.hako"
+ selfhost.hakorune_vm.terminator_handler = "apps/selfhost/hakorune-vm/terminator_handler.hako"
+ selfhost.hakorune_vm.phi_handler = "apps/selfhost/hakorune-vm/phi_handler.hako"
+ selfhost.hakorune_vm.instruction_dispatcher = "apps/selfhost/hakorune-vm/instruction_dispatcher.hako"
+ selfhost.hakorune_vm.value_manager = "apps/selfhost/hakorune-vm/value_manager.hako"
+ selfhost.hakorune_vm.json_field_extractor = "apps/selfhost/hakorune-vm/json_field_extractor.hako"
+ selfhost.hakorune_vm.const_handler = "apps/selfhost/hakorune-vm/const_handler.hako"
+ selfhost.hakorune_vm.binop_handler = "apps/selfhost/hakorune-vm/binop_handler.hako"
+ selfhost.hakorune_vm.compare_handler = "apps/selfhost/hakorune-vm/compare_handler.hako"
+ selfhost.hakorune_vm.copy_handler = "apps/selfhost/hakorune-vm/copy_handler.hako"
 
  selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
  # Dev VM utility boxes (for tests that reference them directly)

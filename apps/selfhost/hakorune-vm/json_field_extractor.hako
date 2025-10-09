@@ -1,0 +1,47 @@
+// JsonFieldExtractorBox - Extract fields from JSON MIR instructions
+// Centralizes JSON field parsing logic
+
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/string_ops.hako" as StringOps
+
+static box JsonFieldExtractor {
+  // Extract integer field from JSON
+  // json: JSON string (e.g., '{"dst":1,"src":2}')
+  // field_name: field name (e.g., "dst")
+  // Returns: integer value or null if not found
+  extract_int(json, field_name) {
+    local key = "\"" + field_name + "\":"
+    local start = json.indexOf(key)
+    if start < 0 {
+      return null
+    }
+    start = start + key.length()
+
+    local digits = StringHelpers.read_digits(json, start)
+    if digits == "" {
+      return null
+    }
+
+    return StringHelpers.to_i64(digits)
+  }
+
+  // Extract string field from JSON
+  // json: JSON string
+  // field_name: field name (e.g., "op")
+  // Returns: string value or null if not found
+  extract_string(json, field_name) {
+    local key = "\"" + field_name + "\":\""
+    local start = json.indexOf(key)
+    if start < 0 {
+      return null
+    }
+    start = start + key.length()
+
+    local end_pos = StringOps.index_of_from(json, "\"", start)
+    if end_pos < 0 {
+      return null
+    }
+
+    return json.substring(start, end_pos)
+  }
+}

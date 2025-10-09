@@ -30,6 +30,17 @@ path = "apps/lib/json_native/core/node.hako"
 
 [modules]
 hakorune.vm.entry = "apps/hakorune/vm/boxes/hakorune_vm_entry.hako"
+hakorune.vm.core = "apps/selfhost/hakorune-vm/hakorune_vm_core.hako"
+hakorune.vm.block_mapper = "apps/selfhost/hakorune-vm/block_mapper.hako"
+hakorune.vm.terminator_handler = "apps/selfhost/hakorune-vm/terminator_handler.hako"
+hakorune.vm.phi_handler = "apps/selfhost/hakorune-vm/phi_handler.hako"
+hakorune.vm.instruction_dispatcher = "apps/selfhost/hakorune-vm/instruction_dispatcher.hako"
+hakorune.vm.value_manager = "apps/selfhost/hakorune-vm/value_manager.hako"
+hakorune.vm.json_field_extractor = "apps/selfhost/hakorune-vm/json_field_extractor.hako"
+hakorune.vm.const_handler = "apps/selfhost/hakorune-vm/const_handler.hako"
+hakorune.vm.binop_handler = "apps/selfhost/hakorune-vm/binop_handler.hako"
+hakorune.vm.compare_handler = "apps/selfhost/hakorune-vm/compare_handler.hako"
+hakorune.vm.copy_handler = "apps/selfhost/hakorune-vm/copy_handler.hako"
 # Map logical namespaces to Nyash source paths (consumed by runner)
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"

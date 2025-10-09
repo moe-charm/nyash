@@ -1,0 +1,76 @@
+// CompareHandlerBox - Compare instruction handler
+// Handles: %dst = %lhs kind %rhs (Eq/Ne/Lt/Le/Gt/Ge)
+// Returns: 1 (true) or 0 (false)
+
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+
+static box CompareHandlerBox {
+  // Handle compare instruction
+  // inst_json: {"op":"compare","dst":3,"kind":"Eq","lhs":1,"rhs":2}
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(inst_json, regs) {
+    // Extract dst, lhs, rhs
+    local dst = JsonFieldExtractor.extract_int(inst_json, "dst")
+    if dst == null {
+      return Result.Err("compare: dst field not found")
+    }
+
+    local lhs_id = JsonFieldExtractor.extract_int(inst_json, "lhs")
+    if lhs_id == null {
+      return Result.Err("compare: lhs field not found")
+    }
+
+    local rhs_id = JsonFieldExtractor.extract_int(inst_json, "rhs")
+    if rhs_id == null {
+      return Result.Err("compare: rhs field not found")
+    }
+
+    // Extract kind (Eq/Ne/Lt/Le/Gt/Ge)
+    local kind = JsonFieldExtractor.extract_string(inst_json, "kind")
+    if kind == null {
+      return Result.Err("compare: kind field not found")
+    }
+
+    // Load operands from registers using ValueManagerBox
+    local lhs_val = ValueManagerBox.get(regs, lhs_id)
+    local rhs_val = ValueManagerBox.get(regs, rhs_id)
+
+    // Execute comparison operation (result: 1=true, 0=false)
+    local result_val = 0
+    if kind == "Eq" {
+      if lhs_val == rhs_val {
+        result_val = 1
+      }
+    } else if kind == "Ne" {
+      if lhs_val != rhs_val {
+        result_val = 1
+      }
+    } else if kind == "Lt" {
+      if lhs_val < rhs_val {
+        result_val = 1
+      }
+    } else if kind == "Le" {
+      if lhs_val <= rhs_val {
+        result_val = 1
+      }
+    } else if kind == "Gt" {
+      if lhs_val > rhs_val {
+        result_val = 1
+      }
+    } else if kind == "Ge" {
+      if lhs_val >= rhs_val {
+        result_val = 1
+      }
+    } else {
+      return Result.Err("compare: unsupported kind: " + kind)
+    }
+
+    // Store result using ValueManagerBox
+    ValueManagerBox.set(regs, dst, result_val)
+
+    return Result.Ok(0)
+  }
+}

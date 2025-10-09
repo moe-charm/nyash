@@ -1,0 +1,55 @@
+// InstructionDispatcherBox - Dispatch instructions to specific handlers
+// Single Responsibility: Extract op field and route to correct handler
+
+using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/hakorune-vm/const_handler.hako" as ConstHandlerBox
+using "apps/selfhost/hakorune-vm/binop_handler.hako" as BinOpHandlerBox
+using "apps/selfhost/hakorune-vm/compare_handler.hako" as CompareHandlerBox
+using "apps/selfhost/hakorune-vm/copy_handler.hako" as CopyHandlerBox
+
+static box InstructionDispatcherBox {
+  // Dispatch instruction based on op field
+  // inst_json: MIR instruction JSON (e.g., '{"op":"const","dst":1,...}')
+  // regs: register MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  dispatch(inst_json, regs) {
+    // Extract op field
+    local key_op = "\"op\":\""
+    local op_start = inst_json.indexOf(key_op)
+    if op_start < 0 {
+      return Result.Err("op field not found")
+    }
+    op_start = op_start + key_op.length()
+
+    local op_end = StringOps.index_of_from(inst_json, "\"", op_start)
+    if op_end < 0 {
+      return Result.Err("op field end not found")
+    }
+
+    local op = inst_json.substring(op_start, op_end)
+
+    // Skip PHI (handled separately at block start)
+    if op == "phi" {
+      return Result.Ok(0)
+    }
+
+    // @match instruction dispatch to handler boxes
+    return match op {
+      "const" => ConstHandlerBox.handle(inst_json, regs)
+      "binop" => BinOpHandlerBox.handle(inst_json, regs)
+      "compare" => CompareHandlerBox.handle(inst_json, regs)
+      "ret" => me._handle_ret_temp(inst_json, regs)
+      "copy" => CopyHandlerBox.handle(inst_json, regs)
+      _ => Result.Err("unsupported instruction: " + op)
+    }
+  }
+
+  // Temporary ret handler (will move to TerminatorHandlerBox later)
+  // Note: ret is already handled in TerminatorHandlerBox, but also appears
+  // in instructions array during sequential execution
+  _handle_ret_temp(inst_json, regs) {
+    // Just return Ok - actual return is handled by terminator
+    return Result.Ok(0)
+  }
+}

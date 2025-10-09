@@ -1,0 +1,40 @@
+// ConstHandlerBox - Const instruction handler
+// Handles: %dst = const value
+
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+
+static box ConstHandlerBox {
+  // Handle const instruction
+  // inst_json: {"op":"const","dst":1,"value":{"type":"i64","value":42}}
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(inst_json, regs) {
+    // Extract dst
+    local dst = JsonFieldExtractor.extract_int(inst_json, "dst")
+    if dst == null {
+      return Result.Err("const: dst field not found")
+    }
+
+    // Extract value (typed: i64 only for Phase 1)
+    local key_val = "\"value\":{\"type\":\"i64\",\"value\":"
+    local val_start = inst_json.indexOf(key_val)
+    if val_start < 0 {
+      return Result.Err("const: i64 value not found")
+    }
+    val_start = val_start + key_val.length()
+
+    local digits = StringHelpers.read_digits(inst_json, val_start)
+    if digits == "" {
+      return Result.Err("const: invalid value")
+    }
+
+    local value = StringHelpers.to_i64(digits)
+
+    // Store in registers using ValueManagerBox
+    ValueManagerBox.set(regs, dst, value)
+
+    return Result.Ok(0)
+  }
+}

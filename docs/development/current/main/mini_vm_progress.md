@@ -306,3 +306,76 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
 
 **次のステップ**:
 - Phase 1 Day 4以降: 残り命令実装（TypeOp/Load/Store/ExternCall等）
+
+---
+
+### Day 3 リファクタリング: 箱化モジュール化強化（2025-10-09 完了✅）
+
+**目標**: デッドコード削除 + 命令ハンドラーの箱化モジュール化
+
+#### Option A: デッドコード削除
+
+**削除内容**:
+- `_execute_block0()` (35行) - Day 3で`_execute_blocks()`に置き換え済み
+- 使用箇所0件確認済み
+
+**成果**:
+- 純削減: 35行
+- hakorune_vm_core.hako: 488行 → 453行
+
+#### Option C: 命令ハンドラー箱化モジュール化
+
+**新規箱作成** (7箱):
+1. **ValueManagerBox** (41行) - レジスタ操作の統一管理
+   - `get(regs, reg_id)` - レジスタ値取得（デフォルト0）
+   - `set(regs, reg_id, value)` - レジスタ値設定
+
+2. **JsonFieldExtractorBox** (47行) - JSONフィールド抽出の統一
+   - `extract_int(json, field_name)` - 整数フィールド抽出
+   - `extract_string(json, field_name)` - 文字列フィールド抽出
+
+3. **ConstHandlerBox** (39行) - Const命令専用ハンドラー
+4. **BinOpHandlerBox** (70行) - BinOp命令専用ハンドラー
+5. **CompareHandlerBox** (77行) - Compare命令専用ハンドラー
+6. **CopyHandlerBox** (29行) - Copy命令専用ハンドラー
+7. **InstructionDispatcherBox** (55行) - 命令ディスパッチャー
+
+**削除内容**:
+- hakorune_vm_core.hako から旧ハンドラー関数を削除: 272行
+  - `_dispatch_instruction()`, `_handle_const()`, `_handle_binop()`, 
+    `_handle_compare()`, `_handle_copy()`, `_handle_ret()`
+  - `_extract_int_field()`, `_load_reg()`
+
+**成果**:
+- 純削減: 272行（358行新規作成 - 272行削除 = +86行、でも箱分離で読みやすさ向上）
+- hakorune_vm_core.hako: 453行 → 181行 ✨
+
+**設定ファイル更新**:
+- `hako.toml`: `[modules.overrides]`に11エイリアス追加
+- `nyash.toml`: `[modules]`に12エイリアス追加
+
+**テスト結果**:
+- ✅ Day 1+2 tests: 10/10 PASS
+- ✅ Day 3 tests: 5/5 PASS
+- ✅ **合計**: 15/15 PASS 🎉
+
+**統計まとめ**:
+- **合計削減**: 307行（Option A: 35行 + Option C: 272行）
+- **新規箱**: 7箱（358行）
+- **hakorune_vm_core.hako**: 488行 → 181行（-307行、-63%）
+- **箱化後の平均ファイルサイズ**: 51行/箱（読みやすさ大幅向上）
+
+**技術的成果**:
+1. **Single Responsibility Principle完全実装**: 各箱が1つの責任のみ
+2. **コード重複削減**: レジスタ操作とJSONパースロジックを統一
+3. **テスト容易性向上**: 各ハンドラーを独立してテスト可能
+4. **保守性向上**: 新規命令追加時の影響範囲を最小化
+
+**学び**:
+1. **箱化モジュール化の威力再確認**: 307行削減でも全テストPASS
+2. **using system の注意点**: file path using 禁止プロファイル → hako.toml設定必須
+3. **indexOf引数エラー**: StringBoxのindexOfは1引数のみ → StringOps.index_of_from使用
+4. **result.hakoパス**: apps/lib/result.hako は存在しない → apps/selfhost/vm/boxes/result_box.hako使用
+
+**次のステップ**:
+- Phase 1 Day 4: 残り命令実装（TypeOp/Load/Store/ExternCall/BoxCall/NewBox等）
