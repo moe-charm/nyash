@@ -1,7 +1,7 @@
 # MapBox.get() Null Comparison Bug - Investigation Report
 
 **Date**: 2025-10-09
-**Status**: FIXED
+**Status**: FIXED (default behavior updated)
 **Severity**: HIGH (affects all comparison operations with MapBox)
 
 ## Executive Summary
@@ -10,7 +10,7 @@
 
 **Impact**: Any code using the pattern `if map.get(key) == null { ... }` or `if value != 0 { ... }` after `value = map.get(key)` will fail.
 
-**Fix**: Replace all `map.get(key)` + null check patterns with `map.has(key)` + `map.get(key)`.
+**Fix**: As of 2025‑10‑09, `MapBox.get(missing)` returns `null` by default. Prefer direct `v = map.get(key); if v == null { ... }` and remove string‑error checks.
 
 ## Problem Description
 
@@ -289,7 +289,7 @@ Should MapBox.get() behavior be changed? Two options:
 - Pros: No breaking changes, explicit error messages
 - Cons: Requires developers to always use has() pattern
 
-**Recommendation**: Document current behavior prominently in MapBox API docs and create a linter rule to detect the buggy pattern.
+**Recommendation (updated)**: Document the default `null` behavior in MapBox API docs; create a linter to detect legacy patterns that look for `"Key not found:"` strings or rely on `has()+get()` where a single `get()+null` suffices.
 
 ## Test Files Created
 

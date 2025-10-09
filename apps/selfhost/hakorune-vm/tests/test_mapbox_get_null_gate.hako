@@ -1,5 +1,4 @@
-// Requires: HAKO_MAP_GET_NULL=1 (or NYASH_MAP_GET_NULL=1)
-// Purpose: when the gate is ON, MapBox.get(missing) must return null
+// Purpose: MapBox.get(missing) must return null (default behavior)
 
 static box Main {
   main() {
@@ -13,4 +12,3 @@ static box Main {
     return 1
   }
 }
-

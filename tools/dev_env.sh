@@ -103,8 +103,6 @@ case "${1:-pyvm}" in
     # Focus on self-hosting workflows; keep toggles minimal and reversible
     export NYASH_COMPILER_TRACK=1
     export DEV_TIGHT=${DEV_TIGHT:-1}
-    # Collections API migration (local-only): MapBox.get(missing) -> null
-    export HAKO_MAP_GET_NULL=${HAKO_MAP_GET_NULL:-1}
     echo "[dev-env] Selfhost profile activated (APP_BIN_DIR=${APP_BIN_DIR}, COMPILER_TRACK=1, tight=${DEV_TIGHT})" >&2
     echo "[hint] Run selfhost smokes: APP_BIN_DIR=${APP_BIN_DIR} tools/selfhost_smokes.sh quick|integration" >&2
     ;;

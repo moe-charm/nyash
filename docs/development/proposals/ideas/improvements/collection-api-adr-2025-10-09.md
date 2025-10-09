@@ -1,6 +1,6 @@
 # ADR: Collections API Unification — Phase 1 (Gated rollout)
 
-Status: accepted (phase‑1 in progress)
+Status: accepted (phase‑2 defaultized)
 Date: 2025‑10‑09
 
 Context
@@ -9,7 +9,7 @@ Context
 - We want a unified, minimal collection surface: `.size()`, `.isEmpty()`, `get(...) -> Box|null` where applicable, without breaking existing code.
 
 Decision
-- Add a migration flag `HAKO_MAP_GET_NULL=1` (alias: `NYASH_MAP_GET_NULL=1`) that changes `MapBox.get(missing)` to return `null` (NullBox). Default OFF for compatibility.
+- Defaultize `MapBox.get(missing) -> null` (flag removed; behavior is now default).
 - Add `.size()` and `.isEmpty()` convenience across core collections:
   - StringBox: `.size()` (alias to length), `.isEmpty()`
   - ArrayBox: `.isEmpty()` (interpreter already supports `.size()`)
@@ -22,15 +22,14 @@ Rationale
 - Gated rollout honors current freeze policy (no default semantics change) and allows per‑profile opt‑in.
 
 Consequences
-- New env: `HAKO_MAP_GET_NULL` documented in `docs/config/env.md`.
-- Minimal code change size; no public spec change by default.
+- Migration flag removed; docs updated in `docs/config/env.md`.
+- Minimal code change size; public spec now aligns with intuitive Map semantics.
 - Follow‑up phases can deprecate status‑string returns from mutators (`set/clear`) and promote lints.
 
 Migration Notes
 - Short‑term: prefer `map.has(k)` before `map.get(k)` in compatibility mode.
-- When enabling `HAKO_MAP_GET_NULL=1`, remove string‑error checks (e.g., `RegexFlow.find_from(value, "Key not found:", …)`).
+- Remove legacy string‑error checks (e.g., `RegexFlow.find_from(value, "Key not found:", …)`).
 - Replace `arr.length()` → `arr.size()` gradually; `.length()` remains as an alias for now.
 
 Verification
 - Add a smoke test that asserts `MapBox.get(missing) == null` when the flag is ON.
-

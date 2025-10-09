@@ -100,7 +100,7 @@
  * - キーは自動的に文字列変換される
  * - スレッドセーフ (Arc<RwLock>使用)
  * - 大量データ格納時はメモリ使用量に注意
- * - 存在しないキーの取得は "Key not found" メッセージ返却
+ * - 存在しないキーの取得は null を返す
  */
 
 use crate::box_trait::{BoolBox, BoxBase, BoxCore, IntegerBox, NyashBox, StringBox};
@@ -135,11 +135,7 @@ impl MapBox {
         Box::new(StringBox::new(&format!("Set key: {}", key_str)))
     }
 
-    /// 値を取得
-    ///
-    /// Note:
-    /// - Default (compat): returns StringBox("Key not found: …") on missing key
-    /// - When HAKO_MAP_GET_NULL=1 (or NYASH_MAP_GET_NULL=1): returns NullBox on missing key
+    /// 値を取得（存在しないキーは null）
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         let guard = self.data.read().unwrap();
@@ -170,28 +166,7 @@ impl MapBox {
                 if map_trace_enabled() {
                     eprintln!("[MapBox] get: key=\"{}\" -> miss", key_str);
                 }
-                if map_get_null_enabled() {
-                    return Box::new(crate::boxes::null_box::NullBox::new());
-                }
-                if map_suggest_enabled() {
-                    let mut cands: Vec<(i32, &String)> = guard
-                        .keys()
-                        .map(|k| (suggest_score(&key_str, k), k))
-                        .filter(|(sc, _)| *sc > 0)
-                        .collect();
-                    cands.sort_by(|a, b| b.0.cmp(&a.0));
-                    let mut msg = format!("Key not found: {}", key_str);
-                    if !cands.is_empty() {
-                        msg.push_str("; did you mean: ");
-                        for (i, (_, k)) in cands.iter().take(5).enumerate() {
-                            if i > 0 { msg.push_str(", "); }
-                            msg.push_str(k);
-                        }
-                    }
-                    Box::new(StringBox::new(&msg))
-                } else {
-                    Box::new(StringBox::new(&format!("Key not found: {}", key_str)))
-                }
+                Box::new(crate::boxes::null_box::NullBox::new())
             }
         }
     }
@@ -331,20 +306,6 @@ fn map_trace_enabled() -> bool {
 fn map_suggest_enabled() -> bool {
     static FLAG: OnceLock<bool> = OnceLock::new();
     *FLAG.get_or_init(|| matches!(std::env::var("HAKO_MAP_SUGGEST").ok().as_deref(), Some("1"|"true"|"on")))
-}
-
-#[inline]
-fn map_get_null_enabled() -> bool {
-    static FLAG: OnceLock<bool> = OnceLock::new();
-    *FLAG.get_or_init(|| {
-        match std::env::var("HAKO_MAP_GET_NULL").ok().as_deref() {
-            Some("1") | Some("true") | Some("on") => true,
-            _ => match std::env::var("NYASH_MAP_GET_NULL").ok().as_deref() {
-                Some("1") | Some("true") | Some("on") => true,
-                _ => false,
-            },
-        }
-    })
 }
 
 #[inline]
