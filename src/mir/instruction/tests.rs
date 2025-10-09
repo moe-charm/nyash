@@ -81,43 +81,7 @@ fn test_ref_new_instruction() {
     assert!(inst.effects().is_pure());
 }
 
-#[test]
-fn test_ref_get_instruction() {
-    let dst = ValueId::new(0);
-    let reference = ValueId::new(1);
-    let field = "name".to_string();
-    let inst = MirInstruction::RefGet {
-        dst,
-        reference,
-        field,
-    };
-
-    assert_eq!(inst.dst_value(), Some(dst));
-    assert_eq!(inst.used_values(), vec![reference]);
-    assert!(!inst.effects().is_pure());
-    assert!(inst
-        .effects()
-        .contains(super::super::effect::Effect::ReadHeap));
-}
-
-#[test]
-fn test_ref_set_instruction() {
-    let reference = ValueId::new(0);
-    let field = "value".to_string();
-    let value = ValueId::new(1);
-    let inst = MirInstruction::RefSet {
-        reference,
-        field,
-        value,
-    };
-
-    assert_eq!(inst.dst_value(), None);
-    assert_eq!(inst.used_values(), vec![reference, value]);
-    assert!(!inst.effects().is_pure());
-    assert!(inst
-        .effects()
-        .contains(super::super::effect::Effect::WriteHeap));
-}
+// RefGet/RefSet retired (normalized to BoxCall at build time). Tests removed.
 
 #[test]
 fn test_weak_new_instruction() {

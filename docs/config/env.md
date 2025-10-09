@@ -1,4 +1,9 @@
-Nyash — Environment Variables (Dev vs Prod Alignment)
+Hakorune — Environment Variables (Dev vs Prod Alignment)
+
+Branding & Aliases
+- Use HAKO_* as primary names in docs and scripts.
+- NYASH_* remains as a compatibility alias; the runner and test tools map HAKO_*→NYASH_* when needed.
+- When both are set, HAKO_* wins in docs; execution prefers explicit values (no implicit override).
 
 Truthiness & Calls
 - NYASH_REWRITE_KNOWN_DEFAULT: default 1 (ON). Instance→Function rewrite enabled.
@@ -20,10 +25,20 @@ Using / AST merge
   - 既定: dev/ci は ON、prod は OFF（SSOT: nyash.toml を優先。必要時のみ明示許可）
 
 Retired / Unified (2025 Phase‑19)
-- NYASH_BUILDER_BOX_EQ_TO_EQUALS: retired. Equality is normalized to `Callee::Extern("nyrt.ops.op_eq")` at MIR; `.equals/1` dispatch is handled behind op_eq.
-- ExternCall instruction: retired. Use unified `MirCall` with `callee=Extern("iface.method")` across builder/optimizer/JSON/backends.
-- HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN: default ON. Alias `NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN` is accepted; docs/examples prefer the HAKO_* prefix.
-- NYASH_USING_AST: compatibility only. Prefer `NYASH_USING_STRATEGY=prelude` (use HAKO_USING_STRATEGY in examples). Default remains OFF globally; profiles may enable it.
+- NYASH_BUILDER_BOX_EQ_TO_EQUALS — retired. Equality is normalized to `Callee::Extern("nyrt.ops.op_eq")` at MIR; `.equals/1` dispatch is handled behind op_eq.
+- ExternCall instruction — retired. Use unified `MirCall` with `callee=Extern("iface.method")` across builder/optimizer/JSON/backends.
+- HAKO_ENTRY_ALLOW_TOPLEVEL_MAIN — default ON. (Alias: NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN) Examples prefer HAKO_* prefix.
+- NYASH_USING_AST — compatibility only. Prefer `HAKO_USING_STRATEGY=prelude` (alias: NYASH_USING_STRATEGY). Global default remains OFF; smoke profiles may enable.
+
+Smoke & Debug helpers
+- SMOKES_CAPTURE=1 — 失敗時に expected/actual/env を `tmp/smokes_capture/` へ保存
+- NYASH_VERIFY_PHI_STRICT=1 — PHI inputs が到達可能 predecessor を網羅しているか検証（dev向け）
+- NYASH_NYRT_SILENT_RESULT=1 — ランタイム末尾の `Result: <n>` を抑止（テスト比較をクリーンに）
+- SMOKES_SKIP_WHEN_PLUGINS_MISSING=1 — プラグイン未配置時は plugins スイートで SKIP
+- SMOKES_FAST_FAIL=0 — fast-fail抑制（全件実行してサマリ）
+
+Dev one‑knob
+- `source tools/dev_env.sh using` — HAKO_USING=1 / STRATEGY=prelude / ALLOW_FILE=1 / PROFILE=dev を一括ON
 
 Plugins
 - HAKO_PLUGIN_POLICY（互換: NYASH_PLUGIN_POLICY）={auto|off|force} (default auto)
@@ -49,12 +64,17 @@ Plugin ABI (Final; experimental, default OFF)
 - NYASH_TRACE_EFFECTS=1: emit JSON lines for method effects (dev only)
 - NYASH_CHECK_CONTRACTS=1: trace pre/post contracts (log only)
 
-VM plugin routing (Phase C — default OFF)
-- NYASH_VM_BOXCALL_PLUGIN_FIRST=1: route BoxCall to PluginInvoke when receiver is plugin-backed
+VM plugin routing
 - NYASH_VM_PLUGIN_PREFER_STRING=1: prefer plugin provider for StringBox
 - NYASH_VM_PLUGIN_PREFER_ARRAY=1: prefer plugin provider for ArrayBox
 - NYASH_VM_PLUGIN_PREFER_MAP=1: prefer plugin provider for MapBox
   Notes: runner merges these into NYASH_PLUGIN_OVERRIDE_TYPES and rebuilds the unified registry.
+
+Retired (routing removed)
+- NYASH_VM_BOXCALL_PLUGIN_FIRST — removed. BoxCall no longer routes via PluginInvoke; plugin-backed receivers are handled by the unified plugin bridge.
+
+Retired (legacy normalization always-on)
+- NYASH_MIR_ARRAY_BOXCALL / NYASH_MIR_REF_BOXCALL — removed. Array/Ref legacy ops are always normalized to BoxCall and rejected by the verifier when present.
 
 Plugin ABI (Final Vision; dev/experimental)
 - NYASH_PLUGIN_ABI_FINAL=1: prefer NyResult-based invoke and enable Final ABI probes (fallback to v2 when unavailable)

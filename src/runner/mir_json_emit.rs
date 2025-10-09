@@ -401,7 +401,20 @@ pub fn emit_mir_json_for_harness(
                             // If NYASH_LLVM_DOWNGRADE_V1=1 is set, force v0 and allow extern fallback for unresolved Global
                             if config.use_unified_call && callee.is_some() {
                                 // v1: Unified mir_call format
-                                let effects_str: Vec<&str> = if effects.is_io() { vec!["IO"] } else { vec![] };
+                                // Effects hint (SSOT): prefer explicit mask; if Extern, consult externs registry as thin adapter
+                                let mut effects_str: Vec<&str> = Vec::new();
+                                if effects.is_io() { effects_str.push("IO"); }
+                                if effects_str.is_empty() {
+                                    if let Some(Callee::Extern(name)) = callee.as_ref() {
+                                        // Split iface.method (iface may contain dots; method is the last component)
+                                        let mut parts = name.rsplitn(2, '.');
+                                        let method = parts.next().unwrap_or("");
+                                        let iface = parts.next().unwrap_or("");
+                                        if let Some(mask) = crate::common::extern_registry::effects_for(iface, method) {
+                                            if mask.is_io() { effects_str.push("IO"); }
+                                        }
+                                    }
+                                }
                                 let args_u32: Vec<u32> = args.iter().map(|v| v.as_u32()).collect();
                                 let unified_call = emit_unified_mir_call(
                                     dst.map(|v| v.as_u32()),
@@ -414,22 +427,7 @@ pub fn emit_mir_json_for_harness(
                                 // v0: Legacy call format (fallback)
                                 // If downgrading from v1 and callee is Global but not defined in this module,
                                 // emit externcall for compile-only harness stability.
-                                if config.downgrade_v1 {
-                                    if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
-                                        let is_defined = module.functions.contains_key(gname);
-                                        if !is_defined {
-                                            let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                                            insts.push(json!({
-                                                "op":"externcall",
-                                                "func": gname,
-                                                "args": args_a,
-                                                "dst": dst.map(|d| d.as_u32())
-                                            }));
-                                            if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
-                                            break;
-                                        }
-                                    }
-                                }
+                            // ExternCall fallback removed: prefer unified mir_call or legacy call only.
                                 let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                                 insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             }
@@ -685,23 +683,7 @@ pub fn emit_mir_json_for_harness_bin(
                             // v0 or no callee → legacy call payload (func is a NameConst value id)
                             // If we are downgrading v1 (NYASH_LLVM_DOWNGRADE_V1=1) and callee is Global but not defined,
                             // emit externcall for compile-only harness stability.
-                            if config.downgrade_v1 {
-                                if let Some(crate::mir::definitions::call_unified::Callee::Global(gname)) = callee.as_ref() {
-                                    let is_defined = module.functions.contains_key(gname);
-                                    if !is_defined {
-                                        let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
-                                        insts.push(json!({
-                                            "op":"externcall",
-                                            "func": gname,
-                                            "name": gname,
-                                            "args": args_a,
-                                            "dst": dst.map(|d| d.as_u32())
-                                        }));
-                                        if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }
-                                        break;
-                                    }
-                                }
-                            }
+                            // ExternCall fallback removed: prefer unified mir_call or legacy call only.
                             let args_a: Vec<_> = args.iter().map(|v| json!(v.as_u32())).collect();
                             insts.push(json!({"op":"call","func": func.as_u32(), "args": args_a, "dst": dst.map(|d| d.as_u32())}));
                             if let Some(d) = dst.map(|v| v.as_u32()) { emitted_defs.insert(d); }

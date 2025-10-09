@@ -64,7 +64,7 @@ fn analyze_function(func: &MirFunction) -> EscapeInfo {
                 MirInstruction::Call { args, .. }
                 | MirInstruction::BoxCall { args, .. }
                 // ExternCall retired
-                | MirInstruction::PluginInvoke { args, .. } => {
+                => {
                     for a in args {
                         if info.local_boxes.contains(a) {
                             info.escaping.insert(*a);

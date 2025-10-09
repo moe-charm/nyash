@@ -83,10 +83,10 @@ mod tests {
             });
         func.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::ExternCall {
+            .add_instruction(MirInstruction::Call {
                 dst: None,
-                iface_name: "env.console".to_string(),
-                method_name: "log".to_string(),
+                func: crate::mir::ValueId::new(0),
+                callee: Some(crate::mir::Callee::Extern("env.console.log".to_string())),
                 args: vec![v0],
                 effects: EffectMask::IO,
             });

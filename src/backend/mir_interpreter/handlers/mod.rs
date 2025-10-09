@@ -39,27 +39,14 @@ impl MirInterpreter {
                     let _ = self.handle_box_call(None, *dst, "birth", args);
                 }
             }
-            MirInstruction::PluginInvoke { .. } => {
-                if let MirInstruction::PluginInvoke { dst, box_val, method, args, .. } = inst {
-                    self.handle_plugin_invoke(*dst, *box_val, method, args)?
-                } else { unreachable!() }
-            }
+            
             MirInstruction::BoxCall { .. } => {
                 if let MirInstruction::BoxCall { dst, box_val, method, args, .. } = inst {
                     self.handle_box_call(*dst, *box_val, method, args)?
                 } else { unreachable!() }
             }
             // ExternCall retired
-            MirInstruction::RefSet {
-                reference,
-                field,
-                value,
-            } => self.handle_ref_set(*reference, field, *value)?,
-            MirInstruction::RefGet {
-                dst,
-                reference,
-                field,
-            } => self.handle_ref_get(*dst, *reference, field)?,
+            
             MirInstruction::BinOp { dst, op, lhs, rhs } => {
                 self.handle_binop(*dst, *op, *lhs, *rhs)?
             }

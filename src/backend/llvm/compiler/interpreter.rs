@@ -74,52 +74,7 @@ impl LLVMCompiler {
                     };
                     self.values.insert(*dst, Box::new(IntegerBox::new(res)));
                 }
-                I::ExternCall {
-                    dst,
-                    iface_name,
-                    method_name,
-                    args,
-                    ..
-                } => {
-                    if iface_name == "env.console" {
-                        if let Some(arg0) = args.get(0) {
-                            use crate::jit::rt::handles;
-                            if let Some(boxed_val) = self.values.get(arg0) {
-                                let arc: std::sync::Arc<dyn NyashBox> =
-                                    boxed_val.clone_box().into();
-                                let handle = handles::to_handle(arc) as i64;
-                                eprintln!("DEBUG: handle={}", handle);
-                                if let Some(obj) = handles::get(handle as u64) {
-                                    let s = obj.to_string_box().value;
-                                    match method_name.as_str() {
-                                        "log" => println!("{}", s),
-                                        "warn" => eprintln!("[warn] {}", s),
-                                        "error" => eprintln!("[error] {}", s),
-                                        _ => {}
-                                    }
-                                } else {
-                                    eprintln!("DEBUG: handle {} not found in registry", handle);
-                                    match method_name.as_str() {
-                                        "log" => println!("{}", handle),
-                                        "warn" => eprintln!("[warn] {}", handle),
-                                        "error" => eprintln!("[error] {}", handle),
-                                        _ => {}
-                                    }
-                                }
-                            } else {
-                                match method_name.as_str() {
-                                    "log" => println!(""),
-                                    "warn" => eprintln!("[warn] "),
-                                    "error" => eprintln!("[error] "),
-                                    _ => {}
-                                }
-                            }
-                        }
-                        if let Some(d) = dst {
-                            self.values.insert(*d, Box::new(IntegerBox::new(0)));
-                        }
-                    }
-                }
+                // ExternCall retired — unified Call(callee=Extern) is preferred
                 I::Return { value } => {
                     if let Some(v) = value {
                         return self

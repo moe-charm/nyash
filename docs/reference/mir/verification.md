@@ -1,21 +1,26 @@
-MIR Verification — Core Checks (Phase 19)
+MIR Verification — Legacy Forbid and Invariants (Phase 19)
 
-Overview
-- Purpose: fail fast on MIR shapes that are known-invalid or semantically ambiguous across backends.
-- Scope: SSA/dominance/CFG/barrier checks, legacy forbiddance, and semantic bans that must be fixed in builders.
+Scope
+- Summarizes the key verifier checks that enforce the unified MIR shape and catch regressions early.
 
-Key Checks
-- Box Compare forbidden:
-  - Forbid `Compare(Eq|Ne)` when either operand is a Box. Equality must be normalized at MIR to a call:
-    - Preferred: `lhs.equals/1(rhs)`
-    - Universal: `Call{ callee=Extern("nyrt.ops.op_eq") }`
+Legacy instructions (forbidden)
+- TypeCheck / Cast → TypeOp
+- BarrierRead / BarrierWrite → Barrier
+- Print → Call + Extern("env.console.log")
+- PluginInvoke → BoxCall/Method
+- ArrayGet / ArraySet → BoxCall("get"/"set") [when Core‑13 or `NYASH_MIR_ARRAY_BOXCALL=1`]
+- RefGet / RefSet → BoxCall("getField"/"setField") [when `NYASH_MIR_REF_BOXCALL=1`]
 
-- Static self fields forbidden:
-  - Forbid `BoxCall { method in {getField,setField}, box_val = Const(String(..)) }`.
-  - Rationale: static box is a namespace. `me.field` read/write is not supported (no runtime state).
-  - Builders must fail early on `me.field`/`me.field =` inside static boxes. The verifier is the safety net.
+Behavior
+- By default, the verifier rejects functions that still contain legacy ops.
+- Set `NYASH_VERIFY_ALLOW_LEGACY=1` to bypass during bring‑up (not recommended for CI).
 
-Notes
-- ExternCall is retired. Builders and normalizers must use `Call{ callee=Extern(..) }` for externs.
-- LLVM harness inlines `nyrt.ops.op_eq` (i64 icmp → zext) for parity without requiring a C kernel symbol.
+Other invariants (selection)
+- Box Compare(Eq/Ne) forbidden: Box equality must be lowered to a call (either `.equals/1` or `Extern("nyrt.ops.op_eq")`).
+- Static box fields forbidden: Disallow `getField/setField` when the receiver is a constant class name (namespace only policy).
+- PHI inputs coverage (dev): With `NYASH_VERIFY_PHI_STRICT=1`, every PHI must cover all reachable predecessors; empty PHIs are invalid.
+
+Dev tips
+- Enable MIR verification in the VM with `NYASH_VM_VERIFY_MIR=1` to get early errors near execution.
+- Use `tools/ny_doctor.sh` for a quick environment sanity check.
 

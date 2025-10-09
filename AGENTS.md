@@ -194,6 +194,14 @@ fn check_layer_boundary() {
 - 正規化パスはレガシー表現を見つけたら `callee=Extern` に書き換える（互換受け）。
 - VM/LLVM/WASM の各バックエンドは `callee=Extern` を単一起点として実装する。
 
+### 6.2.1 Cleanup Roadmap — 現在地（短縮）
+- TypeCheck/Cast → TypeOp: 正規化済み（Verifier でレガシー禁止）
+- BarrierRead/BarrierWrite → Barrier: 正規化済み（Verifier でレガシー禁止）
+- PluginInvoke → BoxCall/Method: 正規化済み（必要時のみ dev 環境で強制可；既定は BoxCall）
+- Print → Call + Extern("env.console.log"): 正規化済み（Builder/Normalize で一本化）
+
+注: レガシー命令は `NYASH_VERIFY_ALLOW_LEGACY=1` を除き Verifier が Fail‑Fast する。スモークは統一形（MirCall/TypeOp/Barrier/BoxCall）で回すこと。
+
 ### 6.3 Static Box の意味論（Namespace 固定）
 
 - 許可: `me.method()`（= `BoxName.method()` の糖衣）。
@@ -247,6 +255,11 @@ fn check_layer_boundary() {
 - 値: 真偽は `0|1|true|false|on|off` を許可（内部で正規化）。
 - 既定 OFF（無指定は無効）。本番で意味が変わらない命名にする。
 
+ブランド/エイリアス（重要）
+- HAKO_* を第一表記として使用する（プロジェクト名に整合）。
+- NYASH_* は互換エイリアスとして維持（ランナー/ツールで自動マッピング）。
+- ドキュメント/新規スクリプトは HAKO_* を優先し、必要に応じて括弧で NYASH_* を併記する。
+
 やらないこと
 - 既定挙動の切替を ENV で行う。
 - 同じ意味の ENV を複数用意する（重複・競合）。
@@ -288,6 +301,23 @@ fn check_layer_boundary() {
 - ENV は“作業を助ける道具”。既定挙動の切替には使わないこと。
 - 互換・実験フラグは TTL を決めて `docs/guides/env-variables.md` に理由と戻し方を書く。
 - 迷ったら CLI/プロファイル先行 → ENV は観測用/一時ガードに限定。
+
+### 8.x Smokes & Noise Policy（運用の実際）
+
+- 出力整形
+  - ランタイム末尾 `Result:` は `NYASH_NYRT_SILENT_RESULT=1` で抑止（プロファイルenvで既定ON）
+  - ログは stderr に統一（stdout はプログラム出力のみ）。新規ノイズは smokes の `filter_noise` に集約
+- 失敗の再現性
+  - `SMOKES_CAPTURE=1` で expected/actual/env を自動採取（tmp/smokes_capture）
+  - `tools/parity_check.sh` でその場 VM↔LLVM 比較
+- プロファイルの責務
+  - quick: dev便利ON＋軽い検証（PHI strictを既定ON）
+  - integration-core: VM↔LLVM パリティ（プラグイン無し）
+  - plugins: プラグイン依存（未配置は SKIP）
+  - integration: apps 系（ハーネス＋VM比較、AOTリンクはバイパス）
+- using 導線
+  - 開発開始は `source tools/dev_env.sh using` で一括ON。詳細は `docs/tools/using-quickstart.md`
+
 
 ### 8.2 Call 統一（ExternCall 撤退完了）
 

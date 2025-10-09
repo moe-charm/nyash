@@ -434,7 +434,7 @@ fn op_name(i: &crate::mir::MirInstruction) -> &'static str {
         I::Compare { .. } => "compare",
         I::Call { .. } => "call",
         I::BoxCall { .. } => "boxcall",
-        I::PluginInvoke { .. } => "boxcall",
+        
         // ExternCall retired
         I::Return { .. } => "ret",
         I::Branch { .. } => "branch",

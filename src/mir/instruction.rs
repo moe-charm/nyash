@@ -100,15 +100,6 @@ pub enum MirInstruction {
         effects: EffectMask,
     },
 
-    /// Plugin invocation (forces plugin path; no builtin fallback)
-    /// `%dst = plugin_invoke %box.method(%args...)`
-    PluginInvoke {
-        dst: Option<ValueId>,
-        box_val: ValueId,
-        method: String,
-        args: Vec<ValueId>,
-        effects: EffectMask,
-    },
 
     // === Control Flow ===
     /// Conditional branch
@@ -176,21 +167,6 @@ pub enum MirInstruction {
     },
 
     // === Array Operations ===
-    /// Get array element
-    /// `%dst = %array[%index]`
-    ArrayGet {
-        dst: ValueId,
-        array: ValueId,
-        index: ValueId,
-    },
-
-    /// Set array element
-    /// `%array[%index] = %value`
-    ArraySet {
-        array: ValueId,
-        index: ValueId,
-        value: ValueId,
-    },
 
     // === Special Operations ===
     /// Copy a value (for optimization passes)
@@ -233,21 +209,6 @@ pub enum MirInstruction {
     /// `%dst = ref_new %box`
     RefNew { dst: ValueId, box_val: ValueId },
 
-    /// Get/dereference a Box field through reference
-    /// `%dst = ref_get %ref.field`
-    RefGet {
-        dst: ValueId,
-        reference: ValueId,
-        field: String,
-    },
-
-    /// Set/assign Box field through reference
-    /// `ref_set %ref.field = %value`
-    RefSet {
-        reference: ValueId,
-        field: String,
-        value: ValueId,
-    },
 
     /// Create a weak reference to a Box
     /// `%dst = weak_new %box`

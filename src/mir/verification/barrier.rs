@@ -133,15 +133,7 @@ pub fn check_barrier_context(function: &MirFunction) -> Result<(), Vec<Verificat
                 if dist > 2 {
                     continue;
                 }
-                if matches!(
-                    other,
-                    MirInstruction::Load { .. }
-                        | MirInstruction::Store { .. }
-                        | MirInstruction::ArrayGet { .. }
-                        | MirInstruction::ArraySet { .. }
-                        | MirInstruction::RefGet { .. }
-                        | MirInstruction::RefSet { .. }
-                ) {
+                if matches!(other, MirInstruction::Load { .. } | MirInstruction::Store { .. }) {
                     has_mem_neighbor = true;
                     break;
                 }

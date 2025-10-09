@@ -37,41 +37,7 @@ impl super::WasmCodegen {
                 ])
             }
 
-            MirInstruction::RefGet {
-                dst,
-                reference,
-                field: _,
-            } => {
-                // Load field value from Box through reference
-                // reference contains Box pointer, field is the field name
-                // For now, assume all fields are at offset 12 (first field after header)
-                // TODO: Add proper field offset calculation
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*reference)?),
-                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
-                    "i32.add".to_string(),
-                    "i32.load".to_string(),
-                    format!("local.set ${}", self.get_local_index(*dst)?),
-                ])
-            }
-
-            MirInstruction::RefSet {
-                reference,
-                field: _,
-                value,
-            } => {
-                // Store field value to Box through reference
-                // reference contains Box pointer, field is the field name, value is new value
-                // For now, assume all fields are at offset 12 (first field after header)
-                // TODO: Add proper field offset calculation
-                Ok(vec![
-                    format!("local.get ${}", self.get_local_index(*reference)?),
-                    "i32.const 12".to_string(), // Offset: header (12 bytes) + first field
-                    "i32.add".to_string(),
-                    format!("local.get ${}", self.get_local_index(*value)?),
-                    "i32.store".to_string(),
-                ])
-            }
+            
 
             MirInstruction::NewBox {
                 dst,
@@ -170,93 +136,7 @@ impl super::WasmCodegen {
                 ])
             }
 
-            // Phase 9.7: External Function Calls
-            MirInstruction::ExternCall {
-                dst,
-                iface_name,
-                method_name,
-                args,
-                effects: _,
-            } => {
-                // Generate call to external function import
-                let signature = match (iface_name.as_str(), method_name.as_str()) {
-                    ("env.console", "log") => Some(WasmExternSignature {
-                        module: "env".to_string(),
-                        name: "console_log".to_string(),
-                        params: vec!["i32".to_string(), "i32".to_string()],
-                        result: None,
-                    }),
-                    ("env.canvas", "fillRect") => Some(WasmExternSignature {
-                        module: "env".to_string(),
-                        name: "canvas_fillRect".to_string(),
-                        params: vec![
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                        ],
-                        result: None,
-                    }),
-                    ("env.canvas", "fillText") => Some(WasmExternSignature {
-                        module: "env".to_string(),
-                        name: "canvas_fillText".to_string(),
-                        params: vec![
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                            "i32".to_string(),
-                        ],
-                        result: None,
-                    }),
-                    (iface, method) => wasm_resolve_signature(iface, method),
-                };
-
-                let signature = signature.ok_or_else(|| {
-                    WasmError::UnsupportedInstruction(format!(
-                        "Unsupported extern call: {}.{}",
-                        iface_name, method_name
-                    ))
-                })?;
-
-                let returns_value = signature.result.is_some();
-                let call_target = signature.name;
-
-                let mut instructions = Vec::new();
-
-                // Load all arguments onto stack in order
-                for arg in args {
-                    instructions.push(format!("local.get ${}", self.get_local_index(*arg)?));
-                }
-
-                // Call the external function
-                instructions.push(format!("call ${}", call_target));
-
-                if returns_value {
-                    if let Some(dst) = dst {
-                        instructions.push(format!(
-                            "local.set ${}",
-                            self.get_local_index(*dst)?
-                        ));
-                    } else {
-                        instructions.push("drop".to_string());
-                    }
-                } else if let Some(dst) = dst {
-                    instructions.push("i32.const 0".to_string());
-                    instructions.push(format!("local.set ${}", self.get_local_index(*dst)?));
-                }
-
-                Ok(instructions)
-            }
+            // ExternCall retired — use Call(callee=Extern) upstream; no dedicated handling here
 
             // BoxCall codegen - critical Box method calls
             MirInstruction::BoxCall {

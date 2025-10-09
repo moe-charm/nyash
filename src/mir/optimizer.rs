@@ -37,34 +37,21 @@ impl MirOptimizer {
             println!("🚀 Starting MIR optimization passes");
         }
 
-        // Env toggles for phased MIR cleanup
-        let core13 = crate::config::env::mir_core13();
-        let mut ref_to_boxcall = crate::config::env::mir_ref_boxcall();
-        if core13 {
-            ref_to_boxcall = true;
-        }
+        // Env toggles (legacy): Core-13 normalization is always ON for legacy ops
 
         // Pass 0: Normalize legacy instructions to unified forms
         //  - Includes optional Array→BoxCall guarded by env (inside the pass)
         stats.merge(
             crate::mir::optimizer_passes::normalize::normalize_legacy_instructions(self, module),
         );
-        // Pass 0.1: RefGet/RefSet → BoxCall(getField/setField) (guarded)
-        if ref_to_boxcall {
-            stats.merge(
-                crate::mir::optimizer_passes::normalize::normalize_ref_field_access(self, module),
-            );
-        }
-
-        // Option: Force BoxCall → PluginInvoke (env)
-        if crate::config::env::mir_plugin_invoke() || crate::config::env::plugin_only() {
-            stats.merge(crate::mir::optimizer_passes::normalize::force_plugin_invoke(self, module));
-        }
-
-        // Normalize Python helper form: py.getattr(obj, name) → obj.getattr(name)
+        // Pass 0.1: RefGet/RefSet → BoxCall(getField/setField) — Always ON (legacy撤退に向けて常時正規化)
         stats.merge(
-            crate::mir::optimizer_passes::normalize::normalize_python_helper_calls(self, module),
+            crate::mir::optimizer_passes::normalize::normalize_ref_field_access(self, module),
         );
+
+        // PluginInvoke path is retired; BoxCall is the unified route (no force-redirects)
+
+        // Normalize Python helper form (retired: PluginInvoke path removed)
 
         // Pass 1: Dead code elimination (modularized pass)
         {
@@ -157,18 +144,14 @@ impl MirOptimizer {
 impl MirOptimizer {
     /// Rewrite all BoxCall to PluginInvoke to force plugin path (no builtin fallback)
     #[allow(dead_code)]
-    fn force_plugin_invoke(&mut self, module: &mut MirModule) -> OptimizationStats {
-        crate::mir::optimizer_passes::normalize::force_plugin_invoke(self, module)
-    }
+    fn force_plugin_invoke(&mut self, _module: &mut MirModule) -> OptimizationStats { OptimizationStats::new() }
 
     /// Normalize Python helper calls that route via PyRuntimeBox into proper receiver form.
     ///
     /// Rewrites: PluginInvoke { box_val=py (PyRuntimeBox), method="getattr"|"call", args=[obj, rest...] }
     ///        →  PluginInvoke { box_val=obj, method, args=[rest...] }
     #[allow(dead_code)]
-    fn normalize_python_helper_calls(&mut self, module: &mut MirModule) -> OptimizationStats {
-        crate::mir::optimizer_passes::normalize::normalize_python_helper_calls(self, module)
-    }
+    fn normalize_python_helper_calls(&mut self, _module: &mut MirModule) -> OptimizationStats { OptimizationStats::new() }
     /// Normalize legacy instructions into unified MIR26 forms.
     /// - TypeCheck/Cast → TypeOp(Check/Cast)
     /// - WeakNew/WeakLoad → WeakRef(New/Load)
@@ -352,12 +335,7 @@ fn diagnose_legacy_instructions(module: &MirModule, debug: bool) -> Optimization
                     | MirInstruction::WeakNew { .. }
                     | MirInstruction::WeakLoad { .. }
                     | MirInstruction::BarrierRead { .. }
-                    | MirInstruction::BarrierWrite { .. }
-                    | MirInstruction::ArrayGet { .. }
-                    | MirInstruction::ArraySet { .. }
-                    | MirInstruction::RefGet { .. }
-                    | MirInstruction::RefSet { .. }
-                    | MirInstruction::PluginInvoke { .. } => {
+                    | MirInstruction::BarrierWrite { .. } => {
                         count += 1;
                     }
                     _ => {}
@@ -370,12 +348,7 @@ fn diagnose_legacy_instructions(module: &MirModule, debug: bool) -> Optimization
                     | MirInstruction::WeakNew { .. }
                     | MirInstruction::WeakLoad { .. }
                     | MirInstruction::BarrierRead { .. }
-                    | MirInstruction::BarrierWrite { .. }
-                    | MirInstruction::ArrayGet { .. }
-                    | MirInstruction::ArraySet { .. }
-                    | MirInstruction::RefGet { .. }
-                    | MirInstruction::RefSet { .. }
-                    | MirInstruction::PluginInvoke { .. } => {
+                    | MirInstruction::BarrierWrite { .. } => {
                         count += 1;
                     }
                     _ => {}
@@ -455,7 +428,7 @@ mod tests {
 
     #[test]
     fn test_dce_does_not_drop_typeop_used_by_console_log() {
-        // Build: %v=TypeOp(check); extern_call env.console.log(%v); ensure TypeOp remains after optimize
+        // Build: %v=TypeOp(check); Call callee=Extern("env.console.log")(%v); ensure TypeOp remains after optimize
         let signature = FunctionSignature {
             name: "main".to_string(),
             params: vec![],
@@ -474,10 +447,12 @@ mod tests {
             value: v0,
             ty: MirType::Integer,
         });
-        b0.add_instruction(MirInstruction::ExternCall {
+        b0.add_instruction(MirInstruction::Call {
             dst: None,
-            iface_name: "env.console".to_string(),
-            method_name: "log".to_string(),
+            func: ValueId::new(0),
+            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                "env.console.log".to_string(),
+            )),
             args: vec![v1],
             effects: super::super::effect::EffectMask::IO,
         });
@@ -497,7 +472,7 @@ mod tests {
             .any(|i| matches!(i, MirInstruction::TypeOp { .. }));
         assert!(
             has_typeop,
-            "TypeOp should not be dropped by DCE when used by console.log (ExternCall)"
+            "TypeOp should not be dropped by DCE when used by console.log (Extern callee)"
         );
     }
 }

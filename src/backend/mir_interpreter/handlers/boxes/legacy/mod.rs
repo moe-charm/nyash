@@ -1,10 +1,9 @@
 //! Legacy box call handling
 //!
 //! This module provides backward compatibility and runtime fallback logic
-//! for BoxCall and PluginInvoke instructions.
+//! for BoxCall instructions.
 //!
 //! ## Module Structure
-//! - `plugin_invoke`: PluginInvoke instruction handler
 //! - `plugin_bridge`: Plugin box invocation + fallbacks
 //! - `mod` (this file): Main BoxCall dispatcher
 
@@ -13,7 +12,6 @@ use crate::backend::mir_interpreter::handlers::{
     boxes_array, boxes_string, boxes_map, boxes_fields, boxes_instance,
 };
 
-mod plugin_invoke;
 mod plugin_bridge;
 
 
@@ -44,24 +42,9 @@ impl MirInterpreter {
         // Handle-trace: birth/fini observation (centralized)
         self.lifecycle_observe_method(box_val, method);
 
-        // Phase B: Optional routing — prefer PluginInvoke for plugin-backed receivers.
-        // Guarded by NYASH_VM_BOXCALL_PLUGIN_FIRST=1. Default OFF (behavior unchanged).
-        // Global flag or per-box flags (Array/String/Map) can trigger PluginInvoke routing
-        if let VMValue::BoxRef(bx) = self.reg_load(box_val)? {
-            if let Some(pb) = bx
-                .as_any()
-                .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
-            {
-                let global_on = crate::config::env::vm_boxcall_plugin_first();
-                let per_box_on =
-                    (pb.box_type == "ArrayBox" && crate::config::env::vm_plugin_prefer_array()) ||
-                    (pb.box_type == "StringBox" && crate::config::env::vm_plugin_prefer_string()) ||
-                    (pb.box_type == "MapBox" && crate::config::env::vm_plugin_prefer_map());
-                if global_on || per_box_on {
-                    return self.handle_plugin_invoke(dst, box_val, method, args);
-                }
-            }
-        }
+        // PluginInvoke retired: routing to a separate PluginInvoke path is removed.
+        // BoxCall proceeds via builtin handlers, user InstanceBox dispatch,
+        // and finally the plugin bridge when receiver is a plugin-backed box.
         // Dev-safe: stringify(Void) → "null" (最小安全弁)
         if method == "stringify" {
             if let VMValue::Void = self.reg_load(box_val)? {

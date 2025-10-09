@@ -5,6 +5,45 @@
 - 互換として NYASH_* も受理されます（未設定時に HAKO_* をマップ）。
 - 例: `HAKO_VM_TRACE ≡ NYASH_VM_TRACE`, `HAKO_CLI_VERBOSE ≡ NYASH_CLI_VERBOSE`。
 
+---
+
+## 新機能（開発に便利）
+
+1) 失敗の再現バンドル採取（SMOKES_CAPTURE=1）
+- 失敗時に `tmp/smokes_capture/<test>_<kind>_<timestamp>/` へ expected/actual/env を保存
+- 有効化: `SMOKES_CAPTURE=1 tools/smokes/v2/run.sh --profile quick`
+
+2) 即席パリティチェッカー
+- `tools/parity_check.sh file.nyash` または `-c 'code'` で VM↔LLVM を正規化比較
+- スモーク無しの軽量デバッグに最適
+
+3) ドクター（診断）
+- `tools/ny_doctor.sh` で HAKO_ROOT/hako.toml/usingの有効状態（strategy/file許可）を一覧表示
+- よくあるハマりへのアドバイスを自動表示
+
+4) PHI の Fail‑Fast（開発時）
+- `NYASH_VERIFY_PHI_STRICT=1` で、PHI inputs が到達可能 predecessor を網羅しているか検証
+- 片側Only/ネスト else-if テストが quick/core/phi に常設
+
+---
+
+## 出力ノイズの扱い
+
+- ランタイム末尾 `Result: <n>` は既定で抑止（`NYASH_NYRT_SILENT_RESULT=1`）
+- ログは stderr へ。stdout はプログラム出力のみ
+- 新規ノイズは smokes の `filter_noise` に集約
+
+---
+
+## プロファイルごとの流儀
+
+- quick: dev 便利ON、軽い検証（PHI strictはON）
+- integration-core: VM↔LLVM パリティ（プラグイン無し）
+- plugins: プラグイン依存（未配置は SKIP）
+- integration: apps 系（ハーネス＋VM比較、AOTリンクはバイパス）
+
+詳細は `docs/guides/smokes-policy.md` を参照。
+
 ## Overview
 
 このガイドでは、スモークテスト失敗時のデバッグ・トラブルシューティング手順を説明します。

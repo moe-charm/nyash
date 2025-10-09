@@ -142,10 +142,7 @@ impl NyashRunner {
                                     let bb = bb_id.as_u32();
                                     eprintln!("{{\"kind\":\"call_static\",\"callee\":\"BoxCall:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(method), args.len(), esc(fname), bb);
                                 }
-                                MirInstruction::PluginInvoke { method, args, .. } => {
-                                    let bb = bb_id.as_u32();
-                                    eprintln!("{{\"kind\":\"call_static\",\"callee\":\"PluginInvoke:{}\",\"argc\":{},\"fn\":\"{}\",\"bb\":{}}}", esc(method), args.len(), esc(fname), bb);
-                                }
+                                
                                 // ExternCall retired: represented as Call with callee=Extern in unified path
                                 _ => {}
                             }
@@ -158,7 +155,7 @@ impl NyashRunner {
         println!("📊 MIR Module compiled successfully!");
         println!("📊 Functions: {}", compile_result.module.functions.len());
 
-        // Inject method_id for BoxCall/PluginInvoke where resolvable (by-id path)
+        // Inject method_id for BoxCall where resolvable (by-id path)
         #[allow(unused_mut)]
         let mut module = compile_result.module.clone();
         let injected = inject_method_ids(&mut module);

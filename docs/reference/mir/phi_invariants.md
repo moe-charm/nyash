@@ -36,6 +36,11 @@ Diagnostics
 - Bridge verifier may allow `verify_allow_no_phi()` in PHI-off mode, but
   the invariants above still apply to resolver synthesis order.
 
+Dev-only verification
+- Enable `NYASH_VERIFY_PHI_STRICT=1` to verify that each PHI's inputs cover all
+  reachable predecessors of its block. Missing inputs are reported as `InvalidPhi`.
+- Quick profile enables this by default to catch builder regressions early.
+
 ## JSON Encoding (PHI values)
 
 - Output format is unified to `values[]` only. Do not emit legacy `incoming`.

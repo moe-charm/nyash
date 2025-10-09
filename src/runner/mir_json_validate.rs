@@ -38,13 +38,7 @@ pub fn validate_json_root(root: &Value) -> Result<(), String> {
                         ensure_non_null_u32(inst, "rhs", name, bid, idx)?;
                         ensure_non_null_u32(inst, "dst", name, bid, idx)?;
                     }
-                    "externcall" => {
-                        // dst may be absent; name or callee must exist in v1
-                        if inst.get("name").is_none() && inst.get("callee").is_none() {
-                            return Err(format!("function '{}' block {} inst#{} externcall missing 'name'/'callee'", name, bid, idx));
-                        }
-                        ensure_array(inst, "args", name, bid, idx)?;
-                    }
+                    // "externcall" retired: reject to catch regressions early
                     "typeop" => {
                         ensure_field(inst, "operation", name, bid, idx)?;
                         ensure_non_null_u32(inst, "src", name, bid, idx)?;

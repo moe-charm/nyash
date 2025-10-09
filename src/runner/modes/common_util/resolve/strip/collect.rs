@@ -15,6 +15,19 @@ pub fn collect_using_and_strip(
     filename: &str,
 ) -> Result<(String, Vec<String>, Vec<(String, String)>), String> {
     if !crate::config::env::enable_using() {
+        // Guidance: if the source contains using directives while using is disabled,
+        // return a helpful error in dev instead of a generic parse failure later.
+        // Keep behavior minimal: only trigger when a line starts with `using `.
+        for (lineno0, line) in code.lines().enumerate() {
+            let t = line.trim_start();
+            if t.starts_with("using ") {
+                let ln = lineno0 + 1;
+                return Err(format!(
+                    "using is disabled (line {}). Dev: `source tools/dev_env.sh using` or set in hako.toml [env]: HAKO_USING=\"1\" HAKO_USING_STRATEGY=\"prelude\" (optionally HAKO_ALLOW_USING_FILE=\"1\"). Prod: register packages/aliases in hako.toml [using]/[modules].",
+                    ln
+                ));
+            }
+        }
         return Ok((code.to_string(), Vec::new(), Vec::new()));
     }
     let using_ctx = runner.init_using_context();
@@ -110,7 +123,7 @@ pub fn collect_using_and_strip(
                 // can organize their modules via file paths.
                 if (prod || !crate::config::env::allow_using_file()) && !inside_pkg {
                     return Err(format!(
-                        "using: file paths are disallowed in this profile. Add it to nyash.toml [using] (packages/aliases) and reference by name: {}",
+                        "using: file paths are disallowed in this profile. Dev: enable HAKO_ALLOW_USING_FILE=\"1\" (e.g., \"source tools/dev_env.sh using\"). Prod: add to hako.toml [using]/[modules] and reference by name instead of path. Target: {}",
                         target
                     ));
                 }

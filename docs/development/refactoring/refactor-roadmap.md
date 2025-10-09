@@ -57,7 +57,7 @@ Phased migration (mechanical, testable per phase):
    - Remove `ArrayGet/Set, RefNew/Get/Set, PluginInvoke, TypeCheck, Cast, Copy, Debug, Print, Nop, Throw, Catch, Safepoint`.
    - Update discriminant printer and state dumps accordingly.
 
-Use `tools/mir13-migration-helper.sh` to generate per-file tasks and verify.
+Legacy migration helper is archived; current codebase rejects legacy ops by default.
 
 ## Commonization Opportunities
 
@@ -79,4 +79,3 @@ Use `tools/mir13-migration-helper.sh` to generate per-file tasks and verify.
 5. Tackle `runner/mod.rs` and `backend/vm_instructions/boxcall.rs` splits.
 
 Each step should compile independently and run `tools/smoke_vm_jit.sh` to validate VM/JIT basics.
-

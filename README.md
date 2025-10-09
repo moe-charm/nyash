@@ -28,6 +28,12 @@ Execution Status (Feature Additions Pause)
 Quick pointers
 - Preferred config is `hako.toml` (compat: `nyash.toml` is still accepted).
   - Quick start for using/aliases: see `docs/tools/using-quickstart.md`.
+  - Smoke policy and stability tips: see `docs/guides/smokes-policy.md` and `docs/guides/smoke-test-debugging.md`.
+
+Dev tools
+- `tools/dev_env.sh using` — enable using(prelude+file) as a one‑knob setup
+- `tools/ny_doctor.sh` — show current config root and using settings with quick advice
+- `tools/parity_check.sh` — VM↔LLVM parity checker with noise filtering
 - Emit object with harness: set `NYASH_LLVM_USE_HARNESS=1` and `NYASH_LLVM_OBJ_OUT=<path>` (defaults in tools use `tmp/`).
 - Run VM: `./target/release/hakorune --backend vm apps/APP/main.hako` (aliases `hako`/`nyash` also available).
 - Root navigation map: see `ROOT_MAP.md` for tight-mode paths.

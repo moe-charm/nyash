@@ -40,13 +40,10 @@ impl MirInstruction {
 
             // Memory operations
             MirInstruction::Load { .. } => EffectMask::READ,
-            MirInstruction::Store { .. } | MirInstruction::ArraySet { .. } => EffectMask::WRITE,
-            MirInstruction::ArrayGet { .. } => EffectMask::READ,
+            MirInstruction::Store { .. } => EffectMask::WRITE,
 
             // Function calls use provided effect mask
-            MirInstruction::Call { effects, .. }
-            | MirInstruction::BoxCall { effects, .. }
-            | MirInstruction::PluginInvoke { effects, .. } => *effects,
+            MirInstruction::Call { effects, .. } | MirInstruction::BoxCall { effects, .. } => *effects,
 
             // Control flow (pure but affects execution)
             MirInstruction::Branch { .. }
@@ -69,8 +66,6 @@ impl MirInstruction {
 
             // Phase 6: Box reference operations
             MirInstruction::RefNew { .. } => EffectMask::PURE, // Creating reference is pure
-            MirInstruction::RefGet { .. } => EffectMask::READ, // Reading field has read effects
-            MirInstruction::RefSet { .. } => EffectMask::WRITE, // Writing field has write effects
             MirInstruction::WeakNew { .. } => EffectMask::PURE, // Creating weak ref is pure
             MirInstruction::WeakLoad { .. } => EffectMask::READ, // Loading weak ref has read effects
             MirInstruction::BarrierRead { .. } => EffectMask::READ.add(Effect::Barrier), // Memory barrier with read
@@ -112,10 +107,8 @@ impl MirInstruction {
             | MirInstruction::TypeCheck { dst, .. }
             | MirInstruction::Cast { dst, .. }
             | MirInstruction::TypeOp { dst, .. }
-            | MirInstruction::ArrayGet { dst, .. }
             | MirInstruction::Copy { dst, .. }
             | MirInstruction::RefNew { dst, .. }
-            | MirInstruction::RefGet { dst, .. }
             | MirInstruction::WeakNew { dst, .. }
             | MirInstruction::WeakLoad { dst, .. }
             | MirInstruction::WeakRef { dst, .. }
@@ -123,19 +116,15 @@ impl MirInstruction {
             | MirInstruction::Await { dst, .. } => Some(*dst),
             MirInstruction::NewClosure { dst, .. } => Some(*dst),
 
-            MirInstruction::Call { dst, .. }
-            | MirInstruction::BoxCall { dst, .. }
-            | MirInstruction::PluginInvoke { dst, .. } => *dst,
+            MirInstruction::Call { dst, .. } | MirInstruction::BoxCall { dst, .. } => *dst,
 
             MirInstruction::Store { .. }
             | MirInstruction::Branch { .. }
             | MirInstruction::Jump { .. }
             | MirInstruction::Return { .. }
-            | MirInstruction::ArraySet { .. }
             | MirInstruction::Debug { .. }
             | MirInstruction::Print { .. }
             | MirInstruction::Throw { .. }
-            | MirInstruction::RefSet { .. }
             | MirInstruction::BarrierRead { .. }
             | MirInstruction::BarrierWrite { .. }
             | MirInstruction::Barrier { .. }
@@ -176,13 +165,7 @@ impl MirInstruction {
                 ..
             } => vec![*lhs, *rhs],
 
-            MirInstruction::ArrayGet { array, index, .. } => vec![*array, *index],
-
-            MirInstruction::ArraySet {
-                array,
-                index,
-                value,
-            } => vec![*array, *index, *value],
+            
 
             MirInstruction::Branch { condition, .. } => vec![*condition],
 
@@ -202,8 +185,7 @@ impl MirInstruction {
                 used
             }
 
-            MirInstruction::BoxCall { box_val, args, .. }
-            | MirInstruction::PluginInvoke { box_val, args, .. } => {
+            MirInstruction::BoxCall { box_val, args, .. } => {
                 let mut used = vec![*box_val];
                 used.extend(args);
                 used
@@ -220,10 +202,7 @@ impl MirInstruction {
 
             // Phase 6: Box reference operations
             MirInstruction::RefNew { box_val, .. } => vec![*box_val],
-            MirInstruction::RefGet { reference, .. } => vec![*reference],
-            MirInstruction::RefSet {
-                reference, value, ..
-            } => vec![*reference, *value],
+            
             MirInstruction::WeakNew { box_val, .. } => vec![*box_val],
             MirInstruction::WeakLoad { weak_ref, .. } => vec![*weak_ref],
             MirInstruction::BarrierRead { ptr } => vec![*ptr],

@@ -58,38 +58,7 @@ impl fmt::Display for MirInstruction {
                     )
                 }
             }
-            MirInstruction::PluginInvoke {
-                dst,
-                box_val,
-                method,
-                args,
-                effects: _,
-            } => {
-                if let Some(dst) = dst {
-                    write!(
-                        f,
-                        "{} = plugin_invoke {}.{}({})",
-                        dst,
-                        box_val,
-                        method,
-                        args.iter()
-                            .map(|v| format!("{}", v))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                } else {
-                    write!(
-                        f,
-                        "plugin_invoke {}.{}({})",
-                        box_val,
-                        method,
-                        args.iter()
-                            .map(|v| format!("{}", v))
-                            .collect::<Vec<_>>()
-                            .join(", ")
-                    )
-                }
-            }
+            
             MirInstruction::Return { value } => {
                 if let Some(value) = value {
                     write!(f, "ret {}", value)

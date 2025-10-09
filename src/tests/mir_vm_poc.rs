@@ -39,7 +39,7 @@ mod tests {
                 ty: MirType::Integer,
             });
 
-        // console.log(result) via callee=Extern
+        // console.log(result) via callee=Extern (unified MirCall)
         func.get_block_mut(bb)
             .unwrap()
             .add_instruction(MirInstruction::Call {
@@ -199,10 +199,10 @@ mod tests {
             });
         func.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::ExternCall {
+            .add_instruction(MirInstruction::Call {
                 dst: None,
-                iface_name: "env.console".to_string(),
-                method_name: "log".to_string(),
+                func: crate::mir::ValueId::new(0),
+                callee: Some(crate::mir::Callee::Extern("env.console.log".to_string())),
                 args: vec![v1],
                 effects: EffectMask::IO,
             });
@@ -274,13 +274,13 @@ mod tests {
                 ptr: v2,
             });
 
-        // Print loaded value via env.console.log
+        // Print loaded value via env.console.log (unified MirCall)
         func.get_block_mut(bb)
             .unwrap()
-            .add_instruction(MirInstruction::ExternCall {
+            .add_instruction(MirInstruction::Call {
                 dst: None,
-                iface_name: "env.console".to_string(),
-                method_name: "log".to_string(),
+                func: crate::mir::ValueId::new(0),
+                callee: Some(crate::mir::Callee::Extern("env.console.log".to_string())),
                 args: vec![v2],
                 effects: EffectMask::IO,
             });

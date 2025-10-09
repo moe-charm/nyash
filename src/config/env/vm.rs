@@ -52,10 +52,6 @@ pub fn vm_resolve_trace() -> bool {
     std::env::var("NYASH_VM_RESOLVE_TRACE").ok().as_deref() == Some("1")
 }
 
-pub fn vm_boxcall_plugin_first() -> bool {
-    std::env::var("NYASH_VM_BOXCALL_PLUGIN_FIRST").ok().as_deref() == Some("1")
-}
-
 pub fn vm_global_tail_fallback() -> bool {
     std::env::var("NYASH_VM_GLOBAL_TAIL_FALLBACK").ok().as_deref() == Some("1")
 }
