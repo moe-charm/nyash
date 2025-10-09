@@ -114,15 +114,16 @@ pub(super) fn ingest_box_specs_from_nyash_box(
                 .and_then(|v| v.as_integer())
             {
                 spec.type_id = Some(tid as u32);
-                if super::util::dbg_on() {
-                    eprintln!(
+                super::util::dbg_once(
+                    &format!("spec_tid:{}:{}", lib_name, box_type),
+                    &format!(
                         "[PluginLoaderV2] spec ingest: {}.{} type_id={} from {}",
                         lib_name,
                         box_type,
                         tid,
                         nyash_box_toml_path.display()
-                    );
-                }
+                    ),
+                );
             }
             if let Some(fini) = doc
                 .get(box_type)
@@ -170,16 +171,17 @@ pub(super) fn ingest_box_specs_from_nyash_box(
                                 returns_result,
                             },
                         );
-                        if super::util::dbg_on() {
-                            eprintln!(
+                        super::util::dbg_once(
+                            &format!("spec_mid:{}:{}:{}", lib_name, box_type, mname),
+                            &format!(
                                 "[PluginLoaderV2] spec ingest: {}.{} method {} -> id={} returns_result={}",
                                 lib_name,
                                 box_type,
                                 mname,
                                 id,
                                 returns_result
-                            );
-                        }
+                            ),
+                        );
                     }
                 }
             }

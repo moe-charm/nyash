@@ -9,19 +9,18 @@ use crate::runtime::plugin_loader_v2::enabled::PluginLoaderV2;
 impl PluginLoaderV2 {
     /// Resolve a method ID for a given box type and method name
     pub(crate) fn resolve_method_id(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
-        // Trace helper
+        // Trace helper — fully silent by default; only emits with NYASH_METHOD_REG_TRACE_V2=1
         fn trace(box_type: &str, method_name: &str, provider: &str, mid: Option<u32>) {
-            if std::env::var("NYASH_METHOD_REG_TRACE").ok().as_deref() == Some("1") {
-                match mid {
-                    Some(id) => eprintln!(
-                        r#"{{"kind":"method_resolve","class":"{}","method":"{}","provider":"{}","method_id":{}}}"#,
-                        box_type, method_name, provider, id
-                    ),
-                    None => eprintln!(
-                        r#"{{"kind":"method_resolve","class":"{}","method":"{}","provider":"{}","status":"miss"}}"#,
-                        box_type, method_name, provider
-                    ),
-                }
+            if std::env::var("NYASH_METHOD_REG_TRACE_V2").ok().as_deref() != Some("1") { return; }
+            match mid {
+                Some(id) => eprintln!(
+                    r#"{{"kind":"method_resolve","class":"{}","method":"{}","provider":"{}","method_id":{}}}"#,
+                    box_type, method_name, provider, id
+                ),
+                None => eprintln!(
+                    r#"{{"kind":"method_resolve","class":"{}","method":"{}","provider":"{}","status":"miss"}}"#,
+                    box_type, method_name, provider
+                ),
             }
         }
         // Prefer specs (ingested from nyash_box.toml or TypeBox FFI)
@@ -30,14 +29,13 @@ impl PluginLoaderV2 {
             for ((_lib, bt), spec) in map.iter() {
                 if bt == box_type {
                     if let Some(ms) = spec.methods.get(method_name) {
-                        trace(box_type, method_name, "spec", Some(ms.method_id));
                         return Ok(ms.method_id);
                     }
                     if let Some(res_fn) = spec.resolve_fn {
                         if let Ok(cstr) = std::ffi::CString::new(method_name) {
                             // Calling a plain extern "C" function is safe; no unsafe needed here.
                             let mid = res_fn(cstr.as_ptr());
-                            if mid != 0 { trace(box_type, method_name, "spec_fn", Some(mid)); return Ok(mid); }
+                            if mid != 0 { return Ok(mid); }
                         }
                     }
                 }
@@ -46,7 +44,7 @@ impl PluginLoaderV2 {
 
         // Then try config mapping (nested under libraries.<lib>.<Box>)
         if let Some(cfg) = self.config.as_ref() {
-            let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+            let cfg_path = self.config_path_str();
             // Use cached TOML when available (dev reload via env bypasses cache)
             let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
             let toml_value: toml::Value = if !reload {
@@ -62,17 +60,13 @@ impl PluginLoaderV2 {
             // Find library for box
             if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
                 if let Some(box_conf) = cfg.get_box_config(lib_name, box_type, &toml_value) {
-                    if let Some(method_spec) = box_conf.methods.get(method_name) {
-                        trace(box_type, method_name, "config", Some(method_spec.method_id));
-                        return Ok(method_spec.method_id);
-                    }
+                    if let Some(method_spec) = box_conf.methods.get(method_name) { return Ok(method_spec.method_id); }
                 }
             }
         }
 
         // Last resort: file-based legacy mapping (dev-only)
         let res = self.resolve_method_id_from_file(box_type, method_name);
-        if let Ok(id) = res { trace(box_type, method_name, "legacy", Some(id)); } else { trace(box_type, method_name, "miss", None); }
         res
     }
 
@@ -91,7 +85,7 @@ impl PluginLoaderV2 {
     /// Check if a method returns a Result type
     pub fn method_returns_result(&self, box_type: &str, method_name: &str) -> bool {
         if let Some(cfg) = self.config.as_ref() {
-            let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+            let cfg_path = self.config_path_str();
             let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
             let toml_value_opt = if !reload {
                 self.cached_toml.clone()
@@ -119,7 +113,7 @@ impl PluginLoaderV2 {
         method_name: &str,
     ) -> BidResult<(u32, u32, bool)> {
         let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
-        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let cfg_path = self.config_path_str();
         let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
         let toml_value: toml::Value = if !reload {
             self.cached_toml.clone().ok_or(BidError::PluginError)?

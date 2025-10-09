@@ -1,13 +1,10 @@
 #![allow(dead_code)]
 use super::host_bridge::InvokeFn;
+use super::loader::util::dbg_on;
 use crate::box_trait::{BoxCore, NyashBox, StringBox};
 use std::any::Any;
 use std::sync::{Arc, RwLock, Weak};
 use once_cell::sync::OnceCell;
-
-fn dbg_on() -> bool {
-    std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
-}
 
 /// Loaded plugin information (library handle + exported addresses)
 pub struct LoadedPluginV2 {

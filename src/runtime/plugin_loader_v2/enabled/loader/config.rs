@@ -12,7 +12,8 @@ pub(super) fn load_config(loader: &mut PluginLoaderV2, config_path: &str) -> Bid
         .map(Some)
         .map_err(|_| BidError::PluginError)?;
     // Only store config_path AFTER successful load (avoid corruption on failure)
-    loader.config_path = Some(canonical.clone());
+    let __vp = crate::runtime::types::verified_path::VerifiedPath::new_ok(canonical.clone());
+    loader.config_path = Some(__vp);
     if let Some(cfg) = loader.config.as_ref() {
         let mut labels: Vec<String> = Vec::new();
         for (_lib, def) in &cfg.libraries {

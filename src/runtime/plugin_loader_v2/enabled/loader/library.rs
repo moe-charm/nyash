@@ -81,21 +81,25 @@ pub(super) fn load_plugin(
             if let Ok(tb_sym) =
                 lib_arc.get::<Symbol<&super::super::types::NyashTypeBoxFfi>>(sym_name.as_bytes())
             {
-                if dbg_on() {
-                    eprintln!(
+                super::util::dbg_once(
+                    &format!("typebox_present:{}:{}", lib_name, box_type),
+                    &format!(
                         "[PluginLoaderV2] TypeBox present for {}.{} (symbol='{}')",
                         lib_name,
                         box_type,
                         sym_name.trim_end_matches('\0')
-                    );
-                }
+                    ),
+                );
                 specs::record_typebox_spec(loader, lib_name, box_type, &*tb_sym)?;
-            } else if dbg_on() {
-                eprintln!(
-                    "[PluginLoaderV2] NOTE: TypeBox symbol not found for {}.{} (symbol='{}'). Migrate plugin to Nyash ABI v2 to enable per-Box dispatch.",
-                    lib_name,
-                    box_type,
-                    sym_name.trim_end_matches('\0')
+            } else {
+                super::util::dbg_once(
+                    &format!("typebox_missing:{}:{}", lib_name, box_type),
+                    &format!(
+                        "[PluginLoaderV2] NOTE: TypeBox symbol not found for {}.{} (symbol='{}'). Migrate plugin to Nyash ABI v2 to enable per-Box dispatch.",
+                        lib_name,
+                        box_type,
+                        sym_name.trim_end_matches('\0')
+                    ),
                 );
             }
         }
@@ -113,23 +117,27 @@ pub(super) fn load_plugin(
                     if nyash_box.exists() { found = Some(nyash_box); break; }
                     if let Some(parent) = base_dir.parent() { base_dir = parent.to_path_buf(); } else { break; }
                 }
-                if found.is_none() && dbg_on() {
-                    eprintln!(
-                        "[PluginLoaderV2] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
-                        lib_path.display()
+                if found.is_none() {
+                    super::util::dbg_once(
+                        &format!("spec_near_missing:{}", lib_path.display()),
+                        &format!(
+                            "[PluginLoaderV2] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
+                            lib_path.display()
+                        ),
                     );
                 }
                 found
             };
             if let Some(spec_path) = pick {
-                if dbg_on() {
-                    eprintln!(
+                super::util::dbg_once(
+                    &format!("spec_probe:{}:{}", lib_name, spec_path.display()),
+                    &format!(
                         "[PluginLoaderV2] spec ingest: probing {} for {} boxes {:?}",
                         spec_path.display(),
                         lib_name,
                         &lib_def.boxes
-                    );
-                }
+                    ),
+                );
                 specs::ingest_box_specs_from_nyash_box(loader, lib_name, &lib_def.boxes, &spec_path);
             }
         }

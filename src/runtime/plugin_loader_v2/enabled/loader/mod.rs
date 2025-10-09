@@ -3,7 +3,7 @@ mod library;
 mod metadata;
 mod singletons;
 mod specs;
-mod util;
+pub(crate) mod util;
 
 use super::host_bridge::BoxInvokeFn;
 use super::types::{LoadedPluginV2, PluginBoxMetadata, PluginHandleInner};
@@ -17,7 +17,7 @@ use std::sync::{Arc, RwLock};
 pub struct PluginLoaderV2 {
     pub(super) plugins: RwLock<HashMap<String, Arc<LoadedPluginV2>>>,
     pub config: Option<NyashConfigV2>,
-    pub(super) config_path: Option<String>,
+    pub(super) config_path: Option<crate::runtime::types::verified_path::VerifiedPath>,
     // Cached parsed nyash.toml (hot‑path use; reduces repeated I/O and parse)
     pub(super) cached_toml: Option<toml::Value>,
     pub(super) singletons: RwLock<HashMap<(String, String), Arc<PluginHandleInner>>>,
@@ -80,5 +80,12 @@ impl PluginLoaderV2 {
         args: &[Box<dyn NyashBox>],
     ) -> BidResult<Option<Box<dyn NyashBox>>> {
         super::extern_functions::extern_call(iface_name, method_name, args)
+    }
+
+    pub fn config_path_str(&self) -> &str {
+        self.config_path
+            .as_ref()
+            .map(|vp| vp.as_str())
+            .unwrap_or("nyash.toml")
     }
 }

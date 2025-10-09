@@ -4,7 +4,7 @@ use crate::runtime::plugin_loader_v2::enabled::{errors, host_bridge, types};
 
 pub(super) fn prebirth_singletons(loader: &PluginLoaderV2) -> BidResult<()> {
     let config = loader.config.as_ref().ok_or(BidError::PluginError)?;
-    let cfg_path = loader.config_path.as_deref().unwrap_or("nyash.toml");
+    let cfg_path = loader.config_path_str();
     let toml_content = errors::from_fs(std::fs::read_to_string(cfg_path))?;
     let toml_value: toml::Value = errors::from_toml(toml::from_str(&toml_content))?;
     for (lib_name, lib_def) in &config.libraries {
@@ -32,7 +32,7 @@ pub(super) fn ensure_singleton_handle(
     {
         return Ok(());
     }
-    let cfg_path = loader.config_path.as_deref().unwrap_or("nyash.toml");
+    let cfg_path = loader.config_path_str();
     let toml_value: toml::Value =
         toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?)
             .map_err(|_| BidError::PluginError)?;

@@ -30,7 +30,8 @@ pub(super) fn box_invoke_fn_for_type_id(
     loader: &PluginLoaderV2,
     type_id: u32,
 ) -> Option<BoxInvokeFn> {
-    if let (Some(config), Some(cfg_path)) = (loader.config.as_ref(), loader.config_path.as_ref()) {
+    if let Some(config) = loader.config.as_ref() {
+        let cfg_path = loader.config_path_str();
         if let (Ok(toml_str), Ok(toml_value)) = (
             std::fs::read_to_string(cfg_path),
             toml::from_str::<TomlValue>(&std::fs::read_to_string(cfg_path).unwrap_or_default()),
@@ -72,7 +73,7 @@ pub(super) fn metadata_for_type_id(
     type_id: u32,
 ) -> Option<PluginBoxMetadata> {
     let config = loader.config.as_ref()?;
-    let cfg_path = loader.config_path.as_ref()?;
+    let cfg_path = loader.config_path_str();
     let toml_str = std::fs::read_to_string(cfg_path).ok()?;
     let toml_value: TomlValue = toml::from_str(&toml_str).ok()?;
     let (lib_name, box_type) = find_box_by_type_id(config, &toml_value, type_id)?;
@@ -114,7 +115,7 @@ pub(super) fn construct_existing_instance(
     instance_id: u32,
 ) -> Option<Box<dyn NyashBox>> {
     let config = loader.config.as_ref()?;
-    let cfg_path = loader.config_path.as_ref()?;
+    let cfg_path = loader.config_path_str();
     let toml_str = std::fs::read_to_string(cfg_path).ok()?;
     let toml_value: TomlValue = toml::from_str(&toml_str).ok()?;
     let (lib_name, box_type) = find_box_by_type_id(config, &toml_value, type_id)?;

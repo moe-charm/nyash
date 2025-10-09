@@ -3,13 +3,9 @@
 use crate::bid::{BidError, BidResult};
 use crate::box_trait::{NyashBox, StringBox};
 use crate::boxes::{BufferBox, FloatBox};
+use crate::runtime::plugin_loader_v2::enabled::loader::util::dbg_on;
 use crate::runtime::plugin_loader_v2::enabled::PluginLoaderV2;
 use std::sync::Arc;
-
-fn dbg_on() -> bool {
-    std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
-        || std::env::var("PLUGIN_DEBUG").is_ok()
-}
 
 impl PluginLoaderV2 {
     /// Invoke a method on a plugin instance with TLV encoding/decoding
@@ -169,7 +165,7 @@ fn resolve_type_info(loader: &PluginLoaderV2, box_type: &str) -> BidResult<(Stri
         eprintln!("[PluginLoaderV2] resolve_type_info: box_type={} config={}", box_type, loader.config.is_some());
     }
     if let Some(cfg) = loader.config.as_ref() {
-        let cfg_path = loader.config_path.as_deref().unwrap_or("nyash.toml");
+        let cfg_path = loader.config_path_str();
         if dbg_on() {
             eprintln!("[PluginLoaderV2] resolve_type_info: trying config path {}", cfg_path);
         }
