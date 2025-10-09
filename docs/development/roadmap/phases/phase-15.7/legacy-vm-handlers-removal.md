@@ -36,6 +36,17 @@ Status: planned; Scope: src/backend/mir_interpreter/handlers/*（VM固有）
 - plugin-on での同等スモークが緑（Plugin優先）
 - 撤退ごとに M1/M2/M3 の自己ホストスモークが緑
 
+## 削除トリガ（表）
+
+| 対象 | Plugin 実装/検証 | quick（VM） | plugin-on（auto） | M1/M2/M3 |
+|------|-------------------|-------------|-------------------|----------|
+| String handlers | `StringBox` plugin の vtable 実装+smoke 緑 | 影響最小 | 緑（優先） | 緑 |
+| Map handlers | `MapBox` plugin の get/set/has/size/keys/values 緑 | 既定null/返り値nullで互換 | 緑 | 緑 |
+| Array handlers | `ArrayBox` plugin の push/get/set/len/size/toJSON 緑 | 返り値null統一後 | 緑 | 緑 |
+| BoxCall fast‑path | vtable/extern 経路が安定 | 影響なし | 緑 | 緑 |
+
+備考: plugin-on 環境は `SMOKES_PROFILE_ENV=plugin-on` で `tools/smokes/v2/configs/env/plugin-on.env` を読込。
+
 ## 備考
 - 長期: CoreBoxの Kernel 側残骸は Null/Missing など最小系に限定
 - 文字列エラー判定（"Key not found:") は全面廃止（null チェックへ統一）

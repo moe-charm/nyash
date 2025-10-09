@@ -9,10 +9,10 @@
 |-----------|----------|--------|-----------|--------|
 | **Size/Length** | `length()` → IntegerBox | `size()` → IntegerBox | ❌ Missing | 🔴 Inconsistent |
 | **Get Element** | `get(index)` → Box\|NullBox ✅ | `get(key)` → StringBox(error) 😱 | ❌ N/A | 🔴 Broken |
-| **Set Element** | `set(idx, val)` → StringBox("ok") | `set(key, val)` → StringBox(msg) | ❌ N/A | 🟡 Messy |
+| **Set Element** | `set(idx, val)` → NullBox | `set(key, val)` → NullBox | ❌ N/A | 🟢 Unified |
 | **Has/Contains** | `contains(value)` → BoolBox | `has(key)` → BoolBox | `contains(str)` → BoolBox | ✅ Good |
 | **Remove** | `remove(index)` → Box\|NullBox | `delete(key)` → StringBox(msg) | ❌ N/A | 🟡 Inconsistent |
-| **Clear** | `clear()` → StringBox("ok") | `clear()` → StringBox(msg) | ❌ N/A | 🟡 Messy |
+| **Clear** | `clear()` → NullBox | `clear()` → NullBox | ❌ N/A | 🟢 Unified |
 | **Is Empty** | ❌ Missing | ❌ Missing | ❌ Missing | 🟡 All missing |
 | **Search** | `indexOf(val)` → IntegerBox(-1) | ❌ N/A | `find(str)` → IntegerBox(-1) | 🟡 Different names |
 | **Iteration** | ❌ N/A | `forEach()` 😱 (broken) | ❌ N/A | 🔴 Non-functional |
@@ -34,18 +34,18 @@
 | Method | Signature | Return Type | Notes |
 |--------|-----------|-------------|-------|
 | `new()` | `() -> ArrayBox` | ArrayBox | Constructor ✅ |
-| `push(item)` | `(Box) -> Box` | StringBox("ok") | 🟡 Should return null |
+| `push(item)` | `(Box) -> Box` | NullBox | 🟢 Unified |
 | `pop()` | `() -> Box` | Box \| NullBox | ✅ Correct |
 | **`length()`** | `() -> IntegerBox` | IntegerBox | 🔄 Rename to `size()` |
 | `get(index)` | `(IntegerBox) -> Box` | Box \| NullBox | ✅ Correct |
-| `set(index, value)` | `(IntegerBox, Box) -> Box` | StringBox("ok") | 🟡 Should return null |
+| `set(index, value)` | `(IntegerBox, Box) -> Box` | NullBox | 🟢 Unified |
 | `remove(index)` | `(IntegerBox) -> Box` | Box \| NullBox | ✅ Correct |
 | `indexOf(value)` | `(Box) -> IntegerBox` | IntegerBox (-1 if not found) | ✅ Correct |
 | `contains(value)` | `(Box) -> BoolBox` | BoolBox | ✅ Correct |
-| `clear()` | `() -> Box` | StringBox("ok") | 🟡 Should return null |
+| `clear()` | `() -> Box` | NullBox | 🟢 Unified |
 | `join(delim)` | `(StringBox) -> Box` | StringBox | ✅ Correct |
-| `sort()` | `() -> Box` | StringBox("ok") | 🟡 Should return null |
-| `reverse()` | `() -> Box` | StringBox("ok") | 🟡 Should return null |
+| `sort()` | `() -> Box` | NullBox | 🟢 Unified |
+| `reverse()` | `() -> Box` | NullBox | 🟢 Unified |
 | `toJSON()` | `() -> Box` | StringBox | ✅ Correct |
 | `slice(start, end)` | `(IntegerBox, IntegerBox) -> ArrayBox` | ArrayBox | ✅ Correct |
 | ❌ `size()` | - | - | 🟢 ADD: Alias for length() |

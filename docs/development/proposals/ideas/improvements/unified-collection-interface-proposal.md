@@ -31,10 +31,10 @@
 |-----------|----------|--------|-----------|
 | **Size/Length** | `length()` → IntegerBox | `size()` → IntegerBox | N/A (no size method) |
 | **Get Element** | `get(index)` → Box \| NullBox | `get(key)` → Box \| StringBox(error) | N/A |
-| **Set Element** | `set(index, value)` → StringBox("ok") | `set(key, value)` → NullBox | N/A (immutable) |
+| **Set Element** | `set(index, value)` → NullBox | `set(key, value)` → NullBox | N/A (immutable) |
 | **Has/Contains** | `contains(value)` → BoolBox | `has(key)` → BoolBox | `contains(search)` → BoolBox |
 | **Remove** | `remove(index)` → Box \| NullBox | `delete(key)` → StringBox(msg) | N/A (immutable) |
-| **Clear** | `clear()` → StringBox("ok") | `clear()` → NullBox | N/A |
+| **Clear** | `clear()` → NullBox | `clear()` → NullBox | N/A |
 | **Search** | `indexOf(value)` → IntegerBox(-1) | N/A | `find(search)` → IntegerBox(-1) |
 | **Keys/Indices** | N/A | `keys()` → ArrayBox | N/A |
 | **Values** | N/A | `values()` → ArrayBox | N/A |
@@ -226,10 +226,10 @@ isEmpty() -> BoolBox {
 ```
 
 #### 🔧 **Fix Return Types** (4 methods)
-- `push(item)` → Return **NullBox** (not StringBox("ok"))
-- `set(index, value)` → Return **NullBox** (not StringBox("ok"))
-- `clear()` → Return **NullBox** (not StringBox("ok"))
-- `sort()`, `reverse()` → Return **NullBox** (not StringBox("ok"))
+- `push(item)` → Return **NullBox**
+- `set(index, value)` → Return **NullBox**
+- `clear()` → Return **NullBox**
+- `sort()`, `reverse()` → Return **NullBox**
 
 #### 🗑️ **Remove** (0 methods)
 - N/A - All ArrayBox methods are useful
@@ -491,7 +491,7 @@ pub fn find(&self, search: &str) -> Box<dyn NyashBox> {
 // BEFORE:
 map.set("key", "value")  // → StringBox("Set key: key")
 map.clear()              // → StringBox("Map cleared")
-array.push(item)         // → StringBox("ok")
+array.push(item)         // → null
 
 // AFTER:
 map.set("key", "value")  // → NullBox

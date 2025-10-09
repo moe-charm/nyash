@@ -77,18 +77,18 @@ impl ArrayBox {
         }
     }
 
-    /// インデックスで要素を設定
+    /// インデックスで要素を設定（戻り値: null）
     pub fn set(&self, index: Box<dyn NyashBox>, value: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {
             let idx = idx_box.value as usize;
             let mut items = self.items.write().unwrap();
             if idx < items.len() {
                 items[idx] = value;
-                Box::new(StringBox::new("ok"))
+                Box::new(crate::boxes::null_box::NullBox::new())
             } else if idx == items.len() {
                 // Pragmatic semantics: allow set at exact end to append
                 items.push(value);
-                Box::new(StringBox::new("ok"))
+                Box::new(crate::boxes::null_box::NullBox::new())
             } else {
                 Box::new(StringBox::new("Error: index out of bounds"))
             }
@@ -139,10 +139,10 @@ impl ArrayBox {
         Box::new(BoolBox::new(false))
     }
 
-    /// 配列を空にする
+    /// 配列を空にする（戻り値: null）
     pub fn clear(&self) -> Box<dyn NyashBox> {
         self.items.write().unwrap().clear();
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 文字列結合

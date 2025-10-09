@@ -92,7 +92,7 @@ local len = text.size()  // → 13 ✅
 ```hako
 map.set("key", "value")  // → null
 map.clear()              // → null
-array.push(item)         // → StringBox("ok")
+array.push(item)         // → null
 ```
 
 **Should Return**: `NullBox` (no message needed)
