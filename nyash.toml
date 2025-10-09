@@ -442,7 +442,7 @@ boxes = ["IntegerBox"]
 path = "plugins/nyash-integer-plugin/libnyash_integer_plugin.so"
 
 [libraries."libnyash_integer_plugin.so".IntegerBox]
-type_id = 12
+type_id = 14
 abi_version = 1
 singleton = false
 
@@ -453,25 +453,6 @@ set = { method_id = 2 }
 fini = { method_id = 4294967295 }
 
 # ArrayBox Plugin (Core Box replacement)
-[libraries."libnyash_array_plugin.so"]
-boxes = ["ArrayBox"]
-path = "plugins/nyash-array-plugin/target/release/libnyash_array_plugin.so"
-
-[libraries."libnyash_array_plugin.so".ArrayBox]
-type_id = 10
-abi_version = 1
-singleton = false
-
-[libraries."libnyash_array_plugin.so".ArrayBox.methods]
-birth  = { method_id = 0 }
-length = { method_id = 1 }
-len    = { method_id = 1 }
-get    = { method_id = 2 }
-push   = { method_id = 3 }
-set    = { method_id = 4 }
-fini   = { method_id = 4294967295 }
-
-
 [libraries."libnyash_nobirth_plugin.so"]
 boxes = ["NoBirthBox"]
 path = "plugins/nyash-nobirth-plugin/target/release/libnyash_nobirth_plugin.so"
@@ -484,4 +465,38 @@ singleton = false
 # Intentionally omit birth here to test loader no-op synthesis
 [libraries."libnyash_nobirth_plugin.so".NoBirthBox.methods]
 ping = { method_id = 4 }
+fini = { method_id = 4294967295 }
+[libraries."libnyash_array_plugin.so"]
+boxes = ["ArrayBox"]
+path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
+
+[libraries."libnyash_array_plugin.so".ArrayBox]
+type_id = 12
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_array_plugin.so".ArrayBox.methods]
+birth = { method_id = 0 }
+length = { method_id = 1 }
+size = { method_id = 1 }
+get = { method_id = 2 }
+push = { method_id = 3 }
+set = { method_id = 4 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_map_plugin.so"]
+boxes = ["MapBox"]
+path = "plugins/nyash-map-plugin/libnyash_map_plugin.so"
+
+[libraries."libnyash_map_plugin.so".MapBox]
+type_id = 11
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_map_plugin.so".MapBox.methods]
+birth = { method_id = 0 }
+size = { method_id = 1 }
+get = { method_id = 2 }
+has = { method_id = 3 }
+set = { method_id = 4 }
 fini = { method_id = 4294967295 }

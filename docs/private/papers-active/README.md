@@ -1,6 +1,6 @@
 # Papers Active - 執筆中の論文
 
-**最終更新**: 2025年9月30日
+**最終更新**: 2025年10月9日
 
 ---
 
@@ -8,7 +8,22 @@
 
 現在執筆中の論文。完成したら `papers-archive/` に移動。
 
-### 1. **hakorune-complete-story/** 🆕 ⭐
+### 1. **ai-design-intent-communication/** 🆕 ⭐
+**AI協働開発における設計意図の伝達**
+
+- **内容**: Implementation State Bias の発見と分析
+- **キーワード**: AI pair programming, Design intent, Incremental migration
+- **完成度**: 100%（初稿完成）
+- **発見**: AIは実装を見て設計意図を誤解する（段階的移行中）
+- **事例**: Hakorune の "Everything is Plugin" 誤解
+- **価値**: 新しい概念提示 + 実践的解決策 + アーキテクチャ検証
+- **作成日**: 2025年10月9日
+
+**読み始める**: [ai-design-intent-communication/paper.md](ai-design-intent-communication/paper.md)
+
+---
+
+### 2. **hakorune-complete-story/** ⭐
 **58日間の完全記録（統合版）**
 
 - **内容**: タイムライン、面白事件簿、AI協働洞察、技術詳細を統合
@@ -27,7 +42,7 @@
 
 ---
 
-### 2. **mir14-universal-execution/**
+### 3. **mir14-universal-execution/**
 **MIR14設計哲学**
 
 - **内容**: たった14命令で万能実行系を実現する中間表現
@@ -36,7 +51,7 @@
 
 ---
 
-### 3. **box-first-convergent-design/**
+### 4. **box-first-convergent-design/**
 **57日間のAI協働開発革命**
 
 - **内容**: Convergent Design Pattern（収束型設計パターン）の実証
@@ -46,7 +61,7 @@
 
 ---
 
-### 4. **nyash-box-first-language/**
+### 5. **nyash-box-first-language/**
 **Nyash言語設計・認知負荷分析**
 
 - **内容**:
@@ -57,7 +72,7 @@
 
 ---
 
-### 5. **box-oriented-programming/**
+### 6. **box-oriented-programming/**
 **Box指向プログラミング**
 
 - **内容**: Everything is Box の理論的基盤
@@ -68,6 +83,12 @@
 ## 📊 執筆進捗状況
 
 ```yaml
+ai-design-intent-communication:
+  進捗: 100%（初稿完成！）
+  状態: 完成（2025年10月9日）
+  行数: 1,100行
+  特記: Implementation State Bias の概念提示
+
 hakorune-complete-story:
   進捗: 100%（完成！）
   状態: 完成（2025年9月30日）
@@ -152,6 +173,13 @@ box-oriented-programming:
 
 ## 🎊 最近の成果
 
+### 2025年10月9日
+- ✅ **ai-design-intent-communication 完成！**
+  - 初稿完成（1,100行）
+  - Implementation State Bias の新概念提示
+  - AI協働開発の落とし穴と解決策
+  - "Everything is Plugin" アーキテクチャの検証
+
 ### 2025年9月30日
 - ✅ **hakorune-complete-story 完成！**
   - 全6章、13,800行
@@ -173,7 +201,8 @@ box-oriented-programming:
 ```
 docs/private/
 ├── papers-active/           ← 今ここ
-│   ├── hakorune-complete-story/  🆕 完成！
+│   ├── ai-design-intent-communication/  🆕 完成！
+│   ├── hakorune-complete-story/  ⭐ 完成！
 │   ├── mir14-universal-execution/
 │   ├── box-first-convergent-design/
 │   ├── nyash-box-first-language/
@@ -187,4 +216,5 @@ docs/private/
 
 **さあ、どの論文を読む？** 📖✨
 
-**推奨**: まずは [hakorune-complete-story](hakorune-complete-story/README.md) から！
+**最新**: [ai-design-intent-communication](ai-design-intent-communication/paper.md) - Implementation State Bias の発見！
+**人気**: [hakorune-complete-story](hakorune-complete-story/README.md) - 58日間の完全記録！

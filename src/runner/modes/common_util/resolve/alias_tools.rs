@@ -263,7 +263,7 @@ pub fn rename_with_collision_guard(
     }
 }
 
-#[cfg(all(test, feature = "resolver-tests"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashSet;

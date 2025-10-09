@@ -9,13 +9,21 @@
 
 use super::super::super::*;
 use crate::backend::mir_interpreter::handlers::{
-    boxes_array, boxes_string, boxes_map, boxes_fields, boxes_instance,
+    boxes_fields, boxes_instance,
 };
 
 mod plugin_bridge;
 
 
 impl MirInterpreter {
+    #[inline]
+    fn env_truthy_default(key: &str, default_on: bool) -> bool {
+        match std::env::var(key).ok().as_deref() {
+            Some("1" | "true" | "on" | "TRUE" | "ON") => true,
+            Some("0" | "false" | "off" | "FALSE" | "OFF") => false,
+            _ => default_on,
+        }
+    }
     pub(crate) fn handle_box_call(
         &mut self,
         dst: Option<ValueId>,
@@ -151,24 +159,9 @@ impl MirInterpreter {
             }
             return Ok(());
         }
-        if boxes_string::try_handle_string_box(self, dst, box_val, method, args)? {
-            if method == "length" && super::super::VmConfig::global().general_trace {
-                eprintln!("[vm-trace] length dispatch handler=string_box");
-            }
-            return Ok(());
-        }
-        if boxes_array::try_handle_array_box(self, dst, box_val, method, args)? {
-            if method == "length" && super::super::VmConfig::global().general_trace {
-                eprintln!("[vm-trace] length dispatch handler=array_box");
-            }
-            return Ok(());
-        }
-        if boxes_map::try_handle_map_box(self, dst, box_val, method, args)? {
-            if method == "length" && super::super::VmConfig::global().general_trace {
-                eprintln!("[vm-trace] length dispatch handler=map_box");
-            }
-            return Ok(());
-        }
+        // String VM convenience handlers removed (Phase 15.7). Prefer plugin/User paths.
+        // Array VM convenience handlers removed (Phase 15.7). Prefer plugin/User paths.
+        // Map VM convenience handlers removed (Phase 15.7). Prefer plugin/User paths.
         // Birth no-op for user InstanceBox when no class-defined birth() is available.
         // Builder injects birth() after NewBox; absence of a user birth implementation
         // should not be fatal. Birth is already recorded at entry; returning Void here
@@ -184,7 +177,8 @@ impl MirInterpreter {
         // Narrow safety valve: if 'length' wasn't handled by any box-specific path,
         // treat it as 0 (avoids Lt on Void in common loops). This is a dev-time
         // robustness measure; precise behavior should be provided by concrete boxes.
-        if method == "length" {
+        // Gate by env: set NYASH_VM_LENGTH_FALLBACK=0 to disable and fail-fast upstream.
+        if method == "length" && Self::env_truthy_default("NYASH_VM_LENGTH_FALLBACK", true) {
             if super::super::VmConfig::global().general_trace {
                 eprintln!("[vm-trace] length dispatch handler=fallback(length=0)");
             }

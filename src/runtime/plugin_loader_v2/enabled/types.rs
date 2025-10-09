@@ -2,7 +2,8 @@
 use super::host_bridge::InvokeFn;
 use crate::box_trait::{BoxCore, NyashBox, StringBox};
 use std::any::Any;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock, Weak};
+use once_cell::sync::OnceCell;
 
 fn dbg_on() -> bool {
     std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
@@ -79,7 +80,7 @@ impl PluginHandleInner {
     }
 }
 
-/// Nyash TypeBox FFI (minimal PoC)
+/// Hako ABI TypeBox FFI (a.k.a. Nyash TypeBox FFI; minimal PoC)
 use std::os::raw::c_char;
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
@@ -233,6 +234,52 @@ impl PluginBoxV2 {
     }
 }
 
+// Global cache: (type_id, instance_id) → Weak<PluginHandleInner>
+static HANDLE_CACHE: OnceCell<RwLock<std::collections::HashMap<(u32, u32), Weak<PluginHandleInner>>>> = OnceCell::new();
+
+fn cache() -> &'static RwLock<std::collections::HashMap<(u32, u32), Weak<PluginHandleInner>>> {
+    HANDLE_CACHE.get_or_init(|| RwLock::new(std::collections::HashMap::new()))
+}
+
+pub fn get_or_create_handle(
+    type_id: u32,
+    instance_id: u32,
+    invoke_fn: super::host_bridge::InvokeFn,
+    fini_method_id: Option<u32>,
+) -> Arc<PluginHandleInner> {
+    if let Ok(map) = cache().read() {
+        if let Some(w) = map.get(&(type_id, instance_id)) {
+            if let Some(a) = w.upgrade() {
+                return a;
+            }
+        }
+    }
+    let arc = Arc::new(PluginHandleInner {
+        type_id,
+        invoke_fn,
+        instance_id,
+        fini_method_id,
+        finalized: std::sync::atomic::AtomicBool::new(false),
+    });
+    if let Ok(mut map) = cache().write() {
+        map.insert((type_id, instance_id), Arc::downgrade(&arc));
+    }
+    arc
+}
+
+/// Lookup an existing handle by instance_id (any type). Dev helper to avoid
+/// relying on global type_id→invoke mapping when we already have a live handle.
+pub fn find_handle_by_instance(instance_id: u32) -> Option<Arc<PluginHandleInner>> {
+    if let Ok(map) = cache().read() {
+        for ((_tid, iid), weak) in map.iter() {
+            if *iid == instance_id {
+                if let Some(a) = weak.upgrade() { return Some(a); }
+            }
+        }
+    }
+    None
+}
+
 /// Helper to construct a PluginBoxV2 from raw ids and invoke pointer safely
 pub fn make_plugin_box_v2(
     box_type: String,
@@ -240,16 +287,8 @@ pub fn make_plugin_box_v2(
     instance_id: u32,
     invoke_fn: InvokeFn,
 ) -> PluginBoxV2 {
-    PluginBoxV2 {
-        box_type,
-        inner: Arc::new(PluginHandleInner {
-            type_id,
-            invoke_fn,
-            instance_id,
-            fini_method_id: None,
-            finalized: std::sync::atomic::AtomicBool::new(false),
-        }),
-    }
+    let inner = get_or_create_handle(type_id, instance_id, invoke_fn, None);
+    PluginBoxV2 { box_type, inner }
 }
 
 /// Public helper to construct a PluginBoxV2 from raw parts (for VM/JIT integration)
@@ -260,14 +299,6 @@ pub fn construct_plugin_box(
     instance_id: u32,
     fini_method_id: Option<u32>,
 ) -> PluginBoxV2 {
-    PluginBoxV2 {
-        box_type,
-        inner: Arc::new(PluginHandleInner {
-            type_id,
-            invoke_fn,
-            instance_id,
-            fini_method_id,
-            finalized: std::sync::atomic::AtomicBool::new(false),
-        }),
-    }
+    let inner = get_or_create_handle(type_id, instance_id, invoke_fn, fini_method_id);
+    PluginBoxV2 { box_type, inner }
 }

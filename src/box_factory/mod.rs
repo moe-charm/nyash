@@ -305,6 +305,20 @@ impl UnifiedBoxRegistry {
         name: &str,
         args: &[Box<dyn NyashBox>],
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        // Fast path: when plugin policy is enabled, attempt direct plugin host creation first.
+        // This avoids dependency on registry provider mapping for core boxes in plugin-on mode.
+        let plugin_policy_on = match std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok()).as_deref() {
+            Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => true,
+            _ => false,
+        };
+        if plugin_policy_on {
+            if let Some(b) = {
+                let host_arc = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                host_arc.read().ok().and_then(|h| h.create_box(name, args).ok())
+            } {
+                return Ok(b);
+            }
+        }
         // Prefer plugin-builtins when enabled and provider is available in v2 registry
         if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().as_deref() == Some("1") {
             use crate::runtime::{get_global_registry, BoxProvider};

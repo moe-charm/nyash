@@ -45,16 +45,35 @@ fn build_adapter() -> VmExternAdapterBox {
         }
         match &args[0] {
             VMValue::BoxRef(b) => {
-                if let Some(arr) = b
-                    .as_any()
-                    .downcast_ref::<crate::boxes::array::ArrayBox>()
-                {
-                    Ok(VMValue::Integer(arr.len() as i64))
-                } else {
-                    Err(VMError::TypeError(
-                        "nyrt.array.size expects ArrayBox".into(),
-                    ))
+                // Builtin ArrayBox
+                if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                    return Ok(VMValue::Integer(arr.len() as i64));
                 }
+                // Plugin ArrayBox (TypeBox v2)
+                if let Some(pb) = b
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                {
+                    if pb.box_type == "ArrayBox" {
+                        let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                        if let Ok(ro) = host.read() {
+                            if let Ok(ret) = ro.invoke_instance_method("ArrayBox", "length", pb.instance_id(), &[]) {
+                                if let Some(vb) = ret {
+                                    if let Some(ii) = vb
+                                        .as_any()
+                                        .downcast_ref::<crate::box_trait::IntegerBox>()
+                                    {
+                                        return Ok(VMValue::Integer(ii.value));
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(VMValue::Integer(0));
+                    }
+                }
+                Err(VMError::TypeError(
+                    "nyrt.array.size expects ArrayBox".into(),
+                ))
             }
             _ => Err(VMError::TypeError(
                 "nyrt.array.size expects ArrayBox".into(),
@@ -71,16 +90,35 @@ fn build_adapter() -> VmExternAdapterBox {
         }
         match &args[0] {
             VMValue::BoxRef(b) => {
-                if let Some(map) = b
-                    .as_any()
-                    .downcast_ref::<crate::boxes::map_box::MapBox>()
-                {
-                    Ok(VMValue::Integer(map.get_data().read().unwrap().len() as i64))
-                } else {
-                    Err(VMError::TypeError(
-                        "nyrt.map.size expects MapBox".into(),
-                    ))
+                // Builtin MapBox
+                if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                    return Ok(VMValue::Integer(map.get_data().read().unwrap().len() as i64));
                 }
+                // Plugin MapBox (TypeBox v2)
+                if let Some(pb) = b
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                {
+                    if pb.box_type == "MapBox" {
+                        let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                        if let Ok(ro) = host.read() {
+                            if let Ok(ret) = ro.invoke_instance_method("MapBox", "size", pb.instance_id(), &[]) {
+                                if let Some(vb) = ret {
+                                    if let Some(ii) = vb
+                                        .as_any()
+                                        .downcast_ref::<crate::box_trait::IntegerBox>()
+                                    {
+                                        return Ok(VMValue::Integer(ii.value));
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(VMValue::Integer(0));
+                    }
+                }
+                Err(VMError::TypeError(
+                    "nyrt.map.size expects MapBox".into(),
+                ))
             }
             _ => Err(VMError::TypeError(
                 "nyrt.map.size expects MapBox".into(),

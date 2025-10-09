@@ -5,11 +5,9 @@ Scope
   - function.rs (global functions)
   - method.rs (instance/static methods)
   - extern_call.rs (extern glue/adapters)
-  - box_call.rs (builtin fast‑paths)
+  - box_call.rs (builtin fast‑paths) — removed in Phase 15.7; routing unified via User/Plugin paths
   - legacy.rs (original implementation; unchanged semantics)
 
 Policy
-- Behavior unchanged; tests should remain green.
-- Moves will be done in small steps; legacy stays until parity is verified.
-- Rollback is trivial: remove new files and keep legacy.rs only.
-
+- VM convenience handlers and fast‑paths are removed (Phase 15.7). Behavior now follows vtable/extern routing.
+- Parity is guarded by plugin‑on smokes; quick remains green with plugins enabled.

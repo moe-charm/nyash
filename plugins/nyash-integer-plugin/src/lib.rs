@@ -26,7 +26,7 @@ const M_SET: u32 = 2;
 const M_FINI: u32 = u32::MAX;
 
 // Assigned type id (nyash.toml must match)
-const TYPE_ID_INTEGER: u32 = 12;
+const TYPE_ID_INTEGER: u32 = 14;
 
 struct IntInstance {
     value: i64,
@@ -150,16 +150,20 @@ extern "C" fn integer_invoke_id(
     unsafe {
         match method_id {
             M_BIRTH => {
-                // Create new IntegerBox instance
+                // Create new IntegerBox instance, return raw 4-byte id
                 let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
                 let init = read_arg_i64(args, args_len, 0).unwrap_or(0);
                 eprintln!("[IntegerBox] M_BIRTH called: id={}, init={}", id, init);
                 if let Ok(mut m) = INST.lock() {
                     m.insert(id, IntInstance { value: init });
-                    return write_tlv_handle(TYPE_ID_INTEGER, id, result, result_len);
                 } else {
                     return E_PLUGIN;
                 }
+                if preflight(result, result_len, 4) { return E_SHORT; }
+                let b = id.to_le_bytes();
+                std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
+                *result_len = 4;
+                OK
             }
             M_FINI => {
                 // Destroy IntegerBox instance

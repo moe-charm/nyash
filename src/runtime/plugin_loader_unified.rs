@@ -92,6 +92,12 @@ impl PluginHost {
         {
             let mut l = self.loader.write().unwrap();
             if l.config.is_none() {
+                // Seed full config when available to enable type_id→invoke mapping
+                if std::path::Path::new("nyash.toml").exists() {
+                    let _ = l.load_config("nyash.toml");
+                } else if std::path::Path::new("hako.toml").exists() {
+                    let _ = l.load_config("hako.toml");
+                }
                 let mut cfg = NyashConfigV2 {
                     libraries: std::collections::HashMap::new(),
                     plugin_paths: crate::config::nyash_toml_v2::PluginPaths { search_paths: vec![] },
@@ -100,19 +106,41 @@ impl PluginHost {
                 };
                 cfg.libraries.insert(lib_name.to_string(), crate::config::nyash_toml_v2::LibraryDefinition { boxes: def.boxes.clone(), path: def.path.clone() });
                 l.config = Some(cfg);
-                // No dedicated config file; keep config_path None and rely on box_specs fallback
             } else if let Some(cfg) = l.config.as_mut() {
                 cfg.libraries.insert(lib_name.to_string(), crate::config::nyash_toml_v2::LibraryDefinition { boxes: def.boxes.clone(), path: def.path.clone() });
+                // Ensure config_path/cached_toml available for metadata resolution
+                if std::path::Path::new("nyash.toml").exists() {
+                    let _ = l.load_config("nyash.toml");
+                } else if std::path::Path::new("hako.toml").exists() {
+                    let _ = l.load_config("hako.toml");
+                }
             }
             // Load the library now
             l.load_plugin_direct(lib_name, &def)?;
             // Ingest hako_box.toml / nyash_box.toml (if present) to populate box_specs: type_id/method ids
-            let base_dir = std::path::Path::new(path)
+            // Locate spec file near the library path; search up to two levels above to tolerate target/release layouts.
+            let mut base_dir = std::path::Path::new(path)
                 .parent()
-                .unwrap_or(std::path::Path::new("."));
-            let hako_box = base_dir.join("hako_box.toml");
-            let nyash_box = base_dir.join("nyash_box.toml");
-            let pick = if hako_box.exists() { hako_box } else { nyash_box };
+                .unwrap_or(std::path::Path::new("."))
+                .to_path_buf();
+            let pick = {
+                let mut found: Option<std::path::PathBuf> = None;
+                // Search up to 5 parents for near-lib box spec
+                for _ in 0..5 {
+                    let hako_box = base_dir.join("hako_box.toml");
+                    let nyash_box = base_dir.join("nyash_box.toml");
+                    if hako_box.exists() { found = Some(hako_box); break; }
+                    if nyash_box.exists() { found = Some(nyash_box); break; }
+                    if let Some(parent) = base_dir.parent() { base_dir = parent.to_path_buf(); } else { break; }
+                }
+                if found.is_none() && std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
+                    eprintln!(
+                        "[PluginHost] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
+                        path
+                    );
+                }
+                found.unwrap_or_else(|| std::path::Path::new("nyash_box.toml").to_path_buf())
+            };
             l.ingest_box_specs_from_nyash_box(lib_name, &def.boxes, &pick);
             // Also register providers in the v2 BoxFactoryRegistry so `new BoxType()` works
             let registry = crate::runtime::get_global_registry();

@@ -1,5 +1,5 @@
 #!/bin/bash
-# plugin_on_string_vm.sh — plugin-on overlay String basic ops
+# plugin_on_array_slice_vm.sh — plugin-on overlay Array set/get/len (boundary)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export NYASH_DISABLE_PLUGINS=0
@@ -9,17 +9,18 @@ preflight_plugins || exit 2
 
 ensure_hako_toml
 
-tmpfile=$(mktemp /tmp/plugin_on_string_XXXX.hako)
+tmpfile=$(mktemp /tmp/plugin_on_array_slice_XXXX.hako)
 cat >"$tmpfile" << 'SRC'
 static box Main {
   main() {
-    local s = "Nyash"
-    if s.size() != 5 { return 100 }
-    if s.substring(1,3) != "ya" { return 101 }
-    if s.indexOf("a") != 2 { return 102 }
-    if s.lastIndexOf("h") != 4 { return 103 }
-    if s.charAt(0) != "N" { return 104 }
-    if ("").isEmpty() != 1 { return 105 }
+    local a = new ArrayBox()
+    a.push(1)
+    // set at end appends
+    a.set(1, 7)
+    if a.size() != 2 { return 201 }
+    // get within bounds is not null; out-of-bounds is null
+    if a.get(1) == null { return 202 }
+    if a.get(5) != null { return 203 }
     return 0
   }
 }

@@ -80,7 +80,7 @@ pub fn box_to_bid_handle(
     // Downcast to specific box types
     if let Some(_string_box) = arc_box
         .as_any()
-        .downcast_ref::<crate::boxes::string_box::StringBox>()
+        .downcast_ref::<crate::box_trait::StringBox>()
     {
         let handle = registry.register_box(
             crate::bid::types::BoxTypeId::StringBox as u32,
@@ -140,7 +140,7 @@ pub fn bid_handle_to_box(
 pub fn extract_string_value(arc_box: &Arc<dyn NyashBox>) -> Result<String, BidError> {
     if let Some(string_box) = arc_box
         .as_any()
-        .downcast_ref::<crate::boxes::string_box::StringBox>()
+        .downcast_ref::<crate::box_trait::StringBox>()
     {
         Ok(string_box.value.clone())
     } else {
@@ -169,7 +169,7 @@ mod tests {
         let mut registry = BoxRegistry::new();
 
         // Create a mock box
-        let string_box = crate::boxes::string_box::StringBox::new("Hello");
+        let string_box = crate::box_trait::StringBox::new("Hello");
         let arc_box: Arc<dyn NyashBox> = Arc::new(string_box);
 
         // Register it
@@ -191,7 +191,7 @@ mod tests {
         let mut registry = BoxRegistry::new();
 
         // Create StringBox
-        let string_box = crate::boxes::string_box::StringBox::new("Test String");
+        let string_box = crate::box_trait::StringBox::new("Test String");
         let arc_box: Arc<dyn NyashBox> = Arc::new(string_box);
 
         // Convert to BID handle

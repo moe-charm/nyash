@@ -2,9 +2,6 @@ use super::*;
 
 mod arithmetic;
 mod boxes;
-mod boxes_array;
-mod boxes_string;
-mod boxes_map;
 mod boxes_fields;
 mod boxes_instance;
 mod calls;

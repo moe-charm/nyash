@@ -11,13 +11,12 @@
 **Current Broken Behavior**:
 ```hako
 local value = map.get("missing_key")
-// Returns: StringBox("Key not found: missing_key") 😱
+// Returns: null （NullBox）
 ```
 
-**Ugly Workaround Required**:
+**Clean Check (Now)**:
 ```hako
-// From apps/selfhost/hakorune-vm/load_handler.hako:31
-if RegexFlow.find_from(value, "Key not found:", 0) < 0 {
+if value != null {
     // Key exists
 }
 ```

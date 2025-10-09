@@ -8,7 +8,7 @@ author = "Nyash Team"
 boxes = ["IntegerBox"]
 
 [IntegerBox]
-type_id = 12
+type_id = 14
 
 [IntegerBox.lifecycle]
 birth = { id = 0 }
@@ -32,4 +32,3 @@ thread_safe = true
 windows = "target/x86_64-pc-windows-msvc/release/nyash_integer_plugin.dll"
 linux   = "target/release/libnyash_integer_plugin.so"
 macos   = "target/release/libnyash_integer_plugin.dylib"
-

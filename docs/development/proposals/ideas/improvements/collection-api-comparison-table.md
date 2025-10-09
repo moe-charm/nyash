@@ -8,10 +8,10 @@
 | Operation | ArrayBox | MapBox | StringBox | Status |
 |-----------|----------|--------|-----------|--------|
 | **Size/Length** | `length()` → IntegerBox | `size()` → IntegerBox | ❌ Missing | 🔴 Inconsistent |
-| **Get Element** | `get(index)` → Box\|NullBox ✅ | `get(key)` → StringBox(error) 😱 | ❌ N/A | 🔴 Broken |
+| **Get Element** | `get(index)` → Box\|NullBox ✅ | `get(key)` → Box\|NullBox ✅ | ❌ N/A | 🟢 Unified |
 | **Set Element** | `set(idx, val)` → NullBox | `set(key, val)` → NullBox | ❌ N/A | 🟢 Unified |
 | **Has/Contains** | `contains(value)` → BoolBox | `has(key)` → BoolBox | `contains(str)` → BoolBox | ✅ Good |
-| **Remove** | `remove(index)` → Box\|NullBox | `delete(key)` → StringBox(msg) | ❌ N/A | 🟡 Inconsistent |
+| **Remove** | `remove(index)` → Box\|NullBox | `delete(key)` → NullBox | ❌ N/A | 🟢 Unified |
 | **Clear** | `clear()` → NullBox | `clear()` → NullBox | ❌ N/A | 🟢 Unified |
 | **Is Empty** | ❌ Missing | ❌ Missing | ❌ Missing | 🟡 All missing |
 | **Search** | `indexOf(val)` → IntegerBox(-1) | ❌ N/A | `find(str)` → IntegerBox(-1) | 🟡 Different names |
@@ -59,11 +59,11 @@
 | Method | Signature | Return Type | Notes |
 |--------|-----------|-------------|-------|
 | `new()` | `() -> MapBox` | MapBox | Constructor ✅ |
-| **`get(key)`** | `(Box) -> Box` | StringBox(error) 😱 | 🔴 FIX: Return null! |
-| **`set(key, value)`** | `(Box, Box) -> Box` | StringBox(msg) | 🟡 Should return null |
+| **`get(key)`** | `(Box) -> Box` | Box \| NullBox | 🟢 Unified |
+| **`set(key, value)`** | `(Box, Box) -> Box` | NullBox | 🟢 Unified |
 | `has(key)` | `(Box) -> BoolBox` | BoolBox | ✅ Correct |
-| **`delete(key)`** | `(Box) -> Box` | StringBox(msg) | 🟡 Should return value\|null |
-| **`clear()`** | `() -> Box` | StringBox(msg) | 🟡 Should return null |
+| **`delete(key)`** | `(Box) -> Box` | NullBox | 🟢 Unified |
+| **`clear()`** | `() -> Box` | NullBox | 🟢 Unified |
 | `keys()` | `() -> ArrayBox` | ArrayBox | ✅ Correct |
 | `values()` | `() -> ArrayBox` | ArrayBox | ✅ Correct |
 | `size()` | `() -> IntegerBox` | IntegerBox | ✅ Correct |

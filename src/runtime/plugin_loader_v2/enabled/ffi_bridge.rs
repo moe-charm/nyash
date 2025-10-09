@@ -7,7 +7,8 @@ use crate::runtime::plugin_loader_v2::enabled::PluginLoaderV2;
 use std::sync::Arc;
 
 fn dbg_on() -> bool {
-    std::env::var("PLUGIN_DEBUG").is_ok()
+    std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
+        || std::env::var("PLUGIN_DEBUG").is_ok()
 }
 
 impl PluginLoaderV2 {
@@ -20,6 +21,12 @@ impl PluginLoaderV2 {
         args: &[Box<dyn NyashBox>],
     ) -> BidResult<Option<Box<dyn NyashBox>>> {
         let trace_fx = crate::config::env::trace_effects();
+        if dbg_on() {
+            eprintln!(
+                "[PluginLoaderV2] invoke_instance_method ENTRY: box_type={} method={} instance_id={} argc={}",
+                box_type, method_name, instance_id, args.len()
+            );
+        }
         if trace_fx {
             eprintln!(
                 "{{\"kind\":\"plugin_call\",\"box\":\"{}\",\"method\":\"{}\",\"argc\":{}}}",
@@ -27,7 +34,18 @@ impl PluginLoaderV2 {
             );
         }
         // Resolve (lib_name, type_id) either from config or cached specs
-        let (lib_name, type_id) = resolve_type_info(self, box_type)?;
+        if dbg_on() {
+            eprintln!("[PluginLoaderV2] About to call resolve_type_info for {}", box_type);
+        }
+        let (lib_name, type_id) = match resolve_type_info(self, box_type) {
+            Ok(res) => res,
+            Err(e) => {
+                if dbg_on() {
+                    eprintln!("[PluginLoaderV2] ERR: resolve_type_info failed for {}: {:?}", box_type, e);
+                }
+                return Err(e);
+            }
+        };
 
         // Resolve method id via config or TypeBox resolve()
         let method_id = match self.resolve_method_id(box_type, method_name) {
@@ -102,7 +120,7 @@ impl PluginLoaderV2 {
             }
         }
 
-        // Fallback: v2 TLV path (default behavior)
+        // Prefer invoking via the existing handle's invoke_fn when available
         let tlv = crate::runtime::plugin_ffi_common::encode_args(args);
         if dbg_on() {
             eprintln!(
@@ -110,13 +128,25 @@ impl PluginLoaderV2 {
                 box_type, method_name, type_id, method_id, instance_id
             );
         }
-        let (_code, out_len, out) = super::host_bridge::invoke_alloc(
-            super::super::nyash_plugin_invoke_v2_shim,
+        let inv_fn = if let Some(h) = super::types::find_handle_by_instance(instance_id) {
+            Some(h.invoke_fn)
+        } else {
+            None
+        };
+        let invoke_fn = inv_fn.unwrap_or(super::super::nyash_plugin_invoke_v2_shim);
+        let (code, out_len, out) = super::host_bridge::invoke_alloc(
+            invoke_fn,
             type_id,
             method_id,
             instance_id,
             &tlv,
         );
+        if dbg_on() {
+            eprintln!(
+                "[PluginLoaderV2] call result {}.{}: code={} out_len={}",
+                box_type, method_name, code, out_len
+            );
+        }
         let ret = decode_tlv_result(box_type, &out[..out_len]);
         if trace_fx {
             let tag = match &ret {
@@ -135,14 +165,38 @@ impl PluginLoaderV2 {
 
 /// Resolve type information for a box
 fn resolve_type_info(loader: &PluginLoaderV2, box_type: &str) -> BidResult<(String, u32)> {
+    if dbg_on() {
+        eprintln!("[PluginLoaderV2] resolve_type_info: box_type={} config={}", box_type, loader.config.is_some());
+    }
     if let Some(cfg) = loader.config.as_ref() {
         let cfg_path = loader.config_path.as_deref().unwrap_or("nyash.toml");
-        let toml_value: toml::Value =
-            toml::from_str(&std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?)
-                .map_err(|_| BidError::PluginError)?;
+        if dbg_on() {
+            eprintln!("[PluginLoaderV2] resolve_type_info: trying config path {}", cfg_path);
+        }
+        let cfg_content = match std::fs::read_to_string(cfg_path) {
+            Ok(s) => s,
+            Err(e) => {
+                if dbg_on() {
+                    eprintln!("[PluginLoaderV2] ERR: failed to read {}: {:?}", cfg_path, e);
+                }
+                return Err(BidError::PluginError);
+            }
+        };
+        let toml_value: toml::Value = match toml::from_str(&cfg_content) {
+            Ok(v) => v,
+            Err(e) => {
+                if dbg_on() {
+                    eprintln!("[PluginLoaderV2] ERR: failed to parse {}: {:?}", cfg_path, e);
+                }
+                return Err(BidError::PluginError);
+            }
+        };
 
         if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
             if let Some(bc) = cfg.get_box_config(lib_name, box_type, &toml_value) {
+                if dbg_on() {
+                    eprintln!("[PluginLoaderV2] resolve_type_info(cfg): {} -> lib={} type_id={}", box_type, lib_name, bc.type_id);
+                }
                 return Ok((lib_name.to_string(), bc.type_id));
             } else {
                 let key = (lib_name.to_string(), box_type.to_string());
@@ -151,13 +205,20 @@ fn resolve_type_info(loader: &PluginLoaderV2, box_type: &str) -> BidResult<(Stri
                     .get(&key)
                     .and_then(|s| s.type_id)
                     .ok_or(BidError::InvalidType)?;
+                if dbg_on() {
+                    eprintln!("[PluginLoaderV2] resolve_type_info(cfg+spec): {} -> lib={} type_id={} (spec)", box_type, lib_name, tid);
+                }
                 return Ok((lib_name.to_string(), tid));
             }
         }
     } else {
         let map = loader.box_specs.read().map_err(|_| BidError::PluginError)?;
         if let Some(((lib, _), spec)) = map.iter().find(|((_, bt), _)| bt == box_type) {
-            return Ok((lib.clone(), spec.type_id.ok_or(BidError::InvalidType)?));
+            let tid = spec.type_id.ok_or(BidError::InvalidType)?;
+            if dbg_on() {
+                eprintln!("[PluginLoaderV2] resolve_type_info(spec): {} -> lib={} type_id={} (spec)", box_type, lib, tid);
+            }
+            return Ok((lib.clone(), tid));
         }
     }
     Err(BidError::InvalidType)
@@ -198,17 +259,17 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
                 if let Some((ret_type, inst)) =
                     crate::runtime::plugin_ffi_common::decode::plugin_handle(payload)
                 {
-                    let handle = Arc::new(super::types::PluginHandleInner {
-                        type_id: ret_type,
-                        invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
-                        instance_id: inst,
-                        fini_method_id: None,
-                        finalized: std::sync::atomic::AtomicBool::new(false),
-                    });
-                    Box::new(super::types::PluginBoxV2 {
-                        box_type: box_type.to_string(),
-                        inner: handle,
-                    })
+                    let inner = super::types::get_or_create_handle(
+                        ret_type,
+                        inst,
+                        super::super::nyash_plugin_invoke_v2_shim,
+                        None,
+                    );
+                    // Resolve real box type name from metadata; fallback to caller's box_type
+                    let real_bt = super::metadata_for_type_id(ret_type)
+                        .map(|m| m.box_type.clone())
+                        .unwrap_or_else(|| box_type.to_string());
+                    Box::new(super::types::PluginBoxV2 { box_type: real_bt, inner })
                 } else {
                     Box::new(crate::box_trait::VoidBox::new())
                 }

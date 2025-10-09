@@ -115,12 +115,40 @@ impl Clone for BoxProvider {
 use once_cell::sync::Lazy;
 
 // ---- Core builtins (minimal, plugin-overrideable) ----
+fn plugin_policy_enabled() -> bool {
+    match std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok()).as_deref() {
+        Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => true,
+        _ => false,
+    }
+}
+
 fn register_core_builtins(reg: &BoxFactoryRegistry) {
     // TimerBox: provide builtin constructor so `new TimerBox()` works without plugins.
     // Plugin 設定が適用されると上書きされる（Plugin-First 原則を維持）。
     reg.register_builtin("TimerBox", |_args: &[Box<dyn NyashBox>]| {
         Ok(Box::new(crate::boxes::time_box::TimerBox::new()))
     });
+
+    // Thin embedded providers (Hako ABI same-face)
+    // Register only when plugin policy is OFF to avoid shadowing plugin-on path.
+    if !plugin_policy_enabled() {
+        reg.register_builtin("ArrayBox", |_args: &[Box<dyn NyashBox>]| {
+            Ok(Box::new(crate::boxes::array::ArrayBox::new()))
+        });
+        reg.register_builtin("MapBox", |_args: &[Box<dyn NyashBox>]| {
+            Ok(Box::new(crate::boxes::map_box::MapBox::new()))
+        });
+        reg.register_builtin("StringBox", |args: &[Box<dyn NyashBox>]| {
+            // Support 0-arg constructor and a pragmatic 1-arg constructor that seeds initial value
+            if args.is_empty() {
+                Ok(Box::new(crate::box_trait::StringBox::new("")))
+            } else {
+                Ok(Box::new(
+                    crate::box_trait::StringBox::new(&args[0].to_string_box().value),
+                ))
+            }
+        });
+    }
 }
 
 static GLOBAL_REGISTRY: Lazy<Arc<BoxFactoryRegistry>> = Lazy::new(|| {

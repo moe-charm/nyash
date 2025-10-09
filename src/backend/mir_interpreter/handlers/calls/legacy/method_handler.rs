@@ -167,48 +167,8 @@ impl MirInterpreter {
                         }
                     };
                     let dev_trace = VmConfig::global().general_trace;
-                    // Fast bridge for builtin boxes (Array) and common methods.
-                    // Preserve legacy semantics when plugins are absent.
-                    if let VMValue::BoxRef(bx) = &recv_val {
-                        if let Some(arr) = bx
-                            .as_any()
-                            .downcast_ref::<crate::boxes::array::ArrayBox>()
-                        {
-                            if let Some(res) =
-                                self.box_array_fastpath(arr, method, args)
-                            {
-                                return res;
-                            }
-                        }
-                        if let Some(map) = bx
-                            .as_any()
-                            .downcast_ref::<crate::boxes::map_box::MapBox>()
-                        {
-                            if let Some(res) =
-                                self.box_map_fastpath(map, method, args)
-                            {
-                                return res;
-                            }
-                        }
-                        if let Some(s) = bx
-                            .as_any()
-                            .downcast_ref::<crate::boxes::string_box::StringBox>()
-                        {
-                            if let Some(res) =
-                                self.box_string_fastpath(s, method, args)
-                            {
-                                return res;
-                            }
-                        }
-                    }
-                    // Fast bridge for VMValue::String (primitive string)
-                    if let VMValue::String(s_inner) = &recv_val {
-                        // Convert to StringBox temporarily for fastpath
-                        let temp_sbox = crate::boxes::string_box::StringBox::new(s_inner.clone());
-                        if let Some(res) = self.box_string_fastpath(&temp_sbox, method, args) {
-                            return res;
-                        }
-                    }
+                    // Builtin box fast-paths removed (Phase 15.7). Route via normal dispatch.
+                    // Primitive strings now route via standard call paths
                     // Minimal bridge for birth(): delegate to BoxCall handler and return Void
                     if method == "birth" {
                         let _ = self.handle_box_call(None, recv_id, method, args)?;

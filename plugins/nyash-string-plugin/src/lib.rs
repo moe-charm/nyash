@@ -19,15 +19,19 @@ const E_PLUGIN: i32 = -5;
 const E_HANDLE: i32 = -8;
 
 const M_BIRTH: u32 = 0;
-const M_LENGTH: u32 = 1;
+const M_LENGTH: u32 = 1; // also resolves for size
 const M_IS_EMPTY: u32 = 2;
 const M_CHAR_CODE_AT: u32 = 3;
 const M_CONCAT: u32 = 4; // concat(other: String|Handle) -> Handle(new)
 const M_FROM_UTF8: u32 = 5; // fromUtf8(data: String|Bytes) -> Handle(new)
 const M_TO_UTF8: u32 = 6; // toUtf8() -> String
+const M_SUBSTRING: u32 = 7; // substring(start,end) -> String
+const M_INDEX_OF: u32 = 8; // indexOf(sub[, from]) -> i64
+const M_LAST_INDEX_OF: u32 = 9; // lastIndexOf(sub[, from]) -> i64
+const M_CHAR_AT: u32 = 10; // charAt(idx) -> String (1-char)
 const M_FINI: u32 = u32::MAX;
 
-const TYPE_ID_STRING: u32 = 10; // Match nyash.toml type_id
+const TYPE_ID_STRING: u32 = 13; // Match hako.toml/nyash.toml canonical type_id
 
 struct StrInstance {
     s: String,
@@ -181,6 +185,21 @@ pub extern "C" fn nyash_plugin_invoke(
                 }
                 return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
             }
+            M_FROM_UTF8 => {
+                // Create new instance from UTF-8 (accept String/Bytes)
+                let s = if let Some(s) = read_arg_string(args, args_len, 0) {
+                    s
+                } else {
+                    return E_ARGS;
+                };
+                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut m) = INST.lock() {
+                    m.insert(id, StrInstance { s });
+                } else {
+                    return E_PLUGIN;
+                }
+                return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
+            }
             M_TO_UTF8 => {
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
@@ -217,9 +236,13 @@ extern "C" fn string_resolve(name: *const c_char) -> u32 {
     }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
-        "len" | "length" => M_LENGTH,
+        "len" | "length" | "size" => M_LENGTH,
         "isEmpty" => M_IS_EMPTY,
         "charCodeAt" => M_CHAR_CODE_AT,
+        "charAt" => M_CHAR_AT,
+        "substring" => M_SUBSTRING,
+        "indexOf" => M_INDEX_OF,
+        "lastIndexOf" => M_LAST_INDEX_OF,
         "concat" => M_CONCAT,
         "fromUtf8" => M_FROM_UTF8,
         "toUtf8" | "toString" => M_TO_UTF8, // Map toString to toUtf8
@@ -259,6 +282,17 @@ extern "C" fn string_invoke_id(
                     return E_PLUGIN;
                 }
             }
+            M_IS_EMPTY => {
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        return write_tlv_bool(inst.s.is_empty(), result, result_len);
+                    } else {
+                        return E_HANDLE;
+                    }
+                } else {
+                    return E_PLUGIN;
+                }
+            }
             M_LENGTH => {
                 eprintln!("[StringBox] M_LENGTH called: instance_id={}", instance_id);
                 if let Ok(m) = INST.lock() {
@@ -279,6 +313,69 @@ extern "C" fn string_invoke_id(
                 } else {
                     return E_PLUGIN;
                 }
+            }
+            M_SUBSTRING => {
+                // args: start(i64), end(i64)
+                let start = read_arg_i64(args, args_len, 0).unwrap_or(0);
+                let end = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        let sref = &inst.s;
+                        let len = sref.len() as i64;
+                        let i0 = start.max(0).min(len) as usize;
+                        let i1 = end.max(0).min(len) as usize;
+                        if i0 > i1 { return write_tlv_string("", result, result_len); }
+                        let bytes = sref.as_bytes();
+                        let sub = String::from_utf8_lossy(&bytes[i0..i1]).to_string();
+                        return write_tlv_string(&sub, result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            M_INDEX_OF => {
+                // args: sub(String), from(i64 optional)
+                let needle = read_arg_string(args, args_len, 0).unwrap_or_default();
+                let from = read_arg_i64(args, args_len, 1).unwrap_or(0);
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        let sref = &inst.s;
+                        if needle.is_empty() { return write_tlv_i64(0, result, result_len); }
+                        let start = from.max(0) as usize;
+                        if start >= sref.len() { return write_tlv_i64(-1, result, result_len); }
+                        let idx = sref[start..].find(&needle).map(|i| (start + i) as i64).unwrap_or(-1);
+                        return write_tlv_i64(idx, result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            M_LAST_INDEX_OF => {
+                // args: sub(String), from(i64 optional)
+                let needle = read_arg_string(args, args_len, 0).unwrap_or_default();
+                let from = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        let sref = &inst.s;
+                        if needle.is_empty() {
+                            let pos = (sref.len() as i64).min(from.max(0));
+                            return write_tlv_i64(pos, result, result_len);
+                        }
+                        let bound = from.max(0) as usize;
+                        let bound = bound.min(sref.len());
+                        let slice = &sref[..bound];
+                        let idx = slice.rfind(&needle).map(|i| i as i64).unwrap_or(-1);
+                        return write_tlv_i64(idx, result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
+            }
+            M_CHAR_AT => {
+                // args: idx(i64) -> returns String (one unicode scalar value)
+                let idx = read_arg_i64(args, args_len, 0).unwrap_or(0);
+                if idx < 0 { return E_ARGS; }
+                if let Ok(m) = INST.lock() {
+                    if let Some(inst) = m.get(&instance_id) {
+                        let ch_opt = inst.s.chars().nth(idx as usize);
+                        let s = ch_opt.map(|c| c.to_string()).unwrap_or_default();
+                        return write_tlv_string(&s, result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
             }
             M_TO_UTF8 => {
                 if let Ok(m) = INST.lock() {

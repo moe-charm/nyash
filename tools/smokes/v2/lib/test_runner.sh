@@ -111,9 +111,6 @@ filter_noise() {
       | grep -v "^\[FileBox\]" \
       | grep -v "^Net plugin:" \
   | grep -v "^\[.*\] Plugin" \
-      | grep -v "Using builtin StringBox" \
-      | grep -v "Using builtin ArrayBox" \
-      | grep -v "Using builtin MapBox" \
       | grep -v "^\[using\]" \
       | grep -v "^\[using/resolve\]" \
       | grep -v "^\[builder\]" \
@@ -210,6 +207,8 @@ preflight_plugins() {
     # プラグインマネージャーが存在する場合は実行
     if [ -f "$(dirname "${BASH_SOURCE[0]}")/plugin_manager.sh" ]; then
         source "$(dirname "${BASH_SOURCE[0]}")/plugin_manager.sh"
+        # Ensure plugin env (policy/config) is applied before integrity checks
+        setup_plugin_env || true
         check_plugin_integrity || return 1
     else
         log_warn "Plugin manager not found, skipping plugin checks"

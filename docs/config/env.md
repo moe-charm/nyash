@@ -48,12 +48,18 @@ Plugins
   - force: plugin-only execution（互換: NYASH_PLUGIN_ONLY=1）
   備考: Loader は常に同梱（オプトインで有効化）。解決順は User > Plugin > Kernel。
 
-VM convenience handlers (deprecation/disable gates; default OFF)
-- NYASH_VM_STRING_HANDLERS_DEPRECATE=1: warn once when String VM handlers are used（撤退予告）
-- NYASH_VM_DISABLE_STRING_HANDLERS=1: disable String VM handlers（Plugin/User 経路のみ）
-- NYASH_VM_ARRAY_HANDLERS_DEPRECATE=1 / NYASH_VM_DISABLE_ARRAY_HANDLERS=1: Array VM handlers 同様
-- NYASH_VM_MAP_HANDLERS_DEPRECATE=1 / NYASH_VM_DISABLE_MAP_HANDLERS=1: Map VM handlers 同様
-- NYASH_VM_DISABLE_BOXCALL_{ARRAY|MAP|STRING}_FASTPATH=1: BoxCall fast‑path を無効化（Plugin/vtable/extern 経路のみ）
+Builtin toggles (staged removal; dev only)
+- NYASH_BUILTIN_DISABLE_STRING=1 — Disable builtin StringBox creation (require plugin)
+- NYASH_BUILTIN_DISABLE_ARRAY=1  — Disable builtin ArrayBox creation (require plugin)
+- NYASH_BUILTIN_DISABLE_MAP=1    — Disable builtin MapBox creation (require plugin)
+- NYASH_USE_PLUGIN_BUILTINS=1    — Allow plugins to claim reserved core types
+- NYASH_PLUGIN_OVERRIDE_TYPES="StringBox,ArrayBox,MapBox" — Comma list of core types to allow plugin override
+
+VM convenience handlers (retired)
+- NYASH_VM_STRING_HANDLERS_DEPRECATE / NYASH_VM_DISABLE_STRING_HANDLERS — retired; handlers removed in Phase 15.7
+- NYASH_VM_ARRAY_HANDLERS_DEPRECATE / NYASH_VM_DISABLE_ARRAY_HANDLERS — retired; handlers removed in Phase 15.7
+- NYASH_VM_MAP_HANDLERS_DEPRECATE / NYASH_VM_DISABLE_MAP_HANDLERS — retired; handlers removed in Phase 15.7
+- NYASH_VM_DISABLE_BOXCALL_{ARRAY|MAP|STRING}_FASTPATH — retired; BoxCall fast‑paths removed in Phase 15.7
 
 Syntax sugar (default ON)
 - NYASH_SYNTAX_SUGAR_LEVEL={basic|full}（unset=ON）。

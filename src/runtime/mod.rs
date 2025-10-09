@@ -14,6 +14,7 @@ pub mod plugin_config;
 pub mod plugin_ffi_common;
 pub mod plugin_loader_unified;
 pub mod plugin_loader_v2;
+pub mod provider_box;
 pub mod scheduler;
 pub mod semantics;
 pub mod unified_registry;

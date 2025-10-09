@@ -1,6 +1,20 @@
 # VM Convenience Handlers — Deprecation & Removal Plan (Phase 15.7)
 
-Status: planned; Scope: src/backend/mir_interpreter/handlers/*（VM固有）
+Status: in-progress → partial-complete; Scope: src/backend/mir_interpreter/handlers/*（VM固有）
+
+Progress (this change set):
+- String VM convenience handlers: removed
+- Map VM convenience handlers: removed
+- Array VM convenience handlers: removed
+- BoxCall fast‑paths (String/Map/Array): removed
+- plugin-on quick-selfhost smokes: green (3/3)
+  - Added: plugin_on_map_keys_values_vm, plugin_on_array_slice_vm (basic get/set/len), plugin_on_basic_vm
+  - Auto-build plugins in preflight; dynamic plugin presence check aligned with actual artifacts
+
+Next:
+- Builtin boxes (String/Map/Array) removal requires plugin parity; keep until dynamic plugins are available by default in dev runs.
+  - Staged toggles available for validation: NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}=1
+  - Permit plugin override of reserved types via NYASH_USE_PLUGIN_BUILTINS=1 and NYASH_PLUGIN_OVERRIDE_TYPES
 
 ## 対象（撤退候補）
 - String ハンドラ: `handlers/boxes_string.rs`

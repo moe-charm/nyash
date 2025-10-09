@@ -185,8 +185,8 @@ interface MappedCollection extends CollectionBox {
 
 | Method | Collection | Current Behavior | Fixed Behavior |
 |--------|-----------|-----------------|----------------|
-| `get(key)` | MapBox | StringBox("Key not found: X") | **NullBox** |
-| `delete(key)` | MapBox | StringBox("Deleted key: X") | **Deleted value \| NullBox** |
+| `get(key)` | MapBox | NullBox | **NullBox** |
+| `delete(key)` | MapBox | NullBox | **NullBox** |
 | `set(key, value)` | MapBox | StringBox("Set key: X") | **NullBox** |
 | `clear()` | All | StringBox("ok"/"Map cleared") | **NullBox** |
 

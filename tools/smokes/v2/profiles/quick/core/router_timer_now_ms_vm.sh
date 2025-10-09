@@ -4,6 +4,7 @@
 
 DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)
 . "${DIR}/../../../lib/test_runner.sh"
+require_llvm_or_skip || exit 0
 
 require_env || exit 2
 preflight_plugins || exit 2

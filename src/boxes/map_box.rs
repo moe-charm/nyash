@@ -185,13 +185,11 @@ impl MapBox {
         ))
     }
 
-    /// キーを削除
+    /// キーを削除（戻り値: null）
     pub fn delete(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        match self.data.write().unwrap().remove(&key_str) {
-            Some(_) => Box::new(StringBox::new(&format!("Deleted key: {}", key_str))),
-            None => Box::new(StringBox::new(&format!("Key not found: {}", key_str))),
-        }
+        let _ = self.data.write().unwrap().remove(&key_str);
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 全てのキーを取得

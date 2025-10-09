@@ -20,6 +20,10 @@ use crate::box_trait::NyashBox;
 // Separated implementations (Phase 0: ✅ Complete)
 use super::builtin_impls;
 
+fn env_truthy(key: &str) -> bool {
+    matches!(std::env::var(key).ok().as_deref(), Some("1"|"true"|"on"|"yes"))
+}
+
 /// Factory for builtin Box types
 pub struct BuiltinBoxFactory;
 
@@ -37,16 +41,13 @@ impl BoxFactory for BuiltinBoxFactory {
     ) -> Result<Box<dyn NyashBox>, RuntimeError> {
         // Phase 0: ✅ Route to separated implementations (easy deletion)
         match name {
-            // Phase 2.1-2.2: DELETE when plugins are confirmed working
-            "StringBox" => builtin_impls::string_box::create(args),
+            // StringBox removed — use plugin provider
             "IntegerBox" => builtin_impls::integer_box::create(args),
 
             // Phase 2.3: DELETE when BoolBox plugin is created
             "BoolBox" => builtin_impls::bool_box::create(args),
 
-            // Phase 2.4-2.5: DELETE when collection plugins confirmed
-            "ArrayBox" => builtin_impls::array_box::create(args),
-            "MapBox" => builtin_impls::map_box::create(args),
+            // ArrayBox/MapBox removed — use plugin providers
 
             // Phase 2.6: DELETE LAST (critical for logging)
             "ConsoleBox" => builtin_impls::console_box::create(args),
@@ -64,12 +65,9 @@ impl BoxFactory for BuiltinBoxFactory {
     fn box_types(&self) -> Vec<&str> {
         vec![
             // Primitive wrappers
-            "StringBox",
             "IntegerBox",
             "BoolBox",
             // Collections/common
-            "ArrayBox",
-            "MapBox",
             "ConsoleBox",
             "NullBox",
         ]

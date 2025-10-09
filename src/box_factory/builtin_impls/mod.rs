@@ -15,11 +15,11 @@
  */
 
 // Phase 2.1-2.6: Delete these modules one by one
-pub mod string_box;    // DELETE: Phase 2.1 (plugin ready)
+// string_box removed (Phase 2.1) — use nyash-string-plugin
 pub mod integer_box;   // DELETE: Phase 2.2 (plugin ready)
 pub mod bool_box;      // DELETE: Phase 2.3 (plugin needed)
-pub mod array_box;     // DELETE: Phase 2.4 (plugin check)
-pub mod map_box;       // DELETE: Phase 2.5 (plugin check)
+// array_box removed (Phase 2.4) — use nyash-array-plugin
+// map_box removed (Phase 2.5) — use nyash-map-plugin
 pub mod console_box;   // DELETE: Phase 2.6 (LAST - critical for logging)
 
 // Special consideration

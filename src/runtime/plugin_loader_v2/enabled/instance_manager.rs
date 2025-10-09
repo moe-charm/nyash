@@ -6,7 +6,9 @@ use crate::runtime::plugin_loader_v2::enabled::{PluginLoaderV2, types::{PluginBo
 use std::sync::Arc;
 
 fn dbg_on() -> bool {
-    std::env::var("PLUGIN_DEBUG").is_ok()
+    // Prefer unified flag; keep legacy for compatibility
+    std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1"
+        || std::env::var("PLUGIN_DEBUG").is_ok()
 }
 
 impl PluginLoaderV2 {
@@ -18,11 +20,92 @@ impl PluginLoaderV2 {
     ) -> BidResult<Box<dyn NyashBox>> {
         // Non-recursive: directly call plugin 'birth' and construct PluginBoxV2
 
-        // Resolve type_id, birth_id (optional), and fini_id
-        let (type_id, birth_id_opt, fini_id) = resolve_box_ids_optional(self, box_type)?;
+        // Fast-path: prefer specs (ingested from nyash_box.toml / TypeBox FFI) for type/method IDs.
+        // This avoids strict dependency on a fully-loaded nyash.toml when partial plugin loads are used.
+        let (type_id, birth_id_opt, fini_id) = if let Ok(map) = self.box_specs.read() {
+            if let Some((_, spec)) = map.iter().find(|((_lib, bt), _)| bt == &box_type) {
+                if let Some(tid) = spec.type_id {
+                    let birth = spec
+                        .methods
+                        .get("birth")
+                        .map(|m| m.method_id)
+                        .or_else(|| spec.resolve_fn.and_then(|rf| {
+                            std::ffi::CString::new("birth")
+                                .ok()
+                                .map(|s| rf(s.as_ptr()))
+                                .filter(|&mid| mid != 0)
+                        }));
+                    (tid, birth, spec.fini_method_id)
+                } else {
+                    resolve_box_ids_optional(self, box_type)?
+                }
+            } else {
+                resolve_box_ids_optional(self, box_type)?
+            }
+        } else {
+            resolve_box_ids_optional(self, box_type)?
+        };
 
-        // Get loaded plugin invoke
-        let _plugins = self.plugins.read().map_err(|_| BidError::PluginError)?;
+        // Try to get per-Box invoke function directly from spec (lib+box) to avoid
+        // dependency on type_id→invoke mapping when config is missing.
+        let mut direct_invoke: Option<super::host_bridge::BoxInvokeFn> = None;
+        let mut lib_name_for_box: Option<String> = None;
+        // Prefer loader.config when available for lib_name
+        if let Some(cfg) = self.config.as_ref() {
+            if let Some((lib, _)) = cfg.find_library_for_box(box_type) {
+                lib_name_for_box = Some(lib.to_string());
+            }
+        }
+        // Fallback: ask global BoxFactoryRegistry for provider mapping
+        if lib_name_for_box.is_none() {
+            let reg = crate::runtime::get_global_registry();
+            if let Some(crate::runtime::BoxProvider::Plugin(lib)) = reg.get_provider(box_type) {
+                lib_name_for_box = Some(lib);
+            }
+        }
+        if let Some(lib) = lib_name_for_box.as_ref() {
+            if let Ok(map) = self.box_specs.read() {
+                if let Some(spec) = map.get(&(lib.clone(), box_type.to_string())) {
+                    direct_invoke = spec.invoke_id;
+                }
+            }
+            if direct_invoke.is_none() {
+                // Fallback: probe symbol from loaded library now
+                if let Ok(plugins) = self.plugins.read() {
+                    if let Some(loaded) = plugins.get(lib) {
+                        let sym_name = format!("nyash_typebox_{}\0", box_type);
+                        unsafe {
+                            if let Ok(tb_sym) = loaded._lib.get::<libloading::Symbol<&super::types::NyashTypeBoxFfi>>(sym_name.as_bytes()) {
+                                let inv = tb_sym.invoke_id;
+                                direct_invoke = inv;
+                                // Record into specs for future
+                                if let Ok(mut specs) = self.box_specs.write() {
+                                    let key = (lib.clone(), box_type.to_string());
+                                    let entry = specs.entry(key).or_default();
+                                    entry.invoke_id = inv;
+                                }
+                                if dbg_on() {
+                                    eprintln!(
+                                        "[PluginLoaderV2] TypeBox FFI fallback: recorded invoke for {}.{} (symbol '{}', invoke_id={:?})",
+                                        lib,
+                                        box_type,
+                                        sym_name.trim_end_matches("\\0"),
+                                        inv
+                                    );
+                                }
+                            } else if dbg_on() {
+                                eprintln!(
+                                    "[PluginLoaderV2] TypeBox FFI not found for {}.{} (looked for '{}')",
+                                    lib,
+                                    box_type,
+                                    sym_name.trim_end_matches("\\0")
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
 
         // Call birth when available; otherwise synthesize no-op instance id (0)
         let mut instance_id: u32 = 0;
@@ -34,13 +117,21 @@ impl PluginLoaderV2 {
                 );
             }
             let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
-            let (code, out_len, out_buf) = super::host_bridge::invoke_alloc(
-                super::super::nyash_plugin_invoke_v2_shim,
-                type_id,
-                birth_id,
-                0,
-                &tlv,
-            );
+            let (code, out_len, out_buf) = if let Some(box_invoke) = direct_invoke {
+                // Direct per-Box call (no type_id dispatch)
+                let mut out = vec![0u8; 1024];
+                let mut out_len: usize = out.len();
+                let code = (box_invoke)(0, birth_id, tlv.as_ptr(), tlv.len(), out.as_mut_ptr(), &mut out_len);
+                (code, out_len, out)
+            } else {
+                super::host_bridge::invoke_alloc(
+                    super::super::nyash_plugin_invoke_v2_shim,
+                    type_id,
+                    birth_id,
+                    0,
+                    &tlv,
+                )
+            };
             if dbg_on() {
                 eprintln!(
                     "[PluginLoaderV2] create_box: box_type={} type_id={} birth_id={} code={} out_len={}",
@@ -100,22 +191,44 @@ fn resolve_box_ids(
 ) -> BidResult<(u32, u32, Option<u32>)> {
     let (mut type_id_opt, mut birth_id_opt, mut fini_id) = (None, None, None);
 
-    // Try config mapping first (when available)
+    // Try config mapping first (when available) — be tolerant if cached TOML is missing
     if let Some(cfg) = loader.config.as_ref() {
         let cfg_path = loader.config_path.as_deref().unwrap_or("nyash.toml");
         let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
-        let toml_value: toml::Value = if !reload {
-            loader.cached_toml.clone().ok_or(BidError::PluginError)?
+        let toml_value_opt: Option<toml::Value> = if !reload {
+            loader.cached_toml.clone()
         } else {
-            let s = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
-            toml::from_str(&s).map_err(|_| BidError::PluginError)?
+            std::fs::read_to_string(cfg_path).ok().and_then(|s| toml::from_str::<toml::Value>(&s).ok())
         };
-
-        if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
-            if let Some(box_conf) = cfg.get_box_config(lib_name, box_type, &toml_value) {
-                type_id_opt = Some(box_conf.type_id);
-                birth_id_opt = box_conf.methods.get("birth").map(|m| m.method_id);
-                fini_id = box_conf.methods.get("fini").map(|m| m.method_id);
+        if let Some(toml_value) = toml_value_opt {
+            if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
+                if let Some(box_conf) = cfg.get_box_config(lib_name, box_type, &toml_value) {
+                    // Prefer spec-ingested type_id when available to avoid stale/incorrect config
+                    let mut resolved_tid = box_conf.type_id;
+                    // Sanity override for core boxes (dev): guard against stale/misparsed config
+                    resolved_tid = match (box_type, resolved_tid) {
+                        ("ArrayBox", tid) if tid != 12 => 12,
+                        ("MapBox", tid) if tid != 11 => 11,
+                        ("StringBox", tid) if tid != 13 => 13,
+                        _ => resolved_tid,
+                    };
+                    if let Ok(map) = loader.box_specs.read() {
+                        if let Some(spec) = map.get(&(lib_name.to_string(), box_type.to_string())) {
+                            if let Some(tid) = spec.type_id {
+                                resolved_tid = tid;
+                            }
+                        }
+                    }
+                    type_id_opt = Some(resolved_tid);
+                    birth_id_opt = box_conf.methods.get("birth").map(|m| m.method_id);
+                    fini_id = box_conf.methods.get("fini").map(|m| m.method_id);
+                    if dbg_on() {
+                        eprintln!(
+                            "[PluginLoaderV2] resolve_box_ids(cfg): {} -> lib={} type_id={} birth_id={:?} fini_id={:?}",
+                            box_type, lib_name, resolved_tid, birth_id_opt, fini_id
+                        );
+                    }
+                }
             }
         }
     }
@@ -124,7 +237,7 @@ fn resolve_box_ids(
     if type_id_opt.is_none() || birth_id_opt.is_none() {
         if let Ok(map) = loader.box_specs.read() {
             // Find any spec that matches this box_type
-            if let Some((_, spec)) = map.iter().find(|((_lib, bt), _)| bt == &box_type) {
+            if let Some(((lib, _), spec)) = map.iter().find(|((_, bt), _)| bt == &box_type) {
                 if type_id_opt.is_none() {
                     type_id_opt = spec.type_id;
                 }
@@ -140,13 +253,40 @@ fn resolve_box_ids(
                         }
                     }
                 }
+                if dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] resolve_box_ids(spec): {} -> lib={} type_id={:?} birth_id={:?}",
+                        box_type, lib, type_id_opt, birth_id_opt
+                    );
+                }
+            }
+        }
+    }
+
+    // Final fallback: try reading nyash.toml/hako.toml directly when loader.config is None
+    if type_id_opt.is_none() {
+        for cfg_path in ["nyash.toml", "hako.toml", "hakorune.toml"].iter() {
+            if let Ok(cfg) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg_path) {
+                if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
+                    if let Ok(raw) = std::fs::read_to_string(cfg_path) {
+                        if let Ok(toml_val) = toml::from_str::<toml::Value>(&raw) {
+                            if let Some(bc) = cfg.get_box_config(lib_name, box_type, &toml_val) {
+                                type_id_opt = Some(bc.type_id);
+                                birth_id_opt = birth_id_opt.or(bc.methods.get("birth").map(|m| m.method_id));
+                                fini_id = fini_id.or(bc.methods.get("fini").map(|m| m.method_id));
+                                if dbg_on() { eprintln!("[PluginLoaderV2] resolve_box_ids(file): {} -> lib={} type_id={} birth_id={:?}", box_type, lib_name, bc.type_id, birth_id_opt); }
+                                break;
+                            }
+                        }
+                    }
+                }
             }
         }
     }
 
     let type_id = type_id_opt.ok_or(BidError::InvalidType)?;
     let birth_id = birth_id_opt.ok_or(BidError::InvalidMethod)?;
-
+    
     Ok((type_id, birth_id, fini_id))
 }
 
@@ -155,9 +295,12 @@ fn resolve_box_ids_optional(
     loader: &PluginLoaderV2,
     box_type: &str,
 ) -> BidResult<(u32, Option<u32>, Option<u32>)> {
-    let (type_id, birth_id, fini_id) = resolve_box_ids(loader, box_type)
-        .or_else(|_| {
-            // Fallback path when birth is missing: resolve type_id even if birth_id is absent
+    // Treat method id 0 as a valid birth id (plugins commonly use 0).
+    // Only omit birth when we cannot resolve it at all.
+    match resolve_box_ids(loader, box_type) {
+        Ok((type_id, birth_id, fini_id)) => Ok((type_id, Some(birth_id), fini_id)),
+        Err(_) => {
+            // Fallback path when resolution fails entirely: resolve type_id even if birth_id is absent
             let (mut ty_opt, mut fi_opt) = (None, None);
             if let Some(cfg) = loader.config.as_ref() {
                 if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
@@ -170,8 +313,7 @@ fn resolve_box_ids_optional(
                 }
             }
             let ty = ty_opt.ok_or(BidError::InvalidType)?;
-            Ok((ty, 0u32, fi_opt))
-        })?;
-    if birth_id == 0 { return Ok((type_id, None, fini_id)); }
-    Ok((type_id, Some(birth_id), fini_id))
+            Ok((ty, None, fi_opt))
+        }
+    }
 }

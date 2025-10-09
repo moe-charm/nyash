@@ -64,7 +64,6 @@ pub mod debug_box;
 pub mod integer_box;
 pub mod math_box;
 pub mod random_box;
-pub mod string_box;
 pub mod time_box;
 // These boxes use web APIs that require special handling in WASM
 #[cfg(not(target_arch = "wasm32"))]

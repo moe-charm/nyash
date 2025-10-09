@@ -458,7 +458,7 @@ boxes = ["StringBox"]
 path = "plugins/nyash-string-plugin/libnyash_string_plugin.so"
 
 [libraries."libnyash_string_plugin.so".StringBox]
-type_id = 10
+type_id = 13
 abi_version = 1
 singleton = false
 
@@ -487,7 +487,7 @@ boxes = ["IntegerBox"]
 path = "plugins/nyash-integer-plugin/libnyash_integer_plugin.so"
 
 [libraries."libnyash_integer_plugin.so".IntegerBox]
-type_id = 12
+type_id = 14
 abi_version = 1
 singleton = false
 
@@ -500,10 +500,10 @@ fini = { method_id = 4294967295 }
 # ArrayBox Plugin (Core Box replacement)
 [libraries."libnyash_array_plugin.so"]
 boxes = ["ArrayBox"]
-path = "plugins/nyash-array-plugin/target/release/libnyash_array_plugin.so"
+path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
 
 [libraries."libnyash_array_plugin.so".ArrayBox]
-type_id = 10
+type_id = 12
 abi_version = 1
 singleton = false
 
@@ -511,10 +511,29 @@ singleton = false
 birth  = { method_id = 0 }
 length = { method_id = 1 }
 len    = { method_id = 1 }
+size   = { method_id = 1 }
 get    = { method_id = 2 }
 push   = { method_id = 3 }
 set    = { method_id = 4 }
 fini   = { method_id = 4294967295 }
+
+# MapBox Plugin (Core Box replacement)
+[libraries."libnyash_map_plugin.so"]
+boxes = ["MapBox"]
+path = "plugins/nyash-map-plugin/libnyash_map_plugin.so"
+
+[libraries."libnyash_map_plugin.so".MapBox]
+type_id = 11
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_map_plugin.so".MapBox.methods]
+birth = { method_id = 0 }
+size  = { method_id = 1 }
+get   = { method_id = 2 }
+has   = { method_id = 3 }
+set   = { method_id = 4 }
+fini  = { method_id = 4294967295 }
 
 [private]
 # Phase 15.7: 最小の非公開パターン（警告モード）。モジュール経由の using を推奨し、直パス using を抑止。

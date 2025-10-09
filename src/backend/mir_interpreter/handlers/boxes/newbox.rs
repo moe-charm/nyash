@@ -14,7 +14,32 @@ impl MirInterpreter {
         if let Err(e) = crate::runtime::provider_lock::guard_before_new_box(box_type) {
             return Err(VMError::InvalidInstruction(e));
         }
-        
+        // ProviderBox first: single boundary for Plugin→Registry→Embedded resolution
+        {
+            let mut converted_pb: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
+            for vid in args { converted_pb.push(self.reg_load(*vid)?.to_nyash_box()); }
+            crate::runtime::provider_box::ensure_loaded(std::env::var("NYASH_PLUGIN_CONFIG").ok().as_deref());
+            if let Ok(created) = crate::runtime::provider_box::new_box(box_type, &converted_pb) {
+                let created_vm = VMValue::from_nyash_box(created);
+                self.regs.insert(dst, created_vm.clone());
+                if let VMValue::BoxRef(arc_box) = &created_vm { self.scope.register_box(arc_box.clone()); }
+                self.lifecycle_observe_new(dst, box_type, args.len());
+                let birth_name = format!("{}.birth/{}", box_type, args.len());
+                if !self.functions.contains_key(&birth_name) {
+                    let key = self.object_key_for(dst);
+                    self.contracts_born.insert(key);
+                    if crate::config::env::check_contracts() {
+                        eprintln!(
+                            "{{\"kind\":\"contracts_born_nobirth\",\"class\":\"{}\",\"key\":{}}}",
+                            box_type, key
+                        );
+                    }
+                }
+                return Ok(());
+            }
+        }
+        // ProviderBox path above is the single source of truth for Plugin→Registry→Embedded.
+
         // Forbid instantiation of flow/static entry boxes (dev guard):
         // Heuristic: when flow is enabled and a `<Class>.main/0` exists but there is
         // no `<Class>.birth/N`, treat the class as a flow/static box and reject `new`.

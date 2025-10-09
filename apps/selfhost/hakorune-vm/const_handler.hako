@@ -33,7 +33,21 @@ static box ConstHandlerBox {
       return Result.Ok(0)
     }
 
-    // Try String value
+    // Try Integer value (alternative format: {"Integer":42})
+    local key_int = "\"value\":{\"Integer\":"
+    local val_int_start = inst_json.indexOf(key_int)
+    if val_int_start >= 0 {
+      val_int_start = val_int_start + key_int.size()
+      local digits = StringHelpers.read_digits(inst_json, val_int_start)
+      if digits == "" {
+        return Result.Err("const: invalid Integer value")
+      }
+      local value = StringHelpers.to_i64(digits)
+      ValueManagerBox.set(regs, dst, value)
+      return Result.Ok(0)
+    }
+
+    // Try String value (format 1: {"String":"hello"})
     local key_str = "\"value\":{\"String\":\""
     local val_str_start = inst_json.indexOf(key_str)
     if val_str_start >= 0 {

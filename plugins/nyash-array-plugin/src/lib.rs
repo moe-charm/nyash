@@ -28,7 +28,7 @@ const METHOD_SET: u32 = 4; // args: i64 index, i64 value -> returns TLV i64 (new
 const METHOD_FINI: u32 = u32::MAX; // destructor
 
 // Assign a unique type_id for ArrayBox (as declared in nyash.toml)
-const TYPE_ID_ARRAY: u32 = 10;
+const TYPE_ID_ARRAY: u32 = 12;
 
 // ===== Instance state (PoC: store i64 values only) =====
 struct ArrayInstance {
@@ -60,7 +60,7 @@ extern "C" fn array_resolve(name: *const c_char) -> u32 {
     }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
-        "len" | "length" => METHOD_LENGTH,
+        "len" | "length" | "size" => METHOD_LENGTH,
         "get" => METHOD_GET,
         "set" => METHOD_SET,
         "push" => METHOD_PUSH,
@@ -78,6 +78,23 @@ extern "C" fn array_invoke_id(
 ) -> i32 {
     unsafe {
         match method_id {
+            METHOD_BIRTH => {
+                // Create new ArrayBox instance and return raw 4-byte instance_id
+                if result_len.is_null() {
+                    return NYB_E_INVALID_ARGS;
+                }
+                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                if let Ok(mut map) = INSTANCES.lock() {
+                    map.insert(id, ArrayInstance { data: Vec::new() });
+                } else {
+                    return NYB_E_PLUGIN_ERROR;
+                }
+                if preflight(result, result_len, 4) { return NYB_E_SHORT_BUFFER; }
+                let b = id.to_le_bytes();
+                std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
+                *result_len = 4;
+                NYB_SUCCESS
+            }
             METHOD_LENGTH => {
                 if let Ok(map) = INSTANCES.lock() {
                     if let Some(inst) = map.get(&instance_id) {

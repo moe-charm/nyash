@@ -30,16 +30,21 @@ impl BoxFactory for PluginBoxFactory {
         // Use the existing v2 plugin system
         let registry = get_global_registry();
 
-        if let Some(_provider) = registry.get_provider(name) {
-            registry
+        match registry.get_provider(name) {
+            Some(crate::runtime::BoxProvider::Plugin(_lib)) => registry
                 .create_box(name, args)
                 .map_err(|e| RuntimeError::InvalidOperation {
                     message: format!("Plugin Box creation failed: {}", e),
-                })
-        } else {
-            Err(RuntimeError::InvalidOperation {
+                }),
+            Some(crate::runtime::BoxProvider::Builtin(_)) => Err(RuntimeError::InvalidOperation {
+                message: format!(
+                    "No plugin provider for Box type: {} (builtin provider present)",
+                    name
+                ),
+            }),
+            None => Err(RuntimeError::InvalidOperation {
                 message: format!("No plugin provider for Box type: {}", name),
-            })
+            }),
         }
     }
 

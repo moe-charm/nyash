@@ -46,9 +46,10 @@ pub(super) fn load_plugin(
     let lib_path = lib_path.unwrap_or_else(|| base.to_path_buf());
     if dbg_on() {
         eprintln!(
-            "[PluginLoaderV2] load_plugin: lib='{}' path='{}'",
+            "[PluginLoaderV2] load_plugin: lib='{}' path='{}' boxes={:?}",
             lib_name,
-            lib_path.display()
+            lib_path.display(),
+            &lib_def.boxes
         );
     }
     let lib = unsafe { Library::new(&lib_path) }.map_err(|_| BidError::PluginError)?;
@@ -80,6 +81,14 @@ pub(super) fn load_plugin(
             if let Ok(tb_sym) =
                 lib_arc.get::<Symbol<&super::super::types::NyashTypeBoxFfi>>(sym_name.as_bytes())
             {
+                if dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] TypeBox present for {}.{} (symbol='{}')",
+                        lib_name,
+                        box_type,
+                        sym_name.trim_end_matches('\0')
+                    );
+                }
                 specs::record_typebox_spec(loader, lib_name, box_type, &*tb_sym)?;
             } else if dbg_on() {
                 eprintln!(
@@ -88,6 +97,40 @@ pub(super) fn load_plugin(
                     box_type,
                     sym_name.trim_end_matches('\0')
                 );
+            }
+        }
+        // Opportunistically ingest nyash_box.toml/hako_box.toml located near the library path
+        // to populate type_id and method ids even when a central nyash.toml is not fully loaded.
+        {
+            let mut base_dir = lib_path.parent().unwrap_or(Path::new(".")).to_path_buf();
+            let pick = {
+                let mut found: Option<PathBuf> = None;
+                // Search depth increased from 3 to 5 to better tolerate nested target layouts
+                for _ in 0..5 {
+                    let hako_box = base_dir.join("hako_box.toml");
+                    let nyash_box = base_dir.join("nyash_box.toml");
+                    if hako_box.exists() { found = Some(hako_box); break; }
+                    if nyash_box.exists() { found = Some(nyash_box); break; }
+                    if let Some(parent) = base_dir.parent() { base_dir = parent.to_path_buf(); } else { break; }
+                }
+                if found.is_none() && dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
+                        lib_path.display()
+                    );
+                }
+                found
+            };
+            if let Some(spec_path) = pick {
+                if dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] spec ingest: probing {} for {} boxes {:?}",
+                        spec_path.display(),
+                        lib_name,
+                        &lib_def.boxes
+                    );
+                }
+                specs::ingest_box_specs_from_nyash_box(loader, lib_name, &lib_def.boxes, &spec_path);
             }
         }
         // Optional: probe Final ABI (env-gated) — no behavior change when absent

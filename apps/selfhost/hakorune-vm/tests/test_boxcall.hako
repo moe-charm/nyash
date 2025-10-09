@@ -15,6 +15,70 @@ static box Main {
       return 1
     }
 
+    // Test 2: StringBox.substring()
+    local test2 = me._test_string_substring()
+    print("[Test 2] StringBox.substring() - result: " + StringHelpers.int_to_str(test2))
+    if test2 != 0 {
+      print("[FAIL] Test 2: expected 0, got " + StringHelpers.int_to_str(test2))
+      return 1
+    }
+
+    // Test 3: StringBox.charAt()
+    local test3 = me._test_string_charat()
+    print("[Test 3] StringBox.charAt() - result: " + StringHelpers.int_to_str(test3))
+    if test3 != 0 {
+      print("[FAIL] Test 3: expected 0, got " + StringHelpers.int_to_str(test3))
+      return 1
+    }
+
+    // Test 4: StringBox.indexOf()
+    local test4 = me._test_string_indexof()
+    print("[Test 4] StringBox.indexOf() - result: " + StringHelpers.int_to_str(test4))
+    if test4 != 0 {
+      print("[FAIL] Test 4: expected 0, got " + StringHelpers.int_to_str(test4))
+      return 1
+    }
+
+    // Test 5: ArrayBox.size()
+    local test5 = me._test_array_size()
+    print("[Test 5] ArrayBox.size() - result: " + StringHelpers.int_to_str(test5))
+    if test5 != 0 {
+      print("[FAIL] Test 5: expected 0, got " + StringHelpers.int_to_str(test5))
+      return 1
+    }
+
+    // Test 6: ArrayBox.isEmpty()
+    local test6 = me._test_array_isempty()
+    print("[Test 6] ArrayBox.isEmpty() - result: " + StringHelpers.int_to_str(test6))
+    if test6 != 0 {
+      print("[FAIL] Test 6: expected 0, got " + StringHelpers.int_to_str(test6))
+      return 1
+    }
+
+    // Test 7: MapBox.size()
+    local test7 = me._test_map_size()
+    print("[Test 7] MapBox.size() - result: " + StringHelpers.int_to_str(test7))
+    if test7 != 0 {
+      print("[FAIL] Test 7: expected 0, got " + StringHelpers.int_to_str(test7))
+      return 1
+    }
+
+    // Test 8: MapBox.isEmpty()
+    local test8 = me._test_map_isempty()
+    print("[Test 8] MapBox.isEmpty() - result: " + StringHelpers.int_to_str(test8))
+    if test8 != 0 {
+      print("[FAIL] Test 8: expected 0, got " + StringHelpers.int_to_str(test8))
+      return 1
+    }
+
+    // Test 9: MapBox.keys()
+    local test9 = me._test_map_keys()
+    print("[Test 9] MapBox.keys() - result: " + StringHelpers.int_to_str(test9))
+    if test9 != 0 {
+      print("[FAIL] Test 9: expected 0, got " + StringHelpers.int_to_str(test9))
+      return 1
+    }
+
     print("\u2705 All BoxCall tests PASSED!")
     return 0
   }
@@ -33,6 +97,172 @@ static box Main {
     // Expected: "HELLO"
     if vm_result != "HELLO" {
       print("[ERROR] Expected 'HELLO', got: " + vm_result)
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 2: StringBox.substring(start, end)
+  _test_string_substring() {
+    // MIR JSON: const "hello" -> v%2, const 1 -> v%3, const 4 -> v%4, boxcall v%2.substring(v%3, v%4) -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":2,\"value\":{\"String\":\"hello\"}},{\"op\":\"const\",\"dst\":3,\"value\":{\"Integer\":1}},{\"op\":\"const\",\"dst\":4,\"value\":{\"Integer\":4}},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"substring\",\"args\":[3,4]},{\"op\":\"copy\",\"dst\":5,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":5}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: "ell" (substring from index 1 to 4)
+    if vm_result != "ell" {
+      print("[ERROR] Expected 'ell', got: " + vm_result)
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 3: StringBox.charAt(index)
+  _test_string_charat() {
+    // MIR JSON: const "hello" -> v%2, const 1 -> v%3, boxcall v%2.charAt(v%3) -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":2,\"value\":{\"String\":\"hello\"}},{\"op\":\"const\",\"dst\":3,\"value\":{\"Integer\":1}},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"charAt\",\"args\":[3]},{\"op\":\"copy\",\"dst\":4,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":4}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: "e" (character at index 1)
+    if vm_result != "e" {
+      print("[ERROR] Expected 'e', got: " + vm_result)
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 4: StringBox.indexOf(substring)
+  _test_string_indexof() {
+    // MIR JSON: const "hello world" -> v%2, const "world" -> v%3, boxcall v%2.indexOf(v%3) -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":2,\"value\":{\"String\":\"hello world\"}},{\"op\":\"const\",\"dst\":3,\"value\":{\"String\":\"world\"}},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"indexOf\",\"args\":[3]},{\"op\":\"copy\",\"dst\":4,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":4}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: 6 (index of "world" in "hello world")
+    local expected = 6
+    if vm_result != expected {
+      print("[ERROR] Expected " + StringHelpers.int_to_str(expected) + ", got: " + StringHelpers.int_to_str(vm_result))
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 5: ArrayBox.size()
+  _test_array_size() {
+    // MIR JSON: newbox ArrayBox -> v%2, const 10 -> v%3, boxcall v%2.push(v%3) -> v%4, const 20 -> v%5, boxcall v%2.push(v%5) -> v%6, boxcall v%2.size() -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"newbox\",\"dst\":2,\"box_type\":\"ArrayBox\",\"args\":[]},{\"op\":\"const\",\"dst\":3,\"value\":{\"Integer\":10}},{\"op\":\"boxcall\",\"dst\":4,\"box\":2,\"method\":\"push\",\"args\":[3]},{\"op\":\"const\",\"dst\":5,\"value\":{\"Integer\":20}},{\"op\":\"boxcall\",\"dst\":6,\"box\":2,\"method\":\"push\",\"args\":[5]},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"size\",\"args\":[]},{\"op\":\"copy\",\"dst\":7,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":7}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: 2 (size of array with 2 elements)
+    local expected = 2
+    if vm_result != expected {
+      print("[ERROR] Expected " + StringHelpers.int_to_str(expected) + ", got: " + StringHelpers.int_to_str(vm_result))
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 6: ArrayBox.isEmpty()
+  _test_array_isempty() {
+    // MIR JSON: newbox ArrayBox -> v%2, boxcall v%2.isEmpty() -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"newbox\",\"dst\":2,\"box_type\":\"ArrayBox\",\"args\":[]},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"isEmpty\",\"args\":[]},{\"op\":\"copy\",\"dst\":3,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":3}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: 1 (true, empty array)
+    local expected = 1
+    if vm_result != expected {
+      print("[ERROR] Expected " + StringHelpers.int_to_str(expected) + ", got: " + StringHelpers.int_to_str(vm_result))
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 7: MapBox.size()
+  _test_map_size() {
+    // MIR JSON: newbox MapBox -> v%2, const "key1" -> v%3, const 100 -> v%4, boxcall v%2.set(v%3, v%4) -> v%5, const "key2" -> v%6, const 200 -> v%7, boxcall v%2.set(v%6, v%7) -> v%8, boxcall v%2.size() -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"newbox\",\"dst\":2,\"box_type\":\"MapBox\",\"args\":[]},{\"op\":\"const\",\"dst\":3,\"value\":{\"String\":\"key1\"}},{\"op\":\"const\",\"dst\":4,\"value\":{\"Integer\":100}},{\"op\":\"boxcall\",\"dst\":5,\"box\":2,\"method\":\"set\",\"args\":[3,4]},{\"op\":\"const\",\"dst\":6,\"value\":{\"String\":\"key2\"}},{\"op\":\"const\",\"dst\":7,\"value\":{\"Integer\":200}},{\"op\":\"boxcall\",\"dst\":8,\"box\":2,\"method\":\"set\",\"args\":[6,7]},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"size\",\"args\":[]},{\"op\":\"copy\",\"dst\":9,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":9}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: 2 (size of map with 2 entries)
+    local expected = 2
+    if vm_result != expected {
+      print("[ERROR] Expected " + StringHelpers.int_to_str(expected) + ", got: " + StringHelpers.int_to_str(vm_result))
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 8: MapBox.isEmpty()
+  _test_map_isempty() {
+    // MIR JSON: newbox MapBox -> v%2, boxcall v%2.isEmpty() -> v%1, ret v%1
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"newbox\",\"dst\":2,\"box_type\":\"MapBox\",\"args\":[]},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"isEmpty\",\"args\":[]},{\"op\":\"copy\",\"dst\":3,\"src\":1}],\"terminator\":{\"op\":\"ret\",\"value\":3}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: 1 (true, empty map)
+    local expected = 1
+    if vm_result != expected {
+      print("[ERROR] Expected " + StringHelpers.int_to_str(expected) + ", got: " + StringHelpers.int_to_str(vm_result))
+      return -1
+    }
+
+    return 0
+  }
+
+  // Test 9: MapBox.keys()
+  _test_map_keys() {
+    // MIR JSON: newbox MapBox -> v%2, const "a" -> v%3, const 1 -> v%4, boxcall v%2.set(v%3, v%4) -> v%5, const "b" -> v%6, const 2 -> v%7, boxcall v%2.set(v%6, v%7) -> v%8, boxcall v%2.keys() -> v%1, boxcall v%1.size() -> v%9, ret v%9
+    local mir_json = "{\"functions\":[{\"name\":\"Main.main\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"newbox\",\"dst\":2,\"box_type\":\"MapBox\",\"args\":[]},{\"op\":\"const\",\"dst\":3,\"value\":{\"String\":\"a\"}},{\"op\":\"const\",\"dst\":4,\"value\":{\"Integer\":1}},{\"op\":\"boxcall\",\"dst\":5,\"box\":2,\"method\":\"set\",\"args\":[3,4]},{\"op\":\"const\",\"dst\":6,\"value\":{\"String\":\"b\"}},{\"op\":\"const\",\"dst\":7,\"value\":{\"Integer\":2}},{\"op\":\"boxcall\",\"dst\":8,\"box\":2,\"method\":\"set\",\"args\":[6,7]},{\"op\":\"boxcall\",\"dst\":1,\"box\":2,\"method\":\"keys\",\"args\":[]},{\"op\":\"boxcall\",\"dst\":9,\"box\":1,\"method\":\"size\",\"args\":[]},{\"op\":\"copy\",\"dst\":10,\"src\":9}],\"terminator\":{\"op\":\"ret\",\"value\":10}}]}]}"
+
+    local vm_result = HakoruneVmCore.run(mir_json)
+    if vm_result == null {
+      print("[ERROR] VM returned null")
+      return -1
+    }
+
+    // Expected: 2 (size of keys array should be 2)
+    local expected = 2
+    if vm_result != expected {
+      print("[ERROR] Expected " + StringHelpers.int_to_str(expected) + ", got: " + StringHelpers.int_to_str(vm_result))
       return -1
     }
 

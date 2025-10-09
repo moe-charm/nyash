@@ -2,6 +2,8 @@
 //! Minimal TLV utilities extracted for unified facade usage.
 
 use crate::box_trait::NyashBox;
+// For handle-aware encoding of plugin boxes
+use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 /// Encode empty TLV arguments: version=1, argc=0
 pub fn encode_empty_args() -> Vec<u8> {
@@ -21,7 +23,10 @@ pub fn encode_tlv_header(argc: u16) -> Vec<u8> {
 pub fn encode_args(args: &[Box<dyn NyashBox>]) -> Vec<u8> {
     let mut buf = encode_tlv_header(args.len() as u16);
     for a in args {
-        if let Some(i) = crate::runtime::semantics::coerce_to_i64(a.as_ref()) {
+        // Prefer direct handle when argument is a PluginBoxV2
+        if let Some(pb) = a.as_any().downcast_ref::<PluginBoxV2>() {
+            encode::plugin_handle(&mut buf, pb.inner.type_id, pb.instance_id());
+        } else if let Some(i) = crate::runtime::semantics::coerce_to_i64(a.as_ref()) {
             encode::i64(&mut buf, i);
         } else if let Some(s) = crate::runtime::semantics::coerce_to_string(a.as_ref()) {
             encode::string(&mut buf, &s);

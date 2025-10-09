@@ -24,6 +24,13 @@
 | **full** | 15-30分 | 完全マトリックス | 全組み合わせテスト |
 | **plugins** | 数十秒〜 | 任意の補助スイート | using.dylib 自動読み込みなど |
 
+### プロファイル環境オーバーレイ
+
+- 追加の overlay を使う場合は `SMOKES_PROFILE_ENV=<name>` で `configs/env/<name>.env` を読み込む
+- plugin-on（動的プラグイン優先）: `SMOKES_PROFILE_ENV=plugin-on`
+  - 既定で `HAKO_PLUGIN_POLICY=auto` と `NYASH_PLUGIN_CONFIG=hako.toml` を設定
+  - ビルトイン core（String/Array/Map）は disable にしてプラグインパリティを検証
+
 ## 🎯 使用方法
 
 ### 基本実行
@@ -134,9 +141,14 @@ run_test "test_name" {
 - JSONヘッダ受理・emit-only CFG/MIR生成の軽量チェック
 - 既定OFFのトレースは ENV→引数透過（例: `NYASH_EMIT_TRACE=1` → `--emit-trace`）
 - 子プロセス実行は `NYASH_JSON_ONLY=1` を徹底（`NYASH_QUIET` は子に渡さない）
- - 代表ケース（制御フロー）
-   - Jump 単発: `profiles/quick/selfhost/selfhost_mir_m3_jump_vm.sh`
-   - Jump チェーン: `profiles/quick/selfhost/selfhost_mir_m3_jump_chain_vm.sh`
+- 代表ケース（制御フロー）
+  - Jump 単発: `profiles/quick/selfhost/selfhost_mir_m3_jump_vm.sh`
+  - Jump チェーン: `profiles/quick/selfhost/selfhost_mir_m3_jump_chain_vm.sh`
+ - plugin-on 代表（コレクション最小）
+   - String 基本: `profiles/quick/selfhost/plugin_on_string_vm.sh`
+   - Map+Array 合成: `profiles/quick/selfhost/plugin_on_map_array_vm.sh`
+   - Array slice/境界: `profiles/quick/selfhost/plugin_on_array_slice_vm.sh`
+   - Identity（Map.values with Handle）: `profiles/quick/selfhost/plugin_on_map_values_identity_vm.sh`
 
 #### **quick/llvm** - 軽量LLVM/ハーネス・トレース
 - llvmlite ハーネス使用のミニテスト（IRダンプ/trace）

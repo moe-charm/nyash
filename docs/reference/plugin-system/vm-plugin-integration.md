@@ -501,3 +501,34 @@ impl VM {
 ### 返り値（v2.2）
 - プラグインが `tag=8` を返した場合、Loaderは `type_id` からBox型名を逆引きし `PluginBoxV2` を構築
 - 同一ライブラリでなくてもOK（構成ファイル全体から探索）
+
+## Hako ABI Notes — StringBox（plugin‑on 経路）
+
+- 目的: plugin‑on 環境で、受けがホスト String の場合でも TypeBox v2 の StringBox へ正しく橋渡しする。
+- 受けが String のときの呼び出し順序（VM → プラグイン）
+  - size/length/indexOf/lastIndexOf/substring/charAt などの BoxCall に対して、VM は一時的にプラグイン側の StringBox を作成して呼び出す。
+  - 初期化は `birth(s: String)` を優先し、未実装の場合は `fromUtf8(s: String|Bytes)` を利用する。
+  - `size()` 呼び出しは内部で `length()` に正規化される（コレクション API を size 統一で見せつつ、ABI は length を保持）。
+
+### StringBox（TypeBox v2）最小 API
+
+- length(0) -> i64（size の別名）
+- isEmpty(0) -> bool
+- substring(2) -> String
+- indexOf(1..2) -> i64
+- lastIndexOf(1..2) -> i64
+- charAt(1) -> String
+- fromUtf8(1) -> Handle(StringBox)（新規作成）
+
+### 引数エンコード（TLV）と Plugin Handle
+
+- VM→プラグインの引数エンコードは以下の順序で行う。
+  1) PluginBoxV2 は `tag=8 (type_id:u32, instance_id:u32)` として渡す（ハンドル）。
+  2) 数値は i64、文字列は UTF‑8（tag=6）、バイト列は tag=7。
+  3) 上記に当てはまらない Box は `toString()` を UTF‑8 として渡す（暫定）。
+- これにより、`Map.set("k", array)` → `Map.get("k")` で、ArrayBox の「実体同一（identity）」が保持される。
+
+### 返り値の型復元
+
+- プラグインが `tag=8` を返した場合、Loader は `type_id` → `box_type` をメタデータから逆引きし、`PluginBoxV2 { box_type, instance_id }` を生成する。
+  - これにより `MapBox.get()` の戻りが ArrayBox であっても、後続の `a2.size()` は正しく ArrayBox へルーティングされる。

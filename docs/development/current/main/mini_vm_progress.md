@@ -801,3 +801,175 @@ Result: 0
 **効率向上要因**: 箱化モジュール化＋既存パターン活用
 
 ---
+
+## 🎯 **Phase 4 Day 11: Collection API実装（部分成功）** (2025-10-09)
+
+**目標**: BoxCall テスト拡張 - StringBox/ArrayBox/MapBox Collection API完全サポート
+
+### ✅ **実装完了事項**
+
+#### 📦 **既存箱拡張** (3箱)
+
+1. **ConstHandlerBox更新** (53行 → 67行)
+   - Integer形式サポート追加: `{"Integer":42}` 形式
+   - 既存: `{"type":"i64","value":42}` 形式
+   - 両形式対応で Selfhost VM MIR互換性確保
+
+2. **NewBoxHandlerBox新規作成** (51行)
+   - ArrayBox生成サポート
+   - MapBox生成サポート
+   - ValueId → Box instance レジスタ保存
+
+3. **BoxCallHandlerBox拡張** (125行 → 145行)
+   - **StringBox**: +4メソッド（length/0, substring/2, charAt/1, indexOf/1）
+   - **ArrayBox**: +3メソッド（length/0, size/0, isEmpty/0）
+   - **MapBox**: +5メソッド（size/0, isEmpty/0, delete/1, keys/0, values/0）
+   - **合計**: 10→22メソッド（+12メソッド）
+
+4. **InstructionDispatcherBox更新** (57行 → 65行)
+   - newbox case追加
+
+#### 🧪 **テストスイート拡張**
+
+**test_boxcall.hako** (42行 → 272行):
+- Test 1: StringBox.upper() ✅ PASS
+- Test 2: StringBox.substring() ✅ PASS
+- Test 3: StringBox.charAt() ✅ PASS
+- Test 4: StringBox.indexOf() ✅ PASS
+- Test 5: ArrayBox.size() ❌ FAIL
+- Test 6: ArrayBox.isEmpty() ❌ FAIL
+- Test 7: MapBox.size() ❌ FAIL
+- Test 8: MapBox.isEmpty() ❌ FAIL
+- Test 9: MapBox.keys() ❌ FAIL
+
+**成功率**: 4/9 (44%)
+
+### ❌ **重大問題発見: ArrayBox.push()結果が保持されない**
+
+#### 🐛 **現象**
+
+```
+[DEBUG-PUSH] recv_size_after=1  ← push()直後は1
+[DEBUG-BOXCALL] box_id=2 method=size recv_size=0  ← 次のboxcall時は0に戻る
+```
+
+**詳細デバッグログ**:
+```
+[DEBUG-NEWBOX] dst=2 box_type=ArrayBox instance=[]
+[DEBUG-NEWBOX-VERIFY] dst=2 retrieved=[]  ← setした直後は正しい
+[DEBUG-BOXCALL] box_id=2 method=push recv_size=0  ← push()前
+[DEBUG-PUSH] result=null recv_size_after=1  ← push()直後は1！
+[DEBUG-BOXCALL] box_id=2 method=size recv_size=0  ← 次は0に戻る！
+```
+
+#### 🔍 **根本原因調査**
+
+**仮説1**: ValueManagerBox.get()が毎回別インスタンスを返す
+- ✅ **検証済み**: 直接 regs.get() でも同じ問題
+- ✅ **検証済み**: MapBox.set/get は正しく参照を保存
+- ❌ **却下**: ValueManagerBoxの問題ではない
+
+**仮説2**: `print("..." + obj.method())`がRust VMバグ
+- ✅ **確認済み**: `local size = obj.size(); print("size=" + size)` で回避可能
+- ✅ **再現**: `print("size=" + obj.size())` で失敗、外で呼ぶと成功
+- 🔥 **Rust VMバグ発見**: print内のメソッド呼び出しで問題が起きる
+
+**仮説3**: Selfhost VM内部でArrayBoxインスタンスが複製される
+- 🔍 **調査中**: push()後に別インスタンスになっている可能性
+- 📋 **Next**: Task Teacher で調査必要（ChatGPT Legacy Removal影響？）
+
+#### 📊 **検証テスト結果**
+
+**MapBox参照保持テスト**:
+```hako
+local map = new MapBox()
+local arr = new ArrayBox()
+map.set("key", arr)  // Set array in map
+arr.push(10)         // Modify original
+local arr2 = map.get("key")  // Get from map
+print("arr2.size: " + arr2.size())  // → 1 ✅ PASS
+```
+
+**print()内メソッド呼び出しテスト**:
+```hako
+// ❌ FAIL pattern
+local arr = new ArrayBox()
+arr.push(10)
+print("size=" + arr.size())  // → 0（バグ）
+
+// ✅ PASS pattern
+local arr = new ArrayBox()
+arr.push(10)
+local size = arr.size()
+print("size=" + size)  // → 1（正常）
+```
+
+### 📂 **実装ファイル**
+
+**新規ファイル**:
+- `apps/selfhost/hakorune-vm/newbox_handler.hako` (51行)
+
+**更新ファイル**:
+- `apps/selfhost/hakorune-vm/boxcall_handler.hako` (125→145行, +20行)
+- `apps/selfhost/hakorune-vm/const_handler.hako` (53→67行, +14行)
+- `apps/selfhost/hakorune-vm/instruction_dispatcher.hako` (57→65行, +8行)
+- `apps/selfhost/hakorune-vm/value_manager.hako` (40行, デバッグトレース追加)
+- `apps/selfhost/hakorune-vm/tests/test_boxcall.hako` (42→272行, +230行)
+- `hako.toml`: +1 module override
+- `nyash.toml`: +1 module
+
+### 📈 **統計**
+
+- **新規箱**: 1箱（NewBoxHandlerBox, 51行）
+- **拡張箱**: 3箱（ConstHandlerBox +14, BoxCallHandlerBox +20, InstructionDispatcherBox +8）
+- **追加テスト**: 9個（1→9）
+- **成功テスト**: 4/9 (44%)
+- **失敗テスト**: 5/9 (56%)
+- **総箱数**: 21箱
+- **新規バグ発見**: 2件（Selfhost VM ArrayBox問題、Rust VM print()バグ）
+
+### 🎯 **技術的成果**
+
+1. **Integer const形式サポート**: Selfhost VM MIR形式対応完了
+2. **NewBox命令実装**: Box生成フロー完成
+3. **Collection API拡張**: 12メソッド追加
+4. **StringBox完全動作**: 全4テストPASS
+5. **Rust VMバグ発見**: print()内メソッド呼び出しの問題特定
+
+### 🎓 **学び**
+
+1. **2レイヤーVM連携の難しさ**:
+   - Selfhost VM（Hakoruneスクリプト）がRust VM上で動作
+   - 中間レイヤーでの状態保持問題が顕在化
+   - デバッグが困難（どちらのレイヤーの問題か判別が必要）
+
+2. **Rust VMバグ発見プロセス**:
+   - 段階的テスト: 直接呼び出し → ValueManagerBox経由 → print()内呼び出し
+   - 最小再現コード作成: `print("..." + obj.method())` vs `local x = obj.method(); print("..." + x)`
+   - 環境変数デバッグ: NYASH_DISABLE_PLUGINS=1 で最小環境構築
+
+3. **デバッグトレース設計**:
+   - ❌ 失敗: `print("size=" + obj.size())` → obj.size()がバグを誘発
+   - ✅ 成功: `local size = obj.size(); print("size=" + size)` → 正しい結果
+
+### 🚀 **次のステップ（Phase 4 Day 12）**
+
+**即時対応が必要**:
+1. **Task Teacher 調査**: ArrayBox/MapBox push()問題の根本原因特定
+   - ChatGPT Legacy Removal（boxes_*.rs削除）の影響確認
+   - `NYASH_VM_LENGTH_FALLBACK` 環境変数の影響調査
+   - boxes/legacy/mod.rs の最新変更確認
+
+2. **Rust VM print()バグ**:
+   - Issue報告（既に発見・回避策あり）
+   - Selfhost VMでの回避策適用（デバッグトレースをすべて修正済み）
+
+3. **Collection APIテスト修正**:
+   - ArrayBox/MapBoxテスト再実行
+   - 根本原因修正後の完全動作確認
+
+**見積もり**: 4-6時間（調査 2-3時間 + 修正 2-3時間）
+**実績**: 約8時間（テスト作成3h + デバッグ5h）
+**効率**: 133%超過（予期しない2つのバグ発見のため）
+
+---

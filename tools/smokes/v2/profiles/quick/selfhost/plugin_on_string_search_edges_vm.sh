@@ -1,5 +1,5 @@
 #!/bin/bash
-# plugin_on_string_vm.sh — plugin-on overlay String basic ops
+# plugin_on_string_search_edges_vm.sh — plugin-on overlay String find/lastIndexOf edges
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export NYASH_DISABLE_PLUGINS=0
@@ -9,17 +9,14 @@ preflight_plugins || exit 2
 
 ensure_hako_toml
 
-tmpfile=$(mktemp /tmp/plugin_on_string_XXXX.hako)
+tmpfile=$(mktemp /tmp/plugin_on_string_search_edges_XXXX.hako)
 cat >"$tmpfile" << 'SRC'
 static box Main {
   main() {
-    local s = "Nyash"
-    if s.size() != 5 { return 100 }
-    if s.substring(1,3) != "ya" { return 101 }
-    if s.indexOf("a") != 2 { return 102 }
-    if s.lastIndexOf("h") != 4 { return 103 }
-    if s.charAt(0) != "N" { return 104 }
-    if ("").isEmpty() != 1 { return 105 }
+    local s = "Hello, Nyash!"
+    if s.indexOf("Ny") != 7 { return 101 }
+    if s.indexOf("xyz") != -1 { return 102 }
+    if s.lastIndexOf("l") != 3 { return 103 } // H e l l o → last 'l' at index 3
     return 0
   }
 }

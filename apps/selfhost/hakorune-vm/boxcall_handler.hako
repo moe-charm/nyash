@@ -38,6 +38,11 @@ static box BoxCallHandlerBox {
       return Result.Err("boxcall: receiver is null")
     }
 
+    // Debug trace: receiver type (TEMPORARY)
+    // Note: Call receiver.size() outside print() to avoid Rust VM bug
+    local recv_size = receiver.size()
+    print("[DEBUG-BOXCALL] box_id=" + box_id + " method=" + method_name + " recv_size=" + recv_size)
+
     // Dispatch based on method name and arg count
     local arg_count = args_array.size()
     local method_sig = method_name + "/" + arg_count
@@ -67,6 +72,8 @@ static box BoxCallHandlerBox {
     // ArrayBox methods
     else if method_sig == "push/1" {
       result_val = receiver.push(args_array.get(0))
+      local recv_size_after = receiver.size()
+      print("[DEBUG-PUSH] result=" + result_val + " recv_size_after=" + recv_size_after)
     } else if method_sig == "get/1" {
       result_val = receiver.get(args_array.get(0))
     } else if method_sig == "set/2" {

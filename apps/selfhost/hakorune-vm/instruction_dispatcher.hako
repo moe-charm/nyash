@@ -16,6 +16,7 @@ using "apps/selfhost/hakorune-vm/barrier_handler.hako" as BarrierHandlerBox
 using "apps/selfhost/hakorune-vm/typeop_handler.hako" as TypeOpHandlerBox
 using "apps/selfhost/hakorune-vm/mircall_handler.hako" as MirCallHandlerBox
 using "apps/selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
+using "apps/selfhost/hakorune-vm/newbox_handler.hako" as NewBoxHandlerBox
 
 static box InstructionDispatcherBox {
   // Dispatch instruction based on op field
@@ -60,6 +61,7 @@ static box InstructionDispatcherBox {
       "typeop" => TypeOpHandlerBox.handle(inst_json, regs, mem)
       "mir_call" => MirCallHandlerBox.handle(inst_json, regs, mem)
       "boxcall" => BoxCallHandlerBox.handle(inst_json, regs)
+      "newbox" => NewBoxHandlerBox.handle(inst_json, regs)
       _ => Result.Err("unsupported instruction: " + op)
     }
   }

@@ -2,6 +2,7 @@
 # plugin_on_map_array_vm.sh — plugin-on overlay Map/Array basic ops
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+export NYASH_DISABLE_PLUGINS=0
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
@@ -32,4 +33,3 @@ if [ "$out_vm" != "Result: 3" ]; then
 fi
 echo "$out_vm"
 exit 0
-

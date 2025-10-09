@@ -10,8 +10,13 @@ static box ValueManagerBox {
   // Returns: register value or 0 if not set
   get(regs, reg_id) {
     local key = StringHelpers.int_to_str(reg_id)
+    print("[DEBUG-VALUEMGR-GET] reg_id=" + reg_id + " key=" + key)
     local v = regs.get(key)
-    if v == null { return 0 }
+    if v == null {
+      print("[DEBUG-VALUEMGR-GET] v is null, returning 0")
+      return 0
+    }
+    print("[DEBUG-VALUEMGR-GET] v=" + v + " (returning)")
     return v
   }
 

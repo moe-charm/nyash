@@ -55,20 +55,49 @@ impl MirInterpreter {
                 argv.push(self.reg_load(*a)?.to_nyash_box());
             }
             let __birth = method=="birth"; let __key = self.object_key_for(box_val);
+            if std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
+                eprintln!(
+                    "[VM plugin_bridge] invoking {}.{}(argc={}) on instance_id={}",
+                    p.box_type,
+                    method,
+                    argv.len(),
+                    p.inner.instance_id
+                );
+            }
             match host.invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv) {
                 Ok(Some(ret)) => { if __birth { self.contracts_in_birth.remove(&__key); self.lifecycle_contracts_birth(box_val, args.len()); }
+                    if std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
+                        eprintln!(
+                            "[VM plugin_bridge] {}.{} returned {}",
+                            p.box_type,
+                            method,
+                            ret.type_name()
+                        );
+                    }
                     if let Some(d) = dst {
                         self.regs.insert(d, VMValue::from_nyash_box(ret));
                     }
                     Ok(())
                 }
                 Ok(None) => { if __birth { self.contracts_in_birth.remove(&__key); self.lifecycle_contracts_birth(box_val, args.len()); }
+                    if std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
+                        eprintln!(
+                            "[VM plugin_bridge] {}.{} returned <none>",
+                            p.box_type, method
+                        );
+                    }
                     if let Some(d) = dst {
                         self.regs.insert(d, VMValue::Void);
                     }
                     Ok(())
                 }
                 Err(e) => {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
+                        eprintln!(
+                            "[VM plugin_bridge] {}.{} error: {:?}",
+                            p.box_type, method, e
+                        );
+                    }
                     if __birth { self.contracts_in_birth.remove(&__key); }
                     Err(VMError::InvalidInstruction(format!(
                         "BoxCall {}.{} failed: {:?}",
@@ -77,6 +106,44 @@ impl MirInterpreter {
                 }
             }
         } else {
+            // Bridging for core host primitives → plugin TypeBox v2
+            // Route host StringBox methods to plugin StringBox when plugin-only path is enabled.
+            if recv_box.as_any().downcast_ref::<crate::StringBox>().is_some() {
+                let method_norm = match method {
+                    // Unify naming to plugin resolve
+                    "size" => "length",
+                    other => other,
+                };
+                // Create a temporary plugin instance via fromUtf8(s)
+                let s = recv_box.to_string_box().value;
+                let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                let mut bridged_done = false;
+                if let Ok(ro) = host.read() {
+                    // Prefer birth(s) if available; fallback to fromUtf8(s)
+                    let arg1 = Box::new(crate::StringBox::new(s.clone())) as Box<dyn NyashBox>;
+                    let arg2 = Box::new(crate::StringBox::new(s.clone())) as Box<dyn NyashBox>;
+                    let new_handle = ro
+                        .invoke_instance_method("StringBox", "birth", 0, &[arg1])
+                        .or_else(|_| ro.invoke_instance_method("StringBox", "fromUtf8", 0, &[arg2]));
+                    if let Ok(ret) = new_handle {
+                        if let Some(pboxed) = ret {
+                            if let Some(p) = pboxed
+                                .as_any()
+                                .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                            {
+                                // Convert args and invoke desired method on the created instance
+                                let mut argv: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
+                                for a in args { argv.push(self.reg_load(*a).unwrap_or(VMValue::Void).to_nyash_box()); }
+                                if let Ok(r2) = ro.invoke_instance_method("StringBox", method_norm, p.instance_id(), &argv) {
+                                    if let Some(d) = dst { if let Some(ret2) = r2 { self.regs.insert(d, VMValue::from_nyash_box(ret2)); } else { self.regs.insert(d, VMValue::Void); } }
+                                    bridged_done = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                if bridged_done { return Ok(()); }
+            }
             // Special-case: minimal runtime fallback for common InstanceBox methods when
             // lowered functions are not available (dev robustness). Keeps behavior stable
             // without changing semantics in the normal path.

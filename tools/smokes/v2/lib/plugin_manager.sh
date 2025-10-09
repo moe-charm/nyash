@@ -27,7 +27,15 @@ detect_plugin_mode() {
 # 動的プラグイン整合性チェック
 check_dynamic_plugins() {
     local plugin_dir="plugins"
-    local required_plugins=("stringbox" "integerbox" "mathbox")
+    # Logical→actual artifact mapping (any candidate satisfies the requirement)
+    declare -A candidates
+    candidates[stringbox]="nyash-string-plugin/libnyash_string_plugin.so nyash-string-plugin/libnyash_string_plugin.a"
+    candidates[integerbox]="nyash-integer-plugin/libnyash_integer_plugin.so nyash-integer-plugin/libnyash_integer_plugin.a"
+    candidates[mathbox]="nyash-math-plugin/libnyash_math_plugin.so nyash-math-plugin/libnyash_math_plugin.a nyash-math/libnyash_math.so"
+    candidates[arraybox]="nyash-array-plugin/libnyash_array_plugin.so nyash-array-plugin/libnyash_array_plugin.a"
+    candidates[mapbox]="nyash-map-plugin/libnyash_map_plugin.so nyash-map-plugin/libnyash_map_plugin.a"
+
+    local required_plugins=("stringbox" "integerbox" "mathbox" "arraybox" "mapbox")
     local missing_plugins=()
 
     if [ ! -d "$plugin_dir" ]; then
@@ -35,21 +43,39 @@ check_dynamic_plugins() {
         return 0  # 警告のみ、エラーにしない
     fi
 
-    for plugin in "${required_plugins[@]}"; do
-        if [ ! -f "$plugin_dir/${plugin}/${plugin}.so" ]; then
-            missing_plugins+=("$plugin")
-        fi
+    for req in "${required_plugins[@]}"; do
+        local ok=0
+        for cand in ${candidates[$req]:-}; do
+            if [ -f "$plugin_dir/$cand" ]; then ok=1; break; fi
+        done
+        if [ $ok -eq 0 ]; then missing_plugins+=("$req"); fi
     done
 
     if [ ${#missing_plugins[@]} -ne 0 ]; then
+        if [ "${SMOKES_AUTO_BUILD_PLUGINS:-1}" = "1" ]; then
+            rebuild_plugins || true
+            # Recheck
+            local still_missing=()
+            for req in "${required_plugins[@]}"; do
+                local ok=0
+                for cand in ${candidates[$req]:-}; do
+                    if [ -f "$plugin_dir/$cand" ]; then ok=1; break; fi
+                done
+                if [ $ok -eq 0 ]; then still_missing+=("$req"); fi
+            done
+            if [ ${#still_missing[@]} -eq 0 ]; then
+                echo "[INFO] Dynamic plugins present after rebuild" >&2
+                return 0
+            fi
+            missing_plugins=("${still_missing[@]}")
+        fi
         echo "[WARN] Missing dynamic plugins: ${missing_plugins[*]}" >&2
         echo "[INFO] Run: tools/plugin-tester/target/release/plugin-tester build-all" >&2
-        # Export skip hint for test runner when requested
         if [ "${SMOKES_SKIP_WHEN_PLUGINS_MISSING:-0}" = "1" ]; then
             export SMOKES_SKIP_CUR_TEST=1
             export SMOKES_SKIP_REASON="plugins missing: ${missing_plugins[*]}"
         fi
-        return 0  # 警告のみ（skipはランナー側で処理）
+        return 0
     fi
 
     echo "[INFO] Dynamic plugins check passed" >&2
@@ -100,6 +126,14 @@ setup_plugin_env() {
             # 動的プラグイン用環境設定
             export NYASH_DISABLE_PLUGINS=0
             unset NYASH_BACKEND  # デフォルトVM使用
+            # 明示的に nyash.toml を指定して v2 ホストにプロバイダ登録させる
+            if [ -z "${NYASH_PLUGIN_CONFIG:-}" ]; then
+              if [ -f "$NYASH_ROOT/nyash.toml" ]; then
+                export NYASH_PLUGIN_CONFIG="$NYASH_ROOT/nyash.toml"
+              elif [ -f "nyash.toml" ]; then
+                export NYASH_PLUGIN_CONFIG="nyash.toml"
+              fi
+            fi
             echo "[INFO] Configured for dynamic plugins (Rust VM)" >&2
             ;;
         "static")

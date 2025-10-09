@@ -38,6 +38,9 @@ pub(super) fn box_invoke_fn_for_type_id(
             let _ = toml_str; // silence unused warning when feature off
             if let Some((lib_name, box_type)) = find_box_by_type_id(config, &toml_value, type_id) {
                 if let Some(spec) = specs::get_spec(loader, lib_name, box_type) {
+                    if super::util::dbg_on() {
+                        eprintln!("[PluginLoaderV2] metadata: mapping type_id={} -> {}.{} invoke_present={}", type_id, lib_name, box_type, spec.invoke_id.is_some());
+                    }
                     if spec.invoke_id.is_none() && super::util::dbg_on() {
                         eprintln!(
                             "[PluginLoaderV2] WARN: no per-Box invoke for {}.{} (type_id={}). Calls will fail with E_PLUGIN until plugin migrates to v2.",
@@ -53,6 +56,9 @@ pub(super) fn box_invoke_fn_for_type_id(
         for ((_lib, _bt), spec) in map.iter() {
             if let Some(tid) = spec.type_id {
                 if tid == type_id {
+                    if super::util::dbg_on() {
+                        eprintln!("[PluginLoaderV2] metadata(fallback): found tid={} invoke_present={}", tid, spec.invoke_id.is_some());
+                    }
                     return spec.invoke_id;
                 }
             }
