@@ -32,7 +32,7 @@ impl ArrayBox {
     /// 要素を追加
     pub fn push(&self, item: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         self.items.write().unwrap().push(item);
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 最後の要素を取り出す
@@ -216,14 +216,14 @@ impl ArrayBox {
             a_str.cmp(&b_str)
         });
 
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// 配列を反転
     pub fn reverse(&self) -> Box<dyn NyashBox> {
         let mut items = self.items.write().unwrap();
         items.reverse();
-        Box::new(StringBox::new("ok"))
+        Box::new(crate::boxes::null_box::NullBox::new())
     }
 
     /// JSON文字列に変換（ネストも対応）
