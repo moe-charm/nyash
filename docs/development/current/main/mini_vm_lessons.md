@@ -455,4 +455,134 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
 5. **Rust VM PHI バグ修正**（production環境の品質向上）
 
 **次のステップ**:
-- Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）
+- Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）→ 完了！
+
+---
+
+### Day 3: 制御フロー実装 + 箱化モジュール化（2025-10-09）
+
+#### ✅ **成功要因1: 箱化モジュール化戦略**
+
+**ユーザーリクエスト**: 「常に箱化モジュール化でつくってねー　読みやすさ美しさを保ったままつくってね」
+
+**実装アプローチ**:
+1. **BlockMapperBox** (77行) - ブロックマップ作成を分離
+2. **TerminatorHandlerBox** (208行) - Ret/Jump/Branch 処理を分離
+3. **PhiHandlerBox** (223行) - PHI 命令処理を分離
+
+**成果**:
+- **読みやすさ**: 各箱が単一責任を持つ（SRP: Single Responsibility Principle）
+- **美しさ**: 機能ごとに分離され、依存関係が明確
+- **保守性**: 各箱を独立してテスト・修正可能
+- **効率性**: 実装時間が見積もり内（5時間）
+
+**箱化の効果**:
+```hako
+// Before (Day 1-2): すべて HakoruneVmCore 内に実装
+static box HakoruneVmCore {
+  run(mir_json) { ... }
+  _execute_block0(mir_json, regs) { ... }
+  _execute_instructions(insts_json, regs) { ... }
+  _dispatch_instruction(inst_json, regs) { ... }
+  // 389行
+}
+
+// After (Day 3): 機能を箱に分離
+using "apps/selfhost/hakorune-vm/block_mapper.hako" as BlockMapperBox
+using "apps/selfhost/hakorune-vm/terminator_handler.hako" as TerminatorHandlerBox
+using "apps/selfhost/hakorune-vm/phi_handler.hako" as PhiHandlerBox
+
+static box HakoruneVmCore {
+  run(mir_json) {
+    local regs = new MapBox()
+    return me._execute_blocks(mir_json, regs)
+  }
+
+  _execute_blocks(mir_json, regs) {
+    local block_map = BlockMapperBox.build_map(mir_json)
+    // ...
+    PhiHandlerBox.handle_phi_instructions(block_json, regs, predecessor)
+    // ...
+    TerminatorHandlerBox.handle_terminator(block_json, regs)
+  }
+}
+```
+
+---
+
+#### ✅ **成功要因2: 最小テストケースによるデバッグ**
+
+**問題**: 初回テスト時に「コアダンプ」と誤認（実際はタイムアウト不足）
+
+**デバッグ手順**:
+1. **最小テスト作成**: Jump のみ → ✅ 成功
+2. **Branch テスト**: true/false 分岐 → ✅ 成功
+3. **PHI テスト**: 値マージ → ✅ 成功
+4. **複数テスト**: 2つずつ実行 → ✅ 成功
+5. **全テスト**: タイムアウト30秒に延長 → ✅ 全5テストPASS
+
+**学び**:
+- **個別テスト**: 各機能を独立して確認
+- **段階的統合**: 2つ→3つ→5つと増やして確認
+- **タイムアウト設定**: 複雑なテストは十分な時間を確保
+
+---
+
+#### ✅ **成功要因3: PHI 処理の正確な実装**
+
+**PHI 命令の役割**: 複数のブロックから来た値をマージ
+
+**実装ポイント**:
+```hako
+// PhiHandlerBox.handle_phi_instructions()
+// predecessor を使って正しい値を選択
+
+{"op":"phi","dst":6,"inputs":[[1,4],[2,5]]}
+//                              ↑ block_id, value_id
+
+// predecessor=1 の場合 → value_id=4 を選択
+// predecessor=2 の場合 → value_id=5 を選択
+```
+
+**Rust VM PHI バグ修正（Day 2）との連携**:
+- Day 2 で else-if の PHI バグ修正
+- Day 3 で PHI 命令を実装
+- 両方の知識が統合されて正確な実装が可能に
+
+---
+
+#### 📊 **Day 3 統計**
+
+- **見積もり**: 4-6時間
+- **実績**: 約5時間（箱化により効率的）
+- **超過なし**: 見積もり内で完了 ✅
+- **コード行数**: +508行（3箱: 508行、テスト: 103行、Core拡張: +100行）
+- **実装命令数**: 12/16（+3: Phi, Jump, Branch）
+- **テスト成功率**: 5/5 (100%) 🎉
+- **新規箱作成**: 3箱（BlockMapper, TerminatorHandler, PhiHandler）
+
+---
+
+#### 🎯 **学び**
+
+1. **箱化モジュール化の威力**: 機能分離により実装・デバッグが容易になる
+2. **単一責任原則**: 各箱が1つの機能だけを持つと保守性が向上
+3. **最小テストケース**: 個別テストで各機能を確認してから統合
+4. **タイムアウト設定**: 複雑なテストは十分なタイムアウトが必要
+5. **PHI処理**: predecessor 記録が重要（どのブロックから来たか）
+6. **段階的デバッグ**: 1つずつ確認してから全体を実行
+
+---
+
+#### ✅ **Phase 1 Day 3 完全完了！** 🎉
+
+**技術的成果**:
+1. **箱化モジュール化**: 3つの新箱作成（508行）
+2. **Branch 命令実装**: condition に応じて then_bb/else_bb を選択
+3. **Jump 命令実装**: 無条件に target ブロックへジャンプ
+4. **Phi 命令実装**: predecessor を使って複数パスからの値をマージ
+5. **複数ブロック実行**: ブロックマップ + ループで任意の制御フローを実行
+6. **全テストPASS**: 5/5 (100%)
+
+**次のステップ**:
+- Phase 1 Day 4以降: 残り命令実装（TypeOp/Load/Store/ExternCall等）

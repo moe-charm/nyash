@@ -247,4 +247,62 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
 5. **デバッグトレース**: print デバッグは変数の直前/直後に入れるべき
 
 **次のステップ**:
-- [ ] Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）
+- [x] Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）→ 完了！
+
+---
+
+### Day 3: 制御フロー実装（Branch/Jump/Phi）+ 箱化モジュール化 (2025-10-09 完了✅)
+
+**目標**: 複数ブロック実行・Branch/Jump/Phi 実装 + 箱化モジュール化
+
+**完了事項**:
+- ✅ **3つの新箱作成（箱化モジュール化戦略）**:
+  1. **BlockMapperBox** (77行) - ブロックマップ作成
+  2. **TerminatorHandlerBox** (208行) - Ret/Jump/Branch 処理
+  3. **PhiHandlerBox** (223行) - PHI 命令処理（predecessor を使って値マージ）
+
+- ✅ **HakoruneVmCore 拡張**:
+  - `_execute_blocks()` - 複数ブロック実行ループ（新規）
+  - `_execute_instructions_in_block()` - ブロック内命令実行（新規）
+  - `_dispatch_instruction()` - PHIスキップ追加
+
+- ✅ **テストケース作成**:
+  - `test_phase1_day3.hako` (5テストケース)
+    1. Simple Jump (block 0 → block 1)
+    2. Branch (true path: 1 == 1 → 100)
+    3. Branch (false path: 1 == 2 → 200)
+    4. PHI merge (then path: 15 > 10 → 42)
+    5. PHI merge (else path: 5 > 10 → 24)
+
+- ✅ **全テストPASS**: 5/5 (100%) 🎉
+
+**実装ファイル**:
+- `apps/selfhost/hakorune-vm/block_mapper.hako` (77行)
+- `apps/selfhost/hakorune-vm/terminator_handler.hako` (208行)
+- `apps/selfhost/hakorune-vm/phi_handler.hako` (223行)
+- `apps/selfhost/hakorune-vm/hakorune_vm_core.hako` (拡張: +100行)
+- `apps/selfhost/hakorune-vm/tests/test_phase1_day3.hako` (103行)
+
+**技術的成果**:
+1. **箱化モジュール化**: 各機能を独立した箱に分離（読みやすさ・美しさ・保守性向上）
+2. **Branch 命令実装**: condition に応じて then_bb/else_bb を選択
+3. **Jump 命令実装**: 無条件に target ブロックへジャンプ
+4. **Phi 命令実装**: predecessor を使って複数パスからの値をマージ
+5. **複数ブロック実行**: ブロックマップ + ループで任意の制御フローを実行
+
+**見積もり**: 4-6時間
+**実績**: 約5時間（箱化により効率的）
+
+**デバッグ結果**:
+- 初回テスト時: コアダンプと誤認（実際はタイムアウト不足）
+- 個別テスト: すべて成功（Jump/Branch/Phi 動作確認）
+- 最終テスト: 全5テストPASS（タイムアウト30秒で実行）
+
+**学び**:
+1. **箱化モジュール化の威力**: 機能分離により実装・デバッグが容易
+2. **最小テストケース**: 個別テストで各機能を確認してから統合
+3. **タイムアウト設定**: 複雑なテストは十分なタイムアウトが必要
+4. **PHI処理**: predecessor 記録が重要（どのブロックから来たか）
+
+**次のステップ**:
+- Phase 1 Day 4以降: 残り命令実装（TypeOp/Load/Store/ExternCall等）
