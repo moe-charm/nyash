@@ -117,6 +117,17 @@ impl StringBox {
         Box::new(IntegerBox::new(n))
     }
 
+    /// size() alias for length() to unify collection API
+    pub fn size(&self) -> Box<dyn NyashBox> {
+        self.length()
+    }
+
+    /// isEmpty(): true when string length is zero
+    pub fn isEmpty(&self) -> Box<dyn NyashBox> {
+        use crate::box_trait::BoolBox;
+        Box::new(BoolBox::new(self.value.is_empty()))
+    }
+
     /// Convert string to integer (parse as i64)
     pub fn to_integer(&self) -> Box<dyn NyashBox> {
         use crate::box_trait::IntegerBox;

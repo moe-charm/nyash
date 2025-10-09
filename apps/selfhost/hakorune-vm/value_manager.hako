@@ -10,12 +10,9 @@ static box ValueManagerBox {
   // Returns: register value or 0 if not set
   get(regs, reg_id) {
     local key = StringHelpers.int_to_str(reg_id)
-    // Fix: MapBox.get() returns StringBox("Key not found") instead of null
-    // Must use has() to check existence first
-    if regs.has(key) {
-      return regs.get(key)
-    }
-    return 0
+    local v = regs.get(key)
+    if v == null { return 0 }
+    return v
   }
 
   // Set register value

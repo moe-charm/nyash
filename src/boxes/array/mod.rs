@@ -97,6 +97,11 @@ impl ArrayBox {
         }
     }
 
+    /// 空配列かどうか
+    pub fn isEmpty(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.items.read().unwrap().is_empty()))
+    }
+
     /// 要素を削除
     pub fn remove(&self, index: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         if let Some(idx_box) = index.as_any().downcast_ref::<IntegerBox>() {

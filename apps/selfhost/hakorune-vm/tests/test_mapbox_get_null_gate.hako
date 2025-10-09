@@ -1,0 +1,16 @@
+// Requires: HAKO_MAP_GET_NULL=1 (or NYASH_MAP_GET_NULL=1)
+// Purpose: when the gate is ON, MapBox.get(missing) must return null
+
+static box Main {
+  main() {
+    local m = new MapBox()
+    local v = m.get("missing")
+    if v == null {
+      print("OK: get(missing) -> null")
+      return 0
+    }
+    print("FAIL: expected null; got: " + v)
+    return 1
+  }
+}
+

@@ -40,6 +40,11 @@ pub(super) fn try_handle_array_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
+                "isEmpty" => {
+                    let is_empty = ab.len() == 0;
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Bool(is_empty)); }
+                    return Ok(true);
+                }
                 "get" => {
                     if args.len() != 1 {
                         if crate::config::env::check_contracts() {

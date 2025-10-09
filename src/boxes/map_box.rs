@@ -136,6 +136,10 @@ impl MapBox {
     }
 
     /// 値を取得
+    ///
+    /// Note:
+    /// - Default (compat): returns StringBox("Key not found: …") on missing key
+    /// - When HAKO_MAP_GET_NULL=1 (or NYASH_MAP_GET_NULL=1): returns NullBox on missing key
     pub fn get(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
         let guard = self.data.read().unwrap();
@@ -166,6 +170,9 @@ impl MapBox {
                 if map_trace_enabled() {
                     eprintln!("[MapBox] get: key=\"{}\" -> miss", key_str);
                 }
+                if map_get_null_enabled() {
+                    return Box::new(crate::boxes::null_box::NullBox::new());
+                }
                 if map_suggest_enabled() {
                     let mut cands: Vec<(i32, &String)> = guard
                         .keys()
@@ -187,6 +194,11 @@ impl MapBox {
                 }
             }
         }
+    }
+
+    /// 空かどうか
+    pub fn isEmpty(&self) -> Box<dyn NyashBox> {
+        Box::new(BoolBox::new(self.data.read().unwrap().is_empty()))
     }
 
     /// キーが存在するかチェック
@@ -319,6 +331,20 @@ fn map_trace_enabled() -> bool {
 fn map_suggest_enabled() -> bool {
     static FLAG: OnceLock<bool> = OnceLock::new();
     *FLAG.get_or_init(|| matches!(std::env::var("HAKO_MAP_SUGGEST").ok().as_deref(), Some("1"|"true"|"on")))
+}
+
+#[inline]
+fn map_get_null_enabled() -> bool {
+    static FLAG: OnceLock<bool> = OnceLock::new();
+    *FLAG.get_or_init(|| {
+        match std::env::var("HAKO_MAP_GET_NULL").ok().as_deref() {
+            Some("1") | Some("true") | Some("on") => true,
+            _ => match std::env::var("NYASH_MAP_GET_NULL").ok().as_deref() {
+                Some("1") | Some("true") | Some("on") => true,
+                _ => false,
+            },
+        }
+    })
 }
 
 #[inline]

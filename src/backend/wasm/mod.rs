@@ -103,9 +103,16 @@ impl WasmBackend {
 
     /// Compile MIR module to WAT text format (for debugging)
     pub fn compile_to_wat(&mut self, mir_module: MirModule) -> Result<String, WasmError> {
+        // Optional lowering: normalize BoxCall to Method/Extern for WASM path
+        let mm = if crate::config::env::wasm_lower_boxcall() {
+            // Lower on a cloned module to keep caller’s copy intact
+            crate::backend::wasm::BoxCallEliminator::lower_module(&mir_module)
+        } else {
+            mir_module
+        };
         let wasm_module =
             self.codegen
-                .generate_module(mir_module, &self.memory_manager, &self.runtime)?;
+                .generate_module(mm, &self.memory_manager, &self.runtime)?;
         Ok(wasm_module.to_wat())
     }
 

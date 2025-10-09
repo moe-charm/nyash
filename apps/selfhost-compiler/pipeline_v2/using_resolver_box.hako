@@ -119,11 +119,9 @@ box UsingResolverBox {
   //    If only a full ns is present (collector shape), alias == ns
   resolve_namespace_alias(alias) {
     if alias == null { return null }
+    // After unification: alias_names.get() returns null when missing
     local ns = me.alias_names.get(alias)
-    if ns != null {
-      local s = "" + ns
-      if RegexFlow.find_from(s, "Key not found:", 0) < 0 { return ns }
-    }
+    if ns != null { return ns }
     // fallback: if alias happens to be a full ns key in modules, accept it
     if me.modules_map.has(alias) == 1 { return alias }
     return null

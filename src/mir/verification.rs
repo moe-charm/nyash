@@ -113,6 +113,11 @@ impl MirVerifier {
             }
         }
 
+        // 9.7. Unified Call invariants
+        if let Err(mut call_errors) = self.verify_calls(function) {
+            local_errors.append(&mut call_errors);
+        }
+
         // 10. PHI-off strict edge-copy policy (optional)
         if crate::config::env::mir_no_phi() && crate::config::env::verify_edge_copy_strict() {
             if let Err(mut ecs) = self.verify_edge_copy_strict(function) {
@@ -326,6 +331,28 @@ impl MirVerifier {
     /// In merge blocks, values coming from predecessors must be routed through Phi.
     fn verify_merge_uses(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
         cfg::check_merge_uses(function)
+    }
+
+    /// Verify unified Call invariants
+    fn verify_calls(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
+        use crate::mir::MirInstruction as I;
+        let mut errors = Vec::new();
+        for (bid, block) in &function.blocks {
+            for (idx, inst) in block.instructions.iter().enumerate() {
+                if let I::Call { callee, .. } = inst {
+                    if callee.is_none() {
+                        errors.push(VerificationError::LegacyCallMissingCallee { block: *bid, instruction_index: idx });
+                        continue;
+                    }
+                    if let Some(crate::mir::definitions::Callee::Method { receiver, method, certainty, .. }) = callee {
+                        if matches!(certainty, crate::mir::definitions::call_unified::TypeCertainty::Known) && receiver.is_none() {
+                            errors.push(VerificationError::MethodReceiverMissing { block: *bid, instruction_index: idx, method: method.clone() });
+                        }
+                    }
+                }
+            }
+        }
+        if errors.is_empty() { Ok(()) } else { Err(errors) }
     }
 
     /// Get all verification errors from the last run

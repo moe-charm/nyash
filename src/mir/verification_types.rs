@@ -12,6 +12,17 @@ pub enum VerificationError {
         block: BasicBlockId,
         instruction_index: usize,
     },
+    /// Unified Call must specify typed callee (legacy func-only form is forbidden)
+    LegacyCallMissingCallee {
+        block: BasicBlockId,
+        instruction_index: usize,
+    },
+    /// Method calls must have an explicit receiver (Known certainty)
+    MethodReceiverMissing {
+        block: BasicBlockId,
+        instruction_index: usize,
+        method: String,
+    },
     MultipleDefinition {
         value: ValueId,
         first_block: BasicBlockId,
@@ -235,6 +246,20 @@ impl std::fmt::Display for VerificationError {
                 write!(
                     f,
                     "Static box field access is forbidden in block {} at {} via {} (use methods or instance boxes)",
+                    block, instruction_index, method
+                )
+            }
+            VerificationError::LegacyCallMissingCallee { block, instruction_index } => {
+                write!(
+                    f,
+                    "Unified Call missing typed callee in block {} at {} (use MirCall with callee=...)",
+                    block, instruction_index
+                )
+            }
+            VerificationError::MethodReceiverMissing { block, instruction_index, method } => {
+                write!(
+                    f,
+                    "Method receiver missing in block {} at {} for {} (receiver must be explicit when Known)",
                     block, instruction_index, method
                 )
             }

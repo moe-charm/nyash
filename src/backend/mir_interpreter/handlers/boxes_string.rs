@@ -23,6 +23,16 @@ pub(super) fn try_handle_string_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
+                "size" => {
+                    let ret = sb.length();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
+                    return Ok(true);
+                }
+                "isEmpty" => {
+                    let is_empty = sb.value.is_empty();
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Bool(is_empty)); }
+                    return Ok(true);
+                }
                 "indexOf" => {
                     // Enforce arity=1 (Fail‑Fast). Previously a dev-only 2-arg form existed but was inconsistent.
                     if args.len() != 1 {
@@ -87,6 +97,22 @@ pub(super) fn try_handle_string_box(
                     let chars: Vec<char> = sb.value.chars().collect();
                     let sub: String = chars[start..end].iter().collect();
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(Box::new(crate::box_trait::StringBox::new(sub)))) ; }
+                    return Ok(true);
+                }
+                "charAt" => {
+                    if args.len() != 1 {
+                        if crate::config::env::check_contracts() {
+                            eprintln!(r#"{{"kind":"contracts_arity","box":"StringBox","method":"charAt","expected":1,"got":{}}}"#, args.len());
+                        }
+                        return Err(VMError::InvalidInstruction("charAt expects 1 arg".into()));
+                    }
+                    let idx = this.reg_load(args[0])?.as_integer().unwrap_or(-1);
+                    let ch = if idx >= 0 { sb.value.chars().nth(idx as usize) } else { None };
+                    let out = match ch {
+                        Some(c) => Box::new(crate::box_trait::StringBox::new(c.to_string())),
+                        None => Box::new(crate::box_trait::StringBox::new("")),
+                    };
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(out)); }
                     return Ok(true);
                 }
                 "concat" => {

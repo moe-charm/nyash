@@ -1,0 +1,50 @@
+## Externs Registry — SSOT (minimal)
+## name: fully-qualified extern name (iface.method)
+## argc: number of arguments
+## io:   whether the call performs I/O (affects effects mask)
+
+[[extern]]
+name = "env.console.log"
+argc = 1
+io = true
+
+[[extern]]
+name = "env.console.warn"
+argc = 1
+io = true
+
+[[extern]]
+name = "env.console.error"
+argc = 1
+io = true
+
+[[extern]]
+name = "env.future.new"
+argc = 1
+io = true
+
+[[extern]]
+name = "env.future.set"
+argc = 2
+io = true
+
+[[extern]]
+name = "env.future.await"
+argc = 1
+io = true
+
+[[extern]]
+name = "env.local.get"
+argc = 1
+io = false
+
+[[extern]]
+name = "nyrt.ops.op_eq"
+argc = 2
+io = false
+
+[[extern]]
+name = "env.debug.trace"
+argc = 1
+io = true
+

@@ -68,6 +68,13 @@ VM plugin routing
 - NYASH_VM_PLUGIN_PREFER_STRING=1: prefer plugin provider for StringBox
 - NYASH_VM_PLUGIN_PREFER_ARRAY=1: prefer plugin provider for ArrayBox
 - NYASH_VM_PLUGIN_PREFER_MAP=1: prefer plugin provider for MapBox
+
+## Collections & Map behavior (temporary migration flags)
+
+- HAKO_MAP_GET_NULL=1 (alias: NYASH_MAP_GET_NULL=1):
+  - Changes `MapBox.get(missing)` to return `null` (NullBox) instead of `StringBox("Key not found: …")`.
+  - Default: OFF (compatibility). Use for gradual migration to the unified collection interface.
+  - Scope: runtime only; affects both VM and LLVM paths where MapBox is handled by core.
   Notes: runner merges these into NYASH_PLUGIN_OVERRIDE_TYPES and rebuilds the unified registry.
 
 Retired (routing removed)

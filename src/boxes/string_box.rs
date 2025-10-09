@@ -113,6 +113,24 @@ impl StringBox {
         Box::new(StringBox::new(self.value.trim()))
     }
 
+    /// size() alias for length (codepoint-aware under NYASH_STR_CP)
+    pub fn size(&self) -> Box<dyn NyashBox> {
+        use crate::box_trait::IntegerBox;
+        let use_cp = std::env::var("NYASH_STR_CP").ok().as_deref() == Some("1");
+        let n = if use_cp {
+            self.value.chars().count() as i64
+        } else {
+            self.value.len() as i64
+        };
+        Box::new(IntegerBox::new(n))
+    }
+
+    /// isEmpty(): true when string length is zero
+    pub fn isEmpty(&self) -> Box<dyn NyashBox> {
+        use crate::box_trait::BoolBox;
+        Box::new(BoolBox::new(self.value.is_empty()))
+    }
+
     /// Convert to uppercase
     pub fn to_upper(&self) -> Box<dyn NyashBox> {
         Box::new(StringBox::new(self.value.to_uppercase()))

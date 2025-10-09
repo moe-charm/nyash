@@ -99,6 +99,16 @@ pub(super) fn try_handle_map_box(
                     if let Some(d) = dst { this.regs.insert(d, VMValue::from_nyash_box(ret)); }
                     return Ok(true);
                 }
+                "isEmpty" => {
+                    // Compute via size()==0 to avoid exposing internals
+                    let n = mb.size();
+                    let is_empty = match n.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                        Some(i) => i.value == 0,
+                        None => false,
+                    };
+                    if let Some(d) = dst { this.regs.insert(d, VMValue::Bool(is_empty)); }
+                    return Ok(true);
+                }
                 "toJSON" => {
                     if !args.is_empty() {
                         if crate::config::env::check_contracts() {

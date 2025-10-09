@@ -25,6 +25,7 @@ mod parser;
 mod plugin;
 mod runtime;
 mod features;
+mod wasm;
 
 // Re-export all public functions
 pub use core::*;
@@ -37,3 +38,4 @@ pub use parser::*;
 pub use plugin::*;
 pub use runtime::*;
 pub use features::*;
+pub use wasm::*;

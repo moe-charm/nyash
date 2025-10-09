@@ -109,12 +109,11 @@ static box PhiHandlerBox {
       return Result.Ok(0)
     }
 
-    // Load value from register
-    // Fix: MapBox.get() returns StringBox("Key not found") instead of null
+    // Load value from register (get() -> null if missing)
     local value_key = StringHelpers.int_to_str(value_id)
-    local value = 0
-    if regs.has(value_key) {
-      value = regs.get(value_key)
+    local value = regs.get(value_key)
+    if value == null {
+      value = 0
     }
 
     // Store in dst register
