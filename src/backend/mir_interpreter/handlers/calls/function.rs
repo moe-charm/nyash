@@ -5,6 +5,74 @@
 use super::super::*;
 
 impl MirInterpreter {
+    /// Helper: Check reentrancy and emit trace if enabled.
+    /// Returns depth on success, or error if limit exceeded.
+    fn check_and_trace_reenter(
+        &mut self,
+        prefix: &str,
+        func_name: &str,
+        argc: usize,
+    ) -> Result<(), VMError> {
+        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
+            let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
+            let key = format!("{}:{}:{}", prefix, clean, argc);
+            let depth = match crate::common::reenter_guard::bump_and_check(
+                &mut self.reenter_count,
+                &key,
+                crate::config::env::vm_reenter_limit()
+            ) {
+                Ok(d) => d,
+                Err(e) => return Err(VMError::InvalidInstruction(e)),
+            };
+            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) {
+                eprintln!("[vm-reenter] {} depth={}", key, depth);
+            }
+        }
+        Ok(())
+    }
+
+    /// Helper: Emit detailed arg trace for diagnosing arg marshalling.
+    /// Dev-only, enabled by NYASH_VM_CALL_ARG_TRACE=1.
+    fn emit_call_arg_trace(&mut self, prefix: &str, func_name: &str, args: &[ValueId]) {
+        if !super::super::VmConfig::global().call_arg_trace {
+            return;
+        }
+        let mut kinds: Vec<String> = Vec::new();
+        let mut preview: Vec<String> = Vec::new();
+        for a in args.iter().take(3) {
+            match self.reg_load(*a) {
+                Ok(v) => {
+                    kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
+                    preview.push(match v {
+                        VMValue::Integer(n) => format!("i64:{}", n),
+                        VMValue::Float(f) => format!("f64:{:.3}", f),
+                        VMValue::Bool(b) => format!("bool:{}", b),
+                        VMValue::String(ref s) => format!("str:'{}'", s),
+                        VMValue::Void => "void".into(),
+                        VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
+                        VMValue::Future(_) => "future".into(),
+                    });
+                }
+                Err(e) => {
+                    kinds.push("<err>".into());
+                    preview.push(format!("err:{:?}", e));
+                }
+            }
+        }
+        eprintln!(
+            "[vm-args] callee={}:{} argc={} a0={:?} a1={:?} a2={:?} kind0={} kind1={} kind2={}",
+            prefix,
+            func_name,
+            args.len(),
+            preview.get(0),
+            preview.get(1),
+            preview.get(2),
+            kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
+            kinds.get(1).map(|s| s.as_str()).unwrap_or("-"),
+            kinds.get(2).map(|s| s.as_str()).unwrap_or("-")
+        );
+    }
+
     /// Dev-only bridge: JSON.stringify(any) when invoked as a Global callee.
     /// Returns Some(result) to short-circuit normal flow.
     pub(crate) fn try_dev_json_stringify_bridge_global(
@@ -30,16 +98,7 @@ impl MirInterpreter {
         func_name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
-        // Dev: naive reentrancy counter (best-effort)
-        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
-            let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
-            let key = format!("Global:{}:{}", clean, args.len());
-            let depth = match crate::common::reenter_guard::bump_and_check(&mut self.reenter_count, &key, crate::config::env::vm_reenter_limit()) {
-                Ok(d) => d,
-                Err(e) => return Err(VMError::InvalidInstruction(e)),
-            };
-            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, depth); }
-        }
+        self.check_and_trace_reenter("Global", func_name, args.len())?;
         // Narrow safety valve to break Json* index_of_from recursion (dev):
         // Handle dotted canonical or base names here when arity==3.
         if args.len() == 3 {
@@ -55,42 +114,7 @@ impl MirInterpreter {
         if let Some(r) = self.try_dev_json_stringify_bridge_global(func_name, args) { return r; }
         let label = format!("Global:{}", func_name);
         self.emit_call_trace_label(&label, args.len(), None);
-        // Dev-only: detailed arg trace for diagnosing arg marshalling (static/global)
-        if std::env::var("NYASH_VM_CALL_ARG_TRACE").ok().as_deref() == Some("1") {
-            let mut kinds: Vec<String> = Vec::new();
-            let mut preview: Vec<String> = Vec::new();
-            for (_i, a) in args.iter().enumerate().take(3) {
-                match self.reg_load(*a) {
-                    Ok(v) => {
-                        kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
-                        preview.push(match v {
-                            VMValue::Integer(n) => format!("i64:{}", n),
-                            VMValue::Float(f) => format!("f64:{:.3}", f),
-                            VMValue::Bool(b) => format!("bool:{}", b),
-                            VMValue::String(ref s) => format!("str:'{}'", s),
-                            VMValue::Void => "void".into(),
-                            VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
-                            VMValue::Future(_) => "future".into(),
-                        });
-                    }
-                    Err(e) => {
-                        kinds.push("<err>".into());
-                        preview.push(format!("err:{:?}", e));
-                    }
-                }
-            }
-            eprintln!(
-                "[vm-args] callee=Global:{} argc={} a0={:?} a1={:?} a2={:?} kind0={} kind1={} kind2={}",
-                func_name,
-                args.len(),
-                preview.get(0),
-                preview.get(1),
-                preview.get(2),
-                kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
-                kinds.get(1).map(|s| s.as_str()).unwrap_or("-"),
-                kinds.get(2).map(|s| s.as_str()).unwrap_or("-")
-            );
-        }
+        self.emit_call_arg_trace("Global", func_name, args);
         let r = self.execute_global_function(func_name, args);
         if let Ok(ref v) = r { self.maybe_register_scope_value(v); }
         r
@@ -111,16 +135,7 @@ impl MirInterpreter {
         func_name: &str,
         args: &[ValueId],
     ) -> Result<VMValue, VMError> {
-        // Dev: naive reentrancy counter (best-effort)
-        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
-            let clean = if let Some(pos) = func_name.rfind('/') { &func_name[..pos] } else { func_name };
-            let key = format!("Global:{}:{}", clean, args.len());
-            let depth = match crate::common::reenter_guard::bump_and_check(&mut self.reenter_count, &key, crate::config::env::vm_reenter_limit()) {
-                Ok(d) => d,
-                Err(e) => return Err(VMError::InvalidInstruction(e)),
-            };
-            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, depth); }
-        }
+        self.check_and_trace_reenter("Global", func_name, args.len())?;
         match func_name {
             "nyash.builtin.print" | "print" | "nyash.console.log" => {
                 if let Some(arg_id) = args.get(0) {
@@ -274,16 +289,7 @@ impl MirInterpreter {
         name: &str,
         args: &[ValueId],
         ) -> Result<VMValue, VMError> {
-        // Dev: naive reentrancy counter (best-effort)
-        if crate::config::env::vm_reenter_trace() || crate::config::env::vm_reenter_limit().is_some() {
-            let clean = if let Some(pos) = name.rfind('/') { &name[..pos] } else { name };
-            let key = format!("ModuleFn:{}:{}", clean, args.len());
-            let depth = match crate::common::reenter_guard::bump_and_check(&mut self.reenter_count, &key, crate::config::env::vm_reenter_limit()) {
-                Ok(d) => d,
-                Err(e) => return Err(VMError::InvalidInstruction(e)),
-            };
-            if crate::config::env::vm_reenter_trace() && (depth == 64 || depth % 256 == 0) { eprintln!("[vm-reenter] {} depth={}", key, depth); }
-        }
+        self.check_and_trace_reenter("ModuleFn", name, args.len())?;
         // Dev safety valve: intercept hot recursive helpers to avoid resolver-induced cycles.
         // JsonCursorBox.index_of_from/3 and JsonFragBox.index_of_from/3 are pure functions;
         // implement minimal native evaluation to break potential recursion.
@@ -345,41 +351,7 @@ impl MirInterpreter {
         }
         let label = format!("ModuleFn:{}", name);
         self.emit_call_trace_label(&label, args.len(), None);
-        if super::super::VmConfig::global().call_arg_trace {
-            let mut kinds: Vec<String> = Vec::new();
-            let mut preview: Vec<String> = Vec::new();
-            for (_i, a) in args.iter().enumerate().take(3) {
-                match self.reg_load(*a) {
-                    Ok(v) => {
-                        kinds.push(crate::backend::abi_util::tag_of_vm(&v).to_string());
-                        preview.push(match v {
-                            VMValue::Integer(n) => format!("i64:{}", n),
-                            VMValue::Float(f) => format!("f64:{:.3}", f),
-                            VMValue::Bool(b) => format!("bool:{}", b),
-                            VMValue::String(ref s) => format!("str:'{}'", s),
-                            VMValue::Void => "void".into(),
-                            VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
-                            VMValue::Future(_) => "future".into(),
-                        });
-                    }
-                    Err(e) => {
-                        kinds.push("<err>".into());
-                        preview.push(format!("err:{:?}", e));
-                    }
-                }
-            }
-            eprintln!(
-                "[vm-args] callee=ModuleFn:{} argc={} a0={:?} a1={:?} a2={:?} kind0={} kind1={} kind2={}",
-                name,
-                args.len(),
-                preview.get(0),
-                preview.get(1),
-                preview.get(2),
-                kinds.get(0).map(|s| s.as_str()).unwrap_or("-"),
-                kinds.get(1).map(|s| s.as_str()).unwrap_or("-"),
-                kinds.get(2).map(|s| s.as_str()).unwrap_or("-")
-            );
-        }
+        self.emit_call_arg_trace("ModuleFn", name, args);
 
         // Normalize name: ensure canonical "/arity" suffix
         let want_name = if name.contains('/') {
