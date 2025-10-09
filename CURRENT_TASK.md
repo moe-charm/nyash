@@ -4,11 +4,11 @@
 
 ---
 
-## 🎯 **Current Phase: Hakorune VM Phase 1 Day 3完了、次はPhase 2開始**
+## 🎯 **Current Phase: Hakorune VM Phase 2 Day 4完了（UnaryOp実装）**
 
-**完了**: Phase 1 Day 1-3（基盤構築・演算・制御フロー・箱化モジュール化）
-**次のステップ**: Phase 2（UnaryOp/TypeOp/Load/Store実装）または Phase 4（Call/BoxCall実装）
-**進捗率**: 12/16命令実装（75%）
+**完了**: Phase 1 Day 1-3 + Phase 2 Day 4（基盤構築・演算・制御フロー・単項演算・箱化モジュール化）
+**次のステップ**: Phase 2 Day 5-6（TypeOp/Load/Store実装）または Phase 4（Call/BoxCall実装）
+**進捗率**: 13/16命令実装（81%）
 
 ---
 
@@ -46,23 +46,48 @@
 
 ---
 
-## 📊 **実装済み命令（12/16 = 75%）**
+### ✅ **Phase 2開始: 単項演算（Day 4）**
 
-1. ✅ **Const** - 定数読み込み
-2. ✅ **BinOp** - 算術演算（Add/Sub/Mul/Div/Mod）
-3. ✅ **Compare** - 比較演算（Eq/Ne/Lt/Le/Gt/Ge）
-4. ✅ **Copy** - 値コピー
-5. ✅ **Return** - 関数からreturn
-6. ✅ **Branch** - 条件分岐
-7. ✅ **Jump** - 無条件ジャンプ
-8. ✅ **Phi** - SSA値マージ
+#### **Day 4: UnaryOp実装** (2025-10-09)
+- ✅ UnaryOpHandlerBox 作成（63行）
+- ✅ 3種類の演算実装: Neg/Not/BitNot
+- ✅ InstructionDispatcherBox 更新（unaryop ルーティング追加）
+- ✅ 7テストケース作成 + 実行
+- ✅ 全テスト: 22/22 PASS ✅（Phase 1: 15 + Phase 2: 7）
+
+**実装詳細**:
+- **Neg**: 算術否定 (`-x`)
+- **Not**: 論理否定 (`!x` → 0/非0を1/0に変換)
+- **BitNot**: ビット否定 (`~x = -x - 1`)
+
+**新規ファイル**:
+- `unaryop_handler.hako` (63行)
+- `test_phase2_day4.hako` (テストスイート)
+
+**更新ファイル**:
+- `instruction_dispatcher.hako` (+1 using, +1 case)
+- `hako.toml` (+1 module override)
+- `nyash.toml` (+1 module)
 
 ---
 
-## ⏳ **未実装命令（8/16 = 25%）**
+## 📊 **実装済み命令（13/16 = 81%）**
 
-### **Phase 2: 演算・型操作（3命令、2-3人日）**
-- ⏳ **UnaryOp** - 単項演算（Not/Neg等）
+1. ✅ **Const** - 定数読み込み
+2. ✅ **UnaryOp** - 単項演算（Neg/Not/BitNot）
+3. ✅ **BinOp** - 算術演算（Add/Sub/Mul/Div/Mod）
+4. ✅ **Compare** - 比較演算（Eq/Ne/Lt/Le/Gt/Ge）
+5. ✅ **Copy** - 値コピー
+6. ✅ **Return** - 関数からreturn
+7. ✅ **Branch** - 条件分岐
+8. ✅ **Jump** - 無条件ジャンプ
+9. ✅ **Phi** - SSA値マージ
+
+---
+
+## ⏳ **未実装命令（7/16 = 19%）**
+
+### **Phase 2: 演算・型操作（2命令、1-2人日）**
 - ⏳ **TypeOp** - 型チェック/キャスト統一
 - ⏳ **Load/Store** - メモリ操作（2命令）
 
@@ -107,13 +132,17 @@
 
 ### テスト実行コマンド
 ```bash
-# Day 1+2 テスト（10テスト）
+# Phase 1 Day 1+2 テスト（10テスト）
 HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
   ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
 
-# Day 3 テスト（5テスト）
+# Phase 1 Day 3 テスト（5テスト）
 HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
   ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_day3.hako
+
+# Phase 2 Day 4 テスト（7テスト - UnaryOp）
+HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
+  ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase2_day4.hako
 ```
 
 ### 箱ファイル一覧
@@ -123,10 +152,11 @@ apps/selfhost/hakorune-vm/
 ├── block_mapper.hako (77行) - ブロックマップ作成
 ├── terminator_handler.hako (208行) - Ret/Jump/Branch処理
 ├── phi_handler.hako (223行) - PHI命令処理
-├── instruction_dispatcher.hako (55行) - 命令ディスパッチャー
+├── instruction_dispatcher.hako (57行) - 命令ディスパッチャー
 ├── value_manager.hako (41行) - レジスタ管理
 ├── json_field_extractor.hako (47行) - JSONフィールド抽出
 ├── const_handler.hako (39行) - Const命令
+├── unaryop_handler.hako (63行) - UnaryOp命令
 ├── binop_handler.hako (70行) - BinOp命令
 ├── compare_handler.hako (77行) - Compare命令
 └── copy_handler.hako (29行) - Copy命令
@@ -137,10 +167,11 @@ apps/selfhost/hakorune-vm/
 ## 📈 **統計**
 
 - **合計削減**: 1,525行（307行 Hakorune VM + 1,218行 MIR整理）
-- **新規箱**: 11箱（Day 3: 3箱 + リファクタリング: 7箱 + 既存: 1箱）
-- **テスト成功率**: 15/15 (100%)
-- **箱化後平均サイズ**: 51行/箱
+- **新規箱**: 12箱（Phase 1: 11箱 + Phase 2: 1箱）
+- **テスト成功率**: 22/22 (100%)
+- **箱化後平均サイズ**: 54行/箱
 - **コア削減率**: -63%（488行 → 181行）
+- **命令実装率**: 13/16 (81%)
 
 ---
 

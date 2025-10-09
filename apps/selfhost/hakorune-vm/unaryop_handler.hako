@@ -1,0 +1,62 @@
+// UnaryOpHandlerBox - UnaryOp instruction handler
+// Handles: %dst = op_kind %operand (Neg/Not/BitNot)
+
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+
+static box UnaryOpHandlerBox {
+  // Handle unaryop instruction
+  // inst_json: {"op":"unaryop","dst":3,"op_kind":"Neg","operand":1}
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(inst_json, regs) {
+    // Extract dst
+    local dst = JsonFieldExtractor.extract_int(inst_json, "dst")
+    if dst == null {
+      return Result.Err("unaryop: dst field not found")
+    }
+
+    // Extract operand
+    local operand_id = JsonFieldExtractor.extract_int(inst_json, "operand")
+    if operand_id == null {
+      return Result.Err("unaryop: operand field not found")
+    }
+
+    // Extract op_kind
+    local kind = JsonFieldExtractor.extract_string(inst_json, "op_kind")
+    if kind == null {
+      return Result.Err("unaryop: op_kind not found")
+    }
+
+    // Load operand from registers using ValueManagerBox
+    local operand_val = ValueManagerBox.get(regs, operand_id)
+
+    // Execute unary operation
+    local result_val = 0
+    if kind == "Neg" {
+      // Arithmetic negation
+      result_val = 0 - operand_val
+    } else if kind == "Not" {
+      // Logical negation: convert to bool, then negate
+      // 0 is false (becomes 1), non-zero is true (becomes 0)
+      if operand_val == 0 {
+        result_val = 1
+      } else {
+        result_val = 0
+      }
+    } else if kind == "BitNot" {
+      // Bitwise negation: ~operand
+      // For integers: ~x = -x - 1
+      result_val = 0 - operand_val - 1
+    } else {
+      return Result.Err("unaryop: unsupported op_kind: " + kind)
+    }
+
+    // Store result using ValueManagerBox
+    ValueManagerBox.set(regs, dst, result_val)
+
+    return Result.Ok(0)
+  }
+}

@@ -378,4 +378,76 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
 4. **result.hakoパス**: apps/lib/result.hako は存在しない → apps/selfhost/vm/boxes/result_box.hako使用
 
 **次のステップ**:
-- Phase 1 Day 4: 残り命令実装（TypeOp/Load/Store/ExternCall/BoxCall/NewBox等）
+- Phase 2: 残り命令実装（TypeOp/Load/Store/Call/BoxCall等）
+
+---
+
+## **Phase 2 Day 4: UnaryOp実装** (2025-10-09)
+
+**目標**: 単項演算命令（UnaryOp）を実装し、Neg/Not/BitNot演算をサポート
+
+### 📊 **開始状況**
+- 実装済み命令: 12/16 (75%)
+- 未実装命令: 8/16 (25%)
+- Phase 1完了、Phase 2開始
+
+### ✅ **実装完了: UnaryOp命令**
+
+**実装内容**:
+1. **UnaryOpHandlerBox作成** (63行)
+   - 3種類の単項演算実装:
+     - **Neg**: 算術否定 (`result = 0 - operand`)
+     - **Not**: 論理否定 (`operand == 0 → 1, else → 0`)
+     - **BitNot**: ビット否定 (`result = 0 - operand - 1`)
+   - JsonFieldExtractorBox/ValueManagerBox使用
+   - 統一Result型パターン
+
+2. **InstructionDispatcherBox更新**
+   - using追加: `UnaryOpHandlerBox`
+   - @match case追加: `"unaryop" => UnaryOpHandlerBox.handle(...)`
+
+3. **テストスイート作成** (test_phase2_day4.hako)
+   - Test 1: Neg (-42 → -42)
+   - Test 2: Neg positive (-(5) → -5)
+   - Test 3: Not true (!1 → 0)
+   - Test 4: Not false (!0 → 1)
+   - Test 5: Not non-zero (!42 → 0)
+   - Test 6: BitNot (~5 → -6)
+   - Test 7: BitNot (~0 → -1)
+
+**新規ファイル**:
+- `apps/selfhost/hakorune-vm/unaryop_handler.hako` (63行)
+- `apps/selfhost/hakorune-vm/tests/test_phase2_day4.hako` (テストスイート)
+
+**更新ファイル**:
+- `instruction_dispatcher.hako`: +1 using, +1 case (55→57行)
+- `hako.toml`: +1 module override
+- `nyash.toml`: +1 module
+
+**テスト結果**:
+- ✅ Phase 1 Day 1+2 tests: 10/10 PASS
+- ✅ Phase 1 Day 3 tests: 5/5 PASS
+- ✅ Phase 2 Day 4 tests: 7/7 PASS
+- ✅ **合計**: 22/22 PASS 🎉
+
+**統計まとめ**:
+- **新規箱**: 1箱（63行）
+- **実装済み命令**: 13/16 (81%)
+- **残り命令**: 7/16 (19%)
+- **総箱数**: 12箱
+- **箱化後平均サイズ**: 54行/箱
+
+**技術的成果**:
+1. **Box-First設計の継続**: UnaryOpHandlerBoxも単一責任原則を遵守
+2. **BitNot実装**: 2の補数表現 `~x = -x - 1` を利用
+3. **統一テストパターン**: Phase 1と同じテスト構造を踏襲
+
+**学び**:
+1. **UnaryOp仕様確認の重要性**: Rust VM実装を参照して正確な動作を確認
+2. **テストの網羅性**: 3演算 × 2-3ケース = 7テストで十分なカバレッジ
+3. **段階的実装の有効性**: 1命令ずつ確実に実装することで品質維持
+
+**次のステップ**:
+- Phase 2 Day 5: TypeOp実装
+- Phase 2 Day 6: Load/Store実装
+- Phase 4: Call/BoxCall実装（最重要）

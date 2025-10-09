@@ -41,6 +41,7 @@ hakorune.vm.const_handler = "apps/selfhost/hakorune-vm/const_handler.hako"
 hakorune.vm.binop_handler = "apps/selfhost/hakorune-vm/binop_handler.hako"
 hakorune.vm.compare_handler = "apps/selfhost/hakorune-vm/compare_handler.hako"
 hakorune.vm.copy_handler = "apps/selfhost/hakorune-vm/copy_handler.hako"
+hakorune.vm.unaryop_handler = "apps/selfhost/hakorune-vm/unaryop_handler.hako"
 # Map logical namespaces to Nyash source paths (consumed by runner)
 selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
