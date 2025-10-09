@@ -188,13 +188,7 @@ fn resolve_box_ids(
 
     // Try config mapping first (when available) — be tolerant if cached TOML is missing
     if let Some(cfg) = loader.config.as_ref() {
-        let cfg_path = loader.config_path_str();
-        let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
-        let toml_value_opt: Option<toml::Value> = if !reload {
-            loader.cached_toml.clone()
-        } else {
-            std::fs::read_to_string(cfg_path).ok().and_then(|s| toml::from_str::<toml::Value>(&s).ok())
-        };
+        let toml_value_opt = loader.get_toml_value().ok();
         if let Some(toml_value) = toml_value_opt {
             if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
                 if let Some(box_conf) = cfg.get_box_config(lib_name, box_type, &toml_value) {

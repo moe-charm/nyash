@@ -44,18 +44,7 @@ impl PluginLoaderV2 {
 
         // Then try config mapping (nested under libraries.<lib>.<Box>)
         if let Some(cfg) = self.config.as_ref() {
-            let cfg_path = self.config_path_str();
-            // Use cached TOML when available (dev reload via env bypasses cache)
-            let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
-            let toml_value: toml::Value = if !reload {
-                if let Some(v) = self.cached_toml.clone() { v } else {
-                    let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
-                    toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?
-                }
-            } else {
-                let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
-                toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?
-            };
+            let toml_value = self.get_toml_value()?;
 
             // Find library for box
             if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
@@ -85,13 +74,7 @@ impl PluginLoaderV2 {
     /// Check if a method returns a Result type
     pub fn method_returns_result(&self, box_type: &str, method_name: &str) -> bool {
         if let Some(cfg) = self.config.as_ref() {
-            let cfg_path = self.config_path_str();
-            let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
-            let toml_value_opt = if !reload {
-                self.cached_toml.clone()
-            } else {
-                std::fs::read_to_string(cfg_path).ok().and_then(|s| toml::from_str::<toml::Value>(&s).ok())
-            };
+            let toml_value_opt = self.get_toml_value().ok();
             if let Some(toml_value) = toml_value_opt {
                 if let Some((lib_name, _)) = cfg.find_library_for_box(box_type) {
                     if let Some(box_conf) = cfg.get_box_config(lib_name, box_type, &toml_value) {
@@ -113,14 +96,7 @@ impl PluginLoaderV2 {
         method_name: &str,
     ) -> BidResult<(u32, u32, bool)> {
         let cfg = self.config.as_ref().ok_or(BidError::PluginError)?;
-        let cfg_path = self.config_path_str();
-        let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
-        let toml_value: toml::Value = if !reload {
-            self.cached_toml.clone().ok_or(BidError::PluginError)?
-        } else {
-            let s = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
-            toml::from_str(&s).map_err(|_| BidError::PluginError)?
-        };
+        let toml_value = self.get_toml_value()?;
         let (lib_name, _) = cfg
             .find_library_for_box(box_type)
             .ok_or(BidError::InvalidType)?;

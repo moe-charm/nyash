@@ -7,7 +7,7 @@ pub(crate) mod util;
 
 use super::host_bridge::BoxInvokeFn;
 use super::types::{LoadedPluginV2, PluginBoxMetadata, PluginHandleInner};
-use crate::bid::BidResult;
+use crate::bid::{BidError, BidResult};
 use crate::box_trait::NyashBox;
 use crate::config::nyash_toml_v2::{LibraryDefinition, NyashConfigV2};
 use specs::LoadedBoxSpec;
@@ -87,5 +87,21 @@ impl PluginLoaderV2 {
             .as_ref()
             .map(|vp| vp.as_str())
             .unwrap_or("nyash.toml")
+    }
+
+    /// Get TOML value with reload support (unified helper)
+    ///
+    /// Returns cached TOML value unless NYASH_PLUGIN_CONFIG_RELOAD=1 is set,
+    /// in which case it reloads from the config file.
+    pub(crate) fn get_toml_value(&self) -> BidResult<toml::Value> {
+        let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
+        if !reload {
+            if let Some(v) = self.cached_toml.clone() {
+                return Ok(v);
+            }
+        }
+        let cfg_path = self.config_path_str();
+        let content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
+        toml::from_str(&content).map_err(|_| BidError::PluginError)
     }
 }
