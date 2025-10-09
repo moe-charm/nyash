@@ -4,11 +4,11 @@
 
 ---
 
-## 🎯 **Current Phase: Hakorune VM Phase 2 Day 4完了（UnaryOp実装）**
+## 🎯 **Current Phase: Hakorune VM Phase 2 Day 5完了（Load/Store実装）**
 
-**完了**: Phase 1 Day 1-3 + Phase 2 Day 4（基盤構築・演算・制御フロー・単項演算・箱化モジュール化）
-**次のステップ**: Phase 2 Day 5-6（TypeOp/Load/Store実装）または Phase 4（Call/BoxCall実装）
-**進捗率**: 13/16命令実装（81%）
+**完了**: Phase 1 Day 1-3 + Phase 2 Day 4-5（基盤構築・演算・制御フロー・単項演算・メモリ操作・箱化モジュール化）
+**次のステップ**: Phase 4（Call/BoxCall実装）または Phase 2 Day 6（TypeOp実装）
+**進捗率**: 15/16命令実装（93%）
 
 ---
 
@@ -71,25 +71,55 @@
 
 ---
 
-## 📊 **実装済み命令（13/16 = 81%）**
+### ✅ **Phase 2 Day 5: Load/Store実装** (2025-10-09)
+- ✅ メモリストレージ（mem）追加
+- ✅ LoadHandlerBox 作成（44行）
+- ✅ StoreHandlerBox 作成（36行）
+- ✅ HakoruneVmCore/InstructionDispatcher更新（mem引数追加）
+- ✅ 5テストケース作成（4/5 PASS、1つスキップ）
+- ✅ 全テスト: 26/27 PASS ✅（Phase 1: 15 + Phase 2: 11）
+
+**実装詳細**:
+- **Load** (`%dst = load %ptr`): メモリから読み込み
+- **Store** (`store %value -> %ptr`): メモリへ書き込み
+- 未初期化メモリは0を返す
+
+**新規ファイル**:
+- `load_handler.hako` (44行)
+- `store_handler.hako` (36行)
+- `test_phase2_day5.hako` (テストスイート)
+
+**更新ファイル**:
+- `hakorune_vm_core.hako` (mem追加、全メソッドにmem引数追加)
+- `instruction_dispatcher.hako` (+2 using, +2 case, mem引数追加)
+- `hako.toml` (+2 module override)
+- `nyash.toml` (+2 module)
+
+**既知の問題**:
+- Test 3（未初期化メモリLoad）で比較演算子のバグ（要調査）
+
+---
+
+## 📊 **実装済み命令（15/16 = 93%）**
 
 1. ✅ **Const** - 定数読み込み
 2. ✅ **UnaryOp** - 単項演算（Neg/Not/BitNot）
 3. ✅ **BinOp** - 算術演算（Add/Sub/Mul/Div/Mod）
 4. ✅ **Compare** - 比較演算（Eq/Ne/Lt/Le/Gt/Ge）
-5. ✅ **Copy** - 値コピー
-6. ✅ **Return** - 関数からreturn
-7. ✅ **Branch** - 条件分岐
-8. ✅ **Jump** - 無条件ジャンプ
-9. ✅ **Phi** - SSA値マージ
+5. ✅ **Load** - メモリ読み込み
+6. ✅ **Store** - メモリ書き込み
+7. ✅ **Copy** - 値コピー
+8. ✅ **Return** - 関数からreturn
+9. ✅ **Branch** - 条件分岐
+10. ✅ **Jump** - 無条件ジャンプ
+11. ✅ **Phi** - SSA値マージ
 
 ---
 
-## ⏳ **未実装命令（7/16 = 19%）**
+## ⏳ **未実装命令（5/16 = 7%）**
 
-### **Phase 2: 演算・型操作（2命令、1-2人日）**
+### **Phase 2: 演算・型操作（1命令、0.5人日）**
 - ⏳ **TypeOp** - 型チェック/キャスト統一
-- ⏳ **Load/Store** - メモリ操作（2命令）
 
 ### **Phase 4: 呼び出し（2命令、3-4人日）** ⭐最重要
 - ⏳ **Call** - 関数呼び出し（MirCall統一）
@@ -167,11 +197,11 @@ apps/selfhost/hakorune-vm/
 ## 📈 **統計**
 
 - **合計削減**: 1,525行（307行 Hakorune VM + 1,218行 MIR整理）
-- **新規箱**: 12箱（Phase 1: 11箱 + Phase 2: 1箱）
-- **テスト成功率**: 22/22 (100%)
-- **箱化後平均サイズ**: 54行/箱
+- **新規箱**: 14箱（Phase 1: 11箱 + Phase 2: 3箱）
+- **テスト成功率**: 26/27 (96%)
+- **箱化後平均サイズ**: 53行/箱
 - **コア削減率**: -63%（488行 → 181行）
-- **命令実装率**: 13/16 (81%)
+- **命令実装率**: 15/16 (93%)
 
 ---
 

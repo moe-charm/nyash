@@ -110,6 +110,8 @@ timer = "core.timer.TimerBox"
  selfhost.hakorune_vm.compare_handler = "apps/selfhost/hakorune-vm/compare_handler.hako"
  selfhost.hakorune_vm.copy_handler = "apps/selfhost/hakorune-vm/copy_handler.hako"
  selfhost.hakorune_vm.unaryop_handler = "apps/selfhost/hakorune-vm/unaryop_handler.hako"
+ selfhost.hakorune_vm.load_handler = "apps/selfhost/hakorune-vm/load_handler.hako"
+ selfhost.hakorune_vm.store_handler = "apps/selfhost/hakorune-vm/store_handler.hako"
 
  selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
  # Dev VM utility boxes (for tests that reference them directly)

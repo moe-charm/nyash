@@ -21,11 +21,12 @@ using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtracto
 static box HakoruneVmCore {
   // Main entry point
   run(mir_json) {
-    // Initialize registers
+    // Initialize registers and memory
     local regs = new MapBox()
+    local mem = new MapBox()
 
     // Execute from block 0 (Phase 1 Day 3: multiple blocks support)
-    local result = me._execute_blocks(mir_json, regs)
+    local result = me._execute_blocks(mir_json, regs, mem)
 
     // @match Result for error handling
     if result.is_Ok() {
@@ -37,7 +38,7 @@ static box HakoruneVmCore {
   }
 
   // Phase 1 Day 3: Execute multiple blocks with control flow
-  _execute_blocks(mir_json, regs) {
+  _execute_blocks(mir_json, regs, mem) {
     // Build block map
     local block_map_result = BlockMapperBox.build_map(mir_json)
     if block_map_result.is_Err() {
@@ -67,7 +68,7 @@ static box HakoruneVmCore {
       }
 
       // Execute normal instructions (non-PHI)
-      local exec_result = me._execute_instructions_in_block(block_json, regs)
+      local exec_result = me._execute_instructions_in_block(block_json, regs, mem)
       if exec_result.is_Err() {
         return exec_result
       }
@@ -102,7 +103,7 @@ static box HakoruneVmCore {
   }
 
   // Execute instructions in a block (excluding PHI)
-  _execute_instructions_in_block(block_json, regs) {
+  _execute_instructions_in_block(block_json, regs, mem) {
     // Find instructions array
     local key_insts = "\"instructions\":["
     local insts_start = block_json.indexOf(key_insts)
@@ -121,11 +122,11 @@ static box HakoruneVmCore {
     local insts_json = block_json.substring(insts_start, insts_end)
 
     // Execute instructions sequentially
-    return me._execute_instructions(insts_json, regs)
+    return me._execute_instructions(insts_json, regs, mem)
   }
 
   // Execute instructions sequentially
-  _execute_instructions(insts_json, regs) {
+  _execute_instructions(insts_json, regs, mem) {
     local pos = 0
     local len = insts_json.length()
     local last_ret_value = 0
@@ -154,7 +155,7 @@ static box HakoruneVmCore {
         local inst_json = insts_json.substring(pos, inst_end + 1)
 
         // Dispatch instruction using InstructionDispatcherBox
-        local result = InstructionDispatcherBox.dispatch(inst_json, regs)
+        local result = InstructionDispatcherBox.dispatch(inst_json, regs, mem)
 
         // Check for errors or return value
         if result.is_Err() {
