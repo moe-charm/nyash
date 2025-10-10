@@ -193,11 +193,19 @@ impl MapBox {
         Box::new(BoolBox::new(ok))
     }
 
-    /// キーを削除（戻り値: null）
+    /// キーを削除（戻り値: 削除された値 / null)
     pub fn delete(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        let _ = self.data.write().unwrap().remove(&key_str);
-        Box::new(crate::boxes::null_box::NullBox::new())
+        let removed = self.data.write().unwrap().remove(&key_str);
+        match removed {
+            Some(v) => {
+                if v.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() { return v.share_box(); }
+                if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() { return v.share_box(); }
+                if v.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() { return v.share_box(); }
+                v.clone_box()
+            }
+            None => Box::new(crate::boxes::null_box::NullBox::new()),
+        }
     }
 
     /// 全てのキーを取得

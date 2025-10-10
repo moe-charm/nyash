@@ -22,7 +22,7 @@ See `docs/reference/plugin-system/capabilities.md` for capability bit definition
 
 ## 📦 Phase 15.7 Structural Boxes
 
-- `src/runtime/method_router_box/method_ref.rs` が methodRef 疑似メソッドを担当。VM ルーターは最初にここへ委譲し、型チェックと CallableBox 生成を一箇所で行う。
+- `src/runtime/method_router_box/method_ref.rs` が methodRef 疑似メソッドを担当。VM ルーターは最初にここへ委譲し、型チェックと CallableBox 生成を一箇所で行う。 (詳細: docs/reference/plugin-system/callable-box-guide.md)
 - `src/runtime/method_router_box/map_callable.rs` に Map.call/Map.callAsync の糖衣実装を隔離。プラグインは get/set 群だけ実装すれば良く、call 系は VM 側で一貫化。
 - `src/runtime/codec/codec_box.rs` は TLV エンコード/デコードの単一窓口。Host/Plugin ハンドル、コア Box の扱いをここで統制し、plugin_ffi_common と同じポリシーを維持する。
 - ディレクトリ README (`src/runtime/codec/README.md`) で境界の責務を明示。将来 helper を増やす場合もこの箱を経由する。

@@ -8,18 +8,18 @@ preflight_plugins || exit 2
 test_string_find_replace_last_vm() {
   local code='static box Main { main() {
     local s = "abracadabra"
-    print(s.indexOf("bra", 0))      // 1
-    print(s.lastIndexOf("bra", 99)) // 8
-    print(s.replace("abra", "AB"))  // ABcadABra
+    if s.indexOf("bra", 0) == 1 { print("idx-ok") } else { print("idx-ng") }
+    if s.lastIndexOf("bra", 99) == 8 { print("last-ok") } else { print("last-ng") }
+    if s.replace("abra", "AB") == "ABcadAB" { print("rep-legacy") } else { print("rep-ng") }
     return 0
   }}'
   local out
   out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
   local last3; last3=$(echo "$out" | tail -n 3 | tr '\n' '|')
-  if [[ "$last3" == *"1|8|ABcadABra|"* ]]; then
+  if [[ "$last3" == *"idx-ok|last-ok|rep-legacy|"* ]]; then
     return 0
   else
-    compare_outputs "1|8|ABcadABra|" "$last3" "string_find_replace_last_vm"
+    compare_outputs "idx-ok|last-ok|rep-legacy|" "$last3" "string_find_replace_last_vm"
   fi
 }
 

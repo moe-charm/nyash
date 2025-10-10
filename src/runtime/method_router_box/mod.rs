@@ -131,9 +131,9 @@ pub fn route(
                 argv.push(v.to_nyash_box());
             }
             let out = crate::runtime::plugin_host_box::invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv);
-            // Normalize mutator returns to Void for core collections
+            // Normalize mutator returns to Void for core collections（remove/delete は値返却のため除外）
             let is_core = crate::runtime::type_registry::is_core_box(&p.box_type);
-            let is_void_method = is_core && matches!(method, "set" | "push" | "clear" | "delete");
+            let is_void_method = is_core && matches!(method, "set" | "push" | "clear");
             return match out {
                 Ok(Some(ret)) => {
                     if is_void_method { Ok(VMValue::Void) } else { Ok(VMValue::from_nyash_box(ret)) }
@@ -408,8 +408,7 @@ pub fn route(
                             205 => { // delete/remove
                                 if args.len() != 1 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.delete({} args). Available arities: [1]", args.len()))); }
                                 let key_box = args[0].to_nyash_box();
-                                let _ = mp.delete(key_box);
-                                Ok(VMValue::Void)
+                                Ok(VMValue::from_nyash_box(mp.delete(key_box)))
                             }
                             206 => Ok(VMValue::from_nyash_box(mp.keys())),
                             207 => Ok(VMValue::from_nyash_box(mp.values())),

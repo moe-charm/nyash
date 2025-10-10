@@ -228,19 +228,31 @@ pub extern "C" fn nyash_plugin_invoke(
                     if let Some(inst) = map.get_mut(&instance_id) {
                         // try int key
                         if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                            return write_tlv_bool(
-                                inst.data_i64.remove(&ik).is_some(),
-                                result,
-                                result_len,
-                            );
+                            if let Some(v) = inst.data_i64.remove(&ik) {
+                                return match v {
+                                    MapVal::I64(n) => write_tlv_i64(n, result, result_len),
+                                    MapVal::Str(s) => write_tlv_string(&s, result, result_len),
+                                    MapVal::Handle(t, i) => write_tlv_handle(t, i, result, result_len),
+                                    MapVal::Host(h) => write_tlv_host_handle(h as u64, result, result_len),
+                                };
+                            } else {
+                                unsafe { if !result_len.is_null() { *result_len = 0; } }
+                                return NYB_SUCCESS;
+                            }
                         }
                         // try string key
                         if let Some(sk) = read_arg_string(args, args_len, 0) {
-                            return write_tlv_bool(
-                                inst.data_str.remove(&sk).is_some(),
-                                result,
-                                result_len,
-                            );
+                            if let Some(v) = inst.data_str.remove(&sk) {
+                                return match v {
+                                    MapVal::I64(n) => write_tlv_i64(n, result, result_len),
+                                    MapVal::Str(s) => write_tlv_string(&s, result, result_len),
+                                    MapVal::Handle(t, i) => write_tlv_handle(t, i, result, result_len),
+                                    MapVal::Host(h) => write_tlv_host_handle(h as u64, result, result_len),
+                                };
+                            } else {
+                                unsafe { if !result_len.is_null() { *result_len = 0; } }
+                                return NYB_SUCCESS;
+                            }
                         }
                         NYB_E_INVALID_ARGS
                     } else {
