@@ -24,12 +24,13 @@ impl NyashRunner {
         // Plugins (guarded)
         // Default policy: OFF (plugins disabled) unless explicitly set to auto/force.
         // Aliases handled by env core bootstrap (HAKO_* → NYASH_*), but we defensively read both.
+        // Policy: default ON (auto). Unknown/empty -> treat as auto.
         let policy = std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok());
         let disable_by_policy = match policy.as_deref() {
-            None => true, // default OFF in Hakorune build
             Some(s) if s.eq_ignore_ascii_case("off") => true,
             Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => false,
-            _ => true, // unknown → OFF
+            None => false, // default to auto
+            _ => false,    // unknown → consider auto (fail-open; providers may still be empty)
         };
         if !disable_by_policy && std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
             runner_plugin_init::init_bid_plugins();

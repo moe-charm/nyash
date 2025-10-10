@@ -24,6 +24,8 @@ impl MirInterpreter {
                 self.regs.insert(dst, created_vm.clone());
                 if let VMValue::BoxRef(arc_box) = &created_vm { self.scope.register_box(arc_box.clone()); }
                 crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::mark_new(self, dst, box_type, args.len());
+                // Always attempt birth; ignore missing method
+                let _ = self.handle_box_call(None, dst, "birth", args);
                 crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::born_if_no_birth(self, dst, box_type, args.len());
                 return Ok(());
             }
@@ -93,14 +95,8 @@ impl MirInterpreter {
         // Centralized lifecycle observation (contracts + traces)
         crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::mark_new(self, dst, box_type, args.len());
 
-        // Dev-only: optional auto birth after NewBox to unblock selfhost paths
-        // Guarded by NYASH_VM_AUTO_BIRTH_DEV=1. In production, builders must
-        // materialize explicit birth calls.
-        if super::super::VmConfig::global().auto_birth_dev {
-            // Dev: call birth with the same args that were provided to NewBox
-            // This covers user-defined boxes that rely on birth parameters
-            let _ = self.handle_box_call(None, dst, "birth", args);
-        }
+        // Always attempt birth after creation; ignore missing method to keep no-op semantics.
+        let _ = self.handle_box_call(None, dst, "birth", args);
 
         // C++-style constructor mode (interim): optionally invoke ModuleFunction
         // "Class.birth/N" immediately after NewBox, using fully qualified name.

@@ -2,6 +2,17 @@
 
 Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI (formerly Nyash ABI)”.
 
+## Policy & Lifecycle — Final Rules (Phase 15.7)
+
+- Plugin Policy: default ON (auto). If no plugins are configured in hako.toml/nyash.toml, nothing is loaded (no side‑effects). CI などで完全遮断したい場合のみ `NYASH_DISABLE_PLUGINS=1` を使う。
+- Creation: `new T(args…)` is always followed by `birth(me,args…)` by VM. When `birth` is not implemented, it is treated as no‑op (idempotent). Builder の auto‑birth は既定OFF。
+- Plugin Init: two idempotent stages are allowed (optional)
+  - Load‑time: `nyash_plugin_init()` called once per library when present
+  - First‑birth: plugin may call `ensure_ready()` guarded by `Once`
+- Provider Resolution: single order — `PluginProvider(T) → BuiltinProvider(T) → Registry/Fallback(T) → error`. Before resolving, the registry performs on‑demand re‑probe for `T` to avoid timing issues.
+- Boot Disabled Non‑cache: boot() no longer caches “disabled” as success (allows later retry when policy flips to ON). Operationally we run with policy=auto by default so this path is rarely used.
+
+
 ## 🎯 概要
 
 NyashのVMバックエンドとプラグインシステム（BID-FFI v1）の統合に関する技術仕様。Everything is Box哲学に基づき、**すべてのBox型（ビルトイン、ユーザー定義、プラグイン）**をVMで統一的に扱えるようにする。

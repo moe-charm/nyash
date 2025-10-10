@@ -20,8 +20,9 @@ fn policy_on() -> bool {
 pub fn boot() -> bool {
     if let Some(v) = BOOTED.get() { return *v; }
 
+    if !policy_on() { return false; }
+
     let ok = (|| {
-        if !policy_on() { return true; } // treat as success when policy off
 
         // Choose config candidates (prefer explicit override)
         let mut tried: Vec<String> = Vec::new();

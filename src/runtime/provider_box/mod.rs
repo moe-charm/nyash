@@ -17,7 +17,7 @@ pub fn ensure_loaded(_config_path: Option<&str>) {
     if crate::runtime::env_gate_box::plugins_disabled() { return; }
     if !crate::runtime::env_gate_box::plugin_policy_on() { return; }
     let _ = crate::runtime::plugin_boot_box::boot();
-    let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(["ArrayBox", "MapBox", "StringBox"].as_ref());
+    let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(["ArrayBox", "MapBox", "StringBox", "FileBox"].as_ref());
 }
 
 /// Create a box using Plugin → Registry → Embedded order (best‑effort)

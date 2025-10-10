@@ -336,3 +336,34 @@ apps/selfhost/hakorune-vm/
 - 既存 from の互換（非strict）を維持、strict で Fail‑Fast が働く
 
 - Builtin callAsync true async implemented (HAKO_CALLABLE_ASYNC=1): job queue + VM polling; added smoke quick/core/callable_async_builtin_vm.sh.
+
+---
+
+## Plugin Policy & Birth Unification (Phase 15.7) — Plan & Status
+
+Goals
+- Default plugin policy = auto (ON). If no providers configured, no side-effects.
+- VM unifies lifecycle: new → birth(me,args) always (birth missing = no-op, idempotent)
+- Plugin init: load-time nyash_plugin_init() (optional) and first-birth ensure_ready() (Once)
+- Provider resolution single order: Plugin → Builtin → Registry; on-demand reprobe for T
+- Boot disabled state is not cached (allow later retry when policy flips to ON)
+
+Done
+- Runner: default policy auto (None/unknown → auto)
+- Boot: policy off no longer cached as success (returns false; retry later)
+- ProviderBox: reprobe list extended to include FileBox
+- VM: always attempt birth after new (ignore missing method)
+- Smokes: plugins/filebox_write_read_vm added; quick/core/filebox stabilized (SKIP when unavailable)
+- Docs updated: docs/reference/plugin-system/vm-plugin-integration.md (final rules)
+
+Next
+- Determinism guard (deny IO caps like FileBox when HAKO_DETERMINISTIC=1)
+- Error ergonomics: ProviderNotFound/PluginInitFailed/BirthFailed with provenance
+- Optional: on-demand reprobe toggle for deterministic mode (off)
+
+Acceptance
+- plugins profile: all smokes green (callable/map/string/array/json/filebox)
+- quick profile: filebox_basic is PASS or SKIP (plugin missing)
+- Runner: default plugin policy is auto; no regressions
+- VM: new→birth unified; no double-birth
+
