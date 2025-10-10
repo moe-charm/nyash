@@ -6,48 +6,57 @@
 
 ---
 
-## 🔄 **現在の開発状況** (2025-10-10)
+## 🔄 **現在の開発状況** (2025-10-11)
 
 **注**: 成功報告中心。失敗・問題点は [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクション参照。
 
-### 🎉 **Hakorune VM: MirCall Phase 2 - Constructor実装完了** (2025-01-10)
-**Box生成＋birth()初期化完全実装 - 3/3テストPASS、3時間で完了**
+### 🎉 **Hakorune VM: MirCall Phase 2 - Closure実装完了** (2025-10-11)
+**クロージャ生成＋環境キャプチャ完全実装 - 6/7 callee types完了（86%）、3/3テストPASS**
 
 #### ✅ **実装完了**
-- **ConstructorCallHandlerBox作成** (90行)
-  - Box instance creation: ArrayBox/MapBox/StringBox対応
-  - birth() method calling: 0-3引数サポート
-  - Constructor ≈ newbox + birth() パターン確立
-- **CalleeParserBox拡張** (+19行)
-  - extract_box_type() メソッド追加
-- **MirCallHandlerBox refactoring**
-  - Early dispatch パターン: Constructor/Method を callee_name 抽出前に処理
-  - args_array 抽出を共通化（重複削減）
+- **ClosureCallHandlerBox作成** (315行)
+  - Closure object creation with captured variables
+  - 3ヘルパーメソッド: extract_string_array/extract_captures/extract_me_capture
+  - MapBox-based closure object: type/params/captures/me_capture fields
+- **MirCallHandlerBox拡張**
+  - Closure early dispatch追加（line 69-72）
+  - Method/Constructor/Closureを統一的に早期処理
+- **test_mircall_phase2_closure.hako作成** (48行)
+  - Test 1: Simple closure (no captures)
+  - Test 2: Closure with captures
+  - Test 3: Closure with me_capture
 
 #### 📊 **統計**
-- 新規箱: 1個（ConstructorCallHandlerBox, 90行）
-- 新規テスト: 1個（test_mircall_phase2_constructor.hako, 72行）
-- 総箱数: 23箱
-- MirCall Phase 2進捗: 5/7 callee types完了（71%）
+- 新規箱: 1個（ClosureCallHandlerBox, 315行）
+- 新規テスト: 1個（test_mircall_phase2_closure.hako, 48行）
+- 総箱数: 24箱
+- MirCall Phase 2進捗: 6/7 callee types完了（86%）
 - テスト結果: 3/3 (100%) PASS ✅
-- 実装時間: ~3時間（見積もり3.5-5時間より短縮）
+- 実装時間: ~4時間（見積もり4-6時間の67-100%、効率的達成）
 
 #### 🎯 **技術的成果**
-1. **Early Dispatch パターン確立**: 特殊フィールドを持つcallee typeは早期ディスパッチが必須
-2. **birth() 引数可変対応**: 明示的ディスパッチで1-3引数サポート（Hakorune言語制約対応）
-3. **MirCall統一設計進展**: Global/Extern/ModuleFunction/Method/Constructor完了（5/7, 71%）
+1. **JSON複雑パース実装**: params配列/captures配列（tuples）/optional me_capture
+2. **環境キャプチャ処理**: レジスタから値ロード＋MapBox格納
+3. **Early Dispatch完全確立**: Method/Constructor/Closureすべて特殊フィールド持ち
+4. **Single Responsibility**: 315行でも1箱1責務（3ヘルパーメソッド分離）
+
+#### 🐛 **修正したバグ（3個）**
+1. **StringOps.str_to_int() → StringHelpers.to_i64()**: 存在しない関数呼び出し
+2. **Dispatch順序修正**: Closureをcallee_name抽出前に処理（early dispatch確立）
+3. **MIR JSON terminator追加**: テストケースに"terminator"フィールド追加
 
 #### 🎓 **学び**
-- **dispatch順序の重要性**: Constructor/Methodは特殊フィールド（box_type/receiver）を持つため、callee_name抽出前に処理が必要
-- **自律的バグ修正**: "failed to extract callee name" エラー → 早期dispatch追加で解決
-- **MVP実装の効率**: 0-3引数対応で十分（可変長引数は将来拡張）
+- **JSON構造の複雑さ**: captures配列は[[name,vid]]のネスト構造、JsonCursorBox活躍
+- **ヘルパーメソッド分離の重要性**: 315行でも読みやすさ維持（70/124/52行）
+- **既存パターン踏襲**: StringHelpers.to_i64()はJsonFieldExtractorと同じパターン
 
 #### 🚀 **次のステップ**
-- **Closure実装** (予測: 4-6時間)
-  - closure_id 抽出 + 環境キャプチャ処理
-  - Closure ≈ ModuleFunction + 環境キャプチャ
+- **Value call実装** (予測: 6-8時間、Phase 4 Day 16)
+  - Callee::Value: Closure calling（動的関数呼び出し）
+  - レジスタから関数ポインタ取得 → 動的ディスパッチ
+  - MirCall Phase 2完了: 7/7 (100%)
 
-詳細: [mini_vm_progress.md](docs/development/current/main/mini_vm_progress.md#-phase-4-day-14-mircall-phase-2---constructor実装完了-2025-01-10)
+詳細: [mini_vm_progress.md](docs/development/current/main/mini_vm_progress.md#-phase-4-day-15-mircall-phase-2---closure実装完了-2025-10-11)
 
 ---
 

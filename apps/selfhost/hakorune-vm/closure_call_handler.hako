@@ -1,0 +1,315 @@
+// ClosureCallHandlerBox - Closure creation handler (Phase 2 MVP)
+// Single Responsibility: Create closure objects with captured variables
+// Note: Full closure calling via Callee::Value is Phase 4 Day 16
+
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+
+static box ClosureCallHandlerBox {
+  // Handle Closure creation (Callee::Closure)
+  // mir_call_json: {"callee":{"type":"Closure","params":["x"],"captures":[["v",5]],"me_capture":null},...}
+  // dst_reg: destination register (not null for constructors)
+  // regs: register MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(mir_call_json, dst_reg, regs) {
+    if dst_reg == null {
+      return Result.Err("Closure: dst_reg must not be null (constructor)")
+    }
+
+    // Extract callee object
+    local callee_start = mir_call_json.indexOf("\"callee\":")
+    if callee_start < 0 {
+      return Result.Err("Closure: callee field not found")
+    }
+    callee_start = callee_start + 9  // strlen("\"callee\":")
+
+    // Find callee object end
+    local callee_end = JsonCursorBox.seek_obj_end(mir_call_json, callee_start)
+    if callee_end < 0 {
+      return Result.Err("Closure: callee object end not found")
+    }
+
+    local callee_json = mir_call_json.substring(callee_start, callee_end + 1)
+
+    // Extract params array
+    local params_array = me.extract_string_array(callee_json, "params")
+    if params_array == null {
+      return Result.Err("Closure: failed to extract params")
+    }
+
+    // Extract captures array
+    local captures_map = me.extract_captures(callee_json, regs)
+    if captures_map == null {
+      return Result.Err("Closure: failed to extract captures")
+    }
+
+    // Extract me_capture (optional)
+    local me_capture = me.extract_me_capture(callee_json, regs)
+    // me_capture can be null (valid for closures without me)
+
+    // Create closure object (MapBox)
+    local closure_obj = new MapBox()
+    closure_obj.set("type", "Closure")
+    closure_obj.set("params", params_array)
+    closure_obj.set("captures", captures_map)
+    if me_capture != null {
+      closure_obj.set("me_capture", me_capture)
+    }
+
+    // Store closure object in dst register
+    regs.set(dst_reg, closure_obj)
+
+    return Result.Ok(0)
+  }
+
+  // Extract params array from JSON
+  // Returns ArrayBox of StringBox parameters
+  extract_string_array(json, field_name) {
+    local field_key = "\"" + field_name + "\":"
+    local start = json.indexOf(field_key)
+    if start < 0 {
+      return null
+    }
+    start = start + field_key.size()
+
+    // Skip whitespace
+    loop(start < json.size()) {
+      local ch = json.charAt(start)
+      if ch == " " {
+        start = start + 1
+      }
+      if ch == "\t" {
+        start = start + 1
+      }
+      if ch == "\n" {
+        start = start + 1
+      }
+      if ch == "[" {
+        break
+      }
+      start = start + 1
+    }
+
+    if start >= json.size() {
+      return null
+    }
+
+    // Find array end
+    local end_pos = JsonCursorBox.seek_array_end(json, start)
+    if end_pos < 0 {
+      return null
+    }
+
+    local array_json = json.substring(start, end_pos + 1)
+
+    // Parse array (simple implementation for string arrays)
+    local result = new ArrayBox()
+    local i = 1  // skip '['
+    loop(i < array_json.size()) {
+      local ch = array_json.charAt(i)
+      if ch == "]" {
+        break
+      }
+      if ch == "\"" {
+        // Find string end
+        local str_start = i + 1
+        local str_end = str_start
+        loop(str_end < array_json.size()) {
+          local ch2 = array_json.charAt(str_end)
+          if ch2 == "\"" {
+            break
+          }
+          str_end = str_end + 1
+        }
+        local param = array_json.substring(str_start, str_end)
+        result.push(param)
+        i = str_end + 1
+      }
+      i = i + 1
+    }
+
+    return result
+  }
+
+  // Extract captures from JSON and load values from registers
+  // Returns MapBox: name → value
+  extract_captures(json, regs) {
+    local field_key = "\"captures\":"
+    local start = json.indexOf(field_key)
+    if start < 0 {
+      // No captures field = empty captures (valid)
+      return new MapBox()
+    }
+    start = start + field_key.size()
+
+    // Skip whitespace to find '['
+    loop(start < json.size()) {
+      local ch = json.charAt(start)
+      if ch == " " {
+        start = start + 1
+      }
+      if ch == "\t" {
+        start = start + 1
+      }
+      if ch == "\n" {
+        start = start + 1
+      }
+      if ch == "[" {
+        break
+      }
+      start = start + 1
+    }
+
+    if start >= json.size() {
+      return null
+    }
+
+    // Find array end
+    local end_pos = JsonCursorBox.seek_array_end(json, start)
+    if end_pos < 0 {
+      return null
+    }
+
+    local array_json = json.substring(start, end_pos + 1)
+
+    // Parse captures array: [["name1", 5], ["name2", 6]]
+    local result = new MapBox()
+    local i = 1  // skip '['
+    loop(i < array_json.size()) {
+      local ch = array_json.charAt(i)
+      if ch == "]" {
+        break
+      }
+      if ch == "[" {
+        // Parse [name, vid] tuple
+        local tuple_start = i
+        local tuple_end = tuple_start + 1
+        loop(tuple_end < array_json.size()) {
+          local ch2 = array_json.charAt(tuple_end)
+          if ch2 == "]" {
+            break
+          }
+          tuple_end = tuple_end + 1
+        }
+
+        local tuple_json = array_json.substring(tuple_start, tuple_end + 1)
+
+        // Extract name (first element)
+        local name_start = tuple_json.indexOf("\"")
+        if name_start >= 0 {
+          name_start = name_start + 1
+          local name_end = name_start
+          loop(name_end < tuple_json.size()) {
+            local ch3 = tuple_json.charAt(name_end)
+            if ch3 == "\"" {
+              break
+            }
+            name_end = name_end + 1
+          }
+          local name = tuple_json.substring(name_start, name_end)
+
+          // Extract vid (second element, after comma)
+          local comma_pos = tuple_json.indexOf(",")
+          if comma_pos >= 0 {
+            local vid_start = comma_pos + 1
+            // Skip whitespace
+            loop(vid_start < tuple_json.size()) {
+              local ch4 = tuple_json.charAt(vid_start)
+              if ch4 != " " {
+                break
+              }
+              vid_start = vid_start + 1
+            }
+
+            local vid_end = vid_start
+            loop(vid_end < tuple_json.size()) {
+              local ch5 = tuple_json.charAt(vid_end)
+              if ch5 == "]" {
+                break
+              }
+              if ch5 == "," {
+                break
+              }
+              vid_end = vid_end + 1
+            }
+
+            local vid_str = tuple_json.substring(vid_start, vid_end)
+            local digits = StringHelpers.read_digits(vid_str, 0)
+            local vid = StringHelpers.to_i64(digits)
+
+            // Load value from register
+            local value = regs.get(vid)
+            if value == null {
+              // Register not found, store null (may cause error later)
+              result.set(name, null)
+            }
+            result.set(name, value)
+          }
+        }
+
+        i = tuple_end + 1
+      }
+      i = i + 1
+    }
+
+    return result
+  }
+
+  // Extract me_capture from JSON and load from registers
+  // Returns value or null
+  extract_me_capture(json, regs) {
+    local field_key = "\"me_capture\":"
+    local start = json.indexOf(field_key)
+    if start < 0 {
+      return null
+    }
+    start = start + field_key.size()
+
+    // Skip whitespace
+    loop(start < json.size()) {
+      local ch = json.charAt(start)
+      if ch == " " {
+        start = start + 1
+      }
+      if ch == "\t" {
+        start = start + 1
+      }
+      if ch == "\n" {
+        start = start + 1
+      }
+      break
+    }
+
+    if start >= json.size() {
+      return null
+    }
+
+    // Check if null
+    local substr = json.substring(start, start + 4)
+    if substr == "null" {
+      return null
+    }
+
+    // Extract integer vid
+    local vid_end = start
+    loop(vid_end < json.size()) {
+      local ch2 = json.charAt(vid_end)
+      if ch2 >= "0" {
+        if ch2 <= "9" {
+          vid_end = vid_end + 1
+        }
+      }
+      break
+    }
+
+    local vid_str = json.substring(start, vid_end)
+    local digits = StringHelpers.read_digits(vid_str, 0)
+    local vid = StringHelpers.to_i64(digits)
+
+    // Load value from register
+    local value = regs.get(vid)
+    return value  // may be null if register not found
+  }
+}

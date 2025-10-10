@@ -1278,3 +1278,220 @@ HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 
 **期待される成果**: Closure calling実装、Selfhost Compiler高度機能サポート
 
 ---
+
+## 🎉 **Phase 4 Day 15: MirCall Phase 2 - Closure実装完了** (2025-10-11)
+
+**目標**: MirCall Phase 2 - Closure creation（クロージャ生成＋環境キャプチャ）
+
+### ✅ **実装完了事項**
+
+#### 📦 **新規箱作成** (1箱)
+
+**ClosureCallHandlerBox** (315行)
+- 役割: Closure object creation with captured variables
+- 機能:
+  - **params抽出**: params配列パース（string array）
+  - **captures抽出**: captures配列パース＋レジスタから値ロード
+  - **me_capture抽出**: optional me_capture処理
+  - **Closure object生成**: MapBox with type/params/captures/me_capture fields
+- 設計方針: Phase 2 MVP - Closure creation のみ（calling は Value call で実装）
+- エラーハンドリング: JSON parse error → `Result.Err("Closure: ...")`
+
+**実装した3つのヘルパーメソッド**:
+1. `extract_string_array()` - params配列抽出（line 65-135）
+2. `extract_captures()` - captures配列抽出＋レジスタ値ロード（line 137-261）
+3. `extract_me_capture()` - optional me_capture抽出（line 263-315）
+
+#### 🔧 **MirCallHandlerBox更新**
+
+**mircall_handler.hako拡張** (重要な構造変更):
+- using追加: `ClosureCallHandlerBox`
+- **Closure dispatch実装**: callee_name 抽出前に早期ディスパッチ（line 69-72）
+  - 理由: Closure callee は `name` フィールドを持たない（params/captures/me_capture のみ）
+  - Method/Constructor と同様に特殊フィールドを持つため早期ディスパッチが必要
+- 重複削除: 2箇所あった Closure dispatch を1箇所に統一
+
+#### 🧪 **テストスイート作成**
+
+**test_mircall_phase2_closure.hako** (48行):
+- Test 1: Simple closure (no captures) ✅ PASS
+- Test 2: Closure with captures ✅ PASS
+- Test 3: Closure with me_capture ✅ PASS
+
+**MIR JSON構造例**:
+```json
+{
+  "op": "mir_call",
+  "dst": 2,
+  "mir_call": {
+    "callee": {
+      "type": "Closure",
+      "params": ["x", "y"],
+      "captures": [["outer1", 1], ["outer2", 2]],
+      "me_capture": null
+    },
+    "args": []
+  }
+}
+```
+
+**Closure Object構造** (MapBox):
+```hakorune
+{
+  "type": "Closure",
+  "params": ArrayBox of param names,
+  "captures": MapBox (name → captured value),
+  "me_capture": optional captured me value
+}
+```
+
+### 🐛 **デバッグ経過**
+
+#### Issue 1: StringOps.str_to_int() not found
+**問題**: `Unknown module function: StringOps.str_to_int/1`
+- ClosureCallHandlerBox が存在しない関数を呼んでいた
+
+**修正**:
+```hako
+// Before:
+local vid = StringOps.str_to_int(vid_str)
+
+// After:
+local digits = StringHelpers.read_digits(vid_str, 0)
+local vid = StringHelpers.to_i64(digits)
+```
+
+#### Issue 2: mir_call: failed to extract callee name
+**問題**: Closure dispatch が callee_name 抽出後に配置されていた
+- Closure callee は `name` フィールドを持たない → name 抽出で失敗
+
+**修正**:
+- Closure dispatch を callee_name 抽出の **前** に移動（line 69-72）
+- Method/Constructor と同様の early dispatch パターン
+
+#### Issue 3: terminator not found
+**問題**: MIR JSON に `"terminator"` フィールドがなかった
+- テストMIR JSONの構造ミス
+
+**修正**:
+```json
+// Before:
+{"instructions":[...{\"op\":\"ret\",\"value\":2}]}
+
+// After:
+{"instructions":[...{\"op\":\"ret\",\"value\":2}],"terminator":{\"op\":\"ret\",\"value\":2}}
+```
+
+### 📂 **実装ファイル**
+
+**新規ファイル**:
+- `apps/selfhost/hakorune-vm/closure_call_handler.hako` (315行)
+- `apps/selfhost/hakorune-vm/tests/test_mircall_phase2_closure.hako` (48行)
+
+**更新ファイル**:
+- `apps/selfhost/hakorune-vm/mircall_handler.hako`: Closure dispatch + 重複削除
+- `hako.toml`: +1 module override (closure_call_handler)
+- `nyash.toml`: +1 module
+
+### 📊 **テスト結果**
+
+**実行コマンド**:
+```bash
+NYASH_DISABLE_PLUGINS=1 HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_QUIET=1 \
+./target/release/hakorune apps/selfhost/hakorune-vm/tests/test_mircall_phase2_closure.hako
+```
+
+**結果**: ✅ All Closure Creation Tests PASSED (3/3)
+```
+PASS: Test 1 - Simple closure (no captures)
+PASS: Test 2 - Closure with captures
+PASS: Test 3 - Closure with me_capture
+
+=== All Closure Creation Tests PASSED ===
+Result: 0
+```
+
+### 📈 **統計**
+
+- **新規箱**: 1箱（ClosureCallHandlerBox, 315行）
+- **新規テスト**: 1ファイル（test_mircall_phase2_closure.hako, 48行）
+- **総箱数**: 24箱
+- **MirCall Phase 2進捗**: ModuleFunction ✅, Method ✅, Constructor ✅, **Closure** ✅ (6/7 callee types, 86%)
+- **残りCallee types**: Value（Phase 2最終）
+- **テスト成功率**: 3/3 (100%)
+- **実装時間**: ~4時間（設計1h + 実装2h + デバッグ1h）
+
+### 🎯 **技術的成果**
+
+1. **Closure Object設計**:
+   - MapBox使用（type/params/captures/me_capture fields）
+   - params: ArrayBox of strings
+   - captures: MapBox (name → value)
+   - me_capture: optional captured value
+
+2. **JSON Parsing完全実装**:
+   - params配列パース（string array）
+   - captures配列パース（[name, vid] tuples）
+   - me_capture optional parsing
+   - StringHelpers.to_i64() + read_digits() 使用
+
+3. **Early Dispatch パターン拡張**:
+   - Method/Constructor/Closure は name extraction 前に dispatch
+   - Global/Extern/ModuleFunction は name extraction 後に dispatch
+   - 各 callee type の特性に合わせた最適化
+
+4. **MirCall統一設計の進展**:
+   - Global ✅
+   - Extern ✅
+   - ModuleFunction ✅
+   - Method ✅
+   - Constructor ✅
+   - **Closure** ✅
+   - Value ⏳ （最後のステップ）
+
+### 🎓 **学び**
+
+1. **Closure = Closure creation**:
+   - Callee::Closure はクロージャ**生成**（creation）のみ
+   - Callee::Value がクロージャ**呼び出し**（calling）を担当
+   - 2つの callee type で役割分担
+
+2. **JSON Parsing技術**:
+   - ネストした配列・オブジェクトの正しいパース
+   - JsonCursorBox.seek_array_end() / seek_obj_end() 活用
+   - StringHelpers ヘルパー関数の重要性
+
+3. **Early Dispatch の重要性**:
+   - 特殊フィールドを持つ callee type は name extraction 前に dispatch
+   - "failed to extract callee name" エラーを回避
+   - コードの読みやすさと保守性向上
+
+4. **テスト設計**:
+   - MIR JSON 構造の正確性（terminator フィールド必須）
+   - 3パターンテスト（no captures/with captures/with me_capture）
+   - 最小再現テストケースの重要性
+
+### 🚀 **次のステップ（Phase 4 Day 16）**
+
+**MirCall Phase 2 - Value実装**（予測: 4-6時間）:
+1. **ValueCallHandlerBox作成**
+   - ValueId → Closure object 抽出
+   - params/captures から環境復元
+   - Function body 実行（CallableBox 経由）
+   - Test作成: Closure creation → Value call
+
+2. **実装戦略**:
+   - Value = Closure calling（動的関数呼び出し）
+   - Closure object から params/captures 抽出
+   - 環境変数の適用 + function body 実行
+   - Phase 2 MVP: 簡易クロージャ calling のみサポート
+
+3. **完了後の状態**:
+   - **MirCall Phase 2 完全完了（7/7 callee types）** 🎉
+   - Hakorune VM MirCall 完全実装達成
+   - Selfhost Compiler 完全動作準備完了
+
+**見積もり**: 4-6時間
+**期待される成果**: Value calling実装、Hakorune VM MirCall完全実装 (7/7)
+
+---

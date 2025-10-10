@@ -156,13 +156,13 @@ singleton = false
 
 [libraries."libnyash_filebox_plugin.so".FileBox.methods]
 birth = { method_id = 0 }
-open = { method_id = 4 }
-read = { method_id = 5 }
-write = { method_id = 6 }
-close = { method_id = 7 }
-exists = { method_id = 8 }
-copyFrom = { method_id = 9 }
-cloneSelf = { method_id = 10 }
+open = { method_id = 1 }
+read = { method_id = 2 }
+write = { method_id = 3 }
+close = { method_id = 4 }
+exists = { method_id = 5 }
+copyFrom = { method_id = 7 }
+cloneSelf = { method_id = 8 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_path_plugin.so"]

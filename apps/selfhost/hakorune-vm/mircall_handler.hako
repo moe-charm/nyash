@@ -12,6 +12,7 @@ using "apps/selfhost/hakorune-vm/extern_call_handler.hako" as ExternCallHandlerB
 using "apps/selfhost/hakorune-vm/module_function_call_handler.hako" as ModuleFunctionCallHandlerBox
 using "apps/selfhost/hakorune-vm/method_call_handler.hako" as MethodCallHandlerBox
 using "apps/selfhost/hakorune-vm/constructor_call_handler.hako" as ConstructorCallHandlerBox
+using "apps/selfhost/hakorune-vm/closure_call_handler.hako" as ClosureCallHandlerBox
 
 static box MirCallHandlerBox {
   // Handle MirCall instruction
@@ -65,6 +66,11 @@ static box MirCallHandlerBox {
       return ConstructorCallHandlerBox.handle(box_type, args_array, dst_reg, regs)
     }
 
+    // Closure: Dispatch directly (params/captures handled in ClosureCallHandlerBox)
+    if callee_type == "Closure" {
+      return ClosureCallHandlerBox.handle(mir_call_json, dst_reg, regs)
+    }
+
     // For other callee types: Extract name
     local callee_name = CalleeParserBox.extract_name(mir_call_json)
     if callee_name == null {
@@ -80,13 +86,9 @@ static box MirCallHandlerBox {
       return ExternCallHandlerBox.handle(callee_name, args_array, dst_reg, regs, mem)
     }
 
-    // Phase 2: ModuleFunction, Closure, Value
+    // Phase 2: ModuleFunction, Value
     if callee_type == "ModuleFunction" {
       return ModuleFunctionCallHandlerBox.handle(callee_name, args_array, dst_reg, regs)
-    }
-
-    if callee_type == "Closure" {
-      return Result.Err("mir_call: Closure not yet implemented (Phase 2)")
     }
 
     if callee_type == "Value" {
