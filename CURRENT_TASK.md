@@ -1,6 +1,27 @@
 # CURRENT_TASK — 現在のタスクと進捗
 
 
+## ✅ Method Router 箱化アップデート（2025-10-14 完了）
+
+- method_router_box を 2 つの小箱で分割
+  - `method_ref.rs`: methodRef 疑似メソッドを集約し、型チェックと CallableBox 生成をFail-Fastで実施
+  - `map_callable.rs`: Map.call/callAsync の糖衣を隔離。プラグインは get/set 群のみ実装すればよい
+- ルーター本体は各小箱へ委譲するだけに縮小。将来追加する糖衣（例: Map.deleteIf 等）も箱単位で追加可能
+- TLV Codec を `src/runtime/codec/codec_box.rs` に分離し、README で責務を明記。encode_value() で型分岐を一箇所に圧縮
+- docs/reference/plugin-system/vm-plugin-integration.md に Phase 15.7 の箱構造を追加
+
+## ✅ CallableBox methodRef 一元化（2025-10-12 完了）
+
+- methodRef は VM 予約疑似メソッドとして実装
+  - `receiver.methodRef(name: String, arity: Integer)` を VM ルーターが最優先で処理
+  - 型不一致・負の arity は Fail-Fast でエラーにする
+  - CallableBox 生成時は `bx.share_box()` を束縛して呼び出し経路を統一
+- Array/Map plugin から methodRef 実装を撤去し、スロット 113 は VM 側でのみ扱う
+- Map.call/callAsync は VM シュガーで `get(key)` → CallableBox → call/callAsync へ委譲
+  - plugin 側は get/set 群だけ維持（call 系の実装不要）
+- 既存スモーク: quick/core/callable_* は緑維持
+- TODO: ResolverBox で MethodHandle を取得する設計稿、docs 追記
+
 ## ✅ Router Slot化 + CallableBox 導入（2025-10-10 完了）
 
 - Router を String/Array/Map で完全に表駆動（slot）に統一
@@ -24,7 +45,7 @@
 - Map シュガー: `Map.call/Map.callAsync`（CallableBox への薄い委譲）
 - String 残りスロット（replace/trim/toUpper/toLower 等）のスモーク拡充
 
-**最終更新**: 2025-10-09
+**最終更新**: 2025-10-14
 
 ---
 
@@ -367,3 +388,14 @@ Acceptance
 - Runner: default plugin policy is auto; no regressions
 - VM: new→birth unified; no double-birth
 
+
+
+## Plugin Capabilities & Deterministic Guard (Phase 15.7)
+- Added docs: docs/reference/plugin-system/capabilities.md
+- Set NET caps (1<<1) for nyash-net-plugin boxes; FileBox already IO (1<<0)
+- Deterministic mode now denies IO/NET boxes; on-demand reprobe disabled (unchanged)
+- PathBox remains caps=0 (deterministic/pure)
+
+Acceptance:
+- Quick/plugins/full smokes stay green
+- Deterministic denial works for FileBox/Net family when HAKO_DETERMINISTIC=1

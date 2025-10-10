@@ -6,9 +6,14 @@
 //!   - BuiltinInvoker → delegate to core semantics (String/Array/Map)
 //!   - PluginInvoker  → invoke v2 TypeBox FFI through plugin host
 
+mod map_callable;
+mod method_ref;
+
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
 use crate::box_trait::NyashBox;
+use map_callable::MapCallableBox;
+use method_ref::MethodRefBox;
 
 
 #[inline]
@@ -34,6 +39,10 @@ pub fn route(
     method: &str,
     args: &[VMValue],
 ) -> Result<VMValue, VMError> {
+    if let Some(result) = MethodRefBox::try_route(receiver, method, args) {
+        return result;
+    }
+
     // Primitive String — table-driven via TypeRegistry slots
     if let VMValue::String(s) = receiver {
         let _ = maybe_arity_guard("StringBox", method, args.len());
@@ -107,6 +116,9 @@ pub fn route(
     if let VMValue::BoxRef(bx) = receiver {
         // Plugin TypeBox v2
         if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+            if let Some(result) = MapCallableBox::try_route(_interp, receiver, method, args) {
+                return result;
+            }
             let mut argv: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
             for v in args {
                 if let VMValue::BoxRef(bx) = v {
@@ -156,7 +168,7 @@ pub fn route(
                                         } else { v.clone() }
                                     });
                                 if let Some(recv) = &cb.receiver {
-                                    let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.clone_box()));
+                                    let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));
                                     crate::runtime::method_router_box::route(_interp, &recv_vm, &cb.method, &argv)
                                 } else {
                                     Err(VMError::InvalidInstruction("CallableBox without receiver is not supported yet".into()))
@@ -199,7 +211,7 @@ pub fn route(
                                             crate::runtime::global_hooks::safepoint_and_poll();
                                             // Fallback: if not ready, compute synchronously in current interpreter context
                                             if !fut.ready() {
-                                                let recv_vm2 = VMValue::BoxRef(std::sync::Arc::from(recv.clone_box()));
+                                                let recv_vm2 = VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));
                                                 let mut argv2: Vec<VMValue> = Vec::new();
                                                 if args.len() == 1 {
                                                     if let VMValue::BoxRef(arrbx) = &args[0] {
@@ -217,7 +229,7 @@ pub fn route(
                                             return Ok(VMValue::from_nyash_box(Box::new(fut)));
                                         } else {
                                             // Builtin receiver — schedule via single-thread scheduler and resolve later
-                                            let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.clone_box()));
+                                            let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));
                                             let mut argv_vm: Vec<VMValue> = Vec::new();
                                             if args.len() == 1 {
                                                 if let VMValue::BoxRef(arrbx) = &args[0] {
@@ -278,7 +290,7 @@ pub fn route(
                                     }
                                 }
                                 let res = if let Some(recv) = &cb.receiver {
-                                    let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.clone_box()));
+                                    let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));
                                     let mut argv: Vec<VMValue> = Vec::new();
                                     if args.len() == 1 {
                                         if let VMValue::BoxRef(arrbx) = &args[0] {
@@ -336,12 +348,7 @@ pub fn route(
                                 let s = crate::boxes::json::stringify_any(arr.clone_box());
                                 Ok(VMValue::String(s))
                             }
-                            113 => { // methodRef(name, arity) -> CallableBox
-                                let name = args.get(0).map(|v| v.to_string()).unwrap_or_default();
-                                let ar = args.get(1).map(|v| v.as_integer().unwrap_or(0)).unwrap_or(0);
-                                let cb = crate::boxes::callable::CallableBox::new(Some(arr.clone_box()), name, ar as usize);
-                                Ok(VMValue::from_nyash_box(Box::new(cb)))
-                            }
+                            // slot 113 (methodRef) is handled as a VM pseudo-method earlier
                             104 => { // pop
                                 Ok(VMValue::from_nyash_box(arr.pop()))
                             }
@@ -412,7 +419,7 @@ pub fn route(
                                 let key_box = args[0].to_nyash_box();
                                 let callee = mp.get(key_box);
                                 if let Some(cb) = callee.as_any().downcast_ref::<crate::boxes::callable::CallableBox>() {
-                                    let recv_vm = VMValue::BoxRef(std::sync::Arc::from(cb.receiver.as_ref().ok_or_else(|| VMError::InvalidInstruction("CallableBox without receiver".into()))?.clone_box()));
+                                    let recv_vm = VMValue::BoxRef(std::sync::Arc::from(cb.receiver.as_ref().ok_or_else(|| VMError::InvalidInstruction("CallableBox without receiver".into()))?.share_box()));
                                     // Reuse shared argv flattener: treat args[1] as the single argv-array input
                                     let argv: Vec<VMValue> = hako_core_callable::flatten_argv(
                                         &args[1..2],

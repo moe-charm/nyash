@@ -118,6 +118,10 @@ impl PluginLoaderV2 {
         // Prefer invoking via the existing handle's invoke_fn when available
         let tlv = crate::runtime::plugin_ffi_common::encode_args(args);
         if dbg_on() {
+            let hex_args = tlv.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ");
+            eprintln!("[PluginLoaderV2] call args tlv: {}", hex_args);
+        }
+        if dbg_on() {
             eprintln!(
                 "[PluginLoaderV2] call {}.{}: type_id={} method_id={} instance_id={}",
                 box_type, method_name, type_id, method_id, instance_id

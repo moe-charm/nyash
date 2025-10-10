@@ -38,7 +38,8 @@ pub fn plugin_policy_on() -> bool {
         let s = v.to_ascii_lowercase();
         s == "auto" || s == "force"
     } else {
-        false
+        // Default ON (auto) when unset
+        true
     }
 }
 

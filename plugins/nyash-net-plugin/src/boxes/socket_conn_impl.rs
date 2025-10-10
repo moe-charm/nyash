@@ -31,5 +31,5 @@ pub static nyash_typebox_SockConnBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     name: b"SockConnBox\0".as_ptr() as *const std::os::raw::c_char,
     resolve: Some(sockconn_resolve),
     invoke_id: Some(sockconn_invoke_id),
-    capabilities: 0,
+    capabilities: 1u64 << 1,
 };

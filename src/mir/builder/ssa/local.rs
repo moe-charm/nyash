@@ -87,8 +87,7 @@ pub fn finalize_callee_and_args(builder: &mut MirBuilder, callee: &mut Callee, a
                 }
             }
         }
-        let r_local = recv(builder, r);
-        *callee = Callee::Method { box_name, method, receiver: Some(r_local), certainty };
+        *callee = Callee::Method { box_name, method, receiver: Some(r), certainty };
     }
     for a in args.iter_mut() {
         *a = arg(builder, *a);

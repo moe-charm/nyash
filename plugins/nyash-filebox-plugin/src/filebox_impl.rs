@@ -3,9 +3,9 @@
 use crate::constants::*;
 use crate::state::{FileBoxInstance, INSTANCES, INSTANCE_COUNTER};
 use crate::tlv_helpers::{
-    preflight, tlv_parse_handle, tlv_parse_optional_string_and_bytes, tlv_parse_string,
-    tlv_parse_two_strings, write_tlv_bool, write_tlv_bytes, write_tlv_i32, write_tlv_result,
-    write_tlv_void,
+    preflight, tlv_parse_handle, tlv_parse_header, tlv_parse_optional_string_payload,
+    tlv_parse_string, tlv_parse_string_at, tlv_parse_two_strings, write_tlv_bool, write_tlv_bytes,
+    write_tlv_i32, write_tlv_result, write_tlv_void,
 };
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::raw::c_char;
@@ -42,7 +42,7 @@ pub extern "C" fn filebox_invoke_id(
 ) -> i32 {
     unsafe {
         match method_id {
-            METHOD_BIRTH => handle_birth(result, result_len),
+            METHOD_BIRTH => handle_birth(args, args_len, result, result_len),
             METHOD_FINI => handle_fini(instance_id),
             METHOD_OPEN => handle_open(instance_id, args, args_len, result, result_len),
             METHOD_READ => handle_read(instance_id, args, args_len, result, result_len),
@@ -56,7 +56,12 @@ pub extern "C" fn filebox_invoke_id(
     }
 }
 
-unsafe fn handle_birth(result: *mut u8, result_len: *mut usize) -> i32 {
+unsafe fn handle_birth(
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
     if result_len.is_null() {
         return NYB_E_INVALID_ARGS;
     }
@@ -64,8 +69,25 @@ unsafe fn handle_birth(result: *mut u8, result_len: *mut usize) -> i32 {
         return NYB_E_SHORT_BUFFER;
     }
     let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let mut initial = FileBoxInstance::new();
+    // Optional constructor argument: path (open immediately in read-write mode)
+    if args_len > 0 {
+        let slice = std::slice::from_raw_parts(args, args_len);
+        if let Ok(path) = tlv_parse_string(slice) {
+            match open_file("rw", &path) {
+                Ok(file) => {
+                    initial.file = Some(file);
+                    initial.path = path;
+                }
+                Err(_) => {
+                    // If open fails, keep instance valid without a file; caller may open later
+                    initial.path = path;
+                }
+            }
+        }
+    }
     if let Ok(mut map) = INSTANCES.lock() {
-        map.insert(id, FileBoxInstance::new());
+        map.insert(id, initial);
     } else {
         return NYB_E_PLUGIN_ERROR;
     }
@@ -127,23 +149,34 @@ unsafe fn handle_read(
     result_len: *mut usize,
 ) -> i32 {
     let slice = std::slice::from_raw_parts(args, args_len);
+    let mut open_path: Option<String> = None;
     if args_len > 0 {
-        match tlv_parse_string(slice) {
-            Ok(path) => match open_file("r", &path) {
-                Ok(mut file) => {
-                    let mut buf = Vec::new();
-                    if file.read_to_end(&mut buf).is_err() {
-                        return NYB_E_PLUGIN_ERROR;
+        match tlv_parse_header(slice) {
+            Ok((_ver, argc, mut pos)) => {
+                if argc >= 1 {
+                    match tlv_parse_string_at(slice, &mut pos) {
+                        Ok(path) => open_path = Some(path),
+                        Err(_) => return NYB_E_INVALID_ARGS,
                     }
-                    let need = 8usize.saturating_add(buf.len());
-                    if preflight(result, result_len, need) {
-                        return NYB_E_SHORT_BUFFER;
-                    }
-                    return write_tlv_bytes(&buf, result, result_len);
                 }
-                Err(_) => return NYB_E_PLUGIN_ERROR,
-            },
+            }
             Err(_) => return NYB_E_INVALID_ARGS,
+        }
+    }
+    if let Some(path) = open_path {
+        match open_file("r", &path) {
+            Ok(mut file) => {
+                let mut buf = Vec::new();
+                if file.read_to_end(&mut buf).is_err() {
+                    return NYB_E_PLUGIN_ERROR;
+                }
+                let need = 8usize.saturating_add(buf.len());
+                if preflight(result, result_len, need) {
+                    return NYB_E_SHORT_BUFFER;
+                }
+                return write_tlv_bytes(&buf, result, result_len);
+            }
+            Err(_) => return NYB_E_PLUGIN_ERROR,
         }
     }
     let mut guard = match INSTANCES.lock() {
@@ -162,8 +195,29 @@ unsafe fn handle_read(
         return NYB_E_PLUGIN_ERROR;
     }
     let mut buf = Vec::new();
-    if file.read_to_end(&mut buf).is_err() {
-        return NYB_E_PLUGIN_ERROR;
+    let mut read_ok = file.read_to_end(&mut buf).is_ok();
+    if !read_ok {
+        // Attempt to reopen in read-write mode if existing handle lacks read perms
+        if !inst.path.is_empty() {
+            match open_file("rw", &inst.path) {
+                Ok(mut reopened) => {
+                    if reopened.seek(SeekFrom::Start(0)).is_ok()
+                        && reopened.read_to_end(&mut buf).is_ok()
+                    {
+                        inst.file = Some(reopened);
+                        read_ok = true;
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+    }
+    if !read_ok {
+        if let Some(buffer) = inst.buffer.as_ref() {
+            buf = buffer.clone();
+        } else {
+            return NYB_E_PLUGIN_ERROR;
+        }
     }
     let need = 8usize.saturating_add(buf.len());
     if preflight(result, result_len, need) {
@@ -180,7 +234,7 @@ unsafe fn handle_write(
     result_len: *mut usize,
 ) -> i32 {
     let slice = std::slice::from_raw_parts(args, args_len);
-    match tlv_parse_optional_string_and_bytes(slice) {
+    match crate::tlv_helpers::tlv_parse_optional_string_payload(slice) {
         Ok((Some(path), data)) => {
             if preflight(result, result_len, 12) {
                 return NYB_E_SHORT_BUFFER;
@@ -346,6 +400,7 @@ fn open_file(mode: &str, path: &str) -> std::io::Result<std::fs::File> {
         "rw" | "r+" => std::fs::OpenOptions::new()
             .read(true)
             .write(true)
+            .create(true)
             .open(path),
         _ => std::fs::File::open(path),
     }

@@ -4,6 +4,13 @@ Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI 
 
 ## Policy & Lifecycle — Final Rules (Phase 15.7)
 
+## Capabilities (Policy Hooks)
+
+See `docs/reference/plugin-system/capabilities.md` for capability bit definitions (IO/NET/ENV/TIME/...).
+- Deterministic runs deny IO/NET boxes.
+- Plugins should set `NyashTypeBoxFfi.capabilities` appropriately.
+
+
 - Plugin Policy: default ON (auto). If no plugins are configured in hako.toml/nyash.toml, nothing is loaded (no side‑effects). CI などで完全遮断したい場合のみ `NYASH_DISABLE_PLUGINS=1` を使う。
 - Creation: `new T(args…)` is always followed by `birth(me,args…)` by VM. When `birth` is not implemented, it is treated as no‑op (idempotent). Builder の auto‑birth は既定OFF。
 - Plugin Init: two idempotent stages are allowed (optional)
@@ -12,6 +19,13 @@ Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI 
 - Provider Resolution: single order — `PluginProvider(T) → BuiltinProvider(T) → Registry/Fallback(T) → error`. Before resolving, the registry performs on‑demand re‑probe for `T` to avoid timing issues.
 - Boot Disabled Non‑cache: boot() no longer caches “disabled” as success (allows later retry when policy flips to ON). Operationally we run with policy=auto by default so this path is rarely used.
 
+
+## 📦 Phase 15.7 Structural Boxes
+
+- `src/runtime/method_router_box/method_ref.rs` が methodRef 疑似メソッドを担当。VM ルーターは最初にここへ委譲し、型チェックと CallableBox 生成を一箇所で行う。
+- `src/runtime/method_router_box/map_callable.rs` に Map.call/Map.callAsync の糖衣実装を隔離。プラグインは get/set 群だけ実装すれば良く、call 系は VM 側で一貫化。
+- `src/runtime/codec/codec_box.rs` は TLV エンコード/デコードの単一窓口。Host/Plugin ハンドル、コア Box の扱いをここで統制し、plugin_ffi_common と同じポリシーを維持する。
+- ディレクトリ README (`src/runtime/codec/README.md`) で境界の責務を明示。将来 helper を増やす場合もこの箱を経由する。
 
 ## 🎯 概要
 

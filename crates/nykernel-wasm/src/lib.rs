@@ -50,7 +50,9 @@ mod wasm_runtime {
 
     #[no_mangle]
     pub extern "C" fn nykernel_store_i64(addr: i64, val: i64) {
-        unsafe { *(addr as *mut i64) = val; }
+        unsafe {
+            *(addr as *mut i64) = val;
+        }
     }
 }
 
@@ -58,10 +60,13 @@ mod wasm_runtime {
 #[cfg(not(target_arch = "wasm32"))]
 mod host_stubs {
     #[no_mangle]
-    pub extern "C" fn nykernel_malloc(_size: i64) -> i64 { 0 }
+    pub extern "C" fn nykernel_malloc(_size: i64) -> i64 {
+        0
+    }
     #[no_mangle]
-    pub extern "C" fn nykernel_load_i64(_addr: i64) -> i64 { 0 }
+    pub extern "C" fn nykernel_load_i64(_addr: i64) -> i64 {
+        0
+    }
     #[no_mangle]
     pub extern "C" fn nykernel_store_i64(_addr: i64, _val: i64) {}
 }
-

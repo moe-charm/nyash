@@ -34,7 +34,7 @@ pub static nyash_typebox_ResponseBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     name: b"ResponseBox\0".as_ptr() as *const std::os::raw::c_char,
     resolve: Some(responsebox_resolve),
     invoke_id: Some(responsebox_invoke_id),
-    capabilities: 0,
+    capabilities: 1u64 << 1,
 };
 unsafe fn response_invoke(
     m: u32,

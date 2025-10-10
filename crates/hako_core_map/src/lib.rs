@@ -1,8 +1,9 @@
 //! hako_core_map — shared helpers for Map semantics
 
 /// Return size as i64
-pub fn size(len: usize) -> i64 { len as i64 }
-
+pub fn size(len: usize) -> i64 {
+    len as i64
+}
 
 use std::collections::HashMap;
 
@@ -13,12 +14,15 @@ pub fn keys_sorted_from_maps_i64_str<V1, V2>(
     m_str: &HashMap<String, V2>,
 ) -> Vec<String> {
     let mut keys: Vec<String> = Vec::with_capacity(m_i64.len() + m_str.len());
-    for k in m_i64.keys() { keys.push(k.to_string()); }
-    for k in m_str.keys() { keys.push(k.clone()); }
+    for k in m_i64.keys() {
+        keys.push(k.to_string());
+    }
+    for k in m_str.keys() {
+        keys.push(k.clone());
+    }
     keys.sort();
     keys
 }
-
 
 /// Return values aligned to the given keys. For each key in `keys`, look up
 /// the corresponding entry in `map_i64` (when the key parses as i64) or
@@ -39,8 +43,6 @@ pub fn values_for_keys<'a, V>(
     }
     out
 }
-
-
 
 /// Return whether `map` contains the given string key.
 pub fn has_key_str<V>(map: &std::collections::HashMap<String, V>, key: &str) -> bool {

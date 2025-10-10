@@ -305,9 +305,11 @@ run_nyash_vm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
+            HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
                 timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         else
+            HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
                 "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         fi
@@ -322,9 +324,11 @@ run_nyash_vm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
+            HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
                 timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         else
+            HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
                 "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         fi

@@ -52,7 +52,12 @@ pub(super) fn load_plugin(
             &lib_def.boxes
         );
     }
-    let lib = unsafe { Library::new(&lib_path) }.map_err(|_| BidError::PluginError)?;
+    let lib = unsafe { Library::new(&lib_path) }.map_err(|err| {
+        if super::util::dbg_on() {
+            eprintln!("[PluginLoaderV2] load_plugin dlopen failed lib='{}' path='{}': {}", lib_name, lib_path.display(), err);
+        }
+        BidError::PluginError
+    })?;
     let lib_arc = Arc::new(lib);
 
     unsafe {
@@ -78,31 +83,41 @@ pub(super) fn load_plugin(
     for box_type in &lib_def.boxes {
         let sym_name = format!("nyash_typebox_{}\0", box_type);
         unsafe {
-            if let Ok(tb_sym) =
-                lib_arc.get::<Symbol<&super::super::types::NyashTypeBoxFfi>>(sym_name.as_bytes())
-            {
-                super::util::dbg_once(
-                    &format!("typebox_present:{}:{}", lib_name, box_type),
-                    &format!(
-                        "[PluginLoaderV2] TypeBox present for {}.{} (symbol='{}')",
-                        lib_name,
-                        box_type,
-                        sym_name.trim_end_matches('\0')
-                    ),
-                );
-                specs::record_typebox_spec(loader, lib_name, box_type, &*tb_sym)?;
-            } else {
-                super::util::dbg_once(
-                    &format!("typebox_missing:{}:{}", lib_name, box_type),
-                    &format!(
-                        "[PluginLoaderV2] NOTE: TypeBox symbol not found for {}.{} (symbol='{}'). Migrate plugin to Nyash ABI v2 to enable per-Box dispatch.",
-                        lib_name,
-                        box_type,
-                        sym_name.trim_end_matches('\0')
-                    ),
-                );
-                // Attempt a unified re-probe path (records invoke id if available later)
-                let _ = super::metadata::probe_and_record_typebox_invoke(loader, lib_name, box_type);
+            if super::util::dbg_on() {
+                eprintln!("[PluginLoaderV2] DEBUG typebox probe start {}.{}", lib_name, box_type);
+            }
+            match lib_arc.get::<Symbol<&super::super::types::NyashTypeBoxFfi>>(sym_name.as_bytes()) {
+                Ok(tb_sym) => {
+                    if super::util::dbg_on() {
+                        eprintln!("[PluginLoaderV2] DEBUG typebox ok {}.{}", lib_name, box_type);
+                    }
+                    super::util::dbg_once(
+                        &format!("typebox_present:{}:{}", lib_name, box_type),
+                        &format!(
+                            "[PluginLoaderV2] TypeBox present for {}.{} (symbol='{}')",
+                            lib_name,
+                            box_type,
+                            sym_name.trim_end_matches('\0')
+                        ),
+                    );
+                    specs::record_typebox_spec(loader, lib_name, box_type, &*tb_sym)?;
+                }
+                Err(err) => {
+                    if super::util::dbg_on() {
+                        eprintln!("[PluginLoaderV2] TypeBox lookup failed for {}.{} (symbol='{}'): {}", lib_name, box_type, sym_name.trim_end_matches('\0'), err);
+                    }
+                    super::util::dbg_once(
+                        &format!("typebox_missing:{}:{}", lib_name, box_type),
+                        &format!(
+                            "[PluginLoaderV2] NOTE: TypeBox symbol not found for {}.{} (symbol='{}'). Migrate plugin to Nyash ABI v2 to enable per-Box dispatch.",
+                            lib_name,
+                            box_type,
+                            sym_name.trim_end_matches('\0')
+                        ),
+                    );
+                    // Attempt a unified re-probe path (records invoke id if available later)
+                    let _ = super::metadata::probe_and_record_typebox_invoke(loader, lib_name, box_type);
+                }
             }
         }
         // Opportunistically ingest nyash_box.toml/hako_box.toml located near the library path

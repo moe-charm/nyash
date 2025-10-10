@@ -420,9 +420,7 @@ impl MirBuilder {
         let raw_value_id = self.build_expression(value)?;
         // Correctness-first: assignment results may be used across control-flow joins.
         // Pin to a slot so the value has a block-local def and participates in PHI merges.
-        let value_id = self
-            .pin_to_slot(raw_value_id, "@assign")
-            .unwrap_or(raw_value_id);
+        let value_id = raw_value_id;
 
         // In SSA form, each assignment creates a new value
         // Dev-stability: inside ParserBox.* methods, avoid binding `me`'s ValueId to other variable names
@@ -441,6 +439,9 @@ impl MirBuilder {
                 } else { value_id }
             } else { value_id }
         } else { value_id };
+        if std::env::var("NYASH_ASSIGN_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[assign] {} -> v%{}", var_name, value_id.0);
+        }
         self.variable_map.insert(var_name.clone(), value_id);
 
         Ok(value_id)

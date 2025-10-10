@@ -34,9 +34,16 @@ check_dynamic_plugins() {
     candidates[mathbox]="nyash-math-plugin/libnyash_math_plugin.so nyash-math-plugin/libnyash_math_plugin.a nyash-math/libnyash_math.so"
     candidates[arraybox]="nyash-array-plugin/libnyash_array_plugin.so nyash-array-plugin/libnyash_array_plugin.a"
     candidates[mapbox]="nyash-map-plugin/libnyash_map_plugin.so nyash-map-plugin/libnyash_map_plugin.a"
+    candidates[filebox]="nyash-filebox-plugin/libnyash_filebox_plugin.so nyash-filebox-plugin/libnyash_filebox_plugin.a"
 
-    local required_plugins=("stringbox" "integerbox" "mathbox" "arraybox" "mapbox")
+    local required_plugins=("stringbox" "integerbox" "mathbox" "arraybox" "mapbox" "filebox")
     local missing_plugins=()
+
+    # Always rebuild when auto-build is enabled to refresh .so artifacts
+    if [ "${SMOKES_AUTO_BUILD_PLUGINS:-1}" = "1" ]; then
+        rebuild_plugins || true
+    fi
+
 
     if [ ! -d "$plugin_dir" ]; then
         echo "[WARN] Plugin directory not found: $plugin_dir" >&2
@@ -191,7 +198,11 @@ rebuild_plugins() {
     fi
 
     # Minimal required set for plugin-on smokes
-    if cargo build --release -p nyash-array-plugin -p nyash-map-plugin -p nyash-string-plugin >/dev/null 2>&1; then
+    if cargo build --release -p nyash-array-plugin -p nyash-map-plugin -p nyash-string-plugin -p nyash-filebox-plugin >/dev/null 2>&1; then
+        if [ -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" ]; then
+            cp -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" \
+                  "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so" 2>/dev/null || true
+        fi
         echo "[INFO] Plugin rebuild completed (cargo)" >&2
         return 0
     fi

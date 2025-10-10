@@ -237,10 +237,7 @@ impl MirInterpreter {
             return Ok(());
         }
 
-        // Birth contracts observation (centralized)
-        if method == "birth" {
-            self.lifecycle_contracts_birth(box_val, args.len());
-        }
+        // Birth contracts are recorded at entry for birth(); avoid double-recording here.
         // Route via Router for plugin boxes; builtin/instance → builtin executor
         {
             let recv_any = self.reg_load(box_val)?;

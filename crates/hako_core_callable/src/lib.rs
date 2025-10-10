@@ -16,9 +16,11 @@ pub fn async_enabled_from_env() -> bool {
 
 /// Join policy hint: how many polls to attempt eagerly (tiny shim)
 pub fn eager_poll_hint() -> usize {
-    std::env::var("HAKO_CALLABLE_EAGER_POLL").ok().and_then(|s| s.parse().ok()).unwrap_or(0)
+    std::env::var("HAKO_CALLABLE_EAGER_POLL")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0)
 }
-
 
 /// Generic argv flattener:
 /// - If args has length 1 and `is_array` returns true for the first element,
@@ -35,7 +37,9 @@ where
         let a = &args[0];
         let n = len(a);
         let mut out = Vec::with_capacity(n);
-        for i in 0..n { out.push(get(a, i)); }
+        for i in 0..n {
+            out.push(get(a, i));
+        }
         out
     } else {
         args.to_vec()

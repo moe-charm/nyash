@@ -191,6 +191,25 @@ pub fn tlv_parse_optional_string_and_bytes(data: &[u8]) -> Result<(Option<String
     }
 }
 
+pub fn tlv_parse_optional_string_payload(data: &[u8]) -> Result<(Option<String>, Vec<u8>), ()> {
+    if let Ok(res) = tlv_parse_optional_string_and_bytes(data) {
+        return Ok(res);
+    }
+    let (_, argc, mut pos) = tlv_parse_header(data)?;
+    match argc {
+        0 => Err(()),
+        1 => {
+            let s = tlv_parse_string_at(data, &mut pos)?;
+            Ok((None, s.into_bytes()))
+        }
+        _ => {
+            let path = tlv_parse_string_at(data, &mut pos)?;
+            let data_str = tlv_parse_string_at(data, &mut pos)?;
+            Ok((Some(path), data_str.into_bytes()))
+        }
+    }
+}
+
 pub fn tlv_parse_handle(data: &[u8]) -> Result<(u32, u32), ()> {
     let (_, argc, mut pos) = tlv_parse_header(data)?;
     if argc < 1 {

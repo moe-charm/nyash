@@ -31,7 +31,7 @@ pub static nyash_typebox_ServerBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     name: b"ServerBox\0".as_ptr() as *const std::os::raw::c_char,
     resolve: Some(serverbox_resolve),
     invoke_id: Some(serverbox_invoke_id),
-    capabilities: 0,
+    capabilities: 1u64 << 1,
 };
 unsafe fn server_invoke(
     m: u32,

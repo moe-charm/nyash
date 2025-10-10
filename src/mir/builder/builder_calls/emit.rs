@@ -201,14 +201,10 @@ impl MirBuilder {
             }
         }
 
-        // Before creating the call, enforce slot (pin) + LocalSSA for Method receiver in the current block
+        // Before creating the call, ensure receiver is materialized in the current block
         let callee = match callee {
             Callee::Method { box_name, method, receiver: Some(r), certainty } => {
-                // Pin to a named slot so start_new_block can propagate across entries
-                let r_pinned = self.pin_to_slot(r, "@recv").unwrap_or(r);
-                // And ensure in-block materialization for this emission site
-                let r_local = self.local_recv(r_pinned);
-                Callee::Method { box_name, method, receiver: Some(r_local), certainty }
+                Callee::Method { box_name, method, receiver: Some(r), certainty }
             }
             other => other,
         };
@@ -225,6 +221,9 @@ impl MirBuilder {
         let mut callee2 = callee.clone();
         let mut args2 = args_local.clone();
         crate::mir::builder::materialize::call_site::finalize_call_site(self, &mut callee2, &mut args2);
+        if let (Some(orig), Callee::Method { receiver, .. }) = (orig_recv, &mut callee2) {
+            *receiver = Some(orig);
+        }
         // Dev trace: show final callee/recv right before emission (guarded)
         if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") || super::super::utils::builder_debug_enabled() {
             if let Callee::Method { method, receiver, box_name, .. } = &callee2 {

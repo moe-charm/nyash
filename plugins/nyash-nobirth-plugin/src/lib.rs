@@ -18,7 +18,9 @@ const M_FINI: u32 = u32::MAX;
 
 use std::ffi::CStr;
 extern "C" fn nobirth_resolve(name: *const std::os::raw::c_char) -> u32 {
-    if name.is_null() { return 0; }
+    if name.is_null() {
+        return 0;
+    }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
         // intentionally no "birth"

@@ -159,7 +159,9 @@ extern "C" fn integer_invoke_id(
                 } else {
                     return E_PLUGIN;
                 }
-                if preflight(result, result_len, 4) { return E_SHORT; }
+                if preflight(result, result_len, 4) {
+                    return E_SHORT;
+                }
                 let b = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
                 *result_len = 4;

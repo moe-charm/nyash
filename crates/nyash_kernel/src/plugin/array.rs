@@ -144,11 +144,13 @@ pub extern "C" fn nyash_array_len_h_alias(handle: i64) -> i64 {
 // Create a new builtin ArrayBox and return its HostHandle (u64 as i64)
 #[no_mangle]
 pub extern "C" fn nyash_array_new_h() -> i64 {
-    use nyash_rust::{boxes::array::ArrayBox, box_trait::NyashBox};
+    use nyash_rust::{box_trait::NyashBox, boxes::array::ArrayBox};
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(ArrayBox::new());
     nyash_rust::runtime::host_handles::to_handle_arc(arc) as i64
 }
 
 // Dotted alias for the same symbol (for consistency with other exports)
 #[export_name = "nyash.array.new_h"]
-pub extern "C" fn nyash_array_new_h_alias() -> i64 { nyash_array_new_h() }
+pub extern "C" fn nyash_array_new_h_alias() -> i64 {
+    nyash_array_new_h()
+}

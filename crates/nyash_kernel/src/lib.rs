@@ -249,7 +249,10 @@ pub extern "C" fn nyrt_time_now_ms() -> i64 {
 // Note: Not a full JSON serializer; intended for smoke/integration parity.
 #[export_name = "nyash.json.stringify_h"]
 pub extern "C" fn nyash_json_stringify_h_export(h: i64) -> i64 {
-    use nyash_rust::{box_trait::{NyashBox, StringBox}, runtime::host_handles as handles};
+    use nyash_rust::{
+        box_trait::{NyashBox, StringBox},
+        runtime::host_handles as handles,
+    };
     if h <= 0 {
         return 0;
     }

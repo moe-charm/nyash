@@ -19,34 +19,49 @@ fn policy_on() -> bool {
 /// Boot plugin host and register providers exactly once. Returns true if booted (or already booted).
 pub fn boot() -> bool {
     if let Some(v) = BOOTED.get() { return *v; }
-
     if !policy_on() { return false; }
 
-    let ok = (|| {
+    // Choose config candidates (prefer explicit override)
+    let mut tried: Vec<String> = Vec::new();
+    let mut success = false;
 
-        // Choose config candidates (prefer explicit override)
-        let mut tried: Vec<String> = Vec::new();
-        if let Some(cfg) = crate::common::env_helpers::get_first(&["NYASH_PLUGIN_CONFIG", "HAKO_PLUGIN_CONFIG"]) {
-            tried.push(cfg.clone());
-            if crate::runtime::init_global_plugin_host(&cfg).is_ok() {
-                return register_providers_from_current();
+    let try_init = |cfg: &str| -> bool {
+        match crate::runtime::init_global_plugin_host(cfg) {
+            Ok(()) => {
+                // Libraries loaded OK → register providers now
+                register_providers_from_current()
+            }
+            Err(_) => {
+                // Partial init path: if config was parsed, register providers anyway
+                if register_providers_from_current() {
+                    if crate::runtime::env_gate_box::debug_plugin() {
+                        eprintln!("[plugin-boot] libraries failed for '{}', providers registered from cached config (on-demand load)", cfg);
+                    }
+                    false
+                } else {
+                    false
+                }
             }
         }
+    };
+
+    if let Some(cfg) = crate::common::env_helpers::get_first(&["NYASH_PLUGIN_CONFIG", "HAKO_PLUGIN_CONFIG"]) {
+        tried.push(cfg.clone());
+        success = try_init(&cfg);
+    }
+    if !success {
         for cfg in ["nyash.toml", "hako.toml", "hakorune.toml"].iter() {
             tried.push((*cfg).into());
-            if crate::runtime::init_global_plugin_host(cfg).is_ok() {
-                return register_providers_from_current();
-            }
+            if try_init(cfg) { success = true; break; }
         }
-        // Optionally log (quiet by default)
-        if crate::runtime::env_gate_box::debug_plugin() {
-            eprintln!("[plugin-boot] failed to init from candidates: {:?}", tried);
-        }
-        true // do not hard fail; caller may choose to restrict builtin fallback
-    })();
+    }
 
-    let _ = BOOTED.set(ok);
-    ok
+    if !success && crate::runtime::env_gate_box::debug_plugin() {
+        eprintln!("[plugin-boot] failed to init from candidates: {:?}", tried);
+    }
+
+    if success { let _ = BOOTED.set(true); }
+    success
 }
 
 fn register_providers_from_current() -> bool {

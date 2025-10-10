@@ -309,13 +309,17 @@ extern "C" fn string_invoke_id(
             M_SUBSTRING => {
                 // args: start(i64), end(i64)
                 let start = read_arg_i64(args, args_len, 0).unwrap_or(0);
-                let end   = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
+                let end = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
                         let sub = hako_core_string::substring_bytes(&inst.s, start, end);
                         return write_tlv_string(&sub, result, result_len);
-                    } else { return E_HANDLE; }
-                } else { return E_PLUGIN; }
+                    } else {
+                        return E_HANDLE;
+                    }
+                } else {
+                    return E_PLUGIN;
+                }
             }
             M_INDEX_OF => {
                 // args: sub(String), from(i64 optional)
@@ -325,8 +329,12 @@ extern "C" fn string_invoke_id(
                     if let Some(inst) = m.get(&instance_id) {
                         let idx = hako_core_string::index_of(&inst.s, &needle, from);
                         return write_tlv_i64(idx, result, result_len);
-                    } else { return E_HANDLE; }
-                } else { return E_PLUGIN; }
+                    } else {
+                        return E_HANDLE;
+                    }
+                } else {
+                    return E_PLUGIN;
+                }
             }
             M_LAST_INDEX_OF => {
                 // args: sub(String), from(i64 optional)
@@ -336,20 +344,30 @@ extern "C" fn string_invoke_id(
                     if let Some(inst) = m.get(&instance_id) {
                         let idx = hako_core_string::last_index_of(&inst.s, &needle, from);
                         return write_tlv_i64(idx, result, result_len);
-                    } else { return E_HANDLE; }
-                } else { return E_PLUGIN; }
+                    } else {
+                        return E_HANDLE;
+                    }
+                } else {
+                    return E_PLUGIN;
+                }
             }
             M_CHAR_AT => {
                 // args: idx(i64) -> returns String (one unicode scalar value)
                 let idx = read_arg_i64(args, args_len, 0).unwrap_or(0);
-                if idx < 0 { return E_ARGS; }
+                if idx < 0 {
+                    return E_ARGS;
+                }
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
                         let ch_opt = inst.s.chars().nth(idx as usize);
                         let s = ch_opt.map(|c| c.to_string()).unwrap_or_default();
                         return write_tlv_string(&s, result, result_len);
-                    } else { return E_HANDLE; }
-                } else { return E_PLUGIN; }
+                    } else {
+                        return E_HANDLE;
+                    }
+                } else {
+                    return E_PLUGIN;
+                }
             }
             M_TO_UTF8 => {
                 if let Ok(m) = INST.lock() {
@@ -408,6 +426,7 @@ extern "C" fn string_invoke_id(
 }
 
 #[no_mangle]
+#[used]
 pub static nyash_typebox_StringBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     abi_tag: 0x54594258, // 'TYBX'
     version: 1,

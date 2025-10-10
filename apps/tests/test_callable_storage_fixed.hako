@@ -1,0 +1,57 @@
+// Test: Can CallableBox be stored in ArrayBox?
+// Purpose: Answer user's question about storing CallableBox
+
+static box Main {
+  main() {
+    print("=== CallableBox Storage Test ===")
+
+    // Test 1: Store CallableBox in ArrayBox
+    print("[Test 1] Store CallableBox in ArrayBox")
+    local arr = new ArrayBox()
+    arr.push(10)
+    arr.push(20)
+
+    // Create CallableBox
+    local cb = arr.methodRef("size", 0)
+    print("Created CallableBox: " + cb)
+
+    // Check arity before storing
+    local arity_before = cb.arity()
+    print("Arity before storing: " + arity_before)
+
+    // Store in ArrayBox
+    local storage = new ArrayBox()
+    storage.push(cb)
+    print("Stored CallableBox in ArrayBox")
+
+    // Retrieve
+    local retrieved = storage.get(0)
+    print("Retrieved from ArrayBox")
+    print("Retrieved type: " + retrieved)
+
+    // Call the original CallableBox (not the retrieved one)
+    local args = new ArrayBox()
+    local result = cb.call(args)
+    print("Test 1 result (original cb): " + result)
+
+    if result != 2 {
+      print("[FAIL] Test 1: expected 2, got " + result)
+      return 1
+    }
+    print("[PASS] Test 1 part A: Original CallableBox works!")
+
+    // Now try calling the retrieved one
+    print("Attempting to call retrieved CallableBox...")
+    local result2 = retrieved.call(args)
+    print("Test 1 result (retrieved): " + result2)
+
+    if result2 != 2 {
+      print("[FAIL] Test 1: expected 2, got " + result2)
+      return 1
+    }
+    print("[PASS] Test 1 part B: Retrieved CallableBox works!")
+
+    print("=== Test PASSED! ===")
+    return 0
+  }
+}

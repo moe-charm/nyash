@@ -52,7 +52,15 @@ impl BoxFactoryRegistry {
     /// Box名からプロバイダーを取得
     pub fn get_provider(&self, name: &str) -> Option<BoxProvider> {
         let providers = self.providers.read().unwrap();
-        providers.get(name).cloned()
+        let p = providers.get(name).cloned();
+        if crate::runtime::env_gate_box::debug_plugin() && name == "FileBox" {
+            match &p {
+                Some(BoxProvider::Plugin(lib)) => eprintln!("[BoxFactoryRegistry] provider(FileBox)=Plugin({})", lib),
+                Some(BoxProvider::Builtin(_)) => eprintln!("[BoxFactoryRegistry] provider(FileBox)=Builtin"),
+                None => eprintln!("[BoxFactoryRegistry] provider(FileBox)=None"),
+            }
+        }
+        p
     }
 
     /// Boxを生成

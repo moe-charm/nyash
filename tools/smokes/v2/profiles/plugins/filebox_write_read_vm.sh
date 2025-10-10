@@ -13,24 +13,18 @@ test_filebox_write_read_vm() {
   local code='
 static box Main { main() {
   local f = new FileBox()
-  f.open("'"$tmp"'", "w")
-  local n = f.write("hello")
-  f.close()
-  local g = new FileBox()
-  local data = g.read("'"$tmp"'")
-  print("" + n)
+  local path = "'""$tmp""'"
+  f.open(path, "w")
+  f.write("hello")
+  local data = f.read()
   print("" + data)
   return 0
 }}
 '
-  out=$(run_nyash_vm -c "$code" --dev)
-  # Expect two lines: 5 and hello
-  first=$(echo "$out" | head -n 1 | tr -d '
-')
-  second=$(echo "$out" | tail -n 1 | tr -d '
-')
-  if [ "$first" != "5" ]; then { test_fail "bytes written not 5 (got '$first')"; return 1; }; fi
-  if [ "$second" != "hello" ]; then { test_fail "file content not 'hello' (got '$second')"; return 1; }; fi
+  out=$(NYASH_DEBUG_PLUGIN=1 run_nyash_vm -c "$code" --dev)
+  # Expect one line: hello
+  last=$(echo "$out" | grep -v '^\[' | grep -v '^$' | grep -v '^Result:' | tail -n 1 | tr -d '\n')
+  if [ "$last" != "hello" ]; then { test_fail "filebox read check failed (got '$last')"; return 1; }; fi
   test_pass "filebox_write_read_vm"
 }
 

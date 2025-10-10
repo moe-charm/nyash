@@ -36,7 +36,14 @@ impl BoxCore for CallableBox {
 impl NyashBox for CallableBox {
     fn is_identity(&self) -> bool { true }
     fn clone_box(&self) -> Box<dyn NyashBox> { Box::new(self.clone()) }
-    fn share_box(&self) -> Box<dyn NyashBox> { Box::new(self.clone()) }
+    fn share_box(&self) -> Box<dyn NyashBox> {
+        Box::new(Self {
+            base: BoxBase::new(),
+            receiver: self.receiver.as_ref().map(|r| r.share_box()),
+            method: self.method.clone(),
+            arity: self.arity,
+        })
+    }
     fn to_string_box(&self) -> StringBox {
         StringBox::new(format!("Callable(method={}, arity={})", self.method, self.arity))
     }
@@ -52,7 +59,7 @@ impl Clone for CallableBox {
     fn clone(&self) -> Self {
         Self {
             base: BoxBase::new(),
-            receiver: self.receiver.as_ref().map(|r| r.clone_box()),
+            receiver: self.receiver.as_ref().map(|r| r.share_box()),
             method: self.method.clone(),
             arity: self.arity,
         }

@@ -1,8 +1,8 @@
 //! Test program for v2 plugin loader (Phase 12 prep)
 
 use nyash_rust::config::NyashConfigV2;
-use nyash_rust::runtime::{get_global_loader_v2, init_global_loader_v2};
 use nyash_rust::runtime::host_api_box;
+use nyash_rust::runtime::{get_global_loader_v2, init_global_loader_v2};
 
 fn main() {
     env_logger::init();

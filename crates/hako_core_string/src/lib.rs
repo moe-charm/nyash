@@ -47,7 +47,9 @@ pub fn substring_bytes(s: &str, start: i64, end: i64) -> String {
     let len = s.len() as i64;
     let i0 = start.max(0).min(len) as usize;
     let i1 = end.max(0).min(len) as usize;
-    if i0 > i1 { return String::new(); }
+    if i0 > i1 {
+        return String::new();
+    }
     let bytes = s.as_bytes();
     String::from_utf8_lossy(&bytes[i0..i1]).to_string()
 }
@@ -55,13 +57,17 @@ pub fn substring_bytes(s: &str, start: i64, end: i64) -> String {
 /// charAt by byte index; returns empty string when out of range
 pub fn char_at_byte(s: &str, idx: i64) -> String {
     let i = idx.max(0) as usize;
-    if i >= s.len() { return String::new(); }
+    if i >= s.len() {
+        return String::new();
+    }
     let bytes = s.as_bytes();
-    String::from_utf8_lossy(&bytes[i..i+1]).to_string()
+    String::from_utf8_lossy(&bytes[i..i + 1]).to_string()
 }
 
 /// replace all occurrences of `from` with `to`
 pub fn replace_all(s: &str, from: &str, to: &str) -> String {
-    if from.is_empty() { return s.to_string(); }
+    if from.is_empty() {
+        return s.to_string();
+    }
     s.replace(from, to)
 }

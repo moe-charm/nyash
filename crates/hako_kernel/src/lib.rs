@@ -14,7 +14,6 @@ use std::sync::{
     Mutex, OnceLock,
 };
 
-
 fn min_sem_enabled() -> bool {
     static ON: OnceLock<bool> = OnceLock::new();
     *ON.get_or_init(|| std::env::var("NYASH_HAKO_MIN_SEM").ok().as_deref() == Some("1"))
@@ -92,7 +91,6 @@ struct ObjRef<'a> {
     _guard: std::sync::MutexGuard<'a, HashMap<i64, Obj>>,
     obj: Option<&'a Obj>,
 }
-
 
 // Global buffer pool for functions that must return i8* (C string pointers)
 // Lifetime: process-wide (we keep CStrings to keep pointers valid)
@@ -240,8 +238,16 @@ pub extern "C" fn nyash_string_concat_ss(lp: *const i8, rp: *const i8) -> *const
     if lp.is_null() && rp.is_null() {
         return std::ptr::null();
     }
-    let ls = if lp.is_null() { "".into() } else { unsafe { CStr::from_ptr(lp) }.to_string_lossy().to_string() };
-    let rs = if rp.is_null() { "".into() } else { unsafe { CStr::from_ptr(rp) }.to_string_lossy().to_string() };
+    let ls = if lp.is_null() {
+        "".into()
+    } else {
+        unsafe { CStr::from_ptr(lp) }.to_string_lossy().to_string()
+    };
+    let rs = if rp.is_null() {
+        "".into()
+    } else {
+        unsafe { CStr::from_ptr(rp) }.to_string_lossy().to_string()
+    };
     let cs = CString::new(format!("{}{}", ls, rs)).unwrap_or_else(|_| CString::new("").unwrap());
     let p = cs.as_ptr();
     cpool().lock().unwrap().push(cs);
@@ -251,7 +257,11 @@ pub extern "C" fn nyash_string_concat_ss(lp: *const i8, rp: *const i8) -> *const
 // nyash.string.concat_si(lhs_ptr, rhs_i64) -> i8*
 #[export_name = "nyash.string.concat_si"]
 pub extern "C" fn nyash_string_concat_si(lp: *const i8, ri: i64) -> *const i8 {
-    let ls = if lp.is_null() { "".into() } else { unsafe { CStr::from_ptr(lp) }.to_string_lossy().to_string() };
+    let ls = if lp.is_null() {
+        "".into()
+    } else {
+        unsafe { CStr::from_ptr(lp) }.to_string_lossy().to_string()
+    };
     let cs = CString::new(format!("{}{}", ls, ri)).unwrap_or_else(|_| CString::new("").unwrap());
     let p = cs.as_ptr();
     cpool().lock().unwrap().push(cs);
@@ -261,7 +271,11 @@ pub extern "C" fn nyash_string_concat_si(lp: *const i8, ri: i64) -> *const i8 {
 // nyash.string.concat_is(lhs_i64, rhs_ptr) -> i8*
 #[export_name = "nyash.string.concat_is"]
 pub extern "C" fn nyash_string_concat_is(li: i64, rp: *const i8) -> *const i8 {
-    let rs = if rp.is_null() { "".into() } else { unsafe { CStr::from_ptr(rp) }.to_string_lossy().to_string() };
+    let rs = if rp.is_null() {
+        "".into()
+    } else {
+        unsafe { CStr::from_ptr(rp) }.to_string_lossy().to_string()
+    };
     let cs = CString::new(format!("{}{}", li, rs)).unwrap_or_else(|_| CString::new("").unwrap());
     let p = cs.as_ptr();
     cpool().lock().unwrap().push(cs);
@@ -553,7 +567,11 @@ pub extern "C" fn nyash_console_log(str_p: *const i8) -> i64 {
 pub extern "C" fn nyash_console_log_handle(h: i64) -> i64 {
     if min_sem_enabled() {
         if h > 0 {
-            if let Some(ObjRef { obj: Some(Obj::Str(s)), .. }) = arena().get(h) {
+            if let Some(ObjRef {
+                obj: Some(Obj::Str(s)),
+                ..
+            }) = arena().get(h)
+            {
                 println!("{}", s);
             } else {
                 println!("{}", h);
@@ -569,7 +587,11 @@ pub extern "C" fn nyash_console_log_handle(h: i64) -> i64 {
 pub extern "C" fn nyash_console_warn_handle(h: i64) -> i64 {
     if min_sem_enabled() {
         if h > 0 {
-            if let Some(ObjRef { obj: Some(Obj::Str(s)), .. }) = arena().get(h) {
+            if let Some(ObjRef {
+                obj: Some(Obj::Str(s)),
+                ..
+            }) = arena().get(h)
+            {
                 eprintln!("[warn] {}", s);
             } else {
                 eprintln!("[warn] {}", h);
@@ -585,7 +607,11 @@ pub extern "C" fn nyash_console_warn_handle(h: i64) -> i64 {
 pub extern "C" fn nyash_console_error_handle(h: i64) -> i64 {
     if min_sem_enabled() {
         if h > 0 {
-            if let Some(ObjRef { obj: Some(Obj::Str(s)), .. }) = arena().get(h) {
+            if let Some(ObjRef {
+                obj: Some(Obj::Str(s)),
+                ..
+            }) = arena().get(h)
+            {
                 eprintln!("[error] {}", s);
             } else {
                 eprintln!("[error] {}", h);
