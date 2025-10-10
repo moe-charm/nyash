@@ -160,6 +160,14 @@ impl MapBox {
                 {
                     return value.share_box();
                 }
+                // ArrayBox: share underlying Arc to preserve aliasing
+                if value
+                    .as_any()
+                    .downcast_ref::<crate::boxes::array::ArrayBox>()
+                    .is_some()
+                {
+                    return value.share_box();
+                }
                 value.clone_box()
             }
             None => {
@@ -180,9 +188,9 @@ impl MapBox {
     /// キーが存在するかチェック
     pub fn has(&self, key: Box<dyn NyashBox>) -> Box<dyn NyashBox> {
         let key_str = key.to_string_box().value;
-        Box::new(BoolBox::new(
-            self.data.read().unwrap().contains_key(&key_str),
-        ))
+        let guard = self.data.read().unwrap();
+        let ok = hako_core_map::has_key_str(&guard, &key_str);
+        Box::new(BoolBox::new(ok))
     }
 
     /// キーを削除（戻り値: null）
@@ -194,9 +202,9 @@ impl MapBox {
 
     /// 全てのキーを取得
     pub fn keys(&self) -> Box<dyn NyashBox> {
-        let mut keys: Vec<String> = self.data.read().unwrap().keys().cloned().collect();
-        // Deterministic ordering for stable stringify/tests
-        keys.sort();
+        let guard = self.data.read().unwrap();
+        let keys: Vec<String> = hako_core_map::keys_sorted_from_map_str(&guard);
+        drop(guard);
         let array = ArrayBox::new();
         for key in keys.into_iter() {
             array.push(Box::new(StringBox::new(&key)));
@@ -206,29 +214,24 @@ impl MapBox {
 
     /// 全ての値を取得
     pub fn values(&self) -> Box<dyn NyashBox> {
-        let values: Vec<Box<dyn NyashBox>> = self
-            .data
-            .read()
-            .unwrap()
-            .values()
-            .map(|v| {
-                if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() {
-                    v.share_box()
-                } else {
-                    v.clone_box()
-                }
-            })
-            .collect();
+        let guard = self.data.read().unwrap();
+        let keys: Vec<String> = hako_core_map::keys_sorted_from_map_str(&guard);
+        let aligned = hako_core_map::values_for_keys_str(&keys, &guard);
         let array = ArrayBox::new();
-        for value in values {
-            array.push(value);
+        for opt in aligned.into_iter() {
+            if let Some(v) = opt {
+                let out = if v.as_any().downcast_ref::<crate::instance_v2::InstanceBox>().is_some() { v.share_box() } else { v.clone_box() };
+                array.push(out);
+            }
         }
         Box::new(array)
     }
 
     /// サイズを取得
     pub fn size(&self) -> Box<dyn NyashBox> {
-        Box::new(IntegerBox::new(self.data.read().unwrap().len() as i64))
+        let guard = self.data.read().unwrap();
+        let n = hako_core_map::size_of_str_map(&guard);
+        Box::new(IntegerBox::new(n))
     }
 
     /// 全てクリア（戻り値: null）

@@ -51,7 +51,6 @@ pub fn path_to_namespace<P: AsRef<Path>>(apps_root: P, file: P) -> Option<String
 
 /// Try resolve namespace using nearest module manifest around the file.
 fn try_module_manifest_namespace(root: &Path, file: &Path) -> Option<String> {
-    use std::path::PathBuf;
     let mut dir = file.parent()?;
     // Walk up to apps_root
     loop {

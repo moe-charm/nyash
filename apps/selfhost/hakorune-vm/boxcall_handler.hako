@@ -105,6 +105,27 @@ static box BoxCallHandlerBox {
       result_val = receiver.values()
     }
 
+    // CallableBox methods (slot 113, 500-503) & Map.call methods (slot 210-211)
+    else if method_sig == "methodRef/2" {
+      // slot 113: Array.methodRef(method_name, arity) -> CallableBox
+      result_val = receiver.methodRef(args_array.get(0), args_array.get(1))
+    } else if method_sig == "call/1" {
+      // slot 500: CallableBox.call(args_array) -> any
+      result_val = receiver.call(args_array.get(0))
+    } else if method_sig == "arity/0" {
+      // slot 501: CallableBox.arity() -> Integer
+      result_val = receiver.arity()
+    } else if method_sig == "call/2" {
+      // slot 210: Map.call(key, args_array) -> any
+      result_val = receiver.call(args_array.get(0), args_array.get(1))
+    } else if method_sig == "callAsync/2" {
+      // slot 211: Map.callAsync(key, args_array) -> FutureBox
+      result_val = receiver.callAsync(args_array.get(0), args_array.get(1))
+    } else if method_sig == "callAsync/1" {
+      // slot 502: CallableBox.callAsync(args_array) -> FutureBox
+      result_val = receiver.callAsync(args_array.get(0))
+    }
+
     // Fallback: unknown method
     // Note: Method resolution depends on Rust VM's plugin switching mechanism
     // (NYASH_VM_DISABLE_STRING_HANDLERS, NYASH_USE_PLUGIN_BUILTINS, etc.)

@@ -87,7 +87,7 @@ impl BoxFactoryRegistry {
         use crate::runtime::get_global_plugin_host;
         let host = get_global_plugin_host();
         let host = host.read().unwrap();
-        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+        if crate::runtime::env_gate_box::debug_plugin() {
             eprintln!(
                 "[BoxFactoryRegistry] create_plugin_box: plugin={} box_type={}",
                 plugin_name, box_name
@@ -116,10 +116,7 @@ use once_cell::sync::Lazy;
 
 // ---- Core builtins (minimal, plugin-overrideable) ----
 fn plugin_policy_enabled() -> bool {
-    match std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok()).as_deref() {
-        Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => true,
-        _ => false,
-    }
+    crate::runtime::env_gate_box::plugin_policy_on()
 }
 
 fn register_core_builtins(reg: &BoxFactoryRegistry) {
@@ -146,6 +143,18 @@ fn register_core_builtins(reg: &BoxFactoryRegistry) {
                 Ok(Box::new(
                     crate::box_trait::StringBox::new(&args[0].to_string_box().value),
                 ))
+            }
+        });
+        reg.register_builtin("FileBox", |args: &[Box<dyn NyashBox>]| {
+            // FileBox::new() creates default, then use .open() for path
+            if args.is_empty() {
+                Ok(Box::new(crate::boxes::file::FileBox::new()))
+            } else {
+                let path = &args[0].to_string_box().value;
+                match crate::boxes::file::FileBox::open(path) {
+                    Ok(file_box) => Ok(Box::new(file_box)),
+                    Err(e) => Err(format!("Failed to open file '{}': {}", path, e)),
+                }
             }
         });
     }

@@ -22,8 +22,8 @@ pub fn lock_providers() { LOCKED.store(true, Ordering::Relaxed); }
 /// When NYASH_PROVIDER_LOCK_WARN=1, prints a warning once.
 pub fn guard_before_new_box(box_type: &str) -> Result<(), String> {
     if is_locked() { return Ok(()); }
-    let strict = std::env::var("NYASH_PROVIDER_LOCK_STRICT").ok().as_deref() == Some("1");
-    let warn = std::env::var("NYASH_PROVIDER_LOCK_WARN").ok().as_deref() == Some("1");
+    let strict = crate::runtime::env_gate_box::bool_any(&["NYASH_PROVIDER_LOCK_STRICT", "HAKO_PROVIDER_LOCK_STRICT"]);
+    let warn = crate::runtime::env_gate_box::bool_any(&["NYASH_PROVIDER_LOCK_WARN", "HAKO_PROVIDER_LOCK_WARN"]);
     if strict {
         return Err(format!("E_PROVIDER_NOT_LOCKED: attempted to create '{}' before Provider Lock", box_type));
     }

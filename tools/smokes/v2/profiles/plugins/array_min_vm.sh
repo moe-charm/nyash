@@ -11,7 +11,7 @@ test_array_min_vm() {
   local code='static box Main { main() {
     local a = new ArrayBox()
     a.push("x"); a.push("y");
-    if a.len() == 2 { print("ok1") } else { print("ng1") }
+    if a.size() == 2 { print("ok1") } else { print("ng1") }
     if a.get(1) == "y" { print("ok2") } else { print("ng2") }
     return 0
   }}'
@@ -19,7 +19,7 @@ test_array_min_vm() {
   out=$(run_nyash_vm -c "$code" --dev)
   # Accept either exact ok1/ok2 lines or compare last two lines
   local last2
-  last2=$(echo "$out" | tail -n 2 | tr '\n' '|')
+  last2=$(echo "$out" | grep -v '^Result:' | tail -n 2 | tr '\n' '|')
   if [[ "$last2" == *"ok1|ok2"* ]]; then
     return 0
   else

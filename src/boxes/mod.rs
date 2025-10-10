@@ -169,6 +169,7 @@ pub use array::ArrayBox;
 pub use buffer::BufferBox;
 pub use file::FileBox;
 pub use future::{FutureBox, FutureWeak, NyashFutureBox};
+pub mod callable;
 pub use http::HttpClientBox;
 pub use http_message_box::{HTTPRequestBox, HTTPResponseBox};
 pub use http_server_box::HTTPServerBox;

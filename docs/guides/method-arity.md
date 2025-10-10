@@ -15,7 +15,7 @@ Runtime Validation (VM)
 
 Compile‑time Verification (wired)
 - SignatureVerifierBox (Pipeline V2) validates (method, arity) right after Method extraction and before emit.
-- MethodRegistryBox exposes built‑in signatures for the verifier (apps/hakorune/vm/boxes/method_registry.hako).
+- Note: method解決は TypeRegistry に一本化予定（MethodRegistryBox は段階的に統合）。
 - Files:
   - apps/selfhost-compiler/pipeline_v2/signature_verifier_box.hako
   - apps/selfhost-compiler/pipeline_v2/pipeline.hako: Method paths call `SignatureVerifierBox.verify_from_args(...)`.
@@ -41,3 +41,7 @@ Updates (2025‑10‑06)
 - Call‑side verifier (SignatureVerifierBox.verify_call_name_arity):
   - Splits at the last '.' to get method; the penultimate token is treated as the box name candidate.
   - Strict arity check applies only to known built‑ins (String|StringBox, Array|ArrayBox, Map|MapBox). Other namespaces are allowed (no false positives).
+
+Updates (2025-10-10)
+- Array.slice semantics fixed and documented:
+  - When end < 0, end is clamped to len (core truth). Builders/VM/LLVM follow this single source of truth.

@@ -1,5 +1,7 @@
 # VM Plugin Integration仕様書
 
+Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI (formerly Nyash ABI)”.
+
 ## 🎯 概要
 
 NyashのVMバックエンドとプラグインシステム（BID-FFI v1）の統合に関する技術仕様。Everything is Box哲学に基づき、**すべてのBox型（ビルトイン、ユーザー定義、プラグイン）**をVMで統一的に扱えるようにする。

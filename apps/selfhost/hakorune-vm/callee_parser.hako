@@ -2,6 +2,7 @@
 // Single Responsibility: Parse callee field and extract type/name
 
 using "apps/selfhost/common/string_ops.hako" as StringOps
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 
 static box CalleeParserBox {
@@ -75,5 +76,68 @@ static box CalleeParserBox {
     }
 
     return mir_call_json.substring(obj_start, obj_end + 1)
+  }
+
+  // Extract receiver ValueId from Method callee
+  // mir_call_json: JSON string like '{"callee":{"type":"Method","receiver":1,"method":"size"},...}'
+  // Returns: receiver ValueId (integer) / null on error
+  extract_receiver(mir_call_json) {
+    // Find "receiver" field
+    local receiver_key = "\"receiver\":"
+    local receiver_start = mir_call_json.indexOf(receiver_key)
+    if receiver_start < 0 {
+      return null
+    }
+    receiver_start = receiver_start + receiver_key.size()
+
+    // Extract receiver value (integer)
+    local digits = StringHelpers.read_digits(mir_call_json, receiver_start)
+    if digits == "" {
+      return null
+    }
+
+    return StringHelpers.to_i64(digits)
+  }
+
+  // Extract method name from Method callee
+  // mir_call_json: JSON string like '{"callee":{"type":"Method","receiver":1,"method":"size"},...}'
+  // Returns: method name string / null on error
+  extract_method(mir_call_json) {
+    // Find "method" field
+    local method_key = "\"method\":\""
+    local method_start = mir_call_json.indexOf(method_key)
+    if method_start < 0 {
+      return null
+    }
+    method_start = method_start + method_key.size()
+
+    // Extract method value
+    local method_end = StringOps.index_of_from(mir_call_json, "\"", method_start)
+    if method_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(method_start, method_end)
+  }
+
+  // Extract box_type from Constructor callee
+  // mir_call_json: JSON string like '{"callee":{"type":"Constructor","box_type":"ArrayBox"},...}'
+  // Returns: box_type string / null on error
+  extract_box_type(mir_call_json) {
+    // Find "box_type" field
+    local box_type_key = "\"box_type\":\""
+    local box_type_start = mir_call_json.indexOf(box_type_key)
+    if box_type_start < 0 {
+      return null
+    }
+    box_type_start = box_type_start + box_type_key.size()
+
+    // Extract box_type value
+    local box_type_end = StringOps.index_of_from(mir_call_json, "\"", box_type_start)
+    if box_type_end < 0 {
+      return null
+    }
+
+    return mir_call_json.substring(box_type_start, box_type_end)
   }
 }

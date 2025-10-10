@@ -96,7 +96,7 @@ fn encode_out(out_ptr: *mut u8, out_len: *mut usize, buf: &[u8]) -> i32 {
     }
 }
 
-#[cfg_attr(all(not(test), feature = "c-abi-export"), no_mangle)]
+#[cfg_attr(all(not(test), any(feature = "c-abi-export", export_host_c_abi)), no_mangle)]
 pub extern "C" fn nyrt_host_call_name(
     handle: u64,
     method_ptr: *const u8,
@@ -288,7 +288,7 @@ fn plugin_box_from_handle(
 // 203: MapBox.get(key:any) -> any
 // 204: MapBox.set(key:any, value:any) -> any
 // 300: StringBox.len() -> i64
-#[cfg_attr(all(not(test), feature = "c-abi-export"), no_mangle)]
+#[cfg_attr(all(not(test), any(feature = "c-abi-export", export_host_c_abi)), no_mangle)]
 pub extern "C" fn nyrt_host_call_slot(
     handle: u64,
     selector_id: u64,

@@ -20,7 +20,7 @@ test_map_min_vm() {
   out=$(run_nyash_vm -c "$code" --dev)
   # Check last three lines combined
   local last3
-  last3=$(echo "$out" | tail -n 3 | tr '\n' '|')
+  last3=$(echo "$out" | grep -v '^Result:' | tail -n 3 | tr '\n' '|')
   if [[ "$last3" == *"ok1|ok2|ok3"* ]]; then
     return 0
   else

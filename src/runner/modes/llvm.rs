@@ -265,7 +265,7 @@ impl NyashRunner {
                         eprintln!("[LLVM] run-emit-exe disabled (NYASH_LLVM_RUN_EMIT_EXE=0); delegating to VM execution for output");
                     }
                     // Reuse VM path to produce program output; keeps parity checks alive without AOT linking
-                    self.execute_vm_mode(filename);
+                    self.execute_vm_engine(filename);
                     return;
                 }
                 // Prefer producing a native executable via ny-llvmc, then execute it

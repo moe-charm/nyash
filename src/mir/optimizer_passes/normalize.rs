@@ -14,9 +14,52 @@ pub fn normalize_legacy_instructions(
     let rw_sp = crate::config::env::rewrite_safepoint();
     let rw_future = crate::config::env::rewrite_future();
     // ArrayGet/Set → BoxCall を常時ON（レガシー撤退のため）
-    let array_to_boxcall = true;
+    let _array_to_boxcall = true; // currently unused in this pass (kept for future slices)
+
+    // Env gate for callable lowering (dev-opt): HAKO_CALLABLE_LOWERING=1
+    let callable_lowering = std::env::var("HAKO_CALLABLE_LOWERING").ok().map(|v| v=="1" || v=="true" || v=="on").unwrap_or(false);
     for (_fname, function) in &mut module.functions {
-        for (_bb, block) in &mut function.blocks {
+        use std::collections::HashMap;
+        // Precompute definition map, constant maps, and callable origins
+        let mut def_map: HashMap<ValueId, (crate::mir::basic_block::BasicBlockId, usize)> = HashMap::new();
+        let mut const_str: HashMap<ValueId, String> = HashMap::new();
+        let mut const_int: HashMap<ValueId, i64> = HashMap::new();
+        for (bb_id, block) in &function.blocks {
+            for (i, inst) in block.instructions.iter().enumerate() {
+                match inst {
+                    I::Const { dst, value } => {
+                        def_map.insert(*dst, (*bb_id, i));
+                        if let crate::mir::ConstValue::String(s) = value { const_str.insert(*dst, s.clone()); }
+                        if let crate::mir::ConstValue::Integer(v) = value { const_int.insert(*dst, *v); }
+                    },
+                    I::Call { dst, .. } => { if let Some(d)=dst { def_map.insert(*d, (*bb_id, i)); } },
+                    I::BoxCall { dst, .. } => { if let Some(d)=dst { def_map.insert(*d, (*bb_id, i)); } },
+                    I::TypeOp { dst, .. } => { def_map.insert(*dst, (*bb_id, i)); },
+                    _ => {}
+                }
+            }
+        }
+        // Map: callable ValueId -> (box_name, recv, name_id, arity_id)
+        let mut callable_info: HashMap<ValueId, (String, ValueId, ValueId, ValueId)> = HashMap::new();
+        for (_bb, block) in &function.blocks {
+            for inst in &block.instructions {
+                match inst {
+                    I::Call { dst: Some(d), callee: Some(crate::mir::definitions::call_unified::Callee::Method { box_name, method, receiver, .. }), args, .. } => {
+                        if box_name=="ArrayBox" && method=="methodRef" && args.len()==2 { if let Some(recv)=receiver { callable_info.insert(*d, (box_name.clone(), *recv, args[0], args[1])); } }
+                    }
+                    I::Call { dst: Some(d), callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name)), args, .. } => {
+                        if name=="ArrayBox.methodRef/2" && args.len()==3 { callable_info.insert(*d, ("ArrayBox".to_string(), args[0], args[1], args[2])); }
+                    }
+                    I::BoxCall { dst: Some(d), box_val: recv, method, args, .. } => {
+                        if method=="methodRef" && args.len()==2 { callable_info.insert(*d, ("ArrayBox".to_string(), *recv, args[0], args[1])); }
+                    }
+                    _ => {}
+                }
+            }
+        }
+
+
+        for (bb_id, block) in &mut function.blocks {
             for inst in &mut block.instructions {
                 match inst {
                     I::WeakNew { dst, box_val } => {
@@ -118,7 +161,87 @@ pub fn normalize_legacy_instructions(
                     _ => {}
                 }
             }
-            // terminator rewrite (subset migrated as needed)
+            // Callable lowering (methodRef.call → direct) for arity==0 only
+            if callable_lowering {
+                for inst in &mut block.instructions {
+                    if let I::BoxCall { dst, box_val, method, method_id: _, args, effects } = inst {
+                        if method == "call" && args.len() == 1 {
+                            if let Some((box_nm, recv, name_id, arity_id)) = callable_info.get(box_val).cloned() {
+                                if let (Some(mname), Some(0)) = (const_str.get(&name_id).cloned(), const_int.get(&arity_id)) {
+                                    *inst = I::Call { dst: *dst, func: ValueId::new(0), callee: Some(crate::mir::definitions::call_unified::Callee::Method { box_name: box_nm, method: mname, receiver: Some(recv), certainty: crate::mir::definitions::call_unified::TypeCertainty::Known }), args: vec![], effects: *effects };
+                                    stats.intrinsic_optimizations += 1;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Callable lowering (arity>0) using static argv reconstruction from local ArrayBox push chain
+            // Safe, conservative: only when argv is a locally constructed ArrayBox in the same block
+            if callable_lowering {
+                // enumerate with index to access defs and scan window
+                for (idx, insn) in block.instructions.clone().into_iter().enumerate() {
+                    if let I::BoxCall { dst, box_val, method, args, effects, .. } = insn.clone() {
+                        if method == "call" && args.len() == 1 {
+                            if let Some((box_nm, recv, name_id, arity_id)) = callable_info.get(&box_val).cloned() {
+                                let mname_opt = const_str.get(&name_id).cloned();
+                                let arity_opt = const_int.get(&arity_id).cloned();
+                                if let (Some(mname), Some(n)) = (mname_opt, arity_opt) {
+                                    if n > 0 {
+                                        let argv_arr = args[0];
+                                        if let Some((def_bb, def_i)) = def_map.get(&argv_arr).cloned() {
+                                            if def_bb == *bb_id && def_i < idx {
+                                                // Scan from def_i to idx and reconstruct push arguments
+                                                let mut elems: Vec<ValueId> = Vec::new();
+                                                let mut safe = true;
+                                                for j in def_i..idx {
+                                                    match &block.instructions[j] {
+                                                        I::NewBox { dst: arr_dst, box_type, .. } => {
+                                                            if *arr_dst == argv_arr {
+                                                                // require ArrayBox constructor
+                                                                if box_type != "ArrayBox" { safe = false; break; }
+                                                            }
+                                                        }
+                                                        I::BoxCall { box_val: arr, method: m, args: a, .. } => {
+                                                            if *arr == argv_arr {
+                                                                if m == "push" && a.len() == 1 {
+                                                                    elems.push(a[0]);
+                                                                } else {
+                                                                    safe = false; break;
+                                                                }
+                                                            }
+                                                        }
+                                                        _ => { /* ignore other ops conservatively */ }
+                                                    }
+                                                }
+                                                if safe && (elems.len() as i64) == n {
+                                                    // Lower to direct call with reconstructed argv
+                                                    block.instructions[idx] = I::Call {
+                                                        dst,
+                                                        func: ValueId::new(0),
+                                                        callee: Some(crate::mir::definitions::call_unified::Callee::Method {
+                                                            box_name: box_nm,
+                                                            method: mname,
+                                                            receiver: Some(recv),
+                                                            certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
+                                                        }),
+                                                        args: elems,
+                                                        effects,
+                                                    };
+                                                    stats.intrinsic_optimizations += 1;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+                        // terminator rewrite (subset migrated as needed)
             if let Some(term) = &mut block.terminator {
                 match term {
                     I::TypeCheck {

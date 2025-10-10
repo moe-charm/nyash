@@ -89,24 +89,16 @@ pub extern "C" fn nyash_plugin_invoke(
             M_LENGTH => {
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_i64(inst.s.len() as i64, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
+                        return write_tlv_i64(hako_core_string::length_bytes(&inst.s), result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
             }
             M_IS_EMPTY => {
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_bool(inst.s.is_empty(), result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
+                        return write_tlv_bool(hako_core_string::is_empty(&inst.s), result, result_len);
+                    } else { return E_HANDLE; }
+                } else { return E_PLUGIN; }
             }
             M_CHAR_CODE_AT => {
                 let idx = match read_arg_i64(args, args_len, 0) {
@@ -317,16 +309,10 @@ extern "C" fn string_invoke_id(
             M_SUBSTRING => {
                 // args: start(i64), end(i64)
                 let start = read_arg_i64(args, args_len, 0).unwrap_or(0);
-                let end = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
+                let end   = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
-                        let sref = &inst.s;
-                        let len = sref.len() as i64;
-                        let i0 = start.max(0).min(len) as usize;
-                        let i1 = end.max(0).min(len) as usize;
-                        if i0 > i1 { return write_tlv_string("", result, result_len); }
-                        let bytes = sref.as_bytes();
-                        let sub = String::from_utf8_lossy(&bytes[i0..i1]).to_string();
+                        let sub = hako_core_string::substring_bytes(&inst.s, start, end);
                         return write_tlv_string(&sub, result, result_len);
                     } else { return E_HANDLE; }
                 } else { return E_PLUGIN; }
@@ -337,11 +323,7 @@ extern "C" fn string_invoke_id(
                 let from = read_arg_i64(args, args_len, 1).unwrap_or(0);
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
-                        let sref = &inst.s;
-                        if needle.is_empty() { return write_tlv_i64(0, result, result_len); }
-                        let start = from.max(0) as usize;
-                        if start >= sref.len() { return write_tlv_i64(-1, result, result_len); }
-                        let idx = sref[start..].find(&needle).map(|i| (start + i) as i64).unwrap_or(-1);
+                        let idx = hako_core_string::index_of(&inst.s, &needle, from);
                         return write_tlv_i64(idx, result, result_len);
                     } else { return E_HANDLE; }
                 } else { return E_PLUGIN; }
@@ -352,15 +334,7 @@ extern "C" fn string_invoke_id(
                 let from = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
                 if let Ok(m) = INST.lock() {
                     if let Some(inst) = m.get(&instance_id) {
-                        let sref = &inst.s;
-                        if needle.is_empty() {
-                            let pos = (sref.len() as i64).min(from.max(0));
-                            return write_tlv_i64(pos, result, result_len);
-                        }
-                        let bound = from.max(0) as usize;
-                        let bound = bound.min(sref.len());
-                        let slice = &sref[..bound];
-                        let idx = slice.rfind(&needle).map(|i| i as i64).unwrap_or(-1);
+                        let idx = hako_core_string::last_index_of(&inst.s, &needle, from);
                         return write_tlv_i64(idx, result, result_len);
                     } else { return E_HANDLE; }
                 } else { return E_PLUGIN; }

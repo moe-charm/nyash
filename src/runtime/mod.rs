@@ -14,7 +14,12 @@ pub mod plugin_config;
 pub mod plugin_ffi_common;
 pub mod plugin_loader_unified;
 pub mod plugin_loader_v2;
+pub mod plugin_boot_box; // unified plugin init (idempotent)
+pub mod method_router_box; // single entry for method dispatch (façade)
 pub mod provider_box;
+pub mod plugin_host_box;
+pub mod codec;
+pub mod method_registry_box;
 pub mod scheduler;
 pub mod semantics;
 pub mod unified_registry;
@@ -24,12 +29,19 @@ pub mod provider_verify;
 // pub mod plugin_loader;  // legacy - Host VTable使用
 pub mod extern_registry; // ExternCall (env.*) 登録・診断用レジストリ
 pub mod host_api; // C ABI: plugins -> host 逆呼び出しAPI（TLSでVMに橋渡し）
+pub mod host_api_box; // Thin facade (slots + grow wrappers)
 pub mod host_handles; // C ABI(TLV) 向け HostHandle レジストリ（ユーザー/内蔵Box受け渡し）
+pub mod host_handle_box; // Box wrapper to carry HostHandle(u64) across Router→FFI
 pub mod modules_registry;
 pub mod type_box_abi; // Phase 12: Nyash ABI (vtable) 雛形
 pub mod type_meta;
 pub mod type_registry; // Phase 12: TypeId→TypeBox 解決（雛形） // env.modules minimal registry
 pub mod nykernel_stub; // Dev-only nykernel.* stub (shared)
+pub mod types; // small newtypes (e.g., VerifiedPath)
+pub mod diagnostics;
+pub mod spec_ingest_box;
+pub mod env_gate_box;
+pub mod method_ids_box;
 
 #[cfg(test)]
 mod tests;

@@ -1,9 +1,9 @@
 //! Runtime features configuration
 
-use crate::config::env_helpers::{env_bool, env_flag, env_u64};
+use crate::config::env_helpers::{env_bool, env_flag, env_u64_any};
 
 pub fn await_max_ms() -> u64 {
-    env_u64("NYASH_AWAIT_MAX_MS", 5000)
+    env_u64_any(&["HAKO_AWAIT_MAX_MS", "NYASH_AWAIT_MAX_MS"], 5000)
 }
 
 pub fn cleanup_allow_return() -> bool {

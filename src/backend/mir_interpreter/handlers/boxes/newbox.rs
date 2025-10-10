@@ -18,23 +18,13 @@ impl MirInterpreter {
         {
             let mut converted_pb: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
             for vid in args { converted_pb.push(self.reg_load(*vid)?.to_nyash_box()); }
-            crate::runtime::provider_box::ensure_loaded(std::env::var("NYASH_PLUGIN_CONFIG").ok().as_deref());
+            crate::runtime::provider_box::ensure_loaded(None);
             if let Ok(created) = crate::runtime::provider_box::new_box(box_type, &converted_pb) {
                 let created_vm = VMValue::from_nyash_box(created);
                 self.regs.insert(dst, created_vm.clone());
                 if let VMValue::BoxRef(arc_box) = &created_vm { self.scope.register_box(arc_box.clone()); }
-                self.lifecycle_observe_new(dst, box_type, args.len());
-                let birth_name = format!("{}.birth/{}", box_type, args.len());
-                if !self.functions.contains_key(&birth_name) {
-                    let key = self.object_key_for(dst);
-                    self.contracts_born.insert(key);
-                    if crate::config::env::check_contracts() {
-                        eprintln!(
-                            "{{\"kind\":\"contracts_born_nobirth\",\"class\":\"{}\",\"key\":{}}}",
-                            box_type, key
-                        );
-                    }
-                }
+                crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::mark_new(self, dst, box_type, args.len());
+                crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::born_if_no_birth(self, dst, box_type, args.len());
                 return Ok(());
             }
         }
@@ -80,14 +70,18 @@ impl MirInterpreter {
         for vid in args {
             converted.push(self.reg_load(*vid)?.to_nyash_box());
         }
+        // plugin-on では unified_registry（builtin）へのフォールバックを抑止して一貫化
+        let plugin_on = crate::runtime::env_gate_box::plugin_policy_on() && !crate::runtime::env_gate_box::plugins_disabled();
+        if plugin_on {
+            return Err(VMError::InvalidInstruction(format!(
+                "NewBox {} failed: plugin-on policy forbids builtin fallback",
+                box_type
+            )));
+        }
         let reg = crate::runtime::unified_registry::get_global_unified_registry();
-        let created = reg
-            .lock()
-            .unwrap()
-            .create_box(box_type, &converted)
-            .map_err(|e| {
-                VMError::InvalidInstruction(format!("NewBox {} failed: {}", box_type, e))
-            })?;
+        let created = reg.lock().unwrap().create_box(box_type, &converted).map_err(|e| {
+            VMError::InvalidInstruction(format!("NewBox {} failed: {}", box_type, e))
+        })?;
         // Store created instance first so 'me' can be passed to birth
         let created_vm = VMValue::from_nyash_box(created);
         self.regs.insert(dst, created_vm.clone());
@@ -97,7 +91,7 @@ impl MirInterpreter {
         }
 
         // Centralized lifecycle observation (contracts + traces)
-        self.lifecycle_observe_new(dst, box_type, args.len());
+        crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::mark_new(self, dst, box_type, args.len());
 
         // Dev-only: optional auto birth after NewBox to unblock selfhost paths
         // Guarded by NYASH_VM_AUTO_BIRTH_DEV=1. In production, builders must
@@ -135,17 +129,7 @@ impl MirInterpreter {
         
         // Contracts: if no birth method exists globally, mark as born immediately
         // to satisfy lifecycle for builtin/plugin boxes that don't require birth.
-        let birth_name = format!("{}.birth/{}", box_type, args.len());
-        if !self.functions.contains_key(&birth_name) {
-            let key = self.object_key_for(dst);
-            self.contracts_born.insert(key);
-            if crate::config::env::check_contracts() {
-                eprintln!(
-                    "{{\"kind\":\"contracts_born_nobirth\",\"class\":\"{}\",\"key\":{}}}",
-                    box_type, key
-                );
-            }
-        }
+        crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::born_if_no_birth(self, dst, box_type, args.len());
 Ok(())
     }
 }

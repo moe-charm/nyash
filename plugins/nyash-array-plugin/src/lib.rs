@@ -25,6 +25,7 @@ const METHOD_LENGTH: u32 = 1; // returns TLV i64
 const METHOD_GET: u32 = 2; // args: i64 index -> returns TLV i64
 const METHOD_PUSH: u32 = 3; // args: i64 value -> returns TLV i64 (new length)
 const METHOD_SET: u32 = 4; // args: i64 index, i64 value -> returns TLV i64 (new length)
+const METHOD_SLICE: u32 = 5; // args: i64 start, i64 end -> returns PluginHandle(ArrayBox)
 const METHOD_FINI: u32 = u32::MAX; // destructor
 
 // Assign a unique type_id for ArrayBox (as declared in nyash.toml)
@@ -64,8 +65,22 @@ extern "C" fn array_resolve(name: *const c_char) -> u32 {
         "get" => METHOD_GET,
         "set" => METHOD_SET,
         "push" => METHOD_PUSH,
+        "slice" => METHOD_SLICE,
         _ => 0,
     }
+}
+
+// ===== extern "C" declarations for host calls =====
+extern "C" {
+    fn nyash_array_new_h() -> i64;
+    fn nyrt_host_call_slot(
+        handle: u64,
+        selector: u64,
+        input: *const u8,
+        input_len: usize,
+        output: *mut u8,
+        output_len: *mut usize
+    ) -> i32;
 }
 
 extern "C" fn array_invoke_id(
@@ -78,8 +93,98 @@ extern "C" fn array_invoke_id(
 ) -> i32 {
     unsafe {
         match method_id {
+            METHOD_SLICE => {
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!("[array-plugin] SLICE enter instance_id={} args_len={}", instance_id, args_len);
+                }
+                // Read arguments
+                let start = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                let end   = match read_arg_i64(args, args_len, 1) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+
+                if let Ok(map) = INSTANCES.lock() {
+                    if let Some(inst) = map.get(&instance_id) {
+                        let len = inst.data.len() as i64;
+                        let mut i0 = if start < 0 { 0 } else { start.min(len) } as usize;
+                        let mut i1 = if end < 0 { len as usize } else { end.max(0).min(len) as usize };
+                        if i0 > i1 { i0 = i1; }
+
+                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                            eprintln!("[array-plugin] SLICE i0={} i1={} len={} (start={},end={})", i0, i1, len, start, end);
+                        }
+
+
+                        // Stage selector: HostHandle (Stage-2) vs PluginHandle (Stage-1)
+                        let use_host_handle = std::env::var("NYASH_PLUGIN_ARRAY_SLICE_HANDLE").ok().as_deref() == Some("1");
+
+                        if use_host_handle {
+                            // 1. Create host-side builtin ArrayBox
+                            let arr_h = nyash_array_new_h();
+                            if arr_h <= 0 {
+                                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                    eprintln!("[array-plugin] SLICE nyash_array_new_h failed: {}", arr_h);
+                                }
+                                return NYB_E_PLUGIN_ERROR;
+                            }
+
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                eprintln!("[array-plugin] SLICE created host array handle={}", arr_h);
+                            }
+
+                            // 2. Push sliced items to host array
+                            for (idx, value) in inst.data[i0..i1].iter().enumerate() {
+                                let tlv = build_tlv_i64_i64(idx as i64, *value);
+                                let mut out = [0u8; 256];
+                                let mut out_len = out.len();
+
+                                let rc = nyrt_host_call_slot(
+                                    arr_h as u64,
+                                    101,  // set selector (index, value)
+                                    tlv.as_ptr(),
+                                    tlv.len(),
+                                    out.as_mut_ptr(),
+                                    &mut out_len
+                                );
+
+                                if rc != 0 {
+                                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                        eprintln!("[array-plugin] SLICE push failed: rc={} idx={} value={}", rc, idx, value);
+                                    }
+                                    return NYB_E_PLUGIN_ERROR;
+                                }
+                            }
+
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                eprintln!("[array-plugin] SLICE pushed {} items to handle={}", i1 - i0, arr_h);
+                            }
+
+                            // 3. Return HostHandle (tag=9)
+                            return write_tlv_host_handle(arr_h as u64, result, result_len);
+                        } else {
+                            // Pure plugin path: create a new Array instance and copy data
+                            let new_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                            if let Ok(mut mapw) = INSTANCES.lock() {
+                                mapw.insert(new_id, ArrayInstance { data: inst.data[i0..i1].to_vec() });
+                            } else {
+                                return NYB_E_PLUGIN_ERROR;
+                            }
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                eprintln!("[array-plugin] SLICE created plugin instance={} items={}", new_id, i1 - i0);
+                            }
+                            return write_tlv_handle(TYPE_ID_ARRAY, new_id, result, result_len);
+                        }
+                    } else { return NYB_E_INVALID_HANDLE; }
+                } else {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[array-plugin] BIRTH lock failed");
+                    }
+                    return NYB_E_PLUGIN_ERROR;
+                }
+            }
             METHOD_BIRTH => {
-                // Create new ArrayBox instance and return raw 4-byte instance_id
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!("[array-plugin] BIRTH enter");
+                }
+                // Create new ArrayBox instance and return TLV(handle: tag=8, payload=type_id(4)+instance_id(4))
                 if result_len.is_null() {
                     return NYB_E_INVALID_ARGS;
                 }
@@ -87,13 +192,17 @@ extern "C" fn array_invoke_id(
                 if let Ok(mut map) = INSTANCES.lock() {
                     map.insert(id, ArrayInstance { data: Vec::new() });
                 } else {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[array-plugin] BIRTH lock failed");
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
-                if preflight(result, result_len, 4) { return NYB_E_SHORT_BUFFER; }
-                let b = id.to_le_bytes();
-                std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
-                *result_len = 4;
-                NYB_SUCCESS
+                {
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!("[array-plugin] BIRTH new id={} type_id={}", id, TYPE_ID_ARRAY);
+                }
+                write_tlv_handle(TYPE_ID_ARRAY, id, result, result_len)
+            }
             }
             METHOD_LENGTH => {
                 if let Ok(map) = INSTANCES.lock() {
@@ -103,6 +212,9 @@ extern "C" fn array_invoke_id(
                         return NYB_E_INVALID_HANDLE;
                     }
                 } else {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[array-plugin] BIRTH lock failed");
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
             }
@@ -125,37 +237,26 @@ extern "C" fn array_invoke_id(
                         return NYB_E_INVALID_HANDLE;
                     }
                 } else {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[array-plugin] BIRTH lock failed");
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
             }
             METHOD_SET => {
-                let idx = match read_arg_i64(args, args_len, 0) {
-                    Some(v) => v,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                let val = match read_arg_i64(args, args_len, 1) {
-                    Some(v) => v,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                if idx < 0 {
-                    return NYB_E_INVALID_ARGS;
-                }
+                let idx = match read_arg_i64(args, args_len, 0) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
+                let val = match read_arg_i64(args, args_len, 1) { Some(v) => v, None => return NYB_E_INVALID_ARGS };
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
-                        let i = idx as usize;
-                        let len = inst.data.len();
-                        if i < len {
-                            inst.data[i] = val;
-                        } else if i == len {
-                            inst.data.push(val);
-                        } else {
-                            return NYB_E_INVALID_ARGS;
+                        match hako_core_array::classify_set_index(inst.data.len(), idx) {
+                            hako_core_array::SetIndex::Replace(i) => inst.data[i] = val,
+                            hako_core_array::SetIndex::Append => inst.data.push(val),
+                            hako_core_array::SetIndex::Oob => return NYB_E_INVALID_ARGS,
                         }
                         return write_tlv_i64(inst.data.len() as i64, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
+                    } else { return NYB_E_INVALID_HANDLE; }
                 } else {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") { eprintln!("[array-plugin] BIRTH lock failed"); }
                     return NYB_E_PLUGIN_ERROR;
                 }
             }
@@ -172,6 +273,9 @@ extern "C" fn array_invoke_id(
                         return NYB_E_INVALID_HANDLE;
                     }
                 } else {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[array-plugin] BIRTH lock failed");
+                    }
                     return NYB_E_PLUGIN_ERROR;
                 }
             }
@@ -231,6 +335,13 @@ fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut 
     NYB_SUCCESS
 }
 
+fn write_tlv_handle(type_id: u32, instance_id: u32, result: *mut u8, result_len: *mut usize) -> i32 {
+    let mut payload = Vec::with_capacity(8);
+    payload.extend_from_slice(&type_id.to_le_bytes());
+    payload.extend_from_slice(&instance_id.to_le_bytes());
+    write_tlv_result(&[(8u8, &payload)], result, result_len)
+}
+
 fn write_tlv_i64(v: i64, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(3u8, &v.to_le_bytes())], result, result_len)
 }
@@ -263,4 +374,51 @@ fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
         off += 4 + size;
     }
     None
+}
+
+// ===== Helper functions for HostHandle implementation =====
+
+/// Build TLV with two i64 arguments (for Array.set calls)
+fn build_tlv_i64_i64(idx: i64, value: i64) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8 + 4 + 8);
+    // header: version=1, argc=2
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&2u16.to_le_bytes());
+    // arg0: i64 idx (tag=3, size=8)
+    buf.push(3u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&idx.to_le_bytes());
+    // arg1: i64 value (tag=3, size=8)
+    buf.push(3u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&value.to_le_bytes());
+    buf
+}
+
+/// Write HostHandle (tag=9) return value
+fn write_tlv_host_handle(handle_id: u64, result: *mut u8, result_len: *mut usize) -> i32 {
+    if result_len.is_null() {
+        return NYB_E_INVALID_ARGS;
+    }
+    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8);
+    // header: version=1, argc=1
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    // tag=9 (HostHandle), size=8
+    buf.push(9u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&handle_id.to_le_bytes());
+    unsafe {
+        let need = buf.len();
+        if result.is_null() || *result_len < need {
+            *result_len = need;
+            return NYB_E_SHORT_BUFFER;
+        }
+        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, need);
+        *result_len = need;
+    }
+    NYB_SUCCESS
 }

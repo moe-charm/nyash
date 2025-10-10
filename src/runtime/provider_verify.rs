@@ -21,7 +21,7 @@
  */
 
 use std::collections::HashMap;
-use crate::common::diagnostics;
+// diagnostics are emitted via runtime::diagnostics; direct import unused here
 
 fn parse_required_methods(spec: &str) -> HashMap<String, Vec<String>> {
     let mut map = HashMap::new();
@@ -82,26 +82,23 @@ fn load_required_methods_from_toml() -> HashMap<String, Vec<String>> {
 }
 
 pub fn verify_from_env() -> Result<(), String> {
-    let mode = std::env::var("NYASH_PROVIDER_VERIFY").unwrap_or_default();
+    let mode = crate::runtime::env_gate_box::string_alias_or("NYASH_PROVIDER_VERIFY","HAKO_PROVIDER_VERIFY","");
     let mode = mode.to_ascii_lowercase();
     if !(mode == "warn" || mode == "strict") { return Ok(()); }
 
     // Merge: nyash.toml + env override
     let mut req = load_required_methods_from_toml();
-    let spec = std::env::var("NYASH_VERIFY_REQUIRED_METHODS").unwrap_or_default();
+    let spec = crate::runtime::env_gate_box::string_alias_or("NYASH_VERIFY_REQUIRED_METHODS","HAKO_VERIFY_REQUIRED_METHODS","");
     if !spec.trim().is_empty() {
         let env_map = parse_required_methods(&spec);
         for (k, v) in env_map { req.entry(k).or_default().extend(v); }
     }
     if req.is_empty() { return Ok(()); }
 
-    let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
-    let host = host.read().unwrap();
-
     let mut failures: Vec<String> = Vec::new();
     for (ty, methods) in req.iter() {
         for m in methods {
-            match host.resolve_method(ty, m) {
+            match crate::runtime::method_registry_box::resolve_method_handle(ty, m) {
                 Ok(_) => { /* ok */ }
                 Err(_e) => failures.push(format!("{}.{}", ty, m)),
             }
@@ -110,7 +107,10 @@ pub fn verify_from_env() -> Result<(), String> {
 
     if failures.is_empty() { return Ok(()); }
     if mode == "warn" {
-        eprintln!("{}", diagnostics::provider_verify_warn(&failures));
+        crate::runtime::diagnostics::trace_event(
+            "provider_verify_warn",
+            &format!("\"missing\":{}", serde_json::to_string(&failures).unwrap_or("[]".to_string())),
+        );
         Ok(())
     } else {
         let msg = format!(

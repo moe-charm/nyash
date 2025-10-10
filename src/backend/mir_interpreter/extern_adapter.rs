@@ -30,10 +30,71 @@ fn build_adapter() -> VmExternAdapterBox {
         } else {
             millis as i64
         };
-        if std::env::var("NYASH_VM_TRACE").ok().as_deref() == Some("1") {
-            eprintln!("[vm.extern] nyrt.time.now_ms -> {}", clamped);
+        if crate::runtime::env_gate_box::bool_any(&["NYASH_VM_TRACE"]) {
+            crate::runtime::diagnostics::trace_event(
+                "vm_extern",
+                &format!("\"iface\":\"nyrt.time\",\"method\":\"now_ms\",\"value\":{}", clamped),
+            );
         }
         Ok(VMValue::Integer(clamped))
+    });
+
+    // nyrt.string.length(recv:String): i64 (byte length)
+    map.insert(("nyrt.string".into(), "length".into()), |args: &[VMValue]| {
+        if args.is_empty() { return Err(VMError::InvalidInstruction("nyrt.string.length requires receiver".into())); }
+        match &args[0] {
+            VMValue::String(s) => Ok(VMValue::Integer(hako_core_string::length_bytes(s))),
+            VMValue::BoxRef(b) => {
+                // Best-effort string view
+                Ok(VMValue::Integer(hako_core_string::length_bytes(&b.to_string_box().value)))
+            }
+            _ => Err(VMError::TypeError("nyrt.string.length expects String".into())),
+        }
+    });
+
+    // nyrt.string.indexOf(recv:String, needle:String, from:i64=0) -> i64
+    map.insert(("nyrt.string".into(), "indexOf".into()), |args: &[VMValue]| {
+        if args.len() < 2 { return Err(VMError::InvalidInstruction("nyrt.string.indexOf requires 2 or 3 args".into())); }
+        let s = match &args[0] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let needle = match &args[1] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let from = if args.len() >= 3 { match &args[2] { VMValue::Integer(i) => *i, v => v.to_string().parse::<i64>().unwrap_or(0) } } else { 0 };
+        Ok(VMValue::Integer(hako_core_string::index_of(&s, &needle, from)))
+    });
+
+    // nyrt.string.lastIndexOf(recv:String, needle:String, from:i64=len) -> i64
+    map.insert(("nyrt.string".into(), "lastIndexOf".into()), |args: &[VMValue]| {
+        if args.len() < 2 { return Err(VMError::InvalidInstruction("nyrt.string.lastIndexOf requires 2 or 3 args".into())); }
+        let s = match &args[0] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let needle = match &args[1] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let default_from = hako_core_string::length_bytes(&s);
+        let from = if args.len() >= 3 { match &args[2] { VMValue::Integer(i) => *i, v => v.to_string().parse::<i64>().unwrap_or(default_from) } } else { default_from };
+        Ok(VMValue::Integer(hako_core_string::last_index_of(&s, &needle, from)))
+    });
+
+    // nyrt.string.substring(recv:String, start:i64, end:i64) -> String
+    map.insert(("nyrt.string".into(), "substring".into()), |args: &[VMValue]| {
+        if args.len() < 3 { return Err(VMError::InvalidInstruction("nyrt.string.substring requires 3 args".into())); }
+        let s = match &args[0] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let start = match &args[1] { VMValue::Integer(i) => *i, v => v.to_string().parse::<i64>().unwrap_or(0) };
+        let end   = match &args[2] { VMValue::Integer(i) => *i, v => v.to_string().parse::<i64>().unwrap_or(hako_core_string::length_bytes(&s)) };
+        Ok(VMValue::String(hako_core_string::substring_bytes(&s, start, end)))
+    });
+
+    // nyrt.string.charAt(recv:String, idx:i64) -> String (byte-based)
+    map.insert(("nyrt.string".into(), "charAt".into()), |args: &[VMValue]| {
+        if args.len() < 2 { return Err(VMError::InvalidInstruction("nyrt.string.charAt requires 2 args".into())); }
+        let s = match &args[0] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let idx = match &args[1] { VMValue::Integer(i) => *i, v => v.to_string().parse::<i64>().unwrap_or(0) };
+        Ok(VMValue::String(hako_core_string::char_at_byte(&s, idx)))
+    });
+
+    // nyrt.string.replace(recv:String, from:String, to:String) -> String (replace all)
+    map.insert(("nyrt.string".into(), "replace".into()), |args: &[VMValue]| {
+        if args.len() < 3 { return Err(VMError::InvalidInstruction("nyrt.string.replace requires 3 args".into())); }
+        let s = match &args[0] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let from = match &args[1] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        let to   = match &args[2] { VMValue::String(s) => s.clone(), v => v.to_string() };
+        Ok(VMValue::String(hako_core_string::replace_all(&s, &from, &to)))
     });
 
     // nyrt.array.size(recv): i64
@@ -47,7 +108,10 @@ fn build_adapter() -> VmExternAdapterBox {
             VMValue::BoxRef(b) => {
                 // Builtin ArrayBox
                 if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                    return Ok(VMValue::Integer(arr.len() as i64));
+                    if std::env::var("HAKO_TRACE_ARRAY_LEN").ok().as_deref() == Some("1") {
+                        eprintln!("[trace] nyrt.array.size builtin -> len={}", arr.len());
+                    }
+                    return Ok(VMValue::Integer(hako_core_array::length(arr.len()) ));
                 }
                 // Plugin ArrayBox (TypeBox v2)
                 if let Some(pb) = b
@@ -71,9 +135,14 @@ fn build_adapter() -> VmExternAdapterBox {
                         return Ok(VMValue::Integer(0));
                     }
                 }
-                Err(VMError::TypeError(
-                    "nyrt.array.size expects ArrayBox".into(),
-                ))
+                {
+                    if std::env::var("HAKO_TRACE_ARRAY_LEN").ok().as_deref() == Some("1") {
+                        eprintln!("[trace] nyrt.array.size recv type_name={}", b.type_name());
+                    }
+                    Err(VMError::TypeError(
+                        "nyrt.array.size expects ArrayBox".into(),
+                    ))
+                }
             }
             _ => Err(VMError::TypeError(
                 "nyrt.array.size expects ArrayBox".into(),
@@ -92,7 +161,8 @@ fn build_adapter() -> VmExternAdapterBox {
             VMValue::BoxRef(b) => {
                 // Builtin MapBox
                 if let Some(map) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                    return Ok(VMValue::Integer(map.get_data().read().unwrap().len() as i64));
+                    let n = map.get_data().read().unwrap().len();
+                    return Ok(VMValue::Integer(hako_core_map::size(n)));
                 }
                 // Plugin MapBox (TypeBox v2)
                 if let Some(pb) = b
@@ -126,10 +196,127 @@ fn build_adapter() -> VmExternAdapterBox {
         }
     });
 
+    // nyrt.map.keys(recv): ArrayBox (builtin) or plugin (Stage-2)/shim(keysS)
+    map.insert(("nyrt.map".into(), "keys".into()), |args: &[VMValue]| {
+        if args.is_empty() {
+            return Err(VMError::InvalidInstruction(
+                "nyrt.map.keys requires receiver".into(),
+            ));
+        }
+        match &args[0] {
+            VMValue::BoxRef(b) => {
+                // Builtin MapBox
+                if let Some(mapb) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                    let out = mapb.keys();
+                    if std::env::var("HAKO_TRACE_ARRAY_LEN").ok().as_deref() == Some("1") {
+                        if let Some(arr) = out.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                            eprintln!("[trace] nyrt.map.keys builtin -> len={}", arr.len());
+                        }
+                    }
+                    return Ok(VMValue::from_nyash_box(out));
+                }
+                // Plugin MapBox
+                if let Some(pb) = b
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                {
+                    if pb.box_type == "MapBox" {
+                        let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                        if let Ok(ro) = host.read() {
+                            let stage2 = std::env::var("NYASH_PLUGIN_MAP_ARRAY_HANDLE").ok().as_deref() == Some("1");
+                            if stage2 {
+                                if let Ok(ret) = ro.invoke_instance_method("MapBox", "keys", pb.instance_id(), &[]) {
+                                    if let Some(vb) = ret { return Ok(VMValue::from_nyash_box(vb)); }
+                                }
+                            } else {
+                                if let Ok(ret) = ro.invoke_instance_method("MapBox", "keysS", pb.instance_id(), &[]) {
+                                    if let Some(vb) = ret {
+                                        let s = vb.to_string_box().value;
+                                        let mut arr = crate::boxes::array::ArrayBox::new();
+                                        for line in s.split('\n') { if !line.is_empty() { arr.push(Box::new(crate::box_trait::StringBox::new(line))); } }
+                                        return Ok(VMValue::from_nyash_box(Box::new(arr)));
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(VMValue::from_nyash_box(Box::new(crate::boxes::array::ArrayBox::new())));
+                    }
+                }
+                Err(VMError::TypeError(
+                    "nyrt.map.keys expects MapBox".into(),
+                ))
+            }
+            _ => Err(VMError::TypeError(
+                "nyrt.map.keys expects MapBox".into(),
+            )),
+        }
+    });
+
+    // nyrt.map.values(recv): ArrayBox (builtin) or shim via valuesS
+    map.insert(("nyrt.map".into(), "values".into()), |args: &[VMValue]| {
+        if args.is_empty() {
+            return Err(VMError::InvalidInstruction(
+                "nyrt.map.values requires receiver".into(),
+            ));
+        }
+        match &args[0] {
+            VMValue::BoxRef(b) => {
+                // Builtin MapBox
+                if let Some(mapb) = b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
+                    let out = mapb.values();
+                    if std::env::var("HAKO_TRACE_ARRAY_LEN").ok().as_deref() == Some("1") {
+                        if let Some(arr) = out.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                            eprintln!("[trace] nyrt.map.values builtin -> len={}", arr.len());
+                        }
+                    }
+                    return Ok(VMValue::from_nyash_box(out));
+                }
+                // Plugin MapBox
+                if let Some(pb) = b
+                    .as_any()
+                    .downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>()
+                {
+                    if pb.box_type == "MapBox" {
+                        let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                        if let Ok(ro) = host.read() {
+                            let stage2 = std::env::var("NYASH_PLUGIN_MAP_ARRAY_HANDLE").ok().as_deref() == Some("1");
+                            if stage2 {
+                                if let Ok(ret) = ro.invoke_instance_method("MapBox", "values", pb.instance_id(), &[]) {
+                                    if let Some(vb) = ret { return Ok(VMValue::from_nyash_box(vb)); }
+                                }
+                            } else {
+                                if let Ok(ret) = ro.invoke_instance_method(
+                                    "MapBox",
+                                    "valuesS",
+                                    pb.instance_id(),
+                                    &[],
+                                ) {
+                                    if let Some(vb) = ret {
+                                        let s = vb.to_string_box().value;
+                                        let mut arr = crate::boxes::array::ArrayBox::new();
+                                        for line in s.split('\n') { if !line.is_empty() { arr.push(Box::new(crate::box_trait::StringBox::new(line))); } }
+                                        return Ok(VMValue::from_nyash_box(Box::new(arr)));
+                                    }
+                                }
+                            }
+                        }
+                        return Ok(VMValue::from_nyash_box(Box::new(crate::boxes::array::ArrayBox::new())));
+                    }
+                }
+                Err(VMError::TypeError(
+                    "nyrt.map.values expects MapBox".into(),
+                ))
+            }
+            _ => Err(VMError::TypeError(
+                "nyrt.map.values expects MapBox".into(),
+            )),
+        }
+    });
+
     // nyrt.rune.eval(code: String) -> i64 (skeleton mock)
     map.insert(("nyrt.rune".into(), "eval".into()), |args: &[VMValue]| {
         // Disabled-by-default; return -1 when not enabled
-        let enabled = std::env::var("HAKO_RUNE_ENABLE").ok().as_deref() == Some("1");
+        let enabled = crate::runtime::env_gate_box::bool_any(&["HAKO_RUNE_ENABLE"]);
         if !enabled {
             return Ok(VMValue::Integer(-1));
         }
@@ -168,12 +355,58 @@ fn build_adapter() -> VmExternAdapterBox {
         crate::backend::mir_interpreter::handlers::op_handlers::op_eq_static(&args[0], &args[1])
     });
 
+    // --- File I/O (nyrt.file.*) ---
+    // nyrt.file.read(path: String) -> String
+    map.insert(("nyrt.file".into(), "read".into()), |args: &[VMValue]| {
+        if args.is_empty() {
+            return Err(VMError::InvalidInstruction(
+                "nyrt.file.read requires path argument".into(),
+            ));
+        }
+        let path = match &args[0] {
+            VMValue::String(s) => s.clone(),
+            v => v.to_string(),
+        };
+
+        match std::fs::read_to_string(&path) {
+            Ok(content) => Ok(VMValue::String(content)),
+            Err(e) => Err(VMError::IoError(format!(
+                "Failed to read file '{}': {}",
+                path, e
+            ))),
+        }
+    });
+
+    // nyrt.file.write(path: String, content: String) -> Void
+    map.insert(("nyrt.file".into(), "write".into()), |args: &[VMValue]| {
+        if args.len() < 2 {
+            return Err(VMError::InvalidInstruction(
+                "nyrt.file.write requires path and content arguments".into(),
+            ));
+        }
+        let path = match &args[0] {
+            VMValue::String(s) => s.clone(),
+            v => v.to_string(),
+        };
+        let content = match &args[1] {
+            VMValue::String(s) => s.clone(),
+            v => v.to_string(),
+        };
+
+        match std::fs::write(&path, content) {
+            Ok(_) => Ok(VMValue::Void),
+            Err(e) => Err(VMError::IoError(format!(
+                "Failed to write file '{}': {}",
+                path, e
+            ))),
+        }
+    });
 
 
     // --- nykernel.* (dev stub for wasm std Array) ---
     // Enabled only when NYASH_ENABLE_NYKERNEL_STUB=1
     fn nykernel_enabled() -> bool {
-        std::env::var("NYASH_ENABLE_NYKERNEL_STUB").ok().as_deref() == Some("1")
+        crate::runtime::env_gate_box::bool_any(&["NYASH_ENABLE_NYKERNEL_STUB"])
     }
     use std::sync::Mutex;
     fn heap_state() -> &'static (Mutex<Vec<i64>>, Mutex<i64>) {
@@ -216,14 +449,17 @@ fn adapter() -> &'static VmExternAdapterBox {
 
 /// Try dispatch extern via VM adapter. Returns Some(Result) if known; None if unknown.
 pub fn try_call(iface: &str, method: &str, loaded_args: &[VMValue]) -> Option<Result<VMValue, VMError>> {
-    // Ensure spec exists in registry (keeps behavior predictable)
-    if extreg::registry().get(iface, method).is_none() {
-        return None;
-    }
     let key = (iface.to_string(), method.to_string());
     if let Some(h) = adapter().handlers.get(&key) {
-        Some(h(loaded_args))
-    } else {
-        None
+        return Some(h(loaded_args));
     }
+    // Fallback: consult externs registry as authoritative spec (in case a handler is added later)
+    if extreg::registry().get(iface, method).is_some() {
+        // Known spec but no handler — treat as unsupported for now
+        return Some(Err(VMError::InvalidInstruction(format!(
+            "Extern {}.{} has spec but no handler",
+            iface, method
+        ))));
+    }
+    None
 }

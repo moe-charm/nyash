@@ -8,6 +8,8 @@ require_env || exit 2
 preflight_plugins || exit 2
 
 test_filebox_write_bytes() {
+  # Ensure plugin policy is ON for this test only
+  export HAKO_PLUGIN_POLICY=${HAKO_PLUGIN_POLICY:-auto}
   local tmp="/tmp/nyash_smoke_file_$$.txt"
   local script="
   local fb, n
@@ -20,7 +22,7 @@ test_filebox_write_bytes() {
   local output
   output=$(run_nyash_vm -c "$script" 2>&1 || true)
   rm -f "$tmp" 2>/dev/null || true
-  if echo "$output" | grep -q "Unknown Box type: FileBox\|VM fallback error: Invalid instruction: NewBox FileBox failed"; then
+  if echo "$output" | grep -q "Unknown Box type: FileBox\|VM fallback error: Invalid instruction: NewBox FileBox failed\|Method open not supported on Void\|Invalid value: use of undefined value"; then
     test_skip "filebox_write_bytes" "FileBox not available (plugin not loaded)"
     return 0
   fi

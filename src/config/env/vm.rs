@@ -1,6 +1,6 @@
 //! VM runtime configuration
 
-use crate::config::env_helpers::{env_bool_ci, env_flag, env_u32, env_usize};
+use crate::config::env_helpers::{env_bool_ci, env_flag, env_u32};
 
 pub fn vm_birth_after_new_fallback() -> bool {
     let on = env_bool_ci("NYASH_VM_BIRTH_AFTER_NEW");

@@ -11,6 +11,12 @@ use crate::runtime::{
 use crate::config::env;
 
 pub fn init_bid_plugins() {
+    // Idempotent: if plugin host is already initialized, skip
+    if let Ok(h) = get_global_plugin_host().read() {
+        if h.config_ref().is_some() {
+            return;
+        }
+    }
     let cli_verbose = env::cli_verbose();
     let plugin_debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
     if plugin_debug {

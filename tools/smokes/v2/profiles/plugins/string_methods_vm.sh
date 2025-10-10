@@ -16,7 +16,7 @@ test_string_methods_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result: ')
   compare_outputs "ok" "$out" "string_methods_vm"
 }
 

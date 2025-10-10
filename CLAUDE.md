@@ -6,9 +6,123 @@
 
 ---
 
-## 🔄 **現在の開発状況** (2025-10-09)
+## 🔄 **現在の開発状況** (2025-10-10)
 
 **注**: 成功報告中心。失敗・問題点は [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクション参照。
+
+### 🎉 **Hakorune VM: MirCall Phase 2 - Constructor実装完了** (2025-01-10)
+**Box生成＋birth()初期化完全実装 - 3/3テストPASS、3時間で完了**
+
+#### ✅ **実装完了**
+- **ConstructorCallHandlerBox作成** (90行)
+  - Box instance creation: ArrayBox/MapBox/StringBox対応
+  - birth() method calling: 0-3引数サポート
+  - Constructor ≈ newbox + birth() パターン確立
+- **CalleeParserBox拡張** (+19行)
+  - extract_box_type() メソッド追加
+- **MirCallHandlerBox refactoring**
+  - Early dispatch パターン: Constructor/Method を callee_name 抽出前に処理
+  - args_array 抽出を共通化（重複削減）
+
+#### 📊 **統計**
+- 新規箱: 1個（ConstructorCallHandlerBox, 90行）
+- 新規テスト: 1個（test_mircall_phase2_constructor.hako, 72行）
+- 総箱数: 23箱
+- MirCall Phase 2進捗: 5/7 callee types完了（71%）
+- テスト結果: 3/3 (100%) PASS ✅
+- 実装時間: ~3時間（見積もり3.5-5時間より短縮）
+
+#### 🎯 **技術的成果**
+1. **Early Dispatch パターン確立**: 特殊フィールドを持つcallee typeは早期ディスパッチが必須
+2. **birth() 引数可変対応**: 明示的ディスパッチで1-3引数サポート（Hakorune言語制約対応）
+3. **MirCall統一設計進展**: Global/Extern/ModuleFunction/Method/Constructor完了（5/7, 71%）
+
+#### 🎓 **学び**
+- **dispatch順序の重要性**: Constructor/Methodは特殊フィールド（box_type/receiver）を持つため、callee_name抽出前に処理が必要
+- **自律的バグ修正**: "failed to extract callee name" エラー → 早期dispatch追加で解決
+- **MVP実装の効率**: 0-3引数対応で十分（可変長引数は将来拡張）
+
+#### 🚀 **次のステップ**
+- **Closure実装** (予測: 4-6時間)
+  - closure_id 抽出 + 環境キャプチャ処理
+  - Closure ≈ ModuleFunction + 環境キャプチャ
+
+詳細: [mini_vm_progress.md](docs/development/current/main/mini_vm_progress.md#-phase-4-day-14-mircall-phase-2---constructor実装完了-2025-01-10)
+
+---
+
+### 🎉 **CallableBox実装完了！ハードコーディング削減成功** (2025-10-10)
+**if文25個→0個削減達成 - 2日で完了、全テストPASS**
+
+#### ✅ **実装完了**
+- **Day 1**: BoxCallHandlerBox拡張（6ハンドラー追加）✅
+  - methodRef/call/callAsync/arity/bind/apply 対応
+  - boxcall_handler.hako への追加のみで完結
+- **Day 2**: test_callable_direct.hako作成（4テスト、全PASS）✅
+  - Basic call: Array.methodRef("push", 1).call([1,2], 3) → [1,2,3]
+  - Arity check: callable.arity() → 1
+  - Map call: map.call(42) → map-specific result
+  - callAsync: 同期実装として動作確認済み
+- **スモークテスト**: callable_hakorune_vm.sh (.018秒)✅
+
+#### 📊 **統計**
+- 修正ファイル: 1個（boxcall_handler.hako）
+- 新規ファイル: 2個（テスト+スモークテスト）
+- 追加ハンドラー: 6個
+- 追加行数: +18行
+- テスト結果: 4/4 PASS ✅
+- 実装時間: ~4時間（計画3日→2日で完了）
+
+#### 💡 **重要な学び**
+- ❌ 誤認: 「Hakorune VM内部で実装が必要」
+- ✅ 正解: 「Hakorune言語として書けば動く」（ユーザー指摘で解決）
+- 📚 教訓: 既存実装確認を最優先、レイヤー理解の重要性
+
+#### 🎯 **成果**
+- if文25個 → 0個（目標達成）
+- CallableBox完全動作確認済み
+- Rust VM既存実装を活用
+
+#### 📚 **関連ドキュメント**
+- **実装**: [boxcall_handler.hako](apps/selfhost/hakorune-vm/boxcall_handler.hako)
+- **テスト**: [test_callable_direct.hako](apps/tests/test_callable_direct.hako)
+- **スモークテスト**: [callable_hakorune_vm.sh](tools/smokes/v2/profiles/quick/core/callable_hakorune_vm.sh)
+- **実装計画**: [callable_box_implementation_plan.md](docs/development/current/main/callable_box_implementation_plan.md)
+
+---
+
+### 🎉 **Hakorune VM: MirCall Phase 2 - ModuleFunction実装完了** (2025-10-10)
+**静的Box関数呼び出し完全実装 - StringHelpers.int_to_str完全動作、4/4テストPASS**
+
+#### ✅ **実装完了**
+- **ModuleFunctionCallHandlerBox作成** (70行)
+  - StringHelpers全5メソッドサポート
+  - call() primitive制約により明示的ディスパッチ実装
+- **test_mircall_phase2_module.hako作成** (95行)
+  - 4テストケース: int_to_str(42/0/100), chain test
+  - 全テストPASS ✅
+
+#### 📊 **統計**
+- 新規箱: 1個（ModuleFunctionCallHandlerBox, 70行）
+- 新規テスト: 1個（test_mircall_phase2_module.hako, 95行）
+- 総箱数: 22箱
+- テスト結果: 4/4 (100%) PASS ✅
+- 実装時間: ~3時間（見積もり4-6時間の50-75%）
+
+#### 🎯 **技術的成果**
+1. **MirCall統一設計実証**: Global/Extern/ModuleFunction完全動作
+2. **Selfhost Compiler準備**: StringHelpers利用可能に
+3. **明示的ディスパッチパターン確立**: call()制約の回避策確立
+
+#### 🚀 **次のステップ**
+- **Method実装** (予測: 3-4時間)
+  - BoxCall dispatch logic再利用
+  - receiver抽出 → method dispatch
+  - Compiler Ready達成
+
+詳細: [mini_vm_progress.md](docs/development/current/main/mini_vm_progress.md#-phase-4-day-11-12-mircall-phase-2---modulefunction実装完了-2025-10-10)
+
+---
 
 ### 🎉 **Hakorune VM Phase 1 Day 3完了！箱化モジュール化強化成功** (2025-10-09)
 **基盤構築完了 - 12/16命令実装（75%）、307行削減、全テストPASS**

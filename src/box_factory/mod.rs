@@ -152,6 +152,24 @@ impl UnifiedBoxRegistry {
                 "[UnifiedBoxRegistry] 🎯 Factory Policy: {:?} (Phase 15.5: Everything is Plugin!)",
                 policy
             );
+            // Also emit a one-line snapshot of core type ids and their source (non-quiet only)
+            let ids = [
+                ("MapBox", crate::runtime::type_registry::builtin_type_id("MapBox").unwrap_or(0)),
+                ("ArrayBox", crate::runtime::type_registry::builtin_type_id("ArrayBox").unwrap_or(0)),
+                ("StringBox", crate::runtime::type_registry::builtin_type_id("StringBox").unwrap_or(0)),
+            ];
+            let mut source = "default";
+            if let Ok(conf) = crate::config::nyash_toml_v2::NyashConfigV2::from_file("hako.toml")
+                .or_else(|_| crate::config::nyash_toml_v2::NyashConfigV2::from_file("nyash.toml"))
+                .or_else(|_| crate::config::nyash_toml_v2::NyashConfigV2::from_file("hakorune.toml"))
+            {
+                if !conf.box_types.is_empty() { source = "config"; }
+            }
+            eprintln!(
+                "[TypeRegistry] CORE type ids: MapBox={} ArrayBox={} StringBox={} (source={})",
+                ids[0].1, ids[1].1, ids[2].1, source
+            );
+
         }
         Self::with_policy(policy)
     }

@@ -1,0 +1,92 @@
+// ConstructorCallHandlerBox - Handle Constructor calls (Box instantiation)
+// Single Responsibility: Create Box instances with birth() initialization
+
+using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+
+static box ConstructorCallHandlerBox {
+  // Handle Constructor call
+  // box_type: "ArrayBox", "MapBox", etc.
+  // args_array: ArrayBox containing birth() arguments
+  // dst_reg: destination register (required for Constructor)
+  // regs: register MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(box_type, args_array, dst_reg, regs) {
+    // Constructor must have destination register
+    if dst_reg == null {
+      return Result.Err("constructor: destination register required")
+    }
+
+    // Create Box instance based on box_type
+    local instance = me._create_box_instance(box_type)
+    if instance == null {
+      return Result.Err("constructor: unsupported box_type: " + box_type)
+    }
+
+    // Call birth() method if arguments provided
+    local argc = args_array.size()
+    if argc > 0 {
+      local birth_result = me._call_birth(instance, argc, args_array, box_type)
+      if birth_result != null {
+        return birth_result
+      }
+    }
+
+    // Store instance in destination register
+    ValueManagerBox.set(regs, dst_reg, instance)
+
+    return Result.Ok(0)
+  }
+
+  // Create Box instance by box_type
+  // Returns: Box instance or null if unsupported
+  _create_box_instance(box_type) {
+    // Phase 2 MVP: Support common Box types
+    if box_type == "ArrayBox" {
+      return new ArrayBox()
+    }
+    else {
+      if box_type == "MapBox" {
+        return new MapBox()
+      }
+      else {
+        if box_type == "StringBox" {
+          return new StringBox()
+        }
+        else {
+          // Unsupported box_type
+          return null
+        }
+      }
+    }
+  }
+
+  // Call birth() method with arguments
+  // Returns: Result.Err(message) on failure, null on success
+  _call_birth(instance, argc, args_array, box_type) {
+    // Phase 2 MVP: Support 0-2 arguments
+    // Note: call() primitive requires string literal, so explicit dispatch
+
+    if argc == 1 {
+      instance.birth(args_array.get(0))
+    }
+    else {
+      if argc == 2 {
+        instance.birth(args_array.get(0), args_array.get(1))
+      }
+      else {
+        if argc == 3 {
+          instance.birth(args_array.get(0), args_array.get(1), args_array.get(2))
+        }
+        else {
+          // Unsupported argument count
+          return Result.Err("constructor: birth() with " + StringHelpers.int_to_str(argc) + " arguments not supported (max 3)")
+        }
+      }
+    }
+
+    // Success
+    return null
+  }
+}

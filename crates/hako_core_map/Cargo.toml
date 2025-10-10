@@ -1,0 +1,11 @@
+[package]
+name = "hako_core_map"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "hako_core_map"
+path = "src/lib.rs"
+
+[dependencies]
+

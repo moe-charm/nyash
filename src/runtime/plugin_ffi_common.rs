@@ -3,38 +3,23 @@
 
 use crate::box_trait::NyashBox;
 // For handle-aware encoding of plugin boxes
+#[allow(unused_imports)]
 use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 /// Encode empty TLV arguments: version=1, argc=0
 pub fn encode_empty_args() -> Vec<u8> {
-    vec![1u8, 0, 0, 0]
+    crate::runtime::codec::TlvCodecBox::default().encode_empty_args()
 }
 
 /// Encode TLV header with argc (no payload entries encoded here)
 pub fn encode_tlv_header(argc: u16) -> Vec<u8> {
-    let mut buf = Vec::with_capacity(4);
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&argc.to_le_bytes());
-    buf
+    crate::runtime::codec::TlvCodecBox::default().encode_header(argc)
 }
 
 /// Encode a slice of NyashBox arguments into TLV buffer (v1)
 /// Policy: prefer i64 numeric when coercible; otherwise UTF-8 string; otherwise to_string_box()
 pub fn encode_args(args: &[Box<dyn NyashBox>]) -> Vec<u8> {
-    let mut buf = encode_tlv_header(args.len() as u16);
-    for a in args {
-        // Prefer direct handle when argument is a PluginBoxV2
-        if let Some(pb) = a.as_any().downcast_ref::<PluginBoxV2>() {
-            encode::plugin_handle(&mut buf, pb.inner.type_id, pb.instance_id());
-        } else if let Some(i) = crate::runtime::semantics::coerce_to_i64(a.as_ref()) {
-            encode::i64(&mut buf, i);
-        } else if let Some(s) = crate::runtime::semantics::coerce_to_string(a.as_ref()) {
-            encode::string(&mut buf, &s);
-        } else {
-            encode::string(&mut buf, &a.to_string_box().value);
-        }
-    }
-    buf
+    crate::runtime::codec::TlvCodecBox::default().encode_args(args)
 }
 
 /// Simple helpers for common primitive returns

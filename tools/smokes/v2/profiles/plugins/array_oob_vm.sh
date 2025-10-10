@@ -11,16 +11,15 @@ test_array_oob_vm() {
   local code='static box Main { main() {
     local a = new ArrayBox()
     a.push("x"); a.push("y");
-    # OOB access should not crash; expected to yield null (policy)
-    local v = a.get(5)
+        local v = a.get(5)
     if v == null { print("ok1") } else { print("ng1") }
-    if a.len() == 2 { print("ok2") } else { print("ng2") }
+    if a.size() == 2 { print("ok2") } else { print("ng2") }
     return 0
   }}'
   local out
   out=$(run_nyash_vm -c "$code" --dev | filter_noise)
   local last2
-  last2=$(echo "$out" | tail -n 2 | tr '\n' '|')
+  last2=$(echo "$out" | grep -v '^Result:' | tail -n 2 | tr '\n' '|')
   if [[ "$last2" == *"ok1|ok2"* ]]; then
     return 0
   else

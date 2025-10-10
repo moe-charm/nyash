@@ -5,7 +5,6 @@ use crate::box_trait::{NyashBox, StringBox};
 use crate::boxes::{BufferBox, FloatBox};
 use crate::runtime::plugin_loader_v2::enabled::loader::util::dbg_on;
 use crate::runtime::plugin_loader_v2::enabled::PluginLoaderV2;
-use std::sync::Arc;
 
 impl PluginLoaderV2 {
     /// Invoke a method on a plugin instance with TLV encoding/decoding
@@ -271,13 +270,12 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
                 }
             }
             9 => {
-                // Host handle (u64) → try to map back to BoxRef, else void
+                // Host handle (u64) → return HostHandleBox; VM 層で実体 Arc に解決
                 if let Some(u) = crate::runtime::plugin_ffi_common::decode::u64(payload) {
-                    if let Some(arc) = crate::runtime::host_handles::get(u) {
-                        return Ok(Some(arc.share_box()));
-                    }
+                    Box::new(crate::runtime::host_handle_box::HostHandleBox::new(u))
+                } else {
+                    Box::new(crate::box_trait::VoidBox::new())
                 }
-                Box::new(crate::box_trait::VoidBox::new())
             }
             _ => Box::new(crate::box_trait::VoidBox::new()),
         };

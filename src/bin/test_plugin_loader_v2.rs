@@ -2,6 +2,7 @@
 
 use nyash_rust::config::NyashConfigV2;
 use nyash_rust::runtime::{get_global_loader_v2, init_global_loader_v2};
+use nyash_rust::runtime::host_api_box;
 
 fn main() {
     env_logger::init();
@@ -69,37 +70,17 @@ fn main() {
     let mut tlv = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(2);
     nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut tlv, 0);
     nyash_rust::runtime::plugin_ffi_common::encode::string(&mut tlv, "hello");
-    let mut out = vec![0u8; 256];
-    let mut out_len: usize = out.len();
-    let code = unsafe {
-        nyash_rust::runtime::host_api::nyrt_host_call_slot(
-            handle,
-            101,
-            tlv.as_ptr(),
-            tlv.len(),
-            out.as_mut_ptr(),
-            &mut out_len,
-        )
-    };
-    println!("  set(slot=101) -> code={}, out_len={}", code, out_len);
+    let code = host_api_box::call_slot_grow(handle, 101, &tlv);
+    match code {
+        Ok(buf) => println!("  set(slot=101) -> code=0, out_len={}", buf.len()),
+        Err(rc) => println!("  set(slot=101) -> code={}, out_len=0", rc),
+    }
     // Call Array.get(0) via slot=100 and decode
     let mut tlv2 = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(1);
     nyash_rust::runtime::plugin_ffi_common::encode::i64(&mut tlv2, 0);
-    let mut out2 = vec![0u8; 256];
-    let mut out2_len: usize = out2.len();
-    let code2 = unsafe {
-        nyash_rust::runtime::host_api::nyrt_host_call_slot(
-            handle,
-            100,
-            tlv2.as_ptr(),
-            tlv2.len(),
-            out2.as_mut_ptr(),
-            &mut out2_len,
-        )
-    };
-    if code2 == 0 {
+    if let Ok(out2) = host_api_box::call_slot_grow(handle, 100, &tlv2) {
         if let Some((tag, _sz, payload)) =
-            nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out2[..out2_len])
+            nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out2)
         {
             if tag == 6 || tag == 7 {
                 // string/bytes
@@ -115,7 +96,7 @@ fn main() {
             }
         }
     } else {
-        println!("  get(slot=100) failed with code {}", code2);
+        println!("  get(slot=100) failed (host_api_box rc)");
     }
 
     // MapBox slots test: set/get/has/size
@@ -126,37 +107,17 @@ fn main() {
     let mut tlv_set = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(2);
     nyash_rust::runtime::plugin_ffi_common::encode::string(&mut tlv_set, "k");
     nyash_rust::runtime::plugin_ffi_common::encode::string(&mut tlv_set, "v");
-    let mut out_s = vec![0u8; 256];
-    let mut out_s_len: usize = out_s.len();
-    let code_s = unsafe {
-        nyash_rust::runtime::host_api::nyrt_host_call_slot(
-            map_h,
-            204,
-            tlv_set.as_ptr(),
-            tlv_set.len(),
-            out_s.as_mut_ptr(),
-            &mut out_s_len,
-        )
-    };
-    println!("  set(slot=204) -> code={}, out_len={}", code_s, out_s_len);
+    let code_s = host_api_box::call_slot_grow(map_h, 204, &tlv_set);
+    match code_s {
+        Ok(buf) => println!("  set(slot=204) -> code=0, out_len={}", buf.len()),
+        Err(rc) => println!("  set(slot=204) -> code={}, out_len=0", rc),
+    }
     // get("k") → slot=203
     let mut tlv_get = nyash_rust::runtime::plugin_ffi_common::encode_tlv_header(1);
     nyash_rust::runtime::plugin_ffi_common::encode::string(&mut tlv_get, "k");
-    let mut out_g = vec![0u8; 256];
-    let mut out_g_len: usize = out_g.len();
-    let code_g = unsafe {
-        nyash_rust::runtime::host_api::nyrt_host_call_slot(
-            map_h,
-            203,
-            tlv_get.as_ptr(),
-            tlv_get.len(),
-            out_g.as_mut_ptr(),
-            &mut out_g_len,
-        )
-    };
-    if code_g == 0 {
+    if let Ok(out_g) = host_api_box::call_slot_grow(map_h, 203, &tlv_get) {
         if let Some((tag, _sz, payload)) =
-            nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out_g[..out_g_len])
+            nyash_rust::runtime::plugin_ffi_common::decode::tlv_first(&out_g)
         {
             if tag == 6 || tag == 7 {
                 let s = nyash_rust::runtime::plugin_ffi_common::decode::string(payload);
@@ -167,39 +128,17 @@ fn main() {
         }
     }
     // has("k") → slot=202
-    let mut out_hb = vec![0u8; 16];
-    let mut out_hb_len: usize = out_hb.len();
-    let code_hb = unsafe {
-        nyash_rust::runtime::host_api::nyrt_host_call_slot(
-            map_h,
-            202,
-            tlv_get.as_ptr(),
-            tlv_get.len(),
-            out_hb.as_mut_ptr(),
-            &mut out_hb_len,
-        )
-    };
-    println!(
-        "  has(slot=202) -> code={}, out_len={}",
-        code_hb, out_hb_len
-    );
+    let code_hb = host_api_box::call_slot_grow(map_h, 202, &tlv_get);
+    match code_hb {
+        Ok(buf) => println!("  has(slot=202) -> code=0, out_len={}", buf.len()),
+        Err(rc) => println!("  has(slot=202) -> code={}, out_len=0", rc),
+    }
     // size() → slot=200
-    let mut out_sz = vec![0u8; 32];
-    let mut out_sz_len: usize = out_sz.len();
-    let code_sz = unsafe {
-        nyash_rust::runtime::host_api::nyrt_host_call_slot(
-            map_h,
-            200,
-            std::ptr::null(),
-            0,
-            out_sz.as_mut_ptr(),
-            &mut out_sz_len,
-        )
-    };
-    println!(
-        "  size(slot=200) -> code={}, out_len={}",
-        code_sz, out_sz_len
-    );
+    let code_sz = host_api_box::call_slot_grow(map_h, 200, &[]);
+    match code_sz {
+        Ok(buf) => println!("  size(slot=200) -> code=0, out_len={}", buf.len()),
+        Err(rc) => println!("  size(slot=200) -> code={}, out_len=0", rc),
+    }
 
     println!("\nTest completed!");
 }

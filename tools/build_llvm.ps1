@@ -12,6 +12,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Ensure we run from the repository root (script is in tools/)
+$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
+Push-Location $RepoRoot
+
 function Info($msg) { Write-Host "[build-llvm.ps1] $msg" -ForegroundColor Cyan }
 function Err($msg) { Write-Host "[build-llvm.ps1] ERROR: $msg" -ForegroundColor Red; exit 1 }
 
@@ -31,7 +35,7 @@ Remove-Item -ErrorAction SilentlyContinue $objPath
 Info "Emitting object: $objPath from $NyashFile"
 $env:NYASH_LLVM_OBJ_OUT = (Resolve-Path $objPath)
 if (-not $env:LLVM_SYS_181_PREFIX -and $env:LLVM_SYS_180_PREFIX) { $env:LLVM_SYS_181_PREFIX = $env:LLVM_SYS_180_PREFIX }
-& .\target\release\nyash.exe --backend llvm $NyashFile | Out-Null
+& "$RepoRoot\target\release\nyash.exe" --backend llvm $NyashFile | Out-Null
 if (!(Test-Path $objPath)) { Err "Object not generated: $objPath" }
 if ((Get-Item $objPath).Length -le 0) { Err "Object is empty: $objPath" }
 
@@ -58,3 +62,6 @@ else {
 
 if (!(Test-Path $Out)) { Err "Link failed: $Out not found" }
 Info ("OK: built {0} ({1} bytes)" -f $Out, (Get-Item $Out).Length)
+
+# Restore location
+Pop-Location

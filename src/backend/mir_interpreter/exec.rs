@@ -22,11 +22,11 @@ impl MirInterpreter {
         arg_vals: Option<&[VMValue]>,
         mode: super::CallMode,
     ) -> Result<VMValue, VMError> {
-        eprintln!("[DEBUG-EXEC-ENTRY] About to call function: {}", func.signature.name);
+        if Self::trace_enabled() { eprintln!("[DEBUG-EXEC-ENTRY] About to call function: {}", func.signature.name); }
         // Centralized OperatorBox guard: intercept before any frame setup (skip in NoOperatorGuard mode)
         if mode == super::CallMode::Normal {
             if let Some(r) = self.operator_guard_intercept_entry(func.signature.name.as_str(), arg_vals) {
-                eprintln!("[DEBUG-EXEC-ENTRY] Early return from operator_guard");
+                if Self::trace_enabled() { eprintln!("[DEBUG-EXEC-ENTRY] Early return from operator_guard"); }
                 return r;
             }
         }
@@ -34,14 +34,14 @@ impl MirInterpreter {
         // Phase 1: delegate cross-class reroute / narrow fallbacks to method_router (skip in NoOperatorGuard mode)
         if mode == super::CallMode::Normal {
             if let Some(r) = super::method_router::pre_exec_reroute(self, func, arg_vals) {
-                eprintln!("[DEBUG-EXEC-ENTRY] Early return from pre_exec_reroute");
+                if Self::trace_enabled() { eprintln!("[DEBUG-EXEC-ENTRY] Early return from pre_exec_reroute"); }
                 return r;
             }
         }
         let saved_regs = mem::take(&mut self.regs);
         let saved_fn = self.cur_fn.clone();
         self.cur_fn = Some(func.signature.name.clone());
-        eprintln!("[DEBUG-EXEC] Entering function: {:?}, prev_fn: {:?}", self.cur_fn, saved_fn);
+        if Self::trace_enabled() { eprintln!("[DEBUG-EXEC] Entering function: {:?}, prev_fn: {:?}", self.cur_fn, saved_fn); }
 
         // Enter a new scope for this function frame (lifetime management)
         self.scope.push_scope();
@@ -236,6 +236,9 @@ impl MirInterpreter {
             // Optional stepper before execute
             if StepperCfg::is_enabled() { maybe_stepper_prompt(block.id, inst_idx, inst, &trace_cfg, self); }
             self.execute_instruction(inst)?;
+            if crate::runtime::env_gate_box::bool_any(&["HAKO_CALLABLE_ASYNC","NYASH_CALLABLE_ASYNC","HAKO_VM_POLL_SCHED","NYASH_VM_POLL_SCHED"]) {
+                crate::runtime::global_hooks::safepoint_and_poll();
+            }
             if let Some(cfg) = &trace_cfg { if cfg.should_trace(block.id, op_name(inst)) {
                 if let Some(line) = cfg.render_after(self, block.id, inst_idx, inst) { eprintln!("{}", line); }
             }}

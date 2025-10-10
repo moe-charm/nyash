@@ -47,6 +47,8 @@ impl MirInterpreter {
         let label = format!("BoxCall:{}", method);
         self.emit_call_trace_label(&label, args.len(), None);
 
+        // ArrayBox.slice early intercept removed. Parity handled downstream.
+
         // Handle-trace: birth/fini observation (centralized)
         self.lifecycle_observe_method(box_val, method);
 
@@ -179,11 +181,19 @@ impl MirInterpreter {
         // robustness measure; precise behavior should be provided by concrete boxes.
         // Gate by env: set NYASH_VM_LENGTH_FALLBACK=0 to disable and fail-fast upstream.
         if method == "length" && Self::env_truthy_default("NYASH_VM_LENGTH_FALLBACK", true) {
-            if super::super::VmConfig::global().general_trace {
-                eprintln!("[vm-trace] length dispatch handler=fallback(length=0)");
+            let recv_any = self.reg_load(box_val)?;
+            let is_core = match &recv_any {
+                VMValue::String(_) => true,
+                VMValue::BoxRef(bx) => crate::runtime::type_registry::is_core_box(bx.type_name()),
+                _ => false,
+            };
+            if !is_core {
+                if super::super::VmConfig::global().general_trace {
+                    eprintln!("[vm-trace] length dispatch handler=fallback(length=0)");
+                }
+                if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); }
+                return Ok(());
             }
-            if let Some(d) = dst { self.regs.insert(d, VMValue::Integer(0)); }
-            return Ok(());
         }
         // Fallback: unique-tail dynamic resolution for user-defined methods
         // Narrowing: restrict to receiver's class when available to avoid
@@ -231,7 +241,23 @@ impl MirInterpreter {
         if method == "birth" {
             self.lifecycle_contracts_birth(box_val, args.len());
         }
-
-        self.invoke_plugin_box(dst, box_val, method, args)
+        // Route via Router for plugin boxes; builtin/instance → builtin executor
+        {
+            let recv_any = self.reg_load(box_val)?;
+            if let VMValue::BoxRef(ref bx) = recv_any {
+                if bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>().is_some() {
+                    let mut argv_vals: Vec<VMValue> = Vec::with_capacity(args.len());
+                    for a in args { argv_vals.push(self.reg_load(*a)?); }
+                    let result = crate::runtime::method_router_box::route(self, &recv_any, method, &argv_vals)?;
+                    if let Some(d) = dst { self.regs.insert(d, result.clone()); }
+                    self.maybe_register_scope_value(&result);
+                    return Ok(());
+                }
+            }
+            let result = self.execute_method_call(&recv_any, method, args)?;
+            if let Some(d) = dst { self.regs.insert(d, result.clone()); }
+            self.maybe_register_scope_value(&result);
+            return Ok(());
+        }
     }
 }

@@ -1,0 +1,62 @@
+// test_callable.hako — CallableBox basic functionality tests
+// Expected: methodRef/call/arity work correctly via Hakorune VM
+
+using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    print("=== CallableBox Tests (methodRef/call/arity) ===")
+
+    // Test 1: Array.methodRef + CallableBox.arity
+    // Create ArrayBox, push 2 elements, methodRef("size", 0), check arity
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"newbox","dst":1,"box_type":"ArrayBox"},{"op":"const","dst":2,"value":{"Integer":1}},{"op":"boxcall","dst":null,"box":1,"method":"push","args":[2]},{"op":"const","dst":3,"value":{"Integer":2}},{"op":"boxcall","dst":null,"box":1,"method":"push","args":[3]},{"op":"const","dst":4,"value":{"String":"size"}},{"op":"const","dst":5,"value":{"Integer":0}},{"op":"boxcall","dst":6,"box":1,"method":"methodRef","args":[4,5]},{"op":"boxcall","dst":7,"box":6,"method":"arity","args":[]},{"op":"ret","value":7}],"terminator":{"op":"ret","value":7}}]}]}"#
+
+    print("[Test 1] Array.methodRef + CallableBox.arity → 0")
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1 result: " + StringHelpers.int_to_str(result1))
+    if result1 != 0 {
+      print("[FAIL] Test 1: expected 0 (arity), got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: CallableBox.call (simple case - call size() on array with 2 elements)
+    // Create ArrayBox, push 2 elements, methodRef("size", 0), call with empty args → 2
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"newbox","dst":1,"box_type":"ArrayBox"},{"op":"const","dst":2,"value":{"Integer":1}},{"op":"boxcall","dst":null,"box":1,"method":"push","args":[2]},{"op":"const","dst":3,"value":{"Integer":2}},{"op":"boxcall","dst":null,"box":1,"method":"push","args":[3]},{"op":"const","dst":4,"value":{"String":"size"}},{"op":"const","dst":5,"value":{"Integer":0}},{"op":"boxcall","dst":6,"box":1,"method":"methodRef","args":[4,5]},{"op":"newbox","dst":7,"box_type":"ArrayBox"},{"op":"boxcall","dst":8,"box":6,"method":"call","args":[7]},{"op":"ret","value":8}],"terminator":{"op":"ret","value":8}}]}]}"#
+
+    print("[Test 2] CallableBox.call (array.size via methodRef) → 2")
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2 result: " + StringHelpers.int_to_str(result2))
+    if result2 != 2 {
+      print("[FAIL] Test 2: expected 2 (array size), got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: CallableBox.call with 1 argument (array.push via methodRef)
+    // Create ArrayBox, methodRef("push", 1), call with [42], then check size → 1
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"newbox","dst":1,"box_type":"ArrayBox"},{"op":"const","dst":2,"value":{"String":"push"}},{"op":"const","dst":3,"value":{"Integer":1}},{"op":"boxcall","dst":4,"box":1,"method":"methodRef","args":[2,3]},{"op":"newbox","dst":5,"box_type":"ArrayBox"},{"op":"const","dst":6,"value":{"Integer":42}},{"op":"boxcall","dst":null,"box":5,"method":"push","args":[6]},{"op":"boxcall","dst":null,"box":4,"method":"call","args":[5]},{"op":"boxcall","dst":7,"box":1,"method":"size","args":[]},{"op":"ret","value":7}],"terminator":{"op":"ret","value":7}}]}]}"#
+
+    print("[Test 3] CallableBox.call with args (array.push(42)) → size=1")
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3 result: " + StringHelpers.int_to_str(result3))
+    if result3 != 1 {
+      print("[FAIL] Test 3: expected 1 (array size after push), got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: Map.call (store CallableBox in Map, retrieve and call)
+    // Create Map, create ArrayBox, methodRef("size", 0), store in map, call via map.call
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"newbox","dst":1,"box_type":"MapBox"},{"op":"newbox","dst":2,"box_type":"ArrayBox"},{"op":"const","dst":3,"value":{"Integer":10}},{"op":"boxcall","dst":null,"box":2,"method":"push","args":[3]},{"op":"const","dst":4,"value":{"Integer":20}},{"op":"boxcall","dst":null,"box":2,"method":"push","args":[4]},{"op":"const","dst":5,"value":{"String":"size"}},{"op":"const","dst":6,"value":{"Integer":0}},{"op":"boxcall","dst":7,"box":2,"method":"methodRef","args":[5,6]},{"op":"const","dst":8,"value":{"String":"sizeMethod"}},{"op":"boxcall","dst":null,"box":1,"method":"set","args":[8,7]},{"op":"const","dst":9,"value":{"String":"sizeMethod"}},{"op":"newbox","dst":10,"box_type":"ArrayBox"},{"op":"boxcall","dst":11,"box":1,"method":"call","args":[9,10]},{"op":"ret","value":11}],"terminator":{"op":"ret","value":11}}]}]}"#
+
+    print("[Test 4] Map.call (store callable, call via map) → 2")
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4 result: " + StringHelpers.int_to_str(result4))
+    if result4 != 2 {
+      print("[FAIL] Test 4: expected 2 (array size via map.call), got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    print("✅ All CallableBox tests PASSED! (4/4)")
+    return 0
+  }
+}

@@ -1,0 +1,79 @@
+// test_callable_direct.hako — Direct CallableBox usage in Hakorune language
+// Purpose: Demonstrate methodRef/call/arity as regular Hakorune code (not MIR JSON)
+// Expected: All 4 tests pass when run on Rust VM
+
+static box Main {
+  main() {
+    print("=== CallableBox Direct Tests (Hakorune Language) ===")
+
+    // Test 1: Array.methodRef + CallableBox.arity
+    // Create ArrayBox, get method reference, check arity
+    print("[Test 1] Array.methodRef + CallableBox.arity")
+    local a1 = new ArrayBox()
+    a1.push(1)
+    a1.push(2)
+    local cb1 = a1.methodRef("size", 0)
+    local arity1 = cb1.arity()
+    print("Test 1 arity: " + arity1)
+    if arity1 != 0 {
+      print("[FAIL] Test 1: expected arity=0, got " + arity1)
+      return 1
+    }
+    print("[PASS] Test 1: arity=0")
+
+    // Test 2: CallableBox.call (no args - array.size())
+    // Call size() method via callable with empty args
+    print("[Test 2] CallableBox.call (array.size via methodRef)")
+    local a2 = new ArrayBox()
+    a2.push(10)
+    a2.push(20)
+    local cb2 = a2.methodRef("size", 0)
+    local args2 = new ArrayBox()
+    local result2 = cb2.call(args2)
+    print("Test 2 result: " + result2)
+    if result2 != 2 {
+      print("[FAIL] Test 2: expected size=2, got " + result2)
+      return 1
+    }
+    print("[PASS] Test 2: size=2")
+
+    // Test 3: CallableBox.call returns result (get method)
+    // NOTE: Current CallableBox implementation clones the receiver, so mutating
+    // methods don't affect the original. Testing with get() instead.
+    print("[Test 3] CallableBox.call with args (array.get(0))")
+    local a3 = new ArrayBox()
+    a3.push(100)
+    a3.push(200)
+    local cb3 = a3.methodRef("get", 1)
+    local args3 = new ArrayBox()
+    args3.push(0)
+    local result3 = cb3.call(args3)
+    print("Test 3 result: " + result3)
+    if result3 != 100 {
+      print("[FAIL] Test 3: expected get(0)=100, got " + result3)
+      return 1
+    }
+    print("[PASS] Test 3: get(0) via callable returned 100")
+
+    // Test 4: Map.call (store callable in map, retrieve and call)
+    // Store CallableBox in MapBox, call via map.call(key, args)
+    print("[Test 4] Map.call (store callable in map, call via map)")
+    local m4 = new MapBox()
+    local a4 = new ArrayBox()
+    a4.push(100)
+    a4.push(200)
+    local cb4 = a4.methodRef("size", 0)
+    m4.set("sizeMethod", cb4)
+    local args4 = new ArrayBox()
+    local result4 = m4.call("sizeMethod", args4)
+    print("Test 4 result: " + result4)
+    if result4 != 2 {
+      print("[FAIL] Test 4: expected size=2 via map.call, got " + result4)
+      return 1
+    }
+    print("[PASS] Test 4: map.call returned size=2")
+
+    print("=== All CallableBox tests PASSED! (4/4) ===")
+    return 0
+  }
+}

@@ -9,6 +9,9 @@ using "apps/selfhost/hakorune-vm/callee_parser.hako" as CalleeParserBox
 using "apps/selfhost/hakorune-vm/args_extractor.hako" as ArgsExtractorBox
 using "apps/selfhost/hakorune-vm/global_call_handler.hako" as GlobalCallHandlerBox
 using "apps/selfhost/hakorune-vm/extern_call_handler.hako" as ExternCallHandlerBox
+using "apps/selfhost/hakorune-vm/module_function_call_handler.hako" as ModuleFunctionCallHandlerBox
+using "apps/selfhost/hakorune-vm/method_call_handler.hako" as MethodCallHandlerBox
+using "apps/selfhost/hakorune-vm/constructor_call_handler.hako" as ConstructorCallHandlerBox
 
 static box MirCallHandlerBox {
   // Handle MirCall instruction
@@ -35,23 +38,38 @@ static box MirCallHandlerBox {
     // Extract mir_call object
     local mir_call_json = inst_json.substring(mir_call_start, mir_call_end + 1)
 
-    // Extract callee type and name
+    // Extract callee type
     local callee_type = CalleeParserBox.extract_type(mir_call_json)
     if callee_type == null {
       return Result.Err("mir_call: failed to extract callee type")
     }
 
+    // Extract destination register (may be null)
+    local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
+    // Note: dst can be null for void functions, JsonFieldExtractor returns null
+
+    // Extract arguments (common for all callee types)
+    local args_array = ArgsExtractorBox.extract_and_load(mir_call_json, regs)
+
+    // Method: Dispatch directly (receiver/method handled in MethodCallHandlerBox)
+    if callee_type == "Method" {
+      return MethodCallHandlerBox.handle(mir_call_json, dst_reg, regs)
+    }
+
+    // Constructor: Dispatch directly (box_type handled in ConstructorCallHandlerBox)
+    if callee_type == "Constructor" {
+      local box_type = CalleeParserBox.extract_box_type(mir_call_json)
+      if box_type == null {
+        return Result.Err("mir_call: failed to extract box_type from Constructor")
+      }
+      return ConstructorCallHandlerBox.handle(box_type, args_array, dst_reg, regs)
+    }
+
+    // For other callee types: Extract name
     local callee_name = CalleeParserBox.extract_name(mir_call_json)
     if callee_name == null {
       return Result.Err("mir_call: failed to extract callee name")
     }
-
-    // Extract arguments
-    local args_array = ArgsExtractorBox.extract_and_load(mir_call_json, regs)
-
-    // Extract destination register (may be null)
-    local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
-    // Note: dst can be null for void functions, JsonFieldExtractor returns null
 
     // Dispatch based on callee type
     if callee_type == "Global" {
@@ -62,17 +80,9 @@ static box MirCallHandlerBox {
       return ExternCallHandlerBox.handle(callee_name, args_array, dst_reg, regs, mem)
     }
 
-    // Phase 2: ModuleFunction, Method, Constructor, Closure, Value
+    // Phase 2: ModuleFunction, Closure, Value
     if callee_type == "ModuleFunction" {
-      return Result.Err("mir_call: ModuleFunction not yet implemented (Phase 2)")
-    }
-
-    if callee_type == "Method" {
-      return Result.Err("mir_call: Method not yet implemented (Phase 2)")
-    }
-
-    if callee_type == "Constructor" {
-      return Result.Err("mir_call: Constructor not yet implemented (Phase 2)")
+      return ModuleFunctionCallHandlerBox.handle(callee_name, args_array, dst_reg, regs)
     }
 
     if callee_type == "Closure" {

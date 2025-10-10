@@ -78,6 +78,7 @@ impl PluginLoaderV2 {
                                     let key = (lib.clone(), box_type.to_string());
                                     let entry = specs.entry(key).or_default();
                                     entry.invoke_id = inv;
+                                    entry.type_id = Some(type_id);
                                 }
                                 if dbg_on() {
                                     eprintln!(
@@ -101,6 +102,44 @@ impl PluginLoaderV2 {
                 }
             }
         }
+        // Final fallback: resolve invoke by type_id or deduce lib by loaded plugins
+        if direct_invoke.is_none() {
+            if let Some(inv) = self.box_invoke_fn_for_type_id(type_id) {
+                if dbg_on() { eprintln!("[PluginLoaderV2] resolved invoke by type_id={} (no lib name)", type_id); }
+                direct_invoke = Some(inv);
+            } else if lib_name_for_box.is_none() {
+                if let Ok(plugins) = self.plugins.read() {
+                    for (lib, loaded) in plugins.iter() {
+                        if loaded.box_types.iter().any(|bt| bt == box_type) {
+                            if dbg_on() { eprintln!("[PluginLoaderV2] deduced library '{}' for box_type='{}' via loaded set", lib, box_type); }
+                            if let Some(spec) = self.box_specs.read().ok().and_then(|m| m.get(&(lib.clone(), box_type.to_string())).cloned()) {
+                                direct_invoke = spec.invoke_id;
+                            }
+                            if direct_invoke.is_none() {
+                                // Probe symbol now (deduced lib) and record
+                                let sym_name = format!("nyash_typebox_{}\0", box_type);
+                                unsafe {
+                                    if let Ok(tb_sym) = loaded._lib.get::<libloading::Symbol<&super::types::NyashTypeBoxFfi>>(sym_name.as_bytes()) {
+                                        direct_invoke = tb_sym.invoke_id;
+                                        if let Ok(mut specs) = self.box_specs.write() {
+                                            let key = (lib.clone(), box_type.to_string());
+                                            let entry = specs.entry(key).or_default();
+                                            entry.invoke_id = tb_sym.invoke_id;
+                                            entry.type_id = Some(type_id);
+                                        }
+                                        if dbg_on() { eprintln!("[PluginLoaderV2] TypeBox FFI probe (deduced lib): {}.{}", lib, box_type); }
+                                    } else if dbg_on() {
+                                        eprintln!("[PluginLoaderV2] TypeBox FFI not found for {}.{} (looked for '{}')", lib, box_type, sym_name.trim_end_matches('\0'));
+                                    }
+                                }
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+
 
         // Call birth when available; otherwise synthesize no-op instance id (0)
         let mut instance_id: u32 = 0;
@@ -111,7 +150,8 @@ impl PluginLoaderV2 {
                     box_type, type_id, birth_id
                 );
             }
-            let tlv = crate::runtime::plugin_ffi_common::encode_empty_args();
+            // Encode provided constructor args for birth (if any)
+            let tlv = crate::runtime::plugin_ffi_common::encode_args(_args);
             let (code, out_len, out_buf) = if let Some(box_invoke) = direct_invoke {
                 // Direct per-Box call (no type_id dispatch)
                 let mut out = vec![0u8; 1024];
@@ -139,13 +179,29 @@ impl PluginLoaderV2 {
                     );
                 }
             }
-            if code != 0 || out_len < 4 {
+            if code != 0 { return Err(BidError::PluginError); }
+            // Accept both legacy raw-4-byte (instance_id) and TLV handle(tag=8,size=8)
+            if out_len == 4 {
+                let mut b = [0u8;4];
+                b.copy_from_slice(&out_buf[..4]);
+                instance_id = u32::from_le_bytes(b);
+            } else if out_len >= 8 {
+                if let Some((tag, sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
+                    if tag != 8 || sz != 8 { return Err(BidError::PluginError); }
+                    if let Some((_ret_tid, inst)) = crate::runtime::plugin_ffi_common::decode::plugin_handle(payload) {
+                        instance_id = inst;
+                    } else {
+                        return Err(BidError::PluginError);
+                    }
+                } else {
+                    return Err(BidError::PluginError);
+                }
+            } else {
                 return Err(BidError::PluginError);
             }
-            instance_id = u32::from_le_bytes([out_buf[0], out_buf[1], out_buf[2], out_buf[3]]);
         } else {
             // No birth provided: synthesize no-op (migration window)
-            let warn = std::env::var("NYASH_WARN_PLUGIN_NO_BIRTH").ok().map(|v| v != "0").unwrap_or(false);
+            let warn = crate::runtime::env_gate_box::bool_any(&["NYASH_WARN_PLUGIN_NO_BIRTH","HAKO_WARN_PLUGIN_NO_BIRTH"]);
             if warn || dbg_on() {
                 eprintln!("[PluginLoaderV2] info: box_type='{}' has no birth(); treating as no-op", box_type);
             }

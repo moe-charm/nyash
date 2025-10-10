@@ -11,15 +11,21 @@ impl PluginLoaderV2 {
     pub(crate) fn resolve_method_id(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
         // Trace helper — fully silent by default; only emits with NYASH_METHOD_REG_TRACE_V2=1
         fn trace(box_type: &str, method_name: &str, provider: &str, mid: Option<u32>) {
-            if std::env::var("NYASH_METHOD_REG_TRACE_V2").ok().as_deref() != Some("1") { return; }
+            if !crate::runtime::env_gate_box::bool_any(&["NYASH_METHOD_REG_TRACE_V2"]) { return; }
             match mid {
-                Some(id) => eprintln!(
-                    r#"{{"kind":"method_resolve","class":"{}","method":"{}","provider":"{}","method_id":{}}}"#,
-                    box_type, method_name, provider, id
+                Some(id) => crate::runtime::diagnostics::trace_event(
+                    "method_resolve",
+                    &format!(
+                        "\"class\":\"{}\",\"method\":\"{}\",\"provider\":\"{}\",\"method_id\":{}",
+                        box_type, method_name, provider, id
+                    ),
                 ),
-                None => eprintln!(
-                    r#"{{"kind":"method_resolve","class":"{}","method":"{}","provider":"{}","status":"miss"}}"#,
-                    box_type, method_name, provider
+                None => crate::runtime::diagnostics::trace_event(
+                    "method_resolve",
+                    &format!(
+                        "\"class\":\"{}\",\"method\":\"{}\",\"provider\":\"{}\",\"status\":\"miss\"",
+                        box_type, method_name, provider
+                    ),
                 ),
             }
         }
@@ -110,15 +116,10 @@ impl PluginLoaderV2 {
 
 /// Helper functions for method resolution
 pub(super) fn is_special_method(method_name: &str) -> bool {
-    matches!(method_name, "birth" | "fini" | "toString")
+    crate::runtime::method_ids_box::is_special(method_name)
 }
 
 /// Get default method IDs for special methods
 pub(super) fn get_special_method_id(method_name: &str) -> Option<u32> {
-    match method_name {
-        "birth" => Some(1),
-        "toString" => Some(100),
-        "fini" => Some(999),
-        _ => None,
-    }
+    crate::runtime::method_ids_box::default_id(method_name)
 }

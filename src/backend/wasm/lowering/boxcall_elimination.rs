@@ -52,7 +52,7 @@ impl BoxCallEliminator {
         let receiver_type = func.metadata.value_types.get(&box_val);
 
         // Phase 1: ArrayBox support → prefer Method callee with explicit receiver
-        if Self::is_box_type(receiver_type, "ArrayBox") {
+        if matches!(receiver_type, Some(crate::mir::MirType::Box(bt)) if bt == "ArrayBox") {
             return MirInstruction::Call {
                 dst,
                 func: ValueId::new(0),
@@ -68,7 +68,7 @@ impl BoxCallEliminator {
         }
 
         // Phase 2: MapBox support → Extern("nybox.map.<method>")
-        if Self::is_box_type(receiver_type, "MapBox") {
+        if matches!(receiver_type, Some(crate::mir::MirType::Box(bt)) if bt == "MapBox") {
             return MirInstruction::Call {
                 dst,
                 func: ValueId::new(0),
@@ -106,9 +106,7 @@ impl BoxCallEliminator {
         }
     }
 
-    fn is_box_type(ty: Option<&crate::mir::MirType>, name: &str) -> bool {
-        matches!(ty, Some(crate::mir::MirType::Box(bt)) if bt == name)
-    }
+    // local is_box_type helper removed; direct matches! used at callsites
 }
 
 impl BoxCallEliminator {

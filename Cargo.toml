@@ -159,6 +159,10 @@ env_logger = "0.11"
 libloading = { version = "0.8", optional = true }
 toml = "0.8"
 which = "6"
+hako_core_string = { path = "crates/hako_core_string" }
+hako_core_array = { path = "crates/hako_core_array" }
+hako_core_map = { path = "crates/hako_core_map" }
+hako_core_callable = { path = "crates/hako_core_callable" }
 
 # 日時処理
 chrono = "0.4"

@@ -170,6 +170,16 @@ pub fn env_usize(name: &str, default: usize) -> usize {
 /// # use crate::config::env_helpers::env_u32;
 /// let port = env_u32("NYASH_PORT", 8080);
 /// ```
+/// Parse the first available env var among given names to u64 with default
+#[inline]
+pub fn env_u64_any(names: &[&str], default: u64) -> u64 {
+    for &n in names {
+        if let Ok(v) = std::env::var(n) {
+            if let Ok(parsed) = v.parse() { return parsed; }
+        }
+    }
+    default
+}
 #[inline]
 pub fn env_u32(name: &str, default: u32) -> u32 {
     std::env::var(name)

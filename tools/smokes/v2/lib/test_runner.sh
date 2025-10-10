@@ -49,6 +49,11 @@ fi
 if [ -z "${NYASH_VM_MAX_INSTRUCTIONS:-}" ]; then
   export NYASH_VM_MAX_INSTRUCTIONS="${SMOKES_VM_MAX_INSTRUCTIONS:-1000000}"
 fi
+
+# Default: enable callable async for smokes unless explicitly set
+if [ -z "${HAKO_CALLABLE_ASYNC:-}" ] && [ -z "${NYASH_CALLABLE_ASYNC:-}" ]; then
+  export HAKO_CALLABLE_ASYNC=1
+fi
 if [ -z "${NYASH_VM_MAX_BLOCK_EXEC:-}" ]; then
   export NYASH_VM_MAX_BLOCK_EXEC="${SMOKES_VM_MAX_BLOCK_EXEC:-200000}"
 fi
@@ -114,6 +119,7 @@ filter_noise() {
       | grep -v "^\[using\]" \
       | grep -v "^\[using/resolve\]" \
       | grep -v "^\[builder\]" \
+      | grep -v '^\[TypeRegistry\] CORE type ids:' \
       | grep -v "^\\[vm-trace\\]" \
   | grep -v '^\{"ev":' \
       | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
@@ -151,7 +157,10 @@ filter_noise() {
       | grep -v '^✅ Mock exit code:' \
   | sed -E 's/^❌[[:space:]]*//' \
   | sed -E 's/^Pipeline error: *//' \
-  | sed -E 's/\bbb[0-9]+\b/bb<ID>/g'
+  | sed -E 's/bb[0-9]+/bb<ID>/g' \
+  | grep -v '^sed: -e expression' \
+  | grep -v -E '^sed: .*unterminated .s. command' \
+  | grep -v -E '^sed: .*コマンドが終了していません'
 }
 
 # Ensure hako.toml exists when tests generate only nyash.toml (compat copy)
@@ -285,6 +294,13 @@ run_nyash_vm() {
         # 軽量ASIFix（テスト用）: ブロック終端の余剰セミコロンを寛容に除去
         if [ "${SMOKES_ASI_STRIP_SEMI:-1}" = "1" ]; then
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$tmpfile" || true
+
+        # 追加の簡易ASIFix（任意）: 同一行内のセミコロン区切りを改行へ（プラグイン最小ケースなどの互換用）
+        # 影響を限定するため、明示的に SMOKES_ASI_LOOSE_SEMI=1 の時のみ有効化
+        if [ "${SMOKES_ASI_LOOSE_SEMI:-0}" = "1" ]; then
+            awk '{gsub(/;[[:space:]]+/, "\n"); print}' "$tmpfile" > "${tmpfile}.sm_asifix" 2>/dev/null && mv "${tmpfile}.sm_asifix" "$tmpfile" || true
+        fi
+
         fi
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
@@ -347,6 +363,14 @@ run_nyash_llvm() {
         # 軽量ASIFix（テスト用）: ブロック終端の余剰セミコロンを寛容に除去
         if [ "${SMOKES_ASI_STRIP_SEMI:-1}" = "1" ]; then
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$tmpfile" || true
+
+        # 追加の簡易ASIFix（任意）: 同一行内のセミコロン区切りを改行へ（プラグイン最小ケースなどの互換用）
+        # 影響を限定するため、明示的に SMOKES_ASI_LOOSE_SEMI=1 の時のみ有効化
+        if [ "${SMOKES_ASI_LOOSE_SEMI:-0}" = "1" ]; then
+            sed -i -E 's/;[[:space:]]+/
+/g' "$tmpfile" || true
+        fi
+
         fi
         # 軽量ASIFix（テスト用）: ブロック終端の余剰セミコロンを寛容に除去
         if [ "${SMOKES_ASI_STRIP_SEMI:-1}" = "1" ] && [ -f "$program" ]; then

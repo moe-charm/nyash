@@ -29,6 +29,11 @@ id = 3
 args = [ { name = "value", type = "box" } ]
 returns = { type = "i64" }
 
+[ArrayBox.methods.slice]
+id = 5
+args = [ { name = "start", type = "i64" }, { name = "end", type = "i64" } ]
+returns = { type = "box" }
+
 [implementation]
 ffi_version = 1
 thread_safe = true

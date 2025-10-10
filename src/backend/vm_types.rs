@@ -18,6 +18,7 @@ pub enum VMError {
     DivisionByZero,
     StackUnderflow,
     TypeError(String),
+    IoError(String),
 }
 
 impl std::fmt::Display for VMError {
@@ -29,6 +30,7 @@ impl std::fmt::Display for VMError {
             VMError::DivisionByZero => write!(f, "Division by zero"),
             VMError::StackUnderflow => write!(f, "Stack underflow"),
             VMError::TypeError(msg) => write!(f, "Type error: {}", msg),
+            VMError::IoError(msg) => write!(f, "I/O error: {}", msg),
         }
     }
 }
@@ -144,6 +146,12 @@ impl VMValue {
         {
             // Treat NullBox as Void in VMValue to align with `null` literal semantics
             VMValue::Void
+        } else if let Some(hhb) = nyash_box.as_any().downcast_ref::<crate::runtime::host_handle_box::HostHandleBox>() {
+            if let Some(arc) = crate::runtime::host_handles::get(hhb.id) {
+                VMValue::BoxRef(arc)
+            } else {
+                VMValue::Void
+            }
         } else if let Some(int_box) = nyash_box.as_any().downcast_ref::<IntegerBox>() {
             VMValue::Integer(int_box.value)
         } else if let Some(bool_box) = nyash_box.as_any().downcast_ref::<BoolBox>() {

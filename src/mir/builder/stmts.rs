@@ -1,4 +1,4 @@
-use super::{Effect, EffectMask, MirInstruction, ValueId};
+use super::{MirInstruction, ValueId};
 use crate::ast::{ASTNode, CallExpr};
 use crate::mir::TypeOpKind;
 use crate::mir::utils::is_current_block_terminated;

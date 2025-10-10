@@ -12,7 +12,7 @@ use crate::box_factory::UnifiedBoxRegistry;
 use std::sync::{Arc, Mutex, OnceLock};
 
 // For early plugin load and provider registration (plugin-first preferred)
-use crate::runtime::{get_global_plugin_host, get_global_registry, init_global_plugin_host, PluginConfig};
+// keep imports minimal to avoid warnings; plugin boot handled by plugin_boot_box
 
 /// Global registry instance
 static GLOBAL_REGISTRY: OnceLock<Arc<Mutex<UnifiedBoxRegistry>>> = OnceLock::new();
@@ -44,57 +44,8 @@ pub fn init_global_unified_registry() {
         // If policy/environment indicates plugin usage, attempt to load nyash.toml/hako.toml
         // and register providers into the v2 BoxFactoryRegistry so `new ArrayBox/MapBox` works
         // even when creation happens before runner plugin init.
-        let policy = std::env::var("NYASH_PLUGIN_POLICY")
-            .ok()
-            .or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok());
-        let disable_by_policy = match policy.as_deref() {
-            None => true, // default OFF unless explicitly set to auto/force
-            Some(s) if s.eq_ignore_ascii_case("off") => true,
-            Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force") => false,
-            _ => false,
-        };
-        if !disable_by_policy && std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
-            // Try a small set of common config paths quietly
-            // Prefer nyash.toml first (project canonical), then fall back to hako/hakorune
-            let candidates = ["nyash.toml", "hako.toml", "hakorune.toml"]; 
-            for cfg in candidates.iter() {
-                if init_global_plugin_host(cfg).is_ok() {
-                    // Mirror runner behavior: register providers from loaded config
-                    if let Ok(host_guard) = get_global_plugin_host().read() {
-                        if let Some(conf) = host_guard.config_ref() {
-                            let reg = get_global_registry();
-                            for (lib_name, lib_def) in &conf.libraries {
-                                for box_name in &lib_def.boxes {
-                                    reg.apply_plugin_config(&PluginConfig { plugins: [(box_name.clone(), lib_name.clone())].into(), });
-                                }
-                            }
-                        }
-                    }
-                    break;
-                } else {
-                    // Partial load fallback: load only core override boxes to avoid hard failure
-                    if let Ok(cfg_v2) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg) {
-                        let host = get_global_plugin_host();
-                        let core_boxes = ["ArrayBox", "MapBox", "StringBox"]; 
-                        for (lib_name, lib_def) in &cfg_v2.libraries {
-                            let include = lib_def.boxes.iter().any(|b| core_boxes.iter().any(|c| c==b));
-                            if include {
-                                let _ = host.read().ok().and_then(|h| h.load_library_direct(lib_name, &lib_def.path, &lib_def.boxes).ok());
-                                // Register providers for boxes listed under this lib (subset is fine)
-                                let reg = get_global_registry();
-                                for box_name in &lib_def.boxes {
-                                    if core_boxes.iter().any(|c| c == box_name) {
-                                        reg.apply_plugin_config(&PluginConfig { plugins: [(box_name.clone(), lib_name.clone())].into(), });
-                                    }
-                                }
-                            }
-                        }
-                        // Even if partial, stop scanning further candidates to keep deterministic
-                        break;
-                    }
-                }
-            }
-        }
+        // Defer plugin boot to PluginBootBox (idempotent)
+        let _ = crate::runtime::plugin_boot_box::boot();
 
         Arc::new(Mutex::new(registry))
     });

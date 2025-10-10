@@ -973,3 +973,308 @@ print("size=" + size)  // → 1（正常）
 **効率**: 133%超過（予期しない2つのバグ発見のため）
 
 ---
+
+## 🎉 **Phase 4 Day 11-12: MirCall Phase 2 - ModuleFunction実装完了** (2025-10-10)
+
+**目標**: MirCall Phase 2 - ModuleFunction calling（静的Box関数呼び出し）
+
+### ✅ **実装完了事項**
+
+#### 📦 **新規箱作成** (1箱)
+
+**ModuleFunctionCallHandlerBox** (70行)
+- 役割: 静的Box関数の動的呼び出しハンドラー
+- サポート関数:
+  - **StringHelpers.int_to_str/1**: 整数→文字列変換
+  - **StringHelpers.to_i64/1**: 文字列→整数変換
+  - **StringHelpers.json_quote/1**: JSON文字列エスケープ
+  - **StringHelpers.is_numeric_str/1**: 数値文字列判定
+  - **StringHelpers.read_digits/2**: 数字読み取り
+- 設計方針: 明示的ディスパッチ（call()はコンパイル時解決のため）
+- エラーハンドリング: 未知関数 → `Result.Err("module_function: unsupported function: ...")`
+
+#### 🔧 **MirCallHandlerBox更新**
+
+**mircall_handler.hako拡張**:
+- using追加: `ModuleFunctionCallHandlerBox`
+- Callee::ModuleFunctionディスパッチ実装（line 67-69）
+- Phase 2 error削除（"not yet implemented" → 実装完了）
+
+#### 🧪 **テストスイート作成**
+
+**test_mircall_phase2_module.hako** (95行):
+- Test 1: StringHelpers.int_to_str(42) → "42" (length 2) ✅ PASS
+- Test 2: StringHelpers.int_to_str(0) → "0" (length 1) ✅ PASS
+- Test 3: StringHelpers.int_to_str(100) → "100" (length 3) ✅ PASS
+- Test 4: Chain test (int_to_str + print) ✅ PASS
+
+**成功率**: 4/4 (100%) 🎉
+
+**MIR JSON構造例**:
+```json
+{
+  "op": "mir_call",
+  "dst": 2,
+  "mir_call": {
+    "callee": {
+      "type": "ModuleFunction",
+      "name": "StringHelpers.int_to_str"
+    },
+    "args": [1],
+    "effects": [],
+    "flags": {}
+  }
+}
+```
+
+### 📂 **実装ファイル**
+
+**新規ファイル**:
+- `apps/selfhost/hakorune-vm/module_function_call_handler.hako` (70行)
+- `apps/selfhost/hakorune-vm/tests/test_mircall_phase2_module.hako` (95行)
+
+**更新ファイル**:
+- `apps/selfhost/hakorune-vm/mircall_handler.hako`: +1 using, ModuleFunction dispatch実装
+- `hako.toml`: +1 module override (module_function_call_handler)
+
+### 📊 **テスト結果**
+
+**実行コマンド**:
+```bash
+HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 \
+./target/release/hakorune apps/selfhost/hakorune-vm/tests/test_mircall_phase2_module.hako
+```
+
+**結果**: ✅ All MirCall Phase 2 (ModuleFunction) tests PASSED! (4/4)
+```
+[PASS] Test 1: StringHelpers.int_to_str works
+[PASS] Test 2: StringHelpers.int_to_str(0) works
+[PASS] Test 3: StringHelpers.int_to_str(100) works
+[PASS] Test 4: ModuleFunction + Global call chain works
+=== All MirCall Phase 2 (ModuleFunction) tests PASSED! (4/4) ===
+```
+
+### 📈 **統計**
+
+- **新規箱**: 1箱（ModuleFunctionCallHandlerBox, 70行）
+- **新規テスト**: 1ファイル（test_mircall_phase2_module.hako, 95行）
+- **総箱数**: 22箱
+- **MirCall Phase 2進捗**: ModuleFunction ✅, Method ⏳（次）
+- **テスト成功率**: 4/4 (100%)
+
+### 🎯 **技術的成果**
+
+1. **明示的ディスパッチパターン**:
+   - `call()` primitive はコンパイル時文字列リテラル必須
+   - 動的な関数名→明示的if-elseディスパッチで実装
+   - 5関数サポート（StringHelpers全メソッド）
+
+2. **MirCall統一設計の実証**:
+   - Global（print） ✅
+   - Extern（未実装）✅ インターフェース完成
+   - **ModuleFunction** ✅ 完全実装
+   - Method ⏳（次のステップ）
+
+3. **Selfhost Compiler準備**:
+   - StringHelpers.int_to_str() 完全動作
+   - Compiler内部で使用される基本ヘルパー関数が利用可能に
+
+### 🎓 **学び**
+
+1. **call() primitive制約**:
+   - `call("ClassName.method/arity", args...)` は文字列リテラル必須
+   - `call(variable_name, args...)` は不可（MIR compilation error）
+   - 回避策: 明示的ディスパッチテーブル
+
+2. **else-if構文制約**:
+   - `else { if ... }` 形式必須（Hakoruneパーサー仕様）
+   - `else if ...` は不可（parse error）
+   - ネスト深度増加だが、読みやすさは維持
+
+3. **テスト設計パターン**:
+   - 戻り値検証: String.size()で間接的にテスト
+   - Chain test: 複数命令組み合わせ動作確認
+   - 境界値テスト: 0, 42, 100 で異なる桁数カバー
+
+### 🚀 **次のステップ（Phase 4 Day 13）**
+
+**MirCall Phase 2 - Method実装**（予測: 3-4時間）:
+1. **MethodCallHandlerBox作成**
+   - receiver抽出（Callee内のreceiverフィールド）
+   - BoxCall dispatchロジック再利用
+   - Test作成: Array.size(), Array.get(), String.substring(), Map.get()
+
+2. **実装戦略**:
+   - Method ≈ BoxCall（等価な機能、異なるルーティング）
+   - BoxCallHandlerBoxのディスパッチロジック再利用
+   - receiver読み込み → BoxCall delegationパターン
+
+3. **完了後の状態**:
+   - MirCall Phase 2完全完了（ModuleFunction + Method）
+   - Selfhost Compiler動作に必要な基盤完成
+
+**見積もり**: 3-4時間
+**期待される成果**: Method calling完全実装、Compiler Ready状態達成
+
+---
+
+## 🎉 **Phase 4 Day 14: MirCall Phase 2 - Constructor実装完了** (2025-01-10)
+
+**目標**: MirCall Phase 2 - Constructor calling（Box生成＋birth()初期化）
+
+### ✅ **実装完了事項**
+
+#### 📦 **新規箱作成** (1箱)
+
+**ConstructorCallHandlerBox** (90行)
+- 役割: Box Constructor 呼び出しハンドラー
+- 機能:
+  - **Box instance creation**: box_type（"ArrayBox", "MapBox", "StringBox"）に基づいて Box 生成
+  - **birth() method calling**: 引数付きコンストラクタの場合、birth() メソッドを呼び出し
+  - **Argument support**: 0-3引数のbirth()をサポート（明示的ディスパッチ）
+- 設計方針: Constructor ≈ newbox + birth()（newbox命令の機能拡張版）
+- エラーハンドリング: 未サポートbox_type → `Result.Err("constructor: unsupported box_type: ...")`
+
+#### 🔧 **CalleeParserBox拡張**
+
+**callee_parser.hako拡張** (+19行):
+- `extract_box_type()` メソッド追加（line 123-142）
+- Constructor callee の `box_type` フィールド抽出
+- JSON例: `{"type":"Constructor","box_type":"ArrayBox"}`
+
+#### 🔧 **MirCallHandlerBox更新**
+
+**mircall_handler.hako拡張** (重要な構造変更):
+- using追加: `ConstructorCallHandlerBox`
+- **args_array 抽出位置の移動**: callee_name 抽出の前に移動（Constructor/Methodで共通利用）
+- **Constructor dispatch実装**: callee_name 抽出前に早期ディスパッチ（line 59-66）
+  - 理由: Constructor callee は `name` フィールドではなく `box_type` フィールドを持つ
+  - Method と同様に特殊フィールドを持つため早期ディスパッチが必要
+- Phase 2 error 削除（Constructor も実装完了）
+
+#### 🧪 **テストスイート作成**
+
+**test_mircall_phase2_constructor.hako** (72行):
+- Test 1: new ArrayBox() + push + size → 1 ✅ PASS
+- Test 2: new MapBox() + size → 0 ✅ PASS
+- Test 3: Multiple Constructors (2個のArrayBox) → 2 (1+1) ✅ PASS
+
+**MIR JSON構造例**:
+```json
+{
+  "op": "mir_call",
+  "dst": 1,
+  "mir_call": {
+    "callee": {
+      "type": "Constructor",
+      "box_type": "ArrayBox"
+    },
+    "args": [],
+    "effects": ["alloc"],
+    "flags": {}
+  }
+}
+```
+
+### 📂 **実装ファイル**
+
+**新規ファイル**:
+- `apps/selfhost/hakorune-vm/constructor_call_handler.hako` (90行)
+- `apps/selfhost/hakorune-vm/tests/test_mircall_phase2_constructor.hako` (72行)
+
+**更新ファイル**:
+- `apps/selfhost/hakorune-vm/callee_parser.hako`: +19行（extract_box_type追加）
+- `apps/selfhost/hakorune-vm/mircall_handler.hako`: Constructor dispatch + 構造変更
+- `hako.toml`: +1 module override (constructor_call_handler)
+- `nyash.toml`: +1 module
+
+### 📊 **テスト結果**
+
+**実行コマンド**:
+```bash
+HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 \
+./target/release/hakorune apps/selfhost/hakorune-vm/tests/test_mircall_phase2_constructor.hako
+```
+
+**結果**: ✅ All MirCall Phase 2 (Constructor) tests PASSED! (3/3)
+```
+[PASS] Test 1: new ArrayBox() works
+[PASS] Test 2: new MapBox() works
+[PASS] Test 3: Multiple Constructors work
+=== All MirCall Phase 2 (Constructor) tests PASSED! (3/3) ===
+```
+
+### 📈 **統計**
+
+- **新規箱**: 1箱（ConstructorCallHandlerBox, 90行）
+- **新規テスト**: 1ファイル（test_mircall_phase2_constructor.hako, 72行）
+- **総箱数**: 23箱
+- **MirCall Phase 2進捗**: ModuleFunction ✅, Method ✅, Constructor ✅ (5/7 callee types, 71%)
+- **残りCallee types**: Closure, Value（Phase 2終盤）
+- **テスト成功率**: 3/3 (100%)
+
+### 🎯 **技術的成果**
+
+1. **Constructor ≈ newbox + birth() パターン**:
+   - newbox: Box instance 生成のみ
+   - Constructor: Box instance 生成 + birth() 初期化
+   - より高レベルな抽象化
+
+2. **Early Dispatch パターン確立**:
+   - Method: receiver + method フィールド → 早期ディスパッチ
+   - Constructor: box_type フィールド → 早期ディスパッチ
+   - 他のcallee types: name フィールド → 通常ディスパッチ
+
+3. **birth() 引数可変対応**:
+   - 0引数: birth()なし（new ArrayBox()のみ）
+   - 1-3引数: 明示的ディスパッチで birth() 呼び出し
+   - 将来的に4引数以上も追加可能
+
+4. **MirCall統一設計の進展**:
+   - Global ✅
+   - Extern ✅ （インターフェースのみ）
+   - ModuleFunction ✅
+   - Method ✅
+   - **Constructor** ✅
+   - Closure ⏳ （次のステップ）
+   - Value ⏳
+
+### 🎓 **学び**
+
+1. **MirCall dispatch順序の重要性**:
+   - 特殊フィールドを持つcallee typeは早期ディスパッチが必須
+   - args_array抽出を共通処理として前に出すことで重複削減
+   - callee_name抽出を後ろに回すことで特殊型をスムーズに処理
+
+2. **birth() method の制約**:
+   - `call()` primitive はコンパイル時文字列リテラル必須
+   - birth(a1), birth(a1,a2), birth(a1,a2,a3) と明示的に分岐が必要
+   - 可変長引数は動的dispatch不可（Hakoruneの言語制約）
+
+3. **エラー発見＆修正プロセス**:
+   - Error 1: "mir_call: failed to extract callee name" → Constructor早期dispatch追加
+   - Error 2: MapBox.isEmpty() 未実装 → MapBox.size() に変更
+   - 自律的バグ修正（ユーザー許可の範囲内で）
+
+### 🚀 **次のステップ（Phase 4 Day 15）**
+
+**MirCall Phase 2 - Closure実装**（予測: 4-6時間）:
+1. **ClosureCallHandlerBox作成**
+   - closure_id 抽出（Callee内のclosure_idフィールド）
+   - クロージャ環境マップ管理
+   - 環境変数キャプチャ処理
+   - Test作成: クロージャ生成→呼び出し
+
+2. **実装戦略**:
+   - Closure ≈ ModuleFunction + 環境キャプチャ
+   - 環境MapBox: closure_id → captured variables
+   - Phase 2 MVP: 簡易クロージャのみサポート
+
+3. **完了後の状態**:
+   - MirCall Phase 2 ほぼ完了（6/7 callee types）
+   - 残り: Value call（動的関数呼び出し）
+
+**見積もり**: 4-6時間
+**期待される成果**: Closure calling実装、Selfhost Compiler高度機能サポート
+
+---

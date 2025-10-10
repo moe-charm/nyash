@@ -48,7 +48,7 @@ pub fn choose_route(box_name: &str, method: &str, certainty: TypeCertainty, arit
         // Extra defensive: debug/file boxes shouldn't own string APIs; prefer BoxCall bridge.
         reason = "nonstring-box-string-like";
         Route::BoxCall
-    } else if matches!(box_name, "StringBox" | "ArrayBox" | "MapBox") {
+    } else if crate::runtime::type_registry::is_core_box(box_name) {
         reason = "core_box";
         Route::BoxCall
     } else if !box_name.ends_with("Box") {

@@ -143,11 +143,7 @@ impl super::MirBuilder {
                 // 🎯 Phase 2: Transform Box == Box into ExternCall to op_eq() (NEW PATH)
                 // or BoxCall to .equals() method (OLD PATH, gated by flag)
 
-                // Check if both operands are Box types (not primitives)
-                let lhs_is_box = matches!(self.value_types.get(&lhs), Some(MirType::Box(_)));
-                let rhs_is_box = matches!(self.value_types.get(&rhs), Some(MirType::Box(_)));
-
-                // Debug: log the types
+                // Debug: log the types (Box vs primitive info can be queried on demand)
                 if std::env::var("NYASH_DEBUG_BOX_COMPARE").is_ok() {
                     eprintln!("[DEBUG] Box comparison check: lhs={:?} lhs_type={:?} rhs={:?} rhs_type={:?}",
                         lhs, self.value_types.get(&lhs), rhs, self.value_types.get(&rhs));

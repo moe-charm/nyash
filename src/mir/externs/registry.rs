@@ -50,6 +50,65 @@ impl ExternCallRegistryBox {
             returns: MirType::Integer,
             effects: EffectMask::READ,
         });
+        // Map.keys -> ArrayBox
+        self.register(ExternCallSpec {
+            interface: "nyrt.map".into(),
+            method: "keys".into(),
+            args: vec![MirType::Box("MapBox".into())],
+            returns: MirType::Box("ArrayBox".into()),
+            effects: EffectMask::READ,
+        });
+        // Map.values -> ArrayBox
+        self.register(ExternCallSpec {
+            interface: "nyrt.map".into(),
+            method: "values".into(),
+            args: vec![MirType::Box("MapBox".into())],
+            returns: MirType::Box("ArrayBox".into()),
+            effects: EffectMask::READ,
+        });
+        // String.* (byte semantics)
+        self.register(ExternCallSpec {
+            interface: "nyrt.string".into(),
+            method: "length".into(),
+            args: vec![MirType::String],
+            returns: MirType::Integer,
+            effects: EffectMask::READ,
+        });
+        self.register(ExternCallSpec {
+            interface: "nyrt.string".into(),
+            method: "indexOf".into(),
+            args: vec![MirType::String, MirType::String, MirType::Integer], // from is optional; builder may pass 2 args
+            returns: MirType::Integer,
+            effects: EffectMask::READ,
+        });
+        self.register(ExternCallSpec {
+            interface: "nyrt.string".into(),
+            method: "lastIndexOf".into(),
+            args: vec![MirType::String, MirType::String, MirType::Integer],
+            returns: MirType::Integer,
+            effects: EffectMask::READ,
+        });
+        self.register(ExternCallSpec {
+            interface: "nyrt.string".into(),
+            method: "substring".into(),
+            args: vec![MirType::String, MirType::Integer, MirType::Integer],
+            returns: MirType::String,
+            effects: EffectMask::READ,
+        });
+        self.register(ExternCallSpec {
+            interface: "nyrt.string".into(),
+            method: "charAt".into(),
+            args: vec![MirType::String, MirType::Integer],
+            returns: MirType::String,
+            effects: EffectMask::READ,
+        });
+        self.register(ExternCallSpec {
+            interface: "nyrt.string".into(),
+            method: "replace".into(),
+            args: vec![MirType::String, MirType::String, MirType::String],
+            returns: MirType::String,
+            effects: EffectMask::READ,
+        });
         // Rune.eval (skeleton)
         self.register(ExternCallSpec {
             interface: "nyrt.rune".into(),
@@ -67,6 +126,24 @@ impl ExternCallRegistryBox {
             effects: EffectMask::READ, // may call user-defined equals()
         });
         // 今後: env.console.log などを必要に応じて追記
+
+        // File I/O (nyrt.file.*)
+        // read(path: String) -> String
+        self.register(ExternCallSpec {
+            interface: "nyrt.file".into(),
+            method: "read".into(),
+            args: vec![MirType::String],
+            returns: MirType::String,
+            effects: EffectMask::IO,
+        });
+        // write(path: String, content: String) -> Void
+        self.register(ExternCallSpec {
+            interface: "nyrt.file".into(),
+            method: "write".into(),
+            args: vec![MirType::String, MirType::String],
+            returns: MirType::Void,
+            effects: EffectMask::IO,
+        });
 
         // nykernel.* (dev stub) — gated at call site by env `NYASH_ENABLE_NYKERNEL_STUB=1`
         // malloc(size: i64) -> i64 (byte address)

@@ -23,23 +23,10 @@ impl NyashRunner {
         {
             // Initialize unified registry globals (idempotent)
             nyash_rust::runtime::init_global_unified_registry();
-            // Init plugin host from nyash.toml if not yet loaded
-            let need_init = {
-                let host = nyash_rust::runtime::get_global_plugin_host();
-                host.read()
-                    .map(|h| h.config_ref().is_none())
-                    .unwrap_or(true)
-            };
-            if need_init {
-                // If explicit plugin config or direct lib is provided, defer to runner_plugin_init only
-                let has_override = std::env::var("NYASH_PLUGIN_CONFIG").ok().map(|v| !v.trim().is_empty()).unwrap_or(false)
-                    || std::env::var("NYASH_PLUGIN_DIRECT_LIB").is_ok();
-                if !has_override {
-                    let _ = nyash_rust::runtime::init_global_plugin_host("nyash.toml");
-                }
-                crate::runner_plugin_init::init_bid_plugins();
-            }
-            // Prefer plugin-builtins for core types unless explicitly disabled
+            // Unified plugin boot (idempotent, prefers override then standard configs)
+            let _ = nyash_rust::runtime::plugin_boot_box::boot();
+            // Keep legacy init path as a no-op when already booted (guarded inside)
+                        // Prefer plugin-builtins for core types unless explicitly disabled
             if std::env::var("NYASH_USE_PLUGIN_BUILTINS").ok().is_none() {
                 std::env::set_var("NYASH_USE_PLUGIN_BUILTINS", "1");
             }

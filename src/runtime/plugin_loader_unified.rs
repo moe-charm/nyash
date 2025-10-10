@@ -39,7 +39,7 @@ pub struct MethodHandle {
 pub struct PluginHost {
     loader: Arc<RwLock<PluginLoaderV2>>, // delegate
     config: Option<NyashConfigV2>,       // cached config for resolution
-    config_path: Option<String>,
+    config_path: Option<crate::runtime::types::verified_path::VerifiedPath>,
 }
 
 impl PluginHost {
@@ -64,7 +64,7 @@ impl PluginHost {
             .unwrap_or_else(|_| config_path.to_string());
         self.config =
             Some(NyashConfigV2::from_file(&canonical).map_err(|_| BidError::PluginError)?);
-        self.config_path = Some(canonical);
+        self.config_path = Some(crate::runtime::types::verified_path::VerifiedPath::new_ok(canonical));
 
         // Delegate actual library loads + pre-birth singletons to v2
         let l = self.loader.read().unwrap();
@@ -133,7 +133,7 @@ impl PluginHost {
                     if nyash_box.exists() { found = Some(nyash_box); break; }
                     if let Some(parent) = base_dir.parent() { base_dir = parent.to_path_buf(); } else { break; }
                 }
-                if found.is_none() && std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
+                if found.is_none() && crate::runtime::env_gate_box::debug_plugin() {
                     eprintln!(
                         "[PluginHost] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
                         path
@@ -159,7 +159,7 @@ impl PluginHost {
         let (lib_name, _lib_def) = cfg
             .find_library_for_box(box_type)
             .ok_or(BidError::InvalidType)?;
-        let cfg_path = self.config_path.as_deref().unwrap_or("nyash.toml");
+        let cfg_path = self.config_path.as_ref().map(|v| v.as_str()).unwrap_or("nyash.toml");
         let toml_content = std::fs::read_to_string(cfg_path).map_err(|_| BidError::PluginError)?;
         let toml_value: toml::Value =
             toml::from_str(&toml_content).map_err(|_| BidError::PluginError)?;

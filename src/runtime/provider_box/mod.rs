@@ -12,53 +12,12 @@
 use crate::box_trait::NyashBox;
 use crate::box_factory::RuntimeError;
 
-fn plugin_policy_on() -> bool {
-    matches!(
-        std::env::var("NYASH_PLUGIN_POLICY").ok().or_else(|| std::env::var("HAKO_PLUGIN_POLICY").ok()).as_deref(),
-        Some(s) if s.eq_ignore_ascii_case("auto") || s.eq_ignore_ascii_case("force")
-    )
-}
-
 /// Ensure plugin host and providers are loaded (best‑effort)
-pub fn ensure_loaded(config_path: Option<&str>) {
-    if std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() == Some("1") {
-        return;
-    }
-    if !plugin_policy_on() {
-        return;
-    }
-    // Initialize from explicit or common paths
-    let paths: [&str; 3] = [
-        config_path.unwrap_or("nyash.toml"),
-        "hako.toml",
-        "hakorune.toml",
-    ];
-    for p in paths.iter() {
-        if crate::runtime::plugin_loader_unified::init_global_plugin_host(p).is_ok() {
-            // Register providers in v2 BoxFactoryRegistry
-            if let Ok(host_guard) = crate::runtime::get_global_plugin_host().read() {
-                if let Some(cfg) = host_guard.config_ref() {
-                    let reg = crate::runtime::get_global_registry();
-                    for (lib, def) in &cfg.libraries {
-                        for b in &def.boxes {
-                            reg.apply_plugin_config(&crate::runtime::PluginConfig { plugins: [(b.clone(), lib.clone())].into(), });
-                        }
-                    }
-                    // Eager-load core boxes (Array/Map/String) to ensure per-Box invoke mapping is available
-                    // and avoid E_PLUGIN during first use under plugin-on.
-                    if std::env::var("NYASH_DEBUG_PLUGIN").unwrap_or_default() == "1" {
-                        eprintln!("[ProviderBox] eager-load core plugins if present (Array/Map/String)");
-                    }
-                    for core in ["ArrayBox", "MapBox", "StringBox"].iter() {
-                        if let Some((lib, def)) = cfg.find_library_for_box(core) {
-                            let _ = host_guard.load_library_direct(lib, &def.path, &def.boxes);
-                        }
-                    }
-                }
-            }
-            break;
-        }
-    }
+pub fn ensure_loaded(_config_path: Option<&str>) {
+    if crate::runtime::env_gate_box::plugins_disabled() { return; }
+    if !crate::runtime::env_gate_box::plugin_policy_on() { return; }
+    let _ = crate::runtime::plugin_boot_box::boot();
+    let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(["ArrayBox", "MapBox", "StringBox"].as_ref());
 }
 
 /// Create a box using Plugin → Registry → Embedded order (best‑effort)
@@ -67,7 +26,8 @@ pub fn new_box(
     args: &[Box<dyn NyashBox>],
 ) -> Result<Box<dyn NyashBox>, RuntimeError> {
     // 1) PluginHost direct
-    if plugin_policy_on() && std::env::var("NYASH_DISABLE_PLUGINS").ok().as_deref() != Some("1") {
+    if crate::runtime::env_gate_box::plugin_policy_on() && !crate::runtime::env_gate_box::plugins_disabled() {
+        let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(&[box_type]);
         if let Some(b) = {
             let host = crate::runtime::get_global_plugin_host();
             host.read().ok().and_then(|h| h.create_box(box_type, args).ok())
@@ -90,13 +50,22 @@ pub fn new_box(
                     }
                 }
             }
+        let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(&[box_type]);
+        if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
+            if let Ok(b) = h.create_box(box_type, args) { return Ok(b); }
+        }
         }
     }
 
     // 2) v2 BoxFactoryRegistry provider
-    let reg = crate::runtime::get_global_registry();
-    if let Ok(b) = reg.create_box(box_type, args) {
-        return Ok(b);
+    // plugin-on かつ core box の場合は、Registry 経由の builtin フォールバックを抑止（plugin 一貫化）
+    let plugin_on = crate::runtime::env_gate_box::plugin_policy_on() && !crate::runtime::env_gate_box::plugins_disabled();
+    let is_core = crate::runtime::type_registry::is_core_box(box_type);
+    if !(plugin_on && is_core) {
+        let reg = crate::runtime::get_global_registry();
+        if let Ok(b) = reg.create_box(box_type, args) {
+            return Ok(b);
+        }
     }
 
     // 3) Final fallback: unified registry (legacy factory set)
@@ -107,6 +76,22 @@ pub fn new_box(
     };
     match res {
         Ok(b) => Ok(b),
-        Err(e) => Err(e),
+        Err(e) => {
+            // Core builtins last‑chance fallback（最終安全網）
+            // plugin‑on（HAKO_PLUGIN_POLICY=auto かつ plugins 有効）では抑止して、
+            // 挙動を plugin→registry に限定する（NewBox→birth 一貫化）。
+            // In plugin-on mode, if plugin creation failed after re-probes,
+            // allow a last-resort builtin fallback to keep VM flows stable
+            // during bring-up. Diagnostics can observe this via upstream logs.
+            // plugin-off のみ、既存の安全網を維持（forward compatibility）。
+            // Strict plugin-on: when HAKO/NYASH_PLUGIN_ON_STRICT=1, forbid builtin fallback and fail-fast
+            let strict = crate::runtime::env_gate_box::bool_any(&["NYASH_PLUGIN_ON_STRICT","HAKO_PLUGIN_ON_STRICT"]);
+            if strict { return Err(e); }
+            if let Some(res) = crate::runtime::type_registry::create_core_box(box_type, args) {
+                return res;
+            } else {
+                Err(e)
+            }
+        },
     }
 }

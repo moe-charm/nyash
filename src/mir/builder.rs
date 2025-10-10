@@ -49,6 +49,7 @@ mod router;    // RouterPolicyBox（Unified vs BoxCall）
 mod emit_guard; // EmitGuardBox（emit直前の最終関所）
 mod name_const; // NameConstBox（関数名Const生成）
 mod infer; // ReceiverInferenceBox（受け手推定の一元化）
+pub mod lowering; // Builtin→Extern lowering map（対応表）
 // rewrite は既存モジュールを使用（gate サブモジュールを追加）
 mod indexes; // InstanceMethodIndexBox（(Box,method,arity)登録/照会）
 mod materialize; // MaterializeBox（Call直前の材化を一元化）

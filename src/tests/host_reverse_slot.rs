@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod tests {
-    use crate::runtime::host_api;
+    use crate::runtime::host_api_box;
     use crate::runtime::host_handles;
 
     #[test]
@@ -16,36 +16,13 @@ mod tests {
         crate::runtime::plugin_ffi_common::encode::i64(&mut tlv, 42);
 
         // set: slot 204
-        let mut out = vec![0u8; 256];
-        let mut out_len = out.len();
-        let code = unsafe {
-            host_api::nyrt_host_call_slot(
-                h,
-                204,
-                tlv.as_ptr(),
-                tlv.len(),
-                out.as_mut_ptr(),
-                &mut out_len,
-            )
-        };
-        assert_eq!(code, 0);
+        let code = host_api_box::call_slot_grow(h, 204, &tlv);
+        assert!(code.is_ok());
 
         // size: slot 200
-        let mut out2 = vec![0u8; 256];
-        let mut out2_len = out2.len();
-        let code2 = unsafe {
-            host_api::nyrt_host_call_slot(
-                h,
-                200,
-                std::ptr::null(),
-                0,
-                out2.as_mut_ptr(),
-                &mut out2_len,
-            )
-        };
-        assert_eq!(code2, 0);
+        let out2 = host_api_box::call_slot_grow(h, 200, &[]).expect("size ok");
         if let Some((tag, _sz, payload)) =
-            crate::runtime::plugin_ffi_common::decode::tlv_first(&out2[..out2_len])
+            crate::runtime::plugin_ffi_common::decode::tlv_first(&out2)
         {
             assert_eq!(tag, 3, "size returns i64 tag (3)");
             let n = crate::runtime::plugin_ffi_common::decode::u64(payload).unwrap_or(0);

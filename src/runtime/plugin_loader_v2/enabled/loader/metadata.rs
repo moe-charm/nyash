@@ -3,6 +3,7 @@ use super::super::{
     types::{construct_plugin_box, PluginBoxMetadata},
 };
 use super::specs;
+use libloading::Symbol;
 use super::PluginLoaderV2;
 use crate::box_trait::NyashBox;
 use crate::config::nyash_toml_v2::NyashConfigV2;
@@ -40,15 +41,18 @@ pub(super) fn box_invoke_fn_for_type_id(
             if let Some((lib_name, box_type)) = find_box_by_type_id(config, &toml_value, type_id) {
                 if let Some(spec) = specs::get_spec(loader, lib_name, box_type) {
                     if super::util::dbg_on() {
-                        eprintln!("[PluginLoaderV2] metadata: mapping type_id={} -> {}.{} invoke_present={}", type_id, lib_name, box_type, spec.invoke_id.is_some());
-                    }
-                    if spec.invoke_id.is_none() && super::util::dbg_on() {
                         eprintln!(
-                            "[PluginLoaderV2] WARN: no per-Box invoke for {}.{} (type_id={}). Calls will fail with E_PLUGIN until plugin migrates to v2.",
-                            lib_name, box_type, type_id
+                            "[PluginLoaderV2] metadata: mapping type_id={} -> {}.{} invoke_present={}",
+                            type_id, lib_name, box_type, spec.invoke_id.is_some()
                         );
                     }
-                    return spec.invoke_id;
+                    if let Some(inv) = spec.invoke_id { return Some(inv); }
+                }
+                // Probe TypeBox symbol on-demand and record when missing
+                if probe_and_record_typebox_invoke(loader, lib_name, box_type) {
+                    if let Some(spec2) = specs::get_spec(loader, lib_name, box_type) {
+                        if let Some(inv) = spec2.invoke_id { return Some(inv); }
+                    }
                 }
             }
         }
@@ -66,6 +70,49 @@ pub(super) fn box_invoke_fn_for_type_id(
         }
     }
     None
+}
+
+/// Utility: probe TypeBox symbol for (lib, box) and record its invoke id into loader.box_specs.
+/// Returns true on success, false if symbol was not found or on errors.
+pub(super) fn probe_and_record_typebox_invoke(
+    loader: &PluginLoaderV2,
+    lib_name: &str,
+    box_type: &str,
+) -> bool {
+    if let Ok(plugins) = loader.plugins.read() {
+        if let Some(loaded) = plugins.get(lib_name) {
+            let sym_name = format!("nyash_typebox_{}\0", box_type);
+            unsafe {
+                if let Ok(tb_sym) = loaded
+                    ._lib
+                    .get::<Symbol<&super::super::types::NyashTypeBoxFfi>>(sym_name.as_bytes())
+                {
+                    if super::util::dbg_on() {
+                        eprintln!(
+                            "[PluginLoaderV2] metadata(probe): recorded invoke for {}.{} via symbol '{}'",
+                            lib_name,
+                            box_type,
+                            sym_name.trim_end_matches('\0')
+                        );
+                    }
+                    if let Ok(mut map) = loader.box_specs.write() {
+                        let key = (lib_name.to_string(), box_type.to_string());
+                        let entry = map.entry(key).or_default();
+                        entry.invoke_id = tb_sym.invoke_id;
+                    }
+                    return true;
+                } else if super::util::dbg_on() {
+                    eprintln!(
+                        "[PluginLoaderV2] metadata(probe): TypeBox not found for {}.{} (looked for '{}')",
+                        lib_name,
+                        box_type,
+                        sym_name.trim_end_matches('\0')
+                    );
+                }
+            }
+        }
+    }
+    false
 }
 
 pub(super) fn metadata_for_type_id(

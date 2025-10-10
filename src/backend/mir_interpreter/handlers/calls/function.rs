@@ -330,7 +330,7 @@ impl MirInterpreter {
                     let key = self.object_key_for(*first);
                     if self.contracts_born.contains(&key) {
                         if super::super::VmConfig::global().birth_trace {
-                            eprintln!("{{\"kind\":\"birth_idempotent\",\"name\":\"{}\",\"key\":{}}}", name, key);
+                            crate::runtime::diagnostics::trace_event("birth_idempotent", &format!("\"name\":\"{}\",\"key\":{}", name, key));
                         }
                         return Ok(VMValue::Void);
                     }

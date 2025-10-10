@@ -175,20 +175,28 @@ EOF
 rebuild_plugins() {
     local plugin_tester="tools/plugin-tester/target/release/plugin-tester"
 
-    if [ ! -f "$plugin_tester" ]; then
+    echo "[INFO] Rebuilding plugins (fallback-safe)..." >&2
+    if [ -f "$plugin_tester" ]; then
+        # Prefer tester when it supports build-all; otherwise fall back to cargo
+        if "$plugin_tester" help 2>/dev/null | grep -q "build-all"; then
+            if "$plugin_tester" build-all; then
+                echo "[INFO] Plugin rebuild completed (tester)" >&2
+                return 0
+            fi
+            echo "[WARN] Plugin tester build-all failed; falling back to cargo" >&2
+        fi
+    else
         echo "[WARN] Plugin tester not found: $plugin_tester" >&2
-        echo "[INFO] Run: cd tools/plugin-tester && cargo build --release" >&2
-        return 1
+        echo "[INFO] Building via cargo fallback" >&2
     fi
 
-    echo "[INFO] Rebuilding all plugins..." >&2
-    if "$plugin_tester" build-all; then
-        echo "[INFO] Plugin rebuild completed" >&2
+    # Minimal required set for plugin-on smokes
+    if cargo build --release -p nyash-array-plugin -p nyash-map-plugin -p nyash-string-plugin >/dev/null 2>&1; then
+        echo "[INFO] Plugin rebuild completed (cargo)" >&2
         return 0
-    else
-        echo "[ERROR] Plugin rebuild failed" >&2
-        return 1
     fi
+    echo "[ERROR] Plugin rebuild failed (cargo)" >&2
+    return 1
 }
 
 # 使用例とヘルプ

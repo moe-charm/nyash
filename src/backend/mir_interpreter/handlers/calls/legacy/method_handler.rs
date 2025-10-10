@@ -28,7 +28,7 @@ impl MirInterpreter {
                                 VMValue::String(_) => { type_name = Some("StringBox".to_string()); },
                                 VMValue::BoxRef(bx) => {
                                     let tn = bx.type_name().to_string();
-                                    if matches!(tn.as_str(), "ArrayBox" | "MapBox" | "StringBox") { type_name = Some(tn); }
+                                    if crate::runtime::type_registry::is_core_box(tn.as_str()) { type_name = Some(tn); }
                                 },
                                 _ => {}
                             }

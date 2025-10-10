@@ -1,6 +1,22 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // Opt-in export of host C ABI symbols and dynamic symbol table
+    // Set HAKO_EXPORT_HOST=1 to enable (used by Stage-2 plugin array return)
+    if std::env::var("HAKO_EXPORT_HOST").ok().as_deref() == Some("1")
+        || std::env::var("NYASH_EXPORT_HOST").ok().as_deref() == Some("1")
+    {
+        // Export host C ABI (cfg) and make symbols visible to dlopen()ed plugins
+        println!("cargo:rustc-cfg=export_host_c_abi");
+        if cfg!(target_os = "linux") || cfg!(target_os = "android") || cfg!(target_os = "freebsd") {
+            println!("cargo:rustc-link-arg=-rdynamic");
+        } else if cfg!(target_os = "macos") {
+            // On macOS, export_all is default for executables; keep as-is.
+            // If needed in the future: println!("cargo:rustc-link-arg=-Wl,-export_dynamic");
+        } else if cfg!(target_os = "windows") {
+            // Windows uses import libraries; no action here (plugins call back via host API entry points).
+        }
+    }
     // Path to grammar spec
     let manifest_dir = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
     let grammar_dir = manifest_dir.join("grammar");

@@ -201,6 +201,18 @@ pub(super) fn get_spec<'a>(
     })
 }
 
+impl super::PluginLoaderV2 {
+    /// Ingest specs from a given spec file path for the specified library.
+    pub(crate) fn ingest_specs_from_file(
+        &self,
+        lib_name: &str,
+        box_names: &[String],
+        spec_path: &std::path::Path,
+    ) {
+        ingest_box_specs_from_nyash_box(self, lib_name, box_names, spec_path);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

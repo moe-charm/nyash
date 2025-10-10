@@ -1,6 +1,47 @@
 # CURRENT_TASK — 現在のタスクと進捗
 
+
+## ✅ Router Slot化 + CallableBox 導入（2025-10-10 完了）
+
+- Router を String/Array/Map で完全に表駆動（slot）に統一
+  - String: length/size/isEmpty/substring/indexOf/lastIndexOf/charAt/…（SSOT: TypeRegistry）
+  - Array: get/set/push/pop/clear/contains/indexOf/join/sort/reverse/slice/toJSON + methodRef(113)
+  - Map: size/len/has/get/set/delete/remove/keys/values/clear/toJSON
+- hako_core_map の小ユーティリティ追加
+  - `has_key_str`, `size_of_str_map` を追加、Builtin MapBox の has/size をコア経由へ委譲
+- CallableBox 追加（関数参照の箱）
+  - API: `arity()/call(argsArray)/callAsync(argsArray)/toString()`
+  - 生成: `ArrayBox.methodRef(name, arity)`（slot 113）、`env.callable.{make|from|from_instance}`
+  - Router: `CallableBox` の slot 500..503 を実装し、call は MirCall 正規化で実行
+  - 非同期: `callAsync` は最小実装（即時 Future 完了）。将来 `spawn_task` へ昇格予定
+- スモーク
+  - 追加: `tools/smokes/v2/profiles/quick/core/callable_basic_vm.sh`（sync 最小）
+  - 既存 quick/plugin-on 含む代表は緑を維持
+
+### 次タスク（小粒提案）
+- callAsync の真の非同期化（スケジューラ接続）
+- `ref` 構文の導入（`ref me.method/arity`, `ref Module.fn/arity`）
+- Map シュガー: `Map.call/Map.callAsync`（CallableBox への薄い委譲）
+- String 残りスロット（replace/trim/toUpper/toLower 等）のスモーク拡充
+
 **最終更新**: 2025-10-09
+
+---
+
+## 🐛 **Today's Bug Fixes (2025-10-09 Evening)**
+
+### ✅ **Plugin config_path Corruption Bug修正**
+- **問題**: `load_config()`がファイル読み込み**前**に`config_path`を設定 → 存在しないファイル（"hakorune.toml"）で上書き → method invocation時にPluginError
+- **修正**: `config_path`の設定をファイル読み込み成功**後**に移動（Line 8 → Line 15）
+- **影響**: すべてのplugin method invocation
+- **ファイル**: `src/runtime/plugin_loader_v2/enabled/loader/config.rs`
+- **テスト**: ✅ ArrayBox.push/MapBox.set/get 動作確認
+
+### ✅ **LLVM Mode VM Delegation Fix**
+- **問題**: `execute_vm_mode()`メソッドが存在しない（typo）
+- **修正**: `execute_vm_mode` → `execute_vm_engine`
+- **ファイル**: `src/runner/modes/llvm.rs:268`
+- **テスト**: ✅ `cargo build --release --features llvm` PASS
 
 ---
 
@@ -206,3 +247,92 @@ apps/selfhost/hakorune-vm/
 ---
 
 **注**: 詳細な進捗・失敗記録は [mini_vm_progress.md](docs/development/current/main/mini_vm_progress.md) 参照
+
+
+---
+
+## 📦 Collections Unification — Step A–D Plan (2025-10-10)
+
+目的: Array/Map/String の意味論を hako_core_* に集約し、ハードコーディングを撤去。Plugin/Core/ユーザーBox を Single Route/Single Face で完全統一する。
+
+### Step A — 構造的解決（最優先・小差分）
+- type_registry.rs
+  - 追加: `CORE_TYPE_IDS: Lazy<HashMap<&'static str,u32>>`（MapBox=11, ArrayBox=12, StringBox=13）
+  - 追加: `is_core_box(type_name: &str) -> bool`
+- 呼び出し側の置換（段階導入）
+  - `matches!(..., "ArrayBox"|"MapBox"|"StringBox")` → `is_core_box(..)`
+  - 対象: provider_box, codec, router（MethodRouterBox）, ほか分岐箇所
+- 期待効果: 3箱の分岐重複の単一起点化（SSOT）。
+
+### Step B — ドキュメント（責務の一枚化）
+- docs/architecture/single-route-single-face.md に「core意味論の責務」を1ページ集約
+  - Array: index正規化/slice境界/戻り値（get→null, set/push→void）
+  - Map: get→null, set/clear/delete→void, keys/values 順序（辞書順）
+  - String: length/isEmpty/substring/indexOf/lastIndexOf/charAt（byte基準；将来codepointはフラグ）
+
+### Step C — スモーク（plugin-on/strict）
+- 追加（短い1–2本）
+  - Map: `get(miss)==null`, `set/clear/delete` が `void`（Result:0観測）/ keys/values の順序
+  - Array: `slice` 負数end clamp, `get(oob)==null`, `set/push` の `void`
+- 実行例
+  - 通常: `SMOKES_PROFILE_ENV=plugin-on tools/smokes/v2/run.sh --profile quick-selfhost --filter 'plugin_on_*'`
+  - strict: `SMOKES_PROFILE_ENV=plugin-on-strict tools/smokes/v2/run.sh --profile quick-selfhost --filter 'plugin_on_*'`
+  - HostHandle系: `HAKO_EXPORT_HOST=1` でビルド、記号が無ければテストはSKIP（既存ガード有り）
+
+### Step D — コード（意味論の移譲）
+- crates/hako_core_map/src/lib.rs 拡張
+  - `size(n)`, `has(bool)`, `get(null)`, `set(void)`, `clear(void)`, `delete(void)`, `keys(Array, sorted)`, `values(Array, normalized)` の意味論を実装
+  - Plugin/Core の実装はこの関数群へ委譲（薄アダプタ化）
+- crates/hako_core_array/src/lib.rs 拡張
+  - `length(len)`, `normalize_index(len,idx)`, `slice_bounds`, `get(null)`, `set(void)`, `push(void)` を実装
+  - Plugin/Core の実装はこの関数群へ委譲
+- 注意: 値型は Box<dyn NyashBox> を前提。意味論はインデックス・境界・戻り値に限定し、値のTLV/Handleはアダプタ側で扱う。
+
+### 運用/フラグ
+- plugin-on strict（builtin fallback抑止）
+  - `NYASH_PLUGIN_ON_STRICT=1`（alias: `HAKO_PLUGIN_ON_STRICT=1`）
+  - Bring‑Up は既定OFF。プロファイル `plugin-on-strict.env` で段階適用。
+- near‑spec 不在時の type_id 冗長記録（済）
+  - Array=12/Map=11/String=13 を box_specs に記録して type_id→invoke 解決を堅牢化。
+
+### Done/Blocked メモ
+- Done: invoke re‑probe/near‑spec冗長化、HostHandle経路（診断/スモーク）、strictフラグ導入、EnvGateBox 置換の一部
+- Next: Step A 実装→置換、Step C スモークの追加、Step D の core 意味論移譲（小粒PR分割）
+
+
+---
+
+## 🔗 Delegation (from/extends) — Phase‑1 Plan (2025-10-10)
+
+目的: ユーザーBox→Core/Plugin Box への委譲（composition）を Single Route/Single Face に統一し、from Parent.method() を親レシーバで安全に実行可能にする。
+
+### 設計（構造優先）
+- Delegation metadata: Builder が AST の `extends` を収集 → Delegation 定義（Child → [Parent…]）として保持
+- InstanceBox: 隠しスロット `__delegates: Map<String, BoxRef>` を導入（Phase‑1: Child.birth 内で親を birth→格納）
+- 正規化: `from Parent.method(args)` → MIR 正規化パスで `DelegatedBoxCall(parent=Parent, method, args)` に変換
+- Router: `DelegatedBoxCall` を受け、`__delegates[Parent]` を取り出して通常 `route(receiver=delegate, method, args)` に委譲
+- Fail‑Fast: 親が未生成/未登録の場合は strict でエラー。非strict は一時的に BoxCall 互換でフォールバック（移行期間のみ）
+- 範囲: メソッド委譲のみ（フィールド/状態のオーバーレイは対象外）。循環委譲は検出してエラー。
+
+### Step E — 実装手順
+1) 構造
+   - Builder: `extends` → Delegation定義作成、Child.birth に親生成（引数なし）を自動注入（Phase‑1）
+   - MIR: `from` 呼び出しを `DelegatedBoxCall` に正規化するパスを追加
+   - VM/Router: `DelegatedBoxCall` ハンドリングを追加（`__delegates` 経由で親レシーバ取得→route）
+2) ドキュメント
+   - docs/architecture/single-route-single-face.md に「委譲は composition」を追記（親の所有/寿命/GC方針）
+   - 言語リファレンス: from/extends の意味論（親は共有せず Child が所有、strict の失敗条件）
+3) スモーク
+   - ユーザー→Core 親: `from ArrayBox.push/get` が親レシーバで動くこと
+   - ユーザー→Plugin 親: `from MapBox.keys/values` が親レシーバで動くこと（Stage‑1/2 混在許容）
+   - 失敗系: 親未生成/未登録、循環委譲（strict=Fail、非strict=警告/互換）
+4) フラグ/運用
+   - 機能ガード: `NYASH|HAKO_DELEGATION_ENABLE=1`（既定OFF→段階導入）。strict は即時 Fail‑Fast。
+   - Bring‑Up 中は非strictを既定（互換）。緑確認後に strict をプロファイル単位でON。
+
+### 受け入れ条件
+- plugin-on/strict/HostHandle スモークが緑（親委譲ケースを含む）
+- Router 一経路（Delegated→通常route）で分岐の増加なし
+- 既存 from の互換（非strict）を維持、strict で Fail‑Fast が働く
+
+- Builtin callAsync true async implemented (HAKO_CALLABLE_ASYNC=1): job queue + VM polling; added smoke quick/core/callable_async_builtin_vm.sh.

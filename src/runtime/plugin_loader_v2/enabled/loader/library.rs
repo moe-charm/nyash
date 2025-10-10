@@ -101,34 +101,14 @@ pub(super) fn load_plugin(
                         sym_name.trim_end_matches('\0')
                     ),
                 );
+                // Attempt a unified re-probe path (records invoke id if available later)
+                let _ = super::metadata::probe_and_record_typebox_invoke(loader, lib_name, box_type);
             }
         }
         // Opportunistically ingest nyash_box.toml/hako_box.toml located near the library path
         // to populate type_id and method ids even when a central nyash.toml is not fully loaded.
         {
-            let mut base_dir = lib_path.parent().unwrap_or(Path::new(".")).to_path_buf();
-            let pick = {
-                let mut found: Option<PathBuf> = None;
-                // Search depth increased from 3 to 5 to better tolerate nested target layouts
-                for _ in 0..5 {
-                    let hako_box = base_dir.join("hako_box.toml");
-                    let nyash_box = base_dir.join("nyash_box.toml");
-                    if hako_box.exists() { found = Some(hako_box); break; }
-                    if nyash_box.exists() { found = Some(nyash_box); break; }
-                    if let Some(parent) = base_dir.parent() { base_dir = parent.to_path_buf(); } else { break; }
-                }
-                if found.is_none() {
-                    super::util::dbg_once(
-                        &format!("spec_near_missing:{}", lib_path.display()),
-                        &format!(
-                            "[PluginLoaderV2] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
-                            lib_path.display()
-                        ),
-                    );
-                }
-                found
-            };
-            if let Some(spec_path) = pick {
+            if let Some(spec_path) = crate::runtime::spec_ingest_box::find_near_spec(&lib_path, 5) {
                 super::util::dbg_once(
                     &format!("spec_probe:{}:{}", lib_name, spec_path.display()),
                     &format!(
@@ -138,7 +118,59 @@ pub(super) fn load_plugin(
                         &lib_def.boxes
                     ),
                 );
-                specs::ingest_box_specs_from_nyash_box(loader, lib_name, &lib_def.boxes, &spec_path);
+                // Ingest via SpecIngestBox facade to decouple callers from specs module
+                crate::runtime::spec_ingest_box::ingest_from_path(
+                    loader,
+                    lib_name,
+                    &lib_def.boxes,
+                    &spec_path,
+                );
+                // If spec ingest didn't provide type_id, record defaults for core boxes
+                if let Some(spec_cur) = super::specs::get_spec(loader, lib_name, box_type) {
+                    if spec_cur.type_id.is_none() {
+                        let default_tid = match box_type.as_str() {
+                            "ArrayBox" => Some(12u32),
+                            "MapBox" => Some(11u32),
+                            "StringBox" => Some(13u32),
+                            _ => None,
+                        };
+                        if let Some(tid) = default_tid {
+                            if let Ok(mut map) = loader.box_specs.write() {
+                                let key = (lib_name.to_string(), box_type.to_string());
+                                let entry = map.entry(key).or_insert_with(|| spec_cur.clone());
+                                entry.type_id = Some(tid);
+                                super::util::dbg_once(&format!("spec_tid_fallback:{}:{}", lib_name, box_type), &format!("[PluginLoaderV2] spec ingest: default type_id={} recorded for {}.{}", tid, lib_name, box_type));
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                super::util::dbg_once(
+                    &format!("spec_near_missing:{}", lib_path.display()),
+                    &format!(
+                        "[PluginLoaderV2] spec ingest: no nyash_box/hako_box next to '{}' (searched up to 5 parents)",
+                        lib_path.display()
+                    ),
+                );
+                // Even when spec is missing, record known type_id defaults for core boxes
+                let default_tid = match box_type.as_str() {
+                    "ArrayBox" => Some(12u32),
+                    "MapBox" => Some(11u32),
+                    "StringBox" => Some(13u32),
+                    _ => None,
+                };
+                if let Some(tid) = default_tid {
+                    if let Ok(mut map) = loader.box_specs.write() {
+                        let key = (lib_name.to_string(), box_type.to_string());
+                        let entry = map.entry(key).or_default();
+                        if entry.type_id.is_none() {
+                            entry.type_id = Some(tid);
+                            super::util::dbg_once(&format!("spec_tid_default:{}:{}", lib_name, box_type), &format!("[PluginLoaderV2] recorded default type_id={} for {}.{} (no near-spec)", tid, lib_name, box_type));
+                        }
+                    }
+                }
+
             }
         }
         // Optional: probe Final ABI (env-gated) — no behavior change when absent
@@ -198,4 +230,14 @@ fn candidate_paths(base: &Path) -> Vec<PathBuf> {
         candidates.push(base.with_extension("so"));
     }
     candidates
+}
+
+/// Public (crate) entry to ingest from a spec path — thin wrapper to keep `specs` private.
+pub(crate) fn ingest_from_spec_path(
+    loader: &super::PluginLoaderV2,
+    lib_name: &str,
+    box_names: &[String],
+    spec_path: &Path,
+) {
+    specs::ingest_box_specs_from_nyash_box(loader, lib_name, box_names, spec_path);
 }

@@ -94,7 +94,7 @@ impl PluginLoaderV2 {
     /// Returns cached TOML value unless NYASH_PLUGIN_CONFIG_RELOAD=1 is set,
     /// in which case it reloads from the config file.
     pub(crate) fn get_toml_value(&self) -> BidResult<toml::Value> {
-        let reload = std::env::var("NYASH_PLUGIN_CONFIG_RELOAD").ok().as_deref() == Some("1");
+        let reload = crate::runtime::env_gate_box::bool_any(&["NYASH_PLUGIN_CONFIG_RELOAD", "HAKO_PLUGIN_CONFIG_RELOAD"]);
         if !reload {
             if let Some(v) = self.cached_toml.clone() {
                 return Ok(v);

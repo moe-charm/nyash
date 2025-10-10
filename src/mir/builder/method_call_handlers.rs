@@ -6,7 +6,7 @@
 use crate::ast::ASTNode;
 use crate::mir::builder::{MirBuilder, ValueId};
 use crate::mir::builder::builder_calls::CallTarget;
-use crate::mir::{MirInstruction, TypeOpKind};
+use crate::mir::{MirInstruction, TypeOpKind, MirType};
 
 impl MirBuilder {
     /// Handle static method calls: BoxName.method(args)
@@ -132,21 +132,60 @@ impl MirBuilder {
         // prelude files (e.g., hakorune std ArrayBox), while keeping behavior
         // consistent for user boxes (their NewBox origin will not be core).
         if method != "birth" {
-            if let Some(cls) = self.origin_get(object_value) {
-                if cls == "ArrayBox" || cls == "MapBox" || cls == "StringBox" {
-                    let dst = self.value_gen.next();
-                    self.emit_instruction(MirInstruction::BoxCall {
+            // Small helper: table-driven lowering entrypoint
+            #[inline]
+            fn try_lower_via_table(builder: &mut MirBuilder, recv_cls: Option<&str>, method: &str, obj: ValueId, args: &mut Vec<ValueId>) -> Option<ValueId> {
+                if let Some(spec) = crate::mir::builder::lowering::lower_builtin_method(recv_cls, method, args.len()) {
+                    let dst = builder.value_gen.next();
+                    let full = spec.extern_name.to_string();
+                    let name_const = crate::mir::builder::name_const::make_name_const_result(builder, &full).ok()?;
+                    let call_args: Vec<ValueId> = if spec.prepend_recv {
+                        let mut v = Vec::with_capacity(1 + args.len());
+                        v.push(obj);
+                        v.extend(args.drain(..));
+                        v
+                    } else {
+                        args.drain(..).collect()
+                    };
+                    let _ = builder.emit_instruction(MirInstruction::Call {
                         dst: Some(dst),
-                        box_val: object_value,
-                        method: method.clone(),
-                        method_id: None,
-                        args: arg_values,
+                        func: name_const,
+                        callee: Some(crate::mir::Callee::Extern(full)),
+                        args: call_args,
                         effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-                    })?;
-                    // Conservatively annotate result type based on method name
-                    self.annotate_call_result_from_func_name(dst, &method);
-                    return Ok(dst);
+                    });
+                    builder.annotate_call_result_from_func_name(dst, method);
+                    return Some(dst);
                 }
+                None
+            }
+            let origin_cls: Option<String> = self.origin_get(object_value).map(|s| s.to_string());
+            // Also infer from value_types when origin is unknown
+            let inferred_string = matches!(self.value_types.get(&object_value), Some(MirType::String))
+                || matches!(self.value_types.get(&object_value), Some(MirType::Box(b)) if b == "StringBox");
+            if let Some(cls) = origin_cls.as_deref() {
+                if let Some(dst) = try_lower_via_table(self, Some(cls), &method, object_value, &mut arg_values) { return Ok(dst); }
+                if cls == "ArrayBox" || cls == "MapBox" || cls == "StringBox" {
+                    // Emit BoxCall only when we have a known builtin method_id
+                    if let Some(mid_u32) = crate::runtime::type_registry::resolve_builtin_method_id(cls, &method) {
+                        let dst = self.value_gen.next();
+                        self.emit_instruction(MirInstruction::BoxCall {
+                            dst: Some(dst),
+                            box_val: object_value,
+                            method: method.clone(),
+                            method_id: Some(mid_u32 as u16),
+                            args: arg_values,
+                            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                        })?;
+                        // Conservatively annotate result type based on method name
+                        self.annotate_call_result_from_func_name(dst, &method);
+                        return Ok(dst);
+                    }
+                }
+            }
+            // Lower string methods for inferred String types (literals/expressions)
+            if inferred_string {
+                if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
             }
         }
 

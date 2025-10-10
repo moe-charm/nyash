@@ -26,11 +26,12 @@ pub fn extern_call(
         "env.task" => handle_task(method_name, args),
         "env.debug" => handle_debug(method_name, args),
         "env.runtime" => handle_runtime(method_name, args),
+        "env.callable" => handle_callable(method_name, args),
         "env.future" => handle_future(method_name, args),
         // Dev-only stub for WASM experiments: enable NYASH_ENABLE_NYKERNEL_STUB=1
         // Provides minimal nykernel.* externs over VM (malloc/load_i64/store_i64)
         "nykernel" => {
-            if std::env::var("NYASH_ENABLE_NYKERNEL_STUB").ok().as_deref() == Some("1") {
+            if crate::runtime::env_gate_box::bool_any(&["NYASH_ENABLE_NYKERNEL_STUB","HAKO_ENABLE_NYKERNEL_STUB"]) {
                 handle_nykernel_stub(method_name, args)
             } else {
                 Err(BidError::PluginError)
@@ -97,7 +98,7 @@ fn handle_nykernel_stub(
 fn handle_console(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "log" => {
-            let trace = std::env::var("NYASH_CONSOLE_TRACE").ok().as_deref() == Some("1");
+            let trace = crate::runtime::env_gate_box::bool_any(&["NYASH_CONSOLE_TRACE","HAKO_CONSOLE_TRACE"]);
             for a in args {
                 let s = a.to_string_box().value;
                 if trace {
@@ -208,7 +209,7 @@ fn handle_task_wait(_args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn Nya
 fn handle_debug(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "trace" => {
-            if std::env::var("NYASH_DEBUG_TRACE").ok().as_deref() == Some("1") {
+            if crate::runtime::env_gate_box::bool_any(&["NYASH_DEBUG_TRACE","HAKO_DEBUG_TRACE"]) {
                 for a in args {
                     eprintln!("[debug.trace] {}", a.to_string_box().value);
                 }
@@ -258,7 +259,7 @@ fn handle_future(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opt
             }
             Ok(None)
         }
-        "await" => handle_future_await(args),
+        "await" | "wait" => handle_future_await(args),
         "release" => release_helpers::handle_release_single(args),
         "release_many" => release_helpers::handle_release_many(args),
         _ => Err(BidError::PluginError),
@@ -306,6 +307,24 @@ fn handle_future_await(args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn N
     Ok(Some(Box::new(NyashResultBox::new_err(Box::new(
         StringBox::new("InvalidArgs"),
     )))))
+}
+
+
+/// Handle env.callable.* methods
+fn handle_callable(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
+    match method_name {
+        // make(recv, methodName, arity:int) — avoid conflict with `from` keyword
+        // aliases: from_instance/from
+        "make" | "from_instance" | "from" => {
+            if args.len() < 2 { return Err(BidError::PluginError); }
+            let recv = args[0].clone_box();
+            let method = args[1].to_string_box().value;
+            let arity = args.get(2).map(|b| b.to_string_box().value.parse::<usize>().unwrap_or(0)).unwrap_or(0);
+            let cb = crate::boxes::callable::CallableBox::new(Some(recv), method, arity);
+            Ok(Some(Box::new(cb)))
+        }
+        _ => Err(BidError::PluginError),
+    }
 }
 
 #[cfg(test)]

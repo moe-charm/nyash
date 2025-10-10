@@ -20,6 +20,9 @@
  */
 
 use super::type_box_abi::{MethodEntry, TypeBox};
+use once_cell::sync::Lazy;
+use std::collections::HashMap;
+use crate::box_trait::NyashBox;
 
 // 最小サンプル: MapBox の TypeBox を事前登録（Tier-1 PoC 用）
 // --- ArrayBox ---
@@ -41,6 +44,11 @@ const ARRAY_METHODS: &[MethodEntry] = &[
     },
     MethodEntry {
         name: "length",
+        arity: 0,
+        slot: 102,
+    },
+    MethodEntry {
+        name: "size",
         arity: 0,
         slot: 102,
     },
@@ -97,7 +105,8 @@ const ARRAY_METHODS: &[MethodEntry] = &[
         arity: 0,
         slot: 112,
     },
-];
+
+    MethodEntry { name: "methodRef", arity: 2, slot: 113 },];
 static ARRAYBOX_TB: TypeBox = TypeBox::new_with("ArrayBox", ARRAY_METHODS);
 
 // --- MapBox ---
@@ -158,73 +167,40 @@ const MAP_METHODS: &[MethodEntry] = &[
         arity: 0,
         slot: 209,
     },
+
+    // Callable helpers (thin sugar)
+    MethodEntry { name: "call",      arity: 2, slot: 210 },
+    MethodEntry { name: "callAsync", arity: 2, slot: 211 }
 ];
 static MAPBOX_TB: TypeBox = TypeBox::new_with("MapBox", MAP_METHODS);
 
 // --- StringBox ---
 const STRING_METHODS: &[MethodEntry] = &[
-    MethodEntry {
-        name: "len",
-        arity: 0,
-        slot: 300,
-    },
-    // P1: extend String vtable
-    MethodEntry {
-        name: "substring",
-        arity: 2,
-        slot: 301,
-    },
-    MethodEntry {
-        name: "concat",
-        arity: 1,
-        slot: 302,
-    },
-    MethodEntry {
-        name: "indexOf",
-        arity: 1,
-        slot: 303,
-    },
-    MethodEntry {
-        name: "replace",
-        arity: 2,
-        slot: 304,
-    },
-    MethodEntry {
-        name: "trim",
-        arity: 0,
-        slot: 305,
-    },
-    MethodEntry {
-        name: "toUpper",
-        arity: 0,
-        slot: 306,
-    },
-    MethodEntry {
-        name: "toLower",
-        arity: 0,
-        slot: 307,
-    },
-    // P2: toString/stringify/startsWith/endsWith
-    MethodEntry {
-        name: "toString",
-        arity: 0,
-        slot: 308,
-    },
-    MethodEntry {
-        name: "stringify",
-        arity: 0,
-        slot: 309,
-    },
-    MethodEntry {
-        name: "startsWith",
-        arity: 1,
-        slot: 310,
-    },
-    MethodEntry {
-        name: "endsWith",
-        arity: 1,
-        slot: 311,
-    },
+    // length/size aliases
+    MethodEntry { name: "len",     arity: 0, slot: 300 },
+    MethodEntry { name: "length",  arity: 0, slot: 300 },
+    MethodEntry { name: "size",    arity: 0, slot: 300 },
+
+    // P1: core ops
+    MethodEntry { name: "isEmpty",    arity: 0, slot: 312 },
+    MethodEntry { name: "substring",  arity: 2, slot: 301 },
+    MethodEntry { name: "charAt",     arity: 1, slot: 314 },
+    // indexOf/lastIndexOf allow optional 'from' → duplicate arity entries share slot
+    MethodEntry { name: "indexOf",     arity: 1, slot: 303 },
+    MethodEntry { name: "indexOf",     arity: 2, slot: 303 },
+    MethodEntry { name: "lastIndexOf", arity: 1, slot: 313 },
+    MethodEntry { name: "lastIndexOf", arity: 2, slot: 313 },
+
+    // P1: extend String vtable (kept for future)
+    MethodEntry { name: "concat",   arity: 1, slot: 302 },
+    MethodEntry { name: "replace",  arity: 2, slot: 304 },
+    MethodEntry { name: "trim",     arity: 0, slot: 305 },
+    MethodEntry { name: "toUpper",  arity: 0, slot: 306 },
+    MethodEntry { name: "toLower",  arity: 0, slot: 307 },
+    MethodEntry { name: "toString", arity: 0, slot: 308 },
+    MethodEntry { name: "stringify",arity: 0, slot: 309 },
+    MethodEntry { name: "startsWith",arity: 1, slot: 310 },
+    MethodEntry { name: "endsWith",  arity: 1, slot: 311 },
 ];
 static STRINGBOX_TB: TypeBox = TypeBox::new_with("StringBox", STRING_METHODS);
 
@@ -253,6 +229,16 @@ const CONSOLE_METHODS: &[MethodEntry] = &[
     },
 ];
 static CONSOLEBOX_TB: TypeBox = TypeBox::new_with("ConsoleBox", CONSOLE_METHODS);
+
+// --- CallableBox ---
+const CALLABLE_METHODS: &[MethodEntry] = &[
+    MethodEntry { name: "arity",     arity: 0, slot: 500 },
+    MethodEntry { name: "call",      arity: 1, slot: 501 },
+    MethodEntry { name: "callAsync", arity: 1, slot: 502 },
+    MethodEntry { name: "toString",  arity: 0, slot: 503 },
+];
+static CALLABLEBOX_TB: TypeBox = TypeBox::new_with("CallableBox", CALLABLE_METHODS);
+
 
 // --- InstanceBox ---
 // Representative methods exposed via unified slots for field access and diagnostics.
@@ -291,6 +277,7 @@ pub fn resolve_typebox_by_name(type_name: &str) -> Option<&'static TypeBox> {
         "ArrayBox" => Some(&ARRAYBOX_TB),
         "StringBox" => Some(&STRINGBOX_TB),
         "ConsoleBox" => Some(&CONSOLEBOX_TB),
+        "CallableBox" => Some(&CALLABLEBOX_TB),
         "InstanceBox" => Some(&INSTANCEBOX_TB),
         _ => None,
     }
@@ -332,4 +319,130 @@ pub fn known_arities_for(type_name: &str, method: &str) -> Option<Vec<u8>> {
     v.sort();
     v.dedup();
     Some(v)
+}
+
+// ---- Builtin Method Ids (Hako ABI ids for core boxes) ----
+
+
+/// Resolve canonical method_id for builtin boxes (Hako ABI ids)
+pub fn resolve_builtin_method_id(type_name: &str, method: &str) -> Option<u32> {
+    match type_name {
+        "StringBox" => match method {
+            "length" | "size" | "len" => Some(1),
+            "isEmpty" => Some(2),
+            "charCodeAt" => Some(3),
+            "concat" => Some(4),
+            "fromUtf8" => Some(5),
+            "toUtf8" | "toString" => Some(6),
+            "substring" => Some(7),
+            "indexOf" => Some(8),
+            "lastIndexOf" => Some(9),
+            "charAt" => Some(10),
+            _ => None,
+        },
+        "ArrayBox" => match method {
+            "length" | "size" | "len" => Some(1),
+            "get" => Some(2),
+            "push" => Some(3),
+            _ => None,
+        },
+        "MapBox" => match method {
+            "size" => Some(1),
+            "get" => Some(2),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+/// Unified builtin handle resolver: (type_id, method_id)
+pub fn resolve_builtin_method_handle(
+    type_name: &str,
+    method: &str,
+) -> Option<(u32, u32)> {
+    let tid = builtin_type_id(type_name)?;
+    let mid = resolve_builtin_method_id(type_name, method)?;
+    Some((tid, mid))
+}
+
+// ---- Core type ids & helpers (SSOT) ----------------------------------------
+
+/// Canonical Hako ABI type ids for core boxes (SSOT)
+/// Core box registry (SSOT): type_name -> (type_id, factory)
+#[derive(Copy, Clone)]
+pub struct CoreBoxEntry {
+    pub type_id: u32,
+    pub factory: fn(&[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, crate::box_factory::RuntimeError>,
+}
+
+#[inline]
+fn create_array_box(_args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, crate::box_factory::RuntimeError> {
+    Ok(Box::new(crate::boxes::array::ArrayBox::new()))
+}
+#[inline]
+fn create_map_box(_args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, crate::box_factory::RuntimeError> {
+    Ok(Box::new(crate::boxes::map_box::MapBox::new()))
+}
+#[inline]
+fn create_string_box(args: &[Box<dyn NyashBox>]) -> Result<Box<dyn NyashBox>, crate::box_factory::RuntimeError> {
+    if args.is_empty() {
+        Ok(Box::new(crate::box_trait::StringBox::new("")))
+    } else {
+        Ok(Box::new(crate::box_trait::StringBox::new(&args[0].to_string_box().value)))
+    }
+}
+
+pub static CORE_BOXES: Lazy<HashMap<&'static str, CoreBoxEntry>> = Lazy::new(|| {
+    let mut m = HashMap::new();
+    // Load type ids from config (SSOT). Fallback to defaults when unavailable.
+    let ids = (|| {
+        for cfg in ["hako.toml", "nyash.toml", "hakorune.toml"].iter() {
+            if let Ok(conf) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg) {
+                if !conf.box_types.is_empty() { return conf.box_types; }
+            }
+        }
+        HashMap::new()
+    })();
+    let tid = |name: &str, d: u32| ids.get(name).copied().unwrap_or(d);
+    m.insert("MapBox",    CoreBoxEntry { type_id: tid("MapBox", 11), factory: create_map_box });
+    m.insert("ArrayBox",  CoreBoxEntry { type_id: tid("ArrayBox", 12), factory: create_array_box });
+    m.insert("StringBox", CoreBoxEntry { type_id: tid("StringBox", 13), factory: create_string_box });
+    m
+});
+
+/// Return true when the given type name is a core box (Map/Array/String)
+#[inline]
+pub fn is_core_box(type_name: &str) -> bool {
+    CORE_BOXES.contains_key(type_name)
+}
+
+/// Return canonical Hako ABI type_id for builtin boxes (via CORE_TYPE_IDS)
+pub fn builtin_type_id(type_name: &str) -> Option<u32> {
+    CORE_BOXES.get(type_name).map(|e| e.type_id)
+}
+
+
+/// Create a core box instance (ArrayBox/MapBox/StringBox).
+/// Returns None if `type_name` is not a core box.
+pub fn create_core_box(
+    type_name: &str,
+    args: &[Box<dyn NyashBox>],
+) -> Option<Result<Box<dyn NyashBox>, crate::box_factory::RuntimeError>> {
+
+    let entry = CORE_BOXES.get(type_name)?;
+    return Some((entry.factory)(args));
+    /* old match removed */
+/*
+        "ArrayBox" => Ok(Box::new(crate::boxes::array::ArrayBox::new()) as Box<dyn NyashBox>),
+        "MapBox"   => Ok(Box::new(crate::boxes::map_box::MapBox::new()) as Box<dyn NyashBox>),
+        "StringBox" => {
+            if args.is_empty() {
+                Ok(Box::new(crate::box_trait::StringBox::new("")) as Box<dyn NyashBox>)
+            } else {
+                Ok(Box::new(crate::box_trait::StringBox::new(&args[0].to_string_box().value)) as Box<dyn NyashBox>)
+            }
+        }
+        _ => return Some(Err(RuntimeError::InvalidOperation { message: format!("Unknown core box: {}", type_name) })),
+    */
+
 }

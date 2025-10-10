@@ -15,13 +15,12 @@ test_map_missing_key_vm() {
   }}'
   local out
   out=$(run_nyash_vm -c "$code" --dev | filter_noise)
-  local last2
-  last2=$(echo "$out" | tail -n 2 | tr '\n' '|')
-  if [[ "$last2" == *"ok1|ok2"* ]]; then
+  sig=$(echo "$out" | grep -E "^(ok1|ok2)$" | tr '\n' '|' )
+  if [[ "$sig" == *"ok1|ok2"* ]]; then
     return 0
   else
     echo "$out" >&2
-    compare_outputs "ok1|ok2" "$last2" "map_missing_key_vm"
+    compare_outputs "ok1|ok2" "$sig" "map_missing_key_vm"
   fi
 }
 

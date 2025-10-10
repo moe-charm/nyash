@@ -21,6 +21,11 @@
 - **Affected Code**: ~50-100 call sites (estimated)
 - **Benefit**: Safer, predictable, "箱らしい" API
 
+> Update (Phase 15.7)
+- StringBox: builder lowering extended — `lastIndexOf` and `replace` added; `find` is an alias of `indexOf`.
+- Externs registry includes: `nyrt.string.{length,indexOf,lastIndexOf,substring,charAt,replace}`. VM implements them via core crate.
+- See also: docs/mir/externs/README.md for the canonical Extern list and lowering policy.
+
 ---
 
 ## 📊 1. Current API Comparison
@@ -1017,3 +1022,11 @@ This proposal provides:
 **Author**: Claude (Anthropic)
 **Date**: 2025-10-09
 **Status**: ⏳ Awaiting Review
+
+
+### Semantics Update (Phase 15.7)
+
+- Array.slice(start, end)
+  - Profile quick-selfhost expects: when `end < 0`, clamp to `len` (full tail).
+  - Core policy is centralized in `hako_core_array::slice_bounds` to keep builtin/plugin consistent.
+  - Builders keep `slice` on Method path; VM invokes `hako_core_array` via builtin/plugin invokers.
