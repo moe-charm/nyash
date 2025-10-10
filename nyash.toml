@@ -115,6 +115,9 @@ close = { method_id = 4 }
 exists = { method_id = 5 }
 copyFrom = { method_id = 7 }
 cloneSelf = { method_id = 8 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_path_plugin.so"]
@@ -134,6 +137,9 @@ basename = { method_id = 6 }
 extname = { method_id = 7 }
 isAbs = { method_id = 8 }
 normalize = { method_id = 9 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_math_plugin.so"]
@@ -151,6 +157,9 @@ sqrt = { method_id = 4 }
 sin = { method_id = 5 }
 cos = { method_id = 6 }
 round = { method_id = 7 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_math_plugin.so".TimeBox]
@@ -161,6 +170,9 @@ singleton = false
 [libraries."libnyash_math_plugin.so".TimeBox.methods]
 birth = { method_id = 0 }
 now = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_regex_plugin.so"]
@@ -179,6 +191,9 @@ isMatch = { method_id = 5 }
 find = { method_id = 6 }
 replaceAll = { method_id = 7 }
 split = { method_id = 8 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so"]
@@ -194,6 +209,9 @@ singleton = false
 birth = { method_id = 0 }
 get = { method_id = 4 }
 post = { method_id = 5 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".ResponseBox]
@@ -209,6 +227,9 @@ write = { method_id = 6 }
 readBody = { method_id = 7 }
 getStatus = { method_id = 8 }
 getHeader = { method_id = 9 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".RequestBox]
@@ -221,6 +242,9 @@ birth = { method_id = 0 }
 path = { method_id = 4 }
 readBody = { method_id = 5 }
 respond = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".ServerBox]
@@ -233,6 +257,9 @@ birth = { method_id = 0 }
 start = { method_id = 4 }
 stop = { method_id = 5 }
 accept = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".SockServerBox]
@@ -246,6 +273,9 @@ start = { method_id = 4 }
 stop = { method_id = 5 }
 accept = { method_id = 6 }
 acceptTimeout = { method_id = 7 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".SockClientBox]
@@ -256,6 +286,9 @@ singleton = false
 [libraries."libnyash_net_plugin.so".SockClientBox.methods]
 birth = { method_id = 0 }
 connect = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_net_plugin.so".SockConnBox]
@@ -269,6 +302,9 @@ send = { method_id = 4 }
 recv = { method_id = 5 }
 close = { method_id = 6 }
 recvTimeout = { method_id = 7 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_encoding_plugin.so"]
@@ -288,6 +324,9 @@ base64Encode = { method_id = 6 }
 base64Decode = { method_id = 7 }
 hexEncode = { method_id = 8 }
 hexDecode = { method_id = 9 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # Provider Verify — minimal required methods (dev warn by default)
@@ -312,6 +351,9 @@ birth = { method_id = 0 }
 parse = { method_id = 4 }
 root = { method_id = 5 }
 error = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_json_plugin.so".JsonNodeBox]
@@ -328,6 +370,9 @@ at = { method_id = 7 }
 str = { method_id = 8 }
 int = { method_id = 9 }
 bool = { method_id = 10 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_toml_plugin.so"]
@@ -344,6 +389,9 @@ birth = { method_id = 0 }
 parse = { method_id = 4 }
 get = { method_id = 5 }
 toJson = { method_id = 6 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # Python (v2 TypeBox) plugins
@@ -362,6 +410,9 @@ eval = { method_id = 4 }
 import = { method_id = 5 }
 evalR = { method_id = 11 }
 importR = { method_id = 12 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_plugin.so".PyObjectBox]
@@ -378,6 +429,9 @@ callKw = { method_id = 5 }
 getattrR = { method_id = 11 }
 callR = { method_id = 12 }
 callKwR = { method_id = 15 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_parser_plugin.so"]
@@ -392,6 +446,9 @@ singleton = false
 [libraries."libnyash_python_parser_plugin.so".PythonParserBox.methods]
 birth = { method_id = 0 }
 parse = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_python_compiler_plugin.so"]
@@ -406,6 +463,9 @@ singleton = false
 [libraries."libnyash_python_compiler_plugin.so".PythonCompilerBox.methods]
 birth = { method_id = 0 }
 compile = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 # StringBox Plugin (Core Box replacement)
 [libraries."libnyash_string_plugin.so"]
@@ -434,6 +494,9 @@ toUtf8 = { method_id = 6 }
 # trim = { method_id = 14 }
 # toUpper = { method_id = 15 }
 # toLower = { method_id = 16 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # IntegerBox Plugin (Core Box replacement)
@@ -450,6 +513,9 @@ singleton = false
 birth = { method_id = 0 }
 get = { method_id = 1 }
 set = { method_id = 2 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 # ArrayBox Plugin (Core Box replacement)
@@ -465,6 +531,9 @@ singleton = false
 # Intentionally omit birth here to test loader no-op synthesis
 [libraries."libnyash_nobirth_plugin.so".NoBirthBox.methods]
 ping = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 [libraries."libnyash_array_plugin.so"]
 boxes = ["ArrayBox"]
@@ -482,6 +551,9 @@ size = { method_id = 1 }
 get = { method_id = 2 }
 push = { method_id = 3 }
 set = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }
 
 [libraries."libnyash_map_plugin.so"]
@@ -499,4 +571,7 @@ size = { method_id = 1 }
 get = { method_id = 2 }
 has = { method_id = 3 }
 set = { method_id = 4 }
+remove = { method_id = 6 }
+keys = { method_id = 15 }
+values = { method_id = 16 }
 fini = { method_id = 4294967295 }

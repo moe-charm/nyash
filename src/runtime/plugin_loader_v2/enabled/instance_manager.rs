@@ -151,7 +151,7 @@ impl PluginLoaderV2 {
                 );
             }
             // Encode provided constructor args for birth (if any)
-            let tlv = crate::runtime::plugin_ffi_common::encode_args(_args);
+            let tlv = crate::runtime::codec::TlvCodecBox::default().encode_args(_args);
             let (code, out_len, out_buf) = if let Some(box_invoke) = direct_invoke {
                 // Direct per-Box call (no type_id dispatch)
                 let mut out = vec![0u8; 1024];

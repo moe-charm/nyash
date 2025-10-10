@@ -116,7 +116,7 @@ impl PluginLoaderV2 {
         }
 
         // Prefer invoking via the existing handle's invoke_fn when available
-        let tlv = crate::runtime::plugin_ffi_common::encode_args(args);
+        let tlv = crate::runtime::codec::TlvCodecBox::default().encode_args(args);
         if dbg_on() {
             let hex_args = tlv.iter().map(|b| format!("{:02X}", b)).collect::<Vec<_>>().join(" ");
             eprintln!("[PluginLoaderV2] call args tlv: {}", hex_args);
