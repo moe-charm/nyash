@@ -26,7 +26,7 @@ pub static nyash_typebox_FileBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     name: b"FileBox\0".as_ptr() as *const c_char,
     resolve: Some(filebox_resolve),
     invoke_id: Some(filebox_invoke_id),
-    capabilities: 0,
+    capabilities: 1u64 << 0,
 };
 
 // ============ Plugin Metadata (optional) ============

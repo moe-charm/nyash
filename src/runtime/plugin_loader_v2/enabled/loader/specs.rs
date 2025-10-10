@@ -10,6 +10,7 @@ use std::path::Path;
 #[derive(Debug, Clone, Default)]
 pub(crate) struct LoadedBoxSpec {
     pub(crate) type_id: Option<u32>,
+    pub(crate) capabilities: Option<u64>,
     pub(crate) methods: HashMap<String, MethodSpec>,
     pub(crate) fini_method_id: Option<u32>,
     pub(crate) invoke_id: Option<BoxInvokeFn>,
@@ -56,6 +57,7 @@ pub(super) fn record_typebox_spec(
         let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
         entry.invoke_id = Some(invoke_id);
         entry.resolve_fn = typebox.resolve;
+        entry.capabilities = Some(typebox.capabilities);
     } else if dbg_on() {
         eprintln!(
             "[PluginLoaderV2] WARN: TypeBox present but no invoke_id for {}.{} — plugin should export per-Box invoke",

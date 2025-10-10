@@ -89,6 +89,13 @@ impl PluginLoaderV2 {
             .unwrap_or("nyash.toml")
     }
 
+    /// Get capabilities bitset for (lib, box) if known.
+    pub fn get_caps_for(&self, lib_name: &str, box_type: &str) -> Option<u64> {
+        let map = self.box_specs.read().ok()?;
+        let spec = map.get(&(lib_name.to_string(), box_type.to_string()))?;
+        spec.capabilities
+    }
+
     /// Get TOML value with reload support (unified helper)
     ///
     /// Returns cached TOML value unless NYASH_PLUGIN_CONFIG_RELOAD=1 is set,

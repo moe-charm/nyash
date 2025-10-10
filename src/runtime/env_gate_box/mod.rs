@@ -58,3 +58,6 @@ pub fn debug_plugin() -> bool { bool_any(&["NYASH_DEBUG_PLUGIN", "HAKO_DEBUG_PLU
 #[inline]
 pub fn diag_trace() -> bool { bool_any(&["NYASH_DIAG_TRACE", "HAKO_DIAG_TRACE"]) }
 
+/// Deterministic execution gate (deny on-demand reprobe; deny IO plugins)
+#[inline]
+pub fn deterministic() -> bool { bool_any(&["HAKO_DETERMINISTIC", "NYASH_DETERMINISTIC"]) }

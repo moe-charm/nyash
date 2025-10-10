@@ -27,7 +27,26 @@ pub fn new_box(
 ) -> Result<Box<dyn NyashBox>, RuntimeError> {
     // 1) PluginHost direct
     if crate::runtime::env_gate_box::plugin_policy_on() && !crate::runtime::env_gate_box::plugins_disabled() {
-        let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(&[box_type]);
+        // Deterministic guard: deny IO‑cap boxes
+        let det = crate::runtime::env_gate_box::deterministic();
+        if det {
+            if let Ok(host) = crate::runtime::get_global_plugin_host().read() {
+                if let Some(caps) = host.get_box_capabilities(box_type) {
+                    const CAP_IO: u64 = 1u64 << 0;
+                    if (caps & CAP_IO) != 0 {
+                        return Err(RuntimeError::InvalidOperation { message: format!(
+                            "deterministic mode: IO plugin box denied: {}", box_type
+                        )});
+                    }
+                } else if box_type == "FileBox" { // heuristic fallback
+                    return Err(RuntimeError::InvalidOperation { message: format!(
+                        "deterministic mode: IO plugin box denied: {}", box_type
+                    )});
+                }
+            }
+        }
+        // Reprobe only when not deterministic (on‑demand discovery)
+        if !det { let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(&[box_type]); }
         if let Some(b) = {
             let host = crate::runtime::get_global_plugin_host();
             host.read().ok().and_then(|h| h.create_box(box_type, args).ok())
@@ -35,25 +54,23 @@ pub fn new_box(
             return Ok(b);
         }
         // Partial config: attempt to load a single library that provides this box
-        for cfg in ["nyash.toml", "hako.toml", "hakorune.toml"].iter() {
-            if let Ok(doc) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg) {
-                if let Some((lib, def)) = doc.find_library_for_box(box_type) {
-                    {
+        if !det {
+            for cfg in ["nyash.toml", "hako.toml", "hakorune.toml"].iter() {
+                if let Ok(doc) = crate::config::nyash_toml_v2::NyashConfigV2::from_file(cfg) {
+                    if let Some((lib, def)) = doc.find_library_for_box(box_type) {
                         if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
                             let _ = h.load_library_direct(lib, &def.path, &def.boxes);
                         }
-                    }
-                    if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
-                        if let Ok(b) = h.create_box(box_type, args) {
-                            return Ok(b);
+                        if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
+                            if let Ok(b) = h.create_box(box_type, args) { return Ok(b); }
                         }
                     }
                 }
             }
-        let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(&[box_type]);
-        if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
-            if let Ok(b) = h.create_box(box_type, args) { return Ok(b); }
-        }
+            let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(&[box_type]);
+            if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
+                if let Ok(b) = h.create_box(box_type, args) { return Ok(b); }
+            }
         }
     }
 

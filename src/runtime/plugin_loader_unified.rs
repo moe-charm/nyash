@@ -185,6 +185,14 @@ impl PluginHost {
         })
     }
 
+    /// Retrieve capabilities of a plugin box type (if available via TypeBox FFI/specs)
+    pub fn get_box_capabilities(&self, box_type: &str) -> Option<u64> {
+        let cfg = self.config.as_ref()?;
+        let (lib_name, _lib_def) = cfg.find_library_for_box(box_type)?;
+        let l = self.loader.read().ok()?;
+        l.get_caps_for(lib_name, box_type)
+    }
+
     // --- v2 adapter layer: allow gradual migration of callers ---
     pub fn create_box(
         &self,
