@@ -23,61 +23,9 @@ using "apps/selfhost-compiler/pipeline_v2/stage1_json_scanner_box.hako" as Stage
 using "apps/selfhost-compiler/pipeline_v2/stage1_name_args_normalizer_box.hako" as NameArgsNormBox
 using "apps/selfhost-compiler/pipeline_v2/alias_preflight_box.hako" as AliasPreflightBox
 using "apps/selfhost-compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
+using "apps/selfhost-compiler/pipeline_v2/pipeline_helpers_box.hako" as PipelineHelpersBox
 
 flow PipelineV2 {
-  _parse_int_at(s, idx) {
-    if s == null { return null }
-    local i = idx
-    loop(true) {
-      local ch = s.substring(i, i+1)
-      if ch == "" { return null }
-      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
-      break
-    }
-    local neg = 0
-    local ch = s.substring(i, i+1)
-    if ch == "-" { neg = 1  i = i + 1 }
-    local acc = 0
-    local matched = 0
-    loop(true) {
-      ch = s.substring(i, i+1)
-      if ch == "" { break }
-      local digit_idx = "0123456789".indexOf(ch)
-      if digit_idx >= 0 {
-        matched = 1
-        acc = acc * 10 + digit_idx
-        i = i + 1
-      } else { break }
-    }
-    if matched == 0 { return null }
-    if neg == 1 { acc = 0 - acc }
-    return acc
-  }
-
-  _parse_int_after_prefix(s, prefix, search_pos) {
-    local p = RegexFlow.find_from(s, prefix, search_pos)
-    if p < 0 { return null }
-    local res = PipelineV2._parse_int_at(s, p + prefix.size())
-    return res
-  }
-
-  _parse_compare_values(ast_json, start_pos) {
-    if ast_json == null { return null }
-    local op_pos = RegexFlow.find_from(ast_json, "\"op\":\"", start_pos)
-    if op_pos < 0 { return null }
-    local cmp_start = op_pos + 6
-    local cmp_end = RegexFlow.find_from(ast_json, "\"", cmp_start)
-    if cmp_end < 0 { return null }
-    local cmp = ast_json.substring(cmp_start, cmp_end)
-    local lhs_val = PipelineV2._parse_int_after_prefix(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", start_pos)
-    if lhs_val == null { return null }
-    local rhs_val = PipelineV2._parse_int_after_prefix(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", start_pos)
-    if rhs_val == null { return null }
-    return [lhs_val, rhs_val, cmp]
-  }
-
-  _to_i64(v) { return StringHelpers.to_i64(v) }
-
   lower_stage1_to_mir(ast_json, prefer_cfg) {
     // Backward-compatible entry (trace=0)
     return PipelineV2.lower_stage1_to_mir_trace(ast_json, prefer_cfg, 0)
@@ -191,7 +139,7 @@ flow PipelineV2 {
   }
 
   lower_stage1_to_mir_trace(ast_json, prefer_cfg, trace) {
-    local prefer = PipelineV2._to_i64(prefer_cfg)
+    local prefer = PipelineHelpersBox.to_i64(prefer_cfg)
     if ast_json == null { return EmitReturnBox.emit_return_int2(0, trace) }
     if trace == 1 { print("[pipe] prefer_cfg=" + prefer_cfg + " prefer=" + prefer) }
     local r = new UsingResolverBox()
@@ -240,7 +188,7 @@ flow PipelineV2 {
       if iq >= 0 {
         // Fast-path: directly parse Compare within If for primitives (Int-only)
         {
-          local cv = PipelineV2._parse_compare_values(ast_json, iq)
+          local cv = PipelineHelpersBox.parse_compare_values(ast_json, iq)
           if cv != null {
             local mat = 1
             local lfast = cv.get(0)

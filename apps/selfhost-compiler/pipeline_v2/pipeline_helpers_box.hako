@@ -1,0 +1,65 @@
+// pipeline_helpers_box.hako — Pipeline解析ヘルパの独立Box
+// 責務: JSON/数値解析の共通ユーティリティ
+// Extracted from PipelineV2 flow (556行 → 506行、-50行削減)
+
+using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box PipelineHelpersBox {
+  // Parse integer at specific position (whitespace-aware, sign-aware)
+  parse_int_at(s, idx) {
+    if s == null { return null }
+    local i = idx
+    loop(true) {
+      local ch = s.substring(i, i+1)
+      if ch == "" { return null }
+      if ch == " " || ch == "\t" || ch == "\n" || ch == "\r" { i = i + 1  continue }
+      break
+    }
+    local neg = 0
+    local ch = s.substring(i, i+1)
+    if ch == "-" { neg = 1  i = i + 1 }
+    local acc = 0
+    local matched = 0
+    loop(true) {
+      ch = s.substring(i, i+1)
+      if ch == "" { break }
+      local digit_idx = "0123456789".indexOf(ch)
+      if digit_idx >= 0 {
+        matched = 1
+        acc = acc * 10 + digit_idx
+        i = i + 1
+      } else { break }
+    }
+    if matched == 0 { return null }
+    if neg == 1 { acc = 0 - acc }
+    return acc
+  }
+
+  // Parse integer after prefix string (search + extract pattern)
+  parse_int_after_prefix(s, prefix, search_pos) {
+    local p = RegexFlow.find_from(s, prefix, search_pos)
+    if p < 0 { return null }
+    local res = PipelineHelpersBox.parse_int_at(s, p + prefix.size())
+    return res
+  }
+
+  // Parse Compare values from Stage-1 JSON (returns [lhs, rhs, cmp])
+  parse_compare_values(ast_json, start_pos) {
+    if ast_json == null { return null }
+    local op_pos = RegexFlow.find_from(ast_json, "\"op\":\"", start_pos)
+    if op_pos < 0 { return null }
+    local cmp_start = op_pos + 6
+    local cmp_end = RegexFlow.find_from(ast_json, "\"", cmp_start)
+    if cmp_end < 0 { return null }
+    local cmp = ast_json.substring(cmp_start, cmp_end)
+    local lhs_val = PipelineHelpersBox.parse_int_after_prefix(ast_json, "\"lhs\":{\"type\":\"Int\",\"value\":", start_pos)
+    if lhs_val == null { return null }
+    local rhs_val = PipelineHelpersBox.parse_int_after_prefix(ast_json, "\"rhs\":{\"type\":\"Int\",\"value\":", start_pos)
+    if rhs_val == null { return null }
+    return [lhs_val, rhs_val, cmp]
+  }
+
+  // Delegate to StringHelpers for type conversion
+  to_i64(v) { return StringHelpers.to_i64(v) }
+}
