@@ -3,14 +3,14 @@
 // Returns: "<content>@<pos>" where <pos> is the index after the closing quote.
 // Notes: pure string scanning; no external deps.
 
-static box ParserStringScanBox {
-  _i2s(v) { return "" + v }
+using "apps/selfhost-compiler/boxes/parser/scan/parser_common_utils_box.hako" as Utils
 
+static box ParserStringScanBox {
   scan(src, i) {
-    if src == null { return "@" + me._i2s(i) }
+    if src == null { return "@" + Utils.i2s(i) }
     local n = src.size()
     local j = i
-    if j >= n || src.substring(j, j+1) != "\"" { return "@" + me._i2s(i) }
+    if j >= n || src.substring(j, j+1) != "\"" { return "@" + Utils.i2s(i) }
     j = j + 1
     local out = ""
     local guard = 0
@@ -20,7 +20,7 @@ static box ParserStringScanBox {
       local ch = src.substring(j, j+1)
       if ch == "\"" {
         j = j + 1
-        return out + "@" + me._i2s(j)
+        return out + "@" + Utils.i2s(j)
       }
       if ch == "\\" && j + 1 < n {
         local nx = src.substring(j+1, j+2)
@@ -43,6 +43,6 @@ static box ParserStringScanBox {
       }
     }
     // if unterminated, return what we have and the last pos to avoid infinite loops
-    return out + "@" + me._i2s(j)
+    return out + "@" + Utils.i2s(j)
   }
 }

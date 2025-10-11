@@ -5,44 +5,9 @@
 // - ParserBox.extract_usings delegates to this box (Phase 2 split)
 // - Pure string scan（依存ゼロ）。Fail‑Fastはせず、安全にスキップでループを進める
 
+using "apps/selfhost-compiler/boxes/parser/scan/parser_common_utils_box.hako" as Utils
+
 static box UsingCollectorBox {
-  _dq() { return "\"" }
-  // Lightweight helpers (local scope)
-  _starts_with(src, i, pat) {
-    local n = src.size()
-    local m = pat.size()
-    if i + m > n { return 0 }
-    local k = 0
-    loop(k < m) { if src.substring(i + k, i + k + 1) != pat.substring(k, k + 1) { return 0 } k = k + 1 }
-    return 1
-  }
-  _index_of(src, i, pat) {
-    local n = src.size()
-    local m = pat.size()
-    if m == 0 { return i }
-    local j = i
-    loop(j + m <= n) { if me._starts_with(src, j, pat) { return j } j = j + 1 }
-    return -1
-  }
-  _trim(s) {
-    local i = 0
-    local n = s.size()
-    loop(i < n && (s.substring(i,i+1) == " " || s.substring(i,i+1) == "	")) { i = i + 1 }
-    local j = n
-    loop(j > i && (s.substring(j-1,j) == " " || s.substring(j-1,j) == "	" || s.substring(j-1,j) == ";")) { j = j - 1 }
-    return s.substring(i, j)
-  }
-  _esc_json(s) {
-    local out = ""
-    local i = 0
-    local n = s.size()
-    loop(i < n) {
-      local ch = s.substring(i, i+1)
-      if ch == "\\" { out = out + "\\\\" } else { if ch == "\"" { out = out + "\\\"" } else { out = out + ch } }
-      i = i + 1
-    }
-    return out
-  }
 
   // Public API: collect line-based using declarations to JSON array string
   collect(src) {
@@ -60,29 +25,29 @@ static box UsingCollectorBox {
       // trim left spaces/tabs
       local k = 0
       loop(k < line.size() && (line.substring(k,k+1) == " " || line.substring(k,k+1) == "	")) { k = k + 1 }
-      if me._starts_with(line, k, "using ") == 1 {
-        local rest = me._trim(line.substring(k + 6, line.size()))
+      if Utils.starts_with(line, k, "using ") == 1 {
+        local rest = Utils.trim(line.substring(k + 6, line.size()))
         // split on ' as '
-        local as_pos = me._index_of(rest, 0, " as ")
+        local as_pos = Utils.index_of(rest, 0, " as ")
         local target = rest
         local alias = null
-        if as_pos >= 0 { target = me._trim(rest.substring(0, as_pos)) alias = me._trim(rest.substring(as_pos + 4, rest.size())) }
+        if as_pos >= 0 { target = Utils.trim(rest.substring(0, as_pos)) alias = Utils.trim(rest.substring(as_pos + 4, rest.size())) }
         // path or namespace
         local is_path = 0
         if target.size() > 0 {
-          if me._starts_with(target, 0, me._dq()) == 1 { is_path = 1 }
-          if me._starts_with(target, 0, "./") == 1 { is_path = 1 }
-          if me._starts_with(target, 0, "/") == 1 { is_path = 1 }
-          if target.size() >= 5 && me._starts_with(target, target.size()-5, ".hako") == 1 { is_path = 1 }
-          if target.size() >= 6 && me._starts_with(target, target.size()-6, ".nyash") == 1 { is_path = 1 }
+          if Utils.starts_with(target, 0, Utils.dq()) == 1 { is_path = 1 }
+          if Utils.starts_with(target, 0, "./") == 1 { is_path = 1 }
+          if Utils.starts_with(target, 0, "/") == 1 { is_path = 1 }
+          if target.size() >= 5 && Utils.starts_with(target, target.size()-5, ".hako") == 1 { is_path = 1 }
+          if target.size() >= 6 && Utils.starts_with(target, target.size()-6, ".nyash") == 1 { is_path = 1 }
         }
         local name = ""
         local path = null
         if is_path == 1 {
           // strip quotes
-          if me._starts_with(target, 0, me._dq()) == 1 {
+          if Utils.starts_with(target, 0, Utils.dq()) == 1 {
             target = target.substring(1, target.size())
-            if target.size() > 0 && target.substring(target.size()-1, target.size()) == me._dq() { target = target.substring(0, target.size()-1) }
+            if target.size() > 0 && target.substring(target.size()-1, target.size()) == Utils.dq() { target = target.substring(0, target.size()-1) }
           }
           path = target
           if alias != null { name = alias } else {
@@ -93,8 +58,8 @@ static box UsingCollectorBox {
             loop(t < p.size()) { if p.substring(t,t+1) == "/" { idx = t } t = t + 1 }
             if idx >= 0 { p = p.substring(idx+1, p.size()) }
             // strip extension
-            if p.size() > 5 && me._starts_with(p, p.size()-5, ".hako") == 1 { p = p.substring(0, p.size()-5) }
-            else { if p.size() > 6 && me._starts_with(p, p.size()-6, ".nyash") == 1 { p = p.substring(0, p.size()-6) } }
+            if p.size() > 5 && Utils.starts_with(p, p.size()-5, ".hako") == 1 { p = p.substring(0, p.size()-5) }
+            else { if p.size() > 6 && Utils.starts_with(p, p.size()-6, ".nyash") == 1 { p = p.substring(0, p.size()-6) } }
             name = p
           }
         } else {
@@ -102,8 +67,8 @@ static box UsingCollectorBox {
         }
         // append entry
         if first == 0 { out = out + "," } else { first = 0 }
-        out = out + "{" + me._dq() + "name" + me._dq() + ":" + me._dq() + me._esc_json(name) + me._dq()
-        if path != null { out = out + "," + me._dq() + "path" + me._dq() + ":" + me._dq() + me._esc_json(path) + me._dq() }
+        out = out + "{" + Utils.dq() + "name" + Utils.dq() + ":" + Utils.dq() + Utils.esc_json(name) + Utils.dq()
+        if path != null { out = out + "," + Utils.dq() + "path" + Utils.dq() + ":" + Utils.dq() + Utils.esc_json(path) + Utils.dq() }
         out = out + "}"
       }
       i = j + 1
