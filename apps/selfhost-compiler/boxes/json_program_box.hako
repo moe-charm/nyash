@@ -396,21 +396,8 @@ static box JsonProgramBox {
   }
 
   last_index_of(s, pat) {
-    local n = s.size()
-    local m = pat.size()
-    if m == 0 { return n }
-    local i = n - m
-    loop(i >= 0) {
-      local j = 0
-      local matched = 1
-      loop(j < m) {
-        if s.substring(i + j, i + j + 1) != pat.substring(j, j + 1) { matched = 0 break }
-        j = j + 1
-      }
-      if matched == 1 { return i }
-      i = i - 1
-    }
-    return -1
+    // Delegate to StringHelpers
+    return StringHelpers.last_index_of(s, pat)
   }
 
   skip_ws(s, idx) {

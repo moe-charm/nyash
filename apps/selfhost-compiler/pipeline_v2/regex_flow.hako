@@ -1,3 +1,5 @@
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
 flow RegexFlow {
   // Minimal regex-like helpers focused on readability and determinism.
   // Supported primitives: digits (\d+), identifier ([A-Za-z_][A-Za-z0-9_]*),
@@ -67,18 +69,8 @@ flow RegexFlow {
   }
 
   last_index_of(s, needle) {
-    if s == null { return -1 }
-    if needle == null { return -1 }
-    // naive: scan from 0 and keep last within bounds
-    local last = -1
-    local pos = 0
-    loop(true) {
-      local p = RegexFlow.find_from(s, needle, pos)
-      if p < 0 { break }
-      last = p
-      pos = p + 1
-    }
-    return last
+    // Delegate to StringHelpers (more efficient backward search)
+    return StringHelpers.last_index_of(s, needle)
   }
 
   to_int(digits) {

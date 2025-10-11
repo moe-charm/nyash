@@ -155,4 +155,20 @@ static box StringHelpers {
     }
     return i
   }
+
+  // Find last occurrence of pattern in string (backward search)
+  last_index_of(src, pat) {
+    if src == null { return -1 }
+    if pat == null { return -1 }
+    local n = src.size()
+    local m = pat.size()
+    if m == 0 { return n }
+    if m > n { return -1 }
+    local i = n - m
+    loop(i >= 0) {
+      if me.starts_with(src, i, pat) { return i }
+      i = i - 1
+    }
+    return -1
+  }
 }
