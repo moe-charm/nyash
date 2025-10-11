@@ -81,28 +81,6 @@ use pytypes::{DecodedValue, PyOwned};
 
 // legacy v1 abi/init removed
 
-/* legacy v1 entry removed
-#[no_mangle]
-pub extern "C" fn nyash_plugin_invoke(
-    type_id: u32,
-    method_id: u32,
-    instance_id: u32,
-    args: *const u8,
-    args_len: usize,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    match type_id {
-        TYPE_ID_PY_RUNTIME => {
-            handle_py_runtime(method_id, instance_id, args, args_len, result, result_len)
-        }
-        TYPE_ID_PY_OBJECT => {
-            handle_py_object(method_id, instance_id, args, args_len, result, result_len)
-        }
-        _ => NYB_E_INVALID_TYPE,
-    }
-}
-*/
 
 fn handle_py_runtime(
     method_id: u32,

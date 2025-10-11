@@ -1,20 +1,19 @@
 //! Nyash StringBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), length(1), is_empty(2), charCodeAt(3), fini(u32::MAX)
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
 
 // Import shared TLV codec from hako_abi_impl
 use hako_abi_impl::tlv::{
     read_arg_handle, read_arg_i64, read_arg_string, write_tlv_bool, write_tlv_handle,
     write_tlv_i64, write_tlv_string,
 };
+
+// Import instance manager macros
+use hako_abi_impl::{define_instance_storage, with_instance, with_instance_mut};
 
 const OK: i32 = 0;
 const E_SHORT: i32 = -1;
@@ -43,177 +42,10 @@ struct StrInstance {
     s: String,
 }
 
-static INST: Lazy<Mutex<HashMap<u32, StrInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static NEXT_ID: AtomicU32 = AtomicU32::new(1);
+define_instance_storage!(StrInstance);
 
 // legacy v1 abi/init removed
 
-/* legacy v1 entry removed
-#[no_mangle]
-pub extern "C" fn nyash_plugin_invoke(
-    type_id: u32,
-    method_id: u32,
-    instance_id: u32,
-    args: *const u8,
-    args_len: usize,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    if type_id != TYPE_ID_STRING {
-        return E_TYPE;
-    }
-    unsafe {
-        match method_id {
-            M_BIRTH => {
-                if result_len.is_null() {
-                    return E_ARGS;
-                }
-                if preflight(result, result_len, 4) {
-                    return E_SHORT;
-                }
-                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                // Optional init from first arg (String/Bytes)
-                let init = read_arg_string(args, args_len, 0).unwrap_or_else(|| String::new());
-                if let Ok(mut m) = INST.lock() {
-                    m.insert(id, StrInstance { s: init });
-                } else {
-                    return E_PLUGIN;
-                }
-                let b = id.to_le_bytes();
-                std::ptr::copy_nonoverlapping(b.as_ptr(), result, 4);
-                *result_len = 4;
-                OK
-            }
-            M_FINI => {
-                if let Ok(mut m) = INST.lock() {
-                    m.remove(&instance_id);
-                    OK
-                } else {
-                    E_PLUGIN
-                }
-            }
-            M_LENGTH => {
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_i64(hako_core_string::length_bytes(&inst.s), result, result_len);
-                    } else { return E_HANDLE; }
-                } else { return E_PLUGIN; }
-            }
-            M_IS_EMPTY => {
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_bool(hako_core_string::is_empty(&inst.s), result, result_len);
-                    } else { return E_HANDLE; }
-                } else { return E_PLUGIN; }
-            }
-            M_CHAR_CODE_AT => {
-                let idx = match read_arg_i64(args, args_len, 0) {
-                    Some(v) => v,
-                    None => return E_ARGS,
-                };
-                if idx < 0 {
-                    return E_ARGS;
-                }
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        // Interpret index as char-index into Unicode scalar values
-                        let i = idx as usize;
-                        let ch_opt = inst.s.chars().nth(i);
-                        let code = ch_opt.map(|c| c as u32 as i64).unwrap_or(0);
-                        return write_tlv_i64(code, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_CONCAT => {
-                // Accept either Handle(tag=8) to another StringBox, or String/Bytes payload
-                let (ok, rhs) = if let Some((t, inst)) = read_arg_handle(args, args_len, 0) {
-                    if t != TYPE_ID_STRING {
-                        return E_TYPE;
-                    }
-                    if let Ok(m) = INST.lock() {
-                        if let Some(s2) = m.get(&inst) {
-                            (true, s2.s.clone())
-                        } else {
-                            (false, String::new())
-                        }
-                    } else {
-                        return E_PLUGIN;
-                    }
-                } else if let Some(s) = read_arg_string(args, args_len, 0) {
-                    (true, s)
-                } else {
-                    (false, String::new())
-                };
-                if !ok {
-                    return E_ARGS;
-                }
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let mut new_s = inst.s.clone();
-                        new_s.push_str(&rhs);
-                        drop(m);
-                        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                        if let Ok(mut mm) = INST.lock() {
-                            mm.insert(id, StrInstance { s: new_s });
-                        }
-                        return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_FROM_UTF8 => {
-                // Create new instance from UTF-8 (accept String/Bytes)
-                let s = if let Some(s) = read_arg_string(args, args_len, 0) {
-                    s
-                } else {
-                    return E_ARGS;
-                };
-                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut m) = INST.lock() {
-                    m.insert(id, StrInstance { s });
-                } else {
-                    return E_PLUGIN;
-                }
-                return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
-            }
-            M_FROM_UTF8 => {
-                // Create new instance from UTF-8 (accept String/Bytes)
-                let s = if let Some(s) = read_arg_string(args, args_len, 0) {
-                    s
-                } else {
-                    return E_ARGS;
-                };
-                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut m) = INST.lock() {
-                    m.insert(id, StrInstance { s });
-                } else {
-                    return E_PLUGIN;
-                }
-                return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
-            }
-            M_TO_UTF8 => {
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_string(&inst.s, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            _ => E_METHOD,
-        }
-    }
-}
-*/
 
 // ===== TypeBox FFI v2 only - no v1 compatibility =====
 #[repr(C)]

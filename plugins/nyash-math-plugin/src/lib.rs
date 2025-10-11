@@ -83,34 +83,6 @@ mod tlv {
 
 // legacy v1 abi/init removed
 
-/* legacy v1 entry removed
-#[no_mangle]
-pub extern "C" fn nyash_plugin_invoke(
-    type_id: u32,
-    method_id: u32,
-    instance_id: u32,
-    args: *const u8,
-    args_len: usize,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    unsafe {
-        match (type_id, method_id) {
-            (TID_MATH, M_BIRTH) => birth(TID_MATH, &MATH_INST, result, result_len),
-            (TID_TIME, M_BIRTH) => birth(TID_TIME, &TIME_INST, result, result_len),
-            (TID_MATH, M_FINI) => fini(&MATH_INST, instance_id),
-            (TID_TIME, M_FINI) => fini(&TIME_INST, instance_id),
-            (TID_MATH, M_SQRT) => sqrt_call(args, args_len, result, result_len),
-            (TID_MATH, M_SIN) => trig_call(args, args_len, result, result_len, true),
-            (TID_MATH, M_COS) => trig_call(args, args_len, result, result_len, false),
-            (TID_MATH, M_ROUND) => round_call(args, args_len, result, result_len),
-            (TID_TIME, T_NOW) => now_call(result, result_len),
-            (TID_MATH, _) | (TID_TIME, _) => E_METHOD,
-            _ => E_TYPE,
-        }
-    }
-}
-*/
 
 // ===== TypeBox ABI v2 (resolve/invoke_id per box) =====
 #[repr(C)]
