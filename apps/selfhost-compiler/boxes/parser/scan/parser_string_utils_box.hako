@@ -1,82 +1,19 @@
-// ParserStringUtilsBox — tiny string helpers for ParserBox
-// Responsibility: small predicates and scans used widely in ParserBox
-// Notes: pure string ops; no external deps.
+// ParserStringUtilsBox — Delegation to StringHelpers (unified string utilities)
+// Responsibility: Backward compatibility wrapper for parser code
+// Notes: All functionality now provided by apps/selfhost/common/string_helpers.hako
+
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box ParserStringUtilsBox {
-  i2s(v) { return "" + v }
-
-  is_digit(ch) { return ch >= "0" && ch <= "9" }
-  is_space(ch) { return ch == " " || ch == "	" || ch == "
-" || ch == "
-" }
-  is_alpha(ch) { return (ch >= "A" && ch <= "Z") || (ch >= "a" && ch <= "z") || ch == "_" }
-
-  starts_with(src, i, pat) {
-    local n = src.size()
-    local m = pat.size()
-    if i + m > n { return 0 }
-    local k = 0
-    loop(k < m) { if src.substring(i + k, i + k + 1) != pat.substring(k, k + 1) { return 0 } k = k + 1 }
-    return 1
-  }
-
-  index_of(src, i, pat) {
-    local n = src.size()
-    local m = pat.size()
-    if m == 0 { return i }
-    local j = i
-    loop(j + m <= n) { if me.starts_with(src, j, pat) { return j } j = j + 1 }
-    return -1
-  }
-
-  trim(s) {
-    local i = 0
-    local n = s.size()
-    loop(i < n && (s.substring(i,i+1) == " " || s.substring(i,i+1) == "	")) { i = i + 1 }
-    local j = n
-    loop(j > i && (s.substring(j-1,j) == " " || s.substring(j-1,j) == "	" || s.substring(j-1,j) == ";")) { j = j - 1 }
-    return s.substring(i, j)
-  }
+  // Delegate all methods to StringHelpers (centralized implementation)
+  i2s(v) { return StringHelpers.int_to_str(v) }
+  is_digit(ch) { return StringHelpers.is_digit(ch) }
+  is_space(ch) { return StringHelpers.is_space(ch) }
+  is_alpha(ch) { return StringHelpers.is_alpha(ch) }
+  starts_with(src, i, pat) { return StringHelpers.starts_with(src, i, pat) }
+  starts_with_kw(src, i, kw) { return StringHelpers.starts_with_kw(src, i, kw) }
+  index_of(src, i, pat) { return StringHelpers.index_of(src, i, pat) }
+  trim(s) { return StringHelpers.trim(s) }
+  to_int(s) { return StringHelpers.to_i64(s) }
+  skip_ws(src, i) { return StringHelpers.skip_ws(src, i) }
 }
-
-
-  // keyword match at position i with word-boundary (next char not [A-Za-z0-9_])
-  starts_with_kw(src, i, kw) {
-    if me.starts_with(src, i, kw) == 0 { return 0 }
-    local n = src.size()
-    local j = i + kw.size()
-    if j >= n { return 1 }
-    local ch = src.substring(j, j+1)
-    if me.is_alpha(ch) || me.is_digit(ch) { return 0 }
-    return 1
-  }
-
-  to_int(s) {
-    local n = s.size()
-    if n == 0 { return 0 }
-    local i = 0
-    local acc = 0
-    loop(i < n) {
-      local d = s.substring(i, i+1)
-      local dv = 0
-      if d == "1" { dv = 1 } else { if d == "2" { dv = 2 } else { if d == "3" { dv = 3 } else { if d == "4" { dv = 4 } else { if d == "5" { dv = 5 } else { if d == "6" { dv = 6 } else { if d == "7" { dv = 7 } else { if d == "8" { dv = 8 } else { if d == "9" { dv = 9 } } } } } } } } }
-      acc = acc * 10 + dv
-      i = i + 1
-    }
-    return acc
-  }
-
-  skip_ws(src, i) {
-    if src == null { return i }
-    local n = src.size()
-    local cont = 1
-    local guard = 0
-    local max = 100000
-    loop(cont == 1) {
-      if guard > max { return i } else { guard = guard + 1 }
-      if i < n {
-        if me.is_space(src.substring(i, i+1)) { i = i + 1 } else { cont = 0 }
-      } else { cont = 0 }
-    }
-    return i
-  }
