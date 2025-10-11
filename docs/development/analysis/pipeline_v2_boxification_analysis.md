@@ -1,7 +1,7 @@
 # Pipeline v2 箱化・最適化分析レポート
 
 **分析日**: 2025-10-12
-**対象**: apps/selfhost-compiler/pipeline_v2/ および common/
+**対象**: selfhost/compiler/pipeline_v2/ および common/
 **目的**: セルフホストコンパイラーのPipeline v2関連コードを分析し、さらなる箱化・最適化機会を特定
 
 ---

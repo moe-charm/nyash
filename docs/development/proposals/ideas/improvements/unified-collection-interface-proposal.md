@@ -550,7 +550,7 @@ if value.toString().startsWith("Key not found") {
 - `apps/selfhost/hakorune-vm/terminator_handler.hako:87, 142`
 - `apps/selfhost/hakorune-vm/value_manager.hako:13`
 - `apps/selfhost/hakorune-vm/phi_handler.hako:113`
-- `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako:125`
+- `selfhost/compiler/pipeline_v2/using_resolver_box.hako:125`
 
 #### Fixed Behavior
 

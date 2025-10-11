@@ -54,7 +54,7 @@ static box Result {
 
 **現在の using パターン**:
 ```nyash
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 ```
 
 ### ❌ Option 実装は存在しない

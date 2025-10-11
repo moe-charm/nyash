@@ -236,8 +236,8 @@ JsonProgramBox (330行)  - 正規化 + メタデータ
 
 ### 既存良好実装 (参考)
 - StringHelpers: `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/common/string_helpers.hako`
-- MapHelpersBox: `/home/tomoaki/git/hakorune-selfhost/apps/selfhost-compiler/pipeline_v2/map_helpers_box.hako`
-- UsingResolverBox: `/home/tomoaki/git/hakorune-selfhost/apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako`
+- MapHelpersBox: `/home/tomoaki/git/hakorune-selfhost/selfhost/compiler/pipeline_v2/map_helpers_box.hako`
+- UsingResolverBox: `/home/tomoaki/git/hakorune-selfhost/selfhost/compiler/pipeline_v2/using_resolver_box.hako`
 
 ### プロジェクトドキュメント
 - [開発マスタープラン](../roadmap/phases/00_MASTER_ROADMAP.md)

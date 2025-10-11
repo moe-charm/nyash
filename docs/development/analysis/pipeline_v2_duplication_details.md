@@ -91,7 +91,7 @@ if ak >= 0 {
 #### 新規Box: `Stage1IntArgsExtractBox`
 ```hako
 // stage1_int_args_extract_box.hako
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box Stage1IntArgsExtractBox {
   // 汎用: JSON args配列からInt値リストを抽出
@@ -145,8 +145,8 @@ static box Stage1IntArgsExtractStub { main(args) { return 0 } }
 #### 統合後: `call_extract_box.hako`（54行 → 24行）
 ```hako
 // CallExtractBox — Stage‑1 JSON から Return(Call name(args...)) を抽出
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
-using "apps/selfhost-compiler/pipeline_v2/stage1_int_args_extract_box.hako" as IntArgsExtract
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/stage1_int_args_extract_box.hako" as IntArgsExtract
 
 static box CallExtractBox {
   // Returns { name: String, args: [Int,...] } or null
@@ -175,8 +175,8 @@ static box CallExtractStub { main(args) { return 0 } }
 #### 統合後: `method_extract_box.hako`（51行 → 22行）
 ```hako
 // MethodExtractBox — Stage‑1 JSON から Return(Method ...) を抽出
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
-using "apps/selfhost-compiler/pipeline_v2/stage1_int_args_extract_box.hako" as IntArgsExtract
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/stage1_int_args_extract_box.hako" as IntArgsExtract
 
 static box MethodExtractBox {
   extract_return_method_ints(ast_json) {
@@ -203,8 +203,8 @@ static box MethodExtractStub { main(args) { return 0 } }
 #### 統合後: `new_extract_box.hako`（51行 → 22行）
 ```hako
 // NewExtractBox — Stage‑1 JSON から Return(New ...) を抽出
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
-using "apps/selfhost-compiler/pipeline_v2/stage1_int_args_extract_box.hako" as IntArgsExtract
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/stage1_int_args_extract_box.hako" as IntArgsExtract
 
 static box NewExtractBox {
   extract_return_new_ints(ast_json) {
@@ -393,7 +393,7 @@ loop (i < n) { arg_ids.push(i + 1)  i = i + 1 }
 #### 新規Box: `ArgsConstEmitBox`
 ```hako
 // args_const_emit_box.hako
-using "apps/selfhost-compiler/pipeline_v2/stage1_args_parser_box.hako" as ArgsParser
+using "selfhost/compiler/pipeline_v2/stage1_args_parser_box.hako" as ArgsParser
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 
 static box ArgsConstEmitBox {
@@ -433,7 +433,7 @@ using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/common/header_emit_box.hako" as HeaderEmitBox
-using "apps/selfhost-compiler/pipeline_v2/args_const_emit_box.hako" as ArgsConstEmit
+using "selfhost/compiler/pipeline_v2/args_const_emit_box.hako" as ArgsConstEmit
 
 static box EmitCallBox {
   emit_call_int_args(name, args) {
@@ -481,7 +481,7 @@ using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 using "apps/selfhost-compiler/common/header_emit_box.hako" as HeaderEmitBox
-using "apps/selfhost-compiler/pipeline_v2/args_const_emit_box.hako" as ArgsConstEmit
+using "selfhost/compiler/pipeline_v2/args_const_emit_box.hako" as ArgsConstEmit
 
 static box EmitMethodBox {
   emit_method_int_args(method, recv_val, args) {

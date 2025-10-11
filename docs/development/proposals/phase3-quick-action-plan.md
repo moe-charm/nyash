@@ -31,7 +31,7 @@ local cv = CompareOpsBox.eval(cmp, lv, rv)
 **using追加**:
 ```hako
 # 既に using 済み（行6）なので追加不要
-using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 ```
 
 ### 修正ファイル: `apps/selfhost/vm/boxes/op_handlers.hako`

@@ -509,7 +509,7 @@ static box Result {
 #### Step 1: 並行運用（Phase 20.6）
 ```hakorune
 // 旧版: apps/selfhost/vm/boxes/result_box.hako
-using "apps/selfhost/vm/boxes/result_box.hako" as ResultLegacy
+using "selfhost/vm/boxes/result_box.hako" as ResultLegacy
 
 // 新版: @enum Result（VariantBoxベース）
 @enum Result {

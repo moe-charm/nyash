@@ -13,8 +13,8 @@ Shared Boxes
   - extern_call_ret/global_call_ret/method_call_ret/constructor_call_ret（最小形）
 
 Emit Adaptation
-- apps/selfhost-compiler/pipeline_v2/emit_mir_flow_map.hako（P1/P2）
-- apps/selfhost-compiler/pipeline_v2/emit_mir_flow.hako（P1/P2/P3）
+- selfhost/compiler/pipeline_v2/emit_mir_flow_map.hako（P1/P2）
+- selfhost/compiler/pipeline_v2/emit_mir_flow.hako（P1/P2/P3）
 - 返却は `{ functions:[...] }` に制限（既存互換）。将来は module(version/kind) へ昇格可能。
 
 Extern Path (P3 Minimal)

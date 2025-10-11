@@ -41,7 +41,7 @@ Ret ポリシー（Fail‑Fast）
 - 既定: 未使用（非再入ポリシーのため、Rust VM 側の実行核からは呼び戻さない）。
 - 使い方（例）:
   ```nyash
-  using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
+  using "selfhost/vm/boxes/operator_box.hako" as OperatorBox
   print("LT=" + (""+OperatorBox.compare("Lt", 1, 2)))   // → LT=1
   print("ADD=" + (""+OperatorBox.apply2("Add", 3, 5))) // → ADD=8
   ```

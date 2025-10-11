@@ -17,8 +17,8 @@ Compile‑time Verification (wired)
 - SignatureVerifierBox (Pipeline V2) validates (method, arity) right after Method extraction and before emit.
 - Note: method解決は TypeRegistry に一本化予定（MethodRegistryBox は段階的に統合）。
 - Files:
-  - apps/selfhost-compiler/pipeline_v2/signature_verifier_box.hako
-  - apps/selfhost-compiler/pipeline_v2/pipeline.hako: Method paths call `SignatureVerifierBox.verify_from_args(...)`.
+  - selfhost/compiler/pipeline_v2/signature_verifier_box.hako
+  - selfhost/compiler/pipeline_v2/pipeline.hako: Method paths call `SignatureVerifierBox.verify_from_args(...)`.
 
 Design Notes
 - Fail‑Fast: no silent fallbacks. Unknown method or wrong arity should stop with a clear error.

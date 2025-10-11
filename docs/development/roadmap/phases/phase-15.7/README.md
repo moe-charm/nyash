@@ -132,7 +132,7 @@ Branch Note (selfhost)
   - JSON v0出力 ✅（最小動作確認済み）
   - **Pipeline V2 🔄（Box-First emit-only architecture）**
     - 📋 **[詳細設計](../../selfhosting/pipeline_v2.md)** - 全体像・Boxes・制約
-    - 📦 **[実装](../../../../apps/selfhost-compiler/pipeline_v2/)** - ExecutionPipelineBox/BackendBox/MirBuilderBox
+    - 📦 **[実装](../../../../selfhost/compiler/pipeline_v2/)** - ExecutionPipelineBox/BackendBox/MirBuilderBox
     - 🔧 **[契約](../../../../apps/selfhost-compiler/INTERFACES.md)** - インターフェース仕様
     - 🧪 **[スモーク](../../selfhosting/pipeline_v2.md#smokes-quick)** - 受け入れテスト
 
@@ -199,14 +199,14 @@ Hakoruneで実行器書く
 
 【2025-10-02 追記】
 - FlowEntryBox / FlowRunner（箱化・薄導線）
-  - 追加: `apps/selfhost-compiler/pipeline_v2/flow_entry.hako`（emit-only 入口）
+  - 追加: `selfhost/compiler/pipeline_v2/flow_entry.hako`（emit-only 入口）
   - 追加: `apps/selfhost/vm/flow_runner.hako`（Hakorune VM 実行薄箱）
   - 役割分離: emit は selfhost-compiler 配下、実行は selfhost/vm 配下（箱境界）
 - LocalSSA 材化ポリシーの統一
   - `ensure_calls`（call/method/new）、`ensure_cond`（branch cond）ともに「PHI直後に copy 挿入」に統一
   - JSONテキスト整形で挙動不変・Fail‑Fast（未対応形は無変更）
 - MirCall v1（統一呼出し）
-  - 薄箱: `apps/selfhost-compiler/pipeline_v2/mir_call_box.hako` を追加（emit-only）
+  - 薄箱: `selfhost/compiler/pipeline_v2/mir_call_box.hako` を追加（emit-only）
   - ハーネス時の v1→v0 ダウングレード (`NYASH_LLVM_DOWNGRADE_V1=1`) を前提に shape/compile を安定化
   - 未解決 Global は v0 extern へ降格（compile-only）、VM/AOT は未解決エラー（Fail‑Fast）
 - CLI: `--emit-mir-json` をグローバル早期ゲートに（バックエンド非依存）
@@ -262,7 +262,7 @@ Hakoruneで実行器書く
 - 既定の意味論は不変（Fail‑Fast 強化は可）。VM/LLVM のパリティを維持したまま、自己ホスト化の歩幅を刻む。
 
 境界と原則（Box‑First）
-- 生成面（Builder/Emitter）: apps/selfhost-compiler/pipeline_v2/ 配下（EmitMirFlow/Map 等）。
+- 生成面（Builder/Emitter）: selfhost/compiler/pipeline_v2/ 配下（EmitMirFlow/Map 等）。
 - 実行面（VM/LLVM）: 既存の Rust VM と llvmlite ハーネス。
 - 意味論の確定点:
   - Eq/Ne は Extern("nyrt.ops.op_eq") に統一（Builder 正規化）。
@@ -319,8 +319,8 @@ SSOT 連動
 - P1 完了（const/ret, compare diamond）
   - 共有箱を導入: `apps/selfhost/common/mir/{mir_schema_box.hako,block_builder_box.hako}`
   - emit 経路を薄アダプタ化（出力互換）:
-    - `apps/selfhost-compiler/pipeline_v2/emit_mir_flow_map.hako`
-    - `apps/selfhost-compiler/pipeline_v2/emit_mir_flow.hako`
+    - `selfhost/compiler/pipeline_v2/emit_mir_flow_map.hako`
+    - `selfhost/compiler/pipeline_v2/emit_mir_flow.hako`
   - quick 代表（rc‑only）: `selfhost_emit_mir_min_rc_vm` が常時緑
 
 - P2 準備完了（binop/loop 最小）
@@ -596,12 +596,12 @@ Phase 15.7進捗: ████████░░ 80%完成
 
 **コンパイラー側（P2系）- 見積もり18日 → 実績2日！**
 - ✅ **P2-A UsingResolverBox実装**（1日で完了、見積もり7日 → **85%短縮！**）
-  - 追加: `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako`
+  - 追加: `selfhost/compiler/pipeline_v2/using_resolver_box.hako`
   - 機能: alias→path/namespace マッピング、using/modules JSON読込
   - スモーク: `quick/selfhost/selfhost_using_resolver_basic_vm.sh`
 
 - ✅ **P2-B NamespaceBox実装**（1日で完了、見積もり5日 → **80%短縮！**）
-  - 追加: `apps/selfhost-compiler/pipeline_v2/namespace_box.hako`
+  - 追加: `selfhost/compiler/pipeline_v2/namespace_box.hako`
   - 機能: `Timer.now_ms` → `Callee::ModuleFunction` 正規化
   - スモーク: `quick/selfhost/selfhost_namespace_box_basic_vm.sh`
 
@@ -611,7 +611,7 @@ Phase 15.7進捗: ████████░░ 80%完成
 
 **品質強化（計画外の追加成果！）**
 - ✅ **SignatureVerifierBox**（コンパイル時型検証）
-  - 追加: `apps/selfhost-compiler/pipeline_v2/signature_verifier_box.hako`
+  - 追加: `selfhost/compiler/pipeline_v2/signature_verifier_box.hako`
   - 機能: ビルトインメソッドのarity検証（compile-time Fail-Fast）
 
 - ✅ **MethodRegistry拡大**（ビルトイン署名管理）

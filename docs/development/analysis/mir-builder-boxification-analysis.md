@@ -48,7 +48,7 @@
   - `_seek_obj_end()` (L11-30: **独自実装、文字列エスケープ対応版**)
   - `_seek_array_end()` (L31-42: ほぼ同じロジック)
 
-- `apps/selfhost-compiler/pipeline_v2/stage1_extract_flow.hako` (206行)
+- `selfhost/compiler/pipeline_v2/stage1_extract_flow.hako` (206行)
   - `_idx()`, `_idx_from()` (L6-7)
   - 5つの抽出関数で同じパターン繰り返し (L9-205)
 
@@ -145,7 +145,7 @@ box MirJsonBuilderBase {
 
 **問題**: stage1_extract_flow.hakoで5つの抽出関数が同じ構造
 
-**発見箇所**: `apps/selfhost-compiler/pipeline_v2/stage1_extract_flow.hako`
+**発見箇所**: `selfhost/compiler/pipeline_v2/stage1_extract_flow.hako`
 
 ```hakorune
 // 5つの抽出関数がすべて同じパターン:
@@ -824,7 +824,7 @@ box CompilerConfigBox {
    - [ ] LocalSSA/LoopSSA箱化（no-opのまま）
 
 **成果物**:
-- `apps/selfhost-compiler/pipeline_v2/stage1_ast_extractor_box.hako`
+- `selfhost/compiler/pipeline_v2/stage1_ast_extractor_box.hako`
 - `apps/selfhost-compiler/builder/ssa/ssa_transform_base.hako`
 
 ---
@@ -960,15 +960,15 @@ box CompilerConfigBox {
 **MIR Builder系**:
 - `apps/selfhost/common/json/mir_builder2.hako` (160行)
 - `apps/selfhost/common/json/mir_builder_min.hako` (437行)
-- `apps/selfhost-compiler/pipeline_v2/mir_builder_box.hako` (35行)
+- `selfhost/compiler/pipeline_v2/mir_builder_box.hako` (35行)
 
 **Emit系**:
-- `apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako` (70行)
-- `apps/selfhost-compiler/pipeline_v2/emit_binop_box.hako` (34行)
-- `apps/selfhost-compiler/pipeline_v2/emit_return_box.hako` (推定50行)
+- `selfhost/compiler/pipeline_v2/emit_compare_box.hako` (70行)
+- `selfhost/compiler/pipeline_v2/emit_binop_box.hako` (34行)
+- `selfhost/compiler/pipeline_v2/emit_return_box.hako` (推定50行)
 
 **Extract系**:
-- `apps/selfhost-compiler/pipeline_v2/stage1_extract_flow.hako` (206行)
+- `selfhost/compiler/pipeline_v2/stage1_extract_flow.hako` (206行)
 
 **共通系**:
 - `apps/selfhost/common/string_helpers.hako` (87行)

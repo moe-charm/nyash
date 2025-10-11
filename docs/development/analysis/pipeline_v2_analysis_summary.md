@@ -2,7 +2,7 @@
 
 **分析日**: 2025-10-12
 **分析者**: Claude (Sonnet 4.5)
-**対象**: apps/selfhost-compiler/pipeline_v2/ および common/
+**対象**: selfhost/compiler/pipeline_v2/ および common/
 
 ---
 

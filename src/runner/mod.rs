@@ -21,6 +21,7 @@ mod cli_directives;
 mod demos;
 mod dispatch;
 mod json_v0_bridge;
+mod mir_json_reader;
 mod mir_json_emit;
 mod mir_json_validate;
 pub mod modes;

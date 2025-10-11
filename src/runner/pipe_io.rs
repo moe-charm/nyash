@@ -45,6 +45,24 @@ impl NyashRunner {
    or convert to AST(JSON v0) and pass via --json-file.");
             std::process::exit(1);
         }
+        if json.contains(""kind":"MIR"") || (json.trim_start().starts_with('{') and json.contains(""functions"")) {
+            if std::env::var("NYASH_JSON_MIR_READER_DEV").ok().as_deref() == Some("1") {
+                match super::mir_json_reader::parse_mir_json_v0_to_module(&json) {
+                    Ok(module) => {
+                        super::json_v0_bridge::maybe_dump_mir(&module);
+                        self.execute_mir_module(&module);
+                        return true;
+                    }
+                    Err(e) => {
+                        eprintln!("❌ MIR JSON reader error: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            } else {
+                eprintln!("❌ JSON v0 bridge error: input appears to be MIR(JSON v0).\n   Hint: Use a Ny driver with `using selfhost.vm.mir_min as MirVmMin; MirVmMin.run(json)` to execute,\n   or set NYASH_JSON_MIR_READER_DEV=1 to enable experimental reader.");
+                std::process::exit(1);
+            }
+        }
         match super::json_v0_bridge::parse_json_v0_to_module(&json) {
             Ok(module) => {
                 // Optional dump via env verbose

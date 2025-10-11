@@ -221,7 +221,7 @@ Phase 3 (VariantBox統合) → Phase 20.6後（3-5時間）
 
 #### Before（旧版）
 ```hakorune
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 
 local r = Result.ok(42)
 local v = r.value()
@@ -232,7 +232,7 @@ if v == null {
 
 #### After Phase 1（MVP版）
 ```hakorune
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 
 local r = Result.ok(42)
 local v = r.unwrap()  // エラー時は自動パニック

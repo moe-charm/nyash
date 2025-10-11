@@ -234,7 +234,7 @@ rm -rf mir/ parser/ emitter/
 ### **プロジェクト内**
 - `apps/selfhost-compiler/README.md` - コンパイラ概要
 - `apps/selfhost-compiler/INTERFACES.md` - インターフェース定義
-- `apps/selfhost-compiler/pipeline_v2/README.md` - Pipeline v2設計
+- `selfhost/compiler/pipeline_v2/README.md` - Pipeline v2設計
 
 ### **上位ドキュメント**
 - `docs/development/selfhosting/pipeline_v2.md` - Pipeline v2詳細設計

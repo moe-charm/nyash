@@ -289,8 +289,8 @@ StringUtilsBox (統合)   - 文字列操作 (既存拡張)
 
 ### 既存良好実装 (参考)
 - StringHelpers: `apps/selfhost/common/string_helpers.hako` (86行)
-- MapHelpersBox: `apps/selfhost-compiler/pipeline_v2/map_helpers_box.hako` (48行)
-- UsingResolverBox: `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako` (249行)
+- MapHelpersBox: `selfhost/compiler/pipeline_v2/map_helpers_box.hako` (48行)
+- UsingResolverBox: `selfhost/compiler/pipeline_v2/using_resolver_box.hako` (249行)
 
 ---
 

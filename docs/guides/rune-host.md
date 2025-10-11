@@ -27,7 +27,7 @@ Notes
 
 ## Usage (skeleton)
 ```
-using "apps/selfhost/vm/boxes/rune_host.hako" as RuneHostBox
+using "selfhost/vm/boxes/rune_host.hako" as RuneHostBox
 
 static box Main {
   main() {

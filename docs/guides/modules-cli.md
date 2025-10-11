@@ -10,7 +10,7 @@ This page documents the lightweight CLI utilities for inspecting module resoluti
 
 - `hakorune --modules-show <namespace>`
   - Prints a single mapping line for the specified namespace with its origin.
-  - Example: `[auto] selfhost.compiler.pipeline_v2.using_resolver → ./apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako`
+  - Example: `[auto] selfhost.compiler.pipeline_v2.using_resolver → ./selfhost/compiler/pipeline_v2/using_resolver_box.hako`
 
 - `hakorune --modules-resolve <file>`
   - Computes the Dir-as-NS namespace for a file under `apps/` and prints it.
@@ -21,7 +21,7 @@ This page documents the lightweight CLI utilities for inspecting module resoluti
 - Directory component: replace `-` with `.` (e.g., `selfhost-compiler` → `selfhost.compiler`).
 - File name: strip `.hako`, then strip optional `_box` suffix (e.g., `json_minify_box.hako` → `json_minify`).
 - Join with `.`. Example:
-  - `apps/selfhost-compiler/pipeline_v2/json_minify_box.hako` → `selfhost.compiler.pipeline_v2.json_minify`
+  - `selfhost/compiler/pipeline_v2/json_minify_box.hako` → `selfhost.compiler.pipeline_v2.json_minify`
 
 ## Recommended workflow
 

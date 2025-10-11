@@ -342,7 +342,7 @@ mv apps/selfhost/vm/boxes/compare_ops.hako apps/selfhost/common/ops/
 mv apps/selfhost/vm/boxes/operator_box.hako apps/selfhost/common/ops/
 
 # 3. using文の一括修正
-# 例: using "apps/selfhost/vm/boxes/json_scan.hako"
+# 例: using "selfhost/vm/boxes/json_scan.hako"
 #  → using "selfhost/shared/json/json_scan.hako"
 ```
 

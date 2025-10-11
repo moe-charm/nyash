@@ -99,15 +99,15 @@ Phase C: ランタイム移行（Runtime + Box実装）
 #### **A3: Using解決**（完了）
 - **Rust実装**: `src/mir/resolve/` + `src/using/`
 - **Hakorune実装**:
-  - `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako`
-  - `apps/selfhost-compiler/pipeline_v2/namespace_box.hako`
+  - `selfhost/compiler/pipeline_v2/using_resolver_box.hako`
+  - `selfhost/compiler/pipeline_v2/namespace_box.hako`
 - **状態**: ✅ 完了（見積もり12日 → 実績2日、**85%短縮！**）
 
 #### **A4: Pipeline V2基盤**（完了）
 - **Hakorune実装**:
-  - `apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako`
-  - `apps/selfhost-compiler/pipeline_v2/backend_box.hako`
-  - `apps/selfhost-compiler/pipeline_v2/mir_builder_box.hako`
+  - `selfhost/compiler/pipeline_v2/execution_pipeline_box.hako`
+  - `selfhost/compiler/pipeline_v2/backend_box.hako`
+  - `selfhost/compiler/pipeline_v2/mir_builder_box.hako`
 - **状態**: ✅ Box-First emit-only architecture完成
 
 ### 🔥 **残り10-15%（Phase 15.7で完了予定）**

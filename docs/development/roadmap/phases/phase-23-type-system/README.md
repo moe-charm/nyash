@@ -166,7 +166,7 @@ static box SharedConfig {
 ### 🌟 2層構造の具体例
 
 ```hako
-// File: apps/selfhost-compiler/pipeline_v2/pipeline.hako
+// File: selfhost/compiler/pipeline_v2/pipeline.hako
 // hako_module.toml: [exports] pipeline = "pipeline_v2/pipeline.hako"
 // → ファイル全体が公開対象（Layer 1: Pass）
 
@@ -200,7 +200,7 @@ Pipeline.Stage1Scanner.find_body(ast)  // ❌ Layer 2: Fail (@implements Interna
 Error: Cannot use private module path
   --> apps/selfhost/test.hako:3:1
   |
-3 | using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EmitCompare
+3 | using "selfhost/compiler/pipeline_v2/emit_compare_box.hako" as EmitCompare
   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   | This file is marked [private] in hako_module.toml
   | Use module-based using instead: using selfhost.compiler.pipeline

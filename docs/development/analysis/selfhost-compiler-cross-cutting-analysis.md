@@ -891,8 +891,8 @@ JsonProgramBox (330行) - 正規化のみ
 
 ### 既存実装 (良い設計例)
 1. **StringHelpers**: `apps/selfhost/common/string_helpers.hako` (86行)
-2. **MapHelpersBox**: `apps/selfhost-compiler/pipeline_v2/map_helpers_box.hako` (48行)
-3. **UsingResolverBox**: `apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako` (249行)
+2. **MapHelpersBox**: `selfhost/compiler/pipeline_v2/map_helpers_box.hako` (48行)
+3. **UsingResolverBox**: `selfhost/compiler/pipeline_v2/using_resolver_box.hako` (249行)
 4. **emit系Boxes**: `apps/selfhost-compiler/common/*.hako` (4ファイル)
 
 ### 関連ドキュメント

@@ -85,7 +85,7 @@
 - [開発ロードマップ](development/roadmap/)
 - **🆕 [言語進化ロードマップ](development/roadmap/language-evolution/)** - Phase 16-30計画（「コアは最小・糖衣は最強」）
 - [Phase別計画](development/roadmap/phases/)
-- **🔥 Phase 15.7: セルフホスティングPipeline v2** - [設計](development/selfhosting/pipeline_v2.md) | [実装](../apps/selfhost-compiler/pipeline_v2/) | [契約](../apps/selfhost-compiler/INTERFACES.md)
+- **🔥 Phase 15.7: セルフホスティングPipeline v2** - [設計](development/selfhosting/pipeline_v2.md) | [実装](../selfhost/compiler/pipeline_v2/) | [契約](../apps/selfhost-compiler/INTERFACES.md)
   - JSON v0 の降下は MirBuilder に統一（レガシーBridgeは撤去済み）
    - 🔥 **[Phase 12: TypeBox統合ABI](development/roadmap/phases/phase-12/)**
    - 🔥 **[Phase 16: マクロ革命](development/roadmap/phases/phase-16-macro-revolution/)**
