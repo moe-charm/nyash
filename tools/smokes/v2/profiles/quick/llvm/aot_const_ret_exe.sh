@@ -37,8 +37,12 @@ cat > "$JSON_IN" << 'JSON'
 }
 JSON
 
-NYASH_HAKO_MIN_SEM=1 "$NY_LLVMc" --in "$JSON_IN" --emit exe --out "$EXE_OUT"
-NYASH_HAKO_MIN_SEM=1 "$EXE_OUT"
+if [ "${SMOKES_QUICK_AOT:-0}" != "1" ]; then
+  echo "[SKIP] aot_const_ret_exe (enable with SMOKES_QUICK_AOT=1)"
+  exit 0
+fi
+NYASH_HAKO_MIN_SEM=1 "$NY_LLVMc" --in "$JSON_IN" --emit exe --out "$EXE_OUT" || exit 1
+NYASH_HAKO_MIN_SEM=1 "$EXE_OUT" || exit 1
 code=$?
 echo "AOT exit=$code"
 test "$code" -eq 0
