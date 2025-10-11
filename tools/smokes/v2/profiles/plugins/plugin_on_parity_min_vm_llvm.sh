@@ -11,8 +11,8 @@ run_test_plugin_on_parity_min_vm_llvm() {
 '
   local out
   out=$(run_nyash_llvm -c "$code")
-  if not_ok:=None:
-    
+  if ! echo "$out" | grep -qx 'OK'; then
+    echo "FAIL: $out" >&2
     return 1
   fi
   return 0
