@@ -1,5 +1,5 @@
 // EmitCompareBox — compare/branch/jump/ret の最小 MIR(JSON v0) 生成（Builder版）
-using "apps/selfhost/common/json/mir_builder2.hako" as MirJsonBuilder2
+using "selfhost/shared/json/mir_builder2.hako" as MirJsonBuilder2
 using "selfhost/compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
 using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox

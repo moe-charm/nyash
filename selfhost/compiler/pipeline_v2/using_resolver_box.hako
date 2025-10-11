@@ -9,7 +9,7 @@
 // - File/TOML IO（上位で読み、必要なら JSON 文字列で受ける）
 // - 実行時の動的解決（Runner 側の Resolver に委譲）
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 

@@ -1,7 +1,7 @@
 // JsonProgramBox — JSON v0 正規化の最小箱
 // 責務: Programヘッダの補正・meta.usings注入・主要Stmt/Exprのキー順安定化
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/json/json_utils.hako" as JsonUtilsBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/json/json_utils.hako" as JsonUtilsBox
 
 static box JsonProgramBox {
   normalize(json, usings_json) {

@@ -1,7 +1,7 @@
 // hakorune_vm_min.hako — Hakorune最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
 // 互換性のため、当面は selfhost 側の既存Boxへ依存するよ（スリムな差分で段階移行）
 using "selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
-using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
 using "selfhost/vm/boxes/operator_box.hako" as OperatorBox
 using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 using "selfhost/vm/boxes/compare_scan_box.hako" as CompareScanBox
@@ -10,13 +10,13 @@ using "apps/hakorune/vm/boxes/phi_wiring.hako" as PhiWiringBox
 using "apps/hakorune/vm/boxes/program_state.hako" as ProgramStateBox
 using "apps/hakorune/vm/boxes/diagnostics.hako" as DiagnosticsBox
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 using "apps/hakorune/vm/boxes/ret_resolver.hako" as RetResolverBox
 using "selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
 using "selfhost/vm/boxes/guard_box.hako" as GuardBox
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
-using "apps/selfhost/common/json/core/string_scan.hako" as StringScanBox
+using "selfhost/shared/json/core/string_scan.hako" as StringScanBox
 using "apps/hakorune/common/strings/string_helpers_alias.hako" as HakoruneStringHelpers
 using "apps/hakorune/vm/boxes/inst_scan.hako" as InstScanBox
 using "apps/hakorune/vm/boxes/inst_value_scan.hako" as InstValueScanBox

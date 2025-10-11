@@ -1,9 +1,9 @@
 // op_handlers.hako — OpHandlersBox
 // Minimal handlers for const/compare/ret etc. with loose JSON key parsing.
 using "selfhost/vm/boxes/arithmetic.hako" as ArithmeticBox
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
-using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
 // Prefer logical module names to avoid file-path using in strict profiles
 static box OpHandlersBox {
   _tprint(msg) {

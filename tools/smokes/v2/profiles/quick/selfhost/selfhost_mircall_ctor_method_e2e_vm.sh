@@ -19,7 +19,7 @@ V1
 
 # Ny driver to convert v1→v0 using MirJsonV1Adapter, then print v0 JSON (quiet)
 cat > "$TMP_DIR/adapter_driver.nyash" << 'DR'
-using "apps/selfhost/common/json/mir_v1_adapter.hako" as V1
+using "selfhost/shared/json/mir_v1_adapter.hako" as V1
 static box Main { main() {
   local s = include_file("mir_v1.json")
   local j0 = V1.to_v0(s)

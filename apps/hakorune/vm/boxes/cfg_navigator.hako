@@ -1,7 +1,7 @@
 // cfg_navigator.hako — CfgNavigatorBox（ブロックの先頭/末尾シーク）
 
-using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 static box CfgNavigatorBox {
   // Provide index_of_from to avoid tail-based fallback/ambiguous resolution

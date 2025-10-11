@@ -2,9 +2,9 @@
 // Responsibility: provide a minimal, escape-aware scanning facade used by JsonFragBox
 // Delegates to StringOps, StringScanBox and JsonScanBox.
 
-using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/common/json/core/string_scan.hako" as StringScanBox
-using "apps/selfhost/common/json/core/json_scan.hako" as JsonScanBox
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/core/string_scan.hako" as StringScanBox
+using "selfhost/shared/json/core/json_scan.hako" as JsonScanBox
 
 static box JsonCursorBox {
   index_of_from(hay, needle, pos) {

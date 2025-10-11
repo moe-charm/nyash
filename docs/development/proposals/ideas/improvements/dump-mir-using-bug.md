@@ -17,7 +17,7 @@
 ## File Example
 ```hako
 // Test StringHelpers common library
-using "apps/selfhost/common/string_helpers.hako" as Helpers
+using "selfhost/shared/common/string_helpers.hako" as Helpers
 
 static box TestStringHelpers {
   main() {

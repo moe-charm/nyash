@@ -4,7 +4,7 @@
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_ops.hako" as StringOps
 
 static box NewBoxHandlerBox {
   // Handle newbox instruction

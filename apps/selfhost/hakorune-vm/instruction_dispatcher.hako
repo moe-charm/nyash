@@ -1,7 +1,7 @@
 // InstructionDispatcherBox - Dispatch instructions to specific handlers
 // Single Responsibility: Extract op field and route to correct handler
 
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_ops.hako" as StringOps
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/hakorune-vm/const_handler.hako" as ConstHandlerBox
 using "apps/selfhost/hakorune-vm/binop_handler.hako" as BinOpHandlerBox

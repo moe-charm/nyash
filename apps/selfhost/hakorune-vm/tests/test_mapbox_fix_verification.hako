@@ -1,7 +1,7 @@
 // test_mapbox_fix_verification.hako — Verify MapBox.has() fix works correctly
 // Comprehensive test of the fix for MapBox.get() null comparison bug
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box Main {
   main() {

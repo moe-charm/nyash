@@ -19,7 +19,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using selfhost.vm.entry as MiniVmEntryBox
-using "apps/selfhost/common/json/mir_builder_min.hako" as MirJsonBuilderMin
+using "selfhost/shared/json/mir_builder_min.hako" as MirJsonBuilderMin
 
 static box Main {
   main() {

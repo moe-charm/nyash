@@ -3,9 +3,9 @@
 // Note: Full closure calling via Callee::Value is Phase 4 Day 16
 
 using "selfhost/vm/boxes/result_box.hako" as Result
-using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 static box ClosureCallHandlerBox {
   // Handle Closure creation (Callee::Closure)

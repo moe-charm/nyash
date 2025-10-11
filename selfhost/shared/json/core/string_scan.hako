@@ -1,7 +1,7 @@
 // string_scan.hako — StringScanBox
 // Escape-aware string scanning helpers for JSON/text processing.
 
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_ops.hako" as StringOps
 
 static box StringScanBox {
   // Return the single-character string at index i (empty if out of bounds)

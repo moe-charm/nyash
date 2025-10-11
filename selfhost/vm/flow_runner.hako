@@ -2,7 +2,7 @@
 
 using "selfhost/compiler/pipeline_v2/flow_entry.hako" as FlowEntryBox
 using hakorune.vm.mir_min as MirVmMin
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_ops.hako" as StringOps
 
 static box FlowRunner {
   _read_digits(text, pos) { local out = "" local i = pos loop(true) { local ch = text.substring(i, i+1) if ch == "" { break } if ch >= "0" && ch <= "9" { out = out + ch  i = i + 1 } else { break } } return out }

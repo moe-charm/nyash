@@ -1,6 +1,6 @@
 // step_runner.hako — Mini‑VM JSON v0 ステップ観測用の軽量箱（実行はしない）
 using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 static box StepRunnerBox {
   // 文字列ヘルパ

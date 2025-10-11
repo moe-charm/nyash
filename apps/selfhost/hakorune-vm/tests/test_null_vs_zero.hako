@@ -1,7 +1,7 @@
 // test_null_vs_zero.hako — Test null vs 0 comparison issue
 // Phase 3: Investigate MapBox.get() null behavior
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box Main {
   main() {

@@ -7,7 +7,7 @@
 // 非責務:
 //  - 実行・評価（それは MirVmMin に委譲）
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box FlowDebugBox {
   // ユーティリティ — 文字列検索

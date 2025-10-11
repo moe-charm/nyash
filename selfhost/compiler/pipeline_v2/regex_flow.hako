@@ -1,4 +1,4 @@
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 flow RegexFlow {
   // Minimal regex-like helpers focused on readability and determinism.

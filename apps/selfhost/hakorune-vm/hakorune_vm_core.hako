@@ -3,9 +3,9 @@
 // Reference: INSTRUCTION_SET.md, LLVM Python, Rust VM
 // Phase 1 Day 3: 制御フロー実装（Branch/Jump/Phi）- 箱化モジュール化
 
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
 using "selfhost/vm/boxes/result_box.hako" as Result
 
 // Phase 1 Day 3: 箱化モジュール化

@@ -2,7 +2,7 @@
 // Expected: TypeOp instruction handles type checks and casts
 
 using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box Main {
   main() {

@@ -69,7 +69,7 @@ git commit -m "refactor(vm): consolidate comparison operators into CompareOpsBox
 
 **using追加**（冒頭に追加）:
 ```hako
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 ```
 
 **削除箇所**（行47-49）:

@@ -1,9 +1,9 @@
 // SeamInspector — analyze inlined code seam and duplicates
 // Usage: import and call report(text) or analyze_dump_file(path)
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/common/mini_vm_scan.hako" as MiniVmScan
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/mini_vm_scan.hako" as MiniVmScan
 
 static box SeamInspector {
   _int_to_str(n) { return StringHelpers.int_to_str(n) }

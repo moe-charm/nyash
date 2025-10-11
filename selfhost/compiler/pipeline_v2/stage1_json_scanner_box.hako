@@ -6,7 +6,7 @@
 // - name/args basic extraction
 // Non‑Responsibility: MIR emit, namespace resolution, IO
 
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 static box Stage1JsonScannerBox {
   // Find the start position of Program.body array key

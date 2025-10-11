@@ -1,7 +1,7 @@
 // test_compare_bug.hako — Minimal test case for comparison bug investigation
 // Phase 1: Simple comparison tests
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box Main {
   main() {

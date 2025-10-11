@@ -2,8 +2,8 @@
 // Single Responsibility: Dispatch MirCall to appropriate handler based on callee type
 
 using "selfhost/vm/boxes/result_box.hako" as Result
-using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 using "apps/selfhost/hakorune-vm/callee_parser.hako" as CalleeParserBox
 using "apps/selfhost/hakorune-vm/args_extractor.hako" as ArgsExtractorBox

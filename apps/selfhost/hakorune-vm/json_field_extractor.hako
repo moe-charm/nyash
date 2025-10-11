@@ -1,8 +1,8 @@
 // JsonFieldExtractorBox - Extract fields from JSON MIR instructions
 // Centralizes JSON field parsing logic
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
 
 static box JsonFieldExtractor {
   // Extract integer field from JSON

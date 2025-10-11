@@ -4,7 +4,7 @@
 // - v1: operation:"==" maps to Eq (CompareOpsBox)
 // Returns: map({ dst:int|null, lhs:int|null, rhs:int|null, kind:String }) or null
 
-using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
 using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 
 static box CompareScanBox {

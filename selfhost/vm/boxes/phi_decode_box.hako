@@ -4,8 +4,8 @@
 // Output: [dst:int, vin:int] when resolvable; otherwise [null,null]
 // Non-goals: MIR execution, register I/O (caller applies values), full JSON parser.
 
-using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box PhiDecodeBox {

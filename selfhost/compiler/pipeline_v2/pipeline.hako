@@ -15,7 +15,7 @@ using "selfhost/compiler/pipeline_v2/map_helpers_box.hako" as MapHelpersBox
 using "selfhost/compiler/pipeline_v2/call_extract_box.hako" as CallExtractBox
 using "selfhost/compiler/pipeline_v2/method_extract_box.hako" as MethodExtractBox
 using "selfhost/compiler/pipeline_v2/new_extract_box.hako" as NewExtractBox
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
 using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
 using "selfhost/compiler/pipeline_v2/signature_verifier_box.hako" as SignatureVerifierBox

@@ -1,6 +1,6 @@
 // map_helpers_box.hako — Pipeline用の軽量ヘルパ（MapBoxの型付き取得）
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 static box MapHelpersBox {
   _raw_get(m, key) {
     if m == null { return null }

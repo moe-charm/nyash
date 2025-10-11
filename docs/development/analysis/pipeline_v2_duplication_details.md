@@ -277,7 +277,7 @@ out.set("args", arr)
 
 ```hako
 // normalizer_box.hako (96行 → 74行)
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box NormalizerBox {
   _to_i64(v) { return StringHelpers.to_i64(v) }

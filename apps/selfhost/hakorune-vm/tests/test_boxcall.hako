@@ -1,7 +1,7 @@
 // test_boxcall.hako - Test boxcall instruction (Box method calls)
 
 using "apps/selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box Main {
   main() {

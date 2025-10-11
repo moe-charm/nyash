@@ -880,7 +880,7 @@ dispatch(inst_json) {
 ### JSON解析パターン（既存実装活用）
 ```hakorune
 // 高速パターン（JsonCursorBox）
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 parse_block(mir_json, block_id) {
   local key = "\"id\":" + StringHelpers.int_to_str(block_id)

@@ -1,7 +1,7 @@
 // Mini-VM scanning and numeric helpers
 using "apps/hakorune/vm/boxes/cfg_navigator.hako" as CfgNavigatorBox
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 static box MiniVmScan {
   // helper: find needle from position pos

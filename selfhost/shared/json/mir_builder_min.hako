@@ -1,12 +1,12 @@
 // mir_builder_min.nyash — Minimal MIR(JSON v0) builder for selfhost tests
 // Scope: selfhost only (apps/selfhost/...); no core/runtime changes.
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox
 using "apps/selfhost-compiler/common/newbox_emit_box.hako" as NewBoxEmitBox
-using "apps/selfhost/common/json/json_inst_encode_box.hako" as JsonInstEncodeBox
+using "selfhost/shared/json/json_inst_encode_box.hako" as JsonInstEncodeBox
 
 box MirJsonBuilderMin {
   buf: StringBox

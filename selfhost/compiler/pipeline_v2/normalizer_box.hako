@@ -1,6 +1,6 @@
 // normalizer_box.hako — Minimal normalizer for Compare maps (cmp/lhs/rhs)
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 static box NormalizerBox {
   // Normalize cmp/lhs/rhs into MapBox with String keys
   normalize_cmp(raw) {

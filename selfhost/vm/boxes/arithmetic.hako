@@ -2,7 +2,7 @@
 // Responsibility: safe decimal Add/Sub/Mul helpers and simple i64 adapters.
 // Non-responsibility: VM execution, JSON parsing, compare semantics.
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box ArithmeticBox {
   // Internal helpers operate on decimal strings to avoid overflow.

@@ -4,7 +4,7 @@
 
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
 using "apps/lib/json_native/stringify.hako" as JSON
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box MirEmitterBox {
   _index_of(hay, needle) { return hay.indexOf(needle) }

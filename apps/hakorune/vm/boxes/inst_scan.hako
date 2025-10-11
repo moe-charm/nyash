@@ -2,7 +2,7 @@
 // Responsibility: thin helpers to extract simple fields from a MIR(JSON) instruction segment
 // Notes: escape-aware quote search delegates to StringScanBox; structural seek to JsonCursorBox.
 
-using "apps/selfhost/common/json/core/string_scan.hako" as StringScanBox
+using "selfhost/shared/json/core/string_scan.hako" as StringScanBox
 using "apps/hakorune/common/json/json_cursor_alias.hako" as HakoruneJsonCursorBox
 
 static box InstScanBox {

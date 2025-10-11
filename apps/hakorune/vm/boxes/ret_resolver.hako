@@ -1,6 +1,6 @@
 // ret_resolver.hako — RetResolverBox
 // 役割: ret の最終値決定（last_cmp 優先→レジスタ定義→Fail‑Fast）
-using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
 using "apps/hakorune/vm/boxes/diagnostics.hako" as DiagnosticsBox
 
 static box RetResolverBox {

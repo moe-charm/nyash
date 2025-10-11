@@ -1,7 +1,7 @@
 // ValueManagerBox - Unified register value management
 // Centralizes all register get/set operations with type conversion
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box ValueManagerBox {

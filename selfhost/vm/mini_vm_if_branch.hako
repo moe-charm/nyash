@@ -1,6 +1,6 @@
 // Mini-VM: function-based entry for branching
 // Local static box (duplicated from mini_vm_lib for now to avoid include gate issues)
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 static box MiniVm {
   read_digits(json, pos) { return StringHelpers.read_digits(json, pos) }
   parse_first_int(json) {

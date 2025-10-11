@@ -348,7 +348,7 @@
 ```bash
 # 実装ステップ
 1. apps/selfhost/vm/boxes/mir_vm_min.hako:
-   - 冒頭に using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox 追加
+   - 冒頭に using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox 追加
    - 行47-49 の _seek_array_end, _block_insts_end 削除
    - 行78等の使用箇所を JsonCursorBox.seek_array_end() に置換
 

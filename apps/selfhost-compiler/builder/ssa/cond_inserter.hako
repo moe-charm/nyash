@@ -1,9 +1,9 @@
 // cond_inserter.hako — LocalSSA helper: ensure branch(cond) is materialized with a copy
 // Scope: test-only box for JSON v0(MIR-like) strings. No full JSON parser; tolerant scanning.
 
-using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/utils/json_frag.hako" as JsonFragBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
 
 static box CondInserter {
   _int_to_str(n) { return StringHelpers.int_to_str(n) }

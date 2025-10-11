@@ -1,7 +1,7 @@
 // CopyHandlerBox - Copy instruction handler
 // Handles: %dst = copy %src
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor

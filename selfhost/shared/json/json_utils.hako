@@ -1,7 +1,7 @@
 // JsonUtilsBox — JSON読み取りユーティリティの共通箱
 // 責務: JSON値抽出・JSON構造パース・トップレベル配列分割
 // Extracted from JsonProgramBox (480行 → 345行, 削減 ~135行)
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box JsonUtilsBox {
   // Extract JSON value by key (returns value with '@' + end position marker)

@@ -2,7 +2,7 @@
 // Responsibility: Backward compatibility wrapper for parser code
 // Notes: All functionality now provided by apps/selfhost/common/string_helpers.hako
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box ParserStringUtilsBox {
   // Delegate all methods to StringHelpers (centralized implementation)

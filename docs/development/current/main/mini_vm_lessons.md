@@ -168,7 +168,7 @@ return value
 
 **修正**:
 ```hako
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_ops.hako" as StringOps
 
 // 4箇所修正
 StringHelpers.index_of_from → StringOps.index_of_from

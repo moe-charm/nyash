@@ -4,7 +4,7 @@
 //   「ブロック内にオペランドが材化されている（LocalSSA）」ことを軽く検証・整形する。
 // - 既定では再配線（Copy挿入）等は行わず、将来の拡張に備えた安全な足場のみを提供する。
 
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 static box LocalSSA {
   // --- 内部ヘルパ ---
   // trace fields are created on demand (dynamic properties)

@@ -58,7 +58,7 @@ index_of_from(hay,needle,pos){
 ### Step 1: CfgNavigatorBox自身の改善
 ```hako
 // apps/hakorune/vm/boxes/cfg_navigator.hako
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box CfgNavigatorBox {
   _int_to_str(n) { return StringHelpers.int_to_str(n) }

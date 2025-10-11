@@ -1,9 +1,9 @@
 // phi_handler.hako — Phase 1 Day 3: Phi命令処理
 // Strategy: 箱化モジュール化 - PHI merge を分離
 
-using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
-using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost/common/string_ops.hako" as StringOps
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/shared/common/string_ops.hako" as StringOps
 using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box PhiHandlerBox {
