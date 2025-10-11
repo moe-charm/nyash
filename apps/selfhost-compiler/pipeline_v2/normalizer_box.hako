@@ -2,13 +2,6 @@
 
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 static box NormalizerBox {
-  _to_i64(v) { return StringHelpers.to_i64(v) }
-
-  _to_string(v) {
-    if v == null { return "" }
-    return "" + v
-  }
-
   // Normalize cmp/lhs/rhs into MapBox with String keys
   normalize_cmp(raw) {
     if raw == null { return null }
@@ -19,9 +12,9 @@ static box NormalizerBox {
     local cmp = "" + raw.get("cmp")
     if cmp == null || cmp == "" { return null }
     out.set("cmp", cmp)
-    // lhs/rhs
-    local lhs = me._to_i64(raw.get("lhs"))
-    local rhs = me._to_i64(raw.get("rhs"))
+    // lhs/rhs (delegate to StringHelpers)
+    local lhs = StringHelpers.to_i64(raw.get("lhs"))
+    local rhs = StringHelpers.to_i64(raw.get("rhs"))
     out.set("lhs", lhs)
     out.set("rhs", rhs)
     if out.has("cmp") { print("DBG:N.cmp_out=1") } else { print("DBG:N.cmp_out=0") }
@@ -32,7 +25,7 @@ static box NormalizerBox {
   normalize_call_ints(raw) {
     if raw == null { return null }
     local out = new MapBox()
-    local name = me._to_string(raw.get("name"))
+    local name = "" + raw.get("name")
     if name == null || name == "" { return null }
     out.set("name", name)
     // args: accept array-like; fallback to empty
@@ -42,7 +35,7 @@ static box NormalizerBox {
       local n = src.size()
       local i = 0
       loop (i < n) {
-        arr.push(me._to_i64(src.get(i)))
+        arr.push(StringHelpers.to_i64(src.get(i)))
         i = i + 1
       }
     }
@@ -54,7 +47,7 @@ static box NormalizerBox {
   normalize_method_ints(raw) {
     if raw == null { return null }
     local out = new MapBox()
-    local m = me._to_string(raw.get("method"))
+    local m = "" + raw.get("method")
     if m == null || m == "" { return null }
     out.set("method", m)
     local arr = new ArrayBox()
@@ -63,7 +56,7 @@ static box NormalizerBox {
       local n = src.size()
       local i = 0
       loop (i < n) {
-        arr.push(me._to_i64(src.get(i)))
+        arr.push(StringHelpers.to_i64(src.get(i)))
         i = i + 1
       }
     }
@@ -75,7 +68,7 @@ static box NormalizerBox {
   normalize_new_ints(raw) {
     if raw == null { return null }
     local out = new MapBox()
-    local c = me._to_string(raw.get("class"))
+    local c = "" + raw.get("class")
     if c == null || c == "" { return null }
     out.set("class", c)
     local arr = new ArrayBox()
@@ -84,7 +77,7 @@ static box NormalizerBox {
       local n = src.size()
       local i = 0
       loop (i < n) {
-        arr.push(me._to_i64(src.get(i)))
+        arr.push(StringHelpers.to_i64(src.get(i)))
         i = i + 1
       }
     }
