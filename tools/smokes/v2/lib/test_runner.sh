@@ -156,6 +156,8 @@ filter_noise() {
       | grep -v "^🚀 Nyash VM Backend - Executing file:" \
       | grep -v '^🔧 Mock LLVM Backend Execution' \
       | grep -v '^✅ Mock exit code:' \
+  | grep -v '^\[provider\] ' \
+  | grep -v '^\[provider/check\] ' \
   | sed -E 's/^❌[[:space:]]*//' \
   | sed -E 's/^Pipeline error: *//' \
   | sed -E 's/bb[0-9]+/bb<ID>/g' \
