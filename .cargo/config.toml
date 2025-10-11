@@ -1,6 +1,7 @@
 # Cargo configuration for Nyash project
 
 [build]
+rustflags = ["-Clink-arg=-rdynamic"]
 # Use 24 threads by default for all cargo builds
 jobs = 24
 

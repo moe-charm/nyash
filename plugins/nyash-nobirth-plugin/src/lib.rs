@@ -1,5 +1,8 @@
 //! Nyash NoBirthBox Plugin — minimal TypeBox that does not implement birth()
 
+// Import shared TLV codec from hako_abi_impl
+use hako_abi_impl::tlv::write_tlv_string;
+
 #[repr(C)]
 pub struct NyashTypeBoxFfi {
     pub abi_tag: u32,     // 'TYBX'
@@ -47,39 +50,11 @@ extern "C" fn nobirth_invoke_id(
     }
 }
 
-// minimal TLV helpers and error/status codes
+// Error/status codes
 const OK: i32 = 0;
-const E_SHORT: i32 = -1;
-const E_ARGS: i32 = -4;
 const E_METHOD: i32 = -3;
 
-fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return E_ARGS;
-    }
-    let needed = 4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>();
-    let mut buf: Vec<u8> = Vec::with_capacity(needed);
-    buf.extend_from_slice(&1u16.to_le_bytes()); // ver
-    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes()); // argc
-    for (tag, payload) in payloads {
-        buf.push(*tag);
-        buf.push(0);
-        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
-        buf.extend_from_slice(payload);
-    }
-    unsafe {
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return E_SHORT;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
-        *result_len = needed;
-    }
-    OK
-}
-fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
-}
+// TLV functions (write_tlv_result, write_tlv_string) now imported from hako_abi_impl
 
 #[no_mangle]
 pub static nyash_typebox_NoBirthBox: NyashTypeBoxFfi = NyashTypeBoxFfi {

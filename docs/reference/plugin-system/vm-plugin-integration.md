@@ -17,7 +17,10 @@ See `docs/reference/plugin-system/capabilities.md` for capability bit definition
   - Load‑time: `nyash_plugin_init()` called once per library when present
   - First‑birth: plugin may call `ensure_ready()` guarded by `Once`
 - Provider Resolution: single order — `PluginProvider(T) → BuiltinProvider(T) → Registry/Fallback(T) → error`. Before resolving, the registry performs on‑demand re‑probe for `T` to avoid timing issues.
+  - プラグイン設定で `boxes = [T]` が宣言されている場合は plugin-only とみなし、プラグイン経路が失敗したらそのままエラーを返す（ビルトインフォールバック禁止）。
+  - `HAKO_PLUGIN_ON_STRICT=1`（互換: `NYASH_PLUGIN_ON_STRICT=1`）を指定すると、最終フォールバックも抑止して Fail-Fast する。
 - Boot Disabled Non‑cache: boot() no longer caches “disabled” as success (allows later retry when policy flips to ON). Operationally we run with policy=auto by default so this path is rarely used.
+- Stage-2 handles (`NYASH_PLUGIN_MAP_ARRAY_HANDLE=1`) を有効にすると、`Map.keys()/values()` が HostHandle(ArrayBox) を返す。plugins プロファイルでは既定ON（`tools/smokes/v2/configs/env/plugins.env`）。
 
 
 ## 📦 Phase 15.7 Structural Boxes

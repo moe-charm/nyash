@@ -26,6 +26,18 @@ Text (UTF‑8/CP): implemented by `StringBox` delegating to `Utf8CursorBox`.
 - `indexOf(substr, from=0) -> i64` — CP index or `-1`.
 - Optional helpers: `startsWith/endsWith/replace/split/trim` as sugar.
 
+## Replace Semantics
+
+- `replace(pattern, replacement)` は **非重複の全置換**（左から順番にマッチし、置換済み領域は再探索しない）。
+- CP ベースで評価するため、`pattern` / `replacement` は UTF-8 文字列として扱われる。
+- 例: `"abracadabra".replace("abra", "AB")` → `"ABcadAB"`（スモーク: `string_find_replace_last_vm.sh`）。
+
+## Search Boundaries
+
+- `indexOf(substr, from=0)` は `from` 未指定時に 0 から検索。負の `from` は 0 にクランプ。`from` が文字列長以上なら即 `-1`。
+- `lastIndexOf(substr, from=len-1)` は後方検索。負の `from` は即 `-1`。長さより大きい場合は末尾にクランプ。
+- `find` は `indexOf` の alias。糖衣レイヤーでのみ提供。
+
 Bytes: handled by `ByteCursorBox`.
 - `len_bytes() -> i64`
 - `slice_bytes(i,j) -> ByteCursorBox`

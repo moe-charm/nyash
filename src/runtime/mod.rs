@@ -30,6 +30,7 @@ pub mod provider_verify;
 pub mod extern_registry; // ExternCall (env.*) 登録・診断用レジストリ
 pub mod host_api; // C ABI: plugins -> host 逆呼び出しAPI（TLSでVMに橋渡し）
 pub mod host_api_box; // Thin facade (slots + grow wrappers)
+pub mod host_api_anchors; // Force-link host API symbols for plugin dlsym() support
 pub mod host_handles; // C ABI(TLV) 向け HostHandle レジストリ（ユーザー/内蔵Box受け渡し）
 pub mod host_handle_box; // Box wrapper to carry HostHandle(u64) across Router→FFI
 pub mod modules_registry;

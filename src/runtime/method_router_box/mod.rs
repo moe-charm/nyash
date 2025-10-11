@@ -43,6 +43,17 @@ pub fn route(
         return result;
     }
 
+    if let VMValue::BoxRef(bx) = receiver {
+        if let Some(hh) = bx.as_any().downcast_ref::<crate::runtime::host_handle_box::HostHandleBox>() {
+            if let Some(real) = crate::runtime::host_handles::get(hh.id) {
+                let real_vm = VMValue::BoxRef(real.clone());
+                return route(_interp, &real_vm, method, args);
+            } else {
+                return Err(VMError::InvalidInstruction(format!("Unknown HostHandle:{}", hh.id)));
+            }
+        }
+    }
+
     // Primitive String — table-driven via TypeRegistry slots
     if let VMValue::String(s) = receiver {
         let _ = maybe_arity_guard("StringBox", method, args.len());

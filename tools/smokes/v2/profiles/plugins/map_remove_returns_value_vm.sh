@@ -9,8 +9,8 @@ test_map_remove_returns_value_vm() {
   local code='static box Main { main() {
     local m = new MapBox()
     m.set("k", 42)
-    m.remove("k")
-    if m.has("k") == false { print("rm-val-ok") } else { print("rm-val-ng") }
+    local removed = m.remove("k")
+    if removed == 42 { print("rm-val-ok") } else { print("rm-val-ng") }
     if m.remove("missing") == null { print("rm-null-ok") } else { print("rm-null-ng") }
     return 0
   }}'

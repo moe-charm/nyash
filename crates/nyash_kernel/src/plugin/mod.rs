@@ -1,3 +1,4 @@
+pub mod anchors;
 pub mod array;
 pub mod birth;
 pub mod console;
@@ -9,6 +10,7 @@ pub mod map;
 pub mod semantics;
 pub mod string;
 
+pub use anchors::*;
 pub use array::*;
 pub use birth::*;
 pub use console::*;

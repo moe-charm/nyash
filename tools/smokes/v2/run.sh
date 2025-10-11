@@ -25,6 +25,13 @@ readonly BLUE='\033[0;34m'
 readonly BOLD='\033[1m'
 readonly NC='\033[0m'
 
+trim_ws() {
+    local var="$1"
+    var="${var#${var%%[![:space:]]*}}"
+    var="${var%${var##*[![:space:]]}}"
+    printf '%s' "$var"
+}
+
 # ログ関数
 log_info() {
     echo -e "${BLUE}[INFO]${NC} $*" >&2
@@ -317,20 +324,73 @@ run_single_test() {
     local start_time end_time duration exit_code
     start_time=$(date +%s.%N)
 
-    # タイムアウト付きテスト実行
-    local timeout_cmd=""
-    if [ -n "${SMOKES_DEFAULT_TIMEOUT:-}" ]; then
-        timeout_cmd="timeout ${SMOKES_DEFAULT_TIMEOUT}"
+    # メタデータ（個別タイムアウト/環境変数の上書き）
+    local header
+    header=$(head -n 25 "$test_file")
+    local per_timeout="${SMOKES_DEFAULT_TIMEOUT:-}"
+    local -a per_env_keys=()
+    local -a per_env_vals=()
+    while IFS= read -r meta_line; do
+        case "$meta_line" in
+            '# SMOKES_TIMEOUT='*)
+                per_timeout="${meta_line#*SMOKES_TIMEOUT=}"
+                per_timeout=$(trim_ws "$per_timeout")
+                ;;
+            '# SMOKES_ENV+='*)
+                local spec="${meta_line#*SMOKES_ENV+=}"
+                local key value
+                IFS='=' read -r key value <<< "$spec"
+                key=$(trim_ws "$key")
+                value=$(trim_ws "$value")
+                per_env_keys+=("$key")
+                per_env_vals+=("$value")
+                ;;
+        esac
+    done <<< "$header"
+
+    declare -A restore_env=()
+    for idx in "${!per_env_keys[@]}"; do
+        local key="${per_env_keys[$idx]}"
+        local value="${per_env_vals[$idx]}"
+        if [ -z "$key" ]; then
+            continue
+        fi
+        if [[ ! -v restore_env[$key] ]]; then
+            if [ -z "${!key+x}" ]; then
+                restore_env[$key]="__SMOKES_UNSET__"
+            else
+                restore_env[$key]="${!key}"
+            fi
+        fi
+        export "$key=$value"
+    done
+
+    # コマンド組み立て（timeoutは必要な場合のみ）
+    local -a cmd=("bash" "$test_file")
+    if [ -n "$per_timeout" ] && [ "$per_timeout" != "0" ] && [ "$per_timeout" != "none" ]; then
+        read -ra timeout_parts <<< "$per_timeout"
+        if [ ${#timeout_parts[@]} -gt 0 ]; then
+            cmd=(timeout "${timeout_parts[@]}" "${cmd[@]}")
+        fi
     fi
 
     # 詳細ログ: 失敗時のみテイル表示
     local log_file
     log_file="/tmp/nyash_smoke_$(date +%s)_$$.log"
-    if $timeout_cmd bash "$test_file" >"$log_file" 2>&1; then
+    if "${cmd[@]}" >"$log_file" 2>&1; then
         exit_code=0
     else
         exit_code=$?
     fi
+
+    # 実行後に環境変数を元へ戻す
+    for key in "${!restore_env[@]}"; do
+        if [ "${restore_env[$key]}" = "__SMOKES_UNSET__" ]; then
+            unset "$key"
+        else
+            export "$key=${restore_env[$key]}"
+        fi
+    done
 
     end_time=$(date +%s.%N)
     duration=$(echo "$end_time - $start_time" | bc -l)
@@ -352,7 +412,7 @@ run_single_test() {
         json)
             local status_json
             status_json=$([ $exit_code -eq 0 ] && echo "pass" || echo "fail")
-            echo "{\"name\":\"$test_name\",\"path\":\"$test_file\",\"status\":\"$status_json\",\"duration\":$duration,\"exit\":$exit_code}"
+            echo "{"name":"$test_name","path":"$test_file","status":"$status_json","duration":$duration,"exit":$exit_code}"
             ;;
         junit)
             # JUnit形式は後でまとめて出力（pathも保持）
@@ -364,6 +424,7 @@ run_single_test() {
     rm -f "$log_file" 2>/dev/null || true
     return $exit_code
 }
+
 
 # テスト実行
 run_tests() {

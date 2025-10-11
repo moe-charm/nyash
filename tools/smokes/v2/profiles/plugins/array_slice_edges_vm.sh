@@ -1,13 +1,13 @@
 #!/bin/bash
 # array_slice_edges_vm.sh — Plugins: Array.slice edge cases
+# SMOKES_TIMEOUT=0
+# SMOKES_ENV+=SMOKES_CLEAN_ENV=0
 
 source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
 test_array_slice_edges_vm() {
-  export SMOKES_CLEAN_ENV=0
-  export SMOKES_DEFAULT_TIMEOUT=0
   local code='static box Main { main() {
     local a = new ArrayBox()
     a.push(1)

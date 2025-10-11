@@ -8,6 +8,9 @@ use std::sync::{
 
 use once_cell::sync::Lazy;
 
+// Import shared TLV codec from hako_abi_impl
+use hako_abi_impl::tlv::write_tlv_i64;
+
 // ===== Error Codes (BID-1 alignment) =====
 const NYB_SUCCESS: i32 = 0;
 const NYB_E_SHORT_BUFFER: i32 = -1;
@@ -57,7 +60,8 @@ pub extern "C" fn nyash_plugin_invoke(
                 if result_len.is_null() {
                     return NYB_E_INVALID_ARGS;
                 }
-                if preflight(result, result_len, 4) {
+                if result.is_null() || *result_len < 4 {
+                    *result_len = 4;
                     return NYB_E_SHORT_BUFFER;
                 }
                 let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
@@ -80,15 +84,12 @@ pub extern "C" fn nyash_plugin_invoke(
                 }
             }
             METHOD_INC => {
-                // increments and returns new count as I32 TLV
+                // increments and returns new count as I64 TLV
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
                         inst.count += 1;
                         let v = inst.count;
-                        if preflight(result, result_len, 12) {
-                            return NYB_E_SHORT_BUFFER;
-                        }
-                        return write_tlv_i32(v, result, result_len);
+                        return write_tlv_i64(v as i64, result, result_len);
                     } else {
                         return NYB_E_INVALID_HANDLE;
                     }
@@ -99,10 +100,7 @@ pub extern "C" fn nyash_plugin_invoke(
             METHOD_GET => {
                 if let Ok(map) = INSTANCES.lock() {
                     if let Some(inst) = map.get(&instance_id) {
-                        if preflight(result, result_len, 12) {
-                            return NYB_E_SHORT_BUFFER;
-                        }
-                        return write_tlv_i32(inst.count, result, result_len);
+                        return write_tlv_i64(inst.count as i64, result, result_len);
                     } else {
                         return NYB_E_INVALID_HANDLE;
                     }
@@ -165,60 +163,63 @@ extern "C" fn counter_invoke(
     result: *mut u8,
     result_len: *mut usize,
 ) -> i32 {
-    unsafe {
-        match method_id {
-            METHOD_BIRTH => {
-                // Return new instance handle (u32 id) as raw 4 bytes (not TLV)
-                if result_len.is_null() {
-                    return NYB_E_INVALID_ARGS;
-                }
-                if preflight(result, result_len, 4) {
+    match method_id {
+        METHOD_BIRTH => {
+            // Return new instance handle (u32 id) as raw 4 bytes (not TLV)
+            if result_len.is_null() {
+                return NYB_E_INVALID_ARGS;
+            }
+            unsafe {
+                if result.is_null() || *result_len < 4 {
+                    *result_len = 4;
                     return NYB_E_SHORT_BUFFER;
                 }
-                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.insert(id, CounterInstance { count: 0 });
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
+            }
+            let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+            if let Ok(mut map) = INSTANCES.lock() {
+                map.insert(id, CounterInstance { count: 0 });
+            } else {
+                return NYB_E_PLUGIN_ERROR;
+            }
+            unsafe {
                 let bytes = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
                 *result_len = 4;
-                NYB_SUCCESS
             }
-            METHOD_FINI => {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.remove(&instance_id);
-                    NYB_SUCCESS
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_INC => {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        inst.count += 1;
-                        return write_tlv_i32(inst.count, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
-            }
-            METHOD_GET => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        return write_tlv_i32(inst.count, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
-            }
-            _ => NYB_E_INVALID_METHOD,
+            NYB_SUCCESS
         }
+        METHOD_FINI => {
+            if let Ok(mut map) = INSTANCES.lock() {
+                map.remove(&instance_id);
+                NYB_SUCCESS
+            } else {
+                NYB_E_PLUGIN_ERROR
+            }
+        }
+        METHOD_INC => {
+            if let Ok(mut map) = INSTANCES.lock() {
+                if let Some(inst) = map.get_mut(&instance_id) {
+                    inst.count += 1;
+                    return write_tlv_i64(inst.count as i64, result, result_len);
+                } else {
+                    return NYB_E_INVALID_HANDLE;
+                }
+            } else {
+                return NYB_E_PLUGIN_ERROR;
+            }
+        }
+        METHOD_GET => {
+            if let Ok(map) = INSTANCES.lock() {
+                if let Some(inst) = map.get(&instance_id) {
+                    return write_tlv_i64(inst.count as i64, result, result_len);
+                } else {
+                    return NYB_E_INVALID_HANDLE;
+                }
+            } else {
+                return NYB_E_PLUGIN_ERROR;
+            }
+        }
+        _ => NYB_E_INVALID_METHOD,
     }
 }
 
@@ -233,46 +234,6 @@ pub static nyash_typebox_CounterBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     capabilities: 0,
 };
 
-// ===== TLV helpers =====
-fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return NYB_E_INVALID_ARGS;
-    }
-    let mut buf: Vec<u8> =
-        Vec::with_capacity(4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>());
-    buf.extend_from_slice(&1u16.to_le_bytes()); // version
-    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes()); // argc
-    for (tag, payload) in payloads {
-        buf.push(*tag);
-        buf.push(0);
-        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
-        buf.extend_from_slice(payload);
-    }
-    unsafe {
-        let needed = buf.len();
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return NYB_E_SHORT_BUFFER;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
-        *result_len = needed;
-    }
-    NYB_SUCCESS
-}
-
-fn write_tlv_i32(v: i32, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(2u8, &v.to_le_bytes())], result, result_len)
-}
-
-fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
-    unsafe {
-        if result_len.is_null() {
-            return false;
-        }
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return true;
-        }
-    }
-    false
-}
+// ===== TLV helpers removed - now imported from hako_abi_impl::tlv =====
+// Note: write_tlv_i32 is replaced with write_tlv_i64 (converting i32 to i64)
+// preflight helper is no longer needed with the shared codec

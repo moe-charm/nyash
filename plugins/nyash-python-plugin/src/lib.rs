@@ -2,6 +2,12 @@
 //! - ABI v1 compatible entry points + ABI v2 TypeBox exports
 //! - Two Box types: PyRuntimeBox (TYPE_ID=40) and PyObjectBox (TYPE_ID=41)
 
+// Import shared TLV codec from hako_abi_impl
+use hako_abi_impl::tlv::{
+    read_arg_string,
+    write_tlv_string, write_tlv_handle
+};
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::sync::{
@@ -622,69 +628,10 @@ pub static nyash_typebox_PyObjectBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     invoke_id: Some(pyobject_invoke_id),
     capabilities: 0,
 };
-fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
-    unsafe {
-        if result_len.is_null() {
-            return false;
-        }
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return true;
-        }
-    }
-    false
-}
+// Standard TLV functions (write_tlv_string, write_tlv_handle, read_arg_string)
+// imported from hako_abi_impl
 
-fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    let payload = s.as_bytes();
-    write_tlv_result(&[(6u8, payload)], result, result_len)
-}
-
-fn write_tlv_handle(
-    type_id: u32,
-    instance_id: u32,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    let mut payload = [0u8; 8];
-    payload[..4].copy_from_slice(&type_id.to_le_bytes());
-    payload[4..].copy_from_slice(&instance_id.to_le_bytes());
-    write_tlv_result(&[(8u8, &payload)], result, result_len)
-}
-
-/// Read nth TLV argument as String (tag 6)
-fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<String> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize; // skip header
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let _rsv = buf[off + 1];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag != 6 {
-                return None;
-            }
-            let slice = &buf[off + 4..off + 4 + size];
-            return std::str::from_utf8(slice).ok().map(|s| s.to_string());
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-// Side-table for PyObject* storage (instance_id -> pointer)
-static PY_HANDLES: Lazy<Mutex<HashMap<u32, PyOwned>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-
-// Base TLV writer used by helpers
+// Custom write_tlv_result for multi-tag payloads (used by autodecode)
 fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
     if result_len.is_null() {
         return NYB_E_INVALID_ARGS;
@@ -710,6 +657,22 @@ fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut 
     }
     NYB_SUCCESS
 }
+
+fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
+    unsafe {
+        if result_len.is_null() {
+            return false;
+        }
+        if result.is_null() || *result_len < needed {
+            *result_len = needed;
+            return true;
+        }
+    }
+    false
+}
+
+// Side-table for PyObject* storage (instance_id -> pointer)
+static PY_HANDLES: Lazy<Mutex<HashMap<u32, PyOwned>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 
 fn should_autodecode() -> bool {
     std::env::var("NYASH_PY_AUTODECODE")

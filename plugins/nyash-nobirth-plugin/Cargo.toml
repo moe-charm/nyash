@@ -8,3 +8,4 @@ name = "nyash_nobirth_plugin"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
+hako_abi_impl = { path = "../../crates/hako_abi_impl" }
