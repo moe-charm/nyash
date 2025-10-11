@@ -39,7 +39,7 @@ if [ -z "${NYASH_USING:-}" ] && [ -z "${NYASH_ENABLE_USING:-}" ]; then
 fi
 # Provide a minimal default modules mapping for selfhost Mini-VM smokes when unset
 if [ -z "${NYASH_MODULES:-}" ]; then
-  export NYASH_MODULES="selfhost.vm.mir_min=apps/selfhost/vm/boxes/mir_vm_min.hako"
+  export NYASH_MODULES="selfhost.vm.mir_min=selfhost/vm/boxes/mir_vm_min.hako"
 fi
 # Dev-friendly VM tolerance to avoid hard-stopping on Void during bring-up
 if [ -z "${NYASH_VM_TOLERATE_VOID:-}" ]; then

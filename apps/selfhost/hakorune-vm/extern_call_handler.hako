@@ -1,7 +1,7 @@
 // ExternCallHandlerBox - Handle Extern function calls
 // Single Responsibility: Execute external/runtime functions
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 
 static box ExternCallHandlerBox {

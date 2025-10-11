@@ -1,6 +1,6 @@
 // flow_runner.hako — Selfhost VM runner thin box（exec allowed under selfhost/vm/）
 
-using "apps/selfhost-compiler/pipeline_v2/flow_entry.hako" as FlowEntryBox
+using "selfhost/compiler/pipeline_v2/flow_entry.hako" as FlowEntryBox
 using hakorune.vm.mir_min as MirVmMin
 using "apps/selfhost/common/string_ops.hako" as StringOps
 

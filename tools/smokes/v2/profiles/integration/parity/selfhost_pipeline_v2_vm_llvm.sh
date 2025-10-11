@@ -24,7 +24,7 @@ mkdir -p "$TMP_DIR"
 # Case 1: Return(Compare Gt 5,4) → expect 1
 cat > "$TMP_DIR/driver_cmp.nyash" << 'EOF'
 using selfhost.vm.entry as MiniVmEntryBox
-using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "selfhost/compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {
   main() {
@@ -42,7 +42,7 @@ compare_outputs "$output_vm" "$output_llvm" "selfhost_pipeline_v2_cmp_vm_llvm" |
 # Case 2: Return(BinOp Add 7,3) → expect 10
 cat > "$TMP_DIR/driver_binop.nyash" << 'EOF'
 using selfhost.vm.entry as MiniVmEntryBox
-using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "selfhost/compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {
   main() {

@@ -2,7 +2,7 @@
 // Responsibility: 3つの類似ExtractBoxを統合（call_extract/method_extract/new_extract）
 // Notes: 85%重複コードを共通化、args抽出ロジックを一元管理
 
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box Stage1IntArgsExtractBox {
   // ===== 汎用Extract（内部実装） =====

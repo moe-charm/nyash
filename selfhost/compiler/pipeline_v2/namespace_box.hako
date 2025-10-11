@@ -5,8 +5,8 @@
 // Non‑Responsibility:
 // - IO / TOML 読み込み、Runner 側の using 解決、実行
 
-using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box NamespaceBox {
   // Normalize global function name using resolver context

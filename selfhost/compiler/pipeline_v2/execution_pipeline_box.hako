@@ -14,7 +14,7 @@ using "apps/selfhost-compiler/boxes/parser/stmt/parser_control_box.hako"
 using "apps/selfhost-compiler/boxes/parser/stmt/parser_exception_box.hako"
 using "apps/selfhost-compiler/boxes/json_program_box.hako"
 using "apps/selfhost-compiler/boxes/emitter_box.hako" as EmitterBoxMod
-using "apps/selfhost-compiler/pipeline_v2/backend_box.hako" as BackendBoxMod
+using "selfhost/compiler/pipeline_v2/backend_box.hako" as BackendBoxMod
 
 box ExecutionPipelineBox {
   backend_name

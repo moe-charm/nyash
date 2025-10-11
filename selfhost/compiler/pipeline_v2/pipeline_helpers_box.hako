@@ -2,7 +2,7 @@
 // 責務: JSON/数値解析の共通ユーティリティ
 // Extracted from PipelineV2 flow (556行 → 506行、-50行削減)
 
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 
 static box PipelineHelpersBox {

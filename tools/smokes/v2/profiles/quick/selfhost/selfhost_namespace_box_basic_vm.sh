@@ -10,8 +10,8 @@ preflight_plugins || exit 2
 
 TEST_main() {
   local program='
-using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
-using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
+using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
 
 static box Main {
   main() {

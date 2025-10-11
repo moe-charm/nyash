@@ -12,8 +12,8 @@ TMP_DIR="/tmp/selfhost_flow_debugger_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as E
-using "apps/selfhost/vm/boxes/flow_debugger.hako" as FlowDebugBox
+using "selfhost/compiler/pipeline_v2/emit_compare_box.hako" as E
+using "selfhost/vm/boxes/flow_debugger.hako" as FlowDebugBox
 
 static box Main {
   main() {
@@ -30,7 +30,8 @@ static box Main {
 EOF
 
 out=$(run_nyash_vm "$TMP_DIR/driver.nyash" --dev 2>/dev/null)
-errs=$(echo "$out" | awk -F= '/^ERRS=/{print $2}' | tr -d '' | xargs)
+errs=$(echo "$out" | awk -F= '/^ERRS=/{print $2}' | tr -d '
+' | xargs)
 if [ "$errs" = "0" ]; then
   log_success "FlowDebugBox validated branch/jump targets (errs=0)"
   rm -rf "$TMP_DIR"; exit 0

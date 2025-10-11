@@ -17,7 +17,7 @@ TMP_DIR="/tmp/rune_host_disabled_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'NY'
-using "apps/selfhost/vm/boxes/rune_host.hako" as RuneHostBox
+using "selfhost/vm/boxes/rune_host.hako" as RuneHostBox
 
 static box Main {
   main() {

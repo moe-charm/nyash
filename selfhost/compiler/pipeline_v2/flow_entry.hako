@@ -1,7 +1,7 @@
 // flow_entry.hako — Pipeline v2 entry box（emit-only）
 // Guard: This box performs no execution. Returns MIR(JSON) as text.
 
-using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "selfhost/compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box FlowEntryBox {
   // Emit legacy v0 JSON（call/boxcall/newbox）。最小入力: Stage‑1 JSON 文字列

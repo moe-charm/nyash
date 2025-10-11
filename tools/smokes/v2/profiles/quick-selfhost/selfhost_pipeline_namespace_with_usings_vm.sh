@@ -26,7 +26,7 @@ TEST_main() {
 
   local tmpfile="/tmp/selfhost_with_usings_$$.nyash"
   cat > "$tmpfile" <<EOF
-using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "selfhost/compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {
   main() {

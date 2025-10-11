@@ -5,9 +5,9 @@
 //  - New: class normalization via UsingResolverBox/NamespaceBox
 // Non‑Responsibility: MIR emit or IO
 
-using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
-using "apps/selfhost-compiler/pipeline_v2/signature_verifier_box.hako" as SignatureVerifierBox
-using "apps/selfhost-compiler/pipeline_v2/alias_preflight_box.hako" as AliasPreflightBox
+using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "selfhost/compiler/pipeline_v2/signature_verifier_box.hako" as SignatureVerifierBox
+using "selfhost/compiler/pipeline_v2/alias_preflight_box.hako" as AliasPreflightBox
 
 static box Stage1NameArgsNormalizerBox {
   _label_or_name(scan) {

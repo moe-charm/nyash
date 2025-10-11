@@ -24,7 +24,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using selfhost.vm.entry as MiniVmEntryBox
-using "apps/selfhost-compiler/pipeline_v2/pipeline.hako" as PipelineV2
+using "selfhost/compiler/pipeline_v2/pipeline.hako" as PipelineV2
 
 static box Main {
   main() {

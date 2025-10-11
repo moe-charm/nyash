@@ -14,7 +14,7 @@ TMP_DIR="/tmp/vm_operator_box_compare_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'NY'
-using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
+using "selfhost/vm/boxes/operator_box.hako" as OperatorBox
 
 static box Main {
   main() {

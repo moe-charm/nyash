@@ -10,7 +10,7 @@
 // - 実行時の動的解決（Runner 側の Resolver に委譲）
 
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
 
 box UsingResolverBox {

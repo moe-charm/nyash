@@ -1,7 +1,7 @@
 // MethodCallHandlerBox - Handle Method calls (MirCall with Method callee)
 // Single Responsibility: Execute instance methods (e.g., array.size(), string.substring())
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 using "apps/selfhost/hakorune-vm/callee_parser.hako" as CalleeParserBox

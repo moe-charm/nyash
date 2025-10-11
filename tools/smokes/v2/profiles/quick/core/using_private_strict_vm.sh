@@ -13,7 +13,7 @@ mkdir -p "$TMP_DIR"
 SRC="$TMP_DIR/driver.nyash"
 
 cat > "$SRC" << 'NYEOF'
-using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as EC
+using "selfhost/compiler/pipeline_v2/emit_compare_box.hako" as EC
 static box Main { main() { return 0 } }
 NYEOF
 

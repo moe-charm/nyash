@@ -2,7 +2,7 @@
 // Single Responsibility: Create closure objects with captured variables
 // Note: Full closure calling via Callee::Value is Phase 4 Day 16
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/common/string_ops.hako" as StringOps
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox

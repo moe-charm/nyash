@@ -10,7 +10,7 @@ preflight_plugins || exit 2
 TEST_main() {
   local j='{"version":0,"modules":[{"name":"m","functions":[{"name":"main","blocks":[{"id":0,"instructions":[{"op":"ret","value":9}]}]}]}]}'
   local prog='
-using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
+using "selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
 static box Main { main(){ local out = MirVmMin._run_min(j) return 0 } }
 '
   local jstr=$(printf '%s' "$j" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')

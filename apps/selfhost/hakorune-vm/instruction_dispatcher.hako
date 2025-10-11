@@ -2,7 +2,7 @@
 // Single Responsibility: Extract op field and route to correct handler
 
 using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/hakorune-vm/const_handler.hako" as ConstHandlerBox
 using "apps/selfhost/hakorune-vm/binop_handler.hako" as BinOpHandlerBox
 using "apps/selfhost/hakorune-vm/compare_handler.hako" as CompareHandlerBox

@@ -3,7 +3,7 @@
 
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/common/string_ops.hako" as StringOps
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box TerminatorHandlerBox {
   // Execute terminator instruction and return next action

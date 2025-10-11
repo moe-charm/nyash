@@ -1,7 +1,7 @@
 // TypeOpHandlerBox - Type operation instruction handler
 // Handles: typeop (type check and type cast)
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 using "apps/selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 

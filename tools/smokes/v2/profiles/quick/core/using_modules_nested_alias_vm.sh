@@ -14,7 +14,7 @@ export SMOKES_USE_DEV=1
 export NYASH_USING_AST=1
 # Provide base modules; we'll alias in two steps: selfhost.vm → VM, VM.mir_min → MirVmMin
 # Provide a minimal working set for MirVmMin to operate
-export NYASH_MODULES="selfhost.vm.mir_min=apps/selfhost/vm/boxes/mir_vm_min.hako,selfhost.vm.handlers=apps/selfhost/vm/boxes/op_handlers.hako,selfhost.json.utils.json_frag=apps/selfhost/common/json/utils/json_frag.hako,selfhost.json.core.string_scan=apps/selfhost/common/json/core/string_scan.hako"
+export NYASH_MODULES="selfhost.vm.mir_min=selfhost/vm/boxes/mir_vm_min.hako,selfhost.vm.handlers=selfhost/vm/boxes/op_handlers.hako,selfhost.json.utils.json_frag=apps/selfhost/common/json/utils/json_frag.hako,selfhost.json.core.string_scan=apps/selfhost/common/json/core/string_scan.hako"
 require_env || exit 2
 # Always-on: nested alias is supported in dev with AST merge
 preflight_plugins || exit 2

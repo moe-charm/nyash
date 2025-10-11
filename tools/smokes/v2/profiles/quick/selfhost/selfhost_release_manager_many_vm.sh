@@ -10,7 +10,7 @@ preflight_plugins || exit 2
 
 TEST_main() {
   local program='
-using "apps/selfhost/vm/boxes/release_manager.hako" as Release
+using "selfhost/vm/boxes/release_manager.hako" as Release
 
 static box Main {
   make_array() {

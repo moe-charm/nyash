@@ -1,7 +1,7 @@
 // MirCallHandlerBox - Unified call instruction handler
 // Single Responsibility: Dispatch MirCall to appropriate handler based on callee type
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 using "apps/selfhost/common/string_ops.hako" as StringOps
 using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 using "apps/selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor

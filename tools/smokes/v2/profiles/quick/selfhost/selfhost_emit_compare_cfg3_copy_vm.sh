@@ -21,7 +21,7 @@ TMP_DIR="/tmp/selfhost_emit_compare_cfg3_copy_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as E
+using "selfhost/compiler/pipeline_v2/emit_compare_box.hako" as E
 using selfhost.vm.entry as MiniVmEntryBox
 
 static box Main {

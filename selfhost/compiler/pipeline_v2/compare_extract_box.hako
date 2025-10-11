@@ -1,5 +1,5 @@
 // CompareExtractBox — Stage‑1 JSON から Compare(lhs,rhs,op) を堅牢に抽出（整数のみ）
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box CompareExtractBox {
   // --- internal helpers (range & safe find) ---

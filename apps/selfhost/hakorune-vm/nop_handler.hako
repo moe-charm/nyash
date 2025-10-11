@@ -1,7 +1,7 @@
 // NopHandlerBox - No-operation instruction handler
 // Handles: nop (does nothing, always succeeds)
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box NopHandlerBox {
   // Handle nop instruction

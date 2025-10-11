@@ -14,7 +14,7 @@ mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
 using selfhost.vm.entry as MiniVmEntryBox
-using "apps/selfhost-compiler/pipeline_v2/emit_mir_flow.hako" as EmitMirFlow
+using "selfhost/compiler/pipeline_v2/emit_mir_flow.hako" as EmitMirFlow
 
 static box Main {
   main() {

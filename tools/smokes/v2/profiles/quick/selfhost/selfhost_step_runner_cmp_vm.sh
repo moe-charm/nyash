@@ -19,8 +19,8 @@ TMP_DIR="/tmp/selfhost_step_runner_cmp_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/pipeline_v2/emit_compare_box.hako" as E
-using "apps/selfhost/vm/boxes/step_runner.hako" as StepRunnerBox
+using "selfhost/compiler/pipeline_v2/emit_compare_box.hako" as E
+using "selfhost/vm/boxes/step_runner.hako" as StepRunnerBox
 
 static box Main {
   main() {

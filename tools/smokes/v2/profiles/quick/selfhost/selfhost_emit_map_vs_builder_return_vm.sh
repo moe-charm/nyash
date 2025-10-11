@@ -13,8 +13,8 @@ TMP_DIR="/tmp/selfhost_emit_map_vs_builder_return_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'EOF'
-using "apps/selfhost-compiler/pipeline_v2/emit_mir_flow.hako" as EmitMirFlow
-using "apps/selfhost-compiler/pipeline_v2/emit_mir_flow_map.hako" as EmitMirFlowMap
+using "selfhost/compiler/pipeline_v2/emit_mir_flow.hako" as EmitMirFlow
+using "selfhost/compiler/pipeline_v2/emit_mir_flow_map.hako" as EmitMirFlowMap
 
 static box Main {
   main() {

@@ -1,7 +1,7 @@
 // SafepointHandlerBox - GC Safepoint instruction handler
 // Handles: safepoint (GC coordination point, no-op in Phase 1)
 
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box SafepointHandlerBox {
   // Handle safepoint instruction

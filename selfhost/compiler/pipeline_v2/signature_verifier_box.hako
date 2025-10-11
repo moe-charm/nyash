@@ -6,7 +6,7 @@
 //   (e.g., indexOf=1 on String/Array, push=1 on Array, etc.).
 // - Unknown methods are allowed (return 1) to avoid over-blocking during bring-up.
 
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 using "apps/hakorune/vm/boxes/method_registry.hako" as MethodRegistryBox
 
 static box SignatureVerifierBox {

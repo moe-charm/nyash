@@ -20,8 +20,8 @@ TEST_main() {
   local mods=$(printf '%s' "$mods_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
 
   local program='
-using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
-using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
+using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
 
 static box Main {
   main() {

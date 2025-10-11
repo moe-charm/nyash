@@ -3,9 +3,9 @@
 // - primary: NamespaceBox.normalize_global_name(raw, resolver)
 // - fallback: unique tail match via UsingResolverBox.guess_namespace_from_tail
 
-using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
-using "apps/selfhost-compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolverBox
+using "selfhost/compiler/pipeline_v2/namespace_box.hako" as NamespaceBox
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box PipelineNameResolveBox {
   // Returns fully-qualified name or null

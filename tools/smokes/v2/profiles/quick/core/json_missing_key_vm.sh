@@ -16,7 +16,7 @@ TEST_main() {
   # Minimal MIR v0 with compare missing 'cmp'
   local seg='{"op":"compare","lhs":1,"rhs":2,"dst":3}'
   local prog='
-using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
+using "selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
 static box Main { main(){ local regs = new MapBox() OpHandlersBox.handle_compare(seg, regs) return 0 } }
 '
   # Inject JSON string literal (escaped) into program

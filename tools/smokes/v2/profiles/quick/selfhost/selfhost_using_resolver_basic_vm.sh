@@ -11,7 +11,7 @@ preflight_plugins || exit 2
 TEST_main() {
   # Build a tiny program that exercises UsingResolverBox
   local program='
-using "apps/selfhost-compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
+using "selfhost/compiler/pipeline_v2/using_resolver_box.hako" as UsingResolver
 
 static box Main {
   main() {

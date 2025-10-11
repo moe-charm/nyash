@@ -2,7 +2,7 @@
 // Responsibility: Parse Stage‑1 args JSON text into integers (MVP: Int only).
 // Non‑Responsibility: MIR emit or namespace.
 
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
 
 static box Stage1ArgsParserBox {
   // Count Int occurrences in Stage‑1 args JSON text.

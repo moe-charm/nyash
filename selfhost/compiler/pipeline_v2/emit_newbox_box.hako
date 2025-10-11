@@ -2,8 +2,8 @@
 // 最小形: 各引数を r1..rN; newbox(class, args=r1..rN) → rK; ret rK
 
 using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
-using "apps/selfhost-compiler/pipeline_v2/regex_flow.hako" as RegexFlow
-using "apps/selfhost-compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
+using "selfhost/compiler/pipeline_v2/regex_flow.hako" as RegexFlow
+using "selfhost/compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
 using "apps/selfhost-compiler/common/mir_emit_box.hako" as MirEmitBox
 using "apps/selfhost-compiler/common/newbox_emit_box.hako" as NewBoxEmitBox
 using "apps/selfhost-compiler/common/call_emit_box.hako" as CallEmitBox

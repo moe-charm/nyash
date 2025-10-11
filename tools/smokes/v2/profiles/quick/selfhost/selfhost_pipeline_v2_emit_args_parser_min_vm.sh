@@ -12,7 +12,7 @@ TMP_DIR="/tmp/selfhost_pipeline_v2_emit_args_parser_min_vm_$$"
 mkdir -p "$TMP_DIR"
 
 cat > "$TMP_DIR/driver.nyash" << 'NYEOF'
-using "apps/selfhost-compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
+using "selfhost/compiler/pipeline_v2/stage1_args_parser_box.hako" as Stage1ArgsParserBox
 
 static box Main {
   main() {
