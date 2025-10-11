@@ -25,9 +25,8 @@ impl MethodRefBox {
 
     fn create_callable(receiver: &VMValue, args: &[VMValue]) -> Result<VMValue, VMError> {
         if args.len() != 2 {
-            return Err(VMError::InvalidInstruction(format!(
-                "No matching method: methodRef({} args). Available arities: [2]",
-                args.len()
+            return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity(
+                "<receiver>", "methodRef", args.len(), &[2]
             )));
         }
 

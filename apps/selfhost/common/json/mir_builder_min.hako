@@ -224,6 +224,15 @@ box MirJsonBuilderMin {
     return me._append(JsonEmitBox.to_json(node))
   }
 
+  add_mir_call_extern_ids(name, args_json_text, dst) {
+    me._comma_if_needed()
+    local args = me._ids_array_from_json_text(args_json_text)
+    local node = CallEmitBox.make_mir_call_extern(name, args, dst)
+    node.set("args_text", args_json_text)
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
+  }
+
   add_mir_call_method_ids(method, recv_id, args_json_text, dst) {
     me._comma_if_needed()
     local args = me._ids_array_from_json_text(args_json_text)
@@ -252,6 +261,18 @@ box MirJsonBuilderMin {
     }
     local args_text = me._ids_range_json(start, count)
     local node = CallEmitBox.make_mir_call_global(name, args, dst)
+    node.set("args_text", args_text)
+    me._push_inst_map(node)
+    return me._append(JsonEmitBox.to_json(node))
+  }
+
+  add_mir_call_extern_range(name, start, count, dst) {
+    me._comma_if_needed()
+    local args = new ArrayBox()
+    local i = 0
+    loop(i < count) { args.push(start + i) i = i + 1 }
+    local args_text = me._ids_range_json(start, count)
+    local node = CallEmitBox.make_mir_call_extern(name, args, dst)
     node.set("args_text", args_text)
     me._push_inst_map(node)
     return me._append(JsonEmitBox.to_json(node))

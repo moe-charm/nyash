@@ -15,4 +15,10 @@ impl MirInterpreter {
         }
         Ok(())
     }
+    /// Public facade for BoxCall unborn guard (vm_ops::boxcall preflight).
+    /// Skips guard for method "birth" to allow first-time initialization.
+    pub fn boxcall_unborn_guard_public(&self, recv_id: crate::backend::mir_interpreter::ValueId, method: &str) -> Result<(), crate::backend::mir_interpreter::VMError> {
+        if method == "birth" { return Ok(()); }
+        self.check_unborn_guard(recv_id)
+    }
 }

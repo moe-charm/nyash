@@ -1,0 +1,80 @@
+// apps/selfhost/common/mir/block_builder_box.hako
+// BlockBuilderBox — small helpers to assemble P1 shapes
+
+using "apps/selfhost/common/mir/mir_schema_box.hako" as Mir
+
+static box BlockBuilderBox {
+  // const→ret (returns literal)
+  const_ret(val) {
+    local insts = [
+      Mir.inst_const(1, val),
+      Mir.inst_ret(1),
+    ]
+    local blocks = [ Mir.block(0, insts) ]
+    return Mir.module(Mir.fn_main(blocks))
+  }
+
+  // compare→branch→jump→ret (diamond)
+  compare_branch(lhs, rhs, cmp) {
+    // entry
+    local b0 = [
+      Mir.inst_const(1, lhs),
+      Mir.inst_const(2, rhs),
+      Mir.inst_compare(cmp, 1, 2, 3),
+      Mir.inst_branch(3, 1, 2),
+    ]
+    // then/else
+    local b1 = [ Mir.inst_const(6, 1), Mir.inst_jump(3) ]
+    local b2 = [ Mir.inst_const(6, 0), Mir.inst_jump(3) ]
+    // merge
+    local b3 = [ Mir.inst_ret(6) ]
+    local blocks = [ Mir.block(0, b0), Mir.block(1, b1), Mir.block(2, b2), Mir.block(3, b3) ]
+    return Mir.module(Mir.fn_main(blocks))
+  }
+
+  // binop: const lhs/rhs; binop -> dst=3; ret 3
+  binop(lhs, rhs, opk) {
+    local b0 = [
+      Mir.inst_const(1, lhs),
+      Mir.inst_const(2, rhs),
+      Mir.inst_binop(opk, 1, 2, 3),
+      Mir.inst_ret(3)
+    ]
+    local blocks = [ Mir.block(0, b0) ]
+    return Mir.module(Mir.fn_main(blocks))
+  }
+
+  // loop_counter: while (i < limit) { i = i + 1 } ; return i
+  loop_counter(limit) {
+    local b0 = [
+      Mir.inst_const(1, 0),
+      Mir.inst_const(2, limit),
+      Mir.inst_const(4, 1),
+      Mir.inst_jump(1)
+    ]
+    local b1 = [ Mir.inst_compare("Lt", 1, 2, 3), Mir.inst_branch(3, 2, 3) ]
+    local b2 = [ Mir.inst_binop("Add", 1, 4, 1), Mir.inst_jump(1) ]
+    local b3 = [ Mir.inst_ret(1) ]
+    local blocks = [ Mir.block(0, b0), Mir.block(1, b1), Mir.block(2, b2), Mir.block(3, b3) ]
+    return Mir.module(Mir.fn_main(blocks))
+  }
+
+  // --- P3 helpers: minimal mir_call shapes ---
+  // extern call (e.g., nyrt.ops.op_eq) with provided arg ids and return
+  extern_call_ret(name, args_ids, dst) {
+    local b0 = [ Mir.inst_mir_call_extern(name, args_ids, dst), Mir.inst_ret(dst) ]
+    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+  }
+  global_call_ret(name, args_ids, dst) {
+    local b0 = [ Mir.inst_mir_call_global(name, args_ids, dst), Mir.inst_ret(dst) ]
+    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+  }
+  method_call_ret(method, recv_id, args_ids, dst) {
+    local b0 = [ Mir.inst_mir_call_method(method, recv_id, args_ids, dst), Mir.inst_ret(dst) ]
+    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+  }
+  constructor_call_ret(box_type, args_ids, dst) {
+    local b0 = [ Mir.inst_mir_call_constructor(box_type, args_ids, dst), Mir.inst_ret(dst) ]
+    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+  }
+}

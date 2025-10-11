@@ -40,10 +40,8 @@ impl MapCallableBox {
         args: &[VMValue],
     ) -> Result<VMValue, VMError> {
         if args.len() != 2 {
-            return Err(VMError::InvalidInstruction(format!(
-                "No matching method: MapBox.{}({} args). Available arities: [2]",
-                method,
-                args.len()
+            return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity(
+                "MapBox", method, args.len(), &[2]
             )));
         }
 

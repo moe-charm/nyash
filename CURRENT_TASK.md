@@ -8,6 +8,59 @@
 
 所要日数（M2まで）: 61日。M3はその2日後に達成。
 
+## ✨ Today’s Update — 2025‑10‑12
+
+この小粒アップデートで、SSOT優先・診断一元化・M2/M3 常緑の足元を固めたよ。
+
+- SSOT 優先の Type 解決/ID（既定ON）
+  - TypeBox/slot/arity/aliases を SSOT（`specs/type_registry.toml`）優先で参照。存在しない場合のみ静的表にフォールバック。
+  - Core type_id 解決も SSOT → config(hako/nyash.toml) → 既定 の順へ統一。
+  - ENV ゲート: `HAKO_REGISTRY_SSOT_DISABLE=1`（`NYASH_REGISTRY_SSOT_DISABLE` 互換）で一時OFF可能。
+  - 参照: `src/runtime/type_registry.rs:66`, `src/runtime/type_registry.rs:312`
+
+- 診断メッセージの一元化（arity/unknown‑slot 等）
+  - ルーター側の直書きは撤去し、`diagnostics::msg::no_method_arity` などのヘルパで統一。
+  - 参照: `src/runtime/method_router_box/mod.rs:16`, `src/runtime/method_router_box/map_callable.rs:44`, `src/runtime/method_router_box/method_ref.rs:29`
+
+- SSOT バリデータ追加（編集時の安全）
+  - `tools/check_ssot_table.sh` — name→slot 多重割当や完全重複を検出。
+  - 実行: `./tools/check_ssot_table.sh` → OK/FAIL を表示。
+
+- スモーク（代表）
+  - M2 quick 代表: PASS（カーネルが無ければ自動SKIP）。
+    - `tools/smokes/v2/run.sh --profile quick --filter 'selfhost_*_vm'`
+  - M3 integration‑core: 20/20 PASS（VM/LLVM パリティ小セット）。
+    - `tools/smokes/v2/run.sh --profile integration-core`
+  - 自己ホスト emit 最小確認（実例）
+    - emit‑only(min‑json): `NYASH_DISABLE_PLUGINS=1 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--pipeline-v2" NYASH_NY_COMPILER_EMIT_ONLY=1 NYASH_NY_COMPILER_SKIP_PY=1 NYASH_JSON_ONLY=1 timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
+    - emit‑MIR(JSON v0): `NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako`
+  - quick 常時へ昇格（rc‑only）
+    - plugin‑on 代表: `tools/smokes/v2/profiles/quick/selfhost/plugin_on_min_rc_vm.sh`
+    - selfhost emit‑mir 最小: `tools/smokes/v2/profiles/quick/selfhost/selfhost_emit_mir_min_rc_vm.sh`
+
+### P2/P3 進捗（箱化で段階移行）
+
+- 共有箱（共通化）
+  - 追加: `apps/selfhost/common/mir/mir_schema_box.hako`（const/ret/compare/branch/jump/binop + mir_call extern/global/method/ctor）
+  - 追加: `apps/selfhost/common/mir/block_builder_box.hako`（const_ret/compare_branch/binop/loop_counter + call系最小）
+
+- emit 経路の薄アダプタ化（互換維持）
+  - 更新: `apps/selfhost-compiler/pipeline_v2/emit_mir_flow_map.hako`（P1/P2）
+  - 更新: `apps/selfhost-compiler/pipeline_v2/emit_mir_flow.hako`（P1/P2/P3 の最小導線）
+
+- Extern（P3最小）
+  - CallEmit/MirJsonBuilderMin に Extern 生成APIを追加
+  - `emit_op_eq(lhs,rhs)` を導入（Extern("nyrt.ops.op_eq")）
+
+- 代表スモーク（rc‑only追加）
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_emit_mir_binop_min_rc_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_op_eq_vm.sh`
+  - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_op_eq_false_vm.sh`
+
+次ステップ（提案）
+- Selfhost MIR 生成 P1（const/ret と compare→branch/jump→ret）を自己ホスト箱に寄せる（Rust 側は受け口に縮退）。
+  - 受け入れ: quick の emit‑min‑json/emit‑mir 代表が rc‑only 緑、integration‑core は現行セット緑維持。
+
 次フェーズ（M4: Parity‑Plus & Stability）
 - quick 常時セットに parity_* 維持（追加2本: JSON stringify / <=, >=）
 - plugins プロファイルで最小 LLVM 交差を常時ON（軽量）

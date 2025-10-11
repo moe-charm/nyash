@@ -23,10 +23,9 @@ fn maybe_arity_guard(type_name: &str, method: &str, arity: usize) -> Result<(), 
         if crate::runtime::type_registry::resolve_slot_by_name(type_name, method, arity).is_none() {
             if let Some(known) = crate::runtime::type_registry::known_arities_for(type_name, method) {
                 if !known.is_empty() {
-                    return Err(crate::backend::vm_types::VMError::InvalidInstruction(format!(
-                        "No matching method: {}.{}({} args). Available arities: {:?}",
-                        type_name, method, arity, known
-                    )));
+                    return Err(crate::backend::vm_types::VMError::InvalidInstruction(
+                        crate::common::diagnostics::msg::no_method_arity(type_name, method, arity, &known.iter().map(|x| *x as usize).collect::<Vec<_>>()),
+                    ));
                 }
             }
         }
@@ -116,11 +115,11 @@ pub fn route(
                     Ok(VMValue::Bool(s.ends_with(&needle)))
                 }
                 312 => Ok(VMValue::Bool(hako_core_string::is_empty(s))),
-                _ => Err(VMError::InvalidInstruction(format!("Unknown String slot {} (method={})", slot, method))),
+                _ => Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::unknown_slot("StringBox", method, slot))),
             };
             return res;
         } else {
-            return Err(VMError::InvalidInstruction(format!("Unknown String method: {} (arity={})", method, args.len())));
+            return Err(crate::vm_ops::boxcall::unknown_method_err("StringBox", method, args.len()));
         }
     }
     // BoxRef
@@ -203,7 +202,7 @@ pub fn route(
         match bx.type_name() {
             "CallableBox" => {
                 if let Some(cb) = bx.as_any().downcast_ref::<crate::boxes::callable::CallableBox>() {
-                    let _ = maybe_arity_guard("CallableBox", method, args.len());
+                    let _ = crate::vm_ops::boxcall::arity_guard_for("CallableBox", method, args.len());
                     if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name("CallableBox", method, args.len()) {
                         return match slot as u32 {
                             500 => Ok(VMValue::Integer(cb.arity() as i64)),
@@ -364,16 +363,16 @@ pub fn route(
                                     Err(e) => Err(e),
                                 }
                             }
-                            _ => Err(VMError::InvalidInstruction(format!("Unknown CallableBox slot {} (method={})", slot, method))),
+                            _ => Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::unknown_slot("CallableBox", method, slot))),
                         };
                     }
-                    return Err(VMError::InvalidInstruction(format!("Unknown CallableBox method: {} (arity={})", method, args.len())));
+                    return Err(crate::vm_ops::boxcall::unknown_method_err("CallableBox", method, args.len()));
                 }
-                return Err(VMError::InvalidInstruction("CallableBox downcast failed".into()));
+                return Err(crate::vm_ops::boxcall::downcast_failed("CallableBox"));
             },
             "ArrayBox" => {
                 if let Some(arr) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                    let _ = maybe_arity_guard("ArrayBox", method, args.len());
+                    let _ = crate::vm_ops::boxcall::arity_guard_for("ArrayBox", method, args.len());
                     return if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name("ArrayBox", method, args.len()) {
                         match slot as u32 {
                             102 => Ok(VMValue::Integer(arr.len() as i64)),
@@ -393,7 +392,7 @@ pub fn route(
                                 Ok(VMValue::Void)
                             }
                             111 => { // slice(start,end)
-                                if args.len() != 2 { return Err(VMError::InvalidInstruction(format!("No matching method: ArrayBox.slice({} args). Available arities: [2]", args.len()))); }
+                                if args.len() != 2 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("ArrayBox","slice", args.len(), &[2]))); }
                                 let s_i = args[0].as_integer().unwrap_or(0);
                                 let e_i = args[1].as_integer().unwrap_or(0);
                                 Ok(VMValue::from_nyash_box(arr.slice(
@@ -426,17 +425,17 @@ pub fn route(
                             }
                             109 => { let _ = arr.sort(); Ok(VMValue::Void) }
                             110 => { let _ = arr.reverse(); Ok(VMValue::Void) }
-                            _ => Err(VMError::InvalidInstruction(format!("Unknown ArrayBox slot {} (method={})", slot, method))),
+                            _ => Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::unknown_slot("ArrayBox", method, slot))),
                         }
                     } else {
-                        Err(VMError::InvalidInstruction(format!("Unknown ArrayBox method: {} (arity={})", method, args.len())))
+                        Err(crate::vm_ops::boxcall::unknown_method_err("ArrayBox", method, args.len()))
                     };
                 }
-                return Err(VMError::InvalidInstruction("ArrayBox downcast failed".into()));
+                return Err(crate::vm_ops::boxcall::downcast_failed("ArrayBox"));
             }
             "MapBox" => {
                 if let Some(mp) = bx.as_any().downcast_ref::<crate::boxes::map_box::MapBox>() {
-                    let _ = maybe_arity_guard("MapBox", method, args.len());
+                    let _ = crate::vm_ops::boxcall::arity_guard_for("MapBox", method, args.len());
                     return if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name("MapBox", method, args.len()) {
                         match slot as u32 {
                             200 | 201 => { // size/len
@@ -444,26 +443,26 @@ pub fn route(
                                 if let Some(ii) = ib.as_any().downcast_ref::<crate::box_trait::IntegerBox>() { Ok(VMValue::Integer(ii.value)) } else { Ok(VMValue::Integer(0)) }
                             }
                             204 => { // set(key, val) -> Void
-                                if args.len() != 2 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.set({} args). Available arities: [2]", args.len()))); }
+                                if args.len() != 2 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("MapBox","set", args.len(), &[2]))); }
                                 let key_box = args[0].to_nyash_box();
                                 let val_box = args[1].to_nyash_box();
                                 let _ = mp.set(key_box, val_box);
                                 Ok(VMValue::Void)
                             }
                             203 => { // get(key) -> value|null
-                                if args.len() != 1 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.get({} args). Available arities: [1]", args.len()))); }
+                                if args.len() != 1 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("MapBox","get", args.len(), &[1]))); }
                                 let key_box = args[0].to_nyash_box();
                                 Ok(VMValue::from_nyash_box(mp.get(key_box)))
                             }
                             202 => { // has(key)
-                                if args.len() != 1 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.has({} args). Available arities: [1]", args.len()))); }
+                                if args.len() != 1 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("MapBox","has", args.len(), &[1]))); }
                                 let key_box = args[0].to_nyash_box();
                                 let bb = mp.has(key_box);
                                 if let Some(b) = bb.as_any().downcast_ref::<crate::box_trait::BoolBox>() { Ok(VMValue::Bool(b.value)) } else { Ok(VMValue::Bool(false)) }
                             }
                             208 => { let _ = mp.clear(); Ok(VMValue::Void) }
                             205 => { // delete/remove
-                                if args.len() != 1 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.delete({} args). Available arities: [1]", args.len()))); }
+                                if args.len() != 1 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("MapBox","delete", args.len(), &[1]))); }
                                 let key_box = args[0].to_nyash_box();
                                 Ok(VMValue::from_nyash_box(mp.delete(key_box)))
                             }
@@ -471,7 +470,7 @@ pub fn route(
                             207 => Ok(VMValue::from_nyash_box(mp.values())),
                             209 => { let s = crate::boxes::json::stringify_any(mp.clone_box()); Ok(VMValue::String(s)) },
                             210 => { // call(key, argsArray)
-                                if args.len() != 2 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.call({} args). Available arities: [2]", args.len()))); }
+                                if args.len() != 2 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("MapBox","call", args.len(), &[2]))); }
                                 let key_box = args[0].to_nyash_box();
                                 let callee = mp.get(key_box);
                                 if let Some(cb) = callee.as_any().downcast_ref::<crate::boxes::callable::CallableBox>() {
@@ -489,7 +488,7 @@ pub fn route(
                                 }
                             }
                             211 => { // callAsync(key, argsArray)
-                                if args.len() != 2 { return Err(VMError::InvalidInstruction(format!("No matching method: MapBox.callAsync({} args). Available arities: [2]", args.len()))); }
+                                if args.len() != 2 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("MapBox","callAsync", args.len(), &[2]))); }
                                 let key_box = args[0].to_nyash_box();
                                 let callee = mp.get(key_box);
                                 if let Some(cb) = callee.as_any().downcast_ref::<crate::boxes::callable::CallableBox>() {
@@ -500,17 +499,17 @@ pub fn route(
                                     Err(VMError::InvalidInstruction("Map.callAsync: value is not CallableBox".into()))
                                 }
                             }
-                            _ => Err(VMError::InvalidInstruction(format!("Unknown MapBox slot {} (method={})", slot, method))),
+                            _ => Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::unknown_slot("MapBox", method, slot))),
                         }
                     } else {
-                        Err(VMError::InvalidInstruction(format!("Unknown MapBox method: {} (arity={})", method, args.len())))
+                        Err(crate::vm_ops::boxcall::unknown_method_err("MapBox", method, args.len()))
                     };
                 }
-                return Err(VMError::InvalidInstruction("MapBox downcast failed".into()));
+                return Err(crate::vm_ops::boxcall::downcast_failed("MapBox"));
             }
 
             _ => {}
         }
     }
-    Err(VMError::InvalidInstruction(format!("Method {} not supported on {:?}", method, receiver)))
+    Err(crate::vm_ops::boxcall::method_not_supported(method, receiver))
 }

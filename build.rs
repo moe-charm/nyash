@@ -476,6 +476,24 @@ pub fn lookup_keyword(word: &str) -> Option<&'static str> {
 
     // Generate externs registry from specs (SSOT)
     gen_externs_registry();
+    // --- SSOT registry (TypeRegistry) codegen stub ---
+    // Always write a small generated file that either includes specs/type_registry.toml
+    // or defines None when absent. Runtime can opt to read this later.
+    {
+        let gen_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("registry_ssot_generated.rs");
+        let ssot_spec = manifest_dir.join("specs").join("type_registry.toml");
+        let gen_src = if ssot_spec.exists() {
+            r#"// Auto-generated: SSOT registry raw TOML presence
+pub const REGISTRY_SSOT_RAW: Option<&'static str> = Some(include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/specs/type_registry.toml")));
+"#.to_string()
+        } else {
+            "// Auto-generated: SSOT registry not present
+pub const REGISTRY_SSOT_RAW: Option<&'static str> = None;
+".to_string()
+        };
+        std::fs::write(&gen_path, gen_src).expect("write registry_ssot_generated.rs");
+        println!("cargo:rerun-if-changed={}", ssot_spec.display());
+    }
 }
 
 // --- Externs SSOT generation -------------------------------------------------
@@ -599,6 +617,7 @@ io = true
                 p.path
             );
             generated.push_str(&inc);
+
         }
     } else {
         // No config — keep function but do nothing

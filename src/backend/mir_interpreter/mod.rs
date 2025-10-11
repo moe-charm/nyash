@@ -23,7 +23,7 @@ mod handlers;
 #[path = "helpers/mod.rs"]
 mod helpers;
 mod method_router;
-mod extern_adapter;
+pub mod extern_adapter;
 mod operator_guard;
 mod vm_config;
 pub mod resolve;

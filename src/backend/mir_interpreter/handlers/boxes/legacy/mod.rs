@@ -33,7 +33,7 @@ impl MirInterpreter {
     ) -> Result<(), VMError> {
 
         // Unborn guard for plugin instance methods (except birth)
-        if method != "birth" { self.check_unborn_guard(box_val)?; }
+        crate::vm_ops::boxcall::preflight_unborn(self, box_val, method)?;
 
         // Early lifecycle: if this is birth(), mark as born before any dispatch.
         // This allows birth() implementation to call back into instance methods
@@ -42,7 +42,7 @@ impl MirInterpreter {
             self.lifecycle_contracts_birth(box_val, args.len());
         }
         // Fail-Fast: forbid operations on unborn instances (user InstanceBox) until birth()
-        if method != "birth" { self.check_unborn_guard(box_val)?; }
+        crate::vm_ops::boxcall::preflight_unborn(self, box_val, method)?;
         // Dev-only call trace for BoxCall (parity aid)
         let label = format!("BoxCall:{}", method);
         self.emit_call_trace_label(&label, args.len(), None);

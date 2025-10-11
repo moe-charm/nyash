@@ -1,5 +1,8 @@
 using "apps/lib/json_native/stringify.hako" as JSON
 using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+// Shared MIR helpers (P1)
+using "apps/selfhost/common/mir/mir_schema_box.hako" as MirSchema
+using "apps/selfhost/common/mir/block_builder_box.hako" as BlockBuilder
 
 flow EmitMirFlowMap {
   _i(n) { return n }
@@ -35,73 +38,28 @@ flow EmitMirFlowMap {
   }
 
   emit_return_int(v) {
-    local insts = EmitMirFlowMap._empty_arr()
-    insts.push(EmitMirFlowMap._instr_const(1, v))
-    insts.push(EmitMirFlowMap._instr_ret(1))
-    local blocks = EmitMirFlowMap._empty_arr()
-    blocks.push(EmitMirFlowMap._block(0, insts))
-    local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JsonEmitBox.to_json(mod)
+    // Route via shared BlockBuilder (P1). Keep output shape identical to legacy by
+    // returning only the { functions: [...] } wrapper.
+    local mod_full = BlockBuilder.const_ret(v)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 
   emit_binop(lhs, rhs, opk) {
-    local insts = EmitMirFlowMap._empty_arr()
-    insts.push(EmitMirFlowMap._instr_const(1, lhs))
-    insts.push(EmitMirFlowMap._instr_const(2, rhs))
-    insts.push(EmitMirFlowMap._instr_binop(opk, 1, 2, 3))
-    insts.push(EmitMirFlowMap._instr_ret(3))
-    local blocks = EmitMirFlowMap._empty_arr()
-    blocks.push(EmitMirFlowMap._block(0, insts))
-    local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JsonEmitBox.to_json(mod)
+    // Shared builder (P2 prep)
+    local mod_full = BlockBuilder.binop(lhs, rhs, opk)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 
   // materialize: 0/1 (builder parity)
   emit_compare_cfg2(lhs, rhs, cmp, materialize) {
-    local b0 = [
-      EmitMirFlowMap._instr_const(1, lhs),
-      EmitMirFlowMap._instr_const(2, rhs),
-      EmitMirFlowMap._instr_compare(cmp, 1, 2, 3),
-      EmitMirFlowMap._instr_branch(3, 1, 2)
-    ]
-
-    local b1 = [EmitMirFlowMap._instr_const(6, 1), EmitMirFlowMap._instr_jump(3)]
-
-    local b2 = [EmitMirFlowMap._instr_const(6, 0), EmitMirFlowMap._instr_jump(3)]
-
-    local b3 = [EmitMirFlowMap._instr_ret(6)]
-
-    local blocks = [
-      EmitMirFlowMap._block(0, b0),
-      EmitMirFlowMap._block(1, b1),
-      EmitMirFlowMap._block(2, b2),
-      EmitMirFlowMap._block(3, b3)
-    ]
-    local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JsonEmitBox.to_json(mod)
+    // Route via shared BlockBuilder; materialize param is ignored in P1
+    local mod_full = BlockBuilder.compare_branch(lhs, rhs, cmp)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 
   emit_loop_counter(limit) {
-    local b0 = [
-      EmitMirFlowMap._instr_const(1, 0),
-      EmitMirFlowMap._instr_const(2, limit),
-      EmitMirFlowMap._instr_const(4, 1),
-      EmitMirFlowMap._instr_jump(1)
-    ]
-
-    local b1 = [EmitMirFlowMap._instr_compare("Lt", 1, 2, 3), EmitMirFlowMap._instr_branch(3, 2, 3)]
-
-    local b2 = [EmitMirFlowMap._instr_binop("Add", 1, 4, 1), EmitMirFlowMap._instr_jump(1)]
-
-    local b3 = [EmitMirFlowMap._instr_ret(1)]
-
-    local blocks = [
-      EmitMirFlowMap._block(0, b0),
-      EmitMirFlowMap._block(1, b1),
-      EmitMirFlowMap._block(2, b2),
-      EmitMirFlowMap._block(3, b3)
-    ]
-    local mod = EmitMirFlowMap._single_function_main(blocks)
-    return JsonEmitBox.to_json(mod)
+    // Shared builder (P2 prep)
+    local mod_full = BlockBuilder.loop_counter(limit)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 }

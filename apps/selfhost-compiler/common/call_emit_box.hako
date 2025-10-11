@@ -18,6 +18,10 @@ static box CallEmitBox {
     local callee = {type: "Global", name: name}
     return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
   }
+  make_mir_call_extern(name, arg_ids, dst) {
+    local callee = {type: "Extern", name: name}
+    return {op: "mir_call", dst: dst, callee: callee, args: arg_ids}
+  }
 
   make_mir_call_method(method, recv_id, arg_ids, dst) {
     local callee = {type: "Method", method: method, receiver: recv_id}
@@ -31,4 +35,3 @@ static box CallEmitBox {
 }
 
 static box CallEmitBoxStub { main(args) { return 0 } }
-

@@ -1,18 +1,16 @@
-using selfhost.common.json.mir_builder_min as MirJsonBuilderMin
+using "apps/lib/json_native/stringify.hako" as JSON
+using "apps/selfhost-compiler/common/json_emit_box.hako" as JsonEmitBox
+// Shared MIR helpers (P1/P2)
+using "apps/selfhost/common/mir/mir_schema_box.hako" as MirSchema
+using "apps/selfhost/common/mir/block_builder_box.hako" as BlockBuilder
 using "apps/selfhost-compiler/pipeline_v2/local_ssa_box.hako" as LocalSSABox
 
 flow EmitMirFlow {
   _int(n) { return "" + n }
 
   emit_return_int(v) {
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, v)
-      |> MirJsonBuilderMin.add_ret(1)
-      |> MirJsonBuilderMin.end_all()
-    return MirJsonBuilderMin.to_string(b)
+    local mod_full = BlockBuilder.const_ret(v)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 
   _map_binop(opk) {
@@ -26,16 +24,8 @@ flow EmitMirFlow {
 
   emit_binop(lhs, rhs, opk) {
     local kind = EmitMirFlow._map_binop(opk)
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, lhs)
-      |> MirJsonBuilderMin.add_const(2, rhs)
-      |> MirJsonBuilderMin.add_binop(kind, 1, 2, 3)
-      |> MirJsonBuilderMin.add_ret(3)
-      |> MirJsonBuilderMin.end_all()
-    return MirJsonBuilderMin.to_string(b)
+    local mod_full = BlockBuilder.binop(lhs, rhs, kind)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 
   emit_compare_cfg(lhs, rhs, cmp) {
@@ -44,30 +34,9 @@ flow EmitMirFlow {
 
   // emit_compare_cfg2: materialize=1 なら cond を copy して branch する
   emit_compare_cfg2(lhs, rhs, cmp, materialize) {
-    // entry: const lhs/rhs; compare→r3; (optional copy r4=copy r3); branch r{3|4} then:1 else:2
-    // then: const 1→r6; jump 3 | else: const 0→r6; jump 3 | merge: ret r6
-    // Builder-based emission
-    local b = MirJsonBuilderMin.make()
-      |> MirJsonBuilderMin.start_module()
-      |> MirJsonBuilderMin.start_function("main")
-      |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, lhs)
-      |> MirJsonBuilderMin.add_const(2, rhs)
-      |> MirJsonBuilderMin.add_compare(cmp, 1, 2, 3)
-      |> MirJsonBuilderMin.add_branch(3, 1, 2)
-      |> MirJsonBuilderMin.end_block_continue()
-      |> MirJsonBuilderMin.start_block(1)
-      |> MirJsonBuilderMin.add_const(6, 1)
-      |> MirJsonBuilderMin.add_jump(3)
-      |> MirJsonBuilderMin.end_block_continue()
-      |> MirJsonBuilderMin.start_block(2)
-      |> MirJsonBuilderMin.add_const(6, 0)
-      |> MirJsonBuilderMin.add_jump(3)
-      |> MirJsonBuilderMin.end_block_continue()
-      |> MirJsonBuilderMin.start_block(3)
-      |> MirJsonBuilderMin.add_ret(6)
-      |> MirJsonBuilderMin.end_all()
-    return MirJsonBuilderMin.to_string(b)
+    // Route via shared builder. materialize is ignored in P1 scope.
+    local mod_full = BlockBuilder.compare_branch(lhs, rhs, cmp)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
   }
 
   // emit_loop_counter: while (i < limit) { i = i + 1 } ; return i
@@ -78,26 +47,22 @@ flow EmitMirFlow {
   //   2: binop add r1 r4 -> r1; jump 1
   //   3: ret r1
   emit_loop_counter(limit) {
-    local lim = limit
+    local mod_full = BlockBuilder.loop_counter(limit)
+    return JsonEmitBox.to_json({ functions: mod_full.functions })
+  }
+
+  // P3 minimal: emit extern call for op_eq (nyrt.ops.op_eq), returning the result
+  // Shape: const 1=lhs; const 2=rhs; mir_call callee=Extern("nyrt.ops.op_eq")(1,2) -> r3; ret r3
+  emit_op_eq(lhs, rhs) {
+    // Use minimal JSON builder since BlockBuilder does not cover calls yet
     local b = MirJsonBuilderMin.make()
       |> MirJsonBuilderMin.start_module()
       |> MirJsonBuilderMin.start_function("main")
       |> MirJsonBuilderMin.start_block(0)
-      |> MirJsonBuilderMin.add_const(1, 0)
-      |> MirJsonBuilderMin.add_const(2, lim)
-      |> MirJsonBuilderMin.add_const(4, 1)
-      |> MirJsonBuilderMin.add_jump(1)
-      |> MirJsonBuilderMin.end_block_continue()
-      |> MirJsonBuilderMin.start_block(1)
-      |> MirJsonBuilderMin.add_compare("Lt", 1, 2, 3)
-      |> MirJsonBuilderMin.add_branch(3, 2, 3)
-      |> MirJsonBuilderMin.end_block_continue()
-      |> MirJsonBuilderMin.start_block(2)
-      |> MirJsonBuilderMin.add_binop("Add", 1, 4, 1)
-      |> MirJsonBuilderMin.add_jump(1)
-      |> MirJsonBuilderMin.end_block_continue()
-      |> MirJsonBuilderMin.start_block(3)
-      |> MirJsonBuilderMin.add_ret(1)
+      |> MirJsonBuilderMin.add_const(1, lhs)
+      |> MirJsonBuilderMin.add_const(2, rhs)
+      |> MirJsonBuilderMin.add_mir_call_extern_range("nyrt.ops.op_eq", 1, 2, 3)
+      |> MirJsonBuilderMin.add_ret(3)
       |> MirJsonBuilderMin.end_all()
     return MirJsonBuilderMin.to_string(b)
   }

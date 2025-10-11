@@ -1,11 +1,29 @@
 use super::super::*;
 use crate::backend::mir_interpreter::VmConfig;
 use crate::box_trait::VoidBox;
+use crate::backend::mir_interpreter::extern_adapter;
 use crate::instance_v2::InstanceBox;
 use std::string::String as StdString;
 use std::sync::Arc;
 
 impl MirInterpreter {
+    /// Public facade for equality evaluation used by vm_ops::compare.
+    /// Keeps the internal eval_equals encapsulated inside the mir_interpreter module.
+    pub fn equals_route_public(&mut self, a: &VMValue, b: &VMValue) -> Result<bool, VMError> {
+        self.eval_equals(a, b)
+    }
+
+    /// Public facade to invoke dotted extern (iface.method) with VMValue args.
+    /// Returns Some(Result) when handler is found; None otherwise.
+    pub fn extern_call_public(
+        &mut self,
+        iface: &str,
+        method: &str,
+        args: &[VMValue],
+    ) -> Option<Result<VMValue, VMError>> {
+        extern_adapter::try_call(iface, method, args)
+    }
+
     #[inline]
     fn tag_nullish(v: &VMValue) -> &'static str {
         match v {
@@ -323,9 +341,9 @@ impl MirInterpreter {
         } else { (a4.clone(), b4.clone()) };
 
         let result = match (op, &a5, &b5) {
-            // Box-aware equality: delegate to eval_equals (supports user-defined equals())
-            (Eq, _, _) => self.eval_equals(&a5, &b5)?,
-            (Ne, _, _) => !self.eval_equals(&a5, &b5)?,
+            // Box-aware equality: delegate via CompareBox choke point (vm_ops::compare)
+            (Eq, _, _) => crate::vm_ops::compare::equals_route(self, &a5, &b5)?,
+            (Ne, _, _) => !crate::vm_ops::compare::equals_route(self, &a5, &b5)?,
             (Lt, Integer(x), Integer(y)) => x < y,
             (Le, Integer(x), Integer(y)) => x <= y,
             (Gt, Integer(x), Integer(y)) => x > y,

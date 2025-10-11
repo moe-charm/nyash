@@ -238,6 +238,104 @@ Hakoruneで実行器書く
   - ArrayBox: len/get/set/push/clear をコード生成（固定cap=8、OOB=0）
   - WAT生成スモークを追加（auto‑SKIPつき）:
     - wasm_compile_array_ops_wat（最小）
+
+【2025-10-12 追記 — SSOT/診断/スモーク更新】
+- SSOT 優先の Type 解決に切替（既定ON）
+  - TypeBox の slot/arity/aliases 解決と Core の type_id を SSOT → config(hako/nyash.toml) → 既定 の順に統一。
+  - 一時無効化ゲート: `HAKO_REGISTRY_SSOT_DISABLE=1`（`NYASH_*` 互換）。
+  - 参照: `src/runtime/type_registry.rs:66`, `src/runtime/type_registry.rs:312`。
+- 診断の一元化（arity/unknown‑slot 等）
+  - ルーター側の直書き文言を `diagnostics::msg` に統合し、Fail‑Fast メッセージの安定性を向上。
+  - 参照: `src/runtime/method_router_box/mod.rs:16`, `map_callable.rs:44`, `method_ref.rs:29`。
+- スモーク運用の指針（軽量・常緑）
+  - M2 quick 代表を常時（rebuild は環境により自動SKIP）。
+    - 実行: `tools/smokes/v2/run.sh --profile quick --filter 'selfhost_*_vm'`
+  - M3 integration‑core の小セット（5〜8本）を代表で常時、フル20本は任意。
+    - 実行: `tools/smokes/v2/run.sh --profile integration-core`
+  - SSOT バリデータ（編集時に任意で実行）
+    - `./tools/check_ssot_table.sh`（name→slot 多重割当/重複の検出）
+
+## 🧭 MIR 生成ロードマップ（Phase 15.7）
+
+目的
+- Rust 側の MIR 生成（Builder/Emitter）を“箱言語側（selfhost compiler）”へ段階移行し、Rust 側は JSON 受け口に縮退。
+- 既定の意味論は不変（Fail‑Fast 強化は可）。VM/LLVM のパリティを維持したまま、自己ホスト化の歩幅を刻む。
+
+境界と原則（Box‑First）
+- 生成面（Builder/Emitter）: apps/selfhost-compiler/pipeline_v2/ 配下（EmitMirFlow/Map 等）。
+- 実行面（VM/LLVM）: 既存の Rust VM と llvmlite ハーネス。
+- 意味論の確定点:
+  - Eq/Ne は Extern("nyrt.ops.op_eq") に統一（Builder 正規化）。
+  - メソッド呼出は SSOT（specs/type_registry.toml）の slot/arity に依存。
+- 失敗ポリシー: Fail‑Fast（静かなフォールバックは禁止）。
+
+段階計画（P1→P5）
+- P1（最小ブート）
+  - 対象: const/ret、compare→branch/jump→ret。
+  - 実装: EmitMirFlow(Map) を活用して 1関数1エントリ CFG を生成。Phi は不要（簡易ダイアモンド）。
+  - 受け入れ:
+    - quick: selfhost_emit_mir_min_rc_vm（rc‑only）緑。
+    - integration‑core: 既存 parity セット（const_ret/compare/branch）緑。
+- P2（式）
+  - 対象: binop（+,-,*,/,%）と単項（neg,not,bitnot）最小。
+  - 受け入れ: integration‑core の算術代表がVM/LLVM一致。
+- P3（呼出）
+  - 対象: Call/Method/Extern の最小統一（Extern は registry/generated を参照）。
+  - 受け入れ: op_eq primitives/reflexive の代表が Builder→VM/LLVM で一致。
+- P4（NewBox: Core Collections）
+  - 対象: ArrayBox/StringBox/MapBox の最小 new（birth は Runner/VM 規約に従う）。
+  - 受け入れ: quick のコレクション最小ケース rc‑only 緑。
+- P5（整形/材化）
+  - 対象: LocalSSA ensure_cond/ensure_calls の最小適用（未定義形は Fail‑Fast）。
+  - 受け入れ: 既存の LocalSSA スモーク rc‑only 緑。
+
+ゲート/フラグ（既存の活用）
+- NY 系（エイリアス受理: HAKO_*）
+  - NYASH_USE_NY_COMPILER=1（自己ホスト子を使用）
+  - NYASH_NY_COMPILER_MIN_JSON=1（最小 JSON）
+  - NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir"（MIR(JSON v0) 出力）
+  - NYASH_JSON_ONLY=1（quiet 受理）
+  - 既定はOFF。quick の代表は rc‑only で常時OK。
+
+SSOT 連動
+- slots/arity/aliases は specs/type_registry.toml を SSOT とし、Builder 参照は SSOT に統一（静的表は互換 fallback）。
+- type_id も SSOT→config→既定の優先で参照（既に Runtime 実装済）。
+
+テスト/スモーク方針
+- quick: rc‑only を基本（本文依存を避ける）。
+- integration‑core: VM/LLVM パリティは既存代表を利用（5〜8本）。段階追加は最小限。
+- plugin‑on: 代表1本のみ常時（rc‑only）。広いE2Eは opt‑in。
+
+ロールバック/安全策
+- 生成経路の切替は環境フラグでいつでもOFFに戻せる構成を維持。
+- Fail‑Fast は既定ON。問題時は quick を崩さずに段階差し戻しが可能。
+
+完了定義（Phase 15.7 時点）
+- P1〜P3 が緑、P4 は最小 new が通る、P5 は ensure_cond の最小が効く。
+- quick 全緑（rc‑only代表を含む）、integration‑core 全緑。
+
+### 進捗（2025‑10‑12 現在）
+
+- P1 完了（const/ret, compare diamond）
+  - 共有箱を導入: `apps/selfhost/common/mir/{mir_schema_box.hako,block_builder_box.hako}`
+  - emit 経路を薄アダプタ化（出力互換）:
+    - `apps/selfhost-compiler/pipeline_v2/emit_mir_flow_map.hako`
+    - `apps/selfhost-compiler/pipeline_v2/emit_mir_flow.hako`
+  - quick 代表（rc‑only）: `selfhost_emit_mir_min_rc_vm` が常時緑
+
+- P2 準備完了（binop/loop 最小）
+  - BlockBuilder に `binop/loop_counter` を追加し、emit 経路から利用開始
+  - quick 代表（rc‑only）: `selfhost_emit_mir_binop_min_rc_vm` を追加
+
+- P3 最小導線（Extern op_eq）
+  - CallEmit/MirJsonBuilderMin を拡張し、`mir_call callee=Extern("nyrt.ops.op_eq")` を生成
+  - emit 経路に `emit_op_eq(lhs,rhs)` を追加（出力互換）
+  - quick 代表（rc‑only）: `selfhost_pipeline_v2_op_eq_vm`（true）と `selfhost_pipeline_v2_op_eq_false_vm`（false）を追加
+
+備考
+- 出力 JSON 形状は既存の `{ functions:[...] }` に揃えており、Rust 側受け口の互換性を維持。
+- SSOT は既定ON。slots/arity/aliases は specs/type_registry.toml を優先参照。Extern シグネチャは specs/externs/registry.toml 由来の生成物を利用。
+
     - wasm_compile_bench_suite_wat（apps/benchmarks/wasm/basic/*.hako 一括）
 - ENV/プロファイルの整理（迷いの削減）
   - HAKO_PLUGIN_POLICY=auto を主。NYASH_* は互換
