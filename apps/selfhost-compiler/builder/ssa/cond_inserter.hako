@@ -3,42 +3,26 @@
 
 using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
 
 static box CondInserter {
   _int_to_str(n) { return StringHelpers.int_to_str(n) }
   _index_of_from(hay, needle, pos) { return JsonFragBox.index_of_from(hay, needle, pos) }
   _read_digits(text, pos) { return JsonFragBox.read_digits(text, pos) }
+
+  // Delegate to JsonCursorBox (escape-aware implementations, fixes array escape bug)
   _seek_obj_end(text, obj_start) {
-    local i = obj_start
-    local depth = 0
-    local in_str = 0
-    loop(true){
-      local ch = text.substring(i, i+1)
-      if ch == "" { break }
-      if in_str == 1 {
-        if ch == "\\" { i = i + 2  continue }
-        if ch == "\"" { in_str = 0  i = i + 1  continue }
-        i = i + 1
-        continue
-      }
-      if ch == "\"" { in_str = 1  i = i + 1  continue }
-      if ch == "{" { depth = depth + 1 } else { if ch == "}" { depth = depth - 1 } }
-      if depth == 0 { return i + 1 }
-      i = i + 1
-    }
-    return i
+    return JsonCursorBox.seek_obj_end(text, obj_start)
   }
   _seek_array_end(text, pos) {
-    local i = pos
-    local depth = 1
-    loop(true) {
-      local ch = text.substring(i,i+1)
-      if ch == "" { break }
-      if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
-      if depth == 0 { return i }
-      i = i + 1
+    // Note: JsonCursorBox expects pos to point at '[', adjust if needed
+    if text == null { return -1 }
+    if pos <= 0 { return -1 }
+    local prev_pos = pos - 1
+    if text.substring(prev_pos, prev_pos+1) == "[" {
+      return JsonCursorBox.seek_array_end(text, prev_pos)
     }
-    return i
+    return JsonCursorBox.seek_array_end(text, pos)
   }
 
   // Insert copy(cond->cond) at the head of instructions for a block that contains branch(cond=R)

@@ -78,15 +78,9 @@ static box Stage1JsonScannerBox {
     local lb = JsonCursorBox.find_from(s, "[", apos)
     local rb = s.size()
     if lb >= 0 {
-      local i = lb + 1
-      local depth = 1
-      loop(true) {
-        local ch = s.substring(i,i+1)
-        if ch == "" { break }
-        if ch == "[" { depth = depth + 1 } else { if ch == "]" { depth = depth - 1 } }
-        if depth == 0 { rb = i  break }
-        i = i + 1
-      }
+      // Use JsonCursorBox for escape-aware array end seeking
+      local rb_result = JsonCursorBox.seek_array_end(s, lb)
+      if rb_result >= lb { rb = rb_result }
     }
     local args_text = s.substring(apos, rb)
     return map({ label: label, args_text: args_text, label_pos: npos, args_pos: apos, label_key: label_key })
