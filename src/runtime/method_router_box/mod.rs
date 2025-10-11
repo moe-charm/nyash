@@ -129,7 +129,9 @@ pub fn route(
         if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
             if let Some(result) = MapCallableBox::try_route(_interp, receiver, method, args) {
                 return result;
+            if let Some(rv) = crate::runtime::adapters::map_keys_values_stage1::route_map_keys_values_stage1(&p.box_type, p.inner.instance_id, method) { return Ok(rv); }
             }
+            // Stage-1 fallback moved to adapters::map_keys_values_stage1
             let mut argv: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
             for v in args {
                 if let VMValue::BoxRef(bx) = v {

@@ -4,8 +4,8 @@ use crate::constants::*;
 
 // Re-export shared TLV codec functions from hako_abi_impl
 pub use hako_abi_impl::tlv::{
-    read_arg_i64, read_arg_string,
-    write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_bool
+    read_arg_i64, read_arg_string, write_tlv_bool, write_tlv_handle, write_tlv_i64,
+    write_tlv_string,
 };
 
 pub fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {

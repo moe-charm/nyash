@@ -135,7 +135,11 @@ setup_plugin_env() {
             unset NYASH_BACKEND  # デフォルトVM使用
             # 明示的に nyash.toml を指定して v2 ホストにプロバイダ登録させる
             if [ -z "${NYASH_PLUGIN_CONFIG:-}" ]; then
-              if [ -f "$NYASH_ROOT/nyash.toml" ]; then
+              if [ -f "$NYASH_ROOT/hako.toml" ]; then
+                export NYASH_PLUGIN_CONFIG="$NYASH_ROOT/hako.toml"
+              elif [ -f "hako.toml" ]; then
+                export NYASH_PLUGIN_CONFIG="hako.toml"
+              elif [ -f "$NYASH_ROOT/nyash.toml" ]; then
                 export NYASH_PLUGIN_CONFIG="$NYASH_ROOT/nyash.toml"
               elif [ -f "nyash.toml" ]; then
                 export NYASH_PLUGIN_CONFIG="nyash.toml"

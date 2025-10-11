@@ -404,24 +404,61 @@ fn build_adapter() -> VmExternAdapterBox {
 
 
     // --- nykernel.* (dev stub for wasm std Array) ---
-    // Enabled only when NYASH_ENABLE_NYKERNEL_STUB=1
-    fn nykernel_enabled() -> bool {
-        crate::runtime::env_gate_box::bool_any(&["NYASH_ENABLE_NYKERNEL_STUB"])
-    }
-    use std::sync::Mutex;
-    fn heap_state() -> &'static (Mutex<Vec<i64>>, Mutex<i64>) {
-        static HEAP: OnceLock<(Mutex<Vec<i64>>, Mutex<i64>)> = OnceLock::new();
-        HEAP.get_or_init(|| (Mutex::new(Vec::with_capacity(1024)), Mutex::new(1)))
-    }
-    fn as_i64(v: &VMValue) -> i64 {
-        match v {
-            VMValue::Integer(i) => *i,
-            VMValue::Float(f) => *f as i64,
-            VMValue::String(s) => s.parse::<i64>().unwrap_or(0),
-            VMValue::Bool(b) => if *b {1} else {0},
-            _ => 0,
+    // Phase 1 Cleanup (2025-10-11):
+    // - ✅ nykernel_enabled() removed (3 lines) - unused
+    // - ✅ heap_state() removed (4 lines) - unused
+    // - ✅ as_i64() removed (8 lines) - unused
+    // - ✅ use std::sync::Mutex removed (1 line) - unused after heap_state removal
+
+    fn value_as_future(value: &VMValue) -> Option<crate::boxes::future::FutureBox> {
+        match value {
+            VMValue::Future(f) => Some(f.clone()),
+            VMValue::BoxRef(arc) => arc
+                .as_any()
+                .downcast_ref::<crate::boxes::future::FutureBox>()
+                .map(|f| f.clone()),
+            _ => None,
         }
     }
+
+    map.insert(("env.future".into(), "new".into()), |args: &[VMValue]| {
+        let fut = crate::boxes::future::FutureBox::new();
+        if let Some(val) = args.get(0) {
+            fut.set_result(val.to_nyash_box());
+        }
+        Ok(VMValue::Future(fut))
+    });
+
+    map.insert(("env.future".into(), "set".into()), |args: &[VMValue]| {
+        if args.len() >= 2 {
+            if let Some(fut) = value_as_future(&args[0]) {
+                fut.set_result(args[1].to_nyash_box());
+            }
+        }
+        Ok(VMValue::Void)
+    });
+
+    map.insert(("env.future".into(), "await".into()), |args: &[VMValue]| {
+        if let Some(first) = args.get(0) {
+            if let Some(fut) = value_as_future(first) {
+                let boxed = fut.get();
+                return Ok(VMValue::from_nyash_box(boxed));
+            }
+            return Ok(VMValue::from_nyash_box(first.to_nyash_box()));
+        }
+        Ok(VMValue::Void)
+    });
+
+    map.insert(("env.future".into(), "spawn_instance".into()), |args: &[VMValue]| {
+        let fut = crate::boxes::future::FutureBox::new();
+        if let Some(val) = args.get(2) {
+            fut.set_result(val.to_nyash_box());
+        } else {
+            fut.set_result(Box::new(crate::box_trait::VoidBox::new()));
+        }
+        Ok(VMValue::Future(fut))
+    });
+
     // nykernel.malloc(size: i64) -> i64 (byte address)
     map.insert(("nykernel".into(), "malloc".into()), |args: &[VMValue]| {
         let size = args.get(0).map(crate::runtime::nykernel_stub::vmvalue_to_i64).unwrap_or(0);

@@ -363,7 +363,7 @@ If true sharing is needed later:
 
 ### Immediate (Phase 1):
 
-- [ ] Rename `crates/nyash_kernel` → `crates/nyash_plugin_abi`
+- [ ] Rename `crates/hako_kernel` → `crates/nyash_plugin_abi`
 - [ ] Update `Cargo.toml` dependencies
 - [ ] Update documentation to clarify purpose
 - [ ] Add comment: "This is NOT used by core runtime, only plugin helpers"
@@ -395,6 +395,6 @@ If true sharing is needed later:
 - [Rust circular dependency patterns](https://doc.rust-lang.org/book/ch15-05-interior-mutability.html)
 - [Trait objects for runtime polymorphism](https://doc.rust-lang.org/book/ch17-02-trait-objects.html)
 - Current code locations:
-  - `crates/nyash_kernel/src/lib.rs` (ABI exports)
-  - `crates/nyash_kernel/src/plugin/invoke.rs` (plugin shims)
+  - `crates/hako_kernel/src/lib.rs` (ABI exports)
+  - `crates/hako_kernel/src/plugin/invoke.rs` (plugin shims)
   - `plugins/*/src/lib.rs` (plugin implementations)

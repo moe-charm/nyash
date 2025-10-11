@@ -4,15 +4,15 @@
 //! for BoxCall instructions.
 //!
 //! ## Module Structure
-//! - `plugin_bridge`: Plugin box invocation + fallbacks
 //! - `mod` (this file): Main BoxCall dispatcher
+//!
+//! ## Phase 1 Cleanup (2025-10-11)
+//! - ✅ `plugin_bridge` removed (286 lines) - invoke_plugin_box/try_bridge_host_string_to_plugin unused
 
 use super::super::super::*;
 use crate::backend::mir_interpreter::handlers::{
     boxes_fields, boxes_instance,
 };
-
-mod plugin_bridge;
 
 
 impl MirInterpreter {

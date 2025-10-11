@@ -38,31 +38,27 @@ unsafe impl Sync for FnPtrArray {}
 pub static NYASH_HOST_API_ANCHORS: FnPtrArray = FnPtrArray(&[
     // ========== Array API ==========
     // Core array operations for ArrayBox plugin callbacks
-    nyash_array_get_h as *const (),      // get(idx) -> i64
-    nyash_array_set_h as *const (),      // set(idx, val) -> i64
-    nyash_array_push_h as *const (),     // push(val) -> i64
-    nyash_array_length_h as *const (),   // length() -> i64
-    nyash_array_new_h as *const (),      // new() -> i64 (⚠️ THIS WAS BEING STRIPPED!)
-
+    nyash_array_get_h as *const (),    // get(idx) -> i64
+    nyash_array_set_h as *const (),    // set(idx, val) -> i64
+    nyash_array_push_h as *const (),   // push(val) -> i64
+    nyash_array_length_h as *const (), // length() -> i64
+    nyash_array_new_h as *const (),    // new() -> i64 (⚠️ THIS WAS BEING STRIPPED!)
     // ========== Map API ==========
     // Core map operations for MapBox plugin callbacks
-    nyash_map_size_h as *const (),       // size() -> i64
-    nyash_map_get_h as *const (),        // get(key: i64) -> i64
-    nyash_map_set_h as *const (),        // set(key: i64, val: i64) -> i64
-    nyash_map_has_h as *const (),        // has(key: i64) -> i64(bool)
-    nyash_map_get_hh as *const (),       // get(key: any) -> any (handle version)
-    nyash_map_set_hh as *const (),       // set(key: any, val: any) -> i64
-    nyash_map_has_hh as *const (),       // has(key: any) -> i64(bool)
-
+    nyash_map_size_h as *const (), // size() -> i64
+    nyash_map_get_h as *const (),  // get(key: i64) -> i64
+    nyash_map_set_h as *const (),  // set(key: i64, val: i64) -> i64
+    nyash_map_has_h as *const (),  // has(key: i64) -> i64(bool)
+    nyash_map_get_hh as *const (), // get(key: any) -> any (handle version)
+    nyash_map_set_hh as *const (), // set(key: any, val: any) -> i64
+    nyash_map_has_hh as *const (), // has(key: any) -> i64(bool)
     // ========== String API ==========
     // String handle conversion for plugin interop
     nyash_string_to_i8p_h as *const (), // StringBox handle -> *mut i8
-
     // ========== Instance API ==========
     // Generic instance field access for user-defined Boxes
     nyash_instance_get_field_h as *const (), // get_field(handle, name) -> i64
     nyash_instance_set_field_h as *const (), // set_field(handle, name, val) -> i64
-
     // ========== Future API ==========
     // Async operation support
     nyash_future_spawn_method_h as *const (), // spawn_method(...) -> i64(future_id)

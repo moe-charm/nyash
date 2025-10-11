@@ -1,0 +1,39 @@
+[box]
+type_name = "ArrayBox"
+type_id = 12
+provider = "nyash-array-plugin"
+
+[[methods]]
+name = "birth"
+slot = 0
+arity = 0
+
+[[methods]]
+name = "size"
+slot = 1
+arity = 0
+
+[[methods]]
+name = "get"
+slot = 2
+arity = 1
+
+[[methods]]
+name = "push"
+slot = 3
+arity = 1
+
+[[methods]]
+name = "set"
+slot = 4
+arity = 2
+
+[[methods]]
+name = "slice"
+slot = 5
+arity = 2
+
+[[methods]]
+name = "fini"
+slot = 4294967295
+arity = 0

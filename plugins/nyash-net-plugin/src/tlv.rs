@@ -1,6 +1,6 @@
 // Import shared TLV functions from hako_abi_impl
-pub use hako_abi_impl::tlv::write_tlv_string;
 pub use hako_abi_impl::tlv::write_tlv_handle;
+pub use hako_abi_impl::tlv::write_tlv_string;
 // Note: write_tlv_i64 exists in hako_abi_impl but net plugin uses write_tlv_i32
 
 use crate::consts::{E_INV_ARGS, E_SHORT, OK};

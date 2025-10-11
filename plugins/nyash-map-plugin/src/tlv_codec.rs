@@ -6,7 +6,9 @@
 use crate::{MapVal, NYB_E_INVALID_ARGS};
 
 // Import shared TLV functions for use by local helpers
-use hako_abi_impl::tlv::{write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_host_handle};
+use hako_abi_impl::tlv::{
+    write_tlv_handle, write_tlv_host_handle, write_tlv_i64, write_tlv_string,
+};
 
 /// JSON escape helper
 pub fn escape_json(s: &str) -> String {
@@ -92,6 +94,45 @@ pub fn build_tlv_i64_i64(idx: i64, value: i64) -> Vec<u8> {
     buf.push(0u8);
     buf.extend_from_slice(&(8u16).to_le_bytes());
     buf.extend_from_slice(&value.to_le_bytes());
+    buf
+}
+
+/// Build TLV with i64 + handle arguments (for Array.set via host)
+pub fn build_tlv_i64_handle(idx: i64, type_id: u32, instance_id: u32) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8 + 4 + 8);
+    // header: version=1, argc=2
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&2u16.to_le_bytes());
+    // arg0: i64 idx (tag=3, size=8)
+    buf.push(3u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&idx.to_le_bytes());
+    // arg1: handle (tag=8, size=8: type_id u32 + instance_id u32)
+    buf.push(8u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&type_id.to_le_bytes());
+    buf.extend_from_slice(&instance_id.to_le_bytes());
+    buf
+}
+
+/// Build TLV with i64 + host_handle arguments (for Array.set via host)
+pub fn build_tlv_i64_host_handle(idx: i64, handle: u64) -> Vec<u8> {
+    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8 + 4 + 8);
+    // header: version=1, argc=2
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&2u16.to_le_bytes());
+    // arg0: i64 idx (tag=3, size=8)
+    buf.push(3u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&idx.to_le_bytes());
+    // arg1: host_handle (tag=9, size=8)
+    buf.push(9u8);
+    buf.push(0u8);
+    buf.extend_from_slice(&(8u16).to_le_bytes());
+    buf.extend_from_slice(&handle.to_le_bytes());
     buf
 }
 

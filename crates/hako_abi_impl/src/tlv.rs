@@ -1,8 +1,8 @@
 //! TLV encoding/decoding utilities (shared by all)
 
 use hako_abi::{
-    TLV_TAG_BOOL, TLV_TAG_I64, TLV_TAG_STRING, TLV_TAG_PLUGIN_HANDLE, TLV_TAG_HOST_HANDLE,
-    HAKO_SUCCESS, HAKO_E_SHORT_BUFFER, HAKO_E_INVALID_ARGS
+    HAKO_E_INVALID_ARGS, HAKO_E_SHORT_BUFFER, HAKO_SUCCESS, TLV_TAG_BOOL, TLV_TAG_HOST_HANDLE,
+    TLV_TAG_I64, TLV_TAG_PLUGIN_HANDLE, TLV_TAG_STRING,
 };
 
 /// Read i64 from TLV-encoded args at position n
@@ -142,7 +142,8 @@ pub fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<Str
             return None;
         }
         if i == n {
-            if tag == TLV_TAG_STRING || tag == 7 {  // 6 or 7 for strings
+            if tag == TLV_TAG_STRING || tag == 7 {
+                // 6 or 7 for strings
                 let s = &buf[off + 4..off + 4 + size];
                 return Some(String::from_utf8_lossy(s).to_string());
             } else {
@@ -244,7 +245,12 @@ pub fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32
 }
 
 /// Write plugin handle to TLV-encoded result buffer
-pub fn write_tlv_handle(type_id: u32, instance_id: u32, result: *mut u8, result_len: *mut usize) -> i32 {
+pub fn write_tlv_handle(
+    type_id: u32,
+    instance_id: u32,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
     if result_len.is_null() {
         return HAKO_E_INVALID_ARGS;
     }

@@ -8,9 +8,7 @@ use std::sync::{
 };
 
 // Import shared TLV codec from hako_abi_impl
-use hako_abi_impl::tlv::{
-    read_arg_string, write_tlv_string
-};
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_string};
 
 // ===== Error Codes (BID-1 alignment) =====
 const NYB_SUCCESS: i32 = 0;

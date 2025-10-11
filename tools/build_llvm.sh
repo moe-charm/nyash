@@ -17,7 +17,7 @@ Options:
 
 Requirements:
   - LLVM 18 development (llvm-config-18)
-  - Nyash Kernel static runtime (crates/nyash_kernel)
+  - Hako Kernel static runtime (crates/hako_kernel) — legacy nyash_kernel also supported
 USAGE
 }
 
@@ -97,11 +97,19 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
       fi
       if [[ "${NYASH_LLVM_EMIT:-obj}" == "exe" ]]; then
         echo "    emitting EXE via ny-llvmc (crate) ..." >&2
-        # Ensure Nyash Kernel is built (for libnyash_kernel.a)
-        if [[ ! -f crates/nyash_kernel/target/release/libnyash_kernel.a && "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" != "1" ]]; then
-          ( cd crates/nyash_kernel && cargo build --release -j 24 >/dev/null )
+        # Ensure Kernel is built (libhako_kernel.a preferred; fallback libhako_kernel.a)
+        if [[ ! -f crates/hako_kernel/target/release/libhako_kernel.a && "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" != "1" ]]; then
+          ( cd crates/hako_kernel && cargo build --release -j 24 >/dev/null ) || true
+          if [[ ! -f crates/hako_kernel/target/release/libhako_kernel.a ]]; then
+            if [[ -d crates/hako_kernel ]]; then
+    ( cd crates/hako_kernel && cargo build --release -j 24 >/dev/null ) || true
+  fi
+  if [[ ! -f crates/hako_kernel/target/release/libhako_kernel.a ]]; then
+    ( cd crates/hako_kernel && cargo build --release -j 24 >/dev/null )
+  fi || true
+          fi
         fi
-        NYRT_DIR_HINT="${NYASH_LLVM_NYRT:-crates/nyash_kernel/target/release}"
+        NYRT_DIR_HINT="${NYASH_LLVM_NYRT:-crates/hako_kernel/target/release}"
         ./target/release/ny-llvmc --in "$NYASH_LLVM_MIR_JSON" --out "$OUT" --emit exe --nyrt "$NYRT_DIR_HINT" ${NYASH_LLVM_LIBS:+--libs "$NYASH_LLVM_LIBS"}
         echo "✅ Done: $OUT"; echo "   (runtime may require hako.toml (compat: nyash.toml) and plugins depending on app)"; exit 0
       else
@@ -133,25 +141,31 @@ if [[ "${NYASH_LLVM_ONLY_OBJ:-0}" == "1" ]]; then
   exit 0
 fi
 
-echo "[3/4] Building Nyash Kernel static runtime ..."
+echo "[3/4] Building Kernel static runtime ..."
 # Auto-skip if NYASH_BENCH_SKIP_NYASH_BUILD=1 (avoid Cargo lock in bench_unified.sh)
 if [[ "${NYASH_BENCH_SKIP_NYASH_BUILD:-0}" == "1" ]]; then
   export NYASH_LLVM_SKIP_NYRT_BUILD=1
 fi
 if [[ "${NYASH_LLVM_SKIP_NYRT_BUILD:-0}" == "1" ]]; then
-  echo "    Skipping Nyash Kernel build (NYASH_LLVM_SKIP_NYRT_BUILD=1)"
+  echo "    Skipping Hako Kernel build (NYASH_LLVM_SKIP_NYRT_BUILD=1)"
 else
-  # Use 24 threads for parallel build
-  ( cd crates/nyash_kernel && cargo build --release -j 24 >/dev/null )
+  ( cd crates/hako_kernel && cargo build --release -j 24 >/dev/null )
 fi
 
 # Ensure output directory exists
 mkdir -p "$(dirname "$OUT")"
 echo "[4/4] Linking $OUT ..."
-cc "$OBJ" \
-  -L target/release \
-  -L crates/nyash_kernel/target/release \
-  -Wl,--whole-archive -lnyash_kernel -Wl,--no-whole-archive \
+LINK_DIR_NYRT="${NYASH_LLVM_NYRT:-crates/hako_kernel/target/release}"
+if [[ ! -f "$LINK_DIR_NYRT/libhako_kernel.a" && -f "crates/hako_kernel/target/release/libhako_kernel.a" ]]; then
+  LINK_DIR_NYRT="crates/hako_kernel/target/release"
+fi
+if [[ ! -f "$LINK_DIR_NYRT/libhako_kernel.a" ]]; then
+  echo "error: libhako_kernel.a not found (looked in $LINK_DIR_NYRT)" >&2
+  exit 4
+fi
+
+cc "$OBJ" -L target/release -L "$LINK_DIR_NYRT" \
+  -Wl,--whole-archive -lhako_kernel -Wl,--no-whole-archive \
   -lpthread -ldl -lm -o "$OUT"
 
 echo "✅ Done: $OUT"

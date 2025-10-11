@@ -54,7 +54,7 @@ Phase 15.7 — NyKernel (Option B) minimal AOT step
 - [x] Introduce `crates/hako_kernel` minimal static shim (C‑ABI stubs)
   - Exports: nyash.box.from_i8_string / nyash.string.* (len_h, concat_hh, eq_hh, substring_hii, lastIndexOf_hh, to_i8p_h, from_u64x2, birth_h), nyash.any.length_h, nyash.env.box.new_i64x, births for Array/Map
   - Provides `main()` → calls `ny_main()` (no output, exit code propagated)
-- [x] ny-llvmc links exe with `libhako_kernel.a` (or `libnyash_kernel.a`) automatically
+- [x] ny-llvmc links exe with `libhako_kernel.a` (or `libhako_kernel.a`) automatically
 - [x] Quick AOT smokes (compile+link+run)
   - tools/smokes/v2/profiles/quick/llvm/aot_const_ret_exe.sh (expects exit=0)
   - tools/smokes/v2/profiles/quick/llvm/aot_compare_branch_exe.sh (expects exit=1)
@@ -62,7 +62,7 @@ Phase 15.7 — NyKernel (Option B) minimal AOT step
 
 Notes
 - These stubs do not allocate or hold handles; they exist to unblock AOT linking and basic integer‑only execution.
-- When real string/collections are exercised, swap to `nyash_kernel` (full shim) or gradually enrich `hako_kernel`.
+- When real string/collections are exercised, swap to `hako_kernel` (full shim) or gradually enrich it.
 
 Updated: 2025‑10‑01
 
@@ -265,3 +265,63 @@ Run cheatsheet
 - Quick: `tools/smokes/v2/run.sh --profile quick`
 - Summary (on demand): `./target/release/nyash apps/selfhost/tools/dep_tree_main.hako apps/selfhost/ny-parser-nyash/main.nyash --summary`
 
+
+---
+
+Plugin Unification — Static Registration Plan (Phase 15.7+)
+
+Goal
+- Single source of truth under plugins/. Core chooses static (features) or dynamic (dlopen) from the same plugin crates.
+- Remove builtin CoreBox implementations (String/Array/Map) after parity; keep runtime boxes (Future/Result/Callable/Token/Console/Time) until plugin versions are wired.
+
+Design
+- Kernel features (hako_kernel):
+  - core-runtime: future/result/callable/null/debug/token/function (plugins)
+  - core-collections: string/array/map (plugins)
+  - core-io, core-network, full (optional aggregates)
+  - default = ["core-runtime", "core-collections"]
+- Static registration API:
+  - PluginHostV2::register_static(StaticTypeBox { box_type, type_id, invoke, birth, ... })
+  - Each plugin exposes pub fn register_static(host: &mut PluginHostV2)
+  - Kernel init: init_static_plugins() -> calls register_static per feature, then dynamic loader load_all_plugins(); type_id duplicates are skipped
+- Provider order:
+  1) static providers (features) 2) dynamic providers (dlopen) 3) builtin fallback (temporary; will be removed)
+
+Acceptance
+- quick: green with default features (bootstrap on)
+- plugins profile: green for String/Array/Map/Callable (values/remove/identity)
+- AOT: ny-llvmc resolves libhako_kernel.a and runs EXE (plugins optional)
+- No duplicate-registration errors in logs; static wins over dynamic
+
+Steps
+1) Add features + init_static_plugins() in hako_kernel
+2) Add PluginHostV2::register_static + duplicate-skip logic
+3) Implement register_static() in nyash-array/map/string-plugin
+4) quick: keep bootstrap (default features) ON to remain green; plugin-on smokes remain green
+5) Remove builtin CoreBox impls (string/array/map) once parity confirmed
+6) Migrate core runtime boxes to plugins (Null/Result/Callable → Future/Token) in small steps; keep env.future.* on host for now
+
+Notes
+- Map semantics: get→null missing, set/clear/push/sort/reverse→Null, remove→value-or-null (spec unified)
+- methodRef remains VM pseudo-method; plugin does not need slot 113
+- TLV tag=8/9 (PluginHandle/HostHandle) preserved; identity re-use via global handle cache is required for round-trips
+
+
+Delta — Core Collections via Plugins (2025‑10‑11)
+- ProviderBox unified NewBox entry. If a plugin box is created with instance_id=0, VM proactively calls birth() and adopts the returned handle.
+- Static specs loaded from per‑plugin hako_box.toml (type_id/method slots known without full config).
+- Env overlays: plugin‑on uses NYASH_PLUGIN_CONFIG=hako.toml; plugins profile keeps Stage‑1 keys/values (NYASH_PLUGIN_MAP_ARRAY_HANDLE=0).
+- Smokes: quick plugin_on_* green (4/4); plugins profile green (21/21).
+
+Next — Cleanup
+- Remove any residual references to VM convenience handlers in docs/tests.
+- Keep Stage‑2 HostHandle tests gated; re‑enable after host handle resolution tables are generalized.
+- Consider raising bootstrap static features default in hako_kernel once AOT path is exercised again.
+
+
+
+Update — 2025‑10‑11 (Runtime cleanup)
+- Stage‑1 keys/values fallback was moved out of the router into `src/runtime/adapters/map_keys_values_stage1.rs`.
+- Introduced `src/runtime/host_handle_router/` (thin entry today) to progressively move slot routing out of `host_api.rs`.
+- Added README and LAYER_GUARD files to keep responsibilities explicit.
+- Next: stabilize Stage‑2 identity (values() returns Array HostHandle referencing same instance) and add a print‑path smoke (to avoid futex deadlocks).

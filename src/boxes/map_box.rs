@@ -314,21 +314,6 @@ fn map_trace_enabled() -> bool {
 
 // legacy suggestion (did-you-mean) removed in Phase 15.7
 
-#[inline]
-fn suggest_score(q: &str, cand: &str) -> i32 {
-    if cand == q { return 1000; }
-    let ql = q.to_lowercase();
-    let cl = cand.to_lowercase();
-    if cl.starts_with(&ql) { return 300 - (cl.len() as i32 - ql.len() as i32).abs(); }
-    if cl.contains(&ql) { return 200 - (cl.len() as i32 - ql.len() as i32).abs(); }
-    let mut pref = 0;
-    for (a, b) in ql.chars().zip(cl.chars()) {
-        if a == b { pref += 1; } else { break; }
-    }
-    if pref > 0 { return 100 + pref as i32; }
-    0
-}
-
 // Clone implementation for MapBox (needed since RwLock doesn't auto-derive Clone)
 impl Clone for MapBox {
     fn clone(&self) -> Self {

@@ -40,6 +40,9 @@ pub fn init_global_unified_registry() {
         // StrictPluginFirst: plugins > user > builtin (SOLVES StringBox/IntegerBox issue)
         // BuiltinFirst: builtin > user > plugin (legacy default)
 
+        // Register minimal static metadata for core collections (no invoke yet)
+        crate::runtime::static_plugins::register_static_plugins();
+
         // Early plugin load (best-effort):
         // If policy/environment indicates plugin usage, attempt to load nyash.toml/hako.toml
         // and register providers into the v2 BoxFactoryRegistry so `new ArrayBox/MapBox` works

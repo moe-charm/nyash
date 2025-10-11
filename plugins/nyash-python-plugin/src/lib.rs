@@ -3,10 +3,7 @@
 //! - Two Box types: PyRuntimeBox (TYPE_ID=40) and PyObjectBox (TYPE_ID=41)
 
 // Import shared TLV codec from hako_abi_impl
-use hako_abi_impl::tlv::{
-    read_arg_string,
-    write_tlv_string, write_tlv_handle
-};
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_handle, write_tlv_string};
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;

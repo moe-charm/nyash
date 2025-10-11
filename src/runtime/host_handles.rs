@@ -88,6 +88,23 @@ pub fn to_handle_box(bx: Box<dyn NyashBox>) -> u64 {
 pub fn to_handle_arc(arc: Arc<dyn NyashBox>) -> u64 {
     let ty = arc.type_name();
     let arc_ptr = format!("{:p}", Arc::as_ptr(&arc));
+
+    // ✅ PluginBoxV2の場合、キャッシュに登録（identity保持のため）
+    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+    {
+        use crate::runtime::plugin_loader_v2::{PluginBoxV2, cache};
+        if let Some(pb) = arc.as_any().downcast_ref::<PluginBoxV2>() {
+            if let Ok(mut map) = cache().write() {
+                let key = (pb.inner.type_id, pb.inner.instance_id);
+                map.insert(key, std::sync::Arc::downgrade(&pb.inner));
+                if crate::runtime::env_gate_box::debug_plugin() {
+                    eprintln!("[host-handle] PluginBoxV2 cache insert: type_id={} instance_id={} cache_size={}",
+                             pb.inner.type_id, pb.inner.instance_id, map.len());
+                }
+            }
+        }
+    }
+
     let h = reg().alloc(arc);
     trace(&format!("alloc from Arc: id={} type={} arc_ptr={}", h, ty, arc_ptr));
     h

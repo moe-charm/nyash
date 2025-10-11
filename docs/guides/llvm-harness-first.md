@@ -22,7 +22,7 @@ Optional: AOT executable
 - Build ny kernel (either name is accepted):
   - cargo build --release -p nyash-llvm-compiler
   - cargo build --release -p nyash_kernel  (legacy) or cargo build --release -p hako_kernel (new)
- - Link executable by using ny-llvmc with --emit exe. ny-llvmc auto‑detects `libnyash_kernel.a`/`libhako_kernel.a` in `target/release/`.
+ - Link executable by using ny-llvmc with --emit exe. ny-llvmc auto‑detects `libhako_kernel.a`/`libnyash_kernel.a` in `target/release/`.
  - Quick examples:
    - tools/smokes/v2/profiles/quick/llvm/aot_const_ret_exe.sh
    - tools/smokes/v2/profiles/quick/llvm/aot_compare_branch_exe.sh
@@ -59,3 +59,12 @@ Smokes (compile-only)
 - v1→v0 downgrade gate:
   - tools/smokes/v2/profiles/quick/llvm/harness_v1_downgrade_call_compile_ok.sh
   - tools/smokes/v2/profiles/quick/llvm/harness_v1_downgrade_global_extern_compile_ok.sh
+
+
+## Kernel features (static plugins)
+
+- The LLVM harness works with a minimal static kernel archive.
+- Use Cargo features on `hako_kernel` to select which core boxes are statically embedded.
+  - default: `core-runtime` + `core-collections`
+  - `full`: embed IO/Network as well (File/Buffer/Stream/Http/Socket)
+- `ny-llvmc --nyrt <dir>` auto-detects `libhako_kernel.a` (legacy `libnyash_kernel.a` still accepted).

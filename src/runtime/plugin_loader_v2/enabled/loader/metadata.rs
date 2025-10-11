@@ -119,32 +119,37 @@ pub(super) fn metadata_for_type_id(
     loader: &PluginLoaderV2,
     type_id: u32,
 ) -> Option<PluginBoxMetadata> {
+    if let Ok(map) = loader.box_specs.read() {
+        for ((lib, btype), spec) in map.iter() {
+            if let Some(tid) = spec.type_id {
+                if tid == type_id {
+                    return Some(PluginBoxMetadata {
+                        lib_name: lib.clone(),
+                        box_type: btype.clone(),
+                        type_id: tid,
+                        invoke_fn: super::super::nyash_plugin_invoke_v2_shim,
+                        fini_method_id: spec.fini_method_id,
+                    });
+                }
+            }
+        }
+    }
     let config = loader.config.as_ref()?;
     let cfg_path = loader.config_path_str();
     let toml_str = std::fs::read_to_string(cfg_path).ok()?;
     let toml_value: TomlValue = toml::from_str(&toml_str).ok()?;
     let (lib_name, box_type) = find_box_by_type_id(config, &toml_value, type_id)?;
-    let plugins = loader.plugins.read().ok()?;
-    let _plugin = plugins.get(lib_name)?.clone();
     let spec_key = (lib_name.to_string(), box_type.to_string());
     let mut resolved_type = type_id;
     let mut fini_method = None;
     if let Some(spec) = loader.box_specs.read().ok()?.get(&spec_key).cloned() {
-        if let Some(tid) = spec.type_id {
-            resolved_type = tid;
-        }
-        if let Some(fini) = spec.fini_method_id {
-            fini_method = Some(fini);
-        }
+        if let Some(tid) = spec.type_id { resolved_type = tid; }
+        if let Some(fini) = spec.fini_method_id { fini_method = Some(fini); }
     }
     if resolved_type == type_id || fini_method.is_none() {
         if let Some(cfg) = config.get_box_config(lib_name, box_type, &toml_value) {
-            if resolved_type == type_id {
-                resolved_type = cfg.type_id;
-            }
-            if fini_method.is_none() {
-                fini_method = cfg.methods.get("fini").map(|m| m.method_id);
-            }
+            if resolved_type == type_id { resolved_type = cfg.type_id; }
+            if fini_method.is_none() { fini_method = cfg.methods.get("fini").map(|m| m.method_id); }
         }
     }
     Some(PluginBoxMetadata {
@@ -161,30 +166,31 @@ pub(super) fn construct_existing_instance(
     type_id: u32,
     instance_id: u32,
 ) -> Option<Box<dyn NyashBox>> {
+    if let Ok(map) = loader.box_specs.read() {
+        for ((lib, btype), spec) in map.iter() {
+            if let Some(tid) = spec.type_id {
+                if tid == type_id {
+                    let bx = construct_plugin_box(
+                        btype.clone(),
+                        type_id,
+                        super::super::nyash_plugin_invoke_v2_shim,
+                        instance_id,
+                        spec.fini_method_id,
+                    );
+                    return Some(Box::new(bx));
+                }
+            }
+        }
+    }
     let config = loader.config.as_ref()?;
     let cfg_path = loader.config_path_str();
     let toml_str = std::fs::read_to_string(cfg_path).ok()?;
     let toml_value: TomlValue = toml::from_str(&toml_str).ok()?;
     let (lib_name, box_type) = find_box_by_type_id(config, &toml_value, type_id)?;
-    let plugins = loader.plugins.read().ok()?;
-    let _plugin = plugins.get(lib_name)?.clone();
-    let fini_method_id = if let Some(spec) = loader
-        .box_specs
-        .read()
-        .ok()?
-        .get(&(lib_name.to_string(), box_type.to_string()))
-    {
-        spec.fini_method_id
-    } else {
+    let fini_method_id = if let Some(spec) = loader.box_specs.read().ok()?.get(&(lib_name.to_string(), box_type.to_string())) { spec.fini_method_id } else {
         let box_conf = config.get_box_config(lib_name, box_type, &toml_value)?;
         box_conf.methods.get("fini").map(|m| m.method_id)
     };
-    let bx = construct_plugin_box(
-        box_type.to_string(),
-        type_id,
-        super::super::nyash_plugin_invoke_v2_shim,
-        instance_id,
-        fini_method_id,
-    );
+    let bx = construct_plugin_box(box_type.to_string(), type_id, super::super::nyash_plugin_invoke_v2_shim, instance_id, fini_method_id);
     Some(Box::new(bx))
 }

@@ -12,8 +12,8 @@ use std::sync::{
 
 // Use shared ABI implementation for TLV codec
 use hako_abi_impl::tlv::{
-    read_arg_i64, read_arg_string, read_arg_handle, read_arg_host_handle,
-    write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_host_handle
+    read_arg_handle, read_arg_host_handle, read_arg_i64, read_arg_string, write_tlv_handle,
+    write_tlv_host_handle, write_tlv_i64, write_tlv_string,
 };
 
 // ===== Error Codes (aligned with existing plugins) =====
@@ -75,11 +75,13 @@ extern "C" fn array_resolve(name: *const c_char) -> u32 {
     }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
+        "birth" => METHOD_BIRTH,
         "len" | "length" | "size" => METHOD_LENGTH,
         "get" => METHOD_GET,
         "set" => METHOD_SET,
         "push" => METHOD_PUSH,
         "slice" => METHOD_SLICE,
+        "fini" => METHOD_FINI,
         _ => 0,
     }
 }
@@ -159,10 +161,7 @@ extern "C" fn array_invoke_id(
                 }
 
                 if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                    eprintln!(
-                        "[array-plugin] SLICE created plugin instance={}",
-                        new_id
-                    );
+                    eprintln!("[array-plugin] SLICE created plugin instance={}", new_id);
                 }
                 return write_tlv_handle(TYPE_ID_ARRAY, new_id, result, result_len);
             }
@@ -384,3 +383,16 @@ fn read_arg_value(args: *const u8, args_len: usize, n: usize) -> Option<ArrayVal
 // write_tlv_host_handle is now provided by hako_abi_impl::tlv (imported at top)
 
 // Unused helper functions removed: preflight, build_tlv_i64_i64
+
+// Static-link per-Box invoke symbol for host static registration
+#[no_mangle]
+pub extern "C" fn nyash_array_plugin_invoke_static(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    array_invoke_id(instance_id, method_id, args, args_len, result, result_len)
+}

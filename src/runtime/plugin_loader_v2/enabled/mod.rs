@@ -11,9 +11,11 @@ mod types;
 pub use globals::{get_global_loader_v2, init_global_loader_v2, shutdown_plugins_v2};
 pub use loader::PluginLoaderV2;
 pub use types::{
-    construct_plugin_box, make_plugin_box_v2, NyashTypeBoxFfi, PluginBoxMetadata, PluginBoxV2,
-    PluginHandleInner,
+    cache, construct_plugin_box, make_plugin_box_v2, NyashTypeBoxFfi, PluginBoxMetadata,
+    PluginBoxV2, PluginHandleInner,
 };
+// Re-export BoxInvokeFn alias for external callers
+pub use host_bridge::BoxInvokeFn;
 
 pub fn metadata_for_type_id(type_id: u32) -> Option<PluginBoxMetadata> {
     let loader = get_global_loader_v2();

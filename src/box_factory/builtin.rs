@@ -20,10 +20,6 @@ use crate::box_trait::NyashBox;
 // Separated implementations (Phase 0: ✅ Complete)
 use super::builtin_impls;
 
-fn env_truthy(key: &str) -> bool {
-    matches!(std::env::var(key).ok().as_deref(), Some("1"|"true"|"on"|"yes"))
-}
-
 /// Factory for builtin Box types
 pub struct BuiltinBoxFactory;
 

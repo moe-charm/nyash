@@ -8,7 +8,7 @@ Status: active (foundation); Scope: VM/LLVM 共通の設計方針の最小合意
 - 解決順序を一意にし、後からの移行（プラグイン化）を容易にする。
 
 ## Layers（責務）
-- Kernel（crates/nyash_kernel/）
+- Kernel（crates/hako_kernel/）
   - GC/handles（Box ID, Arc<u64> 変換）
   - Host ABI/extern registry（例: time.now_ms 等）
   - Plugin host/loader v2（動的ロード・メタ照会・呼出し橋渡し）
@@ -49,8 +49,67 @@ Notes
 - 自己ホスト最小系（emit-only, M1 bootstrap）が動作
 
 ## Pointers（参照）
-- Kernel: `crates/nyash_kernel/`
+- Kernel: `crates/hako_kernel/`
 - VM backend handlers: `src/backend/mir_interpreter/handlers/`
 - Box factory/override: `src/box_factory/`
 - ENV/Policy: `docs/config/env.md`
 
+
+## Static vs Dynamic (Single Source Plugins)
+
+Design
+- All box implementations live under `plugins/`.
+- Kernel selects a static subset via Cargo features (e.g., `core-runtime`, `core-collections`) and can still load dynamic plugins (dlopen) at runtime.
+- Registration is unified via a single path:
+  - Static: each plugin exposes `pub fn register_static(host: &mut PluginHostV2)` and kernel calls it during `init_static_plugins()`.
+  - Dynamic: loader ingests `nyash_box.toml` (type_id/method ids) and resolves the same metadata/symbols before calling `register_static(...)` internally.
+
+Features (proposal)
+- `core-runtime`: Future/Result/Callable/Null/Debug/Token/Function
+- `core-collections`: String/Array/Map
+- `core-io`: File/Buffer/Stream
+- `core-network`: Http/Socket
+- `full`: aggregate of all groups (standalone distribution)
+- default = ["core-runtime", "core-collections"]
+
+Initialization order (Provider)
+1) `init_static_plugins()`
+2) `load_all_plugins()`
+3) Rebuild type/method caches
+
+Duplicate handling
+- If the same `box_type`/`type_id` is registered from both static and dynamic sources, the dynamic registration is skipped.
+
+Acceptance
+- quick profile: green with defaults (bootstrap on)
+- plugins profile: green for core collections and callable (values/remove/identity)
+- AOT: `ny-llvmc` resolves `libhako_kernel.a` and EXE runs without dynamic plugins
+
+
+
+## What Changed (2025‑10‑11)
+
+- ProviderBox is the single NewBox entry. Order: PluginHost → Registry → Embedded. When a plugin box returns `instance_id=0`, the VM proactively calls `birth()` and adopts the returned handle (fail‑safe birth adoption).
+- Static plugin specs are now ingested from per‑plugin `hako_box.toml` via `src/runtime/static_plugins/mod.rs` so type_id/method ids are known even without full `hako.toml`.
+- Per‑Box invoke pointers for Array/Map/String can be registered when features are enabled (static linkage). Dynamic runs still prefer dlopen.
+- Env overlays updated:
+  - plugin‑on profile uses `NYASH_PLUGIN_CONFIG=hako.toml` explicitly.
+  - plugins profile sets `NYASH_PLUGIN_MAP_ARRAY_HANDLE=0` (Stage‑1 fallback: keysS/valuesS → host converts newline string → ArrayBox). Stage‑2 HostHandle path remains opt‑in.
+
+## Route Map (Core Collections)
+
+- MapBox
+  - get(missing) → null（NullBox）
+  - set/clear → null（破壊系の返り値は null で統一）
+  - remove(key) → 削除した値（見つからなければ null）
+  - keys/values: Stage‑1 では `keysS/valuesS` を経由し、ホストが `ArrayBox<String>` に正規化。Stage‑2 HostHandle は `NYASH_PLUGIN_MAP_ARRAY_HANDLE=1` で有効。
+- ArrayBox
+  - get(oob) → null / set/push → null / size() あり
+- StringBox
+  - size/substring/charAt/indexOf/lastIndexOf 等を Plugin 実装へ（VM 便宜ハンドラは撤退済み）
+
+## Status
+
+- quick (plugin‑on subset) green
+- plugins profile green（Map remove/keys/values/identity を含む）
+- VM convenience handlers（String/Map/Array）と BoxCall fast‑paths は撤退済み（Plugin 経路を優先）

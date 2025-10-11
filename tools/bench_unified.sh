@@ -121,11 +121,11 @@ if [[ "$BACKEND" == "all" || "$BACKEND" == "llvm" ]]; then
         exit 1
     fi
 
-    echo -e "${BLUE}🔧 Pre-building Nyash Kernel...${NC}"
-    if ( cd crates/nyash_kernel && cargo build --release -j 24 >/dev/null 2>&1 ); then
-        echo -e "  ${GREEN}✓${NC} Nyash Kernel ready"
+    echo -e "${BLUE}🔧 Pre-building Hako Kernel...${NC}"
+    if ( cd crates/hako_kernel && cargo build --release -j 24 >/dev/null 2>&1 ); then
+        echo -e "  ${GREEN}✓${NC} Hako Kernel ready"
     else
-        echo -e "  ${RED}✗${NC} Nyash Kernel build failed"
+        echo -e "  ${RED}✗${NC} Hako Kernel build failed"
         exit 1
     fi
 

@@ -3,9 +3,7 @@
 use crate::constants::*;
 
 // Import shared TLV codec from hako_abi_impl
-use hako_abi_impl::tlv::{
-    write_tlv_bool, write_tlv_string, write_tlv_handle
-};
+use hako_abi_impl::tlv::{write_tlv_bool, write_tlv_handle, write_tlv_string};
 
 pub fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
     if result_len.is_null() {

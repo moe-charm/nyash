@@ -18,28 +18,40 @@ impl PluginLoaderV2 {
         // Fast-path: prefer specs (ingested from nyash_box.toml / TypeBox FFI) for type/method IDs.
         // This avoids strict dependency on a fully-loaded nyash.toml when partial plugin loads are used.
         let (type_id, birth_id_opt, fini_id) = if let Ok(map) = self.box_specs.read() {
-            if let Some((_, spec)) = map.iter().find(|((_lib, bt), _)| bt == &box_type) {
-                if let Some(tid) = spec.type_id {
-                    let birth = spec
-                        .methods
-                        .get("birth")
-                        .map(|m| m.method_id)
-                        .or_else(|| spec.resolve_fn.and_then(|rf| {
-                            std::ffi::CString::new("birth")
-                                .ok()
-                                .map(|s| rf(s.as_ptr()))
-                                .filter(|&mid| mid != 0)
-                        }));
-                    (tid, birth, spec.fini_method_id)
-                } else {
-                    resolve_box_ids_optional(self, box_type)?
+            // Prefer spec entries that have a resolve_fn (from TypeBox FFI), fallback otherwise.
+            let mut best: Option<(u32, Option<u32>, Option<u32>)> = None;
+            for ((_lib, bt), spec) in map.iter() {
+                if bt == &box_type {
+                    if let Some(tid) = spec.type_id {
+                        let birth = spec
+                            .methods
+                            .get("birth")
+                            .map(|m| m.method_id)
+                            .or_else(|| spec.resolve_fn.and_then(|rf| {
+                                std::ffi::CString::new("birth").ok().map(|s| rf(s.as_ptr())).filter(|&mid| mid != 0)
+                            }));
+                        let item = (tid, birth, spec.fini_method_id);
+                        if spec.resolve_fn.is_some() {
+                            if birth.is_some() {
+                                best = Some(item);
+                                break;
+                            } else if best.is_none() {
+                                best = Some(item);
+                            }
+                        } else if best.is_none() {
+                            best = Some(item);
+                        }
+                    }
                 }
-            } else {
-                resolve_box_ids_optional(self, box_type)?
+            }
+            match best {
+                Some((tid, Some(birth_id), fini)) => (tid, Some(birth_id), fini),
+                _ => resolve_box_ids_optional(self, box_type)?,
             }
         } else {
             resolve_box_ids_optional(self, box_type)?
         };
+
 
         // Try to get per-Box invoke function directly from spec (lib+box) to avoid
         // dependency on type_id→invoke mapping when config is missing.

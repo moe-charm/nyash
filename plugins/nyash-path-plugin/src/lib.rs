@@ -1,10 +1,7 @@
 //! Nyash PathBox Plugin - minimal path ops (join, dirname, basename, extname, isAbs, normalize)
 
 // Import shared TLV codec from hako_abi_impl
-use hako_abi_impl::tlv::{
-    read_arg_string,
-    write_tlv_bool, write_tlv_string
-};
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_bool, write_tlv_string};
 
 use once_cell::sync::Lazy;
 use std::collections::HashMap;

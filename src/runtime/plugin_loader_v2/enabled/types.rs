@@ -234,7 +234,7 @@ impl PluginBoxV2 {
 // Global cache: (type_id, instance_id) → Weak<PluginHandleInner>
 static HANDLE_CACHE: OnceCell<RwLock<std::collections::HashMap<(u32, u32), Weak<PluginHandleInner>>>> = OnceCell::new();
 
-fn cache() -> &'static RwLock<std::collections::HashMap<(u32, u32), Weak<PluginHandleInner>>> {
+pub fn cache() -> &'static RwLock<std::collections::HashMap<(u32, u32), Weak<PluginHandleInner>>> {
     HANDLE_CACHE.get_or_init(|| RwLock::new(std::collections::HashMap::new()))
 }
 
@@ -247,9 +247,19 @@ pub fn get_or_create_handle(
     if let Ok(map) = cache().read() {
         if let Some(w) = map.get(&(type_id, instance_id)) {
             if let Some(a) = w.upgrade() {
+                if crate::runtime::env_gate_box::debug_plugin() {
+                    eprintln!("[CACHE HIT] type_id={} instance_id={} arc_strong={}", type_id, instance_id, Arc::strong_count(&a));
+                }
                 return a;
+            } else {
+                if crate::runtime::env_gate_box::debug_plugin() {
+                    eprintln!("[CACHE EXPIRED] type_id={} instance_id={} (Weak expired)", type_id, instance_id);
+                }
             }
         }
+    }
+    if crate::runtime::env_gate_box::debug_plugin() {
+        eprintln!("[CACHE MISS] type_id={} instance_id={} - creating new Arc", type_id, instance_id);
     }
     let arc = Arc::new(PluginHandleInner {
         type_id,
@@ -260,6 +270,9 @@ pub fn get_or_create_handle(
     });
     if let Ok(mut map) = cache().write() {
         map.insert((type_id, instance_id), Arc::downgrade(&arc));
+        if crate::runtime::env_gate_box::debug_plugin() {
+            eprintln!("[CACHE INSERT] type_id={} instance_id={} cache_size={}", type_id, instance_id, map.len());
+        }
     }
     arc
 }

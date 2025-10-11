@@ -1,17 +1,17 @@
 # VM Convenience Handlers — Deprecation & Removal Plan (Phase 15.7)
 
-Status: in-progress → partial-complete; Scope: src/backend/mir_interpreter/handlers/*（VM固有）
+Status: completed (handlers/fast-paths) → cleanup ongoing; Scope: src/backend/mir_interpreter/handlers/*（VM固有）
 
 Progress (this change set):
 - String VM convenience handlers: removed
 - Map VM convenience handlers: removed
 - Array VM convenience handlers: removed
 - BoxCall fast‑paths (String/Map/Array): removed
-- plugin-on quick-selfhost smokes: green (3/3)
+- plugin-on quick smokes: green (4/4)
   - Added: plugin_on_map_keys_values_vm, plugin_on_array_slice_vm (basic get/set/len), plugin_on_basic_vm
   - Auto-build plugins in preflight; dynamic plugin presence check aligned with actual artifacts
 
-Next:
+Next (cleanup focus):
 - Builtin boxes (String/Map/Array) removal requires plugin parity; keep until dynamic plugins are available by default in dev runs.
   - Staged toggles available for validation: NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}=1
   - Permit plugin override of reserved types via NYASH_USE_PLUGIN_BUILTINS=1 and NYASH_PLUGIN_OVERRIDE_TYPES
@@ -62,5 +62,6 @@ Next:
 備考: plugin-on 環境は `SMOKES_PROFILE_ENV=plugin-on` で `tools/smokes/v2/configs/env/plugin-on.env` を読込。
 
 ## 備考
+- Stage‑2 HostHandle path for Map.keys/values remains opt‑in in plugins profile (default OFF). Stage‑1 shim via keysS/valuesS is active and verified.
 - 長期: CoreBoxの Kernel 側残骸は Null/Missing など最小系に限定
 - 文字列エラー判定（"Key not found:") は全面廃止（null チェックへ統一）

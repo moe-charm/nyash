@@ -15,12 +15,15 @@ use std::sync::{
 
 // Import shared TLV codec from hako_abi_impl
 use hako_abi_impl::tlv::{
-    read_arg_i64, read_arg_string, read_arg_handle, read_arg_host_handle, read_arg_bool,
-    write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_host_handle, write_tlv_bool
+    read_arg_bool, read_arg_handle, read_arg_host_handle, read_arg_i64, read_arg_string,
+    write_tlv_bool, write_tlv_handle, write_tlv_host_handle, write_tlv_i64, write_tlv_string,
 };
 
 // Import plugin-specific helpers from local tlv_codec
-use tlv_codec::{preflight, build_tlv_i64_string, build_tlv_i64_i64, v_to_string, write_mapval_tlv};
+use tlv_codec::{
+    build_tlv_i64_handle, build_tlv_i64_host_handle, build_tlv_i64_i64, build_tlv_i64_string,
+    preflight, v_to_string, write_mapval_tlv,
+};
 
 extern "C" {
     fn nyrt_host_call_name(
@@ -102,10 +105,12 @@ extern "C" fn mapbox_resolve(name: *const c_char) -> u32 {
     }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
+        "birth" => METHOD_BIRTH,
         "size" | "len" => METHOD_SIZE,
         "get" => METHOD_GET,
         "has" => METHOD_HAS,
         "set" => METHOD_SET,
+        "fini" => METHOD_FINI,
         "getS" => METHOD_GET_STR,
         "hasS" => METHOD_HAS_STR,
         // Stage-1 host shim: expose string-returning variants for keys/values
@@ -146,134 +151,96 @@ fn map_keys_values_stage2(
         if arr_h <= 0 {
             return NYB_E_PLUGIN_ERROR;
         }
-        let mut i: i64 = 0;
-        // Prepare pairs (index, string)
-        if let Ok(map) = INSTANCES.lock() {
-            if let Some(inst) = map.get(&instance_id) {
-                if method_id == METHOD_KEYS {
-                    // keys as strings, sorted
-                    let keys = hako_core_map::keys_sorted_from_maps_i64_str(
-                        &inst.data_i64,
-                        &inst.data_str,
-                    );
-                    for k in keys.into_iter() {
-                        let tlv = build_tlv_i64_string(i, &k);
-                        // Robust out buffer: start moderately sized and grow on SHORT_BUFFER
-                        let mut cap: usize = 64;
-                        let mut out: Vec<u8> = vec![0u8; cap];
-                        let rc = loop {
-                            let mut out_len: usize = out.len();
-                            let rc = nyrt_host_call_slot(
-                                arr_h as u64,
-                                101u64,
-                                tlv.as_ptr(),
-                                tlv.len(),
-                                out.as_mut_ptr(),
-                                &mut out_len,
-                            );
-                            if rc == 0 {
-                                break rc;
-                            }
-                            // Host encode_out uses -3 for SHORT_BUFFER
-                            if rc == -3 {
-                                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1")
-                                {
-                                    eprintln!("[map-plugin] SHORT_BUFFER on Array.set: cap={} need?>={} rc={}", cap, out_len, rc);
-                                }
-                                cap = cap.saturating_mul(2);
-                                if cap > 64 * 1024 {
-                                    return NYB_E_PLUGIN_ERROR;
-                                }
-                                out.resize(cap, 0);
-                                continue;
-                            }
-                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                                eprintln!(
-                                    "[map-plugin] host_call_slot(Array.set) failed rc={} (len={})",
-                                    rc, out_len
-                                );
-                            }
-                            return NYB_E_PLUGIN_ERROR;
+        // Lock scope separation: Extract data BEFORE calling host functions
+        // (avoids deadlock when nyrt_host_call_slot -> ArrayBox -> array-plugin needs INSTANCES lock)
+        let data_to_insert: Vec<(i64, MapVal)> = {
+            let map = match INSTANCES.lock() {
+                Ok(m) => m,
+                Err(_) => return NYB_E_INVALID_HANDLE,
+            };
+            let inst = match map.get(&instance_id) {
+                Some(i) => i,
+                None => return NYB_E_INVALID_HANDLE,
+            };
+            if method_id == METHOD_KEYS {
+                // Extract keys as strings (sorted)
+                let keys = hako_core_map::keys_sorted_from_maps_i64_str(
+                    &inst.data_i64,
+                    &inst.data_str,
+                );
+                keys.into_iter()
+                    .enumerate()
+                    .map(|(idx, k)| (idx as i64, MapVal::Str(k)))
+                    .collect()
+            } else {
+                // Extract values (aligned to sorted keys)
+                let keys = hako_core_map::keys_sorted_from_maps_i64_str(
+                    &inst.data_i64,
+                    &inst.data_str,
+                );
+                let aligned = hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
+                aligned
+                    .into_iter()
+                    .enumerate()
+                    .map(|(idx, v)| {
+                        let val = match v {
+                            Some(mv) => mv.clone(),
+                            None => MapVal::Str(String::new()),
                         };
-                        if rc != 0 {
-                            return NYB_E_PLUGIN_ERROR;
-                        }
-                        i += 1;
-                    }
-                } else {
-                    // values aligned to sorted keys; numeric as i64, others stringified
-                    let keys = hako_core_map::keys_sorted_from_maps_i64_str(
-                        &inst.data_i64,
-                        &inst.data_str,
-                    );
-                    let aligned =
-                        hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
-                    for v in aligned.into_iter() {
-                        let rc = if let Some(MapVal::I64(n)) = v {
-                            let tlv = build_tlv_i64_i64(i, *n);
-                            let mut cap: usize = 64;
-                            let mut out: Vec<u8> = vec![0u8; cap];
-                            loop {
-                                let mut out_len: usize = out.len();
-                                let rc = nyrt_host_call_slot(
-                                    arr_h as u64,
-                                    101u64,
-                                    tlv.as_ptr(),
-                                    tlv.len(),
-                                    out.as_mut_ptr(),
-                                    &mut out_len,
-                                );
-                                if rc == 0 {
-                                    break rc;
-                                }
-                                if rc == -3 {
-                                    cap = cap.saturating_mul(2);
-                                    if cap > 64 * 1024 {
-                                        return NYB_E_PLUGIN_ERROR;
-                                    }
-                                    out.resize(cap, 0);
-                                    continue;
-                                }
-                                return NYB_E_PLUGIN_ERROR;
-                            }
-                        } else {
-                            let s = v.map(|vv| v_to_string(vv)).unwrap_or_else(String::new);
-                            let tlv = build_tlv_i64_string(i, &s);
-                            let mut cap: usize = 64;
-                            let mut out: Vec<u8> = vec![0u8; cap];
-                            loop {
-                                let mut out_len: usize = out.len();
-                                let rc = nyrt_host_call_slot(
-                                    arr_h as u64,
-                                    101u64,
-                                    tlv.as_ptr(),
-                                    tlv.len(),
-                                    out.as_mut_ptr(),
-                                    &mut out_len,
-                                );
-                                if rc == 0 {
-                                    break rc;
-                                }
-                                if rc == -3 {
-                                    cap = cap.saturating_mul(2);
-                                    if cap > 64 * 1024 {
-                                        return NYB_E_PLUGIN_ERROR;
-                                    }
-                                    out.resize(cap, 0);
-                                    continue;
-                                }
-                                return NYB_E_PLUGIN_ERROR;
-                            }
-                        };
-                        if rc != 0 {
-                            return NYB_E_PLUGIN_ERROR;
-                        }
-                        i += 1;
-                    }
-                }
+                        (idx as i64, val)
+                    })
+                    .collect()
             }
-        } else {
-            return NYB_E_INVALID_HANDLE;
+        };  // ← Lock released here!
+
+        // Now populate ArrayBox WITHOUT holding INSTANCES lock
+        for (i, val) in data_to_insert.into_iter() {
+            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                eprintln!("[map-plugin] stage2 insert idx={} variant={}", i, tlv_codec::v_to_string(&val));
+            }
+            let tlv = match val {
+                MapVal::I64(n) => build_tlv_i64_i64(i, n),
+                MapVal::Str(s) => build_tlv_i64_string(i, &s),
+                MapVal::Handle(t, inst_id) => build_tlv_i64_handle(i, t, inst_id),
+                MapVal::Host(h) => build_tlv_i64_host_handle(i, h),
+            };
+            let mut cap: usize = 64;
+            let mut out: Vec<u8> = vec![0u8; cap];
+            let rc = loop {
+                let mut out_len: usize = out.len();
+                let rc = nyrt_host_call_slot(
+                    arr_h as u64,
+                    101u64,
+                    tlv.as_ptr(),
+                    tlv.len(),
+                    out.as_mut_ptr(),
+                    &mut out_len,
+                );
+                if rc == 0 {
+                    break rc;
+                }
+                if rc == -3 {
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[map-plugin] SHORT_BUFFER on Array.set: cap={} need?>={} rc={}", cap, out_len, rc);
+                    }
+                    cap = cap.saturating_mul(2);
+                    if cap > 64 * 1024 {
+                        return NYB_E_PLUGIN_ERROR;
+                    }
+                    out.resize(cap, 0);
+                    continue;
+                }
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[map-plugin] host_call_slot(Array.set) failed rc={} (len={})",
+                        rc, out_len
+                    );
+                }
+                return NYB_E_PLUGIN_ERROR;
+            };
+            if rc != 0 {
+                return NYB_E_PLUGIN_ERROR;
+            }
         }
         write_tlv_host_handle(arr_h as u64, result, result_len)
     }
@@ -458,6 +425,7 @@ extern "C" fn mapbox_invoke_id(
             }
         }
         METHOD_SET => {
+            let debug = true;
             // key: i64 or string; value: i64/String/Handle/HostHandle
             let val = if let Some(v) = read_arg_i64(args, args_len, 1) {
                 MapVal::I64(v)
@@ -470,10 +438,13 @@ extern "C" fn mapbox_invoke_id(
             } else {
                 return NYB_E_INVALID_ARGS;
             };
+            if debug {
+                eprintln!("[map-plugin] set value variant={}", tlv_codec::v_to_string(&val));
+            }
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
-                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        if debug {
                             eprintln!("[map-plugin] set int key={}", ik);
                         }
                         inst.data_i64.insert(ik, val);
@@ -492,7 +463,7 @@ extern "C" fn mapbox_invoke_id(
             } else if let Some(sk) = read_arg_string(args, args_len, 0) {
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
-                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        if debug {
                             eprintln!("[map-plugin] set str key={}", sk);
                         }
                         inst.data_str.insert(sk, val);
@@ -519,7 +490,11 @@ extern "C" fn mapbox_invoke_id(
                     if let Some(ik) = read_arg_i64(args, args_len, 0) {
                         if let Some(value) = inst.data_i64.remove(&ik) {
                             if debug {
-                                eprintln!("[map-plugin] remove int key={} variant={}", ik, v_to_string(&value));
+                                eprintln!(
+                                    "[map-plugin] remove int key={} variant={}",
+                                    ik,
+                                    v_to_string(&value)
+                                );
                             }
                             return write_mapval_tlv(&value, result, result_len);
                         }
@@ -533,7 +508,11 @@ extern "C" fn mapbox_invoke_id(
                     if let Some(sk) = read_arg_string(args, args_len, 0) {
                         if let Some(value) = inst.data_str.remove(&sk) {
                             if debug {
-                                eprintln!("[map-plugin] remove str key={} variant={}", sk, v_to_string(&value));
+                                eprintln!(
+                                    "[map-plugin] remove str key={} variant={}",
+                                    sk,
+                                    v_to_string(&value)
+                                );
                             }
                             return write_mapval_tlv(&value, result, result_len);
                         }
@@ -689,3 +668,16 @@ pub static nyash_typebox_MapBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     invoke_id: Some(mapbox_invoke_id),
     capabilities: 0,
 };
+
+// Static-link per-Box invoke symbol for host static registration
+#[no_mangle]
+pub extern "C" fn nyash_map_plugin_invoke_static(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    mapbox_invoke_id(instance_id, method_id, args, args_len, result, result_len)
+}

@@ -30,6 +30,11 @@ dynamic-file = []
 wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # プラグイン機構の有効化（ネイティブ環境のみ推奨）
 plugins = ["dep:libloading"]
+## Static plugin linkage (optional): when enabled, runtime registers
+## per-Box invoke pointers from statically linked plugin crates.
+static-array-plugin = ["dep:nyash-array-plugin"]
+static-map-plugin   = ["dep:nyash-map-plugin"]
+static-string-plugin= ["dep:nyash-string-plugin"]
 # MIR instruction diet PoC flags (scaffolding only; off by default)
 mir_typeop_poc = []
 mir_refbarrier_unify_poc = []
@@ -163,6 +168,9 @@ hako_core_string = { path = "crates/hako_core_string" }
 hako_core_array = { path = "crates/hako_core_array" }
 hako_core_map = { path = "crates/hako_core_map" }
 hako_core_callable = { path = "crates/hako_core_callable" }
+nyash-array-plugin = { path = "plugins/nyash-array-plugin", optional = true }
+nyash-map-plugin   = { path = "plugins/nyash-map-plugin", optional = true }
+nyash-string-plugin= { path = "plugins/nyash-string-plugin", optional = true }
 
 # 日時処理
 chrono = "0.4"
@@ -264,6 +272,7 @@ members = [
 exclude = [
   "plugins/nyash-file",
   "plugins/nyash-test-multibox",
+  "plugins/legacy",
 ]
 
 [profile.release]

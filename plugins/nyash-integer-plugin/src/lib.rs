@@ -11,9 +11,7 @@ use std::sync::{
 };
 
 // Import shared TLV codec from hako_abi_impl
-use hako_abi_impl::tlv::{
-    read_arg_i64, write_tlv_i64, write_tlv_handle
-};
+use hako_abi_impl::tlv::{read_arg_i64, write_tlv_handle, write_tlv_i64};
 
 // Error codes
 const OK: i32 = 0;

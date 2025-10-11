@@ -281,7 +281,7 @@ bb9:
 +     echo "🔧 Pre-building nyash with LLVM features..."
 +     cargo build --release -j 24 -p nyash-rust --features llvm
 +     echo "🔧 Pre-building Nyash Kernel..."
-+     ( cd crates/nyash_kernel && cargo build --release -j 24 )
++     ( cd crates/hako_kernel && cargo build --release -j 24 )
 +     export NYASH_BENCH_SKIP_NYASH_BUILD=1
 + fi
 

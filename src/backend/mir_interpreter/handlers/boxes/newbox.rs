@@ -20,11 +20,24 @@ impl MirInterpreter {
             for vid in args { converted_pb.push(self.reg_load(*vid)?.to_nyash_box()); }
             crate::runtime::provider_box::ensure_loaded(None);
             if let Ok(created) = crate::runtime::provider_box::new_box(box_type, &converted_pb) {
-                let created_vm = VMValue::from_nyash_box(created);
+                let mut created_vm = VMValue::from_nyash_box(created);
+                // If plugin box without instance, proactively call birth() and adopt returned handle
+                if let VMValue::BoxRef(bx) = &created_vm {
+                    if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                        if p.instance_id() == 0 {
+                            let host = crate::runtime::plugin_loader_unified::get_global_plugin_host();
+                            if let Ok(ro) = host.read() {
+                                if let Ok(ret) = ro.invoke_instance_method(box_type, "birth", 0, &converted_pb) {
+                                    if let Some(vb) = ret { created_vm = VMValue::from_nyash_box(vb); }
+                                }
+                            };
+                        }
+                    }
+                }
                 self.regs.insert(dst, created_vm.clone());
                 if let VMValue::BoxRef(arc_box) = &created_vm { self.scope.register_box(arc_box.clone()); }
                 crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::mark_new(self, dst, box_type, args.len());
-                // Always attempt birth; ignore missing method
+                // Always attempt birth; ignore missing method (idempotent for plugin or user boxes)
                 let _ = self.handle_box_call(None, dst, "birth", args);
                 crate::backend::mir_interpreter::helpers::lifecycle_contracts_box::LifecycleContractsBox::born_if_no_birth(self, dst, box_type, args.len());
                 return Ok(());

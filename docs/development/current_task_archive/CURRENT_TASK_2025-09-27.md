@@ -636,7 +636,7 @@ Phase 1（完了）
 **技術革命**: 3つの重大問題を同時解決
 
 #### **🔧 1. アーキテクチャ変更完了**
-- **完全移行**: `crates/nyrt` → `crates/nyash_kernel`
+- **完全移行**: `crates/nyrt` → `crates/hako_kernel`
 - **プラグインファースト**: `with_legacy_vm_args` 11箇所完全削除
 - **コード削減**: 42%削除可能関数特定（ChatGPT5 Pro分析）
 
@@ -647,7 +647,7 @@ Phase 1（完了）
 - **検証**: ✅ `🎉 ExternCall print修正テスト！` 完璧出力確認
 
 #### **🔧 3. リンク統合完了**
-- **ライブラリ更新**: `libnyrt.a` → `libnyash_kernel.a`
+- **ライブラリ更新**: `libnyrt.a` → `libhako_kernel.a`
 - **ビルドシステム**: `tools/build_llvm.sh` 完全対応
 - **実行確認**: Python LLVM → リンク → 実行パイプライン成功
 
@@ -692,16 +692,16 @@ Phase 1（完了）
 **設計文書**: [chatgpt5-nyrt-kernel-design.md](docs/development/roadmap/phases/phase-15/chatgpt5-nyrt-kernel-design.md)
 
 **🎉 完全実装成果** (2025-09-24):
-- **✅ NyKernel化完了**: `crates/nyrt` → `crates/nyash_kernel`
+- **✅ NyKernel化完了**: `crates/nyrt` → `crates/hako_kernel`
 - **✅ 42%削減達成**: 11箇所の`with_legacy_vm_args`完全除去
 - **✅ Plugin-First統一**: 旧VM依存システム完全根絶
-- **✅ ビルド成功**: libnyash_kernel.a完全生成（0エラー・0警告）
+- **✅ ビルド成功**: libhako_kernel.a完全生成（0エラー・0警告）
 
 **🛠️ 実装詳細**:
 - **Phase A-B完了**: アーキテクチャ変更・参照更新・Legacy削除
 - **コンパイルエラー**: 11個 → 0個（100%解決）
 - **削除対象**: encode.rs, birth.rs, future.rs, invoke.rs, invoke_core.rs
-- **C ABI準備**: libnyash_kernel.a生成完了
+- **C ABI準備**: libhako_kernel.a生成完了
 
 **🚀 革命的効果**: ChatGPT5×Claude協働開発の画期的成果達成！
 
@@ -816,10 +816,10 @@ Phase 1（完了）
     - LLVM/VM統一設計の完全実現への道筋確立
     - 42%削減（26個関数→プラグイン統合）+ 設計一貫性100%達成戦略
 13. **🎉 Phase 2.4 NyRT→NyKernelアーキテクチャ革命100%完了！**
-    - crates/nyrt → crates/nyash_kernel 完全移行成功
+    - crates/nyrt → crates/hako_kernel 完全移行成功
     - with_legacy_vm_args 11箇所系統的削除完了（42%削減達成）
     - コンパイルエラー 11個→0個（100%解決）
-    - libnyash_kernel.a完全ビルド成功（0エラー・0警告）
+    - libhako_kernel.a完全ビルド成功（0エラー・0警告）
     - Plugin-First Architecture完全実現（旧VM依存根絶）
     - **ChatGPT5×Claude協働開発の歴史的画期的成果！**
 

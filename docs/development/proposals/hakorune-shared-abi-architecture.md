@@ -305,7 +305,7 @@ static REGISTRY: once_cell::sync::Lazy<ArrayRegistry> =
 **Purpose**: Bridges shared implementation to nyash-rust's `host_handles` system.
 
 ```rust
-// crates/nyash_kernel/src/plugin/array.rs (AFTER refactoring)
+// crates/hako_kernel/src/plugin/array.rs (AFTER refactoring)
 use hako_abi_impl::ArrayRegistry;
 use nyash_rust::runtime::host_handles;
 
@@ -679,14 +679,14 @@ if let Some(i) = safe_get_index(arr.len(), idx) {
 ```
 
 **Files to modify**:
-- [ ] `crates/nyash_kernel/src/plugin/array.rs`
+- [ ] `crates/hako_kernel/src/plugin/array.rs`
   - [ ] Use `hako_core_array` helpers
   - [ ] Remove duplicated validation
   - [ ] Expected reduction: ~20 lines
-- [ ] `crates/nyash_kernel/src/plugin/map.rs`
+- [ ] `crates/hako_kernel/src/plugin/map.rs`
   - [ ] Use `hako_core_map` helpers
   - [ ] Expected reduction: ~15 lines
-- [ ] `crates/nyash_kernel/src/plugin/string.rs`
+- [ ] `crates/hako_kernel/src/plugin/string.rs`
   - [ ] Use `hako_core_string` helpers
   - [ ] Expected reduction: ~10 lines
 

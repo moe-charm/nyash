@@ -1,6 +1,32 @@
 # CURRENT_TASK — 現在のタスクと進捗
 
 
+## ✅ Runtime Cleanup — Boxification Round（2025-10-11 完了）
+
+目的
+- ルータとホストAPIに混在していた一時フォールバック/分岐を箱として外出しし、責務境界を明確化。
+
+実施
+- Stage‑1 フォールバックを Adapter Box へ移動
+  - 追加: `src/runtime/adapters/map_keys_values_stage1.rs`
+  - 変更: `src/runtime/method_router_box/mod.rs` — 旧インライン実装を撤去し、adapter に委譲
+- HostHandle ルーティングの抽出（骨組み）
+  - 追加: `src/runtime/host_handle_router/mod.rs`（今は薄い委譲、段階移行の受け口）
+  - 変更: `src/runtime/host_api.rs` — `nyrt_host_call_slot` の先頭で router を試行
+- ドキュメント/ガード
+  - 追加: `src/runtime/method_router_box/README.md`, `LAYER_GUARD.rs`
+  - 追加: `src/runtime/provider_box/README.md`, `LAYER_GUARD.rs`
+  - 追加: `src/runtime/host_handle_router/README.md`, `LAYER_GUARD.rs`
+
+影響
+- 構造のみの変更（仕様不変）。Stage‑1/Stage‑2 の切替は従来通り `NYASH_PLUGIN_MAP_ARRAY_HANDLE`。
+
+次のステップ（小粒）
+- HostHandleRouter へ Array/Map/Instance スロット分岐を段階移設（現行の `host_api.rs` 内分岐を縮退）
+- `print()` 経路の ConsoleBox 化（ロック順序固定/非同期化、ハング回避）
+- plugin‑on スモーク: identity（values→push→values）/print の2本を追加
+
+
 ## ✅ Method Router 箱化アップデート（2025-10-14 完了）
 
 - method_router_box を 2 つの小箱で分割

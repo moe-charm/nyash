@@ -8,10 +8,7 @@ use std::sync::{
 };
 
 // Import shared TLV codec from hako_abi_impl
-use hako_abi_impl::tlv::{
-    read_arg_string,
-    write_tlv_bool, write_tlv_string
-};
+use hako_abi_impl::tlv::{read_arg_string, write_tlv_bool, write_tlv_string};
 
 const OK: i32 = 0;
 const E_SHORT: i32 = -1;

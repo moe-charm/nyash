@@ -76,6 +76,24 @@ impl PluginHost {
         Ok(())
     }
 
+
+    /// Register a static (in-process) spec for a plugin box.
+    /// This records type_id/method ids/invoke pointer without requiring nyash.toml or dlopen.
+    pub fn register_static_box(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        _invoke_any: Option<*const ()>,
+    ) {
+        if let Ok(l) = self.loader.read() {
+            l.register_static_box(lib_name, box_type, type_id, capabilities, fini_method_id, methods, None);
+        }
+    }
+
     /// Expose read-only view of loaded config for callers migrating from v2 paths.
     pub fn config_ref(&self) -> Option<&NyashConfigV2> {
         self.config.as_ref()
@@ -294,4 +312,32 @@ pub fn init_global_plugin_host(config_path: &str) -> BidResult<()> {
     host.write().unwrap().load_libraries(config_path)?;
     host.read().unwrap().register_boxes()?;
     Ok(())
+}
+
+impl PluginHost {
+    /// Register a static spec with an invoke pointer (per-Box).
+    pub fn register_static_with_spec(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        invoke: Option<unsafe extern "C" fn(u32, u32, *const u8, usize, *mut u8, *mut usize) -> i32>,
+    ) {
+        if let Ok(l) = self.loader.read() {
+            // Convert to loader's BoxInvokeFn type; both layouts are identical.
+            let inv = invoke.map(|f| unsafe { std::mem::transmute::<_, crate::runtime::plugin_loader_v2::BoxInvokeFn>(f) });
+            l.register_static_with_invoke(
+                lib_name,
+                box_type,
+                type_id,
+                capabilities,
+                fini_method_id,
+                methods,
+                inv,
+            );
+        }
+    }
 }

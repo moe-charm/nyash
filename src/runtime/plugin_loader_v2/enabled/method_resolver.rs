@@ -31,18 +31,22 @@ impl PluginLoaderV2 {
         }
         // Prefer specs (ingested from nyash_box.toml or TypeBox FFI)
         if let Ok(map) = self.box_specs.read() {
-            // Direct spec lookup for this box
+            // Prefer TypeBox resolve() when available (plugin-provided mapping)
+            for ((_lib, bt), spec) in map.iter() {
+                if bt == box_type {
+                    if let Some(res_fn) = spec.resolve_fn {
+                        if let Ok(cstr) = std::ffi::CString::new(method_name) {
+                            let mid = res_fn(cstr.as_ptr());
+                            if mid != 0 { return Ok(mid); }
+                        }
+                    }
+                }
+            }
+            // Fallback to static spec mapping (e.g., from hako_box.toml)
             for ((_lib, bt), spec) in map.iter() {
                 if bt == box_type {
                     if let Some(ms) = spec.methods.get(method_name) {
                         return Ok(ms.method_id);
-                    }
-                    if let Some(res_fn) = spec.resolve_fn {
-                        if let Ok(cstr) = std::ffi::CString::new(method_name) {
-                            // Calling a plain extern "C" function is safe; no unsafe needed here.
-                            let mid = res_fn(cstr.as_ptr());
-                            if mid != 0 { return Ok(mid); }
-                        }
                     }
                 }
             }

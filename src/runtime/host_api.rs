@@ -8,6 +8,7 @@
  */
 
 use crate::box_trait::NyashBox;
+use crate::runtime::plugin_loader_v2::PluginBoxV2;
 
 // ===== TLS: current VM pointer during plugin invoke =====
 // VM-legacy feature removed - provide stubs only
@@ -15,7 +16,7 @@ pub fn set_current_vm(_ptr: *mut ()) {}
 pub fn clear_current_vm() {}
 
 // ===== Utilities: TLV encode helpers (single-value) =====
-fn tlv_encode_one(val: &crate::backend::vm::VMValue) -> Vec<u8> {
+pub(crate) fn tlv_encode_one(val: &crate::backend::vm::VMValue) -> Vec<u8> {
     use crate::runtime::plugin_ffi_common as tlv;
     let mut buf = tlv::encode_tlv_header(1);
     match val {
@@ -33,7 +34,7 @@ fn tlv_encode_one(val: &crate::backend::vm::VMValue) -> Vec<u8> {
     buf
 }
 
-fn vmvalue_from_tlv(tag: u8, payload: &[u8]) -> Option<crate::backend::vm::VMValue> {
+pub(crate) fn vmvalue_from_tlv(tag: u8, payload: &[u8]) -> Option<crate::backend::vm::VMValue> {
     use crate::runtime::plugin_ffi_common as tlv;
     match tag {
         1 => Some(crate::backend::vm::VMValue::Bool(
@@ -54,9 +55,24 @@ fn vmvalue_from_tlv(tag: u8, payload: &[u8]) -> Option<crate::backend::vm::VMVal
             payload,
         ))),
         8 => {
-            // PluginHandle(type_id, instance_id) → reconstruct PluginBoxV2 (when plugins enabled)
+            // PluginHandle(type_id, instance_id)
             if let Some((type_id, instance_id)) = tlv::decode::plugin_handle(payload) {
                 if let Some(arc) = plugin_box_from_handle(type_id, instance_id) {
+                    // Prefer HostHandle path for core ArrayBox to unify identity in Stage‑2 flows
+                    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+                    {
+                        let loader = crate::runtime::plugin_loader_v2::get_global_loader_v2();
+                        let _drop_guard = if let Ok(ro) = loader.read() {
+                            if let Some(meta) = ro.metadata_for_type_id(type_id) {
+                                if meta.box_type == "ArrayBox" {
+                                    let h = crate::runtime::host_handles::to_handle_arc(arc.clone());
+                                    let hb = crate::runtime::host_handle_box::HostHandleBox::new(h);
+                                    return Some(crate::backend::vm::VMValue::BoxRef(std::sync::Arc::new(hb)));
+                                }
+                            }
+                            Some(())
+                        } else { None };
+                    }
                     return Some(crate::backend::vm::VMValue::BoxRef(arc));
                 }
             }
@@ -73,14 +89,14 @@ fn vmvalue_from_tlv(tag: u8, payload: &[u8]) -> Option<crate::backend::vm::VMVal
     }
 }
 
-unsafe fn slice_from_raw<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
+pub(crate) unsafe fn slice_from_raw<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
     std::slice::from_raw_parts(ptr, len)
 }
-unsafe fn slice_from_raw_mut<'a>(ptr: *mut u8, len: usize) -> &'a mut [u8] {
+pub(crate) unsafe fn slice_from_raw_mut<'a>(ptr: *mut u8, len: usize) -> &'a mut [u8] {
     std::slice::from_raw_parts_mut(ptr, len)
 }
 
-fn encode_out(out_ptr: *mut u8, out_len: *mut usize, buf: &[u8]) -> i32 {
+pub(crate) fn encode_out(out_ptr: *mut u8, out_len: *mut usize, buf: &[u8]) -> i32 {
     unsafe {
         if out_ptr.is_null() || out_len.is_null() {
             return -2;
@@ -96,7 +112,7 @@ fn encode_out(out_ptr: *mut u8, out_len: *mut usize, buf: &[u8]) -> i32 {
     }
 }
 
-#[cfg_attr(all(not(test), any(feature = "c-abi-export", export_host_c_abi)), no_mangle)]
+#[no_mangle]
 pub extern "C" fn nyrt_host_call_name(
     handle: u64,
     method_ptr: *const u8,
@@ -288,7 +304,7 @@ fn plugin_box_from_handle(
 // 203: MapBox.get(key:any) -> any
 // 204: MapBox.set(key:any, value:any) -> any
 // 300: StringBox.len() -> i64
-#[cfg_attr(all(not(test), any(feature = "c-abi-export", export_host_c_abi)), no_mangle)]
+#[no_mangle]
 pub extern "C" fn nyrt_host_call_slot(
     handle: u64,
     selector_id: u64,
@@ -297,6 +313,16 @@ pub extern "C" fn nyrt_host_call_slot(
     out_ptr: *mut u8,
     out_len: *mut usize,
 ) -> i32 {
+    // First try the extracted HostHandleRouterBox (progressive migration)
+    if let Some(_) = Some(()) {
+        let rc = crate::runtime::host_handle_router::route_slot(handle, selector_id, args_ptr, args_len, out_ptr, out_len);
+        if rc != -10 { return rc; }
+    }
+
+    let host_trace = std::env::var("NYASH_HOST_HANDLE_TRACE").ok().as_deref() == Some("1");
+    if crate::runtime::env_gate_box::debug_plugin() || host_trace {
+        eprintln!("[host-api] slot call selector={} handle={} args_len={}", selector_id, handle, args_len);
+    }
     let recv_arc = match crate::runtime::host_handles::get(handle) {
         Some(a) => a,
         None => return -1,
@@ -317,6 +343,55 @@ pub extern "C" fn nyrt_host_call_slot(
                 argv.push(v);
             }
             off += 4 + sz;
+        }
+    }
+
+    if let Some(pb) = recv_arc.as_any().downcast_ref::<PluginBoxV2>() {
+        let method = match selector_id {
+            100 => Some("get"),
+            101 => Some("set"),
+            102 => Some("size"),
+            200 => Some("size"),
+            201 => Some("len"),
+            202 => Some("has"),
+            203 => Some("get"),
+            204 => Some("set"),
+            _ => None,
+        };
+        if let Some(name) = method {
+            let mut args_boxes: Vec<Box<dyn NyashBox>> = Vec::with_capacity(argv.len());
+            for v in &argv { args_boxes.push(v.to_nyash_box()); }
+            if crate::runtime::env_gate_box::debug_plugin() {
+                eprintln!("[host-api] slot plugin dispatch {}.{}", pb.box_type, name);
+            }
+            match crate::runtime::plugin_host_box::invoke_instance_method(
+                &pb.box_type,
+                name,
+                pb.instance_id(),
+                &args_boxes,
+            ) {
+                Ok(Some(ret)) => {
+                    if crate::runtime::env_gate_box::debug_plugin() {
+                        eprintln!("[host-api] slot plugin result {:?}", ret.type_name());
+                    }
+                    let vmv = crate::backend::vm::VMValue::from_nyash_box(ret);
+                    let buf = tlv_encode_one(&vmv);
+                    return encode_out(out_ptr, out_len, &buf);
+                }
+                Ok(None) => {
+                    if crate::runtime::env_gate_box::debug_plugin() {
+                        eprintln!("[host-api] slot plugin result <void>");
+                    }
+                    let buf = tlv_encode_one(&crate::backend::vm::VMValue::Void);
+                    return encode_out(out_ptr, out_len, &buf);
+                }
+                Err(e) => {
+                    if crate::runtime::env_gate_box::debug_plugin() {
+                        eprintln!("[host-api] slot plugin error {:?}", e);
+                    }
+                    return -5;
+                }
+            }
         }
     }
 
@@ -465,14 +540,24 @@ pub extern "C" fn nyrt_host_call_slot(
                             let out = arr.set(Box::new(crate::box_trait::IntegerBox::new(idx)), vb);
                             let vmv = crate::backend::vm::VMValue::from_nyash_box(out);
                             let buf = tlv_encode_one(&vmv);
-                            return encode_out(out_ptr, out_len, &buf);
+                            let rc = encode_out(out_ptr, out_len, &buf);
+                            if host_trace {
+                                let final_len = unsafe { if !out_len.is_null() { *out_len } else { 0 } };
+                                eprintln!("[host-api] selector=101 Array.set rc={} out_len={} buf_len={}", rc, final_len, buf.len());
+                            }
+                            return rc;
                         }
                     }
                     102 => {
                         // len()
                         let len = arr.len();
                         let buf = tlv_encode_one(&crate::backend::vm::VMValue::Integer(len as i64));
-                        return encode_out(out_ptr, out_len, &buf);
+                        let rc = encode_out(out_ptr, out_len, &buf);
+                        if host_trace {
+                            let final_len = unsafe { if !out_len.is_null() { *out_len } else { 0 } };
+                            eprintln!("[host-api] selector=102 Array.len rc={} out_len={} result={}", rc, final_len, len);
+                        }
+                        return rc;
                     }
                     _ => {}
                 }

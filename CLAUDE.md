@@ -10,6 +10,86 @@
 
 **注**: 成功報告中心。失敗・問題点は [🚨 失敗報告の重要性](#-失敗報告の重要性最優先) セクション参照。
 
+### 🚀 **次の実装: Phase 15.6 - Everything is Plugin 完全実現** (2025-10-11)
+**ChatGPT5による実装開始 - すべてのBoxをplugins/へ、単一ソース原則確立**
+
+#### 🎯 **合意された設計（Claude + ChatGPT5検証済み）**
+
+**核心コンセプト**:
+```
+plugins/          ← すべてのBox実装（唯一の管理場所）
+  ├── core系      ← 静的リンク候補（hako_kernel features）
+  └── 拡張系      ← 動的ロード
+
+src/boxes/        ← 完全削除（段階的）
+
+方針: 単一ソース + ビルド分岐（動的 or 静的）
+フォールバック: 無し（強いコアの証明）
+```
+
+**実装戦略**（30-40時間見積もり）:
+- Week 1: 基盤系プラグイン化（FutureBox, ResultBox, NullBox等 7個）
+- Week 2: IO/ネットワーク系（BufferBox, HTTPBox, SocketBox等）
+- Week 3: 統合テスト、src/boxes/ 削除
+
+**ChatGPT5の重要指摘** ✅ 反映:
+1. 重複登録ガード必須（静的→動的の順序）
+2. bootstrap feature をデフォルト化（テスト維持）
+3. src/boxes/ 完全削除は段階的に（実行基盤から順次）
+
+**現状**: ChatGPT5が実装中 → Claude は後でレビュー担当
+
+詳細: 次回セッションで進捗確認
+
+---
+
+### 🎉 **Phase 3.3完了: array-plugin デッドロック修正 + filebox TLV共通化** (2025-10-11)
+**8時間ハング→0.04秒 + 重複コード削減 - commit完了（4141fa86）**
+
+#### ✅ **array-plugin: デッドロック修正**
+**根本原因**: ネストされたMutexロック
+```rust
+// 問題のコード
+if let Ok(map) = INSTANCES.lock() {
+    // ... データ参照 ...
+    if let Ok(mut mapw) = INSTANCES.lock() {  // ← 同じMutex再取得でデッドロック！
+        mapw.insert(...);
+    }
+}
+```
+
+**修正**: ロックスコープ分離
+```rust
+// データ抽出（ロック即解放）
+let slice_data = {
+    let map = INSTANCES.lock()?;
+    inst.data[i0..i1].to_vec()
+}; // ← ここでロック解放
+
+// 新規作成（別ロック）
+let mut mapw = INSTANCES.lock()?;
+mapw.insert(new_id, ArrayInstance { data: slice_data });
+```
+
+**結果**: 8時間ハング → **0.04秒**で完了 ✅
+
+#### ✅ **filebox-plugin: TLV共通化**
+- 削除: write_tlv_bool, write_tlv_string, write_tlv_handle（-19行）
+- 保持: write_tlv_void, write_tlv_bytes, write_tlv_i32（filebox固有TLV）
+- パターン: ハイブリッド移行（map-plugin実証パターン踏襲）
+
+#### 📊 **Phase 2-3 累計成果**
+| 項目 | 結果 |
+|------|------|
+| **移行済みプラグイン** | 12個 |
+| **削減行数** | **-972行** 🚀 |
+| **テスト結果** | 251/269 PASS (93.3%) |
+| **Bonus** | `nyash_kernel → hako_kernel` リネーム完了 |
+
+**Commit**: `4141fa86` (22 files, -696 lines)
+
+---
+
 ### 🎉 **Plugin System: MapBox リファクタリング + 共通ABI設計完了** (2025-10-11)
 **循環依存解決＋将来のC ABI移行設計 - 純削減304行、ChatGPT-5が解決できなかった問題を解決**
 

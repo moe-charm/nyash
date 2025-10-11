@@ -32,7 +32,7 @@ struct Args {
     #[arg(long, value_name = "{obj|exe}", default_value = "obj")]
     emit: String,
 
-    /// Path to directory containing libnyash_kernel.a when emitting an executable. If omitted, searches target/release then crates/nyash_kernel/target/release.
+    /// Path to directory containing libhako_kernel.a (legacy libhako_kernel.a) when emitting an executable. If omitted, searches target/release then crates/hako_kernel/target/release.
     #[arg(long, value_name = "DIR")]
     nyrt: Option<PathBuf>,
 
@@ -190,30 +190,27 @@ fn link_executable(
     let nyrt_dir = if let Some(dir) = nyrt_dir_opt {
         dir.clone()
     } else {
-        // try target/release then crates/nyash_kernel/target/release, crates/hako_kernel/target/release
+        // try target/release then crates/hako_kernel/target/release
         let a = PathBuf::from("target/release");
-        let b = PathBuf::from("crates/nyash_kernel/target/release");
-        let c = PathBuf::from("crates/hako_kernel/target/release");
-        if a.join("libnyash_kernel.a").exists() || a.join("libhako_kernel.a").exists() {
+        let b = PathBuf::from("crates/hako_kernel/target/release");
+        if a.join("libhako_kernel.a").exists() || a.join("libnyash_kernel.a").exists() {
             a
-        } else if b.join("libnyash_kernel.a").exists() || b.join("libhako_kernel.a").exists() {
+        } else if b.join("libhako_kernel.a").exists() || b.join("libnyash_kernel.a").exists() {
             b
-        } else if c.join("libnyash_kernel.a").exists() || c.join("libhako_kernel.a").exists() {
-            c
         } else {
             a
         }
     };
-    let lib_nyash = nyrt_dir.join("libnyash_kernel.a");
     let lib_hako = nyrt_dir.join("libhako_kernel.a");
-    let libnyrt = if lib_nyash.exists() {
-        &lib_nyash
-    } else {
+    let lib_legacy = nyrt_dir.join("libnyash_kernel.a");
+    let libnyrt = if lib_hako.exists() {
         &lib_hako
+    } else {
+        &lib_legacy
     };
     if !libnyrt.exists() {
         bail!(
-            "Kernel archive not found in {} (looked for libnyash_kernel.a, libhako_kernel.a). Use --nyrt to specify directory",
+            "Kernel archive not found in {} (looked for libhako_kernel.a or legacy libnyash_kernel.a). Use --nyrt to specify directory",
             nyrt_dir.display()
         );
     }

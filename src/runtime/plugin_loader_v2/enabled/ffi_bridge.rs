@@ -254,20 +254,43 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
                 Box::new(crate::box_trait::StringBox::new(s))
             }
             8 => {
-                // Plugin handle (type_id, instance_id) → wrap into PluginBoxV2
+                // Plugin handle (type_id, instance_id)
                 if let Some((ret_type, inst)) =
                     crate::runtime::plugin_ffi_common::decode::plugin_handle(payload)
                 {
+                    // Resolve real box type name and prefer HostHandle for ArrayBox to unify identity route
+                    let real_bt = {
+                        let loader = super::super::get_global_loader_v2();
+                        let x = if let Ok(ro) = loader.read() {
+                            ro.metadata_for_type_id(ret_type)
+                                .map(|m| m.box_type)
+                                .unwrap_or_else(|| box_type.to_string())
+                        } else {
+                            box_type.to_string()
+                        };
+                        x
+                    };
+                    let invoke_fn = super::super::nyash_plugin_invoke_v2_shim;
+
+                    // If this is an ArrayBox handle, convert to HostHandleBox so downstream
+                    // routes can use HostHandleRouter (and preserve identity via registry).
+                    if real_bt == "ArrayBox" {
+                        let pbox = super::types::make_plugin_box_v2(real_bt.clone(), ret_type, inst, invoke_fn);
+                        let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> =
+                            std::sync::Arc::new(pbox);
+                        let h = crate::runtime::host_handles::to_handle_arc(arc);
+                        return Ok(Some(Box::new(
+                            crate::runtime::host_handle_box::HostHandleBox::new(h),
+                        )));
+                    }
+
+                    // Fallback: return PluginBoxV2 as-is for other types
                     let inner = super::types::get_or_create_handle(
                         ret_type,
                         inst,
                         super::super::nyash_plugin_invoke_v2_shim,
                         None,
                     );
-                    // Resolve real box type name from metadata; fallback to caller's box_type
-                    let real_bt = super::metadata_for_type_id(ret_type)
-                        .map(|m| m.box_type.clone())
-                        .unwrap_or_else(|| box_type.to_string());
                     Box::new(super::types::PluginBoxV2 { box_type: real_bt, inner })
                 } else {
                     Box::new(crate::box_trait::VoidBox::new())
@@ -285,7 +308,7 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
         };
         return Ok(Some(bx));
     }
-    Ok(Some(Box::new(crate::box_trait::VoidBox::new())))
+    Ok(None)
 }
 
 // ---- Final ABI encode/decode (Phase A minimal) ----

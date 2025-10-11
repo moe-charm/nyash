@@ -20,7 +20,7 @@
 ### Key Achievements Verified
 
 #### ✅ NyRT → NyKernel Transformation
-- **libnyash_kernel.a** successfully created and functioning
+- **libhako_kernel.a** successfully created and functioning
 - All references to `nyrt` updated to `nyash_kernel`
 - Plugin-First Architecture fully operational
 - Handle registry and GC functioning correctly

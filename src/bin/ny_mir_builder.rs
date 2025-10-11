@@ -64,7 +64,7 @@ fn main() {
     let nyrt_dir = matches
         .get_one::<String>("nyrt")
         .map(|s| s.to_string())
-        .unwrap_or("crates/nyash_kernel".to_string());
+        .unwrap_or("crates/hako_kernel".to_string());
 
     // Determine sibling nyash binary path (target dir)
     let nyash_bin = current_dir_bin("nyash");
@@ -202,7 +202,8 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
         // Prefer lld-link, then link.exe, fallback to cc
         let nyrt_release = format!("{}/target/release", nyrt_dir.replace('\\', "/"));
         let lib_nyrt_lib = format!("{}/nyrt.lib", nyrt_release);
-        let lib_nyrt_a = format!("{}/libnyash_kernel.a", nyrt_release);
+        let lib_nyrt_a = format!("{}/libhako_kernel.a", nyrt_release);
+        let lib_nyrt_a_legacy = format!("{}/libnyash_kernel.a", nyrt_release);
         if which::which("lld-link").is_ok() {
             let mut args: Vec<String> = Vec::new();
             args.push(format!("/OUT:{}", out_path));
@@ -243,7 +244,17 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
         let status = PCommand::new("cc")
             .args([obj_path])
             .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args(["-lnyash_kernel", "-o", out_path])
+            .args([
+                if std::path::Path::new(&lib_nyrt_a).exists() {
+                    "-lhako_kernel"
+                } else if std::path::Path::new(&lib_nyrt_a_legacy).exists() {
+                    "-lnyash_kernel"
+                } else {
+                    "-lhako_kernel"
+                },
+                "-o",
+                out_path,
+            ])
             .status()
             .map_err(|e| e.to_string())?;
         if status.success() {
@@ -253,22 +264,50 @@ fn link_exe(obj_path: &str, out_path: &str, nyrt_dir: &str) -> Result<(), String
     }
     #[cfg(not(target_os = "windows"))]
     {
+        let lib_dir = format!("{}/target/release", nyrt_dir);
+        let lib_flag = if std::path::Path::new(&format!("{}/libhako_kernel.a", lib_dir)).exists() {
+            "-lhako_kernel"
+        } else {
+            "-lnyash_kernel"
+        };
+
         let status = PCommand::new("cc")
             .args([obj_path])
             .args(["-L", "target/release"])
-            .args(["-L", &format!("{}/target/release", nyrt_dir)])
-            .args([
-                "-Wl,--whole-archive",
-                "-lnyash_kernel",
-                "-Wl,--no-whole-archive",
-            ])
+            .args(["-L", &lib_dir])
+            .args(["-Wl,--whole-archive", lib_flag, "-Wl,--no-whole-archive"])
             .args(["-lpthread", "-ldl", "-lm", "-o", out_path])
             .status()
             .map_err(|e| e.to_string())?;
         if status.success() {
             Ok(())
         } else {
-            Err(format!("cc failed: status {:?}", status.code()))
+            let fallback_flag = if lib_flag == "-lhako_kernel" {
+                "-lnyash_kernel"
+            } else {
+                "-lhako_kernel"
+            };
+            let status2 = std::process::Command::new("cc")
+                .args([obj_path])
+                .args(["-L", "target/release"])
+                .args(["-L", &lib_dir])
+                .args([
+                    "-Wl,--whole-archive",
+                    fallback_flag,
+                    "-Wl,--no-whole-archive",
+                ])
+                .args(["-lpthread", "-ldl", "-lm", "-o", out_path])
+                .status()
+                .map_err(|e| e.to_string())?;
+            if status2.success() {
+                Ok(())
+            } else {
+                Err(format!(
+                    "cc failed (new/legacy): {:?} / {:?}",
+                    status.code(),
+                    status2.code()
+                ))
+            }
         }
     }
 }

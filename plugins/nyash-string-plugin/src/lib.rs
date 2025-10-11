@@ -12,8 +12,8 @@ use std::sync::{
 
 // Import shared TLV codec from hako_abi_impl
 use hako_abi_impl::tlv::{
-    read_arg_i64, read_arg_string, read_arg_handle,
-    write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_bool
+    read_arg_handle, read_arg_i64, read_arg_string, write_tlv_bool, write_tlv_handle,
+    write_tlv_i64, write_tlv_string,
 };
 
 const OK: i32 = 0;
@@ -234,6 +234,7 @@ extern "C" fn string_resolve(name: *const c_char) -> u32 {
     }
     let s = unsafe { CStr::from_ptr(name) }.to_string_lossy();
     match s.as_ref() {
+        "birth" => M_BIRTH,
         "len" | "length" | "size" => M_LENGTH,
         "isEmpty" => M_IS_EMPTY,
         "charCodeAt" => M_CHAR_CODE_AT,
@@ -244,6 +245,7 @@ extern "C" fn string_resolve(name: *const c_char) -> u32 {
         "concat" => M_CONCAT,
         "fromUtf8" => M_FROM_UTF8,
         "toUtf8" | "toString" => M_TO_UTF8, // Map toString to toUtf8
+        "fini" => M_FINI,
         _ => 0,
     }
 }
@@ -446,3 +448,16 @@ pub static nyash_typebox_StringBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 // All TLV functions (read_arg_*, write_tlv_*) are now imported from hako_abi_impl::tlv
 // Removed duplicate implementations: preflight, write_tlv_result, write_tlv_i64, write_tlv_bool,
 // write_tlv_handle, write_tlv_string, read_arg_i64, read_arg_handle, read_arg_string
+
+// Static-link per-Box invoke symbol for host static registration
+#[no_mangle]
+pub extern "C" fn nyash_string_plugin_invoke_static(
+    instance_id: u32,
+    method_id: u32,
+    args: *const u8,
+    args_len: usize,
+    result: *mut u8,
+    result_len: *mut usize,
+) -> i32 {
+    string_invoke_id(instance_id, method_id, args, args_len, result, result_len)
+}

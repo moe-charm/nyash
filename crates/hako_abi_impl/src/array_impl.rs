@@ -3,7 +3,10 @@
 use hako_abi::{ArrayAbi, HakoHandle};
 use hako_core_array::{classify_set_index, SetIndex};
 use std::collections::HashMap;
-use std::sync::{Mutex, atomic::{AtomicU64, Ordering}};
+use std::sync::{
+    atomic::{AtomicU64, Ordering},
+    Mutex,
+};
 
 /// Array element value (plugin-side, no NyashBox dependency)
 #[derive(Clone, Debug)]

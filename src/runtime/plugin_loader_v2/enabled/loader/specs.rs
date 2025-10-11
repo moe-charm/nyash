@@ -213,6 +213,34 @@ impl super::PluginLoaderV2 {
     ) {
         ingest_box_specs_from_nyash_box(self, lib_name, box_names, spec_path);
     }
+
+    /// Register a static (in-process) specification for a plugin box.
+    ///
+    /// This allows the runtime to know `type_id`/methods/invoke pointer without
+    /// relying on external nyash.toml or dlopen.
+    /// Duplicate registrations merge; existing fields are preserved.
+    pub(crate) fn register_static_box(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        _invoke_any: Option<*const ()>,
+    ) {
+        if let Ok(mut map) = self.box_specs.write() {
+            let key = (lib_name.to_string(), box_type.to_string());
+            let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
+            if entry.type_id.is_none() { entry.type_id = type_id; }
+            if entry.capabilities.is_none() { entry.capabilities = capabilities; }
+            if entry.fini_method_id.is_none() { entry.fini_method_id = fini_method_id; }
+            
+            for (name, id, retres) in methods.iter().copied() {
+                entry.methods.insert(name.to_string(), MethodSpec { method_id: id, returns_result: retres });
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -263,5 +291,35 @@ mod tests {
         let _ = record_typebox_final_spec(&loader, "libY", "OtherBox", &ffi);
         let spec = get_spec(&loader, "libY", "OtherBox");
         assert!(spec.is_none() || spec.unwrap().final_invoke.is_none());
+    }
+}
+
+// Separate impl to avoid touching existing block
+impl super::PluginLoaderV2 {
+    /// Register a static spec and per-Box invoke pointer.
+    /// Same as `register_static_box`, but also records the `invoke` pointer used by
+    /// the enabled loader to bypass dynamic lookup. Existing `invoke_id` is preserved
+    /// when already present.
+    pub(crate) fn register_static_with_invoke(
+        &self,
+        lib_name: &str,
+        box_type: &str,
+        type_id: Option<u32>,
+        capabilities: Option<u64>,
+        fini_method_id: Option<u32>,
+        methods: &[(&str, u32, bool)],
+        invoke: Option<super::super::host_bridge::BoxInvokeFn>,
+    ) {
+        if let Ok(mut map) = self.box_specs.write() {
+            let key = (lib_name.to_string(), box_type.to_string());
+            let entry = map.entry(key).or_insert_with(LoadedBoxSpec::default);
+            if entry.type_id.is_none() { entry.type_id = type_id; }
+            if entry.capabilities.is_none() { entry.capabilities = capabilities; }
+            if entry.fini_method_id.is_none() { entry.fini_method_id = fini_method_id; }
+            if entry.invoke_id.is_none() { entry.invoke_id = invoke; }
+            for (name, id, retres) in methods.iter().copied() {
+                entry.methods.insert(name.to_string(), MethodSpec { method_id: id, returns_result: retres });
+            }
+        }
     }
 }

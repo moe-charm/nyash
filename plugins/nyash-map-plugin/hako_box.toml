@@ -1,0 +1,84 @@
+[box]
+type_name = "MapBox"
+type_id = 11
+provider = "nyash-map-plugin"
+
+[[methods]]
+name = "birth"
+slot = 0
+arity = 0
+
+[[methods]]
+name = "size"
+slot = 1
+arity = 0
+
+[[methods]]
+name = "get"
+slot = 2
+arity = 1
+
+[[methods]]
+name = "has"
+slot = 3
+arity = 1
+
+[[methods]]
+name = "set"
+slot = 4
+arity = 2
+
+[[methods]]
+name = "remove"
+slot = 6
+arity = 1
+
+[[methods]]
+name = "clear"
+slot = 7
+arity = 0
+
+[[methods]]
+name = "keysS"
+slot = 8
+arity = 0
+
+[[methods]]
+name = "setS"
+slot = 10
+arity = 2
+
+[[methods]]
+name = "getS"
+slot = 11
+arity = 1
+
+[[methods]]
+name = "hasS"
+slot = 12
+arity = 1
+
+[[methods]]
+name = "valuesS"
+slot = 13
+arity = 0
+
+[[methods]]
+name = "toJSON"
+slot = 14
+arity = 0
+
+[[methods]]
+name = "keys"
+slot = 15
+arity = 0
+
+[[methods]]
+name = "values"
+slot = 16
+arity = 0
+
+[[methods]]
+name = "fini"
+slot = 4294967295
+arity = 0

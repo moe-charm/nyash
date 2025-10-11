@@ -41,7 +41,7 @@ rustflags = ["-Clink-arg=-rdynamic"]
 
 #### 2. Anchor Functions (Prevent LTO dead code elimination)
 
-Create `crates/nyash_kernel/src/plugin/anchors.rs`:
+Create `crates/hako_kernel/src/plugin/anchors.rs`:
 ```rust
 //! Host API Symbol Anchors - Force-link host C ABI symbols
 

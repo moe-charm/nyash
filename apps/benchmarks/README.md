@@ -35,12 +35,12 @@ cargo build --release -p nyash-llvm-compiler
 cargo build --release --features llvm
 
 # 3. Kernel ライブラリのビルド
-cargo build --release -p nyash_kernel
+cargo build --release -p hako_kernel
 
 # 4. ビルド確認
 ls target/release/hako
 ls target/release/ny-llvmc
-ls target/release/libnyash_kernel.a
+ls target/release/libhako_kernel.a
 ```
 
 **ビルド時間**: 標準ビルド ~1分、LLVMビルド ~3-5分
@@ -204,14 +204,14 @@ cargo build --release -p nyash-llvm-compiler
 NYASH_NY_LLVM_COMPILER=$PWD/target/release/ny-llvmc
 ```
 
-### "libnyash_kernel.a not found"
+### "libhako_kernel.a not found"
 
 ```bash
 # 解決策: カーネルライブラリをビルド
-cargo build --release -p nyash_kernel
+cargo build --release -p hako_kernel
 
 # 確認
-ls target/release/libnyash_kernel.a
+ls target/release/libhako_kernel.a
 ```
 
 ### LLVMが遅い
