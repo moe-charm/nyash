@@ -1,7 +1,7 @@
 // bench module removed with vm-legacy
 pub mod llvm;
 pub mod mir;
-pub mod vm_fallback;
+// pub mod vm_fallback; // Removed - unused legacy fallback path
 #[cfg(feature = "pyvm-bridge")]
 pub mod pyvm;
 pub mod macro_child;
