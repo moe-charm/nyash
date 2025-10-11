@@ -48,6 +48,14 @@ impl PluginLoaderV2 {
         library::load_plugin(self, lib_name, lib_def)
     }
 
+    /// Check if a given plugin library is currently loaded.
+    pub fn has_plugin(&self, lib_name: &str) -> bool {
+        if let Ok(map) = self.plugins.read() {
+            return map.contains_key(lib_name);
+        }
+        false
+    }
+
     pub fn box_invoke_fn_for_type_id(&self, type_id: u32) -> Option<BoxInvokeFn> {
         metadata::box_invoke_fn_for_type_id(self, type_id)
     }

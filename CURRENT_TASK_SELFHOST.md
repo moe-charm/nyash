@@ -332,3 +332,17 @@ Addendum — 2025‑10‑11/12 (Router/Adapter & Stage‑2)
 - ConsoleAdapter: print 経路を一元化。VM側の出力をここで正規化（Void/null/String）。
 - ENV 整理: host_handle_trace() を env_gate_box に追加（HAKO/NYASH 両対応）。docs に TTL/cleanup を追記。
 - Stage‑2: Map.values(identity) は futex_wait を解消（nyash_array_new_h をBuiltin生成へ）。identityは要素のHostHandle返却で一本化中（plugins/profile は Result:22→次パスで緑化予定）。
+
+
+
+## Update — 2025‑10‑11
+
+Status
+- M1: EXE-first PASS（Program v0 + Bridge 実行）。
+- M2: MIR builder 実行は `NYASH_MIR_BUILDER_EXE=1` で有効。runner `--emit-mir-json` を優先入力に採用。
+- 既定はProgramヘッダ検証まで。既定ON化はオブジェクト出力の最終整合で可能。
+
+Next
+- [ ] builder入出力の微整合（NYASH_LLVM_OBJ_OUT、一時名、末尾改行/単一行）
+- [ ] `NYASH_MIR_BUILDER_EXE` 既定ON
+- [ ] quick 側の代表2本を緑化（Program/MIR経路のみ対象）

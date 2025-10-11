@@ -40,6 +40,16 @@ pub extern "C" fn nyash_array_new_host() -> i64 {
     if crate::runtime::env_gate_box::debug_plugin() {
         eprintln!("[host-api] nyash_array_new_h (builtin) constructed ArrayBox");
     }
+
+// Provide a stable alias with the legacy symbol name expected by plugins
+// Many plugins link against `nyash_array_new_h`. Keep an alias that forwards
+// to the host-anchored implementation above to satisfy dlsym lookups.
+#[no_mangle]
+#[cfg(feature = "host-anchors")]
+#[export_name = "nyash_array_new_h"]
+pub extern "C" fn nyash_array_new_h_alias() -> i64 {
+    nyash_array_new_host()
+}
     host_handles::to_handle_box(Box::new(arr)) as i64
 }
 

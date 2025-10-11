@@ -4,7 +4,6 @@ use super::PluginLoaderV2;
 use crate::bid::{BidError, BidResult};
 use crate::config::nyash_toml_v2::LibraryDefinition;
 use libloading::{Library, Symbol};
-use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -71,8 +70,6 @@ pub(super) fn load_plugin(
     let loaded = super::super::types::LoadedPluginV2 {
         _lib: lib_arc.clone(),
         box_types: lib_def.boxes.clone(),
-        typeboxes: HashMap::new(),
-        init_fn: None,
     };
     loader
         .plugins

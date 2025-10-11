@@ -1,6 +1,6 @@
 # 🐱 HakoRune Programming Language (aka Nyash)
-**A Seriously-Crafted Hobby Language**  
-**From Zero to Native Binary in 20 Days - The AI-Powered Language Revolution**
+**A Seriously-Crafted Hobby Language**
+**63-Day Self-Hosting Achievement - The AI-Powered Language Revolution (10-50x Faster than Industry Standard)**
 
 *[🇯🇵 日本語版はこちら / Japanese Version](README.ja.md)*
 

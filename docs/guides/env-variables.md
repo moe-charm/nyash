@@ -1,13 +1,15 @@
 # ENV Variables — Core (Plugins/Provider)
 
 Key variables (current)
-- `HAKO_PLUGIN_POLICY` (auto|off|force) — plugin load policy
+- `HAKO_PLUGIN_POLICY` (auto|off|force) — primary plugin load policy (preferred)
 - `NYASH_PLUGIN_CONFIG` — plugin config path (prefer `hako.toml`)
-- `NYASH_USE_PLUGIN_BUILTINS` — allow plugin to override core box types
-- `NYASH_PLUGIN_OVERRIDE_TYPES` — comma list (e.g., `StringBox,ArrayBox,MapBox`)
-- `NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}` — disable builtin core boxes (dev gate)
 - `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — Stage‑2: 1 で keys/values HostHandle 経路を有効化。0 で Stage‑1(keysS/valuesS) シム（plugins プロファイルは既定ON）。
 - `HAKO_HOST_HANDLE_TRACE` / `NYASH_HOST_HANDLE_TRACE` — HostHandle slot呼び出しの観測ログ（短命/既定OFF）
+
+Deprecated (compat) — avoid in new scripts
+- `NYASH_USE_PLUGIN_BUILTINS` — superseded by `HAKO_PLUGIN_POLICY`
+- `NYASH_PLUGIN_OVERRIDE_TYPES` — superseded by `HAKO_PLUGIN_POLICY`
+- `NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}` — superseded by `HAKO_PLUGIN_POLICY`
 
 Profiles
 - plugin‑on: sets `HAKO_PLUGIN_POLICY=auto`, `NYASH_PLUGIN_CONFIG=hako.toml`
@@ -19,7 +21,7 @@ Birth Adoption
 
 Notes
 - Prefer CLI/Profiles over ENV when possible; ENV should be minimal and scoped.
-- Primary names are `HAKO_*`; `NYASH_*` are compatibility aliases. 新規は `HAKO_*` を優先。
+- Primary names are `HAKO_*`; `NYASH_*` are compatibility aliases. 新規は `HAKO_*` を優先。短命のデバッグ用 ENV のみプロファイル内で使用。
 
 TTL/cleanup
 - 実験・観測用 ENV は短命。機能が安定したら削除または CLI/プロファイルへ昇格。

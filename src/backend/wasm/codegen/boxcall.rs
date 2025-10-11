@@ -21,6 +21,63 @@ impl super::WasmCodegen {
             "equals" => self.generate_equals_call(dst, box_val, args),
             "clone" => self.generate_clone_call(dst, box_val),
             "log" => self.generate_log_call(dst, box_val, args),
+            // ArrayBox minimal API (Phase‑A): size/len/length/get/set/push/clear
+            "size" | "len" | "length" => {
+                let Some(dst) = dst else { return Err(WasmError::CodegenError("len() requires dst".into())); };
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(box_val)?),
+                    "call $array_len".to_string(),
+                    format!("local.set ${}", self.get_local_index(dst)?),
+                ])
+            }
+            "get" => {
+                let Some(dst) = dst else { return Err(WasmError::CodegenError("get() requires dst".into())); };
+                if args.len()!=1 { return Err(WasmError::CodegenError("get(idx) expects 1 arg".into())); }
+                Ok(vec![
+                    format!("local.get ${}", self.get_local_index(box_val)?),
+                    format!("local.get ${}", self.get_local_index(args[0])?),
+                    "call $array_get".to_string(),
+                    format!("local.set ${}", self.get_local_index(dst)?),
+                ])
+            }
+            "set" => {
+                if args.len()!=2 { return Err(WasmError::CodegenError("set(idx,val) expects 2 args".into())); }
+                let mut v = vec![
+                    format!("local.get ${}", self.get_local_index(box_val)?),
+                    format!("local.get ${}", self.get_local_index(args[0])?),
+                    format!("local.get ${}", self.get_local_index(args[1])?),
+                    "call $array_set".to_string(),
+                ];
+                if let Some(dst) = dst { // return void→0
+                    v.push("i32.const 0".to_string());
+                    v.push(format!("local.set ${}", self.get_local_index(dst)?));
+                }
+                Ok(v)
+            }
+            "push" => {
+                if args.len()!=1 { return Err(WasmError::CodegenError("push(val) expects 1 arg".into())); }
+                let mut v = vec![
+                    format!("local.get ${}", self.get_local_index(box_val)?),
+                    format!("local.get ${}", self.get_local_index(args[0])?),
+                    "call $array_push".to_string(),
+                ];
+                if let Some(dst) = dst {
+                    v.push("i32.const 0".to_string());
+                    v.push(format!("local.set ${}", self.get_local_index(dst)?));
+                }
+                Ok(v)
+            }
+            "clear" => {
+                let mut v = vec![
+                    format!("local.get ${}", self.get_local_index(box_val)?),
+                    "call $array_clear".to_string(),
+                ];
+                if let Some(dst) = dst {
+                    v.push("i32.const 0".to_string());
+                    v.push(format!("local.set ${}", self.get_local_index(dst)?));
+                }
+                Ok(v)
+            }
             _ => Err(WasmError::UnsupportedInstruction(format!(
                 "Unsupported BoxCall method: {}",
                 method

@@ -1,4 +1,3 @@
-#![allow(dead_code)]
 use super::host_bridge::InvokeFn;
 use super::loader::util::dbg_on;
 use crate::box_trait::{BoxCore, NyashBox, StringBox};
@@ -10,8 +9,6 @@ use once_cell::sync::OnceCell;
 pub struct LoadedPluginV2 {
     pub(super) _lib: Arc<libloading::Library>,
     pub(super) box_types: Vec<String>,
-    pub(super) typeboxes: std::collections::HashMap<String, usize>,
-    pub(super) init_fn: Option<unsafe extern "C" fn() -> i32>,
 }
 
 #[derive(Clone)]

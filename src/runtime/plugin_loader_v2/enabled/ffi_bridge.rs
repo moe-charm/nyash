@@ -292,13 +292,9 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
                     // If this is an ArrayBox handle, convert to HostHandleBox so downstream
                     // routes can use HostHandleRouter (and preserve identity via registry).
                     if real_bt == "ArrayBox" {
-                        let pbox = super::types::make_plugin_box_v2(real_bt.clone(), ret_type, inst, invoke_fn);
-                        let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> =
-                            std::sync::Arc::new(pbox);
-                        let h = crate::runtime::host_handles::to_handle_arc(arc);
-                        return Ok(Some(Box::new(
-                            crate::runtime::host_handle_box::HostHandleBox::new(h),
-                        )));
+                        // Convert PluginHandle(type_id,instance_id) → HostHandle(u64) via stable cache
+                        let h = crate::runtime::host_api_anchors::nyash_host_from_plugin_handle(ret_type, inst);
+                        return Ok(Some(Box::new(crate::runtime::host_handle_box::HostHandleBox::new(h))));
                     }
 
                     // Fallback: return PluginBoxV2 as-is for other types

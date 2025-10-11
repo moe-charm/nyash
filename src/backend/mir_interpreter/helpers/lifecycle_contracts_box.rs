@@ -14,10 +14,6 @@ impl LifecycleContractsBox {
         vm.lifecycle_observe_new(dst, box_type, argc);
     }
 
-    pub fn mark_birth(vm: &mut MirInterpreter, recv_val: ValueId, argc_birth: usize) {
-        vm.lifecycle_contracts_birth(recv_val, argc_birth);
-    }
-
     /// If no birth/N lowered function exists, mark born immediately and emit guard log when enabled.
     pub fn born_if_no_birth(vm: &mut MirInterpreter, dst: ValueId, box_type: &str, argc: usize) {
         let birth_name = format!("{}.birth/{}", box_type, argc);

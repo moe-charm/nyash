@@ -1,5 +1,19 @@
 # CURRENT_TASK — 現在のタスクと進捗
 
+## 🏁 Milestones Timeline（Self‑Host → Parity）
+
+- 2025-08-09: initial commit
+- 2025-10-09: M2 Self‑Rebuild 達成（自己ホストEXEで再ビルド）
+- 2025-10-11: M3 VM↔LLVM Parity（最小）達成（parity_q_* 緑）
+
+所要日数（M2まで）: 61日。M3はその2日後に達成。
+
+次フェーズ（M4: Parity‑Plus & Stability）
+- quick 常時セットに parity_* 維持（追加2本: JSON stringify / <=, >=）
+- plugins プロファイルで最小 LLVM 交差を常時ON（軽量）
+- MIR→EXE の小スモークは quick/llvm の AOT 系で常時確認（負荷低）
+- provider 起動1行ログ（policy/config/loaded/anchors/stage2）＋ dlsym セルフチェック（force時Fail‑Fast）を固定化
+
 
 ## ✅ Runtime Cleanup — Boxification Round（2025-10-11 完了）
 
@@ -497,3 +511,50 @@ Next steps
 
 備考
 - 拡張子は .hako に統一（自作/サンプル/スモーク）。既存 .nyash は互換経路で当面維持（削除は後段）。
+
+
+
+## ✅ ENV Consolidation & Provider Simplification（2025-10-11）
+
+要旨
+- ENVは「3本柱」に集約: `HAKO_PLUGIN_POLICY`, `NYASH_PLUGIN_MAP_ARRAY_HANDLE`(pluginsのみ), `HAKO_HOST_HANDLE_TRACE`(短命)
+- ProviderBoxは policy に一本化（force=strict=フォールバック禁止）。旧 builtins 系ENVは依存撤退（互換は当面維持）。
+- スモークのENVパススルーを最小化（policy/map_handle/trace のみ）。
+
+効果
+- テスト実行のENVノイズが大幅削減（9→3）。判定経路の分岐が明瞭化し、失敗解析が容易に。
+
+---
+
+## ✅ Self‑Host M1/M2 状態（2025-10-11 現在）
+
+M1（EXE-first）
+- compiler.hako は Program v0（version:Int=0, Return 7）を出力。
+- スモーク: Programヘッダ＋Bridge 実行 既定ON（`NYASH_EXE_BRIDGE=1`）。PASS。
+
+M2（MIR builder ブリッジ）
+- 既定: ProgramヘッダのみでPASS。
+- `NYASH_MIR_BUILDER_EXE=1` 有効時に Builder/EXE 実行を通す導線を整備（runnerの `--emit-mir-json` を優先入力）。
+- 現状: オブジェクト生成フェーズで一部ケースが失敗（一時出力/末尾整合の微修正が必要）。
+
+次の一手（小差分で既定ONへ）
+- builder入力の安定: `NYASH_LLVM_OBJ_OUT`/一時名の固定と末尾整合（改行/JSON単一行）。
+- PASS確認後、`NYASH_MIR_BUILDER_EXE` の既定を 1 に昇格。
+
+---
+
+## 🔧 追加のコード整備（完了）
+- 警告削減: 到達不能・重複削除、未使用抑止（import/変数）、局所 `#[allow(dead_code)]`。
+- リンク堅牢化: `tools/build_llvm.sh` が `libhako_kernel.a` を `crates/hako_kernel` → `target/release` の順に探索。
+- シンボル衝突回避: `nyash_array_new_host` に改名（Kernel側と競合回避）。
+
+---
+
+## 📋 Todo（短期）
+- [ ] MIR builder 既定ON（微整合の最終パッチ）
+- [ ] quick の代表2本の緑化（Program/MIR経路のみを対象に）
+- [ ] env-variables.md に primary/alias・短命ENVの一文追記（必要なら）
+
+備考
+- integration-core（LLVM parity）は全緑維持（15/15）。
+- quick の広域失敗は今回の範囲外（Box/using/legacy挙動の混在）。対象縮小で段階対応する。

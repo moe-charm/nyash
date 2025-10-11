@@ -64,7 +64,7 @@ impl WasmCodegen {
             .push(memory_manager.get_generic_box_alloc_function());
 
         // Add Box-specific allocation functions for known types
-        for box_type in ["StringBox", "IntegerBox", "BoolBox", "DataBox"] {
+        for box_type in ["StringBox", "IntegerBox", "BoolBox", "DataBox", "ArrayBox"] {
             if let Ok(alloc_func) = memory_manager.get_box_alloc_function(box_type) {
                 wasm_module.functions.push(alloc_func);
             }
@@ -74,6 +74,11 @@ impl WasmCodegen {
         for (name, function) in &mir_module.functions {
             let wasm_function = self.generate_function(name, function.clone())?;
             wasm_module.functions.push(wasm_function);
+        }
+
+        // Add ArrayBox helper functions (alloc wrapper and ops)
+        if let Ok(funcs) = memory_manager.get_array_helpers() {
+            wasm_module.functions.extend(funcs);
         }
 
         // Add string literal data segments

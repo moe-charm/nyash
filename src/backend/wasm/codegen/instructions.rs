@@ -46,6 +46,12 @@ impl super::WasmCodegen {
             } => {
                 // Create a new Box using the generic allocator
                 match box_type.as_str() {
+                    "ArrayBox" => {
+                        Ok(vec![
+                            "call $alloc_arraybox".to_string(),
+                            format!("local.set ${}", self.get_local_index(*dst)?),
+                        ])
+                    }
                     "DataBox" => {
                         // Use specific allocator for known types
                         let mut instructions = vec![

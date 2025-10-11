@@ -23,119 +23,16 @@ fn parse_box_spec(toml_str: &str) -> Option<(String, String, u32, Vec<(String, u
     Some((spec.r#box.provider, spec.r#box.type_name, spec.r#box.type_id, methods))
 }
 
-pub fn register_static_plugins() {
-    // Array
-    let arr = include_str!("../../../plugins/nyash-array-plugin/hako_box.toml");
-    if let Some((_prov, type_name, type_id, methods)) = parse_box_spec(arr) {
-        let host = crate::runtime::get_global_plugin_host();
-        if let Ok(h) = host.read() {
-            let methods_ref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-            h.register_static_box("libnyash_array_plugin.so", &type_name, Some(type_id), None, None, &methods_ref, None);
-        };
-    }
-    // Map
-    let map = include_str!("../../../plugins/nyash-map-plugin/hako_box.toml");
-    if let Some((_prov, type_name, type_id, methods)) = parse_box_spec(map) {
-        let host = crate::runtime::get_global_plugin_host();
-        if let Ok(h) = host.read() {
-            let methods_ref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-            h.register_static_box("libnyash_map_plugin.so", &type_name, Some(type_id), None, None, &methods_ref, None);
-        };
-    }
-    // String
-    let strb = include_str!("../../../plugins/nyash-string-plugin/hako_box.toml");
-    if let Some((_prov, type_name, type_id, methods)) = parse_box_spec(strb) {
-        let host = crate::runtime::get_global_plugin_host();
-        if let Ok(h) = host.read() {
-            let methods_ref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-            h.register_static_box("libnyash_string_plugin.so", &type_name, Some(type_id), None, None, &methods_ref, None);
-        };
-    }
-
-    // If statically linking plugins, also register per-Box invoke pointers.
-    // This allows calling v2 per-Box invoke directly without dynamic loader.
-    #[cfg(feature = "static-array-plugin")]
-    unsafe {
-        extern "C" {
-            fn nyash_array_plugin_invoke_static(
-                instance_id: u32,
-                method_id: u32,
-                args: *const u8,
-                args_len: usize,
-                result: *mut u8,
-                result_len: *mut usize,
-            ) -> i32;
-        }
-        if let Some((provider, type_name, type_id, methods)) = parse_box_spec(arr) {
-            let host = crate::runtime::get_global_plugin_host();
-            if let Ok(h) = host.read() {
-                let mref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-                h.register_static_with_spec(
-                    "libnyash_array_plugin.so",
-                    &type_name,
-                    Some(type_id),
-                    None,
-                    None,
-                    &mref,
-                    Some(std::mem::transmute(nyash_array_plugin_invoke_static as extern "C" fn(u32,u32,*const u8,usize,*mut u8,*mut usize)->i32)),
-                );
-            }
-        }
-    }
-    #[cfg(feature = "static-map-plugin")]
-    unsafe {
-        extern "C" {
-            fn nyash_map_plugin_invoke_static(
-                instance_id: u32,
-                method_id: u32,
-                args: *const u8,
-                args_len: usize,
-                result: *mut u8,
-                result_len: *mut usize,
-            ) -> i32;
-        }
-        if let Some((provider, type_name, type_id, methods)) = parse_box_spec(map) {
-            let host = crate::runtime::get_global_plugin_host();
-            if let Ok(h) = host.read() {
-                let mref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-                h.register_static_with_spec(
-                    "libnyash_map_plugin.so",
-                    &type_name,
-                    Some(type_id),
-                    None,
-                    None,
-                    &mref,
-                    Some(std::mem::transmute(nyash_map_plugin_invoke_static as extern "C" fn(u32,u32,*const u8,usize,*mut u8,*mut usize)->i32)),
-                );
-            }
-        }
-    }
-    #[cfg(feature = "static-string-plugin")]
-    unsafe {
-        extern "C" {
-            fn nyash_string_plugin_invoke_static(
-                instance_id: u32,
-                method_id: u32,
-                args: *const u8,
-                args_len: usize,
-                result: *mut u8,
-                result_len: *mut usize,
-            ) -> i32;
-        }
-        if let Some((provider, type_name, type_id, methods)) = parse_box_spec(strb) {
-            let host = crate::runtime::get_global_plugin_host();
-            if let Ok(h) = host.read() {
-                let mref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-                h.register_static_with_spec(
-                    "libnyash_string_plugin.so",
-                    &type_name,
-                    Some(type_id),
-                    None,
-                    None,
-                    &mref,
-                    Some(std::mem::transmute(nyash_string_plugin_invoke_static as extern "C" fn(u32,u32,*const u8,usize,*mut u8,*mut usize)->i32)),
-                );
-            }
-        }
+pub fn register_from_toml(toml_str: &str) {
+    let Some((provider, type_name, type_id, methods)) = parse_box_spec(toml_str) else { return; };
+    if let Ok(h) = crate::runtime::get_global_plugin_host().read() {
+        let methods_ref: Vec<(&str, u32, bool)> = methods
+            .iter()
+            .map(|(n, id, rr)| (n.as_str(), *id, *rr))
+            .collect();
+        h.register_static_box(&provider, &type_name, Some(type_id), None, None, &methods_ref, None);
     }
 }
+
+// Build-script generated registration entry
+include!(concat!(env!("OUT_DIR"), "/static_plugins_generated.rs"));

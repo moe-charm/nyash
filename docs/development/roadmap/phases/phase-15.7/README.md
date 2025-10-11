@@ -221,6 +221,32 @@ Hakoruneで実行器書く
   - ハーネス compile 前に IR をサニタイズ: 空PHI除去＋ブロック先頭へのPHIグループ化（検証を安定化）
 
 【2025-10-05 追記 — 小粒前進のまとめ】
+
+
+【2025-10-11 追記 — M2/M3達成と盤石化】
+- Selfhost M2/M3 達成（quick常時ONの小セットで緑）
+  - M2: selfhost_rebuild_vm（EXEで自分自身を解析、ProgramヘッダOK）
+  - M3: parity_q_*（VM↔LLVM最小パリティ）＋ plugin identity 緑
+  - 追加パリティ: JSON stringify / <=, >= 境界
+- Provider 起動ダイジェストを固定化（1行）
+  - 形式: policy=… config=… loaded={…} anchors=ok|miss stage2=on|off
+  - dlsym セルフチェック導入（nyash_array_new_h / nyrt_host_call_slot / nyash_host_from_plugin_handle）
+  - policy=force では anchors miss 時に Fail‑Fast
+- plugins profile の最小LLVM交差を追加（軽量・常時ON）
+  - plugin_parity_min_vm_llvm（VM/LLVM最小一致の検査）
+- WASM Phase‑A を開始（ベンチ準備の最小実装）
+  - ArrayBox: len/get/set/push/clear をコード生成（固定cap=8、OOB=0）
+  - WAT生成スモークを追加（auto‑SKIPつき）:
+    - wasm_compile_array_ops_wat（最小）
+    - wasm_compile_bench_suite_wat（apps/benchmarks/wasm/basic/*.hako 一括）
+- ENV/プロファイルの整理（迷いの削減）
+  - HAKO_PLUGIN_POLICY=auto を主。NYASH_* は互換
+  - Stage‑2（HostHandle Array）は profile 限定でON
+
+受け入れ（更新）
+- quick: parity_* + M2代表 + plugin identity（1本）+ wasm WAT（1本）緑
+- plugins: identity（2本）+ 最小LLVM交差（1本）緑
+- provider digest が毎回表示、policy=forceは anchors=ok 必須
 - Hakorune VM の箱化・安定化（自己ホスト向け）
   - HakoruneVmMin: InstructionScannerBox.next + OpHandlersBox.handle_* 経由に統一。無限ループ対策/観測の集約を反映。
   - 共通箱の拡充: ProgramStateBox（bb/prev/steps）, CfgNavigatorBox（index_of_from/head/tail）, RetResolverBox（ret一元化）, DiagnosticsBox（DEVでdebug）。

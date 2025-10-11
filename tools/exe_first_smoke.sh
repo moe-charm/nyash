@@ -22,7 +22,7 @@ mkdir -p dist/nyash_compiler/tmp
 echo 'return 1+2*3' > dist/nyash_compiler/tmp/sample_exe_smoke.hako
 
 echo "[3/4] Running parser EXE → JSON ..."
-(cd dist/nyash_compiler && timeout -s KILL 60s ./nyash_compiler tmp/sample_exe_smoke.hako > sample.json)
+(cd dist/nyash_compiler && NYASH_NYRT_SILENT_RESULT=1 timeout -s KILL 60s ./nyash_compiler tmp/sample_exe_smoke.hako > sample.json)
 
 if [[ "${NYASH_VALIDATE_EXE_JSON:-0}" == "1" ]]; then
   echo "[3.5/4] Validating JSON schema ..."

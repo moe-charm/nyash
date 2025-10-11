@@ -1,0 +1,11 @@
+[[plugins]]
+path = "plugins/nyash-array-plugin"
+feature = "static-array-plugin"
+
+[[plugins]]
+path = "plugins/nyash-map-plugin"
+feature = "static-map-plugin"
+
+[[plugins]]
+path = "plugins/nyash-string-plugin"
+feature = "static-string-plugin"

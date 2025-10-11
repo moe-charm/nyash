@@ -98,6 +98,14 @@ impl PluginHost {
     pub fn config_ref(&self) -> Option<&NyashConfigV2> {
         self.config.as_ref()
     }
+    /// Check whether a given library is currently loaded in the v2 loader.
+    pub fn has_loaded_lib(&self, lib_name: &str) -> bool {
+        if let Ok(l) = self.loader.read() {
+            return l.has_plugin(lib_name);
+        }
+        false
+    }
+
 
     /// Load a single library directly from path for `using kind="dylib"` autoload.
     /// Boxes list is best-effort (may be empty). When empty, TypeBox FFI is used to resolve metadata.

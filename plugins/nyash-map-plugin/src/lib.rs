@@ -546,7 +546,17 @@ extern "C" fn mapbox_invoke_id(
                 match inst.data_str.get(&key) {
                     Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
                     Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
-                    Some(MapVal::Handle(t, i)) => write_tlv_handle(*t, *i, result, result_len),
+                    Some(MapVal::Handle(t, i)) => {
+                        if (*t == TYPE_ID_ARRAY) {
+                            unsafe {
+                                extern "C" { fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64; }
+                                let h = nyash_host_from_plugin_handle(*t, *i);
+                                write_tlv_host_handle(h as u64, result, result_len)
+                            }
+                        } else {
+                            write_tlv_handle(*t, *i, result, result_len)
+                        }
+                    },
                     Some(MapVal::Host(h)) => {
                         write_tlv_host_handle(*h as u64, result, result_len)
                     }
