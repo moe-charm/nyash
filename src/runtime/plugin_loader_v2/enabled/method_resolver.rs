@@ -9,26 +9,6 @@ use crate::runtime::plugin_loader_v2::enabled::PluginLoaderV2;
 impl PluginLoaderV2 {
     /// Resolve a method ID for a given box type and method name
     pub(crate) fn resolve_method_id(&self, box_type: &str, method_name: &str) -> BidResult<u32> {
-        // Trace helper — fully silent by default; only emits with NYASH_METHOD_REG_TRACE_V2=1
-        fn trace(box_type: &str, method_name: &str, provider: &str, mid: Option<u32>) {
-            if !crate::runtime::env_gate_box::bool_any(&["NYASH_METHOD_REG_TRACE_V2"]) { return; }
-            match mid {
-                Some(id) => crate::runtime::diagnostics::trace_event(
-                    "method_resolve",
-                    &format!(
-                        "\"class\":\"{}\",\"method\":\"{}\",\"provider\":\"{}\",\"method_id\":{}",
-                        box_type, method_name, provider, id
-                    ),
-                ),
-                None => crate::runtime::diagnostics::trace_event(
-                    "method_resolve",
-                    &format!(
-                        "\"class\":\"{}\",\"method\":\"{}\",\"provider\":\"{}\",\"status\":\"miss\"",
-                        box_type, method_name, provider
-                    ),
-                ),
-            }
-        }
         // Prefer specs (ingested from nyash_box.toml or TypeBox FFI)
         if let Ok(map) = self.box_specs.read() {
             // Prefer TypeBox resolve() when available (plugin-provided mapping)
@@ -116,14 +96,4 @@ impl PluginLoaderV2 {
         let m = bc.methods.get(method_name).ok_or(BidError::InvalidMethod)?;
         Ok((bc.type_id, m.method_id, m.returns_result))
     }
-}
-
-/// Helper functions for method resolution
-pub(super) fn is_special_method(method_name: &str) -> bool {
-    crate::runtime::method_ids_box::is_special(method_name)
-}
-
-/// Get default method IDs for special methods
-pub(super) fn get_special_method_id(method_name: &str) -> Option<u32> {
-    crate::runtime::method_ids_box::default_id(method_name)
 }

@@ -319,7 +319,7 @@ pub extern "C" fn nyrt_host_call_slot(
         if rc != -10 { return rc; }
     }
 
-    let host_trace = std::env::var("NYASH_HOST_HANDLE_TRACE").ok().as_deref() == Some("1");
+    let host_trace = crate::runtime::env_gate_box::host_handle_trace();
     if crate::runtime::env_gate_box::debug_plugin() || host_trace {
         eprintln!("[host-api] slot call selector={} handle={} args_len={}", selector_id, handle, args_len);
     }

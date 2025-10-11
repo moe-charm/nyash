@@ -698,3 +698,39 @@ Recommended defaults（未設定時の挙動）
 >   1) 既存ドキュメント/QuickRefと乖離している? → 直す（OK）。
 >   2) 未定義/暗黙挙動で不安定? → 明確化しFail‑Fast（OK）。
 >   3) 新しい構文/命令/外部API? → 保留（フラグ付・既定OFFなら検討）。
+
+
+### 5.2 Refactoring & Clean Code（常に綺麗に保つ）
+
+目的
+- デバッグの難易度を下げ、ハードコーディング依存の“場当たり修正”を防ぐ。
+
+原則（実務ルール）
+- 変更は「構造→ドキュメント→テスト→コード」の順に適用（構造で直せるならまず直す）。
+- 責務を箱（Adapter/Router/Provider など）に寄せ、散在する if/unwrap/println デバッグを禁止。
+- Magic number/固定名を撤廃。Type/Method は toml/spec/registry 由来を唯一情報源にする（“Single Source of Truth”）。
+- ログはゲート（ENV/feature）配下に集約。print系は ConsoleAdapter 経由に統一（ロック順序固定・toString 正規化）。
+- Hot path の一時デバッグは TTL 付き ENV（既定OFF）で運用し、PR前に除去/ドキュメント化。
+
+リファクタ・トリガ（発見したら即着手）
+- 同種の分岐/変換が3箇所以上に複製されている。
+- fan-in/out ≥ 3 の結合点にデバッグ/条件分岐が混入している。
+- futex_wait（ロック逆順/長臨界）が疑われる。→ ロックスコープを分離し Adapter/Router へ抽出。
+- “暫定”のハードコーディング（シンボル名/スロット/型ID）が残っている。
+
+コード規約（抜粋）
+- 関数は 100 行以内、ネスト 2 段まで（超える場合は箱に分離）。
+- unwrap/expect は test/dev のみ許容。runtime は Result/Option を Box化/Fail‑Fast。
+- env 分岐は GateBox/Adapter に集約（直接 std::env::var を広域で呼ばない）。
+- plugin/builtin/host の境界は Router/Adapter で一箇所に寄せ、直呼び分岐を散在させない。
+
+レビュー・チェックリスト（最小）
+- [ ] 識別子やスロットは toml/spec/registry による参照で、ハードコードしていない。
+- [ ] 新規ロジックは薄い箱（Adapter/Router/Provider）に置いた。README/LAYER_GUARD を追加した。
+- [ ] 追加ログは ENV でOFF可能。既定は静か。ノイズを filter に寄せない。
+- [ ] 代表スモークを追加/更新（正常/境界）。Fail‑Fast を確認。
+- [ ] 警告/到達不能/未使用が増えていない（cargo build 時に0を目標）。
+
+デバッグ・ログ運用
+- 形式: HAKO_* / NYASH_* の短命ENV（例: NYASH_HOST_HANDLE_TRACE=1）。
+- 既定OFF。PR前に CURRENT_TASK.md or docs/guides に記録、収束後に整理。

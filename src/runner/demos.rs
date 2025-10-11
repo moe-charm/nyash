@@ -90,13 +90,6 @@ pub(super) fn demo_parser_system() {
     }
 }
 
-pub(super) fn demo_interpreter_system() {
-    println!("\n🎭 7. Interpreter System:");
-    println!("  ⚠️  Legacy interpreter removed - use VM or LLVM backends instead");
-    println!("  💡 Try: ./target/release/hakorune --backend vm program.hako");
-    println!("  💡 Try: ./target/release/hakorune --backend llvm program.hako");
-}
-
 /// Run all demo sections (moved from runner/mod.rs)
 pub(super) fn run_all_demos() {
     println!("🦀 Hakorune Runtime Demos - Everything is Box! 🦀");

@@ -7,20 +7,6 @@
 
 use super::*;
 
-/// Kinds of operator boxes we may guard (extensible)
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub enum OperatorKind {
-    Compare, /* Add */
-}
-
-#[inline]
-pub fn should_adopt(kind: OperatorKind) -> bool {
-    match kind {
-        OperatorKind::Compare => crate::config::env::operator_box_compare_adopt(),
-        // OperatorKind::Add => crate::config::env::operator_box_add_adopt(),
-    }
-}
-
 impl super::MirInterpreter {
     /// Intercept by function name before any frame/regs work (exec_function_inner entry point).
     /// Returns Some(Result) when interception handled the call; None to continue normal flow.

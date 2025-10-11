@@ -23,14 +23,6 @@ fn parse_box_spec(toml_str: &str) -> Option<(String, String, u32, Vec<(String, u
     Some((spec.r#box.provider, spec.r#box.type_name, spec.r#box.type_id, methods))
 }
 
-fn register_from_toml(toml_str: &str) {
-    let Some((provider, type_name, type_id, methods)) = parse_box_spec(toml_str) else { return; };
-    let host = crate::runtime::get_global_plugin_host();
-    let h = match host.read() { Ok(v) => v, Err(_) => return };
-    let methods_ref: Vec<(&str, u32, bool)> = methods.iter().map(|(n, id, rr)| (n.as_str(), *id, *rr)).collect();
-    h.register_static_box("libnyash_array_plugin.so", &type_name, Some(type_id), None, None, &methods_ref, None);
-}
-
 pub fn register_static_plugins() {
     // Array
     let arr = include_str!("../../../plugins/nyash-array-plugin/hako_box.toml");

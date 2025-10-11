@@ -62,3 +62,8 @@ pub fn diag_trace() -> bool { bool_any(&["NYASH_DIAG_TRACE", "HAKO_DIAG_TRACE"])
 /// Deterministic execution gate (deny on-demand reprobe; deny IO plugins)
 #[inline]
 pub fn deterministic() -> bool { bool_any(&["HAKO_DETERMINISTIC", "NYASH_DETERMINISTIC"]) }
+
+
+/// HostHandle routing/slot trace (short‑lived, default OFF). Primary=HAKO_*, alias=NYASH_*.
+#[inline]
+pub fn host_handle_trace() -> bool { bool_any(&["HAKO_HOST_HANDLE_TRACE", "NYASH_HOST_HANDLE_TRACE"]) }

@@ -6,11 +6,12 @@ Key variables (current)
 - `NYASH_USE_PLUGIN_BUILTINS` — allow plugin to override core box types
 - `NYASH_PLUGIN_OVERRIDE_TYPES` — comma list (e.g., `StringBox,ArrayBox,MapBox`)
 - `NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}` — disable builtin core boxes (dev gate)
-- `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — 1 to enable Stage‑2 keys/values HostHandle path; 0 for Stage‑1 keysS/valuesS shim
+- `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — EXPERIMENTAL; 1 to enable Stage‑2 keys/values HostHandle path, 0 for Stage‑1 keysS/valuesS shim（既定OFF/プロファイル限定）
+- `HAKO_HOST_HANDLE_TRACE` / `NYASH_HOST_HANDLE_TRACE` — HostHandle slot呼び出しの観測ログ（短命/既定OFF）
 
 Profiles
 - plugin‑on: sets `HAKO_PLUGIN_POLICY=auto`, `NYASH_PLUGIN_CONFIG=hako.toml`
-- plugins: keeps Stage‑1 keys/values (HostHandle OFF) for stability
+- plugins: keeps Stage‑1 keys/values (HostHandle OFF) for stability（`NYASH_PLUGIN_MAP_ARRAY_HANDLE=0`）
 
 Birth Adoption
 - VM will call `birth()` when a plugin box is created with `instance_id=0`, and adopt the returned handle.
@@ -18,6 +19,10 @@ Birth Adoption
 
 Notes
 - Prefer CLI/Profiles over ENV when possible; ENV should be minimal and scoped.
+- Primary names are `HAKO_*`; `NYASH_*` are compatibility aliases. 新規は `HAKO_*` を優先。
+
+TTL/cleanup
+- 実験・観測用 ENV は短命。機能が安定したら削除または CLI/プロファイルへ昇格。
 
 
 Adapter/Fallbacks
