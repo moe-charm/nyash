@@ -111,55 +111,60 @@ extern "C" fn array_invoke_id(
                     None => return NYB_E_INVALID_ARGS,
                 };
 
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        let len = inst.data.len() as i64;
-                        let mut i0 = if start < 0 { 0 } else { start.min(len) } as usize;
-                        let mut i1 = if end < 0 {
-                            len as usize
-                        } else {
-                            end.max(0).min(len) as usize
-                        };
-                        if i0 > i1 {
-                            i0 = i1;
-                        }
-
-                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                            eprintln!(
-                                "[array-plugin] SLICE i0={} i1={} len={} (start={},end={})",
-                                i0, i1, len, start, end
-                            );
-                        }
-
-                        // Stage selector removed (host-handle path disabled); always return plugin handle
-                        let new_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                        if let Ok(mut mapw) = INSTANCES.lock() {
-                            mapw.insert(
-                                new_id,
-                                ArrayInstance {
-                                    data: inst.data[i0..i1].to_vec(),
-                                },
-                            );
-                        } else {
+                // Extract slice data with limited lock scope to avoid deadlock
+                let slice_data = {
+                    let map = match INSTANCES.lock() {
+                        Ok(m) => m,
+                        Err(_) => {
+                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                                eprintln!("[array-plugin] SLICE lock failed");
+                            }
                             return NYB_E_PLUGIN_ERROR;
                         }
-                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                            eprintln!(
-                                "[array-plugin] SLICE created plugin instance={} items={}",
-                                new_id,
-                                i1 - i0
-                            );
-                        }
-                        return write_tlv_handle(TYPE_ID_ARRAY, new_id, result, result_len);
+                    };
+                    let inst = match map.get(&instance_id) {
+                        Some(i) => i,
+                        None => return NYB_E_INVALID_HANDLE,
+                    };
+
+                    let len = inst.data.len() as i64;
+                    let mut i0 = if start < 0 { 0 } else { start.min(len) } as usize;
+                    let mut i1 = if end < 0 {
+                        len as usize
                     } else {
-                        return NYB_E_INVALID_HANDLE;
+                        end.max(0).min(len) as usize
+                    };
+                    if i0 > i1 {
+                        i0 = i1;
                     }
-                } else {
+
                     if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[array-plugin] BIRTH lock failed");
+                        eprintln!(
+                            "[array-plugin] SLICE i0={} i1={} len={} (start={},end={})",
+                            i0, i1, len, start, end
+                        );
                     }
-                    return NYB_E_PLUGIN_ERROR;
+
+                    inst.data[i0..i1].to_vec()
+                }; // Lock released here
+
+                // Create new instance with separate lock (no deadlock)
+                let new_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
+                {
+                    let mut mapw = match INSTANCES.lock() {
+                        Ok(m) => m,
+                        Err(_) => return NYB_E_PLUGIN_ERROR,
+                    };
+                    mapw.insert(new_id, ArrayInstance { data: slice_data });
                 }
+
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!(
+                        "[array-plugin] SLICE created plugin instance={}",
+                        new_id
+                    );
+                }
+                return write_tlv_handle(TYPE_ID_ARRAY, new_id, result, result_len);
             }
             METHOD_BIRTH => {
                 if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {

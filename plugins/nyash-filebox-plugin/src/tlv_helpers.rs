@@ -2,6 +2,11 @@
 
 use crate::constants::*;
 
+// Import shared TLV codec from hako_abi_impl
+use hako_abi_impl::tlv::{
+    write_tlv_bool, write_tlv_string, write_tlv_handle
+};
+
 pub fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
     if result_len.is_null() {
         return NYB_E_INVALID_ARGS;
@@ -40,28 +45,9 @@ pub fn write_tlv_i32(v: i32, result: *mut u8, result_len: *mut usize) -> i32 {
     write_tlv_result(&[(TLV_TAG_I32, &v.to_le_bytes())], result, result_len)
 }
 
-pub fn write_tlv_bool(v: bool, result: *mut u8, result_len: *mut usize) -> i32 {
-    let b = [if v { 1u8 } else { 0u8 }];
-    write_tlv_result(&[(TLV_TAG_BOOL, &b)], result, result_len)
-}
-
-#[allow(dead_code)]
-pub fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(TLV_TAG_STRING, s.as_bytes())], result, result_len)
-}
-
-#[allow(dead_code)]
-pub fn write_tlv_handle(
-    type_id: u32,
-    instance_id: u32,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    let mut payload = Vec::with_capacity(8);
-    payload.extend_from_slice(&type_id.to_le_bytes());
-    payload.extend_from_slice(&instance_id.to_le_bytes());
-    write_tlv_result(&[(TLV_TAG_HANDLE, &payload)], result, result_len)
-}
+// Deleted: write_tlv_bool - use hako_abi_impl::tlv::write_tlv_bool
+// Deleted: write_tlv_string - use hako_abi_impl::tlv::write_tlv_string
+// Deleted: write_tlv_handle - use hako_abi_impl::tlv::write_tlv_handle
 
 pub fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
     unsafe {
