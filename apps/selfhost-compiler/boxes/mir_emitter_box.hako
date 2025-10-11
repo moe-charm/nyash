@@ -9,19 +9,8 @@ using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 static box MirEmitterBox {
   _index_of(hay, needle) { return hay.indexOf(needle) }
   _index_of_from(hay, needle, pos) {
-    if pos < 0 { pos = 0 }
-    local n = hay.size()
-    if pos >= n { return -1 }
-    local m = needle.size()
-    if m <= 0 { return pos }
-    local i = pos
-    local limit = n - m
-    loop (i <= limit) {
-      local seg = hay.substring(i, i + m)
-      if seg == needle { return i }
-      i = i + 1
-    }
-    return -1
+    // Delegate to StringHelpers with adjusted argument order
+    return StringHelpers.index_of(hay, pos, needle)
   }
   _read_digits(text, pos) { return StringHelpers.read_digits(text, pos) }
   _str_to_int(s) { return StringHelpers.to_i64(s) }
@@ -158,32 +147,10 @@ static box MirEmitterBox {
     local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
     if q < 0 { return 0 }
     q = q + 23 // length of the marker
-    // Read consecutive digits (optional minus not handled in Stage-1 yet)
-    local n = ast_json.size()
-    local i = q
-    local s = ""
-    loop(i < n) {
-      local ch = ast_json.substring(i, i+1)
-      if ch >= "0" && ch <= "9" { s = s + ch i = i + 1 } else { break }
-    }
-    if s.size() == 0 { return 0 }
-    // String to int via addition loop
-    local val = 0
-    local k = 0
-    local m = s.size()
-    loop(k < m) {
-      local d = s.substring(k, k+1)
-      local dv = match d {
-        "0" => 0, "1" => 1, "2" => 2, "3" => 3,
-        "4" => 4, "5" => 5, "6" => 6, "7" => 7,
-        "8" => 8, "9" => 9,
-        _ => -1
-      }
-      if dv < 0 { break }
-      val = val * 10 + dv
-      k = k + 1
-    }
-    return val
+    // Use StringHelpers for digit reading and parsing
+    local digits = StringHelpers.read_digits(ast_json, q)
+    if digits.size() == 0 { return 0 }
+    return StringHelpers.to_i64(digits)
   }
 
   // Build minimal MIR JSON v0: main with const -> ret
@@ -191,26 +158,8 @@ static box MirEmitterBox {
     // Try richer patterns first; fallback to Return(Int)
     local try_rich = me._emit_from_stage1_try(ast_json)
     if try_rich != null { return try_rich }
-    // Inline minimal Return(Int) extraction to avoid nested call issues in some parsers
-    local retv = 0
-    if ast_json != null {
-      local p = ast_json.lastIndexOf("\"type\":\"Return\"")
-      if p < 0 { p = ast_json.indexOf("\"type\":\"Return\"") }
-      if p >= 0 {
-        local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
-        if q >= 0 {
-          q = q + 23
-          local n = ast_json.size()
-          local i = q
-          local s = ""
-          loop(i < n) {
-            local ch = ast_json.substring(i, i+1)
-            if ch >= "0" && ch <= "9" { s = s + ch i = i + 1 } else { break }
-          }
-          if s.size() > 0 { retv = me._str_to_int(s) }
-        }
-      }
-    }
+    // Extract Return(Int) value (DRY: delegate to helper)
+    local retv = me._extract_return_int(ast_json)
     // Declarative: Map/Array リテラル + JSON.stringify（読みやすさ優先・挙動同一）
     local mir = {
       functions: [{
