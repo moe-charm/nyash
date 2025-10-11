@@ -786,7 +786,7 @@ pub enum Callee {
 - **mini_vm_progress.md**: Hakorune VM 開発進捗（Phase 1-4 Day 11）
 - **INSTRUCTION_SET.md**: MIR 命令セット仕様
 - **Rust VM handlers**: `src/backend/mir_interpreter/handlers/`
-- **Hakorune VM handlers**: `apps/selfhost/hakorune-vm/*.hako`
+- **Hakorune VM handlers**: `selfhost/hakorune-vm/*.hako`
 
 ---
 

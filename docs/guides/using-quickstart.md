@@ -23,7 +23,7 @@ HAKO_USING_PROFILE = "dev"
 paths = ["apps", "lib", "."]
 
 [modules.overrides]
-selfhost.hakorune_vm.hakorune_vm_core = "apps/selfhost/hakorune-vm/hakorune_vm_core.hako"
+selfhost.hakorune_vm.hakorune_vm_core = "selfhost/hakorune-vm/hakorune_vm_core.hako"
 ```
 - ソース: `using selfhost.hakorune_vm.hakorune_vm_core as VM`
 

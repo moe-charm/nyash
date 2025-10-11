@@ -35,7 +35,7 @@
 
 **戦略決定**:
 - ✅ 新規実装アプローチ採用（既存リファクタリングでなく）
-- ✅ ディレクトリ: `apps/selfhost/hakorune-vm/`（Mini-VM v2 → Hakorune VM に命名変更）
+- ✅ ディレクトリ: `selfhost/hakorune-vm/`（Mini-VM v2 → Hakorune VM に命名変更）
 - ✅ @match 最大限活用（@enum Result での error handling）
 
 **次のステップ**:
@@ -58,8 +58,8 @@
 - ✅ 3テスト全PASS: const 42, 10+32, copy 42
 
 **実装ファイル**:
-- `apps/selfhost/hakorune-vm/hakorune_vm_core.hako` (288行)
-- `apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako` (43行)
+- `selfhost/hakorune-vm/hakorune_vm_core.hako` (288行)
+- `selfhost/hakorune-vm/tests/test_phase1_minimal.hako` (43行)
 
 **技術的成果**:
 - @match でのinstruction dispatch成功（"const"/"binop"/"ret"/"copy" → handler関数）
@@ -111,8 +111,8 @@
 - ✅ instruction loop位置更新: `pos = inst_end + 1`
 
 **実装ファイル**:
-- `apps/selfhost/hakorune-vm/hakorune_vm_core.hako` (377行 → 387行, +10行)
-- `apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako` (43行 → 113行, +70行)
+- `selfhost/hakorune-vm/hakorune_vm_core.hako` (377行 → 387行, +10行)
+- `selfhost/hakorune-vm/tests/test_phase1_minimal.hako` (43行 → 113行, +70行)
 
 **技術的成果**:
 - BinOp 5種類実装完了（Add/Sub/Mul/Div/Mod）
@@ -147,7 +147,7 @@ print("Before set: result_val=0")  // result_val が 0 に変わっている！
 [DEBUG binop] Stored v%3 = 0
 ```
 
-**問題箇所**: `apps/selfhost/hakorune-vm/hakorune_vm_core.hako:219-237`
+**問題箇所**: `selfhost/hakorune-vm/hakorune_vm_core.hako:219-237`
 
 **影響範囲**:
 - ✅ Test 1-3 PASS (Add/Copy): `kind == "Add"` は動作
@@ -166,7 +166,7 @@ print("Before set: result_val=0")  // result_val が 0 に変わっている！
 **再現手順**:
 ```bash
 source tools/dev_env.sh using
-NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako selfhost/hakorune-vm/tests/test_phase1_minimal.hako
 # Test 4-10 すべてFAIL（expected 42/1, got 0）
 ```
 
@@ -214,7 +214,7 @@ match (tvar, evar) {
 **実行コマンド**:
 ```bash
 source tools/dev_env.sh using
-NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako selfhost/hakorune-vm/tests/test_phase1_minimal.hako
 ```
 
 **結果**: 全10テストPASS！ 🎉
@@ -283,11 +283,11 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
 - ✅ **全テストPASS**: 5/5 (100%) 🎉
 
 **実装ファイル**:
-- `apps/selfhost/hakorune-vm/block_mapper.hako` (77行)
-- `apps/selfhost/hakorune-vm/terminator_handler.hako` (208行)
-- `apps/selfhost/hakorune-vm/phi_handler.hako` (223行)
-- `apps/selfhost/hakorune-vm/hakorune_vm_core.hako` (拡張: +100行)
-- `apps/selfhost/hakorune-vm/tests/test_phase1_day3.hako` (103行)
+- `selfhost/hakorune-vm/block_mapper.hako` (77行)
+- `selfhost/hakorune-vm/terminator_handler.hako` (208行)
+- `selfhost/hakorune-vm/phi_handler.hako` (223行)
+- `selfhost/hakorune-vm/hakorune_vm_core.hako` (拡張: +100行)
+- `selfhost/hakorune-vm/tests/test_phase1_day3.hako` (103行)
 
 **技術的成果**:
 1. **箱化モジュール化**: 各機能を独立した箱に分離（読みやすさ・美しさ・保守性向上）
@@ -422,8 +422,8 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
    - Test 7: BitNot (~0 → -1)
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/unaryop_handler.hako` (63行)
-- `apps/selfhost/hakorune-vm/tests/test_phase2_day4.hako` (テストスイート)
+- `selfhost/hakorune-vm/unaryop_handler.hako` (63行)
+- `selfhost/hakorune-vm/tests/test_phase2_day4.hako` (テストスイート)
 
 **更新ファイル**:
 - `instruction_dispatcher.hako`: +1 using, +1 case (55→57行)

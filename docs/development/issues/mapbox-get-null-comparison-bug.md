@@ -212,17 +212,17 @@ if map.has(key) {
 
 ### Files Modified
 
-1. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/terminator_handler.hako`
+1. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/terminator_handler.hako`
    - Fixed `_handle_ret()` (line 84-92)
    - Fixed `_handle_branch()` (line 139-146)
 
-2. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/phi_handler.hako`
+2. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/phi_handler.hako`
    - Fixed phi value loading (line 112-118)
 
-3. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/value_manager.hako`
+3. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/value_manager.hako`
    - Fixed `get()` method (line 11-19)
 
-4. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/load_handler.hako`
+4. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/load_handler.hako`
    - Fixed memory load (line 27-35)
 
 ## Test Results
@@ -293,16 +293,16 @@ Should MapBox.get() behavior be changed? Two options:
 
 ## Test Files Created
 
-1. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/tests/test_compare_bug.hako`
+1. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/tests/test_compare_bug.hako`
    - Phase 1: Basic comparison tests
 
-2. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/tests/test_vm_return_compare.hako`
+2. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/tests/test_vm_return_compare.hako`
    - Phase 2: VM return value comparison tests
 
-3. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/tests/test_null_vs_zero.hako`
+3. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/tests/test_null_vs_zero.hako`
    - Phase 3: null vs 0 comparison investigation
 
-4. `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/tests/test_mapbox_get_behavior.hako`
+4. `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/tests/test_mapbox_get_behavior.hako`
    - Phase 4: MapBox.get() behavior investigation
 
 All test files can be run with:

@@ -1,0 +1,50 @@
+// GlobalCallHandlerBox - Handle Global function calls
+// Single Responsibility: Execute global functions (print, etc.)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+
+static box GlobalCallHandlerBox {
+  // Handle global function call
+  // name: function name (e.g., "print")
+  // args_array: ArrayBox containing argument values
+  // dst_reg: destination register (null if no return value)
+  // regs: register MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  handle(name, args_array, dst_reg, regs) {
+    if name == "print" {
+      return me._handle_print(args_array, dst_reg, regs)
+    }
+
+    // Unsupported global function
+    return Result.Err("global_call: unsupported function: " + name)
+  }
+
+  // Handle print() function
+  // Phase 1: Simple implementation - print integer value
+  // Future: Support multiple types, string formatting
+  _handle_print(args_array, dst_reg, regs) {
+    // Check argument count
+    local argc = args_array.size()
+    if argc != 1 {
+      return Result.Err("print: expected 1 argument, got " + StringHelpers.int_to_str(argc))
+    }
+
+    // Get first argument
+    local arg_value = args_array.get(0)
+
+    // Print value (convert to string first)
+    // Phase 1: Assume integer value
+    local output = StringHelpers.int_to_str(arg_value)
+    print(output)
+
+    // print() has no return value (dst_reg should be null)
+    // If dst_reg is provided, set it to 0
+    if dst_reg != null {
+      ValueManagerBox.set(regs, dst_reg, 0)
+    }
+
+    return Result.Ok(0)
+  }
+}

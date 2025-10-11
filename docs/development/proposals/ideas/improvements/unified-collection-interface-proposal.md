@@ -66,7 +66,7 @@ if value.startsWith("Key not found") {  // 😱 String check for errors!
 }
 ```
 
-**Evidence from codebase** (`apps/selfhost/hakorune-vm/load_handler.hako:31`):
+**Evidence from codebase** (`selfhost/hakorune-vm/load_handler.hako:31`):
 ```nyash
 // Fix: MapBox.get() returns StringBox("Key not found") instead of null
 ```
@@ -546,10 +546,10 @@ if value.toString().startsWith("Key not found") {
 ```
 
 **Evidence from codebase** (~50-100 call sites):
-- `apps/selfhost/hakorune-vm/load_handler.hako:31`
-- `apps/selfhost/hakorune-vm/terminator_handler.hako:87, 142`
-- `apps/selfhost/hakorune-vm/value_manager.hako:13`
-- `apps/selfhost/hakorune-vm/phi_handler.hako:113`
+- `selfhost/hakorune-vm/load_handler.hako:31`
+- `selfhost/hakorune-vm/terminator_handler.hako:87, 142`
+- `selfhost/hakorune-vm/value_manager.hako:13`
+- `selfhost/hakorune-vm/phi_handler.hako:113`
 - `selfhost/compiler/pipeline_v2/using_resolver_box.hako:125`
 
 #### Fixed Behavior

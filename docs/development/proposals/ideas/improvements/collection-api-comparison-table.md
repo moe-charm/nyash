@@ -183,7 +183,7 @@ interface MappedCollection extends CollectionBox {
 
 - [ ] **MapBox.get()**: Change return from `StringBox(error)` → `NullBox`
   - Impact: ~50-100 call sites
-  - Files: `apps/selfhost/hakorune-vm/*.hako`, `apps/selfhost-compiler/*.hako`
+  - Files: `selfhost/hakorune-vm/*.hako`, `apps/selfhost-compiler/*.hako`
 
 - [ ] **StringBox.size()**: Add missing method
   - Impact: 0 (new method, no breaking change)

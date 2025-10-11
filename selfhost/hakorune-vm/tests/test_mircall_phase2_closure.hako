@@ -1,0 +1,51 @@
+// Test: MirCall Phase 2 - Closure creation
+// Tests Callee::Closure (closure object creation with captures)
+// Note: Closure calling (Callee::Value) is tested separately
+
+using "selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+
+static box Main {
+  main() {
+    print("=== Test: MirCall Phase 2 - Closure Creation ===")
+
+    // Test 1: Simple closure with no captures
+    local test1_mir = "{\"functions\":[{\"name\":\"main/0\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"Integer\":42}},{\"op\":\"mir_call\",\"mir_call\":{\"callee\":{\"type\":\"Closure\",\"params\":[\"x\",\"y\"],\"captures\":[],\"me_capture\":null},\"args\":[]},\"dst\":2},{\"op\":\"ret\",\"value\":2}],\"terminator\":{\"op\":\"ret\",\"value\":2}}]}]}"
+    local result1 = HakoruneVmCore.run(test1_mir)
+    if result1 == null {
+      print("FAIL: Test 1 returned null")
+      return 1
+    }
+    // Closure objects are not directly returnable, so we check for success (no crash)
+    print("PASS: Test 1 - Simple closure (no captures)")
+
+    // Test 2: Closure with captures
+    local test2_mir = "{\"functions\":[{\"name\":\"main/0\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"Integer\":10}},{\"op\":\"const\",\"dst\":2,\"value\":{\"Integer\":20}},{\"op\":\"mir_call\",\"mir_call\":{\"callee\":{\"type\":\"Closure\",\"params\":[\"x\"],\"captures\":[[\"outer1\",1],[\"outer2\",2]],\"me_capture\":null},\"args\":[]},\"dst\":3},{\"op\":\"ret\",\"value\":1}],\"terminator\":{\"op\":\"ret\",\"value\":1}}]}]}"
+    local result2 = HakoruneVmCore.run(test2_mir)
+    if result2 == null {
+      print("FAIL: Test 2 returned null")
+      return 1
+    }
+    if result2 != 10 {
+      print("FAIL: Test 2 expected 10, got " + result2)
+      return 1
+    }
+    print("PASS: Test 2 - Closure with captures")
+
+    // Test 3: Closure with me_capture
+    local test3_mir = "{\"functions\":[{\"name\":\"main/0\",\"blocks\":[{\"id\":0,\"instructions\":[{\"op\":\"const\",\"dst\":1,\"value\":{\"Integer\":5}},{\"op\":\"const\",\"dst\":2,\"value\":{\"Integer\":100}},{\"op\":\"mir_call\",\"mir_call\":{\"callee\":{\"type\":\"Closure\",\"params\":[],\"captures\":[[\"v\",1]],\"me_capture\":2},\"args\":[]},\"dst\":3},{\"op\":\"ret\",\"value\":2}],\"terminator\":{\"op\":\"ret\",\"value\":2}}]}]}"
+    local result3 = HakoruneVmCore.run(test3_mir)
+    if result3 == null {
+      print("FAIL: Test 3 returned null")
+      return 1
+    }
+    if result3 != 100 {
+      print("FAIL: Test 3 expected 100, got " + result3)
+      return 1
+    }
+    print("PASS: Test 3 - Closure with me_capture")
+
+    print("")
+    print("=== All Closure Creation Tests PASSED ===")
+    return 0
+  }
+}

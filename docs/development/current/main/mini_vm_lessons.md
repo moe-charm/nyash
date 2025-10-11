@@ -405,7 +405,7 @@ match (tvar, evar) {
 **検証結果**: 全10テストPASS！ 🎉
 ```bash
 source tools/dev_env.sh using
-NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 ./target/release/hako selfhost/hakorune-vm/tests/test_phase1_minimal.hako
 
 Test 4: 50 - 8 → 42 ✅ (修正前: 0)
 Test 5: 6 * 7 → 42 ✅ (修正前: 0)
@@ -488,9 +488,9 @@ static box HakoruneVmCore {
 }
 
 // After (Day 3): 機能を箱に分離
-using "apps/selfhost/hakorune-vm/block_mapper.hako" as BlockMapperBox
-using "apps/selfhost/hakorune-vm/terminator_handler.hako" as TerminatorHandlerBox
-using "apps/selfhost/hakorune-vm/phi_handler.hako" as PhiHandlerBox
+using "selfhost/hakorune-vm/block_mapper.hako" as BlockMapperBox
+using "selfhost/hakorune-vm/terminator_handler.hako" as TerminatorHandlerBox
+using "selfhost/hakorune-vm/phi_handler.hako" as PhiHandlerBox
 
 static box HakoruneVmCore {
   run(mir_json) {

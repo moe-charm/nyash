@@ -338,7 +338,7 @@ static box MethodRegistry {
 
 **2. 具体的なハンドラー実装例**
 ```hakorune
-// apps/selfhost/hakorune-vm/handlers/double_handler.hako
+// selfhost/hakorune-vm/handlers/double_handler.hako
 box DoubleHandler {
     invoke(args) {
         local value = args.get(0)
@@ -346,7 +346,7 @@ box DoubleHandler {
     }
 }
 
-// apps/selfhost/hakorune-vm/handlers/upper_handler.hako
+// selfhost/hakorune-vm/handlers/upper_handler.hako
 box UpperHandler {
     invoke(args) {
         local str = args.get(0)
@@ -354,7 +354,7 @@ box UpperHandler {
     }
 }
 
-// apps/selfhost/hakorune-vm/handlers/substring_handler.hako
+// selfhost/hakorune-vm/handlers/substring_handler.hako
 box SubstringHandler {
     invoke(args) {
         local str = args.get(0)
@@ -367,9 +367,9 @@ box SubstringHandler {
 
 **3. Registry実装**
 ```hakorune
-// apps/selfhost/hakorune-vm/method_registry.hako
-using "apps/selfhost/hakorune-vm/handlers/double_handler.hako" as DoubleHandler
-using "apps/selfhost/hakorune-vm/handlers/upper_handler.hako" as UpperHandler
+// selfhost/hakorune-vm/method_registry.hako
+using "selfhost/hakorune-vm/handlers/double_handler.hako" as DoubleHandler
+using "selfhost/hakorune-vm/handlers/upper_handler.hako" as UpperHandler
 // ... 他のハンドラー
 
 static box MethodRegistry {
@@ -404,8 +404,8 @@ static box MethodRegistry {
 
 **4. BoxCallHandlerBox統合**
 ```hakorune
-// apps/selfhost/hakorune-vm/boxcall_handler.hako
-using "apps/selfhost/hakorune-vm/method_registry.hako" as MethodRegistry
+// selfhost/hakorune-vm/boxcall_handler.hako
+using "selfhost/hakorune-vm/method_registry.hako" as MethodRegistry
 
 static box BoxCallHandlerBox {
     handle(inst_json, regs) {
@@ -692,7 +692,7 @@ static box MethodRegistry {
 **タスク**:
 ```bash
 # 1. ハンドラーBox雛形作成 (テンプレート)
-cat > apps/selfhost/hakorune-vm/handlers/TEMPLATE.hako << 'EOF'
+cat > selfhost/hakorune-vm/handlers/TEMPLATE.hako << 'EOF'
 // Handler template
 box XxxHandler {
     invoke(args) {
@@ -712,7 +712,7 @@ EOF
 # ... (20個以上)
 
 # 3. MethodRegistry実装 (0.3人日)
-# - apps/selfhost/hakorune-vm/method_registry.hako
+# - selfhost/hakorune-vm/method_registry.hako
 
 # 4. BoxCallHandlerBox統合 (0.6人日)
 # - 既存の25個のif-elseを削除
@@ -789,6 +789,6 @@ EOF
 **作成日**: 2025-10-10
 **次回レビュー**: Phase 2実装完了後
 **関連ドキュメント**:
-- [BoxCallHandlerBox実装](/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/boxcall_handler.hako)
+- [BoxCallHandlerBox実装](/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/boxcall_handler.hako)
 - [MethodRouterBox実装](/home/tomoaki/git/hakorune-selfhost/src/runtime/method_router_box/mod.rs)
 - [MIR命令セット](/home/tomoaki/git/hakorune-selfhost/docs/reference/mir/INSTRUCTION_SET.md)

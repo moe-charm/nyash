@@ -61,10 +61,10 @@ if map.has(key) {
 ```
 
 **Files Fixed**:
-1. `apps/selfhost/hakorune-vm/load_handler.hako`
-2. `apps/selfhost/hakorune-vm/value_manager.hako`
-3. `apps/selfhost/hakorune-vm/terminator_handler.hako` (2 locations)
-4. `apps/selfhost/hakorune-vm/phi_handler.hako`
+1. `selfhost/hakorune-vm/load_handler.hako`
+2. `selfhost/hakorune-vm/value_manager.hako`
+3. `selfhost/hakorune-vm/terminator_handler.hako` (2 locations)
+4. `selfhost/hakorune-vm/phi_handler.hako`
 
 **Result**: All 27 tests now pass (100%)
 
@@ -74,7 +74,7 @@ if map.has(key) {
 
 ### Phase 1: Basic Comparison Tests ✅
 
-**Created**: `apps/selfhost/hakorune-vm/tests/test_compare_bug.hako`
+**Created**: `selfhost/hakorune-vm/tests/test_compare_bug.hako`
 
 **Result**: All basic comparisons work correctly
 - Direct literal comparison (0 != 0): **PASS**
@@ -85,7 +85,7 @@ if map.has(key) {
 
 ### Phase 2: VM Return Value Tests ❌
 
-**Created**: `apps/selfhost/hakorune-vm/tests/test_vm_return_compare.hako`
+**Created**: `selfhost/hakorune-vm/tests/test_vm_return_compare.hako`
 
 **Test 2.1**: VM returns const 0 → **PASS**
 ```hako
@@ -105,7 +105,7 @@ if result2 != 0 { print("[FAIL]") }  // FAIL!
 
 ### Phase 3: Null vs Zero Comparison ⚠️
 
-**Created**: `apps/selfhost/hakorune-vm/tests/test_null_vs_zero.hako`
+**Created**: `selfhost/hakorune-vm/tests/test_null_vs_zero.hako`
 
 ```hako
 local a = null
@@ -131,7 +131,7 @@ if b != 0 {
 
 ### Phase 4: MapBox.get() Behavior Investigation 🎯
 
-**Created**: `apps/selfhost/hakorune-vm/tests/test_mapbox_get_behavior.hako`
+**Created**: `selfhost/hakorune-vm/tests/test_mapbox_get_behavior.hako`
 
 ```hako
 local map = new MapBox()
@@ -303,10 +303,10 @@ box MapBox {
 
 Only 4 files currently use the correct pattern:
 
-1. `apps/selfhost/hakorune-vm/load_handler.hako`
-2. `apps/selfhost/hakorune-vm/value_manager.hako`
-3. `apps/selfhost/hakorune-vm/terminator_handler.hako`
-4. `apps/selfhost/hakorune-vm/phi_handler.hako`
+1. `selfhost/hakorune-vm/load_handler.hako`
+2. `selfhost/hakorune-vm/value_manager.hako`
+3. `selfhost/hakorune-vm/terminator_handler.hako`
+4. `selfhost/hakorune-vm/phi_handler.hako`
 
 **All 4 files were fixed during this bug investigation.**
 
@@ -588,13 +588,13 @@ local value = map.get(key).unwrap_or(0)
 ### Test Files Created
 
 1. **Bug Investigation Tests**:
-   - `apps/selfhost/hakorune-vm/tests/test_compare_bug.hako` - Phase 1: Basic comparison tests
-   - `apps/selfhost/hakorune-vm/tests/test_vm_return_compare.hako` - Phase 2: VM return tests
-   - `apps/selfhost/hakorune-vm/tests/test_null_vs_zero.hako` - Phase 3: Null vs zero tests
-   - `apps/selfhost/hakorune-vm/tests/test_mapbox_get_behavior.hako` - Phase 4: Root cause tests
+   - `selfhost/hakorune-vm/tests/test_compare_bug.hako` - Phase 1: Basic comparison tests
+   - `selfhost/hakorune-vm/tests/test_vm_return_compare.hako` - Phase 2: VM return tests
+   - `selfhost/hakorune-vm/tests/test_null_vs_zero.hako` - Phase 3: Null vs zero tests
+   - `selfhost/hakorune-vm/tests/test_mapbox_get_behavior.hako` - Phase 4: Root cause tests
 
 2. **Verification Tests**:
-   - `apps/selfhost/hakorune-vm/tests/test_mapbox_fix_verification.hako` - Comprehensive fix verification (6 tests)
+   - `selfhost/hakorune-vm/tests/test_mapbox_fix_verification.hako` - Comprehensive fix verification (6 tests)
 
 ### Test Results
 
@@ -636,7 +636,7 @@ Test 3: load from uninitialized mem[99] → 0
 
 - **Bug Report**: `docs/bugs/mapbox-get-null-comparison-bug.md` - Complete investigation report
 - **Phase 2 Day 5**: `docs/development/current/main/mini_vm_progress.md` - Implementation context
-- **Verification Test**: `apps/selfhost/hakorune-vm/tests/test_mapbox_fix_verification.hako` - Complete test suite
+- **Verification Test**: `selfhost/hakorune-vm/tests/test_mapbox_fix_verification.hako` - Complete test suite
 
 ---
 

@@ -1,0 +1,38 @@
+// BarrierHandlerBox - Memory barrier instruction handler
+// Handles: barrier (memory fence for ordering guarantees)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+
+static box BarrierHandlerBox {
+  // Handle barrier instruction
+  // inst_json: {"op":"barrier","op_kind":"Read|Write","ptr":X}
+  // regs: register MapBox
+  // mem: memory MapBox
+  // Returns: Result.Ok(0) or Result.Err(message)
+  // Phase 1: No-op (just validate fields, actual memory barrier not implemented yet)
+  handle(inst_json, regs, mem) {
+    // Extract op_kind
+    local kind = JsonFieldExtractor.extract_string(inst_json, "op_kind")
+    if kind == null {
+      return Result.Err("barrier: op_kind not found")
+    }
+
+    // Validate op_kind (must be "Read" or "Write")
+    if kind != "Read" && kind != "Write" {
+      return Result.Err("barrier: invalid op_kind: " + kind)
+    }
+
+    // Extract ptr (memory pointer)
+    local ptr = JsonFieldExtractor.extract_int(inst_json, "ptr")
+    if ptr == null {
+      return Result.Err("barrier: ptr not found")
+    }
+
+    // Phase 1: No-op (just validate fields)
+    // Future: Implement actual memory barrier semantics for ordering guarantees
+    // - Read barrier: Ensure all preceding loads complete before subsequent loads
+    // - Write barrier: Ensure all preceding stores complete before subsequent stores
+    return Result.Ok(0)
+  }
+}

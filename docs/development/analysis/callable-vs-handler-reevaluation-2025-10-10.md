@@ -166,7 +166,7 @@ local callable = ref Math.double/1
 
 現在の実装:
 ```hakorune
-// apps/selfhost/hakorune-vm/boxcall_handler.hako (152行)
+// selfhost/hakorune-vm/boxcall_handler.hako (152行)
 static box BoxCallHandlerBox {
   handle(inst_json, regs) {
     // 25個のif-else文 (54-114行)
@@ -184,7 +184,7 @@ static box BoxCallHandlerBox {
 
 修正後の実装:
 ```hakorune
-// apps/selfhost/hakorune-vm/boxcall_handler.hako (修正後: 約70行)
+// selfhost/hakorune-vm/boxcall_handler.hako (修正後: 約70行)
 using "apps/lib/method_registry.hako" as MethodRegistry
 
 static box BoxCallHandlerBox {
@@ -279,7 +279,7 @@ static box MethodRegistry {
 
 ```hakorune
 // apps/tests/callable_boxcall_test.hako (新規: 約40行)
-using "apps/selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
+using "selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
 
 static box Main {
   main() {
@@ -725,7 +725,7 @@ EOF
 #### Action 3: boxcall_handler.hako修正
 ```bash
 # Day 2: if文削除 (0.2人日)
-# apps/selfhost/hakorune-vm/boxcall_handler.hako
+# selfhost/hakorune-vm/boxcall_handler.hako
 # - 25個のif-else削除
 # - MethodRegistry統合
 ```
@@ -744,7 +744,7 @@ EOF
 - `/home/tomoaki/git/hakorune-selfhost/src/tests/vm_functionbox_call.rs` (テスト)
 
 #### Hakorune VM側 (修正対象)
-- `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/boxcall_handler.hako` (152行)
+- `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/boxcall_handler.hako` (152行)
 
 ### 11-2. 関連ドキュメント
 - [前回の比較分析](callable-vs-handler-comparison.md) (2025-10-10 午前)

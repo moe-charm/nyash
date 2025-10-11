@@ -190,10 +190,10 @@ local char = text.split("").get(0)
 - `/home/tomoaki/git/hakorune-selfhost/src/boxes/string_box.rs` - StringBox
 
 ### Call Sites to Migrate (Examples)
-- `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/load_handler.hako:31`
-- `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/terminator_handler.hako:87,142`
-- `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/value_manager.hako:13`
-- `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/hakorune-vm/phi_handler.hako:113`
+- `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/load_handler.hako:31`
+- `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/terminator_handler.hako:87,142`
+- `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/value_manager.hako:13`
+- `/home/tomoaki/git/hakorune-selfhost/selfhost/hakorune-vm/phi_handler.hako:113`
 - `/home/tomoaki/git/hakorune-selfhost/selfhost/compiler/pipeline_v2/using_resolver_box.hako:125`
 
 ---

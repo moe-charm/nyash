@@ -69,7 +69,7 @@ Callee::Closure {
 
 ### Phase 2-1: NewClosureHandlerBox実装（3-4時間）
 
-**ファイル**: `apps/selfhost/hakorune-vm/newclosure_handler.hako` (60-80行)
+**ファイル**: `selfhost/hakorune-vm/newclosure_handler.hako` (60-80行)
 
 **実装内容**:
 ```hako
@@ -119,7 +119,7 @@ local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[
 
 ### Phase 2-2: ValueCallHandlerBox実装（6-8時間）
 
-**ファイル**: `apps/selfhost/hakorune-vm/value_call_handler.hako` (80-100行)
+**ファイル**: `selfhost/hakorune-vm/value_call_handler.hako` (80-100行)
 
 **実装内容**:
 ```hako

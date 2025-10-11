@@ -338,20 +338,20 @@ P5: LocalSSA ensure_cond/ensure_calls の最小適用
 ```bash
 # Phase 1 Day 1+2 テスト（10テスト）
 HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
-  ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_minimal.hako
+  ./target/release/hako selfhost/hakorune-vm/tests/test_phase1_minimal.hako
 
 # Phase 1 Day 3 テスト（5テスト）
 HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
-  ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase1_day3.hako
+  ./target/release/hako selfhost/hakorune-vm/tests/test_phase1_day3.hako
 
 # Phase 2 Day 4 テスト（7テスト - UnaryOp）
 HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
-  ./target/release/hako apps/selfhost/hakorune-vm/tests/test_phase2_day4.hako
+  ./target/release/hako selfhost/hakorune-vm/tests/test_phase2_day4.hako
 ```
 
 ### 箱ファイル一覧
 ```
-apps/selfhost/hakorune-vm/
+selfhost/hakorune-vm/
 ├── hakorune_vm_core.hako (181行) - メインVM
 ├── block_mapper.hako (77行) - ブロックマップ作成
 ├── terminator_handler.hako (208行) - Ret/Jump/Branch処理

@@ -1,0 +1,62 @@
+// test_phase2_day5.hako — Phase 2 Day 5 Load/Store tests
+// Expected: Load/Store memory operations tests
+
+using "selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box Main {
+  main() {
+    // Test 1: Store 42 to mem[1], then Load from mem[1] → 42
+    local mir1 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":42}},{"op":"store","value":1,"ptr":10},{"op":"load","dst":2,"ptr":10},{"op":"ret","value":2}],"terminator":{"op":"ret","value":2}}]}]}"#
+
+    local result1 = HakoruneVmCore.run(mir1)
+    print("Test 1: store 42 to mem[10], load from mem[10] → " + StringHelpers.int_to_str(result1))
+    if result1 != 42 {
+      print("[FAIL] Test 1: expected 42, got " + StringHelpers.int_to_str(result1))
+      return 1
+    }
+
+    // Test 2: Store 10 to mem[20], Store 32 to mem[21], Load both, Add → 42
+    local mir2 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":10}},{"op":"const","dst":2,"value":{"type":"i64","value":32}},{"op":"store","value":1,"ptr":20},{"op":"store","value":2,"ptr":21},{"op":"load","dst":3,"ptr":20},{"op":"load","dst":4,"ptr":21},{"op":"binop","op_kind":"Add","dst":5,"lhs":3,"rhs":4},{"op":"ret","value":5}],"terminator":{"op":"ret","value":5}}]}]}"#
+
+    local result2 = HakoruneVmCore.run(mir2)
+    print("Test 2: store 10/32, load, add → " + StringHelpers.int_to_str(result2))
+    if result2 != 42 {
+      print("[FAIL] Test 2: expected 42, got " + StringHelpers.int_to_str(result2))
+      return 1
+    }
+
+    // Test 3: Load from uninitialized memory → 0
+    local mir3 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"load","dst":1,"ptr":99},{"op":"ret","value":1}],"terminator":{"op":"ret","value":1}}]}]}"#
+
+    local result3 = HakoruneVmCore.run(mir3)
+    print("Test 3: load from uninitialized mem[99] → " + StringHelpers.int_to_str(result3))
+    if result3 != 0 {
+      print("[FAIL] Test 3: expected 0, got " + StringHelpers.int_to_str(result3))
+      return 1
+    }
+
+    // Test 4: Overwrite memory location (Store 5, then Store 42, then Load → 42)
+    local mir4 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":5}},{"op":"const","dst":2,"value":{"type":"i64","value":42}},{"op":"store","value":1,"ptr":30},{"op":"store","value":2,"ptr":30},{"op":"load","dst":3,"ptr":30},{"op":"ret","value":3}],"terminator":{"op":"ret","value":3}}]}]}"#
+
+    local result4 = HakoruneVmCore.run(mir4)
+    print("Test 4: overwrite mem[30] (5→42), load → " + StringHelpers.int_to_str(result4))
+    if result4 != 42 {
+      print("[FAIL] Test 4: expected 42, got " + StringHelpers.int_to_str(result4))
+      return 1
+    }
+
+    // Test 5: Store result of BinOp to memory
+    local mir5 = r#"{"functions":[{"name":"test","blocks":[{"id":0,"instructions":[{"op":"const","dst":1,"value":{"type":"i64","value":30}},{"op":"const","dst":2,"value":{"type":"i64","value":12}},{"op":"binop","op_kind":"Add","dst":3,"lhs":1,"rhs":2},{"op":"store","value":3,"ptr":40},{"op":"load","dst":4,"ptr":40},{"op":"ret","value":4}],"terminator":{"op":"ret","value":4}}]}]}"#
+
+    local result5 = HakoruneVmCore.run(mir5)
+    print("Test 5: store binop result (30+12), load → " + StringHelpers.int_to_str(result5))
+    if result5 != 42 {
+      print("[FAIL] Test 5: expected 42, got " + StringHelpers.int_to_str(result5))
+      return 1
+    }
+
+    print("✅ All Phase 2 Day 5 tests PASSED!")
+    return 0
+  }
+}

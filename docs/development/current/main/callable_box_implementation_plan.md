@@ -22,7 +22,7 @@
 - **Implementation Time**: ~4 hours (planned 3 days → completed in 2 days)
 
 ### Key Files
-- Implementation: [apps/selfhost/hakorune-vm/boxcall_handler.hako](../../../../apps/selfhost/hakorune-vm/boxcall_handler.hako)
+- Implementation: [selfhost/hakorune-vm/boxcall_handler.hako](../../../../selfhost/hakorune-vm/boxcall_handler.hako)
 - Test: [apps/tests/test_callable_direct.hako](../../../../apps/tests/test_callable_direct.hako)
 - Smoke Test: [tools/smokes/v2/profiles/quick/core/callable_hakorune_vm.sh](../../../../tools/smokes/v2/profiles/quick/core/callable_hakorune_vm.sh)
 
@@ -39,7 +39,7 @@
   - Smoke tests: 1 PASS, 1 minor bug (abi_util.rs)
 
 - **Hakorune VM**: 未対応 ❌
-  - `apps/selfhost/hakorune-vm/boxcall_handler.hako`: 22メソッドがハードコード
+  - `selfhost/hakorune-vm/boxcall_handler.hako`: 22メソッドがハードコード
   - if-else chains: 25箇所
 
 ### Goal
@@ -54,7 +54,7 @@
 ### **Day 1: BoxCallHandlerBox拡張** (4-6 hours)
 
 #### Target File
-`apps/selfhost/hakorune-vm/boxcall_handler.hako`
+`selfhost/hakorune-vm/boxcall_handler.hako`
 
 #### Required Method Handlers (6 handlers)
 
@@ -143,7 +143,7 @@ else if method_sig == "callAsync/1" {
 ### **Day 2: Test Implementation** (4-6 hours)
 
 #### Target File
-`apps/selfhost/hakorune-vm/tests/test_callable.hako`
+`selfhost/hakorune-vm/tests/test_callable.hako`
 
 #### Test Cases
 
@@ -243,7 +243,7 @@ Add to `tools/smokes/v2/profiles/quick/selfhost/`:
 
 #### Files to Update
 
-##### 1. `apps/selfhost/hakorune-vm/README.md`
+##### 1. `selfhost/hakorune-vm/README.md`
 Add section:
 ```markdown
 ## CallableBox Support
@@ -284,7 +284,7 @@ Added 6 method handlers:
 - arity/0 (slot 501)
 - callAsync/1, callAsync/2 (slots 502, 211)
 
-See: apps/selfhost/hakorune-vm/boxcall_handler.hako
+See: selfhost/hakorune-vm/boxcall_handler.hako
 ```
 
 ##### 3. `CLAUDE.md`
@@ -356,7 +356,7 @@ VMValue::Future(fb) => fb.to_string_box().value,  // ✅ Correct
 
 3. **Edit Hakorune VM handler**:
    ```bash
-   cat apps/selfhost/hakorune-vm/boxcall_handler.hako
+   cat selfhost/hakorune-vm/boxcall_handler.hako
    # Add 6 method handlers as specified above
    ```
 
@@ -372,7 +372,7 @@ VMValue::Future(fb) => fb.to_string_box().value,  // ✅ Correct
 - **CallableBox Design**: [docs/architecture/callable-box.md](../../../architecture/callable-box.md)
 - **Rust VM Implementation**: [src/boxes/callable/mod.rs](../../../../src/boxes/callable/mod.rs)
 - **Method Router**: [src/runtime/method_router_box/mod.rs](../../../../src/runtime/method_router_box/mod.rs)
-- **Hakorune VM Handler**: [apps/selfhost/hakorune-vm/boxcall_handler.hako](../../../../apps/selfhost/hakorune-vm/boxcall_handler.hako)
+- **Hakorune VM Handler**: [selfhost/hakorune-vm/boxcall_handler.hako](../../../../selfhost/hakorune-vm/boxcall_handler.hako)
 
 ---
 
@@ -391,7 +391,7 @@ VMValue::Future(fb) => fb.to_string_box().value,  // ✅ Correct
 All planned tasks have been successfully completed:
 
 1. **BoxCallHandlerBox Extension** ✅
-   - Added 6 CallableBox handlers to `apps/selfhost/hakorune-vm/boxcall_handler.hako`
+   - Added 6 CallableBox handlers to `selfhost/hakorune-vm/boxcall_handler.hako`
    - Lines 108-127: methodRef/2, call/1, arity/0, call/2, callAsync/2, callAsync/1
 
 2. **Test Creation** ✅

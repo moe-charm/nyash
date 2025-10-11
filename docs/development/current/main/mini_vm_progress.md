@@ -158,7 +158,7 @@ local mir_call_end = JsonCursorBox.seek_obj_end(inst_json, mir_call_start)
 **実行コマンド**:
 ```bash
 env HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
-./target/release/hako apps/selfhost/hakorune-vm/tests/test_mircall_phase1.hako
+./target/release/hako selfhost/hakorune-vm/tests/test_mircall_phase1.hako
 ```
 
 **結果**: ✅ All MirCall Phase 1 tests PASSED!
@@ -173,14 +173,14 @@ Test 1 result: 0
 #### 📂 **実装ファイル**
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/callee_parser.hako` (55行)
-- `apps/selfhost/hakorune-vm/args_extractor.hako` (131行)
-- `apps/selfhost/hakorune-vm/global_call_handler.hako` (29行)
-- `apps/selfhost/hakorune-vm/extern_call_handler.hako` (準備中)
-- `apps/selfhost/hakorune-vm/mircall_handler.hako` (88行)
-- `apps/selfhost/hakorune-vm/nop_handler.hako` (19行)
-- `apps/selfhost/hakorune-vm/safepoint_handler.hako` (19行)
-- `apps/selfhost/hakorune-vm/tests/test_mircall_phase1.hako` (63行)
+- `selfhost/hakorune-vm/callee_parser.hako` (55行)
+- `selfhost/hakorune-vm/args_extractor.hako` (131行)
+- `selfhost/hakorune-vm/global_call_handler.hako` (29行)
+- `selfhost/hakorune-vm/extern_call_handler.hako` (準備中)
+- `selfhost/hakorune-vm/mircall_handler.hako` (88行)
+- `selfhost/hakorune-vm/nop_handler.hako` (19行)
+- `selfhost/hakorune-vm/safepoint_handler.hako` (19行)
+- `selfhost/hakorune-vm/tests/test_mircall_phase1.hako` (63行)
 
 **更新ファイル**:
 - `instruction_dispatcher.hako`: +3 using, +3 case (nop/safepoint/mir_call)
@@ -342,7 +342,7 @@ if val_str_start >= 0 {
 env HAKO_ALLOW_USING_FILE=1 HAKO_USING_PROFILE=dev \
   NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 \
   NYASH_QUIET=1 ./target/release/hako \
-  apps/selfhost/hakorune-vm/tests/test_boxcall.hako
+  selfhost/hakorune-vm/tests/test_boxcall.hako
 ```
 
 **結果**: ✅ All BoxCall tests PASSED!
@@ -355,12 +355,12 @@ Result: 0
 ### 📂 **実装ファイル**
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/boxcall_handler.hako` (125行)
-- `apps/selfhost/hakorune-vm/tests/test_boxcall.hako` (42行)
+- `selfhost/hakorune-vm/boxcall_handler.hako` (125行)
+- `selfhost/hakorune-vm/tests/test_boxcall.hako` (42行)
 
 **更新ファイル**:
-- `apps/selfhost/hakorune-vm/instruction_dispatcher.hako`: +1 using, +1 case
-- `apps/selfhost/hakorune-vm/const_handler.hako`: String値サポート追加
+- `selfhost/hakorune-vm/instruction_dispatcher.hako`: +1 using, +1 case
+- `selfhost/hakorune-vm/const_handler.hako`: String値サポート追加
 - `src/backend/mir_interpreter/handlers/boxes_string.rs`: upper/lower追加
 - `src/backend/mir_interpreter/handlers/calls/box_call.rs`: StringBox fastpath追加
 - `src/backend/mir_interpreter/handlers/calls/legacy/method_handler.rs`: fastpath呼び出し追加
@@ -525,14 +525,14 @@ print("size=" + size)  // → 1（正常）
 ### 📂 **実装ファイル**
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/newbox_handler.hako` (51行)
+- `selfhost/hakorune-vm/newbox_handler.hako` (51行)
 
 **更新ファイル**:
-- `apps/selfhost/hakorune-vm/boxcall_handler.hako` (125→145行, +20行)
-- `apps/selfhost/hakorune-vm/const_handler.hako` (53→67行, +14行)
-- `apps/selfhost/hakorune-vm/instruction_dispatcher.hako` (57→65行, +8行)
-- `apps/selfhost/hakorune-vm/value_manager.hako` (40行, デバッグトレース追加)
-- `apps/selfhost/hakorune-vm/tests/test_boxcall.hako` (42→272行, +230行)
+- `selfhost/hakorune-vm/boxcall_handler.hako` (125→145行, +20行)
+- `selfhost/hakorune-vm/const_handler.hako` (53→67行, +14行)
+- `selfhost/hakorune-vm/instruction_dispatcher.hako` (57→65行, +8行)
+- `selfhost/hakorune-vm/value_manager.hako` (40行, デバッグトレース追加)
+- `selfhost/hakorune-vm/tests/test_boxcall.hako` (42→272行, +230行)
 - `hako.toml`: +1 module override
 - `nyash.toml`: +1 module
 
@@ -648,11 +648,11 @@ print("size=" + size)  // → 1（正常）
 ### 📂 **実装ファイル**
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/module_function_call_handler.hako` (70行)
-- `apps/selfhost/hakorune-vm/tests/test_mircall_phase2_module.hako` (95行)
+- `selfhost/hakorune-vm/module_function_call_handler.hako` (70行)
+- `selfhost/hakorune-vm/tests/test_mircall_phase2_module.hako` (95行)
 
 **更新ファイル**:
-- `apps/selfhost/hakorune-vm/mircall_handler.hako`: +1 using, ModuleFunction dispatch実装
+- `selfhost/hakorune-vm/mircall_handler.hako`: +1 using, ModuleFunction dispatch実装
 - `hako.toml`: +1 module override (module_function_call_handler)
 
 ### 📊 **テスト結果**
@@ -660,7 +660,7 @@ print("size=" + size)  // → 1（正常）
 **実行コマンド**:
 ```bash
 HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 \
-./target/release/hakorune apps/selfhost/hakorune-vm/tests/test_mircall_phase2_module.hako
+./target/release/hakorune selfhost/hakorune-vm/tests/test_mircall_phase2_module.hako
 ```
 
 **結果**: ✅ All MirCall Phase 2 (ModuleFunction) tests PASSED! (4/4)
@@ -797,12 +797,12 @@ HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 
 ### 📂 **実装ファイル**
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/constructor_call_handler.hako` (90行)
-- `apps/selfhost/hakorune-vm/tests/test_mircall_phase2_constructor.hako` (72行)
+- `selfhost/hakorune-vm/constructor_call_handler.hako` (90行)
+- `selfhost/hakorune-vm/tests/test_mircall_phase2_constructor.hako` (72行)
 
 **更新ファイル**:
-- `apps/selfhost/hakorune-vm/callee_parser.hako`: +19行（extract_box_type追加）
-- `apps/selfhost/hakorune-vm/mircall_handler.hako`: Constructor dispatch + 構造変更
+- `selfhost/hakorune-vm/callee_parser.hako`: +19行（extract_box_type追加）
+- `selfhost/hakorune-vm/mircall_handler.hako`: Constructor dispatch + 構造変更
 - `hako.toml`: +1 module override (constructor_call_handler)
 - `nyash.toml`: +1 module
 
@@ -811,7 +811,7 @@ HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 
 **実行コマンド**:
 ```bash
 HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_DISABLE_PLUGINS=1 NYASH_QUIET=1 \
-./target/release/hakorune apps/selfhost/hakorune-vm/tests/test_mircall_phase2_constructor.hako
+./target/release/hakorune selfhost/hakorune-vm/tests/test_mircall_phase2_constructor.hako
 ```
 
 **結果**: ✅ All MirCall Phase 2 (Constructor) tests PASSED! (3/3)
@@ -1003,11 +1003,11 @@ local vid = StringHelpers.to_i64(digits)
 ### 📂 **実装ファイル**
 
 **新規ファイル**:
-- `apps/selfhost/hakorune-vm/closure_call_handler.hako` (315行)
-- `apps/selfhost/hakorune-vm/tests/test_mircall_phase2_closure.hako` (48行)
+- `selfhost/hakorune-vm/closure_call_handler.hako` (315行)
+- `selfhost/hakorune-vm/tests/test_mircall_phase2_closure.hako` (48行)
 
 **更新ファイル**:
-- `apps/selfhost/hakorune-vm/mircall_handler.hako`: Closure dispatch + 重複削除
+- `selfhost/hakorune-vm/mircall_handler.hako`: Closure dispatch + 重複削除
 - `hako.toml`: +1 module override (closure_call_handler)
 - `nyash.toml`: +1 module
 
@@ -1016,7 +1016,7 @@ local vid = StringHelpers.to_i64(digits)
 **実行コマンド**:
 ```bash
 NYASH_DISABLE_PLUGINS=1 HAKO_ALLOW_USING_FILE=1 NYASH_USING_AST=1 NYASH_QUIET=1 \
-./target/release/hakorune apps/selfhost/hakorune-vm/tests/test_mircall_phase2_closure.hako
+./target/release/hakorune selfhost/hakorune-vm/tests/test_mircall_phase2_closure.hako
 ```
 
 **結果**: ✅ All Closure Creation Tests PASSED (3/3)
