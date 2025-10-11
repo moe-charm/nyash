@@ -134,6 +134,7 @@ filter_noise() {
   | grep -v 'llvmlite/binding/ffi\.py' \
   | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
   | grep -v '^\[warn\] dev verify:' \
+  | grep -v '^Result: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
