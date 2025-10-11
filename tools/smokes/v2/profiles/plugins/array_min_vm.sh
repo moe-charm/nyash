@@ -16,7 +16,7 @@ test_array_min_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" )
   # Accept either exact ok1/ok2 lines or compare last two lines
   local last2
   last2=$(echo "$out" | grep -v '^Result:' | tail -n 2 | tr '\n' '|')

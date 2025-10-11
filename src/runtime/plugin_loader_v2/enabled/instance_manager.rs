@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 impl PluginLoaderV2 {
     /// Create a new plugin box instance
+    #[allow(unused_assignments)]
     pub fn create_box(
         &self,
         box_type: &str,

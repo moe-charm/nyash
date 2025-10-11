@@ -160,7 +160,10 @@ if [[ ! -f "$LINK_DIR_NYRT/libhako_kernel.a" && -f "crates/hako_kernel/target/re
   LINK_DIR_NYRT="crates/hako_kernel/target/release"
 fi
 if [[ ! -f "$LINK_DIR_NYRT/libhako_kernel.a" ]]; then
-  echo "error: libhako_kernel.a not found (looked in $LINK_DIR_NYRT)" >&2
+  if [[ -f target/release/libhako_kernel.a ]]; then LINK_DIR_NYRT=target/release; fi
+fi
+if [[ ! -f "$LINK_DIR_NYRT/libhako_kernel.a" && ! -f "$LINK_DIR_NYRT/libnyash_kernel.a" ]]; then
+  echo "error: libhako_kernel.a not found (looked in $LINK_DIR_NYRT and target/release)" >&2
   exit 4
 fi
 

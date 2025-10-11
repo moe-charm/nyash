@@ -20,7 +20,6 @@
 //! - Instance API: nyash_instance_get_field_h, etc.
 //! - Future API: nyash_future_spawn_method_h
 
-use crate::box_trait::NyashBox;
 use crate::runtime::host_handles;
 
 use crate::runtime::host_api::nyrt_host_call_slot;
@@ -33,22 +32,15 @@ use crate::runtime::host_api::nyrt_host_call_slot;
 /// This is the critical function that was being stripped by LTO.
 /// Plugins use this via dlsym() to create arrays.
 #[no_mangle]
-pub extern "C" fn nyash_array_new_h() -> i64 {
-    crate::runtime::provider_box::ensure_loaded(None);
-    match crate::runtime::provider_box::new_box("ArrayBox", &[]) {
-        Ok(b) => {
-            if crate::runtime::env_gate_box::debug_plugin() {
-                eprintln!("[host-api] nyash_array_new_h constructed {}", b.type_name());
-            }
-            host_handles::to_handle_box(b) as i64
-        }
-        Err(e) => {
-            if crate::runtime::env_gate_box::debug_plugin() {
-                eprintln!("[host-api] nyash_array_new_h failed: {:?}", e);
-            }
-            -1
-        }
+#[cfg(feature = "host-anchors")]
+pub extern "C" fn nyash_array_new_host() -> i64 {
+    // Avoid recursive loader locks when called from plugin threads.
+    // Construct a minimal builtin ArrayBox and return its HostHandle.
+    let arr = crate::boxes::array::ArrayBox::new();
+    if crate::runtime::env_gate_box::debug_plugin() {
+        eprintln!("[host-api] nyash_array_new_h (builtin) constructed ArrayBox");
     }
+    host_handles::to_handle_box(Box::new(arr)) as i64
 }
 
 // NOTE: Other host API functions (get_h, set_h, etc.) remain in hako_kernel
@@ -61,7 +53,8 @@ pub extern "C" fn nyash_array_new_h() -> i64 {
 // so it is always retained and exported (together with -rdynamic).
 #[used]
 #[no_mangle]
-pub static NYASH_HOST_API_KEEPERS: [extern "C" fn() -> i64; 1] = [nyash_array_new_h];
+#[cfg(feature = "host-anchors")]
+pub static NYASH_HOST_API_KEEPERS: [extern "C" fn() -> i64; 1] = [nyash_array_new_host];
 
 
 
@@ -76,3 +69,30 @@ pub static NYASH_HOST_API_KEEP_SLOT: extern "C" fn(
     *mut u8,
     *mut usize,
 ) -> i32 = nyrt_host_call_slot;
+
+
+// Provide a helper to convert a PluginHandle(type_id, instance_id)
+// into a HostHandle(u64) by constructing a PluginBoxV2 Arc and registering it.
+#[no_mangle]
+pub extern "C" fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) -> u64 {
+    #[cfg(all(feature = "plugins", not(target_arch = "wasm32")))]
+    {
+        let loader = crate::runtime::plugin_loader_v2::get_global_loader_v2();
+        let _drop = if let Ok(ro) = loader.read() {
+            let box_type = ro
+                .metadata_for_type_id(type_id)
+                .map(|m| m.box_type)
+                .unwrap_or_else(|| "PluginBox".to_string());
+            let inv = crate::runtime::plugin_loader_v2::nyash_plugin_invoke_v2_shim;
+            let pb = crate::runtime::plugin_loader_v2::make_plugin_box_v2(
+                box_type,
+                type_id,
+                instance_id,
+                inv,
+            );
+            let arc: std::sync::Arc<dyn crate::box_trait::NyashBox> = std::sync::Arc::new(pb);
+            return host_handles::to_handle_arc(arc);
+        };
+    }
+    0
+}

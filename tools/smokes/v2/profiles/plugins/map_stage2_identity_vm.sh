@@ -30,7 +30,7 @@ run_test_map_stage2_identity() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | awk '/^Result:/{print $2}')
+  out=$(run_nyash_vm -c "$code"  | awk '/^Result:/{print $2}')
   if [[ "$out" != "0" ]]; then
     echo "FAIL: Result: $out"
     return 1

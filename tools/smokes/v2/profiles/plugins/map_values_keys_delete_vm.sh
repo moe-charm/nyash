@@ -20,7 +20,7 @@ test_map_values_keys_delete_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
+  out=$(run_nyash_vm -c "$code"  | grep -v '^Result:')
   local expect=("keys2" "values2" "rm-called" "has-k-ok")
   for token in "${expect[@]}"; do
     if [[ "$out" != *"$token"* ]]; then

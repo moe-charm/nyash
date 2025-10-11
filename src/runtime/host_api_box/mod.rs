@@ -33,16 +33,14 @@ pub fn call_slot_grow(handle: u64, selector_id: u64, args: &[u8]) -> Result<Vec<
     loop {
         let mut out = vec![0u8; cap];
         let mut out_len: usize = out.len();
-        let rc = unsafe {
-            crate::runtime::host_api::nyrt_host_call_slot(
-                handle,
-                selector_id,
-                if args.is_empty() { std::ptr::null() } else { args.as_ptr() },
-                args.len(),
-                out.as_mut_ptr(),
-                &mut out_len,
-            )
-        };
+        let rc = crate::runtime::host_api::nyrt_host_call_slot(
+            handle,
+            selector_id,
+            if args.is_empty() { std::ptr::null() } else { args.as_ptr() },
+            args.len(),
+            out.as_mut_ptr(),
+            &mut out_len,
+        );
         if rc == 0 {
             out.truncate(out_len.min(out.len()));
             return Ok(out);
@@ -63,17 +61,15 @@ pub fn call_name_grow(handle: u64, method: &str, args: &[u8]) -> Result<Vec<u8>,
     loop {
         let mut out = vec![0u8; cap];
         let mut out_len: usize = out.len();
-        let rc = unsafe {
-            crate::runtime::host_api::nyrt_host_call_name(
-                handle,
-                method.as_ptr(),
-                method.len(),
-                if args.is_empty() { std::ptr::null() } else { args.as_ptr() },
-                args.len(),
-                out.as_mut_ptr(),
-                &mut out_len,
-            )
-        };
+        let rc = crate::runtime::host_api::nyrt_host_call_name(
+            handle,
+            method.as_ptr(),
+            method.len(),
+            if args.is_empty() { std::ptr::null() } else { args.as_ptr() },
+            args.len(),
+            out.as_mut_ptr(),
+            &mut out_len,
+        );
         if rc == 0 {
             out.truncate(out_len.min(out.len()));
             return Ok(out);

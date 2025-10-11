@@ -11,7 +11,7 @@ categories = ["development-tools::parsing", "interpreters"]
 
 # Default features - minimal CLI only
 [features]
-default = ["cli", "plugins"]
+default = ["cli", "plugins", "host-anchors"]
 # Legacy features removed - archive cleaned up
 e2e = []
 cli = []
@@ -30,6 +30,7 @@ dynamic-file = []
 wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # プラグイン機構の有効化（ネイティブ環境のみ推奨）
 plugins = ["dep:libloading"]
+host-anchors = []
 ## Static plugin linkage (optional): when enabled, runtime registers
 ## per-Box invoke pointers from statically linked plugin crates.
 static-array-plugin = ["dep:nyash-array-plugin"]

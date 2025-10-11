@@ -12,6 +12,12 @@ ensure_hako_toml
 APP_SRC="${NYASH_ROOT}/apps/selfhost-compiler/compiler.hako"
 OUT_EXE="/tmp/hako_selfhost_compiler"
 if [ ! -x "$OUT_EXE" ]; then
+KERNEL="${NYASH_ROOT}/crates/hako_kernel/target/release/libhako_kernel.a"
+if [ ! -f "$KERNEL" ]; then
+  echo "SKIP: selfhost_rebuild_vm (kernel missing)" >&2
+  exit 0
+fi
+
   if ! command -v llvm-config-18 >/dev/null 2>&1; then
     echo "SKIP: selfhost_rebuild_vm (llvm-config-18 not found; EXE not present)" >&2
     exit 0

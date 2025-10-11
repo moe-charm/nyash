@@ -161,8 +161,8 @@ impl MacroBox for SelfhostMinMacro {
                                         let user_argc = arguments.len().saturating_sub(1);
                                         if user_argc == n && n >= 1 {
                                             if let Some(recv) = arguments.get(1..2) {
-                                                let recv_ast = go(&recv[0], changed);
-                                                let new_args = arguments.iter().skip(2).map(|c| go(c, changed)).collect::<Vec<_>>();
+                                                let _recv_ast = go(&recv[0], changed);
+                                                let _new_args = arguments.iter().skip(2).map(|c| go(c, changed)).collect::<Vec<_>>();
                                                 *changed = true;
                                                 let norm_box = if _box_name.ends_with("Box") { _box_name.to_string() } else { match _box_name { "String"=>"StringBox".to_string(), "Array"=>"ArrayBox".to_string(), "Map"=>"MapBox".to_string(), other=>format!("{}Box", other) } };
                                                 let m_arity = n - 1;

@@ -16,7 +16,7 @@ static box Main { main() {
   return 0
 }}
 '
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" )
   local rc=$?
   if [ $rc -ne 0 ] && echo "$out" | grep -Eq "deterministic mode|plugin-on policy forbids builtin fallback"; then
     test_pass "deterministic_net_denied_vm"

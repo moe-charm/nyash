@@ -167,7 +167,7 @@ pub(super) fn construct_existing_instance(
     instance_id: u32,
 ) -> Option<Box<dyn NyashBox>> {
     if let Ok(map) = loader.box_specs.read() {
-        for ((lib, btype), spec) in map.iter() {
+        for ((_lib, btype), spec) in map.iter() {
             if let Some(tid) = spec.type_id {
                 if tid == type_id {
                     let bx = construct_plugin_box(

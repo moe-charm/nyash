@@ -15,7 +15,7 @@ test_json_stringify_vm() {
       return 0
     }}
   '
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" )
   # Skip gracefully if JSON.stringify is not available in this build
   if echo "$out" | grep -q "Unknown module function: JSON\.stringify"; then
     test_skip "json_stringify_vm (JSON.stringify unsupported in this build)"

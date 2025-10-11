@@ -1,7 +1,6 @@
 //! methods.rs — BoxCall method helpers (extracted, behavior-preserving)
 
 use super::super::*;
-use crate::box_trait::NyashBox;
 
 impl MirInterpreter {
     /// Void/VoidBox guard for common short‑circuit patterns.

@@ -146,7 +146,17 @@ impl PluginLoaderV2 {
                 box_type, method_name, code, out_len
             );
         }
+        if dbg_on() {
+            eprintln!("[PluginLoaderV2] decode entry: box_type={} out_len={}", box_type, out_len);
+        }
         let ret = decode_tlv_result(box_type, &out[..out_len]);
+        if dbg_on() {
+            match &ret {
+                Ok(Some(b)) => eprintln!("[PluginLoaderV2] decode -> {}", b.type_name()),
+                Ok(None) => eprintln!("[PluginLoaderV2] decode -> <none>"),
+                Err(e) => eprintln!("[PluginLoaderV2] decode -> <err {:?}>", e),
+            }
+        }
         if trace_fx {
             let tag = match &ret {
                 Ok(Some(b)) => b.type_name().to_string(),
@@ -225,9 +235,16 @@ fn resolve_type_info(loader: &PluginLoaderV2, box_type: &str) -> BidResult<(Stri
 
 /// Decode TLV result into a NyashBox
 fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn NyashBox>>> {
+    let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+    if debug {
+        eprintln!("[decode_tlv_result] ENTER: box_type={} data.len()={}", box_type, data.len());
+    }
     if let Some((tag, _sz, payload)) =
         crate::runtime::plugin_ffi_common::decode::tlv_first(data)
     {
+        if debug {
+            eprintln!("[decode_tlv_result] tlv_first SUCCESS: tag={} payload.len()={}", tag, payload.len());
+        }
         let bx: Box<dyn NyashBox> = match tag {
             1 => Box::new(crate::box_trait::BoolBox::new(
                 crate::runtime::plugin_ffi_common::decode::bool(payload).unwrap_or(false),
@@ -307,6 +324,9 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
             _ => Box::new(crate::box_trait::VoidBox::new()),
         };
         return Ok(Some(bx));
+    }
+    if debug {
+        eprintln!("[decode_tlv_result] tlv_first FAILED: returning Ok(None) -> will become Void");
     }
     Ok(None)
 }

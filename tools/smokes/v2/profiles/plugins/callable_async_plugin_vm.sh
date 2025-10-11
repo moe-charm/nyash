@@ -24,7 +24,7 @@ static box Main { main() {
   return 0
 }}
 '
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" )
   echo "$out" | tr -d '
 ' | grep -E 'Future|<future>' >/dev/null || { test_fail "async return not Future-like"; return 1; }
   test_pass "callable_async_plugin_vm"

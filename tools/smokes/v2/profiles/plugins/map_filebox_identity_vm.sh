@@ -21,7 +21,7 @@ test_map_filebox_identity_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
+  out=$(run_nyash_vm -c "$code"  | grep -v '^Result:')
   rm -f "$tmp" 2>/dev/null || true
   local last; last=$(echo "$out" | tail -n 1)
   if [[ "$last" == "file-ok" ]]; then

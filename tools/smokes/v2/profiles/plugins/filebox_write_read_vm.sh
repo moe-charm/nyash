@@ -21,7 +21,7 @@ static box Main { main() {
   return 0
 }}
 '
-  out=$(NYASH_DEBUG_PLUGIN=1 run_nyash_vm -c "$code" --dev)
+  out=$(NYASH_DEBUG_PLUGIN=1 run_nyash_vm -c "$code" )
   # Expect one line: hello
   last=$(echo "$out" | grep -v '^\[' | grep -v '^$' | grep -v '^Result:' | tail -n 1 | tr -d '\n')
   if [ "$last" != "hello" ]; then { test_fail "filebox read check failed (got '$last')"; return 1; }; fi

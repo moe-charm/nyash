@@ -23,7 +23,7 @@ run_case_stage3() {
   printf "%s\n" "$src" > "$file"
   # 1) Produce JSON v0 via selfhost compiler program
   set +e
-  JSON=$(NYASH_JSON_ONLY=1 "$BIN" --backend vm "$ROOT_DIR/apps/selfhost/compiler/compiler.nyash" -- --stage3 "$file" 2>/dev/null | awk 'BEGIN{found=0} /^[ \t]*\{/{ if ($0 ~ /"version"/ && $0 ~ /"kind"/) { print; found=1; exit } } END{ if(found==0){} }')
+  JSON=$(NYASH_JSON_ONLY=1 "$BIN" --backend vm "$ROOT_DIR/apps/selfhost-compiler/compiler.hako" -- --stage3 "$file" 2>/dev/null | awk 'BEGIN{found=0} /^[ \t]*\{/{ if ($0 ~ /"version"/ && $0 ~ /"kind"/) { print; found=1; exit } } END{ if(found==0){} }')
   # 2) Execute JSON v0 via Bridge (prefer PyVM harness if requested)
   OUT=$(printf '%s\n' "$JSON" | NYASH_TRY_RESULT_MODE=${NYASH_TRY_RESULT_MODE:-1} NYASH_PIPE_USE_PYVM=${NYASH_PIPE_USE_PYVM:-1} "$BIN" --ny-parser-pipe --backend vm 2>&1)
   CODE=$?

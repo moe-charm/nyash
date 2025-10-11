@@ -14,7 +14,7 @@ test_string_find_replace_last_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
+  out=$(run_nyash_vm -c "$code"  | grep -v '^Result:')
   local last3; last3=$(echo "$out" | tail -n 3 | tr '\n' '|')
   if [[ "$last3" == *"idx-ok|last-ok|rep-legacy|"* ]]; then
     return 0

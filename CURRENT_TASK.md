@@ -425,3 +425,75 @@ Acceptance
 Acceptance:
 - Quick/plugins/full smokes stay green
 - Deterministic denial works for FileBox/Net family when HAKO_DETERMINISTIC=1
+
+## Update — Router/Adapter Consolidation and Stage‑2 Identity (2025-10-11/12)
+
+What we changed
+- HostHandleRouter: host_api by‑slot分岐をHostHandleRouterへ全面移設。`nyrt_host_call_slot`はRouter委譲のみ。
+- ConsoleAdapter: print() を一箇所（console_adapter）に集約。Void/null/String/BoxRef(String)の出力正規化。
+- ENV gate: `host_handle_trace()` を env_gate_box に追加（HAKO_HOST_HANDLE_TRACE/NYASH_*対応）。既定OFF。
+- docs: env-variables.md を更新（HAKO_*主、NYASH_*互換、TTL/cleanup、Stage‑2は実験/プロファイル限定）。
+
+Stage‑2 identity 進捗
+- ハング解消: `nyash_array_new_h` を loader経由→Builtin ArrayBox 直接生成に変更（再帰ロック回避）。
+- 昇格経路: tag=8 (PluginHandle ArrayBox) → HostHandle へ正規化（ffi_bridge/host_api decode）。
+- Map plugin: values(Stage‑2) と METHOD_GET の Array 値を HostHandle(tag=9) に正規化（identity一本化）。
+- 現状: futex_wait は解消。`plugin_on_values_identity_vm` は Result: 22（未達）。Array.set/len トレースは `NYASH_HOST_HANDLE_TRACE=1` で採取可能。
+
+Next steps
+- 観測: HostHandle slot 101/102 の rc/out_len を確認し、必要なら fail‑fast 条件（rc=0 & out_len 不変の扱い）を詰める。
+- 確認: Map.get の HostHandle返却がVM側で同一Arcとして解決されるか（キャッシュ＋Routerの動線）を点検。
+- 緑化: 上記 fix 後に plugins/profile（plugin_on_*）を再実行。安定後、plugins.env の Stage‑2 既定ONへ復帰。
+
+
+## ✅ Stage‑2 HostHandle（Collections）完了（2025-10-11→10-14）
+
+目的
+- Map/Array/String のコレクションAPIを Stage‑2（HostHandle 直往復）へ統一し、同一性と使いやすさを確保。
+
+実施
+- プラグイン側
+  - MapBox: keys()/values()（NYASH_PLUGIN_MAP_ARRAY_HANDLE=1）で HostHandle(Array) を返却。
+  - MapBox.get(): Array 値は HostHandle(tag=9) に正規化して返す（Stage‑2経路と整合）。
+  - ArrayBox: birth/length/get/set/push/slice の最小TLV実装（lengthはTLV i64）。
+- ホスト側
+  - decode 正規化: tag=8(Array) は HostHandle へ昇格、tag=9 は HostHandleBox 化。
+  - HostHandleRouter: Array(100/101/102), Map(200..204), Instance(1..4), String(300) の by‑slot を実装。
+  - ProviderBox: NYASH_USE_PLUGIN_BUILTINS=1 で core(Array/Map/String) を plugin-only と扱う。
+- スモーク/プロファイル
+  - plugins プロファイルで Stage‑2 を既定ON（NYASH_PLUGIN_MAP_ARRAY_HANDLE=1）。
+  - plugins スモークから --dev を撤去（print 経路の揺れを排除）。
+  - PASS: plugin_on_values_identity_vm / plugin_on_print_array_size_vm / map_keys_values_stage2_vm / map_stage2_identity_vm。
+
+備考
+- 追加した診断ログ（Router/Decode/host_bridge/array-plugin）は NYASH_DEBUG_PLUGIN=1 のときのみ出力（既定OFF）。
+- 一時フォールバックENV NYASH_ARRAY_SIZE_FORCE_HOST は撤去（診断用途のみ、既定OFFで温存可）。
+
+次のステップ（WASM/LLVM への波及）
+- LLVM: nyrt_host_call_slot/nyash_array_new_h/nyash_host_from_plugin_handle を輸出（AOTも対応）。slot呼び出しに統一。
+- WASM Phase‑A: plugins OFF + 内蔵コレクションで緑化 → Phase‑B: HostHandle import（BigInt）で完全化。
+
+**最終更新**: 2025-10-14
+
+---
+
+## ✅ Phase 15.7 — Plugins/Stage‑2 完了と Self‑Hosting 再開（2025-10-11）
+
+要旨
+- Plugins profile（VM/Stage‑2 HostHandle）代表スモーク PASS（identity/print）。
+- LLVM parity（integration-core）全緑（15/15）。
+- ProviderBox/ENV 方針固定（HAKO_PLUGIN_POLICY=auto を尊重、コアは NYASH_USE_PLUGIN_BUILTINS=1 でプラグイン優先）。
+
+次のステップ（Self‑Hosting に復帰）
+- M1 Bootstrap EXE（最小）
+  - 受け入れ: 自作フロントが非空JSON（"kind":"Program"）を出力し、LLVMハーネスで EXE 化。
+  - 実装: apps/selfhost-compiler/compiler.hako（最小出力）。
+  - スモーク: tools/exe_first_smoke.sh, tools/mir_builder_exe_smoke.sh（.hakoに更新）。
+- M2 Self‑Rebuild
+  - 受け入れ: コンパイラが自分のソースを処理し、JSON/MIR サマリが安定（ハッシュ/サイズ）
+  - スモーク: tools/selfhost_smoke.sh（.hakoに更新）ほか Stage‑2 セット。
+- M3 VM↔LLVM パリティ
+  - 受け入れ: 小サンプル2〜3本で VM/LLVM 出力一致を継続確認。
+
+備考
+- 拡張子は .hako に統一（自作/サンプル/スモーク）。既存 .nyash は互換経路で当面維持（削除は後段）。

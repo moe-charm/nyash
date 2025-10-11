@@ -20,7 +20,7 @@ test_array_slice_edges_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
+  out=$(run_nyash_vm -c "$code"  | grep -v '^Result:')
   local last2; last2=$(echo "$out" | tail -n 2 | tr '\n' '|')
   # Expect slice lengths (stage2 plugin handle to plugin array)
   if [[ "$last2" == *"slice1-ok|slice2-ok|"* ]]; then

@@ -96,7 +96,7 @@ impl NyashRunner {
                                 }
                                 #[cfg(not(feature = "pyvm-bridge"))]
                                 {
-                                    eprintln!("[ny-compiler] PyVM bridge disabled (feature off); skipping pre-expand fast path");
+                                    if crate::config::env::cli_verbose() { eprintln!("[ny-compiler] PyVM bridge disabled (feature off); skipping pre-expand fast path"); }
                                     return false;
                                 }
                             } else {
@@ -141,8 +141,8 @@ impl NyashRunner {
             let exe = std::env::current_exe()
                 .unwrap_or_else(|_| std::path::PathBuf::from("target/release/hakorune"));
             let parser_prog_hako = std::path::Path::new("apps/selfhost-compiler/compiler.hako");
-            let parser_prog_nyash = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
-            let parser_prog_legacy = std::path::Path::new("apps/selfhost/compiler/compiler.nyash");
+            let parser_prog_nyash = std::path::Path::new("apps/selfhost-compiler/compiler.hako");
+            let parser_prog_legacy = std::path::Path::new("apps/selfhost/compiler/compiler.hako");
             let parser_prog = if parser_prog_hako.exists() { parser_prog_hako } else if parser_prog_nyash.exists() { parser_prog_nyash } else { parser_prog_legacy };
             if parser_prog.exists() {
                 // Build extra args forwarded to child program
@@ -212,7 +212,7 @@ impl NyashRunner {
                                 }
                                 #[cfg(not(feature = "pyvm-bridge"))]
                                 {
-                                    eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM");
+                                    if crate::config::env::cli_verbose() { eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM"); }
                                 }
                             }
                                 self.execute_mir_module(&module);
@@ -262,7 +262,7 @@ impl NyashRunner {
                                             }
                                             #[cfg(not(feature = "pyvm-bridge"))]
                                             {
-                                                eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM");
+                                                if crate::config::env::cli_verbose() { eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM"); }
                                             }
                                         }
                                         self.execute_mir_module(&module);
@@ -346,7 +346,7 @@ impl NyashRunner {
                         }
                         #[cfg(not(feature = "pyvm-bridge"))]
                         {
-                            eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM");
+                            if crate::config::env::cli_verbose() { eprintln!("[selfhost] PyVM bridge disabled (feature off); executing with Rust VM"); }
                         }
                     }
                     self.execute_mir_module(&module);
@@ -368,7 +368,7 @@ impl NyashRunner {
                 use crate::runner::modes::common_util::selfhost::child::run_ny_program_capture_json;
                 let exe = std::env::current_exe()
                     .unwrap_or_else(|_| std::path::PathBuf::from("target/release/hakorune"));
-                let program = std::path::Path::new("apps/selfhost-compiler/compiler.nyash");
+                let program = std::path::Path::new("apps/selfhost-compiler/compiler.hako");
                 let mut extra: Vec<String> = Vec::new();
                 // Pass delimiter then args to child compiler
                 extra.push("--".to_string());

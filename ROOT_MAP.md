@@ -18,7 +18,7 @@ High-frequency Entrypoints
 - MIR builder (Rust): `src/mir/`
 - LLVM harness orchestrator: `src/llvm_py/llvm_builder.py`
 - PyVM exec core: `src/llvm_py/pyvm/`
-- Selfhost compiler main: `apps/selfhost-compiler/compiler.nyash`
+- Selfhost compiler main: `apps/selfhost-compiler/compiler.hako`
 - Selfhost emit (MIR v0): `apps/selfhost-compiler/boxes/mir_emitter_box.nyash`
 
 Tight Search Tips

@@ -43,6 +43,11 @@ pub fn invoke_alloc(
 ) -> (i32, usize, Vec<u8>) {
     let mut out = vec![0u8; 1024];
     let mut out_len: usize = out.len();
+    let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+    if debug {
+        eprintln!("[host_bridge] invoke_alloc ENTER: type_id={} method_id={} instance_id={} out_len_before={}",
+                  type_id, method_id, instance_id, out_len);
+    }
     let code = unsafe {
         invoke(
             type_id,
@@ -54,5 +59,9 @@ pub fn invoke_alloc(
             &mut out_len,
         )
     };
+    if debug {
+        eprintln!("[host_bridge] invoke_alloc EXIT: code={} out_len_after={} (buffer_cap=1024)",
+                  code, out_len);
+    }
     (code, out_len, out)
 }

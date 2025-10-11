@@ -60,7 +60,9 @@ pub fn set_current(cfg: NyashEnv) {
 }
 
 // ---- Deprecation helper (print once per key when verbose) ----
+#[allow(dead_code)]
 static DEPREC_EMITTED: StdOnceLock<RwLock<HashSet<String>>> = StdOnceLock::new();
+#[allow(dead_code)]
 fn deprec_once(key: &str, message: &str) {
     if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() != Some("1") { return; }
     let lock = DEPREC_EMITTED.get_or_init(|| RwLock::new(HashSet::new()));

@@ -465,7 +465,7 @@ pub fn collect_using_and_strip(
                                                             let next = line.as_bytes().get(pos + needle.len()).copied();
                                                             let ok_boundary = match next {
                                                                 None => true,
-                                                                Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\n') | Some(b'{') => true,
+                                                                Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'{') => true,
                                                                 _ => false,
                                                             };
                                                             if ok_boundary { return Some(p.to_string_lossy().to_string()); }
@@ -559,7 +559,7 @@ pub fn collect_using_and_strip(
                                                     let next = line.as_bytes().get(pos + needle.len()).copied();
                                                     let ok_boundary = match next {
                                                         None => true,
-                                                        Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'\n') | Some(b'{') => true,
+                                                        Some(b' ') | Some(b'\t') | Some(b'\n') | Some(b'{') => true,
                                                         _ => false,
                                                     };
                                                     if ok_boundary { return Some(p.to_string_lossy().to_string()); }

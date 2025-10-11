@@ -11,3 +11,6 @@ Inputs/Outputs
 Guards
 - Deterministic mode blocks IO/NET boxes.
 - plugin-only boxes do not fall back to embedded.
+
+ENV behavior
+- Respects plugin-on gates. With `HAKO_PLUGIN_POLICY=auto` (and `NYASH_USE_PLUGIN_BUILTINS=1` for core collections), String/Array/Map are served by dynamic plugins; otherwise builtin fallbacks apply. Public APIs remain unchanged across VM/LLVM.

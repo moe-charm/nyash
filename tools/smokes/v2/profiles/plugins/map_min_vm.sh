@@ -17,7 +17,7 @@ test_map_min_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" )
   # Check last three lines combined
   local last3
   last3=$(echo "$out" | grep -v '^Result:' | tail -n 3 | tr '\n' '|')

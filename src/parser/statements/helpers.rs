@@ -6,7 +6,6 @@
 
 use crate::ast::ASTNode;
 use crate::parser::{NyashParser, ParseError};
-use crate::parser::common::ParserUtils;
 use crate::parser::cursor::TokenCursor;
 use crate::tokenizer::TokenType;
 

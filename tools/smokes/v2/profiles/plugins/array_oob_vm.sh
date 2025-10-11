@@ -17,7 +17,7 @@ test_array_oob_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | filter_noise)
+  out=$(run_nyash_vm -c "$code"  | filter_noise)
   local last2
   last2=$(echo "$out" | grep -v '^Result:' | tail -n 2 | tr '\n' '|')
   if [[ "$last2" == *"ok1|ok2"* ]]; then

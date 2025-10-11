@@ -6,12 +6,12 @@ Key variables (current)
 - `NYASH_USE_PLUGIN_BUILTINS` — allow plugin to override core box types
 - `NYASH_PLUGIN_OVERRIDE_TYPES` — comma list (e.g., `StringBox,ArrayBox,MapBox`)
 - `NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}` — disable builtin core boxes (dev gate)
-- `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — EXPERIMENTAL; 1 to enable Stage‑2 keys/values HostHandle path, 0 for Stage‑1 keysS/valuesS shim（既定OFF/プロファイル限定）
+- `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — Stage‑2: 1 で keys/values HostHandle 経路を有効化。0 で Stage‑1(keysS/valuesS) シム（plugins プロファイルは既定ON）。
 - `HAKO_HOST_HANDLE_TRACE` / `NYASH_HOST_HANDLE_TRACE` — HostHandle slot呼び出しの観測ログ（短命/既定OFF）
 
 Profiles
 - plugin‑on: sets `HAKO_PLUGIN_POLICY=auto`, `NYASH_PLUGIN_CONFIG=hako.toml`
-- plugins: keeps Stage‑1 keys/values (HostHandle OFF) for stability（`NYASH_PLUGIN_MAP_ARRAY_HANDLE=0`）
+- plugins: Stage‑2 HostHandle 既定ON（`NYASH_PLUGIN_MAP_ARRAY_HANDLE=1`）。
 
 Birth Adoption
 - VM will call `birth()` when a plugin box is created with `instance_id=0`, and adopt the returned handle.

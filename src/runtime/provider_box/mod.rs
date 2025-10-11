@@ -29,6 +29,7 @@ pub fn new_box(
 
     // Determine if config marks this box as plugin-only
     let mut plugin_only = false;
+
     if crate::runtime::env_gate_box::plugin_policy_on()
         && !crate::runtime::env_gate_box::plugins_disabled()
     {
@@ -43,7 +44,7 @@ pub fn new_box(
 
     let plugin_on = crate::runtime::env_gate_box::plugin_policy_on()
         && !crate::runtime::env_gate_box::plugins_disabled();
-    let strict = crate::runtime::env_gate_box::bool_any(&["NYASH_PLUGIN_ON_STRICT", "HAKO_PLUGIN_ON_STRICT"]);
+    let strict = match crate::common::env_helpers::get_string_with_alias("HAKO_PLUGIN_POLICY","NYASH_PLUGIN_POLICY").unwrap_or_else(||"auto".to_string()).to_ascii_lowercase().as_str() { "force" => true, _ => false };
 
     if debug {
         eprintln!(
@@ -176,7 +177,7 @@ pub fn new_box(
     }
     let res = {
         let uni = crate::runtime::unified_registry::get_global_unified_registry();
-        let mut guard = uni.lock().unwrap();
+        let guard = uni.lock().unwrap();
         guard.create_box(box_type, args)
     };
     match res {

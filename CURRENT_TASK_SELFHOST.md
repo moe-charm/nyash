@@ -325,3 +325,10 @@ Update — 2025‑10‑11 (Runtime cleanup)
 - Introduced `src/runtime/host_handle_router/` (thin entry today) to progressively move slot routing out of `host_api.rs`.
 - Added README and LAYER_GUARD files to keep responsibilities explicit.
 - Next: stabilize Stage‑2 identity (values() returns Array HostHandle referencing same instance) and add a print‑path smoke (to avoid futex deadlocks).
+
+
+Addendum — 2025‑10‑11/12 (Router/Adapter & Stage‑2)
+- HostHandleRouter へ移設: host_api by‑slot は Router 経由に統一し、実装は箱に集約。
+- ConsoleAdapter: print 経路を一元化。VM側の出力をここで正規化（Void/null/String）。
+- ENV 整理: host_handle_trace() を env_gate_box に追加（HAKO/NYASH 両対応）。docs に TTL/cleanup を追記。
+- Stage‑2: Map.values(identity) は futex_wait を解消（nyash_array_new_h をBuiltin生成へ）。identityは要素のHostHandle返却で一本化中（plugins/profile は Result:22→次パスで緑化予定）。

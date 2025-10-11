@@ -139,7 +139,7 @@ Call { callee: Callee, args }
 
 #### Phase 15.3 — Detailed Plan（Ny compiler MVP）
 - Directory layout（selfhost compiler）
-  - `apps/selfhost-compiler/compiler.nyash`（CompilerBox entry; Ny→JSON v0 emit）
+  - `apps/selfhost-compiler/compiler.hako`（CompilerBox entry; Ny→JSON v0 emit）
   - `apps/selfhost-compiler/parser/{lexer.nyash,parser.nyash,ast.nyash}`（Stage‑2 へ段階拡張）
   - `apps/selfhost-compiler/emitter/json_v0.nyash`（将来: emit 分離。MVPは inline でも可）
   - `apps/selfhost-compiler/mir/{builder.nyash,optimizer.nyash}`（将来）

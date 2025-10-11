@@ -20,7 +20,7 @@ test_map_callable_identity_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
+  out=$(run_nyash_vm -c "$code"  | grep -v '^Result:')
   local last; last=$(echo "$out" | tail -n 1)
   if [[ "$last" == "call-ok" ]]; then
     return 0

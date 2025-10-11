@@ -248,6 +248,7 @@ fn candidate_paths(base: &Path) -> Vec<PathBuf> {
 }
 
 /// Public (crate) entry to ingest from a spec path — thin wrapper to keep `specs` private.
+#[allow(dead_code)]
 pub(crate) fn ingest_from_spec_path(
     loader: &super::PluginLoaderV2,
     lib_name: &str,

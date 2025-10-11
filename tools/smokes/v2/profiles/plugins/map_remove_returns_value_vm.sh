@@ -15,7 +15,7 @@ test_map_remove_returns_value_vm() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code" --dev | grep -v '^Result:')
+  out=$(run_nyash_vm -c "$code"  | grep -v '^Result:')
   local tail; tail=$(echo "$out" | tail -n 2 | tr '\n' '|')
   if [[ "$tail" == *"rm-val-ok|rm-null-ok|"* ]]; then
     return 0

@@ -312,7 +312,7 @@ impl MirBuilder {
                     };
                     match tail_res {
                         TailQueryResult::Unique(n) => chosen = Some(n),
-                        TailQueryResult::Ambiguous(mut ambig_list) => {
+                        TailQueryResult::Ambiguous(ambig_list) => {
                             if strict {
                                 // Stable and informative ordering: prefer current box first, then lexical
                                 let mut display = ambig_list.clone();

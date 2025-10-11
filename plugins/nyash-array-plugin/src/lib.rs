@@ -185,12 +185,34 @@ extern "C" fn array_invoke_id(
                 write_tlv_handle(TYPE_ID_ARRAY, id, result, result_len)
             }
             METHOD_LENGTH => {
-                match with_instance!(instance_id, |inst: &ArrayInstance| {
+                let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+                if debug {
+                    unsafe {
+                        if !result_len.is_null() {
+                            eprintln!("[array-plugin] LENGTH ENTER: result_len ptr={:?} value_before={}",
+                                      result_len, *result_len);
+                        } else {
+                            eprintln!("[array-plugin] LENGTH ENTER: result_len ptr=NULL");
+                        }
+                    }
+                }
+                let ret = match with_instance!(instance_id, |inst: &ArrayInstance| {
                     write_tlv_i64(inst.data.len() as i64, result, result_len)
                 }) {
                     Ok(r) => r,
                     Err(e) => e,
+                };
+                if debug {
+                    unsafe {
+                        if !result_len.is_null() {
+                            eprintln!("[array-plugin] LENGTH EXIT: code={} result_len value_after={}",
+                                      ret, *result_len);
+                        } else {
+                            eprintln!("[array-plugin] LENGTH EXIT: code={} result_len ptr=NULL", ret);
+                        }
+                    }
                 }
+                ret
             }
             METHOD_GET => {
                 let idx = match read_arg_i64(args, args_len, 0) {

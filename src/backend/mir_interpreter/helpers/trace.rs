@@ -79,7 +79,8 @@ impl MirInterpreter {
         );
     }
 
-    pub(in crate::backend::mir_interpreter) fn box_trace_emit_get(&self, class_name: &str, field: &str, val_kind: &str) {
+    #[allow(dead_code)]
+pub(in crate::backend::mir_interpreter) fn box_trace_emit_get(&self, class_name: &str, field: &str, val_kind: &str) {
         if !Self::box_trace_enabled() || !Self::box_trace_filter_match(class_name) { return; }
         eprintln!(
             "{{\"ev\":\"get\",\"class\":\"{}\",\"field\":\"{}\",\"val\":\"{}\"}}",

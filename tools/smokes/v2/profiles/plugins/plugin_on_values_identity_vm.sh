@@ -15,7 +15,7 @@ export NYASH_BUILTIN_DISABLE_MAP=${NYASH_BUILTIN_DISABLE_MAP:-1}
 run_test_plugin_on_values_identity_vm() {
   local code=$'static box Main {\n  main() {\n    local arr = new ArrayBox()\n    arr.push(1)\n    local m = new MapBox()\n    m.set("list", arr)\n    local vals = m.values()\n    local first = vals.get(0)\n    first.push(2)\n    local vals2 = m.values()\n    local again = vals2.get(0)\n    if again.size() != 2 { return 22 }\n    return 0\n  }\n}\n'
   local out
-  out=$(SMOKES_TIMEOUT_SEC=10 run_nyash_vm -c "$code" --dev | awk '/^Result:/{print $2}')
+  out=$(SMOKES_TIMEOUT_SEC=10 run_nyash_vm -c "$code"  | awk '/^Result:/{print $2}')
   if [[ "$out" != "0" ]]; then
     echo "FAIL: Result: $out"
     return 1

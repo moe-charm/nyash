@@ -46,6 +46,7 @@ pub fn extern_call(
 use std::sync::{Mutex, OnceLock};
 use crate::box_trait::IntegerBox;
 
+#[allow(dead_code)]
 fn heap_state() -> &'static (Mutex<Vec<i64>>, Mutex<i64>) {
     static HEAP: OnceLock<(Mutex<Vec<i64>>, Mutex<i64>)> = OnceLock::new();
     HEAP.get_or_init(|| (Mutex::new(Vec::with_capacity(1024)), Mutex::new(1)))

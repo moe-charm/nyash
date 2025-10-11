@@ -232,7 +232,7 @@ fn build_adapter() -> VmExternAdapterBox {
                                 if let Ok(ret) = ro.invoke_instance_method("MapBox", "keysS", pb.instance_id(), &[]) {
                                     if let Some(vb) = ret {
                                         let s = vb.to_string_box().value;
-                                        let mut arr = crate::boxes::array::ArrayBox::new();
+                                        let arr = crate::boxes::array::ArrayBox::new();
                                         for line in s.split('\n') { if !line.is_empty() { arr.push(Box::new(crate::box_trait::StringBox::new(line))); } }
                                         return Ok(VMValue::from_nyash_box(Box::new(arr)));
                                     }
@@ -293,7 +293,7 @@ fn build_adapter() -> VmExternAdapterBox {
                                 ) {
                                     if let Some(vb) = ret {
                                         let s = vb.to_string_box().value;
-                                        let mut arr = crate::boxes::array::ArrayBox::new();
+                                        let arr = crate::boxes::array::ArrayBox::new();
                                         for line in s.split('\n') { if !line.is_empty() { arr.push(Box::new(crate::box_trait::StringBox::new(line))); } }
                                         return Ok(VMValue::from_nyash_box(Box::new(arr)));
                                     }

@@ -129,7 +129,6 @@ pub fn route(
         if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
             if let Some(result) = MapCallableBox::try_route(_interp, receiver, method, args) {
                 return result;
-            if let Some(rv) = crate::runtime::adapters::map_keys_values_stage1::route_map_keys_values_stage1(&p.box_type, p.inner.instance_id, method) { return Ok(rv); }
             }
             // Stage-1 fallback moved to adapters::map_keys_values_stage1
             let mut argv: Vec<Box<dyn NyashBox>> = Vec::with_capacity(args.len());
@@ -143,7 +142,50 @@ pub fn route(
                 }
                 argv.push(v.to_nyash_box());
             }
+            // Fast path (diagnostic): size/len/length for ArrayBox via HostHandle slot 102
+            if p.box_type == "ArrayBox"
+                && (method == "size" || method == "len" || method == "length")
+                && std::env::var("NYASH_ARRAY_SIZE_FORCE_HOST").ok().as_deref() == Some("1")
+            {
+                if crate::runtime::env_gate_box::debug_plugin() { eprintln!("[router] early: host-slot 102 for ArrayBox.size"); }
+                let hh = crate::runtime::host_handles::to_handle_arc(bx.clone());
+                let mut out_buf = vec![0u8; 64];
+                let mut out_len: usize = out_buf.len();
+                let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 102, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
+                if crate::runtime::env_gate_box::debug_plugin() { eprintln!("[router] host-slot 102 rc={} len={}", rc, out_len); }
+                if rc == 0 && out_len >= 6 {
+                    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
+                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { print!(""); return Ok(v); }
+                    }
+                }
+            }
+
             let out = crate::runtime::plugin_host_box::invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv);
+            if crate::runtime::env_gate_box::debug_plugin() {
+                match &out {
+                    Ok(Some(ret)) => eprintln!("[router] plugin ret {}.{} -> {}", p.box_type, method, ret.type_name()),
+                    Ok(None) => eprintln!("[router] plugin ret {}.{} -> <none>", p.box_type, method),
+                    Err(e) => eprintln!("[router] plugin ret {}.{} -> <err {:?}>", p.box_type, method, e),
+                }
+            }
+            if p.box_type == "ArrayBox"
+                && (method == "size" || method == "len" || method == "length")
+                && std::env::var("NYASH_ARRAY_SIZE_FORCE_HOST").ok().as_deref() == Some("1")
+            {
+                if crate::runtime::env_gate_box::debug_plugin() { eprintln!("[router] fallback: host-slot 102 for ArrayBox.size"); }
+                {
+                    let hh = crate::runtime::host_handles::to_handle_arc(bx.clone());
+                    let mut out_buf = vec![0u8; 64];
+                    let mut out_len: usize = out_buf.len();
+                    let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 102, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
+                    if crate::runtime::env_gate_box::debug_plugin() { eprintln!("[router] host-slot 102 rc={} len={}", rc, out_len); }
+                    if rc == 0 && out_len >= 6 {
+                        if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
+                            if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(v); }
+                        }
+                    }
+                }
+            }
             // Normalize mutator returns to Void for core collections（remove/delete は値返却のため除外）
             let is_core = crate::runtime::type_registry::is_core_box(&p.box_type);
             let is_void_method = is_core && matches!(method, "set" | "push" | "clear");

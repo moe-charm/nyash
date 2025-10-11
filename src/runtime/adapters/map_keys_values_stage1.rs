@@ -34,7 +34,7 @@ pub fn route_map_keys_values_stage1(
         } else { None }
     };
     if let Some(s) = s_opt {
-        let mut arr = crate::boxes::array::ArrayBox::new();
+        let arr = crate::boxes::array::ArrayBox::new();
         for line in s.split('\n') {
             if !line.is_empty() {
                 arr.push(Box::new(crate::box_trait::StringBox::new(line)));

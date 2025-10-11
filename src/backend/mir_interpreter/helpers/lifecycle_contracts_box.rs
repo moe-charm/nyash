@@ -9,6 +9,7 @@ use super::super::*;
 pub struct LifecycleContractsBox;
 
 impl LifecycleContractsBox {
+    #[allow(dead_code)]
     pub fn mark_new(vm: &mut MirInterpreter, dst: ValueId, box_type: &str, argc: usize) {
         vm.lifecycle_observe_new(dst, box_type, argc);
     }

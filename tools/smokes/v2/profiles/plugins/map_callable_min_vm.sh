@@ -23,7 +23,7 @@ static box Main { main() {
   return 0
 }}
 '
-  out=$(run_nyash_vm -c "$code" --dev)
+  out=$(run_nyash_vm -c "$code" )
   # Expect sync=2 and async=Future string
   first=$(echo "$out" | grep -v "^Result:" | head -n 1 | tr -d '
 ')
