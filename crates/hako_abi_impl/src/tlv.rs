@@ -375,3 +375,63 @@ mod tests {
         assert_eq!(val2, Some(false));
     }
 }
+
+// ===== Phase 2-2: Multi-entry TLV Builders =====
+
+/// Write TLV with multiple entries (generic builder)
+///
+/// This is a low-level function used by plugins to build custom TLV responses
+/// with multiple entries of different types.
+///
+/// # Arguments
+/// * `payloads` - Slice of (tag, payload) tuples to encode
+/// * `result` - Output buffer pointer
+/// * `result_len` - Input: buffer size, Output: bytes written
+///
+/// # Returns
+/// * `HAKO_SUCCESS` (0) on success
+/// * `HAKO_E_SHORT_BUFFER` (-1) if buffer too small
+/// * `HAKO_E_INVALID_ARGS` (-4) if result_len is null
+pub fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
+    if result_len.is_null() {
+        return HAKO_E_INVALID_ARGS;
+    }
+
+    // Calculate total size: header (4) + sum of entry headers (4 each) + payloads
+    let total_size = 4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>();
+
+    let mut buf = Vec::with_capacity(total_size);
+
+    // Header: version=1, argc=payloads.len()
+    buf.extend_from_slice(&1u16.to_le_bytes());
+    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes());
+
+    // Entries
+    for (tag, payload) in payloads {
+        buf.push(*tag);
+        buf.push(0); // reserved
+        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
+        buf.extend_from_slice(payload);
+    }
+
+    unsafe {
+        let needed = buf.len();
+        if result.is_null() || *result_len < needed {
+            *result_len = needed;
+            return HAKO_E_SHORT_BUFFER;
+        }
+        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
+        *result_len = needed;
+    }
+
+    HAKO_SUCCESS
+}
+
+/// Write void/empty TLV result
+///
+/// Returns a TLV response with a single Void entry (tag=9, size=0).
+/// This is commonly used for methods that don't return a value.
+pub fn write_tlv_void(result: *mut u8, result_len: *mut usize) -> i32 {
+    use hako_abi::TLV_TAG_VOID;
+    write_tlv_result(&[(TLV_TAG_VOID, &[])], result, result_len)
+}
