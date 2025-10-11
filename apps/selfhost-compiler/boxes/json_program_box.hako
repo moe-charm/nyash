@@ -1,5 +1,7 @@
 // JsonProgramBox — JSON v0 正規化の最小箱
 // 責務: Programヘッダの補正・meta.usings注入・主要Stmt/Exprのキー順安定化
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
 static box JsonProgramBox {
   normalize(json, usings_json) {
     local normalized = me.normalize_program(json)
@@ -389,21 +391,8 @@ static box JsonProgramBox {
   }
 
   index_of(s, start, pat) {
-    local n = s.size()
-    local m = pat.size()
-    if m == 0 { return start }
-    local i = start
-    loop(i + m <= n) {
-      local j = 0
-      local matched = 1
-      loop(j < m) {
-        if s.substring(i + j, i + j + 1) != pat.substring(j, j + 1) { matched = 0 break }
-        j = j + 1
-      }
-      if matched == 1 { return i }
-      i = i + 1
-    }
-    return -1
+    // Delegate to StringHelpers
+    return StringHelpers.index_of(s, start, pat)
   }
 
   last_index_of(s, pat) {
@@ -425,23 +414,14 @@ static box JsonProgramBox {
   }
 
   skip_ws(s, idx) {
-    local i = idx
-    local n = s.size()
-    loop(i < n) {
-      local ch = s.substring(i, i + 1)
-      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1 } else { break }
-    }
-    return i
+    // Delegate to StringHelpers
+    return StringHelpers.skip_ws(s, idx)
   }
 
   trim(s) {
+    // Delegate to StringHelpers
     if s == null { return "" }
-    local n = s.size()
-    local i = 0
-    loop(i < n && (s.substring(i, i + 1) == " " || s.substring(i, i + 1) == "\n" || s.substring(i, i + 1) == "\r" || s.substring(i, i + 1) == "\t")) { i = i + 1 }
-    local j = n
-    loop(j > i && (s.substring(j - 1, j) == " " || s.substring(j - 1, j) == "\n" || s.substring(j - 1, j) == "\r" || s.substring(j - 1, j) == "\t")) { j = j - 1 }
-    return s.substring(i, j)
+    return StringHelpers.trim(s)
   }
 
   join(parts) {
@@ -458,29 +438,8 @@ static box JsonProgramBox {
   }
 
   quote(s) {
-    if s == null { s = "" }
-    return "\"" + me.escape_string(s) + "\""
-  }
-
-  escape_string(s) {
-    if s == null { return "" }
-    local out = ""
-    local i = 0
-    local n = s.size()
-    loop(i < n) {
-      local ch = s.substring(i, i + 1)
-      if ch == "\\" { out = out + "\\\\" } else {
-        if ch == "\"" { out = out + "\\\"" } else {
-          if ch == "\n" { out = out + "\\n" } else {
-            if ch == "\r" { out = out + "\\r" } else {
-              if ch == "\t" { out = out + "\\t" } else { out = out + ch }
-            }
-          }
-        }
-      }
-      i = i + 1
-    }
-    return out
+    // Delegate to StringHelpers.json_quote (includes escaping and wrapping with quotes)
+    return StringHelpers.json_quote(s)
   }
 
   unescape_string(s) {
@@ -527,5 +486,8 @@ static box JsonProgramBox {
     return out
   }
 
-  i2s(v) { return "" + v }
+  i2s(v) {
+    // Delegate to StringHelpers
+    return StringHelpers.int_to_str(v)
+  }
 }
