@@ -21,12 +21,12 @@ static box Main {
   }
 }
 SRC
-out=$(run_nyash_vm "$tmpfile" | awk '/^Result:/{print $0}' | head -n1 | tr -d '
-' | xargs)
+run_nyash_vm "$tmpfile" >/dev/null
+rc=$?
 rm -f "$tmpfile"
-if [ "$out" != "Result: 0" ]; then
-  echo "FAIL: expected 'Result: 0', got '$out'" >&2
+if [ $rc -ne 0 ]; then
+  echo "FAIL: rc=$rc" >&2
   exit 1
 fi
-echo "$out"
+echo "OK"
 exit 0
