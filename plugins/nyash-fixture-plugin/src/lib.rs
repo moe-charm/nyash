@@ -1,14 +1,12 @@
 //! Nyash FixtureBox Plugin — Minimal stable fixture for tests
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
+//! - ✅ 3 lines (INSTANCES + INSTANCE_COUNTER) → 1 line (define_instance_storage!)
+//! - ✅ 2 lock() blocks in birth()/fini() → macro helpers
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
-
-// Import shared TLV codec from hako_abi_impl
+// Import shared TLV codec + instance manager macros from hako_abi_impl
 use hako_abi_impl::tlv::{read_arg_string, write_tlv_string};
+use hako_abi_impl::define_instance_storage;
 
 // ===== Error Codes (BID-1 alignment) =====
 const NYB_SUCCESS: i32 = 0;
@@ -33,9 +31,8 @@ struct FixtureInstance {
     alive: bool,
 }
 
-static INSTANCES: Lazy<Mutex<HashMap<u32, FixtureInstance>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+// Instance storage (replaces 3 lines of boilerplate)
+define_instance_storage!(FixtureInstance);
 
 // ===== v1 legacy entry (kept for loader shim compatibility) =====
 #[no_mangle]
@@ -141,12 +138,12 @@ unsafe fn birth(result: *mut u8, result_len: *mut usize) -> i32 {
     if preflight(result, result_len, 4) {
         return NYB_E_SHORT_BUFFER;
     }
-    let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-    if let Ok(mut map) = INSTANCES.lock() {
-        map.insert(id, FixtureInstance { alive: true });
-    } else {
-        return NYB_E_PLUGIN_ERROR;
+
+    let id = allocate_instance_id();
+    if let Err(e) = store_instance(id, FixtureInstance { alive: true }) {
+        return e;
     }
+
     let bytes = id.to_le_bytes();
     std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
     *result_len = 4;
@@ -154,12 +151,8 @@ unsafe fn birth(result: *mut u8, result_len: *mut usize) -> i32 {
 }
 
 unsafe fn fini(instance_id: u32) -> i32 {
-    if let Ok(mut map) = INSTANCES.lock() {
-        map.remove(&instance_id);
-        NYB_SUCCESS
-    } else {
-        NYB_E_PLUGIN_ERROR
-    }
+    remove_instance(instance_id);
+    NYB_SUCCESS
 }
 
 unsafe fn echo(args: *const u8, args_len: usize, result: *mut u8, result_len: *mut usize) -> i32 {

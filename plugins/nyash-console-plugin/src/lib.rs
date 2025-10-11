@@ -1,13 +1,15 @@
 //! Nyash ConsoleBox Plugin — TypeBox v2
 //! Provides simple stdout printing via ConsoleBox
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
+//! - ✅ 3 lines (INSTANCES + INSTANCE_COUNTER) → 1 line (define_instance_storage!)
+//! - Note: Instance storage is declared but currently unused (no METHOD_BIRTH/FINI)
 
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
+
+// Import instance manager macros from hako_abi_impl
+use hako_abi_impl::define_instance_storage;
 
 // ===== Error Codes (BID-1) =====
 const NYB_SUCCESS: i32 = 0;
@@ -29,10 +31,8 @@ const TYPE_ID_CONSOLE_BOX: u32 = 5; // keep in sync with nyash.toml [box_types]
 // ===== Instance management =====
 struct ConsoleInstance {/* no state for now */}
 
-use once_cell::sync::Lazy;
-static INSTANCES: Lazy<Mutex<HashMap<u32, ConsoleInstance>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+// Instance storage (currently unused, but declared for potential future use)
+define_instance_storage!(ConsoleInstance);
 
 // ===== TLV helpers (minimal) =====
 // TLV layout: [u16 ver=1][u16 argc][entries...]

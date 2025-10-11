@@ -1,23 +1,22 @@
 //! Nyash MapBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), size(1), get(2), has(3), set(4), fini(u32::MAX)
 //! Extension: support both i64 and UTF-8 string keys; values remain i64.
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
 
 mod tlv_codec;
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
 
 // Import shared TLV codec from hako_abi_impl
 use hako_abi_impl::tlv::{
     read_arg_bool, read_arg_handle, read_arg_host_handle, read_arg_i64, read_arg_string,
     write_tlv_bool, write_tlv_handle, write_tlv_host_handle, write_tlv_i64, write_tlv_string,
 };
+
+// Import instance manager macros (note: macros generate helper functions locally)
+use hako_abi_impl::{define_instance_storage, with_instance, with_instance_mut};
 
 // Import plugin-specific helpers from local tlv_codec
 use tlv_codec::{
@@ -80,11 +79,11 @@ enum MapVal {
 }
 
 struct MapInstance {
-    data_i64: HashMap<i64, MapVal>,
-    data_str: HashMap<String, MapVal>,
+    data_i64: std::collections::HashMap<i64, MapVal>,
+    data_str: std::collections::HashMap<String, MapVal>,
 }
-static INSTANCES: Lazy<Mutex<HashMap<u32, MapInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+
+define_instance_storage!(MapInstance);
 
 // ---- Nyash TypeBox (FFI minimal PoC) ----
 #[repr(C)]
@@ -153,15 +152,7 @@ fn map_keys_values_stage2(
         }
         // Lock scope separation: Extract data BEFORE calling host functions
         // (avoids deadlock when nyrt_host_call_slot -> ArrayBox -> array-plugin needs INSTANCES lock)
-        let data_to_insert: Vec<(i64, MapVal)> = {
-            let map = match INSTANCES.lock() {
-                Ok(m) => m,
-                Err(_) => return NYB_E_INVALID_HANDLE,
-            };
-            let inst = match map.get(&instance_id) {
-                Some(i) => i,
-                None => return NYB_E_INVALID_HANDLE,
-            };
+        let data_to_insert: Vec<(i64, MapVal)> = match with_instance!(instance_id, |inst: &MapInstance| {
             if method_id == METHOD_KEYS {
                 // Extract keys as strings (sorted)
                 let keys = hako_core_map::keys_sorted_from_maps_i64_str(
@@ -191,6 +182,9 @@ fn map_keys_values_stage2(
                     })
                     .collect()
             }
+        }) {
+            Ok(data) => data,
+            Err(_) => return NYB_E_INVALID_HANDLE,
         };  // ← Lock released here!
 
         // Now populate ArrayBox WITHOUT holding INSTANCES lock
@@ -295,16 +289,12 @@ extern "C" fn mapbox_invoke_id(
                     return NYB_E_INVALID_ARGS;
                 }
             }
-            let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-            if let Ok(mut map) = INSTANCES.lock() {
-                map.insert(
-                    id,
-                    MapInstance {
-                        data_i64: HashMap::new(),
-                        data_str: HashMap::new(),
-                    },
-                );
-            } else {
+            let id = allocate_instance_id();
+            let inst = MapInstance {
+                data_i64: std::collections::HashMap::new(),
+                data_str: std::collections::HashMap::new(),
+            };
+            if store_instance(id, inst).is_err() {
                 if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
                     eprintln!("[map-plugin] METHOD_BIRTH: mutex lock failed");
                 }
@@ -335,65 +325,54 @@ extern "C" fn mapbox_invoke_id(
             rc
         }
         METHOD_SIZE => {
-            if let Ok(map) = INSTANCES.lock() {
-                if let Some(inst) = map.get(&instance_id) {
-                    let sz = inst.data_i64.len() + inst.data_str.len();
-                    return write_tlv_i64(sz as i64, result, result_len);
-                } else {
-                    NYB_E_INVALID_HANDLE
-                }
-            } else {
-                NYB_E_PLUGIN_ERROR
+            match with_instance!(instance_id, |inst: &MapInstance| {
+                let sz = inst.data_i64.len() + inst.data_str.len();
+                write_tlv_i64(sz as i64, result, result_len)
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
         METHOD_FINI => {
-            if let Ok(mut map) = INSTANCES.lock() {
-                map.remove(&instance_id);
-                NYB_SUCCESS
-            } else {
-                NYB_E_PLUGIN_ERROR
+            match remove_instance(instance_id) {
+                Some(_) => NYB_SUCCESS,
+                None => NYB_E_PLUGIN_ERROR,
             }
         }
         METHOD_GET => {
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        match inst.data_i64.get(&ik) {
-                            Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
-                            Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
-                            Some(MapVal::Handle(t, i)) => {
-                                write_tlv_handle(*t, *i, result, result_len)
-                            }
-                            Some(MapVal::Host(h)) => {
-                                write_tlv_host_handle(*h as u64, result, result_len)
-                            }
-                            None => NYB_E_INVALID_ARGS,
+                match with_instance!(instance_id, |inst: &MapInstance| {
+                    match inst.data_i64.get(&ik) {
+                        Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
+                        Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
+                        Some(MapVal::Handle(t, i)) => {
+                            write_tlv_handle(*t, *i, result, result_len)
                         }
-                    } else {
-                        NYB_E_INVALID_HANDLE
+                        Some(MapVal::Host(h)) => {
+                            write_tlv_host_handle(*h as u64, result, result_len)
+                        }
+                        None => NYB_E_INVALID_ARGS,
                     }
-                } else {
-                    NYB_E_PLUGIN_ERROR
+                }) {
+                    Ok(rc) => rc,
+                    Err(_) => NYB_E_INVALID_HANDLE,
                 }
             } else if let Some(sk) = read_arg_string(args, args_len, 0) {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        match inst.data_str.get(&sk) {
-                            Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
-                            Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
-                            Some(MapVal::Handle(t, i)) => {
-                                write_tlv_handle(*t, *i, result, result_len)
-                            }
-                            Some(MapVal::Host(h)) => {
-                                write_tlv_host_handle(*h as u64, result, result_len)
-                            }
-                            None => NYB_E_INVALID_ARGS,
+                match with_instance!(instance_id, |inst: &MapInstance| {
+                    match inst.data_str.get(&sk) {
+                        Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
+                        Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
+                        Some(MapVal::Handle(t, i)) => {
+                            write_tlv_handle(*t, *i, result, result_len)
                         }
-                    } else {
-                        NYB_E_INVALID_HANDLE
+                        Some(MapVal::Host(h)) => {
+                            write_tlv_host_handle(*h as u64, result, result_len)
+                        }
+                        None => NYB_E_INVALID_ARGS,
                     }
-                } else {
-                    NYB_E_PLUGIN_ERROR
+                }) {
+                    Ok(rc) => rc,
+                    Err(_) => NYB_E_INVALID_HANDLE,
                 }
             } else {
                 NYB_E_INVALID_ARGS
@@ -401,24 +380,18 @@ extern "C" fn mapbox_invoke_id(
         }
         METHOD_HAS => {
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        write_tlv_bool(inst.data_i64.contains_key(&ik), result, result_len)
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
+                match with_instance!(instance_id, |inst: &MapInstance| {
+                    write_tlv_bool(inst.data_i64.contains_key(&ik), result, result_len)
+                }) {
+                    Ok(rc) => rc,
+                    Err(_) => NYB_E_INVALID_HANDLE,
                 }
             } else if let Some(sk) = read_arg_string(args, args_len, 0) {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        write_tlv_bool(inst.data_str.contains_key(&sk), result, result_len)
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
+                match with_instance!(instance_id, |inst: &MapInstance| {
+                    write_tlv_bool(inst.data_str.contains_key(&sk), result, result_len)
+                }) {
+                    Ok(rc) => rc,
+                    Err(_) => NYB_E_INVALID_HANDLE,
                 }
             } else {
                 NYB_E_INVALID_ARGS
@@ -442,114 +415,102 @@ extern "C" fn mapbox_invoke_id(
                 eprintln!("[map-plugin] set value variant={}", tlv_codec::v_to_string(&val));
             }
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        if debug {
-                            eprintln!("[map-plugin] set int key={}", ik);
-                        }
-                        inst.data_i64.insert(ik, val);
-                        unsafe {
-                            if !result_len.is_null() {
-                                *result_len = 0;
-                            }
-                        }
-                        return NYB_SUCCESS;
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
+                match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
+                    if debug {
+                        eprintln!("[map-plugin] set int key={}", ik);
                     }
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
-            } else if let Some(sk) = read_arg_string(args, args_len, 0) {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        if debug {
-                            eprintln!("[map-plugin] set str key={}", sk);
-                        }
-                        inst.data_str.insert(sk, val);
-                        unsafe {
-                            if !result_len.is_null() {
-                                *result_len = 0;
-                            }
-                        }
-                        return NYB_SUCCESS;
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
-            } else {
-                NYB_E_INVALID_ARGS
-            }
-        }
-        METHOD_REMOVE => {
-            if let Ok(mut map) = INSTANCES.lock() {
-                if let Some(inst) = map.get_mut(&instance_id) {
-                    let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
-                    if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                        if let Some(value) = inst.data_i64.remove(&ik) {
-                            if debug {
-                                eprintln!(
-                                    "[map-plugin] remove int key={} variant={}",
-                                    ik,
-                                    v_to_string(&value)
-                                );
-                            }
-                            return write_mapval_tlv(&value, result, result_len);
-                        }
-                        unsafe {
-                            if !result_len.is_null() {
-                                *result_len = 0;
-                            }
-                        }
-                        return NYB_SUCCESS;
-                    }
-                    if let Some(sk) = read_arg_string(args, args_len, 0) {
-                        if let Some(value) = inst.data_str.remove(&sk) {
-                            if debug {
-                                eprintln!(
-                                    "[map-plugin] remove str key={} variant={}",
-                                    sk,
-                                    v_to_string(&value)
-                                );
-                            }
-                            return write_mapval_tlv(&value, result, result_len);
-                        }
-                        unsafe {
-                            if !result_len.is_null() {
-                                *result_len = 0;
-                            }
-                        }
-                        return NYB_SUCCESS;
-                    }
-                    NYB_E_INVALID_ARGS
-                } else {
-                    NYB_E_INVALID_HANDLE
-                }
-            } else {
-                NYB_E_PLUGIN_ERROR
-            }
-        }
-        METHOD_CLEAR => {
-            if let Ok(mut map) = INSTANCES.lock() {
-                if let Some(inst) = map.get_mut(&instance_id) {
-                    inst.data_i64.clear();
-                    inst.data_str.clear();
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[map-plugin] clear instance {}", instance_id);
-                    }
+                    inst.data_i64.insert(ik, val);
                     unsafe {
                         if !result_len.is_null() {
                             *result_len = 0;
                         }
                     }
                     NYB_SUCCESS
-                } else {
-                    NYB_E_INVALID_HANDLE
+                }) {
+                    Ok(rc) => return rc,
+                    Err(_) => return NYB_E_INVALID_HANDLE,
+                }
+            } else if let Some(sk) = read_arg_string(args, args_len, 0) {
+                match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
+                    if debug {
+                        eprintln!("[map-plugin] set str key={}", sk);
+                    }
+                    inst.data_str.insert(sk, val);
+                    unsafe {
+                        if !result_len.is_null() {
+                            *result_len = 0;
+                        }
+                    }
+                    NYB_SUCCESS
+                }) {
+                    Ok(rc) => return rc,
+                    Err(_) => return NYB_E_INVALID_HANDLE,
                 }
             } else {
-                NYB_E_PLUGIN_ERROR
+                NYB_E_INVALID_ARGS
+            }
+        }
+        METHOD_REMOVE => {
+            let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+            match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
+                if let Some(ik) = read_arg_i64(args, args_len, 0) {
+                    if let Some(value) = inst.data_i64.remove(&ik) {
+                        if debug {
+                            eprintln!(
+                                "[map-plugin] remove int key={} variant={}",
+                                ik,
+                                v_to_string(&value)
+                            );
+                        }
+                        return write_mapval_tlv(&value, result, result_len);
+                    }
+                    unsafe {
+                        if !result_len.is_null() {
+                            *result_len = 0;
+                        }
+                    }
+                    return NYB_SUCCESS;
+                }
+                if let Some(sk) = read_arg_string(args, args_len, 0) {
+                    if let Some(value) = inst.data_str.remove(&sk) {
+                        if debug {
+                            eprintln!(
+                                "[map-plugin] remove str key={} variant={}",
+                                sk,
+                                v_to_string(&value)
+                            );
+                        }
+                        return write_mapval_tlv(&value, result, result_len);
+                    }
+                    unsafe {
+                        if !result_len.is_null() {
+                            *result_len = 0;
+                        }
+                    }
+                    return NYB_SUCCESS;
+                }
+                NYB_E_INVALID_ARGS
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
+            }
+        }
+        METHOD_CLEAR => {
+            match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
+                inst.data_i64.clear();
+                inst.data_str.clear();
+                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                    eprintln!("[map-plugin] clear instance {}", instance_id);
+                }
+                unsafe {
+                    if !result_len.is_null() {
+                        *result_len = 0;
+                    }
+                }
+                NYB_SUCCESS
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
         METHOD_GET_STR => {
@@ -557,22 +518,19 @@ extern "C" fn mapbox_invoke_id(
                 Some(s) => s,
                 None => return NYB_E_INVALID_ARGS,
             };
-            if let Ok(map) = INSTANCES.lock() {
-                if let Some(inst) = map.get(&instance_id) {
-                    match inst.data_str.get(&key) {
-                        Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
-                        Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
-                        Some(MapVal::Handle(t, i)) => write_tlv_handle(*t, *i, result, result_len),
-                        Some(MapVal::Host(h)) => {
-                            write_tlv_host_handle(*h as u64, result, result_len)
-                        }
-                        None => NYB_E_INVALID_ARGS,
+            match with_instance!(instance_id, |inst: &MapInstance| {
+                match inst.data_str.get(&key) {
+                    Some(MapVal::I64(v)) => write_tlv_i64(*v, result, result_len),
+                    Some(MapVal::Str(s)) => write_tlv_string(s, result, result_len),
+                    Some(MapVal::Handle(t, i)) => write_tlv_handle(*t, *i, result, result_len),
+                    Some(MapVal::Host(h)) => {
+                        write_tlv_host_handle(*h as u64, result, result_len)
                     }
-                } else {
-                    NYB_E_INVALID_HANDLE
+                    None => NYB_E_INVALID_ARGS,
                 }
-            } else {
-                NYB_E_PLUGIN_ERROR
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
         METHOD_HAS_STR => {
@@ -580,61 +538,52 @@ extern "C" fn mapbox_invoke_id(
                 Some(s) => s,
                 None => return NYB_E_INVALID_ARGS,
             };
-            if let Ok(map) = INSTANCES.lock() {
-                if let Some(inst) = map.get(&instance_id) {
-                    write_tlv_bool(
-                        hako_core_map::has_key_str(&inst.data_str, &key),
-                        result,
-                        result_len,
-                    )
-                } else {
-                    NYB_E_INVALID_HANDLE
-                }
-            } else {
-                NYB_E_PLUGIN_ERROR
+            match with_instance!(instance_id, |inst: &MapInstance| {
+                write_tlv_bool(
+                    hako_core_map::has_key_str(&inst.data_str, &key),
+                    result,
+                    result_len,
+                )
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
         METHOD_KEYS_S => {
-            if let Ok(map) = INSTANCES.lock() {
-                if let Some(inst) = map.get(&instance_id) {
-                    let mut keys: Vec<String> =
-                        Vec::with_capacity(inst.data_i64.len() + inst.data_str.len());
-                    for k in inst.data_i64.keys() {
-                        keys.push(k.to_string());
-                    }
-                    for k in inst.data_str.keys() {
-                        keys.push(k.clone());
-                    }
-                    keys.sort();
-                    let out = keys.join("\n");
-                    return write_tlv_string(&out, result, result_len);
-                } else {
-                    NYB_E_INVALID_HANDLE
+            match with_instance!(instance_id, |inst: &MapInstance| {
+                let mut keys: Vec<String> =
+                    Vec::with_capacity(inst.data_i64.len() + inst.data_str.len());
+                for k in inst.data_i64.keys() {
+                    keys.push(k.to_string());
                 }
-            } else {
-                NYB_E_PLUGIN_ERROR
+                for k in inst.data_str.keys() {
+                    keys.push(k.clone());
+                }
+                keys.sort();
+                let out = keys.join("\n");
+                write_tlv_string(&out, result, result_len)
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
         METHOD_VALUES_S => {
-            if let Ok(map) = INSTANCES.lock() {
-                if let Some(inst) = map.get(&instance_id) {
-                    let keys = hako_core_map::keys_sorted_from_maps_i64_str(
-                        &inst.data_i64,
-                        &inst.data_str,
-                    );
-                    let aligned =
-                        hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
-                    let mut vals: Vec<String> = Vec::with_capacity(keys.len());
-                    for v in aligned.into_iter() {
-                        vals.push(v.map(|vv| v_to_string(vv)).unwrap_or_default());
-                    }
-                    let out = vals.join("\n");
-                    return write_tlv_string(&out, result, result_len);
-                } else {
-                    NYB_E_INVALID_HANDLE
+            match with_instance!(instance_id, |inst: &MapInstance| {
+                let keys = hako_core_map::keys_sorted_from_maps_i64_str(
+                    &inst.data_i64,
+                    &inst.data_str,
+                );
+                let aligned =
+                    hako_core_map::values_for_keys(&keys, &inst.data_i64, &inst.data_str);
+                let mut vals: Vec<String> = Vec::with_capacity(keys.len());
+                for v in aligned.into_iter() {
+                    vals.push(v.map(|vv| v_to_string(vv)).unwrap_or_default());
                 }
-            } else {
-                NYB_E_PLUGIN_ERROR
+                let out = vals.join("\n");
+                write_tlv_string(&out, result, result_len)
+            }) {
+                Ok(rc) => rc,
+                Err(_) => NYB_E_INVALID_HANDLE,
             }
         }
         _ => NYB_E_INVALID_METHOD,

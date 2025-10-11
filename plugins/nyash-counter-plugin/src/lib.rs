@@ -1,15 +1,12 @@
 //! Nyash CounterBox Plugin - BID-FFI v1 Implementation
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
+//! - ✅ 3 lines (INSTANCES + INSTANCE_COUNTER) → 1 line (define_instance_storage!)
+//! - ✅ 6 lock() blocks → with_instance!/with_instance_mut! macros (both v1 and v2 entries)
 
-use std::collections::HashMap;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
-
-use once_cell::sync::Lazy;
-
-// Import shared TLV codec from hako_abi_impl
+// Import shared TLV codec + instance manager macros from hako_abi_impl
 use hako_abi_impl::tlv::write_tlv_i64;
+use hako_abi_impl::{define_instance_storage, with_instance, with_instance_mut};
 
 // ===== Error Codes (BID-1 alignment) =====
 const NYB_SUCCESS: i32 = 0;
@@ -34,9 +31,8 @@ struct CounterInstance {
     count: i32,
 }
 
-static INSTANCES: Lazy<Mutex<HashMap<u32, CounterInstance>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+// Instance storage (replaces 3 lines of boilerplate)
+define_instance_storage!(CounterInstance);
 
 // legacy v1 abi entry (kept for compatibility with host shim)
 #[no_mangle]
@@ -64,48 +60,37 @@ pub extern "C" fn nyash_plugin_invoke(
                     *result_len = 4;
                     return NYB_E_SHORT_BUFFER;
                 }
-                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.insert(id, CounterInstance { count: 0 });
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
+
+                let id = allocate_instance_id();
+                if let Err(e) = store_instance(id, CounterInstance { count: 0 }) {
+                    return e;
                 }
+
                 let bytes = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
                 *result_len = 4;
                 NYB_SUCCESS
             }
             METHOD_FINI => {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.remove(&instance_id);
-                    NYB_SUCCESS
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
+                remove_instance(instance_id);
+                NYB_SUCCESS
             }
             METHOD_INC => {
                 // increments and returns new count as I64 TLV
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        inst.count += 1;
-                        let v = inst.count;
-                        return write_tlv_i64(v as i64, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
+                match with_instance_mut!(instance_id, |inst: &mut CounterInstance| {
+                    inst.count += 1;
+                    write_tlv_i64(inst.count as i64, result, result_len)
+                }) {
+                    Ok(r) => r,
+                    Err(e) => e,
                 }
             }
             METHOD_GET => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        return write_tlv_i64(inst.count as i64, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
+                match with_instance!(instance_id, |inst: &CounterInstance| {
+                    write_tlv_i64(inst.count as i64, result, result_len)
+                }) {
+                    Ok(r) => r,
+                    Err(e) => e,
                 }
             }
             _ => NYB_E_INVALID_METHOD,
@@ -175,12 +160,12 @@ extern "C" fn counter_invoke(
                     return NYB_E_SHORT_BUFFER;
                 }
             }
-            let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-            if let Ok(mut map) = INSTANCES.lock() {
-                map.insert(id, CounterInstance { count: 0 });
-            } else {
-                return NYB_E_PLUGIN_ERROR;
+
+            let id = allocate_instance_id();
+            if let Err(e) = store_instance(id, CounterInstance { count: 0 }) {
+                return e;
             }
+
             unsafe {
                 let bytes = id.to_le_bytes();
                 std::ptr::copy_nonoverlapping(bytes.as_ptr(), result, 4);
@@ -189,34 +174,24 @@ extern "C" fn counter_invoke(
             NYB_SUCCESS
         }
         METHOD_FINI => {
-            if let Ok(mut map) = INSTANCES.lock() {
-                map.remove(&instance_id);
-                NYB_SUCCESS
-            } else {
-                NYB_E_PLUGIN_ERROR
-            }
+            remove_instance(instance_id);
+            NYB_SUCCESS
         }
         METHOD_INC => {
-            if let Ok(mut map) = INSTANCES.lock() {
-                if let Some(inst) = map.get_mut(&instance_id) {
-                    inst.count += 1;
-                    return write_tlv_i64(inst.count as i64, result, result_len);
-                } else {
-                    return NYB_E_INVALID_HANDLE;
-                }
-            } else {
-                return NYB_E_PLUGIN_ERROR;
+            match with_instance_mut!(instance_id, |inst: &mut CounterInstance| {
+                inst.count += 1;
+                write_tlv_i64(inst.count as i64, result, result_len)
+            }) {
+                Ok(r) => r,
+                Err(e) => e,
             }
         }
         METHOD_GET => {
-            if let Ok(map) = INSTANCES.lock() {
-                if let Some(inst) = map.get(&instance_id) {
-                    return write_tlv_i64(inst.count as i64, result, result_len);
-                } else {
-                    return NYB_E_INVALID_HANDLE;
-                }
-            } else {
-                return NYB_E_PLUGIN_ERROR;
+            match with_instance!(instance_id, |inst: &CounterInstance| {
+                write_tlv_i64(inst.count as i64, result, result_len)
+            }) {
+                Ok(r) => r,
+                Err(e) => e,
             }
         }
         _ => NYB_E_INVALID_METHOD,

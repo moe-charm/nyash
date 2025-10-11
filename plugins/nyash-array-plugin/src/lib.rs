@@ -1,20 +1,19 @@
 //! Nyash ArrayBox Plugin — TypeBox v2 (minimal)
 //! Methods: birth(0), length(1), get(2), push(3), fini(u32::MAX)
+//!
+//! ## Phase 2-1: Instance Manager Macros Applied
+//! - ✅ 3 lines (INSTANCES + INSTANCE_COUNTER) → 1 line (define_instance_storage!)
+//! - ✅ 9 lock() blocks → with_instance!/with_instance_mut! macros
 
-use once_cell::sync::Lazy;
-use std::collections::HashMap;
 use std::ffi::CStr;
 use std::os::raw::c_char;
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    Mutex,
-};
 
-// Use shared ABI implementation for TLV codec
+// Import shared TLV codec + instance manager macros from hako_abi_impl
 use hako_abi_impl::tlv::{
     read_arg_handle, read_arg_host_handle, read_arg_i64, read_arg_string, write_tlv_handle,
     write_tlv_host_handle, write_tlv_i64, write_tlv_string,
 };
+use hako_abi_impl::{define_instance_storage, with_instance, with_instance_mut};
 
 // ===== Error Codes (aligned with existing plugins) =====
 const NYB_SUCCESS: i32 = 0;
@@ -50,9 +49,8 @@ struct ArrayInstance {
     data: Vec<ArrayValue>,
 }
 
-static INSTANCES: Lazy<Mutex<HashMap<u32, ArrayInstance>>> =
-    Lazy::new(|| Mutex::new(HashMap::new()));
-static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
+// Instance storage (replaces 3 lines of boilerplate)
+define_instance_storage!(ArrayInstance);
 
 // legacy v1 entry points removed
 
@@ -114,21 +112,7 @@ extern "C" fn array_invoke_id(
                 };
 
                 // Extract slice data with limited lock scope to avoid deadlock
-                let slice_data = {
-                    let map = match INSTANCES.lock() {
-                        Ok(m) => m,
-                        Err(_) => {
-                            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                                eprintln!("[array-plugin] SLICE lock failed");
-                            }
-                            return NYB_E_PLUGIN_ERROR;
-                        }
-                    };
-                    let inst = match map.get(&instance_id) {
-                        Some(i) => i,
-                        None => return NYB_E_INVALID_HANDLE,
-                    };
-
+                let slice_data = match with_instance!(instance_id, |inst: &ArrayInstance| {
                     let len = inst.data.len() as i64;
                     let mut i0 = if start < 0 { 0 } else { start.min(len) } as usize;
                     let mut i1 = if end < 0 {
@@ -148,16 +132,20 @@ extern "C" fn array_invoke_id(
                     }
 
                     inst.data[i0..i1].to_vec()
+                }) {
+                    Ok(data) => data,
+                    Err(e) => {
+                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                            eprintln!("[array-plugin] SLICE with_instance failed: {}", e);
+                        }
+                        return e;
+                    }
                 }; // Lock released here
 
                 // Create new instance with separate lock (no deadlock)
-                let new_id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                {
-                    let mut mapw = match INSTANCES.lock() {
-                        Ok(m) => m,
-                        Err(_) => return NYB_E_PLUGIN_ERROR,
-                    };
-                    mapw.insert(new_id, ArrayInstance { data: slice_data });
+                let new_id = allocate_instance_id();
+                if let Err(e) = store_instance(new_id, ArrayInstance { data: slice_data }) {
+                    return e;
                 }
 
                 if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
@@ -173,44 +161,35 @@ extern "C" fn array_invoke_id(
                 if result_len.is_null() {
                     return NYB_E_INVALID_ARGS;
                 }
-                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.insert(id, ArrayInstance { data: Vec::new() });
-                } else {
+
+                let id = allocate_instance_id();
+                if let Err(e) = store_instance(id, ArrayInstance { data: Vec::new() }) {
                     if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[array-plugin] BIRTH lock failed");
+                        eprintln!("[array-plugin] BIRTH store_instance failed");
                     }
-                    return NYB_E_PLUGIN_ERROR;
+                    return e;
                 }
+
                 if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
                     eprintln!(
                         "[array-plugin] BIRTH writing handle len ptr={:?} len_before={}",
                         result_len,
                         unsafe { *result_len }
                     );
+                    eprintln!(
+                        "[array-plugin] BIRTH new id={} type_id={}",
+                        id, TYPE_ID_ARRAY
+                    );
                 }
-                {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!(
-                            "[array-plugin] BIRTH new id={} type_id={}",
-                            id, TYPE_ID_ARRAY
-                        );
-                    }
-                    write_tlv_handle(TYPE_ID_ARRAY, id, result, result_len)
-                }
+
+                write_tlv_handle(TYPE_ID_ARRAY, id, result, result_len)
             }
             METHOD_LENGTH => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[array-plugin] BIRTH lock failed");
-                    }
-                    return NYB_E_PLUGIN_ERROR;
+                match with_instance!(instance_id, |inst: &ArrayInstance| {
+                    write_tlv_i64(inst.data.len() as i64, result, result_len)
+                }) {
+                    Ok(r) => r,
+                    Err(e) => e,
                 }
             }
             METHOD_GET => {
@@ -221,21 +200,16 @@ extern "C" fn array_invoke_id(
                 if idx < 0 {
                     return NYB_E_INVALID_ARGS;
                 }
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        let i = idx as usize;
-                        if i >= inst.data.len() {
-                            return NYB_E_INVALID_ARGS;
-                        }
-                        return write_tlv_value(&inst.data[i], result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
+
+                match with_instance!(instance_id, |inst: &ArrayInstance| {
+                    let i = idx as usize;
+                    if i >= inst.data.len() {
+                        return NYB_E_INVALID_ARGS;
                     }
-                } else {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[array-plugin] BIRTH lock failed");
-                    }
-                    return NYB_E_PLUGIN_ERROR;
+                    write_tlv_value(&inst.data[i], result, result_len)
+                }) {
+                    Ok(r) => r,
+                    Err(e) => e,
                 }
             }
             METHOD_SET => {
@@ -247,22 +221,17 @@ extern "C" fn array_invoke_id(
                     Some(v) => v,
                     None => return NYB_E_INVALID_ARGS,
                 };
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        match hako_core_array::classify_set_index(inst.data.len(), idx) {
-                            hako_core_array::SetIndex::Replace(i) => inst.data[i] = val,
-                            hako_core_array::SetIndex::Append => inst.data.push(val),
-                            hako_core_array::SetIndex::Oob => return NYB_E_INVALID_ARGS,
-                        }
-                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
+
+                match with_instance_mut!(instance_id, |inst: &mut ArrayInstance| {
+                    match hako_core_array::classify_set_index(inst.data.len(), idx) {
+                        hako_core_array::SetIndex::Replace(i) => inst.data[i] = val,
+                        hako_core_array::SetIndex::Append => inst.data.push(val),
+                        hako_core_array::SetIndex::Oob => return NYB_E_INVALID_ARGS,
                     }
-                } else {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[array-plugin] BIRTH lock failed");
-                    }
-                    return NYB_E_PLUGIN_ERROR;
+                    write_tlv_i64(inst.data.len() as i64, result, result_len)
+                }) {
+                    Ok(r) => r,
+                    Err(e) => e,
                 }
             }
             METHOD_PUSH => {
@@ -270,18 +239,13 @@ extern "C" fn array_invoke_id(
                     Some(v) => v,
                     None => return NYB_E_INVALID_ARGS,
                 };
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        inst.data.push(val);
-                        return write_tlv_i64(inst.data.len() as i64, result, result_len);
-                    } else {
-                        return NYB_E_INVALID_HANDLE;
-                    }
-                } else {
-                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                        eprintln!("[array-plugin] BIRTH lock failed");
-                    }
-                    return NYB_E_PLUGIN_ERROR;
+
+                match with_instance_mut!(instance_id, |inst: &mut ArrayInstance| {
+                    inst.data.push(val);
+                    write_tlv_i64(inst.data.len() as i64, result, result_len)
+                }) {
+                    Ok(r) => r,
+                    Err(e) => e,
                 }
             }
             _ => NYB_E_INVALID_METHOD,
