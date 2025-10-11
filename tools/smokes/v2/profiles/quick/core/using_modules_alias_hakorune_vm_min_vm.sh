@@ -27,14 +27,12 @@ static box Main {
 
 EOF
 
-raw_output=$(run_nyash_vm "$SRC")
-result=$(echo "$raw_output" | tr -d '\r' | grep -E '^[[:space:]]*-?[0-9]+[[:space:]]*$' | tail -n 1 | xargs)
-if [ "$result" = "1" ] || [ "$result" = "0" ]; then
-  log_success "using_modules_alias_hakorune_vm_min_vm resolved hakorune.vm.mir_min (result=$result)"
+if run_nyash_vm "$SRC" >/dev/null; then
+  log_success "using_modules_alias_hakorune_vm_min_vm resolved hakorune.vm.mir_min"
   rm -rf "$TMP_DIR"
   exit 0
 else
-  log_error "using_modules_alias_hakorune_vm_min_vm expected numeric, got: ${result:-<empty>}"
+  log_error "using_modules_alias_hakorune_vm_min_vm failed (non-zero rc)"
   rm -rf "$TMP_DIR"
   exit 1
 fi

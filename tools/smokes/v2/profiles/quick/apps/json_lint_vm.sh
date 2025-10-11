@@ -13,6 +13,7 @@ preflight_plugins || exit 2
 APP_DIR="$NYASH_ROOT/apps/examples/json_lint"
 # Strict mode: do not tolerate Void in VM (policy: tests must not rely on NYASH_VM_TOLERATE_VOID)
 # Drop trailing VM result summary lines to keep output stable
+export HAKO_PLUGIN_POLICY=off
 output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev | grep -v '^Result: ')
 
 expected=$(cat << 'TXT'
