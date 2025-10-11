@@ -57,6 +57,25 @@
   - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_op_eq_vm.sh`
   - `tools/smokes/v2/profiles/quick/selfhost/selfhost_pipeline_v2_op_eq_false_vm.sh`
 
+## ▶ Next — P4/P5（着手順）
+
+P4: NewBox/Call/Method を shared Box（MirSchema/BlockBuilder）へ直結（出力互換）
+- 対応範囲
+  - Constructor 最小（ArrayBox/StringBox/MapBox）→ ret（rc-only代表はE2Eで既に担保）
+  - Method 最小（size/length/indexOf 等の1〜2本）→ ret
+  - Global 最小（純関数: JSON.stringify）→ ret（rc-only）
+- 実装方針
+  - emit_mir_flow(_map).hako に薄アダプタ関数を追加（BlockBuilder の *_call_ret を利用）
+  - v1 生成が必要な経路は MirJsonBuilderMin で mir_call を出力し、必要時に MirJsonV1Adapter で v0 へ変換。
+- 受け入れ
+  - quick 常時代表は現状維持（rc-only）。P4 は opt-in 代表で観測。
+
+P5: LocalSSA ensure_cond/ensure_calls の最小適用
+- CondInserter の escape 修正済み（JsonCursorBox に委譲）。
+- ensure_calls のミニ版を導入（call/method/new の入口で必要なら copy/phi を材化）。
+- 受け入れ: rc-only 代表1本（pipeline_v2 の call/min）を追加し常緑。
+
+
 次ステップ（提案）
 - Selfhost MIR 生成 P1（const/ret と compare→branch/jump→ret）を自己ホスト箱に寄せる（Rust 側は受け口に縮退）。
   - 受け入れ: quick の emit‑min‑json/emit‑mir 代表が rc‑only 緑、integration‑core は現行セット緑維持。

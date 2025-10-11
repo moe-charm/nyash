@@ -1,6 +1,6 @@
 // mini_vm_entry.hako — MiniVmEntryBox
 // Thin entry wrapper to stabilize static call names for smokes and tools.
-using "apps/selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
+using "selfhost/vm/boxes/mir_vm_min.hako" as MirVmMin
 
 static box MiniVmEntryBox {
 

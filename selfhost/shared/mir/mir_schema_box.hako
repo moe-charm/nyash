@@ -1,4 +1,4 @@
-// apps/selfhost/common/mir/mir_schema_box.hako
+// selfhost/shared/mir/mir_schema_box.hako
 // MirSchemaBox — minimal MIR(JSON v0) constructors (P1 scope)
 
 static box MirSchemaBox {
@@ -15,7 +15,7 @@ static box MirSchemaBox {
     return { op: "binop", op_kind: kind, lhs: this.i(lhs), rhs: this.i(rhs), dst: this.i(dst) }
   }
   inst_branch(cond, then_id, else_id) {
-    return { op: "branch", cond: this.i(cond), then: this.i(then_id), else: this.i(else_id) }
+    return { op: "branch", cond: this.i(cond), then: this.i(then_id), "else": this.i(else_id) }
   }
   inst_jump(target) { return { op: "jump", target: this.i(target) } }
 
@@ -24,7 +24,10 @@ static box MirSchemaBox {
     local out = new ArrayBox()
     if arr == null { return out }
     local i = 0
-    loop(i < arr.size()) { out.push(this.i(arr.get(i))); i = i + 1 }
+    loop(i < arr.size()) {
+      out.push(this.i(arr.get(i)))
+      i = i + 1
+    }
     return out
   }
   inst_mir_call_extern(name, arg_ids, dst) {

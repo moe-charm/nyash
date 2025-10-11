@@ -1,18 +1,18 @@
 // mir_vm_min.hako — Ny製の最小MIR(JSON v0)実行器（const/compare/copy/branch/jump/ret の最小）
-using "apps/selfhost/vm/boxes/op_handlers.hako" as OpHandlersBox
+using selfhost.vm.handlers as OpHandlersBox
 using "apps/selfhost/common/string_helpers.hako" as StringHelpers
 using "apps/selfhost/common/string_ops.hako" as StringOps
 using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
 using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
-using "apps/selfhost/vm/boxes/operator_box.hako" as OperatorBox
-using "apps/selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
-using "apps/selfhost/vm/boxes/compare_scan_box.hako" as CompareScanBox
-using "apps/selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
-using "apps/selfhost/vm/boxes/guard_box.hako" as GuardBox
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
-using "apps/selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
-using "apps/selfhost/vm/boxes/ret_resolve_simple.hako" as RetResolveSimpleBox
-using "apps/selfhost/vm/boxes/instruction_scanner.hako" as InstructionScannerBox
+using "selfhost/vm/boxes/operator_box.hako" as OperatorBox
+using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
+using "selfhost/vm/boxes/compare_scan_box.hako" as CompareScanBox
+using "selfhost/vm/boxes/phi_apply_box.hako" as PhiApplyBox
+using "selfhost/vm/boxes/guard_box.hako" as GuardBox
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/phi_decode_box.hako" as PhiDecodeBox
+using "selfhost/vm/boxes/ret_resolve_simple.hako" as RetResolveSimpleBox
+using selfhost.vm.scanner as InstructionScannerBox
 
 static box MirVmMin {
   _tprint(msg) {

@@ -332,6 +332,19 @@ SSOT 連動
   - emit 経路に `emit_op_eq(lhs,rhs)` を追加（出力互換）
   - quick 代表（rc‑only）: `selfhost_pipeline_v2_op_eq_vm`（true）と `selfhost_pipeline_v2_op_eq_false_vm`（false）を追加
 
+- P3 追加（Global/Method/Constructor E2E）
+  - v1→v0 変換（`MirJsonV1Adapter.to_v0`）→ `--json-file` 実行のE2E代表を追加（rc‑only）
+    - Global(print): `selfhost_mircall_global_print_e2e_vm`（副作用は無視。ret 0でrcのみ検証）
+    - Constructor+Method(size): `selfhost_mircall_ctor_method_e2e_vm`（ArrayBox.size）
+    - Global(JSON.stringify): `selfhost_mircall_global_json_stringify_e2e_vm`（`NYASH_JSON_STRINGIFY_DEV=1` で純関数化。ret 0でrcのみ）
+
+### ENV ゲート（Builder Eq/Ne 正規化）
+- `NYASH_BUILDER_EQ_TO_OPEQ=1|0`（別名 `HAKO_BUILDER_EQ_TO_OPEQ`）
+  - 1/true/on: Eq/Ne を Extern("nyrt.ops.op_eq") に降格（NeはNotで反転）
+  - 0/未設定: 降格しない（Compareのまま）
+  - 既定: OFF（Phase 15.7時点）。回帰が安定したらONに昇格可能。
+  - quick 代表（rc-only）: `tools/smokes/v2/profiles/quick/core/builder_eq_gate_off_rc_vm.sh`
+
 備考
 - 出力 JSON 形状は既存の `{ functions:[...] }` に揃えており、Rust 側受け口の互換性を維持。
 - SSOT は既定ON。slots/arity/aliases は specs/type_registry.toml を優先参照。Extern シグネチャは specs/externs/registry.toml 由来の生成物を利用。

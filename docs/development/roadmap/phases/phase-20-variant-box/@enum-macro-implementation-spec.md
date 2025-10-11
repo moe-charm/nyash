@@ -2,8 +2,19 @@
 
 **Version**: 1.0
 **Date**: 2025-10-08
-**Status**: Implementation-Ready
+**Status**: ✅ **完了（2025-10-08）** - Phase 19 実装済み
 **Approach**: Macro-only desugaring (no VariantBox Core implementation)
+
+---
+
+## 🎉 実装完了状況（2025-10-08）
+
+- ✅ **@enum Parser**: `src/parser/declarations/enum_parser.rs` (147行)
+- ✅ **Macro Expansion**: `src/macro/engine.rs` (expand_enum_to_boxes関数)
+- ✅ **match式**: `src/parser/expr/match_expr.rs` (392行、literal/type patterns + guards)
+- ✅ **ResultBox Phase 1**: `apps/lib/boxes/result.hako` (103行)
+- ✅ **OptionBox**: `apps/lib/boxes/option.hako` (94行、manual implementation)
+- ⚠️ **API競合未解決**: 小文字版 vs @enum版（詳細は Section 1.3 参照）
 
 ---
 

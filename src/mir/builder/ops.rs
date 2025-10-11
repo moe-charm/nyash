@@ -161,8 +161,22 @@ impl super::MirBuilder {
                         self.current_function.as_ref().map(|f| &f.signature.name));
                 }
 
-                // Always use op_eq for equality, even if types unknown (runtime dispatch側で対処)
-                if !in_equals_method && matches!(op, CompareOp::Eq | CompareOp::Ne) {
+                // Gate: Eq/Ne → Extern("nyrt.ops.op_eq") 降格（ENVで切替）。既定はON（後方互換）。
+                let eq_to_opeq_enabled = {
+                    let v = std::env::var("NYASH_BUILDER_EQ_TO_OPEQ")
+                        .ok()
+                        .or_else(|| std::env::var("HAKO_BUILDER_EQ_TO_OPEQ").ok());
+                    match v {
+                        Some(s) => {
+                            let s = s.to_ascii_lowercase();
+                            matches!(s.as_str(), "1" | "true" | "on")
+                        }
+                        None => false, // default OFF per Phase 15.7 gate
+                    }
+                };
+
+                // Always use op_eq for equality when gate is ON, even if types unknown（runtime dispatch側で対処）
+                if eq_to_opeq_enabled && !in_equals_method && matches!(op, CompareOp::Eq | CompareOp::Ne) {
                     let mut lhs_copy = lhs;
                     let mut rhs_copy = rhs;
                     crate::mir::builder::ssa::local::finalize_compare(self, &mut lhs_copy, &mut rhs_copy);

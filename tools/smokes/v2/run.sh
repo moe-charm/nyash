@@ -291,7 +291,7 @@ find_test_files() {
             continue
         fi
         # フィルタ適用
-        if [ -n "$FILTER" ] && ! echo "$file" | grep -q "$FILTER"; then
+        if [ -n "$FILTER" ] && ! echo "$file" | grep -E -q "$FILTER"; then
             continue
         fi
         # LLVM未ビルド時は AST(LLVM) 系テストをスキップ

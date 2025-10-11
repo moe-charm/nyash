@@ -6,7 +6,7 @@
 
 using "apps/selfhost/common/json/utils/json_frag.hako" as JsonFragBox
 using "apps/selfhost/common/json/json_cursor.hako" as JsonCursorBox
-using "apps/selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/vm/boxes/result_box.hako" as Result
 
 static box PhiDecodeBox {
   // tiny helpers to avoid raw quote/backslash sequences in source (prelude‑safe)

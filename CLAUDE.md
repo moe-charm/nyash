@@ -96,6 +96,10 @@ src/boxes/        ← 完全削除（段階的）
 - ✅ **Phase 15.15** (2025-10-09): 共通化綺麗綺麗大作戦（-48行削減）
 - ✅ **Phase 15.13/15.14** (2025-10-09): @match適用による可読性向上
 - ✅ **Phase 19** (2025-10-08): @enum/@match Macros実装成功
+  - ✅ @enum macro完全実装（enum_parser.rs, macro/engine.rs）
+  - ✅ match式完全実装（match_expr.rs、literal/type patterns + guards対応）
+  - ✅ ResultBox Phase 1実装完了（apps/lib/boxes/result.hako, 103行）
+  - ⚠️ API競合: 小文字版(Result.ok/err) vs @enum版(Result.Ok/Err) 共存中
 - ✅ **Phase 15.11** (2025-10-05): StringHelpers共通ライブラリ箱化、335行削減
 - ✅ **Phase 15.10** (2025-10-05): Legacy Code大掃除、純削減400行
 - ✅ **Phase 15.9** (2025-10-05): VmConfig集約化（42ファイル→1箇所）

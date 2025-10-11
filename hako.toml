@@ -36,7 +36,37 @@ JsonNode = "json_node"
 path = "apps/lib/json_native/core/node.hako"
 
 [modules]
+
+# Selfhost VM boxes (migration)
+selfhost.vm.boxes.mini_vm_entry = "selfhost/vm/boxes/mini_vm_entry.hako"
+selfhost.vm.boxes.mir_vm_min = "selfhost/vm/boxes/mir_vm_min.hako"
+selfhost.vm.boxes.op_handlers = "selfhost/vm/boxes/op_handlers.hako"
+selfhost.vm.boxes.instruction_scanner = "selfhost/vm/boxes/instruction_scanner.hako"
+selfhost.vm.boxes.mini_vm_prints = "selfhost/vm/boxes/mini_vm_prints.hako"
+selfhost.vm.boxes.json_cur = "selfhost/vm/boxes/json_cur.hako"
+selfhost.vm.boxes.mini_vm_core = "selfhost/vm/boxes/mini_vm_core.hako"
+selfhost.vm.boxes.seam_inspector = "selfhost/vm/boxes/seam_inspector.hako"
+selfhost.vm.boxes.guard_box = "selfhost/vm/boxes/guard_box.hako"
+selfhost.vm.boxes.scanner_box = "selfhost/vm/boxes/scanner_box.hako"
 # Map logical namespaces to Nyash source paths (consumed by runner)
+# Selfhost shared (new top-level)
+selfhost.shared.mir.schema = "selfhost/shared/mir/mir_schema_box.hako"
+selfhost.shared.mir.builder = "selfhost/shared/mir/block_builder_box.hako"
+# Selfhost compiler (pipeline v2)
+selfhost.compiler.pipeline_v2.emit_flow = "selfhost/compiler/pipeline_v2/emit_mir_flow.hako"
+selfhost.compiler.pipeline_v2.emit_flow_map = "selfhost/compiler/pipeline_v2/emit_mir_flow_map.hako"
+selfhost.compiler.pipeline_v2.local_ssa = "selfhost/compiler/pipeline_v2/local_ssa_box.hako"
+selfhost.compiler.pipeline_v2.pipeline = "selfhost/compiler/pipeline_v2/pipeline.hako"
+selfhost.compiler.pipeline_v2.using_resolver = "selfhost/compiler/pipeline_v2/using_resolver_box.hako"
+selfhost.compiler.pipeline_v2.namespace = "selfhost/compiler/pipeline_v2/namespace_box.hako"
+selfhost.compiler.pipeline_v2.emit_call = "selfhost/compiler/pipeline_v2/emit_call_box.hako"
+selfhost.compiler.pipeline_v2.emit_method = "selfhost/compiler/pipeline_v2/emit_method_box.hako"
+selfhost.compiler.pipeline_v2.emit_newbox = "selfhost/compiler/pipeline_v2/emit_newbox_box.hako"
+selfhost.compiler.pipeline_v2.emit_compare = "selfhost/compiler/pipeline_v2/emit_compare_box.hako"
+selfhost.compiler.pipeline_v2.emit_binop = "selfhost/compiler/pipeline_v2/emit_binop_box.hako"
+selfhost.compiler.pipeline_v2.header_emit = "selfhost/compiler/pipeline_v2/header_emit_box.hako"
+selfhost.compiler.pipeline_v2.mir_call = "selfhost/compiler/pipeline_v2/mir_call_box.hako"
+selfhost.compiler.pipeline_v2.name_resolve = "selfhost/compiler/pipeline_v2/name_resolve_box.hako"
 selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.hako"
 selfhost.common.json.mir_v1_adapter = "apps/selfhost/common/json/mir_v1_adapter.hako"
 selfhost.core.timer = "core.timer.TimerBox"
@@ -66,7 +96,7 @@ selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
 [modules.options]
 # Keep discovery enabled; roots default to apps (can extend per project)
 enable_discovery = true
-roots = ["apps"]
+roots = ["apps", "selfhost"]
 # Heuristic excludes (simple keywords; no glob engine)
 exclude = [
   "**/archive/**",
@@ -128,15 +158,15 @@ timer = "core.timer.TimerBox"
 
  selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
  # Dev VM utility boxes (for tests that reference them directly)
- selfhost.vm.boxes.guard_box = "apps/selfhost/vm/boxes/guard_box.hako"
- selfhost.vm.boxes.scanner_box = "apps/selfhost/vm/boxes/scanner_box.hako"
+ selfhost.vm.boxes.guard_box = "selfhost/vm/boxes/guard_box.hako"
+ selfhost.vm.boxes.scanner_box = "selfhost/vm/boxes/scanner_box.hako"
  # Option/Result boxes (Step 1: enum MVP)
  std.option = "apps/lib/boxes/option.hako"
  std.result = "apps/lib/boxes/result.hako"
 
 [modules.workspace]
 members = [
-  "apps/selfhost/vm/hako_module.toml",
+  "selfhost/vm/hako_module.toml",
   "apps/hakorune/vm/hako_module.toml",
   "apps/selfhost-compiler/hako_module.toml",
   "apps/hakorune/common/hako_module.toml",

@@ -1,9 +1,37 @@
 # @match Macro Implementation Specification
 
+**✅ Status**: **Phase 19 完了（2025-10-08）** - 正規match構文として実装済み
+
 **Created**: 2025-10-08
-**Target Phase**: Phase 20 (VariantBox)
-**Strategy**: Choice A'' (macro-only, desugar to if/else)
-**MIR Compatibility**: MIR16 Frozen (no new instructions)
+**Target Phase**: ~~Phase 20 (VariantBox)~~ **✅ Phase 19完了**
+**Strategy**: ~~Choice A'' (macro-only)~~ **正規match式として実装**
+**MIR Compatibility**: MIR16 Frozen (no new instructions) ✅
+
+---
+
+## 🎉 実装完了状況（2025-10-08）
+
+- ✅ **match式 Parser**: `src/parser/expr/match_expr.rs` (392行)
+- ✅ **Literal patterns**: 整数・文字列・bool リテラルマッチング対応
+- ✅ **Type patterns**: Box型パターンマッチング対応
+- ✅ **Guards**: `if` ガード条件対応
+- ⚠️ **実装方式**: `@match`マクロではなく、正規`match`**式**として実装
+- ⚠️ **脱糖化**: マクロではなくParser/MIR段階で直接処理
+
+**実装場所**:
+- Parser: `src/parser/expr/match_expr.rs` (392行)
+- AST: `ASTNode::Match` variant
+- MIR: if-elseチェインに直接変換
+
+**使用例** (実装済み):
+```hakorune
+local result = match value {
+  0 => "zero"
+  1 => "one"
+  n if n > 10 => "large"
+  _ => "other"
+}
+```
 
 ---
 
