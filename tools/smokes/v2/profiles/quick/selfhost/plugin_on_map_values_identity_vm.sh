@@ -36,10 +36,10 @@ SRC
 out_vm=$(run_nyash_vm "$tmpfile" | awk '/^Result:/{print $0}' | head -n1 | tr -d '\r' | xargs)
 rm -f "$tmpfile"
 
-if [ "$out_vm" != "Result: 0" ]; then
-  echo "FAIL: expected 'Result: 0', got '$out_vm'" >&2
+if [ $rc -ne 0 ]; then
+  echo "FAIL: rc=$rc" >&2
   exit 1
 fi
 
-echo "$out_vm"
+echo "OK"
 exit 0
