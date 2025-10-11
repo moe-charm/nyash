@@ -19,20 +19,20 @@ run_test_map_stage2_identity() {
     local m = new MapBox()
     m.set("list", arr)
     local vals = m.values()
-    if vals.size() != 1 { return 20 }
+    if vals.size() != 1 { print("NG"); return 20 }
     local first = vals.get(0)
     first.push(2)
     local vals2 = m.values()
-    if vals2.size() != 1 { return 21 }
+    if vals2.size() != 1 { print("NG"); return 21 }
     local again = vals2.get(0)
-    if again.size() != 2 { return 22 }
-    if again.get(0) != 1 || again.get(1) != 2 { return 23 }
-    return 0
+    if again.size() != 2 { print("NG"); return 22 }
+    if again.get(0) != 1 || again.get(1) != 2 { print("NG"); return 23 }
+    print("OK"); return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code"  | awk '/^Result:/{print $2}')
-  if [[ "$out" != "0" ]]; then
-    echo "FAIL: Result: $out"
+  out=$(run_nyash_vm -c "$code" | tail -n 1 | tr -d '' | xargs)
+  if [[ "$out" != "OK" ]]; then
+    echo "FAIL: $out"
     return 1
   fi
   return 0

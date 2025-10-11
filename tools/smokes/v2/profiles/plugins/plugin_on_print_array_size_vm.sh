@@ -16,13 +16,13 @@ run_test_plugin_on_print_array_size_vm() {
   local code=$'static box Main {\n  main() {\n    local arr = new ArrayBox()\n    arr.push(1)\n    print(arr.size())\n    return 0\n  }\n}\n'
   # Use timeout to avoid hanging forever; expect to finish with exit 0 and print "1"
   local out
-  out=$(SMOKES_TIMEOUT_SEC=10 run_nyash_vm -c "$code")
+  out=$(SMOKES_TIMEOUT_SEC=10 run_nyash_vm -c "$code"); rc=$?
   if ! echo "$out" | grep -q '^1$'; then
     echo "FAIL: expected to print 1, got:"; echo "$out" | tail -n +1
     return 1
   fi
-  if ! echo "$out" | grep -q '^Result: 0$'; then
-    echo "FAIL: result not 0"; echo "$out" | tail -n +1
+  if [ $rc -ne 0 ]; then
+    echo "FAIL: non-zero exit ($rc)"; echo "$out" | tail -n +1
     return 1
   fi
   return 0

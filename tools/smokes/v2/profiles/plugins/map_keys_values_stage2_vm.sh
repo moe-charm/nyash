@@ -29,9 +29,9 @@ run_test_map_stage2() {
     return 0
   }}'
   local out
-  out=$(run_nyash_vm -c "$code"  | awk '/^Result:/{print $2}')
-  if [[ "$out" != "0" ]]; then
-    echo "FAIL: Result: $out"
+  out=$(run_nyash_vm -c "$code"); rc=$?
+  if [ $rc -ne 0 ]; then
+    echo "FAIL: non-zero exit ($rc)"
     return 1
   fi
   return 0
