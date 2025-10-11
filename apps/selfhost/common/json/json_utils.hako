@@ -1,0 +1,211 @@
+// JsonUtilsBox — JSON読み取りユーティリティの共通箱
+// 責務: JSON値抽出・JSON構造パース・トップレベル配列分割
+// Extracted from JsonProgramBox (480行 → 345行, 削減 ~135行)
+using "apps/selfhost/common/string_helpers.hako" as StringHelpers
+
+static box JsonUtilsBox {
+  // Extract JSON value by key (returns value with '@' + end position marker)
+  extract_value(json, key) {
+    if json == null { return null }
+    local pattern = "\"" + key + "\""
+    local idx = StringHelpers.index_of(json, 0, pattern)
+    if idx < 0 { return null }
+    idx = idx + pattern.size()
+    idx = StringHelpers.skip_ws(json, idx)
+    if json.substring(idx, idx + 1) != ":" { return null }
+    idx = StringHelpers.skip_ws(json, idx + 1)
+    local res = me.read_value(json, idx)
+    local at = StringHelpers.last_index_of(res, "@")
+    if at < 0 { return null }
+    return res.substring(0, at)
+  }
+
+  // Extract string value by key with default fallback
+  extract_string_value(json, key, default_value) {
+    local raw = me.extract_value(json, key)
+    if raw == null { return default_value }
+    local trimmed = StringHelpers.trim(raw)
+    if trimmed.size() >= 2 && trimmed.substring(0,1) == "\"" && trimmed.substring(trimmed.size()-1, trimmed.size()) == "\"" {
+      return me.unescape_string(trimmed.substring(1, trimmed.size()-1))
+    }
+    return default_value
+  }
+
+  // Read JSON value (dispatch to appropriate reader)
+  read_value(json, idx) {
+    local n = json.size()
+    if idx >= n { return "@" + StringHelpers.int_to_str(idx) }
+    local ch = json.substring(idx, idx + 1)
+    if ch == "\"" { return me.read_string(json, idx) }
+    if ch == "{" { return me.read_object(json, idx) }
+    if ch == "[" { return me.read_array(json, idx) }
+    return me.read_literal(json, idx)
+  }
+
+  // Read JSON string (escape-aware) with position marker
+  read_string(json, idx) {
+    local i = idx + 1
+    local n = json.size()
+    local done = 0
+    loop(done == 0 && i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\\" {
+        i = i + 2
+      } else {
+        if ch == "\"" { done = 1 i = i + 1 } else { i = i + 1 }
+      }
+    }
+    return json.substring(idx, i) + "@" + StringHelpers.int_to_str(i)
+  }
+
+  // Skip JSON string (returns end position)
+  skip_string(json, idx) {
+    local i = idx + 1
+    local n = json.size()
+    local done = 0
+    loop(done == 0 && i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\\" { i = i + 2 }
+      else { if ch == "\"" { done = 1 i = i + 1 } else { i = i + 1 } }
+    }
+    return i
+  }
+
+  // Read JSON object (bracket-aware) with position marker
+  read_object(json, idx) {
+    local depth = 0
+    local i = idx
+    local n = json.size()
+    loop(i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\"" {
+        i = me.skip_string(json, i)
+      } else {
+        if ch == "{" { depth = depth + 1 }
+        else if ch == "}" {
+          depth = depth - 1
+          if depth == 0 { i = i + 1 break }
+        }
+        i = i + 1
+      }
+    }
+    return json.substring(idx, i) + "@" + StringHelpers.int_to_str(i)
+  }
+
+  // Read JSON array (bracket-aware) with position marker
+  read_array(json, idx) {
+    local depth = 0
+    local i = idx
+    local n = json.size()
+    loop(i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "\"" {
+        i = me.skip_string(json, i)
+      } else {
+        if ch == "[" { depth = depth + 1 }
+        else if ch == "]" {
+          depth = depth - 1
+          if depth == 0 { i = i + 1 break }
+        }
+        i = i + 1
+      }
+    }
+    return json.substring(idx, i) + "@" + StringHelpers.int_to_str(i)
+  }
+
+  // Read JSON literal (number/true/false/null) with position marker
+  read_literal(json, idx) {
+    local n = json.size()
+    local i = idx
+    loop(i < n) {
+      local ch = json.substring(i, i + 1)
+      if ch == "," || ch == "}" || ch == "]" { break }
+      i = i + 1
+    }
+    return json.substring(idx, i) + "@" + StringHelpers.int_to_str(i)
+  }
+
+  // Split JSON array at top-level commas (depth-aware, escape-aware)
+  split_top_level(array_json) {
+    local out = new ArrayBox()
+    local n = array_json.size()
+    local i = 1
+    local start = 1
+    local depth = 0
+    local in_string = 0
+    loop(i < n - 1) {
+      local ch = array_json.substring(i, i + 1)
+      if in_string == 1 {
+        if ch == "\\" {
+          i = i + 2
+        } else {
+          if ch == "\"" { in_string = 0 }
+          i = i + 1
+        }
+      } else {
+        if ch == "\"" {
+          in_string = 1
+          i = i + 1
+        } else {
+          if ch == "{" || ch == "[" { depth = depth + 1 }
+          else if ch == "}" || ch == "]" { depth = depth - 1 }
+          else if ch == "," && depth == 0 {
+            local part = array_json.substring(start, i)
+            out.push(part)
+            start = i + 1
+          }
+          i = i + 1
+        }
+      }
+    }
+    if start < n - 1 {
+      out.push(array_json.substring(start, n - 1))
+    }
+    return out
+  }
+
+  // Unescape JSON string (convert \n, \t, \r, \\, \" to actual characters)
+  unescape_string(s) {
+    if s == null { return "" }
+    local out = ""
+    local i = 0
+    local n = s.size()
+    loop(i < n) {
+      local ch = s.substring(i, i + 1)
+      if ch == "\\" && i + 1 < n {
+        local nx = s.substring(i + 1, i + 2)
+        if nx == "\"" {
+          out = out + "\""
+          i = i + 2
+        } else {
+          if nx == "\\" {
+            out = out + "\\"
+            i = i + 2
+          } else {
+            if nx == "n" {
+              out = out + "\n"
+              i = i + 2
+            } else {
+              if nx == "r" {
+                out = out + "\r"
+                i = i + 2
+              } else {
+                if nx == "t" {
+                  out = out + "\t"
+                  i = i + 2
+                } else {
+                  out = out + ch
+                  i = i + 1
+                }
+              }
+            }
+          }
+        }
+      } else {
+        out = out + ch
+        i = i + 1
+      }
+    }
+    return out
+  }
+}
