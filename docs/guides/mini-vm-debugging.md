@@ -1,7 +1,7 @@
 Mini‑VM Debugging Guide
 
 Scope
-- Hakorune Mini‑VM boxes: `apps/hakorune/vm/boxes/hakorune_vm_min.hako` and legacy `apps/selfhost/vm/boxes/mir_vm_min.hako`.
+- Hakorune Mini‑VM boxes: `apps/hakorune/vm/boxes/hakorune_vm_min.hako` and legacy `selfhost/vm/boxes/mir_vm_min.hako`.
 - JSON v0 MIR strings executed via `run_min` or `MiniVmEntryBox.run_min`.
 
 Quick Start

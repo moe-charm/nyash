@@ -37,7 +37,7 @@ Phase 3 (VariantBox統合) → Phase 20.6後（3-5時間）
 
 ### タスクリスト
 
-#### 1. コア実装（apps/selfhost/vm/boxes/result_box.hako）
+#### 1. コア実装（selfhost/vm/boxes/result_box.hako）
 
 - [ ] **1.1 is_err() 追加**
   - コード: 4行
@@ -99,7 +99,7 @@ Phase 3 (VariantBox統合) → Phase 20.6後（3-5時間）
 #### 5. 既存コード互換性確認
 
 - [ ] **5.1 既存5箇所の動作確認**
-  - apps/selfhost/vm/boxes/phi_decode_box.hako (2箇所)
+  - selfhost/vm/boxes/phi_decode_box.hako (2箇所)
   - tools/smokes/.../selfhost_utils_result_box_vm.sh (1箇所)
   - 他2箇所
   - 変更不要であることを確認
@@ -119,7 +119,7 @@ Phase 3 (VariantBox統合) → Phase 20.6後（3-5時間）
 - [ ] **6.3 コミット**
   - コミットメッセージ: "feat(box): Result<T,E> MVP版実装 - unwrap/expect追加"
   - 変更ファイル:
-    - apps/selfhost/vm/boxes/result_box.hako (34→84行)
+    - selfhost/vm/boxes/result_box.hako (34→84行)
     - apps/tests/result_box_extended.hako (新規)
     - tools/smokes/v2/profiles/quick/selfhost/result_box_extended_vm.sh (新規)
     - docs/reference/boxes-system/result-box.md (新規)

@@ -55,7 +55,7 @@
 **手順**:
 ```bash
 # Step 1: StringHelpers.hako を拡張 (既存ファイル)
-apps/selfhost/common/string_helpers.hako
+selfhost/shared/common/string_helpers.hako
   ↓ 追加機能:
   - index_of, last_index_of, starts_with
   - trim, skip_ws
@@ -235,7 +235,7 @@ JsonProgramBox (330行)  - 正規化 + メタデータ
 - **[重複コードヒートマップ](./selfhost-compiler-duplication-heatmap.md)** - 視覚的分析
 
 ### 既存良好実装 (参考)
-- StringHelpers: `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/common/string_helpers.hako`
+- StringHelpers: `/home/tomoaki/git/hakorune-selfhost/selfhost/shared/common/string_helpers.hako`
 - MapHelpersBox: `/home/tomoaki/git/hakorune-selfhost/selfhost/compiler/pipeline_v2/map_helpers_box.hako`
 - UsingResolverBox: `/home/tomoaki/git/hakorune-selfhost/selfhost/compiler/pipeline_v2/using_resolver_box.hako`
 

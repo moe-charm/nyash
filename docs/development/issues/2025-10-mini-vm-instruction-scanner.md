@@ -3,7 +3,7 @@
 Status: open (root cause isolated — fix via box modularization)
 
 Summary
-- Symptom: Mini‑VM (apps/selfhost/vm/boxes/mir_vm_min.hako) executes the first `const` in a block but fails to advance to the second object (const/compare/ret). The loop ends with `moved==0`, returning 0 even for Eq true cases.
+- Symptom: Mini‑VM (selfhost/vm/boxes/mir_vm_min.hako) executes the first `const` in a block but fails to advance to the second object (const/compare/ret). The loop ends with `moved==0`, returning 0 even for Eq true cases.
 - Repro: `SMOKES_DEV_LOG=1 tools/smokes/v2/profiles/quick/selfhost/selfhost_mir_m2_eq_true_vm.sh`
 - Logs: `[mirvm] inst_seg.head= {"op":"const"} , {"op":"const"} , {"op":"compare"} , {"op":"ret"}` then early end.
 

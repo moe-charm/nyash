@@ -190,7 +190,7 @@ quote(s) {
   return "\"" + me.escape_string(s) + "\""
 }
 
-// apps/selfhost/common/string_helpers.hako
+// selfhost/shared/common/string_helpers.hako
 json_quote(s) {
   if s == null { return "\"\"" }
   local out = ""
@@ -226,7 +226,7 @@ to_int(s) {
 
 i2s(v) { return "" + v }
 
-// apps/selfhost/common/string_helpers.hako
+// selfhost/shared/common/string_helpers.hako
 to_i64(x) {
   local s = "" + x
   local i = 0
@@ -618,7 +618,7 @@ static box DebugBox {
 **目標**: 30+ファイルの文字列操作を1箇所に集約
 
 **作業内容**:
-1. 既存 `apps/selfhost/common/string_helpers.hako` を拡張
+1. 既存 `selfhost/shared/common/string_helpers.hako` を拡張
 2. 以下の機能を統合:
    - `index_of`, `last_index_of`, `starts_with`
    - `trim`, `skip_ws`
@@ -823,7 +823,7 @@ JsonProgramBox (330行) - 正規化のみ
 ## ✅ 即座に実行可能なクイックウィン
 
 ### クイックウィン1: StringHelpers統合 (既存を活用)
-**現状**: `apps/selfhost/common/string_helpers.hako` は既に存在 (86行)
+**現状**: `selfhost/shared/common/string_helpers.hako` は既に存在 (86行)
 
 **アクション**:
 1. このファイルに不足機能を追加:
@@ -890,7 +890,7 @@ JsonProgramBox (330行) - 正規化のみ
 ## 📚 参考資料
 
 ### 既存実装 (良い設計例)
-1. **StringHelpers**: `apps/selfhost/common/string_helpers.hako` (86行)
+1. **StringHelpers**: `selfhost/shared/common/string_helpers.hako` (86行)
 2. **MapHelpersBox**: `selfhost/compiler/pipeline_v2/map_helpers_box.hako` (48行)
 3. **UsingResolverBox**: `selfhost/compiler/pipeline_v2/using_resolver_box.hako` (249行)
 4. **emit系Boxes**: `apps/selfhost-compiler/common/*.hako` (4ファイル)

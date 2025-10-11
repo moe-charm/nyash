@@ -186,7 +186,7 @@ Hakoruneにenum的な表現を追加（MIR16維持、Everything-is-Box原則を�
 
 - [ ] **段階移行計画実施**（2日）
   - 新規コードのみVariantBox版使用
-  - 既存ResultBox（`apps/selfhost/vm/boxes/result_box.hako`）は互換維持
+  - 既存ResultBox（`selfhost/vm/boxes/result_box.hako`）は互換維持
   - 3-5ファイル試験移行
 
 **成果物**:
@@ -272,7 +272,7 @@ Hakoruneにenum的な表現を追加（MIR16維持、Everything-is-Box原則を�
 - `apps/macros/loop_normalize_macro.nyash` (393行)
 - `apps/macros/if_match_normalize_macro.nyash` (404行)
 - `src/macro/pattern.rs` (252行)
-- `apps/selfhost/vm/boxes/result_box.hako` (34行、既存実装)
+- `selfhost/vm/boxes/result_box.hako` (34行、既存実装)
 
 ---
 

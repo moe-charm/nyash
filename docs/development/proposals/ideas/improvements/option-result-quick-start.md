@@ -128,7 +128,7 @@ export NYASH_CLI_VERBOSE=1
 
 ### 実装前
 - [ ] Phase 15.11成功事例を読んだ
-- [ ] 既存のResultBox実装（`apps/selfhost/vm/boxes/result_box.hako`）を確認した
+- [ ] 既存のResultBox実装（`selfhost/vm/boxes/result_box.hako`）を確認した
 - [ ] Hakorune構文制約を理解している
 
 ### 実装中
@@ -196,7 +196,7 @@ box OptionBox {
 **追加メソッド**:
 ```nyash
 box ResultBox {
-  // 既存: _val, _err, _ok (apps/selfhost/vm/boxes/result_box.hako から移植)
+  // 既存: _val, _err, _ok (selfhost/vm/boxes/result_box.hako から移植)
 
   // 高階関数
   map(f) {
@@ -433,7 +433,7 @@ opt.map(Helpers.double)
 
 - **完全戦略書**: `docs/development/proposals/ideas/improvements/option-result-test-strategy.md`
 - **Phase 15.11成功事例**: `apps/selfhost/test_string_helpers.hako`
-- **既存ResultBox**: `apps/selfhost/vm/boxes/result_box.hako`
+- **既存ResultBox**: `selfhost/vm/boxes/result_box.hako`
 - **スモークテスト例**: `tools/smokes/v2/profiles/quick/core/wasm_std_array_resize_vm.sh`
 
 ---

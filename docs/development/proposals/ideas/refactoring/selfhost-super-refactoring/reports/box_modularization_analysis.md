@@ -475,7 +475,7 @@ static box UsingExtractorBox {
 
 #### 1.2 共通ユーティリティBoxの作成
 
-**apps/selfhost/common/utils/** に以下を新設:
+**selfhost/shared/common/utils/** に以下を新設:
 
 1. `string_utils.hako` - 文字列操作
 2. `number_utils.hako` - 数値変換

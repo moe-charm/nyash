@@ -29,7 +29,7 @@ This guide describes how Hakorune resolves module namespaces and how to opt into
 [modules.workspace]
 members = [
   "apps/selfhost-compiler/hako_module.toml",
-  "apps/selfhost/vm/hako_module.toml",
+  "selfhost/vm/hako_module.toml",
 ]
 
 [modules.overrides]

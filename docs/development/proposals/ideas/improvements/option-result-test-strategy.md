@@ -593,7 +593,7 @@ export NYASH_DISABLE_PLUGINS=1
 
 ### 9.2 既存実装
 
-- **ResultBox**: `apps/selfhost/vm/boxes/result_box.hako`
+- **ResultBox**: `selfhost/vm/boxes/result_box.hako`
 - **StringStd**: `apps/lib/boxes/string_std.hako`
 - **ArrayStd**: `apps/lib/boxes/array_std.hako`
 - **MapStd**: `apps/lib/boxes/map_std.hako`

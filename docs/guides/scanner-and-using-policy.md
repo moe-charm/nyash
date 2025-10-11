@@ -10,11 +10,11 @@ Purpose: eliminate fragile string scanning and make `using` predictable across p
 
 ## Standard Boxes
 
-- `StringScanBox` (apps/selfhost/vm/boxes/string_scan.hako)
+- `StringScanBox` (selfhost/vm/boxes/string_scan.hako)
   - `find_unescaped(text, ch, pos)` – skip escaped occurrences.
   - `scan_string_end(text, start)` – returns closing quote index or -1.
 
-- `JsonScanBox` (apps/selfhost/vm/boxes/json_scan.hako)
+- `JsonScanBox` (selfhost/vm/boxes/json_scan.hako)
   - `seek_obj_end(text, start)` / `seek_array_end(text, start)` – escape-aware end scanners.
   - `find_key_dual(text, plain, escaped, pos)` – dual-key search helper.
 

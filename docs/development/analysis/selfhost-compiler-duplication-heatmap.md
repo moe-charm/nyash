@@ -288,7 +288,7 @@ StringUtilsBox (統合)   - 文字列操作 (既存拡張)
 - [Box理論](../../reference/language/LANGUAGE_REFERENCE_2025.md)
 
 ### 既存良好実装 (参考)
-- StringHelpers: `apps/selfhost/common/string_helpers.hako` (86行)
+- StringHelpers: `selfhost/shared/common/string_helpers.hako` (86行)
 - MapHelpersBox: `selfhost/compiler/pipeline_v2/map_helpers_box.hako` (48行)
 - UsingResolverBox: `selfhost/compiler/pipeline_v2/using_resolver_box.hako` (249行)
 

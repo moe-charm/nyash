@@ -149,7 +149,7 @@ Branch Note (selfhost)
 ```
 Hakoruneコンパイラ（apps/selfhost-compiler/compiler.hako｜互換: .nyash）
     ↓ MIR生成
-Hakorune-VM（apps/hakorune/vm/boxes/hakorune_vm_min.hako｜互換: apps/selfhost/vm/boxes/mir_vm_min.hako）
+Hakorune-VM（apps/hakorune/vm/boxes/hakorune_vm_min.hako｜互換: selfhost/vm/boxes/mir_vm_min.hako）
     ↓ 実行
 Rust VM（src/backend/mir_interpreter/）
     ↓ 比較検証
@@ -317,7 +317,7 @@ SSOT 連動
 ### 進捗（2025‑10‑12 現在）
 
 - P1 完了（const/ret, compare diamond）
-  - 共有箱を導入: `apps/selfhost/common/mir/{mir_schema_box.hako,block_builder_box.hako}`
+  - 共有箱を導入: `selfhost/shared/common/mir/{mir_schema_box.hako,block_builder_box.hako}`
   - emit 経路を薄アダプタ化（出力互換）:
     - `selfhost/compiler/pipeline_v2/emit_mir_flow_map.hako`
     - `selfhost/compiler/pipeline_v2/emit_mir_flow.hako`
@@ -625,7 +625,7 @@ Phase 15.7進捗: ████████░░ 80%完成
 - ✅ **Hakorune VM への改名**（2025-10-05完了）
   - Mini-VM → Hakorune VM（ブランディング統一）
   - ファイルパス: `apps/hakorune/vm/boxes/hakorune_vm_min.hako`（正式）
-  - 互換パス: `apps/selfhost/vm/boxes/mir_vm_min.nyash`（alias維持）
+  - 互換パス: `selfhost/vm/boxes/mir_vm_min.nyash`（alias維持）
 
 #### 🔥 **現在の最優先タスク**
 
@@ -889,7 +889,7 @@ Phase 15.7進捗: █████████░ 85-90%完成（上方修正！�
 - 担当: ChatGPT + Claude
 - 期間: 2週間
 - 成果: 完全な Hakorune VM（M4-M7）
-- ファイル: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
+- ファイル: `selfhost/vm/boxes/mir_vm_min.nyash`
 
 **統合**:
 - 期間: 1週間
@@ -981,7 +981,7 @@ Hakorune VM（Hakorune実装）
      -- input.hkr > output.json
 
    # c1 → c1'（自己コンパイル）
-   ./target/release/hakorune apps/selfhost/vm/boxes/mir_vm_min.nyash \
+   ./target/release/hakorune selfhost/vm/boxes/mir_vm_min.nyash \
      -- output.json
    ```
 
@@ -1013,7 +1013,7 @@ Hakorune VM（Hakorune実装）
 ### **Phase 2: Hakorune VM拡張（Week 2-3、並行可能）**
 
 4. **M4: ループサポート**（3日）
-   - ファイル: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
+   - ファイル: `selfhost/vm/boxes/mir_vm_min.nyash`
    - 目標: loop命令の実行
    - 検証: 累積計算テスト
 
@@ -1058,7 +1058,7 @@ tools/smokes/v2/run.sh --profile quick --filter "selfhost_mir_m*"
   -- --stage3 sample.hkr > output.json
 
 # Hakorune VM実行
-./target/release/hakorune apps/selfhost/vm/boxes/mir_vm_min.nyash \
+./target/release/hakorune selfhost/vm/boxes/mir_vm_min.nyash \
   -- output.json
 
 # Rust VM比較
@@ -1091,7 +1091,7 @@ HAKO_COMPILER_TRACK=1 # コンパイラトラック有効化
 
 2. ✅ **教材として最高の価値**
    - コンパイラ実装: `apps/selfhost-compiler/` 全体
-   - Hakorune VM実装: `apps/selfhost/vm/boxes/mir_vm_min.nyash`
+   - Hakorune VM実装: `selfhost/vm/boxes/mir_vm_min.nyash`
    - 完全な理解が可能な規模
 
 3. ✅ **保守性の革命**
@@ -1190,7 +1190,7 @@ Unified Call（開発既定ON）
 
 4) NYABI（VM Kernel Bridge）下地（未配線・既定OFF）
    - docs/abi/vm-kernel.md（関数: caps()/policy.*()/resolve_method_batch()）
-   - スケルトン: apps/selfhost/vm/boxes/vm_kernel_box.nyash（policy スタブ）
+   - スケルトン: selfhost/vm/boxes/vm_kernel_box.nyash（policy スタブ）
  - 既定OFFトグル予約: NYASH_VM_NY_KERNEL, *_TIMEOUT_MS, *_TRACE
 
 非スコープ（やらない）
@@ -1237,7 +1237,7 @@ Unified Call（開発既定ON）
 - Phase 15.5（基盤整理）: ../phase-15.5/README.md
 - Known/Rewrite 観測: src/mir/builder/{method_call_handlers.rs,builder_calls.rs}, src/debug/hub.rs
 - QuickRef（表示API）: docs/reference/language/quick-reference.md
-- Hakorune VM: apps/selfhost/vm/boxes/mir_vm_min.nyash
+- Hakorune VM: selfhost/vm/boxes/mir_vm_min.nyash
 - スモーク: tools/smokes/v2/profiles/quick/core/
 
 更新履歴
@@ -1418,7 +1418,7 @@ Unified Call（開発既定ON）
 - Throw/PHI/LLVM/マクロ/Resolver 小粒を並列に、常に quick 緑を維持する方針。
 
 参照
-- EntryBox: `apps/selfhost/vm/boxes/mini_vm_entry.hako`, `apps/hakorune/vm/boxes/hakorune_vm_entry.hako`
+- EntryBox: `selfhost/vm/boxes/mini_vm_entry.hako`, `apps/hakorune/vm/boxes/hakorune_vm_entry.hako`
 - 環境: `tools/smokes/v2/configs/env/{quick,integration,full}.env`
 - スモーク: `tools/smokes/v2/profiles/quick/selfhost/*`, `tools/smokes/v2/profiles/integration/*`, `tools/smokes/v2/suites/core/*`
 

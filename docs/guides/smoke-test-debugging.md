@@ -675,7 +675,7 @@ $ HAKO_VM_TRACE="op=compare;regs=1" \
 
 # === Step 6: 原因特定 ===
 # Mini-VM内部で ret命令の処理が間違っている可能性
-# → Mini-VM (apps/selfhost/vm/boxes/mir_vm_min.hako) のコードを確認
+# → Mini-VM (selfhost/vm/boxes/mir_vm_min.hako) のコードを確認
 
 # === Step 7: 修正・検証 ===
 # （コード修正）

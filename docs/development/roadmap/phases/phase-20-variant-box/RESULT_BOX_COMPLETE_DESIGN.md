@@ -21,7 +21,7 @@
 
 ### 1.1 現在の実装（34行）
 
-**場所**: `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/vm/boxes/result_box.hako`
+**場所**: `/home/tomoaki/git/hakorune-selfhost/selfhost/vm/boxes/result_box.hako`
 
 ```hakorune
 box ResultBox {
@@ -379,7 +379,7 @@ Result.unwrap() called on Err: file not found
 ```
 [PANIC] Result.unwrap() called on Err
   Error: file not found
-  Location: apps/selfhost/vm/boxes/phi_decode_box.hako:115
+  Location: selfhost/vm/boxes/phi_decode_box.hako:115
   Suggestion: Use unwrap_or() or expect() for safer error handling
 ```
 
@@ -406,7 +406,7 @@ Result.unwrap() called on Err: file not found
 **見積もり**: 2-3時間
 
 **成果物**:
-- `apps/selfhost/vm/boxes/result_box.hako` (84行、現在34行 → +50行)
+- `selfhost/vm/boxes/result_box.hako` (84行、現在34行 → +50行)
 - `apps/tests/result_box_extended.hako` (新規、30行)
 - `tools/smokes/v2/profiles/quick/selfhost/result_box_extended_vm.sh` (新規)
 
@@ -508,7 +508,7 @@ static box Result {
 
 #### Step 1: 並行運用（Phase 20.6）
 ```hakorune
-// 旧版: apps/selfhost/vm/boxes/result_box.hako
+// 旧版: selfhost/vm/boxes/result_box.hako
 using "selfhost/vm/boxes/result_box.hako" as ResultLegacy
 
 // 新版: @enum Result（VariantBoxベース）

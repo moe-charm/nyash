@@ -1,7 +1,7 @@
 MIR Generation — Phase 15.7 (P1)
 
 Scope
-- Migrate minimal MIR(JSON v0) generation to Nyash boxes under selfhost/compiler/pipeline_v2/ using shared helpers in apps/selfhost/common/mir/.
+- Migrate minimal MIR(JSON v0) generation to Nyash boxes under selfhost/compiler/pipeline_v2/ using shared helpers in selfhost/shared/common/mir/.
 - Keep Rust side as a JSON receiver; semantics unchanged.
 
 Boxes

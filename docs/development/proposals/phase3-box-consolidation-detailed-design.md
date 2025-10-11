@@ -13,16 +13,16 @@
 **目的**: 比較演算子マッピング・評価ロジックの完全統合
 
 **現状分析**:
-- **既存実装**: `apps/selfhost/vm/boxes/compare_ops.hako` (25行)
+- **既存実装**: `selfhost/vm/boxes/compare_ops.hako` (25行)
 - **重複箇所**:
   - `mir_vm_min.hako`: 行228-233 (6行の完全重複)
   - `op_handlers.hako`: 行67-76 (10行の完全重複、`_map_cmp_symbol` + `_eval_cmp`)
 - **検出パターン**: `if kind == "Eq"` 系の6連続if文
 
 **統合対象ファイル**:
-1. `apps/selfhost/vm/boxes/compare_ops.hako` (既存、保持)
-2. `apps/selfhost/vm/boxes/mir_vm_min.hako` (16行削除可能)
-3. `apps/selfhost/vm/boxes/op_handlers.hako` (10行削除可能)
+1. `selfhost/vm/boxes/compare_ops.hako` (既存、保持)
+2. `selfhost/vm/boxes/mir_vm_min.hako` (16行削除可能)
+3. `selfhost/vm/boxes/op_handlers.hako` (10行削除可能)
 
 **削減効果**: 319行 → 293行 (**26行削減、8.2%削減**)
 
@@ -49,7 +49,7 @@
 **目的**: 数値パース処理（to_i64, int_to_str, is_numeric_str）の統一
 
 **現状分析**:
-- **既存実装**: `apps/selfhost/common/string_helpers.hako` (86行中、数値関連42行)
+- **既存実装**: `selfhost/shared/common/string_helpers.hako` (86行中、数値関連42行)
 - **使用箇所**: 24ファイルで `to_i64` / `_str_to_int` を使用
 - **重複パターン**:
   ```hako
@@ -80,7 +80,7 @@
 - StringHelpersは既に広く使用されており、テスト済み
 
 **実装ステップ**:
-1. `apps/selfhost/common/numeric_parser.hako` を新規作成
+1. `selfhost/shared/common/numeric_parser.hako` を新規作成
 2. StringHelpers から `to_i64`, `int_to_str`, `is_numeric_str`, `read_digits` を移動
 3. 全24ファイルの `using StringHelpers` を `using NumericParserBox` に置換（数値処理のみ）
 4. JsonFragBox等のラッパー削除（`_str_to_int` → `NumericParserBox.to_i64`）
@@ -94,18 +94,18 @@
 
 **現状分析**:
 - **既存実装**:
-  - `apps/selfhost/common/json/core/json_scan.hako` (73行、seek_obj_end/seek_array_end/find_key_dual)
-  - `apps/selfhost/common/json/core/string_scan.hako` (scan_string_end)
-  - `apps/selfhost/common/json/json_cursor.hako` (20行、facade)
+  - `selfhost/shared/json/core/json_scan.hako` (73行、seek_obj_end/seek_array_end/find_key_dual)
+  - `selfhost/shared/json/core/string_scan.hako` (scan_string_end)
+  - `selfhost/shared/json/json_cursor.hako` (20行、facade)
 - **使用箇所**: 12ファイル（grep結果）
 - **重複パターン**:
   - mir_vm_min.hako: 行47-48に独自の `_seek_array_end` 実装（20行）
 
 **統合対象ファイル**:
-1. `apps/selfhost/common/json/core/json_scan.hako` (保持)
-2. `apps/selfhost/common/json/core/string_scan.hako` (保持)
-3. `apps/selfhost/common/json/json_cursor.hako` (保持、facade)
-4. `apps/selfhost/vm/boxes/mir_vm_min.hako` (行47-49の独自実装を削除)
+1. `selfhost/shared/json/core/json_scan.hako` (保持)
+2. `selfhost/shared/json/core/string_scan.hako` (保持)
+3. `selfhost/shared/json/json_cursor.hako` (保持、facade)
+4. `selfhost/vm/boxes/mir_vm_min.hako` (行47-49の独自実装を削除)
 
 **削減効果**: 319行 → 299行 (**20行削除、6.3%削減**)
 
@@ -239,7 +239,7 @@
 
 **理由**:
 1. **ResultBox が既に存在**:
-   - `apps/selfhost/vm/boxes/result_box.hako` (34行)
+   - `selfhost/vm/boxes/result_box.hako` (34行)
    - Result.ok(v) / Result.err(msg) パターン実装済み
 2. **段階的移行が必要**:
    - 現在: print-based error（即座に表示）
@@ -264,7 +264,7 @@
 **目的**: Result型パターンの全面導入
 
 **現状分析**:
-- **既存実装**: `apps/selfhost/vm/boxes/result_box.hako` (34行)
+- **既存実装**: `selfhost/vm/boxes/result_box.hako` (34行)
   ```hako
   box ResultBox {
     _val: Box
@@ -328,10 +328,10 @@
 #### Day 1: CompareOpsBox統合（26行削減）
 ```bash
 # 実装ステップ
-1. apps/selfhost/vm/boxes/mir_vm_min.hako:
+1. selfhost/vm/boxes/mir_vm_min.hako:
    - 行228-233, 299-304 を CompareOpsBox.eval(cmp, lv, rv) に置換
 
-2. apps/selfhost/vm/boxes/op_handlers.hako:
+2. selfhost/vm/boxes/op_handlers.hako:
    - 行67-76 の _map_cmp_symbol, _eval_cmp を削除
    - 行67→CompareOpsBox.map_symbol(), 行68→CompareOpsBox.eval() に置換
 
@@ -347,7 +347,7 @@
 #### Day 2: JsonScannerBox統合（20行削減）
 ```bash
 # 実装ステップ
-1. apps/selfhost/vm/boxes/mir_vm_min.hako:
+1. selfhost/vm/boxes/mir_vm_min.hako:
    - 冒頭に using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox 追加
    - 行47-49 の _seek_array_end, _block_insts_end 削除
    - 行78等の使用箇所を JsonCursorBox.seek_array_end() に置換
@@ -367,7 +367,7 @@
 #### Day 3-4: NumericParserBox実装（10-15行削減）
 ```bash
 # 実装ステップ
-1. apps/selfhost/common/numeric_parser.hako 新規作成:
+1. selfhost/shared/common/numeric_parser.hako 新規作成:
    static box NumericParserBox {
      to_i64(x) { ... }        // StringHelpers から移動
      int_to_str(n) { ... }
@@ -375,7 +375,7 @@
      read_digits(text, pos) { ... }
    }
 
-2. apps/selfhost/common/string_helpers.hako:
+2. selfhost/shared/common/string_helpers.hako:
    - 数値処理メソッド削除（42行削除）
    - json_quote() のみ残す（44行に縮小）
 
@@ -514,19 +514,19 @@ local cv = CompareOpsBox.eval(cmp, lv, rv)
 ## 📚 参考資料
 
 ### 分析対象ファイル
-- `apps/selfhost/vm/boxes/mir_vm_min.hako` (319行)
-- `apps/selfhost/common/json/mir_builder_min.hako` (397行)
-- `apps/selfhost/common/string_helpers.hako` (86行)
-- `apps/selfhost/common/json/utils/json_frag.hako` (69行)
-- `apps/selfhost/vm/boxes/compare_ops.hako` (25行)
-- `apps/selfhost/vm/boxes/op_handlers.hako` (143行)
-- `apps/selfhost/vm/boxes/result_box.hako` (34行)
+- `selfhost/vm/boxes/mir_vm_min.hako` (319行)
+- `selfhost/shared/json/mir_builder_min.hako` (397行)
+- `selfhost/shared/common/string_helpers.hako` (86行)
+- `selfhost/shared/json/utils/json_frag.hako` (69行)
+- `selfhost/vm/boxes/compare_ops.hako` (25行)
+- `selfhost/vm/boxes/op_handlers.hako` (143行)
+- `selfhost/vm/boxes/result_box.hako` (34行)
 
 ### 既存Box（活用対象）
-- CompareOpsBox: apps/selfhost/vm/boxes/compare_ops.hako
-- JsonScanBox: apps/selfhost/common/json/core/json_scan.hako
-- JsonCursorBox: apps/selfhost/common/json/json_cursor.hako
-- ResultBox: apps/selfhost/vm/boxes/result_box.hako
+- CompareOpsBox: selfhost/vm/boxes/compare_ops.hako
+- JsonScanBox: selfhost/shared/json/core/json_scan.hako
+- JsonCursorBox: selfhost/shared/json/json_cursor.hako
+- ResultBox: selfhost/vm/boxes/result_box.hako
 
 ### スモークテスト
 ```bash

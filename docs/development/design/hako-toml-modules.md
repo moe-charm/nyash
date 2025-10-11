@@ -8,7 +8,7 @@ Goal
 Design (Option C + Overrides)
 - Auto‑discovery
   - Scan `apps/**/*.hako` and register namespaces by path:
-    - `apps/selfhost/vm/boxes/mir_vm_min.hako` → `selfhost.vm.boxes.mir_vm_min`
+    - `selfhost/vm/boxes/mir_vm_min.hako` → `selfhost.vm.boxes.mir_vm_min`
     - `apps/hakorune/vm/boxes/inst_scan.hako` → `hakorune.vm.boxes.inst_scan`
   - This becomes the implicit [modules] table unless overridden.
 
@@ -22,7 +22,7 @@ Design (Option C + Overrides)
   - `[modules.overrides]`: explicit path for specific keys (takes precedence).
     ```toml
     [modules.overrides]
-    selfhost.vm.entry = "apps/selfhost/vm/boxes/mini_vm_entry.hako"
+    selfhost.vm.entry = "selfhost/vm/boxes/mini_vm_entry.hako"
     hakorune.vm.entry = "apps/hakorune/vm/boxes/hakorune_vm_entry.hako"
     ```
   - `[modules.options]`: discovery options（既定ON、除外強化）
@@ -49,7 +49,7 @@ Workspace (module manifests)
 - Resolver wiring: also accepts `module.hako` as a fallback manifest when TOML is absent (same priority as shown by `--list-modules`).
 - Declare per‑module boundary and public exports only.
   ```toml
-  # apps/selfhost/vm/hako_module.toml
+  # selfhost/vm/hako_module.toml
   [module]
   name = "selfhost.vm"
   version = "1.0.0"
@@ -62,7 +62,7 @@ Workspace (module manifests)
   ```toml
   [modules.workspace]
   members = [
-    "apps/selfhost/vm/hako_module.toml",
+    "selfhost/vm/hako_module.toml",
     "apps/hakorune/vm/hako_module.toml",
   ]
   ```
@@ -104,10 +104,10 @@ Labels in list-modules
 Dry‑run (preview)
 ```bash
 hako --list-modules
-# [workspace:hako_module] selfhost.vm.entry → apps/selfhost/vm/boxes/mini_vm_entry.hako
+# [workspace:hako_module] selfhost.vm.entry → selfhost/vm/boxes/mini_vm_entry.hako
 # [workspace:module_hako] demo.modhako.hello → apps/examples/module_hako_demo/hello_box.hako
 # [override] selfhost.tools.dep_tree_core → apps/selfhost/tools/dep_tree_core.hako
-# [auto] selfhost.vm.boxes.mir_vm_min → apps/selfhost/vm/boxes/mir_vm_min.hako
+# [auto] selfhost.vm.boxes.mir_vm_min → selfhost/vm/boxes/mir_vm_min.hako
 ```
 
 

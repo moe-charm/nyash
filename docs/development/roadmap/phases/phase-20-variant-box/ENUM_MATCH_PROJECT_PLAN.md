@@ -484,7 +484,7 @@ This document provides a comprehensive, executable project plan for implementing
 
 **Tasks**:
 1. **Identify error handling locations** (2 hours)
-   - File: `apps/selfhost/vm/boxes/result_box.hako` usages
+   - File: `selfhost/vm/boxes/result_box.hako` usages
    - Find: if-else chains checking `.is_ok()`
    - Candidates: 3-5 locations in Mini-VM
 

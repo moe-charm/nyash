@@ -36,7 +36,7 @@ Ret ポリシー（Fail‑Fast）
 
 
 ### OperatorBox（デバッグ用）
-- `apps/selfhost/vm/boxes/operator_box.hako`
+- `selfhost/vm/boxes/operator_box.hako`
 - 目的: Mini‑VM/StepRunner から比較・算術を箱経由で呼び出し、ネイティブ評価とのパリティ確認や観測に使う。
 - 既定: 未使用（非再入ポリシーのため、Rust VM 側の実行核からは呼び戻さない）。
 - 使い方（例）:

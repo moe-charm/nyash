@@ -16,7 +16,7 @@ The builder emits MIR from Nyash source. Historically, instance calls could trav
 - Mini‑VM: Single-pass, brace-balanced instruction segmentation; v0/v1 compare forms supported.
 
 ## 4. Implementation
-Key modules in builder (RouterPolicy, ReceiverInference, LocalSSA/materialize, VarMapGuard) and MirVmMin implemented in Nyash (apps/selfhost/vm/boxes/mir_vm_min.nyash). Flags are default-OFF for diagnostics; behavior remains unchanged by default.
+Key modules in builder (RouterPolicy, ReceiverInference, LocalSSA/materialize, VarMapGuard) and MirVmMin implemented in Nyash (selfhost/vm/boxes/mir_vm_min.nyash). Flags are default-OFF for diagnostics; behavior remains unchanged by default.
 
 ## 5. Evaluation
 - Quick profile: 72/72 PASS (includes new Mini‑VM edges: mixed compare, branch undef cond, jump chain, div/mod zero, no-ret fallback).

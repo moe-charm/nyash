@@ -10,7 +10,7 @@
 
 ### ✅ 既存の Result 実装
 
-**場所**: `/home/tomoaki/git/hakorune-selfhost/apps/selfhost/vm/boxes/result_box.hako`
+**場所**: `/home/tomoaki/git/hakorune-selfhost/selfhost/vm/boxes/result_box.hako`
 
 ```nyash
 // result_box.hako — Result / ResultBox
@@ -48,8 +48,8 @@ static box Result {
 ```
 
 **現在の使用箇所** (3ファイル):
-- `apps/selfhost/vm/boxes/phi_decode_box.hako` - PHI命令デコード結果
-- `apps/selfhost/vm/boxes/mir_vm_min.hako` - Mini-VM内部
+- `selfhost/vm/boxes/phi_decode_box.hako` - PHI命令デコード結果
+- `selfhost/vm/boxes/mir_vm_min.hako` - Mini-VM内部
 - `apps/hakorune/vm/boxes/hakorune_vm_min.hako` - Hakorune VM内部
 
 **現在の using パターン**:
@@ -77,7 +77,7 @@ Option型は現在実装されていない。null チェックを直接コード
 
 #### 🚫 移動が必要な理由
 
-**現在の場所**: `apps/selfhost/vm/boxes/result_box.hako`
+**現在の場所**: `selfhost/vm/boxes/result_box.hako`
 
 **問題点**:
 - VM内部の実装詳細に見える（実際は汎用型）
@@ -137,10 +137,10 @@ using Result as Res
 
 **実例**:
 ```nyash
-// apps/selfhost/vm/boxes/phi_decode_box.hako から
+// selfhost/vm/boxes/phi_decode_box.hako から
 using "apps/lib/boxes/result.hako" as Result
 // ↓ 解決順序
-// 1. apps/selfhost/vm/boxes/apps/lib/boxes/result.hako (存在しない)
+// 1. selfhost/vm/boxes/apps/lib/boxes/result.hako (存在しない)
 // 2. $NYASH_ROOT/apps/lib/boxes/result.hako (成功!)
 ```
 
@@ -262,7 +262,7 @@ static box Option {
 **JsonCursorBox統合時のResult<T,E>活用例**:
 
 ```nyash
-// apps/selfhost/common/json/json_cursor.hako
+// selfhost/shared/json/json_cursor.hako
 using "apps/lib/boxes/result.hako" as Result
 
 static box JsonCursorBox {
@@ -286,7 +286,7 @@ static box JsonCursorBox {
 
 **呼び出し側**:
 ```nyash
-// apps/selfhost/vm/boxes/phi_decode_box.hako
+// selfhost/vm/boxes/phi_decode_box.hako
 local result = JsonCursorBox.seek_array_end(seg, arr_br)
 if result.is_ok() == 0 {
   me._tprint("[ERROR] " + result.error())
@@ -298,7 +298,7 @@ local endp = result.value()
 #### InstructionDispatcherでのOption<T>活用例
 
 ```nyash
-// apps/selfhost/vm/boxes/instruction_scanner.hako
+// selfhost/vm/boxes/instruction_scanner.hako
 using "apps/lib/boxes/option.hako" as Option
 
 static box InstructionScannerBox {
@@ -342,10 +342,10 @@ if maybe_inst.is_some() == 1 {
 - [ ] メソッド: `some()`, `none()`, `is_some()`, `is_none()`, `unwrap()`, `unwrap_or()`
 
 #### Step 1.2: Result.hako 移動
-- [ ] `apps/selfhost/vm/boxes/result_box.hako` → `apps/lib/boxes/result.hako` に移動
+- [ ] `selfhost/vm/boxes/result_box.hako` → `apps/lib/boxes/result.hako` に移動
 - [ ] 既存の3ファイルの using パス更新
-  - `apps/selfhost/vm/boxes/phi_decode_box.hako`
-  - `apps/selfhost/vm/boxes/mir_vm_min.hako`
+  - `selfhost/vm/boxes/phi_decode_box.hako`
+  - `selfhost/vm/boxes/mir_vm_min.hako`
   - `apps/hakorune/vm/boxes/hakorune_vm_min.hako`
 
 #### Step 1.3: スモークテスト追加

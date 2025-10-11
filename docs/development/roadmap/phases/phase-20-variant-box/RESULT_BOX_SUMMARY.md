@@ -183,7 +183,7 @@ unwrap() {
 
 ### 参考資料
 - **[DESIGN.md](./DESIGN.md)** - VariantBox設計（Phase 20.6）
-- **[apps/selfhost/vm/boxes/result_box.hako](../../../../apps/selfhost/vm/boxes/result_box.hako)** - 現在の実装（34行）
+- **[selfhost/vm/boxes/result_box.hako](../../../../selfhost/vm/boxes/result_box.hako)** - 現在の実装（34行）
 
 ---
 
@@ -192,7 +192,7 @@ unwrap() {
 ### 即座実行（2-3時間）
 
 1. ✅ 設計完了
-2. ⬜ `apps/selfhost/vm/boxes/result_box.hako` 編集
+2. ⬜ `selfhost/vm/boxes/result_box.hako` 編集
    - 5つのメソッド追加（34行 → 84行）
 3. ⬜ テストファイル作成
 4. ⬜ スモークテスト実行

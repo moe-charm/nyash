@@ -19,11 +19,11 @@
 
 **目的**: 5箇所で重複する文字列・数値変換を統一
 
-**新規ファイル**: `apps/selfhost/common/utils/string_utils.hako`
+**新規ファイル**: `selfhost/shared/common/utils/string_utils.hako`
 
 **実装内容**:
 ```hakorune
-// apps/selfhost/common/utils/string_utils.hako
+// selfhost/shared/common/utils/string_utils.hako
 static box StringUtilsBox {
   // 文字列 → 整数変換（負数対応）
   str_to_int(s: String) → Int {
@@ -124,11 +124,11 @@ static box StringUtilsBox {
 
 **目的**: 5箇所で重複する文字列スキャン機能を統一
 
-**新規ファイル**: `apps/selfhost/common/utils/scan_utils.hako`
+**新規ファイル**: `selfhost/shared/common/utils/scan_utils.hako`
 
 **実装内容**:
 ```hakorune
-// apps/selfhost/common/utils/scan_utils.hako
+// selfhost/shared/common/utils/scan_utils.hako
 using selfhost.common.utils.string_utils as StringUtilsBox
 
 static box ScanUtilsBox {
@@ -234,7 +234,7 @@ using selfhost.common.utils.string_utils as StringUtilsBox
 **検証**:
 ```bash
 # 循環依存チェック
-grep -r "using.*selfhost.vm" apps/selfhost/common/
+grep -r "using.*selfhost.vm" selfhost/shared/common/
 # → 結果が0件であることを確認
 ```
 
@@ -327,19 +327,19 @@ apps/selfhost/
 **実施手順**:
 ```bash
 # 1. ディレクトリ作成
-mkdir -p apps/selfhost/common/{utils,json,ops}
+mkdir -p selfhost/shared/common/{utils,json,ops}
 mkdir -p apps/selfhost/vm/tests
 
 # 2. ファイル移動
 # StringUtilsBox/ScanUtilsBox新設（Task 1.1, 1.2）
 # 既存ファイル移動
-mv apps/selfhost/vm/boxes/json_cur.hako apps/selfhost/common/json/json_cursor.hako
-mv apps/selfhost/vm/boxes/json_scan.hako apps/selfhost/common/json/
-mv apps/selfhost/vm/boxes/json_frag.hako apps/selfhost/common/json/
-mv apps/selfhost/vm/boxes/string_scan.hako apps/selfhost/common/json/
-mv apps/selfhost/vm/boxes/arithmetic.hako apps/selfhost/common/ops/
-mv apps/selfhost/vm/boxes/compare_ops.hako apps/selfhost/common/ops/
-mv apps/selfhost/vm/boxes/operator_box.hako apps/selfhost/common/ops/
+mv selfhost/vm/boxes/json_cur.hako selfhost/shared/json/json_cursor.hako
+mv selfhost/vm/boxes/json_scan.hako selfhost/shared/json/
+mv selfhost/vm/boxes/json_frag.hako selfhost/shared/json/
+mv selfhost/vm/boxes/string_scan.hako selfhost/shared/json/
+mv selfhost/vm/boxes/arithmetic.hako selfhost/shared/common/ops/
+mv selfhost/vm/boxes/compare_ops.hako selfhost/shared/common/ops/
+mv selfhost/vm/boxes/operator_box.hako selfhost/shared/common/ops/
 
 # 3. using文の一括修正
 # 例: using "selfhost/vm/boxes/json_scan.hako"
@@ -516,7 +516,7 @@ chmod +x tools/smokes/v2/profiles/quick/selfhost/mini_vm_suite.sh
 
 #### Task 4.1: vm/README.md作成
 
-**新規ファイル**: `apps/selfhost/vm/README.md`
+**新規ファイル**: `selfhost/vm/README.md`
 
 ```markdown
 # Mini-VM - Hakorune MIR実行器
@@ -563,7 +563,7 @@ print(result)
 
 #### Task 4.2: common/README.md作成
 
-**新規ファイル**: `apps/selfhost/common/README.md`
+**新規ファイル**: `selfhost/shared/common/README.md`
 
 ```markdown
 # 共通モジュール (Common Modules)

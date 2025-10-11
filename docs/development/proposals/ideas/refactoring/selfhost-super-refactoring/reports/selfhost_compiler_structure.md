@@ -268,7 +268,7 @@ compiler.hako (Main)
             ├─→ EmitNewBoxBox ─→ MirJsonBuilderMin
             ├─→ MirCallBox ─→ MirJsonBuilderMin
             ├─→ LocalSSA (builder/ssa/local.hako)
-            └─→ MirJsonV1Adapter (外部: apps/selfhost/common/json/)
+            └─→ MirJsonV1Adapter (外部: selfhost/shared/json/)
 
 ExecutionPipelineBox
     │
@@ -286,7 +286,7 @@ builder/mod.hako (CompilerBuilder)
 
 boxes/mir_emitter_box.hako (MirEmitterBox)
     │
-    ├─→ MirJsonBuilderMin (外部: apps/selfhost/common/json/)
+    ├─→ MirJsonBuilderMin (外部: selfhost/shared/json/)
     └─→ JSON (外部: apps/lib/json_native/stringify.hako)
 ```
 
@@ -295,8 +295,8 @@ boxes/mir_emitter_box.hako (MirEmitterBox)
 selfhost.common.json.mir_builder_min     - MIR JSON生成（最小版）
 selfhost.common.json.mir_v1_adapter      - MIR v1/v0変換
 apps/lib/json_native/stringify.hako      - JSON文字列化
-apps/selfhost/common/json/mir_builder2   - MIR JSON生成（v2）
-apps/selfhost/vm/boxes/json_frag.hako    - JSON断片操作
+selfhost/shared/json/mir_builder2   - MIR JSON生成（v2）
+selfhost/vm/boxes/json_frag.hako    - JSON断片操作
 ```
 
 ---

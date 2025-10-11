@@ -99,7 +99,7 @@
 #### [mini_vm_structure.md](reports/mini_vm_structure.md) - Mini-VM構造詳細
 **サイズ**: 17KB | **読了時間**: 30分
 - エグゼクティブサマリー
-- ディレクトリ構造（apps/selfhost/vm/ + apps/selfhost/common/）
+- ディレクトリ構造（apps/selfhost/vm/ + selfhost/shared/common/）
 - 主要コンポーネント詳細（23箱）
 - 依存関係マップ
 - コード規模分析（52ファイル、~3,400行）

@@ -31,7 +31,7 @@ Hakorune言語にモダンなエラーハンドリング機能を追加:
 - **Result<T,E>**: 成功/失敗を表現（例外の型安全版）
 
 ### 既存実装との関係
-- **既存**: `apps/selfhost/vm/boxes/result_box.hako` （基本的なResultBox）
+- **既存**: `selfhost/vm/boxes/result_box.hako` （基本的なResultBox）
 - **新規**: `apps/lib/boxes/option_std.hako` （Option実装）
 - **拡張**: `apps/lib/boxes/result_std.hako` （Resultの高階関数追加）
 
@@ -235,7 +235,7 @@ using "./option_std.hako"  // パースエラー
 cat docs/development/proposals/ideas/improvements/option-result-quick-start.md
 
 # 既存実装確認
-cat apps/selfhost/vm/boxes/result_box.hako
+cat selfhost/vm/boxes/result_box.hako
 cat apps/lib/boxes/string_std.hako
 
 # Phase 15.11成功事例確認
@@ -372,7 +372,7 @@ export NYASH_DISABLE_PLUGINS=1
 - [テスト戦略](./option-result-test-strategy.md) - 完全な計画
 
 ### 参考実装
-- `apps/selfhost/vm/boxes/result_box.hako` - 既存ResultBox
+- `selfhost/vm/boxes/result_box.hako` - 既存ResultBox
 - `apps/lib/boxes/string_std.hako` - StringStd（パターン参考）
 - `apps/selfhost/test_string_helpers.hako` - Phase 15.11テスト
 

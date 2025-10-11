@@ -164,8 +164,8 @@
 ```bash
 # 調査対象
 apps/selfhost/vm/              # VM本体（32ファイル）
-apps/selfhost/common/          # 共通モジュール（4ファイル）
-apps/selfhost/common/json/     # JSON処理（1ファイル）
+selfhost/shared/common/          # 共通モジュール（4ファイル）
+selfhost/shared/json/     # JSON処理（1ファイル）
 
 # 除外
 apps/selfhost/parser/          # パーサー（別調査対象）

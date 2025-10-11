@@ -396,7 +396,7 @@ if __match_scrutinee._tag == "Ok" {
 
 **Files**:
 - `apps/tests/match_patterns.hako` (15 test patterns)
-- `apps/selfhost/vm/boxes/*_with_match.hako` (3-5 files)
+- `selfhost/vm/boxes/*_with_match.hako` (3-5 files)
 
 **Test Patterns**:
 1. Simple 2-arm match
@@ -575,7 +575,7 @@ if __match_scrutinee._tag == "Ok" {
 **Existing Option/Result**:
 - `apps/lib/boxes/option.hako` - Existing implementation (commit: e441b2ba)
 - `apps/lib/boxes/result.hako` - Existing implementation (commit: e441b2ba)
-- `apps/selfhost/vm/boxes/result_box.hako` (34 lines) - Mini-VM implementation
+- `selfhost/vm/boxes/result_box.hako` (34 lines) - Mini-VM implementation
 
 ### Strategic Context
 

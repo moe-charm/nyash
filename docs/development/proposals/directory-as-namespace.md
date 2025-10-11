@@ -29,7 +29,7 @@ apps/
 ### **ルール1: ディレクトリ構造 = ネームスペース階層**
 
 ```
-apps/selfhost/vm/boxes/
+selfhost/vm/boxes/
 └── Entry.hako  → selfhost.vm.boxes.Entry
 ```
 
@@ -84,9 +84,9 @@ enable_discovery = true
 ```toml
 # hako.toml（100行以上の手動定義）
 [modules]
-"selfhost.vm.entry" = "apps/selfhost/vm/boxes/mini_vm_entry.hako"
-"selfhost.vm.mir_min" = "apps/selfhost/vm/boxes/mir_vm_min.hako"
-"selfhost.vm.core" = "apps/selfhost/vm/boxes/mini_vm_core.hako"
+"selfhost.vm.entry" = "selfhost/vm/boxes/mini_vm_entry.hako"
+"selfhost.vm.mir_min" = "selfhost/vm/boxes/mir_vm_min.hako"
+"selfhost.vm.core" = "selfhost/vm/boxes/mini_vm_core.hako"
 # ... 97行続く
 ```
 

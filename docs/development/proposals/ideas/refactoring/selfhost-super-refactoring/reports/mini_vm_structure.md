@@ -139,7 +139,7 @@ mir_vm_min.hako
 
 ### 5. **共通モジュール** (Common Modules)
 
-#### `mini_vm_scan.hako` (206行) - apps/selfhost/common/
+#### `mini_vm_scan.hako` (206行) - selfhost/shared/common/
 **責務**: スキャンと数値ヘルパー
 - **index_of_from**: 部分文字列検索
 - **find_balanced_array_end/object_end**: 括弧対応
@@ -147,14 +147,14 @@ mir_vm_min.hako
 - **read_digits**: 数字列読み込み
 - **sum_***: 数値集計関数（複数バリエーション）
 
-#### `mini_vm_binop.hako` (277行) - apps/selfhost/common/
+#### `mini_vm_binop.hako` (277行) - selfhost/shared/common/
 **責務**: BinaryOp処理（Print内の二項演算）
 - **try_print_binop_at**: BinaryOp(+)の出力
 - **string+string**: 文字列連結対応
 - **int+int**: 整数加算対応
 - **sum_***: 複数のフォールバック戦略
 
-#### `mini_vm_compare.hako` (48行) - apps/selfhost/common/
+#### `mini_vm_compare.hako` (48行) - selfhost/shared/common/
 **責務**: Compare処理（Print内の比較演算）
 - **try_print_compare_at**: Compare命令の出力
 - **対応演算**: <, ==, <=, >, >=, !=
@@ -359,7 +359,7 @@ eval(kind, a, b) {
 
 **提案**: 共通ユーティリティ箱に統一
 ```hakorune
-// 新規: apps/selfhost/common/string_utils.hako
+// 新規: selfhost/shared/common/string_utils.hako
 static box StringUtilsBox {
   str_to_int(s) { ... }
   int_to_str(n) { ... }
@@ -424,9 +424,9 @@ apps/selfhost/vm/tests/
 
 **提案**: 以下のドキュメント追加
 ```
-apps/selfhost/vm/README.md              # Mini-VM概要
-apps/selfhost/vm/boxes/README.md        # 箱の説明
-apps/selfhost/common/README.md          # 共通モジュール説明
+selfhost/vm/README.md              # Mini-VM概要
+selfhost/vm/boxes/README.md        # 箱の説明
+selfhost/shared/common/README.md          # 共通モジュール説明
 docs/development/mini-vm-architecture.md  # アーキテクチャ設計書
 ```
 
@@ -435,12 +435,12 @@ docs/development/mini-vm-architecture.md  # アーキテクチャ設計書
 ## 🎯 推奨される改善ロードマップ
 
 ### Phase 1: コード重複削除（優先度: 高）
-1. **StringUtilsBox新設** (apps/selfhost/common/string_utils.hako)
+1. **StringUtilsBox新設** (selfhost/shared/common/string_utils.hako)
    - str_to_int(), int_to_str(), is_numeric_str()を統合
    - 全箱をStringUtilsBox使用に移行
    - **効果**: 約150行削減
 
-2. **ScanUtilsBox新設** (apps/selfhost/common/scan_utils.hako)
+2. **ScanUtilsBox新設** (selfhost/shared/common/scan_utils.hako)
    - index_of_from(), read_digits()を統合
    - **効果**: 約100行削減
 

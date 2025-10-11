@@ -103,7 +103,7 @@ HakoruneでセルフホストMini-VMを実装し、MIR16凍結セット（基本
 - **参考実装**:
   - Rust VM（/src/backend/mir_interpreter/）- 本番品質アーキテクチャ
   - LLVM Python（/src/llvm_py/）- 8,370行、MIR16 100%実装済み
-  - 既存Mini-VM（/apps/selfhost/vm/boxes/）- 1,831行、部分実装
+  - 既存Mini-VM（/selfhost/vm/boxes/）- 1,831行、部分実装
 
 ### 成功基準
 1. **機能**: MIR16命令すべて実行可能
@@ -174,7 +174,7 @@ MIR構造体
 - [ ] **JSON MIRパーサー基盤**（1日）
   - JsonCursorBox活用（既存実装流用）
   - block/instructions構造解析
-  - 参考: `/apps/selfhost/common/json/json_cursor.hako`
+  - 参考: `/selfhost/shared/json/json_cursor.hako`
 
 - [ ] **命令ディスパッチャ基盤**（1日）
   - InstructionDispatcherBox実装
@@ -228,7 +228,7 @@ return 42  // → MIR: const v%1=42; ret v%1
 
 - [ ] **Compare**（1日）
   - 比較: Eq, Ne, Lt, Le, Gt, Ge
-  - 参考: `/apps/selfhost/common/mini_vm_compare.hako`
+  - 参考: `/selfhost/shared/common/mini_vm_compare.hako`
 
 - [ ] **TypeOp**（0.5日）
   - Cast（型変換）
@@ -660,7 +660,7 @@ tools/smokes/v2/run.sh --profile quick
 - [Phase 15.8 WASM実装](../../roadmap/phases/phase-15.8/README.md) - PHI実装参考
 - [LLVM Python実装](../../../../src/llvm_py/README.md) - 8,370行、MIR16 100%実装
 - [Rust VM実装](../../../../src/backend/mir_interpreter/README.md) - 本番品質参考
-- [既存Mini-VM](../../../../apps/selfhost/vm/boxes/README.md) - Hakorune実装参考
+- [既存Mini-VM](../../../../selfhost/vm/boxes/README.md) - Hakorune実装参考
 
 ### 外部リソース
 - [Box-First原則](../../../guides/box-first-principle.md)

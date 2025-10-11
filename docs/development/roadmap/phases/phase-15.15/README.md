@@ -39,7 +39,7 @@ box MirJsonBuilderMin {
 ```
 
 **ファイル**:
-- `apps/selfhost/common/json/mir_builder_min.hako` (377→415行, +38)
+- `selfhost/shared/json/mir_builder_min.hako` (377→415行, +38)
 - 7つのスモークテスト更新（使用パターン変更）
 
 **テスト**: 302/302 PASS ✅
@@ -66,8 +66,8 @@ find_balanced_array_end(json, idx) { return JsonCursorBox.seek_array_end(json, i
 ```
 
 **ファイル**:
-- `apps/selfhost/common/mini_vm_scan.hako` (132→80行, -52)
-- `apps/selfhost/vm/boxes/phi_apply_box.hako` (import追加)
+- `selfhost/shared/common/mini_vm_scan.hako` (132→80行, -52)
+- `selfhost/vm/boxes/phi_apply_box.hako` (import追加)
 
 **テスト**: 302/302 PASS ✅
 
@@ -99,8 +99,8 @@ _str_to_int(s) { return StringHelpers.to_i64(s) }
 
 **ファイル**:
 - `apps/selfhost/vm/collect_mixed_smoke.hako` (-18行)
-- `apps/selfhost/vm/boxes/arithmetic.hako` (-14行)
-- `apps/selfhost/vm/boxes/phi_apply_box.hako` (-1行、既に委譲済み確認）
+- `selfhost/vm/boxes/arithmetic.hako` (-14行)
+- `selfhost/vm/boxes/phi_apply_box.hako` (-1行、既に委譲済み確認）
 
 **テスト**: 302/302 PASS ✅
 

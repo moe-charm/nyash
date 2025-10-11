@@ -6,7 +6,7 @@
 
 ## 🚀 Action 1: CompareOpsBox統合（1時間、26行削減）
 
-### 修正ファイル: `apps/selfhost/vm/boxes/mir_vm_min.hako`
+### 修正ファイル: `selfhost/vm/boxes/mir_vm_min.hako`
 
 **削除箇所1**（行228-233）:
 ```hako
@@ -34,7 +34,7 @@ local cv = CompareOpsBox.eval(cmp, lv, rv)
 using "selfhost/vm/boxes/compare_ops.hako" as CompareOpsBox
 ```
 
-### 修正ファイル: `apps/selfhost/vm/boxes/op_handlers.hako`
+### 修正ファイル: `selfhost/vm/boxes/op_handlers.hako`
 
 **削除箇所**（行67-76）:
 ```hako
@@ -57,7 +57,7 @@ tools/smokes/v2/run.sh --profile quick
 
 ### コミット
 ```bash
-git add apps/selfhost/vm/boxes/mir_vm_min.hako apps/selfhost/vm/boxes/op_handlers.hako
+git add selfhost/vm/boxes/mir_vm_min.hako selfhost/vm/boxes/op_handlers.hako
 git commit -m "refactor(vm): consolidate comparison operators into CompareOpsBox (-26 lines)"
 ```
 
@@ -65,7 +65,7 @@ git commit -m "refactor(vm): consolidate comparison operators into CompareOpsBox
 
 ## 🚀 Action 2: JsonScannerBox統合（1時間、20行削除）
 
-### 修正ファイル: `apps/selfhost/vm/boxes/mir_vm_min.hako`
+### 修正ファイル: `selfhost/vm/boxes/mir_vm_min.hako`
 
 **using追加**（冒頭に追加）:
 ```hako
@@ -99,7 +99,7 @@ tools/smokes/v2/run.sh --profile quick
 
 ### コミット
 ```bash
-git add apps/selfhost/vm/boxes/mir_vm_min.hako
+git add selfhost/vm/boxes/mir_vm_min.hako
 git commit -m "refactor(vm): use JsonCursorBox.seek_array_end instead of local impl (-20 lines)"
 ```
 
@@ -129,13 +129,13 @@ git checkout -b refactor/phase3-box-consolidation
 # - mir_vm_min.hako: 行228-233, 299-304 を CompareOpsBox.eval() に置換
 # - op_handlers.hako: 行67-76 削除
 tools/smokes/v2/run.sh --profile quick
-git add apps/selfhost/vm/boxes/{mir_vm_min,op_handlers}.hako
+git add selfhost/vm/boxes/{mir_vm_min,op_handlers}.hako
 git commit -m "refactor(vm): consolidate comparison operators into CompareOpsBox (-26 lines)"
 
 # 3. JsonScannerBox統合（1時間）
 # - mir_vm_min.hako: using JsonCursorBox 追加、行47-49削除、行78置換
 tools/smokes/v2/run.sh --profile quick
-git add apps/selfhost/vm/boxes/mir_vm_min.hako
+git add selfhost/vm/boxes/mir_vm_min.hako
 git commit -m "refactor(vm): use JsonCursorBox.seek_array_end instead of local impl (-20 lines)"
 
 # 4. 統合テスト

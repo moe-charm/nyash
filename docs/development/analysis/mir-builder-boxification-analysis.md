@@ -84,12 +84,12 @@ static box JsonStringParserBox {
 **問題**: MirJsonBuilder2とMirJsonBuilderMinで類似の状態管理
 
 **発見箇所**:
-- `apps/selfhost/common/json/mir_builder2.hako` (160行)
+- `selfhost/shared/json/mir_builder2.hako` (160行)
   - MapBox経由の状態管理 (L8-23)
   - `_get_buf()`, `_set_buf()`, `_append()` (L26-28)
   - `_cur_insts()` - 現在のinstructions配列取得 (L39-48)
 
-- `apps/selfhost/common/json/mir_builder_min.hako` (437行)
+- `selfhost/shared/json/mir_builder_min.hako` (437行)
   - フィールド直接管理 (L12-19)
   - `_get_buf()`, `_set_buf()`, `_append()` (L33-38: **同一処理**)
   - `_cur_insts()` (L339-351: **ほぼ同一処理**)
@@ -784,8 +784,8 @@ box CompilerConfigBox {
    - [ ] パフォーマンステスト
 
 **成果物**:
-- `apps/selfhost/common/json/json_string_parser_box.hako`
-- `apps/selfhost/common/string_builder_box.hako`
+- `selfhost/shared/json/json_string_parser_box.hako`
+- `selfhost/shared/common/string_builder_box.hako`
 
 ---
 
@@ -805,7 +805,7 @@ box CompilerConfigBox {
    - [ ] 回帰テスト実行
 
 **成果物**:
-- `apps/selfhost/common/json/mir_builder_context.hako`
+- `selfhost/shared/json/mir_builder_context.hako`
 
 ---
 
@@ -958,8 +958,8 @@ box CompilerConfigBox {
 - `apps/selfhost-compiler/builder/rewrite/known.hako` (9行)
 
 **MIR Builder系**:
-- `apps/selfhost/common/json/mir_builder2.hako` (160行)
-- `apps/selfhost/common/json/mir_builder_min.hako` (437行)
+- `selfhost/shared/json/mir_builder2.hako` (160行)
+- `selfhost/shared/json/mir_builder_min.hako` (437行)
 - `selfhost/compiler/pipeline_v2/mir_builder_box.hako` (35行)
 
 **Emit系**:
@@ -971,9 +971,9 @@ box CompilerConfigBox {
 - `selfhost/compiler/pipeline_v2/stage1_extract_flow.hako` (206行)
 
 **共通系**:
-- `apps/selfhost/common/string_helpers.hako` (87行)
-- `apps/selfhost/common/json/utils/json_frag.hako` (75行)
-- `apps/selfhost/common/json/json_cursor.hako` (39行)
+- `selfhost/shared/common/string_helpers.hako` (87行)
+- `selfhost/shared/json/utils/json_frag.hako` (75行)
+- `selfhost/shared/json/json_cursor.hako` (39行)
 - `apps/selfhost-compiler/common/json_emit_box.hako` (12行)
 - `apps/selfhost-compiler/common/mir_emit_box.hako` (14行)
 - `apps/selfhost-compiler/common/header_emit_box.hako` (23行)

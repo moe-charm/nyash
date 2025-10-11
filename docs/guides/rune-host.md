@@ -8,7 +8,7 @@ Status: Minimal bridge (default OFF). We stop here for now. The box is in place 
 - Encapsulate provider selection and timeouts behind a box boundary.
 
 ## Interface (Box-first)
-File: apps/selfhost/vm/boxes/rune_host.hako
+File: selfhost/vm/boxes/rune_host.hako
 
 - RuneHostBox.is_available() -> Bool
 - RuneHostBox.provider_name() -> String

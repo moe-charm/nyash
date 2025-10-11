@@ -381,7 +381,7 @@ Test 10: 42 >= 42 → 1 ✅ (修正前: 0)
 1. **箱化モジュール化の威力再確認**: 307行削減でも全テストPASS
 2. **using system の注意点**: file path using 禁止プロファイル → hako.toml設定必須
 3. **indexOf引数エラー**: StringBoxのindexOfは1引数のみ → StringOps.index_of_from使用
-4. **result.hakoパス**: apps/lib/result.hako は存在しない → apps/selfhost/vm/boxes/result_box.hako使用
+4. **result.hakoパス**: apps/lib/result.hako は存在しない → selfhost/vm/boxes/result_box.hako使用
 
 **次のステップ**:
 - Phase 2: 残り命令実装（TypeOp/Load/Store/Call/BoxCall等）

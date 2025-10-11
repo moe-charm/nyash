@@ -49,7 +49,7 @@ Plan (surgical fix)
 4) Re-run quick; ensure all four pass; remove dev traces.
 
 Temporary Workaround (in repo)
-- Added instance-style builder `apps/selfhost/common/json/mir_builder2.hako` that keeps internal state (`me.st`) and does not rely on passing a builder state via args. Use this for emit paths while the VM bug is being fixed.
+- Added instance-style builder `selfhost/shared/json/mir_builder2.hako` that keeps internal state (`me.st`) and does not rely on passing a builder state via args. Use this for emit paths while the VM bug is being fixed.
 
 Risks
 - None to stable quick profile once the fix is in; smokes are isolated and plugin-free.

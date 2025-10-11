@@ -510,7 +510,7 @@ if __match_result._tag == "Ok" {
 #### 実装済み Option/Result
 - `apps/lib/boxes/option.hako` - 既存実装（commit: e441b2ba）
 - `apps/lib/boxes/result.hako` - 既存実装（commit: e441b2ba）
-- `apps/selfhost/vm/boxes/result_box.hako` (34行) - Mini-VM 用実装
+- `selfhost/vm/boxes/result_box.hako` (34行) - Mini-VM 用実装
 
 ---
 

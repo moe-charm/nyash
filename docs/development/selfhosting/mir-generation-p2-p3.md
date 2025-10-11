@@ -5,10 +5,10 @@ Scope
 - P3: Call 統一の最小導線（Extern/Global/Method/Constructor）を JSON 生成面に追加。VM/LLVM 実行は既存の registry/adapter に準拠。
 
 Shared Boxes
-- apps/selfhost/common/mir/mir_schema_box.hako
+- selfhost/shared/common/mir/mir_schema_box.hako
   - inst_const/ret/compare/branch/jump/binop
   - inst_mir_call_extern/global/method/constructor（argsは i64 wrap）
-- apps/selfhost/common/mir/block_builder_box.hako
+- selfhost/shared/common/mir/block_builder_box.hako
   - const_ret, compare_branch, binop, loop_counter
   - extern_call_ret/global_call_ret/method_call_ret/constructor_call_ret（最小形）
 

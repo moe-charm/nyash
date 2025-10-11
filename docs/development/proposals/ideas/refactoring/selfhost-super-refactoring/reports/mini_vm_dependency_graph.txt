@@ -202,7 +202,7 @@ step_runner.hako (74行) ※観測専用
 
 ```
 【新規作成推奨】
-apps/selfhost/common/utils/
+selfhost/shared/common/utils/
 ├── string_utils.hako
 │   ├── str_to_int(s) → int
 │   ├── int_to_str(n) → string
@@ -241,8 +241,8 @@ apps/selfhost/common/utils/
 ### Step 1: 共通ユーティリティ箱新設
 ```bash
 # 新規ファイル作成
-apps/selfhost/common/utils/string_utils.hako
-apps/selfhost/common/utils/scan_utils.hako
+selfhost/shared/common/utils/string_utils.hako
+selfhost/shared/common/utils/scan_utils.hako
 
 # 既存機能を移行（コピー＆統合）
 ```

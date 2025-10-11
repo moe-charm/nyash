@@ -2,7 +2,7 @@
 // Version: 2.0 (Phase 1: 基本拡張完了)
 //
 // このファイルは参照用です。実際の実装は以下を更新：
-//   apps/selfhost/vm/boxes/result_box.hako
+//   selfhost/vm/boxes/result_box.hako
 //
 // 設計書: docs/development/roadmap/phases/phase-20-variant-box/RESULT_BOX_COMPLETE_DESIGN.md
 
