@@ -2,6 +2,8 @@
 //! Methods: birth(0), size(1), get(2), has(3), set(4), fini(u32::MAX)
 //! Extension: support both i64 and UTF-8 string keys; values remain i64.
 
+mod tlv_codec;
+
 use once_cell::sync::Lazy;
 use std::collections::HashMap;
 use std::ffi::CStr;
@@ -10,6 +12,15 @@ use std::sync::{
     atomic::{AtomicU32, Ordering},
     Mutex,
 };
+
+// Import shared TLV codec from hako_abi_impl
+use hako_abi_impl::tlv::{
+    read_arg_i64, read_arg_string, read_arg_handle, read_arg_host_handle, read_arg_bool,
+    write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_host_handle, write_tlv_bool
+};
+
+// Import plugin-specific helpers from local tlv_codec
+use tlv_codec::{preflight, build_tlv_i64_string, build_tlv_i64_i64, v_to_string, write_mapval_tlv};
 
 extern "C" {
     fn nyrt_host_call_name(
@@ -71,370 +82,6 @@ struct MapInstance {
 }
 static INSTANCES: Lazy<Mutex<HashMap<u32, MapInstance>>> = Lazy::new(|| Mutex::new(HashMap::new()));
 static INSTANCE_COUNTER: AtomicU32 = AtomicU32::new(1);
-
-// legacy v1 abi/init removed
-
-/* legacy v1 entry removed
-#[no_mangle]
-pub extern "C" fn nyash_plugin_invoke(
-    type_id: u32,
-    method_id: u32,
-    instance_id: u32,
-    args: *const u8,
-    args_len: usize,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    if type_id != TYPE_ID_MAP {
-        return NYB_E_INVALID_TYPE;
-    }
-    unsafe {
-        match method_id {
-            METHOD_BIRTH => {
-                if result_len.is_null() {
-                    return NYB_E_INVALID_ARGS;
-                }
-                if preflight(result, result_len, 4) {
-                    return NYB_E_SHORT_BUFFER;
-                }
-                let id = INSTANCE_COUNTER.fetch_add(1, Ordering::Relaxed);
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.insert(
-                        id,
-                        MapInstance {
-                            data_i64: HashMap::new(),
-                            data_str: HashMap::new(),
-                        },
-                    );
-                } else {
-                    return NYB_E_PLUGIN_ERROR;
-                }
-                std::ptr::copy_nonoverlapping(id.to_le_bytes().as_ptr(), result, 4);
-                *result_len = 4;
-                NYB_SUCCESS
-            }
-            METHOD_FINI => {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    map.remove(&instance_id);
-                    NYB_SUCCESS
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_SIZE => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        let sz = inst.data_i64.len() + inst.data_str.len();
-                        write_tlv_i64(sz as i64, result, result_len)
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_GET => {
-                if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                    if let Ok(map) = INSTANCES.lock() {
-                        if let Some(inst) = map.get(&instance_id) {
-                            match inst.data_i64.get(&ik).copied() {
-                                Some(v) => write_tlv_i64(v, result, result_len),
-                                None => NYB_E_INVALID_ARGS,
-                            }
-                        } else {
-                            NYB_E_INVALID_HANDLE
-                        }
-                    } else {
-                        NYB_E_PLUGIN_ERROR
-                    }
-                } else if let Some(sk) = read_arg_string(args, args_len, 0) {
-                    if let Ok(map) = INSTANCES.lock() {
-                        if let Some(inst) = map.get(&instance_id) {
-                            match inst.data_str.get(&sk).copied() {
-                                Some(v) => write_tlv_i64(v, result, result_len),
-                                None => NYB_E_INVALID_ARGS,
-                            }
-                        } else {
-                            NYB_E_INVALID_HANDLE
-                        }
-                    } else {
-                        NYB_E_PLUGIN_ERROR
-                    }
-                } else {
-                    NYB_E_INVALID_ARGS
-                }
-            }
-            METHOD_HAS => {
-                if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                    if let Ok(map) = INSTANCES.lock() {
-                        if let Some(inst) = map.get(&instance_id) {
-                            write_tlv_bool(inst.data_i64.contains_key(&ik), result, result_len)
-                        } else {
-                            NYB_E_INVALID_HANDLE
-                        }
-                    } else {
-                        NYB_E_PLUGIN_ERROR
-                    }
-                } else if let Some(sk) = read_arg_string(args, args_len, 0) {
-                    if let Ok(map) = INSTANCES.lock() {
-                        if let Some(inst) = map.get(&instance_id) {
-                            write_tlv_bool(inst.data_str.contains_key(&sk), result, result_len)
-                        } else {
-                            NYB_E_INVALID_HANDLE
-                        }
-                    } else {
-                        NYB_E_PLUGIN_ERROR
-                    }
-                } else {
-                    NYB_E_INVALID_ARGS
-                }
-            }
-            METHOD_SET => {
-                // value は i64 限定
-                let val = match read_arg_i64(args, args_len, 1) {
-                    Some(v) => v,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                    if let Ok(mut map) = INSTANCES.lock() {
-                        if let Some(inst) = map.get_mut(&instance_id) {
-                            inst.data_i64.insert(ik, val);
-                            let sz = inst.data_i64.len() + inst.data_str.len();
-                            return write_tlv_i64(sz as i64, result, result_len);
-                        } else {
-                            NYB_E_INVALID_HANDLE
-                        }
-                    } else {
-                        NYB_E_PLUGIN_ERROR
-                    }
-                } else if let Some(sk) = read_arg_string(args, args_len, 0) {
-                    if let Ok(mut map) = INSTANCES.lock() {
-                        if let Some(inst) = map.get_mut(&instance_id) {
-                            inst.data_str.insert(sk, val);
-                            let sz = inst.data_i64.len() + inst.data_str.len();
-                            return write_tlv_i64(sz as i64, result, result_len);
-                        } else {
-                            NYB_E_INVALID_HANDLE
-                        }
-                    } else {
-                        NYB_E_PLUGIN_ERROR
-                    }
-                } else {
-                    NYB_E_INVALID_ARGS
-                }
-            }
-            METHOD_REMOVE => {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        // try int key
-                        if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                            if let Some(v) = inst.data_i64.remove(&ik) {
-                                return match v {
-                                    MapVal::I64(n) => write_tlv_i64(n, result, result_len),
-                                    MapVal::Str(s) => write_tlv_string(&s, result, result_len),
-                                    MapVal::Handle(t, i) => write_tlv_handle(t, i, result, result_len),
-                                    MapVal::Host(h) => write_tlv_host_handle(h as u64, result, result_len),
-                                };
-                            } else {
-                                unsafe { if !result_len.is_null() { *result_len = 0; } }
-                                return NYB_SUCCESS;
-                            }
-                        }
-                        // try string key
-                        if let Some(sk) = read_arg_string(args, args_len, 0) {
-                            if let Some(v) = inst.data_str.remove(&sk) {
-                                return match v {
-                                    MapVal::I64(n) => write_tlv_i64(n, result, result_len),
-                                    MapVal::Str(s) => write_tlv_string(&s, result, result_len),
-                                    MapVal::Handle(t, i) => write_tlv_handle(t, i, result, result_len),
-                                    MapVal::Host(h) => write_tlv_host_handle(h as u64, result, result_len),
-                                };
-                            } else {
-                                unsafe { if !result_len.is_null() { *result_len = 0; } }
-                                return NYB_SUCCESS;
-                            }
-                        }
-                        NYB_E_INVALID_ARGS
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_CLEAR => {
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        inst.data_i64.clear();
-                        inst.data_str.clear();
-                        return write_tlv_i64(0, result, result_len);
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_KEYS_S => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        let mut keys: Vec<String> =
-                            Vec::with_capacity(inst.data_i64.len() + inst.data_str.len());
-                        for k in inst.data_i64.keys() {
-                            keys.push(k.to_string());
-                        }
-                        for k in inst.data_str.keys() {
-                            keys.push(k.clone());
-                        }
-                        keys.sort();
-                        let out = keys.join("\n");
-                        return write_tlv_string(&out, result, result_len);
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_GET_OR => {
-                let defv = match read_arg_i64(args, args_len, 1) {
-                    Some(v) => v,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        // prefer exact match, else default
-                        if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                            let v = inst.data_i64.get(&ik).copied().unwrap_or(defv);
-                            return write_tlv_i64(v, result, result_len);
-                        }
-                        if let Some(sk) = read_arg_string(args, args_len, 0) {
-                            let v = inst.data_str.get(&sk).copied().unwrap_or(defv);
-                            return write_tlv_i64(v, result, result_len);
-                        }
-                        NYB_E_INVALID_ARGS
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_SET_STR => {
-                let key = match read_arg_string(args, args_len, 0) {
-                    Some(s) => s,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                let val = match read_arg_i64(args, args_len, 1) {
-                    Some(v) => v,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                if let Ok(mut map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get_mut(&instance_id) {
-                        inst.data_str.insert(key, val);
-                        let sz = inst.data_i64.len() + inst.data_str.len();
-                        return write_tlv_i64(sz as i64, result, result_len);
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_GET_STR => {
-                let key = match read_arg_string(args, args_len, 0) {
-                    Some(s) => s,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        match inst.data_str.get(&key).copied() {
-                            Some(v) => write_tlv_i64(v, result, result_len),
-                            None => NYB_E_INVALID_ARGS,
-                        }
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_HAS_STR => {
-                let key = match read_arg_string(args, args_len, 0) {
-                    Some(s) => s,
-                    None => return NYB_E_INVALID_ARGS,
-                };
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        write_tlv_bool(hako_core_map::has_key_str(&inst.data_str, &key), result, result_len)
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_VALUES_S => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        let mut vals: Vec<String> =
-                            Vec::with_capacity(inst.data_i64.len() + inst.data_str.len());
-                        for v in inst.data_i64.values() {
-                            vals.push(v.to_string());
-                        }
-                        for v in inst.data_str.values() {
-                            vals.push(v.to_string());
-                        }
-                        let out = vals.join("\n");
-                        return write_tlv_string(&out, result, result_len);
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            METHOD_TO_JSON => {
-                if let Ok(map) = INSTANCES.lock() {
-                    if let Some(inst) = map.get(&instance_id) {
-                        let mut s = String::from("{");
-                        let mut first = true;
-                        for (k, v) in inst.data_str.iter() {
-                            if !first {
-                                s.push(',');
-                            }
-                            first = false;
-                            // JSON string key
-                            s.push('"');
-                            s.push_str(&escape_json(k));
-                            s.push_str("\": ");
-                            s.push_str(&v.to_string());
-                        }
-                        for (k, v) in inst.data_i64.iter() {
-                            if !first {
-                                s.push(',');
-                            }
-                            first = false;
-                            // numeric key as string per JSON
-                            s.push('"');
-                            s.push_str(&k.to_string());
-                            s.push_str("\": ");
-                            s.push_str(&v.to_string());
-                        }
-                        s.push('}');
-                        return write_tlv_string(&s, result, result_len);
-                    } else {
-                        NYB_E_INVALID_HANDLE
-                    }
-                } else {
-                    NYB_E_PLUGIN_ERROR
-                }
-            }
-            _ => NYB_E_INVALID_METHOD,
-        }
-    }
-}
-*/
 
 // ---- Nyash TypeBox (FFI minimal PoC) ----
 #[repr(C)]
@@ -628,6 +275,7 @@ fn map_keys_values_stage2(
         } else {
             return NYB_E_INVALID_HANDLE;
         }
+        write_tlv_host_handle(arr_h as u64, result, result_len)
     }
 }
 
@@ -825,9 +473,16 @@ extern "C" fn mapbox_invoke_id(
             if let Some(ik) = read_arg_i64(args, args_len, 0) {
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
+                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                            eprintln!("[map-plugin] set int key={}", ik);
+                        }
                         inst.data_i64.insert(ik, val);
-                        let sz = inst.data_i64.len() + inst.data_str.len();
-                        return write_tlv_i64(sz as i64, result, result_len);
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        return NYB_SUCCESS;
                     } else {
                         return NYB_E_INVALID_HANDLE;
                     }
@@ -837,9 +492,16 @@ extern "C" fn mapbox_invoke_id(
             } else if let Some(sk) = read_arg_string(args, args_len, 0) {
                 if let Ok(mut map) = INSTANCES.lock() {
                     if let Some(inst) = map.get_mut(&instance_id) {
+                        if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                            eprintln!("[map-plugin] set str key={}", sk);
+                        }
                         inst.data_str.insert(sk, val);
-                        let sz = inst.data_i64.len() + inst.data_str.len();
-                        return write_tlv_i64(sz as i64, result, result_len);
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        return NYB_SUCCESS;
                     } else {
                         return NYB_E_INVALID_HANDLE;
                     }
@@ -848,6 +510,67 @@ extern "C" fn mapbox_invoke_id(
                 }
             } else {
                 NYB_E_INVALID_ARGS
+            }
+        }
+        METHOD_REMOVE => {
+            if let Ok(mut map) = INSTANCES.lock() {
+                if let Some(inst) = map.get_mut(&instance_id) {
+                    let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
+                    if let Some(ik) = read_arg_i64(args, args_len, 0) {
+                        if let Some(value) = inst.data_i64.remove(&ik) {
+                            if debug {
+                                eprintln!("[map-plugin] remove int key={} variant={}", ik, v_to_string(&value));
+                            }
+                            return write_mapval_tlv(&value, result, result_len);
+                        }
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        return NYB_SUCCESS;
+                    }
+                    if let Some(sk) = read_arg_string(args, args_len, 0) {
+                        if let Some(value) = inst.data_str.remove(&sk) {
+                            if debug {
+                                eprintln!("[map-plugin] remove str key={} variant={}", sk, v_to_string(&value));
+                            }
+                            return write_mapval_tlv(&value, result, result_len);
+                        }
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        return NYB_SUCCESS;
+                    }
+                    NYB_E_INVALID_ARGS
+                } else {
+                    NYB_E_INVALID_HANDLE
+                }
+            } else {
+                NYB_E_PLUGIN_ERROR
+            }
+        }
+        METHOD_CLEAR => {
+            if let Ok(mut map) = INSTANCES.lock() {
+                if let Some(inst) = map.get_mut(&instance_id) {
+                    inst.data_i64.clear();
+                    inst.data_str.clear();
+                    if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                        eprintln!("[map-plugin] clear instance {}", instance_id);
+                    }
+                    unsafe {
+                        if !result_len.is_null() {
+                            *result_len = 0;
+                        }
+                    }
+                    NYB_SUCCESS
+                } else {
+                    NYB_E_INVALID_HANDLE
+                }
+            } else {
+                NYB_E_PLUGIN_ERROR
             }
         }
         METHOD_GET_STR => {
@@ -966,274 +689,3 @@ pub static nyash_typebox_MapBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
     invoke_id: Some(mapbox_invoke_id),
     capabilities: 0,
 };
-
-fn escape_json(s: &str) -> String {
-    let mut out = String::with_capacity(s.len() + 8);
-    for ch in s.chars() {
-        match ch {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            c if c.is_control() => out.push_str(&format!("\\u{:04x}", c as u32)),
-            c => out.push(c),
-        }
-    }
-    out
-}
-
-// TLV helpers
-fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
-    unsafe {
-        if result_len.is_null() {
-            return false;
-        }
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return true;
-        }
-    }
-    false
-}
-
-fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return NYB_E_INVALID_ARGS;
-    }
-    let mut buf: Vec<u8> =
-        Vec::with_capacity(4 + payloads.iter().map(|(_, p)| 4 + p.len()).sum::<usize>());
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&(payloads.len() as u16).to_le_bytes());
-    for (tag, payload) in payloads {
-        buf.push(*tag);
-        buf.push(0);
-        buf.extend_from_slice(&(payload.len() as u16).to_le_bytes());
-        buf.extend_from_slice(payload);
-    }
-    unsafe {
-        let needed = buf.len();
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return NYB_E_SHORT_BUFFER;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, needed);
-        *result_len = needed;
-    }
-    NYB_SUCCESS
-}
-
-fn write_tlv_handle(
-    type_id: u32,
-    instance_id: u32,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    let mut payload = Vec::with_capacity(8);
-    payload.extend_from_slice(&type_id.to_le_bytes());
-    payload.extend_from_slice(&instance_id.to_le_bytes());
-    write_tlv_result(&[(8u8, &payload)], result, result_len)
-}
-
-fn write_tlv_i64(v: i64, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(3u8, &v.to_le_bytes())], result, result_len)
-}
-fn write_tlv_bool(bv: bool, result: *mut u8, result_len: *mut usize) -> i32 {
-    let b = [if bv { 1u8 } else { 0u8 }];
-    write_tlv_result(&[(1u8, &b)], result, result_len)
-}
-fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
-}
-
-fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 3 && size == 8 {
-                let mut b = [0u8; 8];
-                b.copy_from_slice(&buf[off + 4..off + 12]);
-                return Some(i64::from_le_bytes(b));
-            } else if tag == 2 && size == 4 {
-                let mut b = [0u8; 4];
-                b.copy_from_slice(&buf[off + 4..off + 8]);
-                return Some(i32::from_le_bytes(b) as i64);
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-fn read_arg_host_handle(args: *const u8, args_len: usize, n: usize) -> Option<u64> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 9 && size == 8 {
-                let mut h = [0u8; 8];
-                h.copy_from_slice(&buf[off + 4..off + 12]);
-                return Some(u64::from_le_bytes(h));
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<String> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 6 || tag == 7 {
-                let s = &buf[off + 4..off + 4 + size];
-                return Some(String::from_utf8_lossy(s).to_string());
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-fn read_arg_handle(args: *const u8, args_len: usize, n: usize) -> Option<(u32, u32)> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 8 && size == 8 {
-                let mut t = [0u8; 4];
-                t.copy_from_slice(&buf[off + 4..off + 8]);
-                let mut id = [0u8; 4];
-                id.copy_from_slice(&buf[off + 8..off + 12]);
-                return Some((u32::from_le_bytes(t), u32::from_le_bytes(id)));
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-// ---- TLV helpers (local) for Stage-2 ----
-fn build_tlv_i64_string(idx: i64, s: &str) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8 + 4 + s.len());
-    // header: version=1, argc=2
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&2u16.to_le_bytes());
-    // arg0: i64 idx (tag=3,size=8)
-    buf.push(3u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&idx.to_le_bytes());
-    // arg1: string (tag=6)
-    buf.push(6u8);
-    buf.push(0u8);
-    let len = core::cmp::min(s.as_bytes().len(), u16::MAX as usize) as u16;
-    buf.extend_from_slice(&len.to_le_bytes());
-    buf.extend_from_slice(&s.as_bytes()[..len as usize]);
-    buf
-}
-
-fn write_tlv_host_handle(handle_id: u64, result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return NYB_E_INVALID_ARGS;
-    }
-    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8);
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.push(9u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&handle_id.to_le_bytes());
-    unsafe {
-        let need = buf.len();
-        if result.is_null() || *result_len < need {
-            *result_len = need;
-            return NYB_E_SHORT_BUFFER;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, need);
-        *result_len = need;
-    }
-    NYB_SUCCESS
-}
-
-fn v_to_string(v: &MapVal) -> String {
-    match v {
-        MapVal::I64(n) => n.to_string(),
-        MapVal::Str(s) => s.clone(),
-        MapVal::Handle(t, i) => format!("handle({},{})", t, i),
-        MapVal::Host(_) => "host-handle".to_string(),
-    }
-}
-
-/// Build TLV with two i64 arguments (for Array.set via host)
-fn build_tlv_i64_i64(idx: i64, value: i64) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8 + 4 + 8);
-    // header: version=1, argc=2
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&2u16.to_le_bytes());
-    // arg0: i64 idx (tag=3, size=8)
-    buf.push(3u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&idx.to_le_bytes());
-    // arg1: i64 value (tag=3, size=8)
-    buf.push(3u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&value.to_le_bytes());
-    buf
-}

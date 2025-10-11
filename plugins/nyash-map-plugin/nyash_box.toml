@@ -32,17 +32,17 @@ returns = { type = "bool" }
 [MapBox.methods.set]
 id = 4
 args = [ { name = "key", type = "box" }, { name = "value", type = "box" } ]
-returns = { type = "i64" }
+returns = { type = "void" }
 
 [MapBox.methods.remove]
 id = 6
 args = [ { name = "key", type = "box" } ]
-returns = { type = "bool" }
+returns = { type = "box" }
 
 [MapBox.methods.clear]
 id = 7
 args = []
-returns = { type = "i64" }
+returns = { type = "void" }
 
 # Stage-1 shim methods# Stage-1 shim methods (string newline-joined). Host converts to ArrayBox for keys()/values().
 [MapBox.methods.keysS]

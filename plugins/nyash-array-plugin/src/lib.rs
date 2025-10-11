@@ -10,6 +10,12 @@ use std::sync::{
     Mutex,
 };
 
+// Use shared ABI implementation for TLV codec
+use hako_abi_impl::tlv::{
+    read_arg_i64, read_arg_string, read_arg_handle, read_arg_host_handle,
+    write_tlv_i64, write_tlv_string, write_tlv_handle, write_tlv_host_handle
+};
+
 // ===== Error Codes (aligned with existing plugins) =====
 const NYB_SUCCESS: i32 = 0;
 const NYB_E_SHORT_BUFFER: i32 = -1;
@@ -314,18 +320,6 @@ pub static nyash_typebox_ArrayBox: NyashTypeBoxFfi = NyashTypeBoxFfi {
 };
 
 // ===== Minimal TLV helpers (compatible with host expectations) =====
-fn preflight(result: *mut u8, result_len: *mut usize, needed: usize) -> bool {
-    unsafe {
-        if result_len.is_null() {
-            return false;
-        }
-        if result.is_null() || *result_len < needed {
-            *result_len = needed;
-            return true;
-        }
-    }
-    false
-}
 
 fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut usize) -> i32 {
     if result_len.is_null() {
@@ -353,25 +347,7 @@ fn write_tlv_result(payloads: &[(u8, &[u8])], result: *mut u8, result_len: *mut 
     NYB_SUCCESS
 }
 
-fn write_tlv_handle(
-    type_id: u32,
-    instance_id: u32,
-    result: *mut u8,
-    result_len: *mut usize,
-) -> i32 {
-    let mut payload = Vec::with_capacity(8);
-    payload.extend_from_slice(&type_id.to_le_bytes());
-    payload.extend_from_slice(&instance_id.to_le_bytes());
-    write_tlv_result(&[(8u8, &payload)], result, result_len)
-}
-
-fn write_tlv_i64(v: i64, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(3u8, &v.to_le_bytes())], result, result_len)
-}
-
-fn write_tlv_string(s: &str, result: *mut u8, result_len: *mut usize) -> i32 {
-    write_tlv_result(&[(6u8, s.as_bytes())], result, result_len)
-}
+// write_tlv_handle, write_tlv_i64, write_tlv_string are now provided by hako_abi_impl::tlv (imported at top)
 
 fn write_tlv_value(val: &ArrayValue, result: *mut u8, result_len: *mut usize) -> i32 {
     match val {
@@ -382,123 +358,7 @@ fn write_tlv_value(val: &ArrayValue, result: *mut u8, result_len: *mut usize) ->
     }
 }
 
-/// Read nth TLV argument as i64 (tag 3)
-fn read_arg_i64(args: *const u8, args_len: usize, n: usize) -> Option<i64> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize; // skip header
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let _rsv = buf[off + 1];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag != 3 || size != 8 {
-                return None;
-            }
-            let mut b = [0u8; 8];
-            b.copy_from_slice(&buf[off + 4..off + 4 + 8]);
-            return Some(i64::from_le_bytes(b));
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-fn read_arg_string(args: *const u8, args_len: usize, n: usize) -> Option<String> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 6 || tag == 7 {
-                let s = &buf[off + 4..off + 4 + size];
-                return Some(String::from_utf8_lossy(s).to_string());
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-fn read_arg_handle(args: *const u8, args_len: usize, n: usize) -> Option<(u32, u32)> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 8 && size == 8 {
-                let mut t = [0u8; 4];
-                t.copy_from_slice(&buf[off + 4..off + 8]);
-                let mut id = [0u8; 4];
-                id.copy_from_slice(&buf[off + 8..off + 12]);
-                return Some((u32::from_le_bytes(t), u32::from_le_bytes(id)));
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
-
-fn read_arg_host_handle(args: *const u8, args_len: usize, n: usize) -> Option<u64> {
-    if args.is_null() || args_len < 4 {
-        return None;
-    }
-    let buf = unsafe { std::slice::from_raw_parts(args, args_len) };
-    let mut off = 4usize;
-    for i in 0..=n {
-        if buf.len() < off + 4 {
-            return None;
-        }
-        let tag = buf[off];
-        let size = u16::from_le_bytes([buf[off + 2], buf[off + 3]]) as usize;
-        if buf.len() < off + 4 + size {
-            return None;
-        }
-        if i == n {
-            if tag == 9 && size == 8 {
-                let mut h = [0u8; 8];
-                h.copy_from_slice(&buf[off + 4..off + 12]);
-                return Some(u64::from_le_bytes(h));
-            } else {
-                return None;
-            }
-        }
-        off += 4 + size;
-    }
-    None
-}
+// read_arg_i64, read_arg_string, read_arg_handle, read_arg_host_handle are now provided by hako_abi_impl::tlv (imported at top)
 
 fn read_arg_value(args: *const u8, args_len: usize, n: usize) -> Option<ArrayValue> {
     if let Some(v) = read_arg_i64(args, args_len, n) {
@@ -516,49 +376,6 @@ fn read_arg_value(args: *const u8, args_len: usize, n: usize) -> Option<ArrayVal
     None
 }
 
-// ===== Helper functions for HostHandle implementation =====
+// write_tlv_host_handle is now provided by hako_abi_impl::tlv (imported at top)
 
-/// Build TLV with two i64 arguments (for Array.set calls)
-fn build_tlv_i64_i64(idx: i64, value: i64) -> Vec<u8> {
-    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8 + 4 + 8);
-    // header: version=1, argc=2
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&2u16.to_le_bytes());
-    // arg0: i64 idx (tag=3, size=8)
-    buf.push(3u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&idx.to_le_bytes());
-    // arg1: i64 value (tag=3, size=8)
-    buf.push(3u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&value.to_le_bytes());
-    buf
-}
-
-/// Write HostHandle (tag=9) return value
-fn write_tlv_host_handle(handle_id: u64, result: *mut u8, result_len: *mut usize) -> i32 {
-    if result_len.is_null() {
-        return NYB_E_INVALID_ARGS;
-    }
-    let mut buf: Vec<u8> = Vec::with_capacity(4 + 4 + 8);
-    // header: version=1, argc=1
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    buf.extend_from_slice(&1u16.to_le_bytes());
-    // tag=9 (HostHandle), size=8
-    buf.push(9u8);
-    buf.push(0u8);
-    buf.extend_from_slice(&(8u16).to_le_bytes());
-    buf.extend_from_slice(&handle_id.to_le_bytes());
-    unsafe {
-        let need = buf.len();
-        if result.is_null() || *result_len < need {
-            *result_len = need;
-            return NYB_E_SHORT_BUFFER;
-        }
-        std::ptr::copy_nonoverlapping(buf.as_ptr(), result, need);
-        *result_len = need;
-    }
-    NYB_SUCCESS
-}
+// Unused helper functions removed: preflight, build_tlv_i64_i64
