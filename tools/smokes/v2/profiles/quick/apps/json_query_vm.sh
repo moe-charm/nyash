@@ -11,7 +11,13 @@ preflight_plugins || exit 2
 APP_DIR="$NYASH_ROOT/apps/examples/json_query"
 # Use default dev behavior (rewrite enabled) for stable resolution
 # NOTE: Do not enable NYASH_VM_TOLERATE_VOID here; path parser relies on strict compare semantics
-output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev | grep -v '^Result: ')
+output=$(run_nyash_vm "$APP_DIR/main.nyash" --dev)
+rc=$?
+if [ $rc -ne 0 ]; then
+  echo "FAIL: rc=$rc" >&2
+  exit 1
+fi
+output=$(echo "$output" | grep -v '^Result: ')
 
 expected=$(cat << 'TXT'
 2

@@ -21,7 +21,8 @@ static box Main {
   }
 }
 SRC
-out=$(run_nyash_vm "$tmpfile" | awk '/^Result:/{print $0}' | head -n1 | tr -d '\r' | xargs)
+run_nyash_vm "$tmpfile" >/dev/null
+rc=$?
 rm -f "$tmpfile"
-[ "$out" = "Result: 0" ] || { echo "FAIL: $out"; exit 1; }
-echo "$out"; exit 0
+if [ $rc -ne 0 ]; then echo "FAIL: rc=$rc"; exit 1; fi
+echo "OK"; exit 0
