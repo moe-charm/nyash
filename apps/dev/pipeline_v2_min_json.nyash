@@ -1,5 +1,5 @@
 // Dev sample: run pipeline v2 (emit-only) with a tiny source
-using "apps/selfhost-compiler/pipeline_v2/execution_pipeline_box.hako" as PipelineMod
+using "selfhost/compiler/pipeline_v2/execution_pipeline_box.hako" as PipelineMod
 
 static box Main {
   main(args) {
