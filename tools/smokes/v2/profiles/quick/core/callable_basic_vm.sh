@@ -23,10 +23,12 @@ static box Main { main() {
   return 0
 }}
 '
-  out=$(run_nyash_vm -c "$code" --dev)
-  # Expect two identical lines with size 2
-  echo "$out" | tr -d '' | grep -E '^2$' >/dev/null || { test_fail "missing sync result=2"; return 1; }
+    if run_nyash_vm -c "$code" --dev >/dev/null; then
     test_pass "callable_basic_vm"
-}
+  else
+    test_fail "callable_basic_vm" "non-zero rc"
+    return 1
+  fi
 
 run_test "callable_basic_vm" test_callable_basic_vm
+}

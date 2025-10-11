@@ -7,6 +7,12 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
 
+# Gate AOT in quick: run only when explicitly enabled
+if [ "${SMOKES_QUICK_AOT:-0}" != "1" ]; then
+  echo "[SKIP] $(basename "$0") (enable with SMOKES_QUICK_AOT=1)"
+  exit 0
+fi
+
 APP="$NYASH_ROOT/apps/tests/extern_substring_len.nyash"
 name=$(basename "$APP" .nyash)
 

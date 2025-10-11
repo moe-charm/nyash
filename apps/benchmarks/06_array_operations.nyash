@@ -1,0 +1,36 @@
+// ベンチマーク6: 配列操作（push/get）
+// 期待値: 499500 (0+1+2+...+999 = 999*1000/2)
+//
+// 測定内容:
+// - ArrayBox.push() × 1000回
+// - ArrayBox.get() × 1000回
+// - Plugin FFI overhead
+//
+// 重要: プラグインシステムの性能測定
+
+static box Main {
+    main() {
+        local arr
+        local i
+        local sum
+
+        arr = new ArrayBox()
+        i = 0
+
+        loop(i < 1000) {
+            arr.push(i)
+            i = i + 1
+        }
+
+        sum = 0
+        i = 0
+
+        loop(i < 1000) {
+            sum = sum + arr.get(i)
+            i = i + 1
+        }
+
+        print("Result: " + sum)
+        return 0
+    }
+}

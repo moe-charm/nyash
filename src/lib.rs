@@ -64,6 +64,8 @@ pub mod cli;
 pub mod debug;
 pub mod runner_plugin_init;
 pub mod runtime;
+// VM ops families (thin boxes): compare/call/boxcall helpers
+pub mod vm_ops;
 // Unified Grammar scaffolding
 pub mod grammar;
 pub mod syntax; // syntax sugar config and helpers

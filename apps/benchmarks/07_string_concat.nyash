@@ -1,0 +1,27 @@
+// ベンチマーク7: 文字列結合
+// 期待値: 100
+//
+// 測定内容:
+// - String concatenation × 100回
+// - O(n²) アルゴリズム（最適化なし）
+// - StringBox allocation
+//
+// 重要: Python/JSも同様にO(n²)なので公平な比較が可能
+
+static box Main {
+    main() {
+        local s
+        local i
+
+        s = ""
+        i = 0
+
+        loop(i < 100) {
+            s = s + "x"
+            i = i + 1
+        }
+
+        print("Result: " + s.length())
+        return 0
+    }
+}

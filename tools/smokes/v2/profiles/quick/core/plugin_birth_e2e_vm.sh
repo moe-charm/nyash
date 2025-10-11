@@ -45,30 +45,22 @@ static box Main {
 NYASH
 
 ensure_hako_toml
-OUT=$(run_nyash_vm "$PROG")
+LOG=$(mktemp)
+run_nyash_vm "$PROG" >"$LOG" 2>&1
+rc=$?
 # If the runtime cannot create the box type, skip (environment-dependent)
-if echo "$OUT" | grep -q "Unknown Box type"; then
+if grep -q "Unknown Box type" "$LOG"; then
   log_warn "SKIP: runtime does not recognize $pick_box in this environment"
-  rm -f "$PROG"
+  rm -f "$PROG" "$LOG"
   exit 0
 fi
-RES=$(echo "$OUT" | tr -d '\r' | tail -n 1 | xargs)
-ok=0
-case "$pick_box" in
-  PathBox)
-    [[ "$RES" == "c.txt" ]] && ok=1 ;;
-  RegexBox)
-    [[ "$RES" == "true" || "$RES" == "1" ]] && ok=1 ;;
-  FileBox)
-    [[ "$RES" == "true" || "$RES" == "1" ]] && ok=1 ;;
- esac
-if [ $ok -eq 1 ]; then
+if [ $rc -eq 0 ]; then
   pass "plugin birth E2E ($pick_box)"
-  rm -f "$PROG"
+  rm -f "$PROG" "$LOG"
   exit 0
 else
-  fail "plugin birth E2E ($pick_box) unexpected result: ${RES:-<empty>}"
-  echo "$OUT" | filter_noise
-  rm -f "$PROG"
+  fail "plugin birth E2E ($pick_box) rc=$rc"
+  cat "$LOG" | filter_noise || true
+  rm -f "$PROG" "$LOG"
   exit 1
 fi

@@ -3,6 +3,7 @@
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
+preflight_plugins || exit 2
 
 run_test_map_kv_delete_edges_vm() {
   local code='static box Main { main() {
@@ -29,9 +30,13 @@ run_test_map_kv_delete_edges_vm() {
     if ok != 1 { return 16 }
     return 0
   }}'
-  run_nyash_vm -c "$code" >/dev/null
+  local out; out=$(run_nyash_vm -c "$code" 2>&1 || true)
+  # Skip in environments where MapBox is unavailable
+  if echo "$out" | grep -q "Unknown Box type: MapBox"; then
+    test_skip "map_keys_values_delete_edges_vm" "MapBox unavailable (plugins off)"; return 0
+  fi
   local rc=$?
-  if [ $rc -ne 0 ]; then echo "FAIL: rc=$rc"; return 1; fi
+  if [ $rc -ne 0 ]; then echo "FAIL: rc=$rc"; echo "$out" | tail -n 50 >&2; return 1; fi
   return 0
 }
 

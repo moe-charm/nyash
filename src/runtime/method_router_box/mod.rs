@@ -127,6 +127,8 @@ pub fn route(
     if let VMValue::BoxRef(bx) = receiver {
         // Plugin TypeBox v2
         if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+            // Central arity guard (vm_ops/boxcall)
+            crate::vm_ops::boxcall::arity_guard_for(&p.box_type, method, args.len())?;
             if let Some(result) = MapCallableBox::try_route(_interp, receiver, method, args) {
                 return result;
             }

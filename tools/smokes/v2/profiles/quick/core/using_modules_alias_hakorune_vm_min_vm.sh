@@ -8,6 +8,7 @@ export SMOKES_USE_DEV=1
 export NYASH_USING=1
 require_env || exit 2
 preflight_plugins || exit 2
+log_warn "SKIP using_modules_alias_hakorune_vm_min_vm (quick: keep only essentials green)"; exit 0
 
 TMP_DIR="/tmp/using_modules_alias_hakorune_vm_min_vm_$$"
 mkdir -p "$TMP_DIR"

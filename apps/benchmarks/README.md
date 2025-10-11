@@ -4,13 +4,22 @@
 
 ## 📊 ベンチマーク一覧
 
-| ファイル | 説明 | 期待値 | 特徴 |
-|---------|------|--------|------|
-| `01_counter.nyash` | シンプルカウンター | 10 | loop PHI検証、基本的な演算 |
-| `02_fibonacci.nyash` | フィボナッチ数列 | 89 | ループ、複数変数、代入 |
-| `03_prime_check.nyash` | 素数判定 | 1 | 条件分岐、剰余演算 |
+### 🔥 基礎ベンチマーク（Compute/Memory-bound）
+
+| ファイル | 説明 | 期待値 | 測定内容 | Python比較 |
+|---------|------|--------|---------|-----------|
+| `01_counter.nyash` | シンプルカウンター | 10 | loop PHI検証、整数演算 | ✅ |
+| `02_fibonacci.nyash` | フィボナッチ数列 | 89 | ループ、複数PHI、代入 | ✅ |
+| `03_prime_check.nyash` | 素数判定 | 1 | 条件分岐、剰余演算 | ✅ |
+| `04_function_call_overhead.nyash` | 関数呼び出し | 1000 | Call/Return overhead | ✅ |
+| `05_box_allocation.nyash` | Box作成・破棄 | 999 | **Box allocation** (核心機能) | ✅ |
+| `06_array_operations.nyash` | 配列操作 | 499500 | **Plugin FFI** (push/get × 1000) | ✅ |
+| `07_string_concat.nyash` | 文字列結合 | 100 | String concat (O(n²)) | ✅ |
+| `08_map_operations.nyash` | Map操作 | 499500 | **Plugin FFI** (set/get × 1000) | ✅ |
 
 すべてのベンチマークは `print("Result: <値>")` 形式で結果を出力します。
+
+**Python版**: `apps/benchmarks/micro/0[4-8]_*.py` に対応するPython実装があります。
 
 ---
 

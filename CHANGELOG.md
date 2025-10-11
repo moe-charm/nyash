@@ -1,28 +1,15 @@
-# Nyash Project – Changelog (Work in progress)
+## Changelog — Milestones and Notable Changes
 
-This changelog tracks high‑level milestones while Core MIR and Phase 12 evolve. For detailed per‑file history, see git log and docs under `docs/development/roadmap/`.
+### 2025-10-11 — M3 VM↔LLVM Parity (minimum)
+- quick parity suite green (parity_q_*)
+- Added two parity cases: JSON stringify and <=/>= boundary
+- Providers print one-line digest (policy/config/loaded/anchors/stage2)
+- Anchors dlsym self-check added; policy=force → Fail‑Fast when missing
 
-## 2025‑09‑06
-- Core‑13 flip complete: code/tests enforce Core‑13 minimal kernel. Normalizations (Array/Ref→BoxCall, TypeCheck/Cast/Barrier/WeakRef unification) are ON by default via env (NYASH_MIR_CORE13=1). New tests validate normalization.
-- Docs synced: step‑50 marked done; DEV quickstart points to Core‑13 reference.
+### 2025-10-09 — M2 Self‑Rebuild
+- Selfhost compiler EXE builds and rebuilds its own source (bootstrap path)
+- EXE-first and MIR→EXE smokes pass under harness
 
-## 2025‑09‑04
-- Phase 12.7‑A complete: peek, continue, `?` operator, lambda, field type annotations. Language reference updated.
-- Phase 12.7‑B (basic) complete: parser‑level desugaring for `|>`, `?.`, `??`, `+=/-=/*=/=`, `..` behind `NYASH_SYNTAX_SUGAR_LEVEL`.
-- Docs: language reference and Phase 12.7 README updated to reflect basic completion; extensions tracked under gated plan.
-- MIR Core migration: previously enforcing Core‑15 during transition; superseded by 2025‑09‑06 Core‑13 flip.
+### 2025-08-09 — Initial Commit
+- Project bootstrap
 
-## 2025‑09‑03
-- Nyash ABI TypeBox integration stabilized across core boxes; differential tests added; loader defaults adjusted (builtin + plugins).
-
----
-
-Notes
-- Core‑13 is canonical minimal kernel. Historical Core‑15 notes remain under `docs/development/roadmap/` for reference.
-- Phase 12.7‑B desugaring is gated by `NYASH_SYNTAX_SUGAR_LEVEL`; tokenizer additions are non‑breaking.
-## 2025‑09‑11 (Phase 15)
-- llvm: BoxCall arm cleanup — unreachable legacy block removed; arm now delegates solely to `instructions::lower_boxcall`.
-- llvm/docs: Documented LLVM lowering rules (StringBox i8* fast path, ExternCall ptr/handle selection, minimal fallback policy for string concat).
-- docs: Added ARCHITECTURE.md, LOWERING_LLVM.md, EXTERNCALL.md, PLUGIN_ABI.md.
-- nyrt: resolved plugin module duplication; build green.
-- builder: suppressed StringBox birth (constructed in LLVM path).

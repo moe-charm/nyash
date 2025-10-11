@@ -220,6 +220,15 @@ impl MirInterpreter {
     pub(in crate::backend::mir_interpreter) fn eval_cmp(&mut self, op: CompareOp, a: VMValue, b: VMValue) -> Result<bool, VMError> {
         use CompareOp::*;
         use VMValue::*;
+        // Early guard: ordered compares on BoxRef are not supported (Eq/Ne only)
+        if matches!(op, Lt | Le | Gt | Ge) {
+            if matches!(a, VMValue::BoxRef(_)) && matches!(b, VMValue::BoxRef(_)) {
+                return Err(VMError::TypeError("ordered compare on BoxRef is unsupported (use .equals or numeric field)".into()));
+            }
+        }
+
+        // Family guard (vm_ops/compare): ordered compare on BoxRef pairs is unsupported
+        crate::vm_ops::compare::guard_ordered_boxref(op, &a, &b)?;
         // Dev-time: normalize BoxRef(VoidBox) → VMValue::Void when tolerance is enabled or in --dev.
         let tolerate = VmConfig::global().tolerate_void;
         let (a, b) = if tolerate {

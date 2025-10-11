@@ -487,6 +487,29 @@ Notes
 - MacroBox（ユーザー拡張）: `docs/guides/macro-box.md`
 - MacroBox in Nyash（設計草案）: `docs/guides/macro-box-nyash.md`
 
+## ドキュメント配置ルール（AI向け重要指示）
+
+**問題**: AI が docs/ 直下に新規ディレクトリを作成してしまい、構造が散らかる
+
+**ルール**:
+
+**❌ 絶対禁止**:
+- `docs/` 直下に新規ディレクトリを作成しない
+- `docs/ai-*/`, `docs/claude-*/`, `docs/analysis-*/` など禁止
+
+**✅ 必ず守る**:
+新しいドキュメントは既存の8ディレクトリ内に配置：
+- 技術提案・設計案 → `docs/development/proposals/`
+- 分析レポート → `docs/development/analysis/`
+- バグ調査 → `docs/development/issues/`
+- 実装計画 → `docs/development/roadmap/phases/`
+- ユーザーガイド → `docs/guides/`
+- API仕様 → `docs/reference/`
+
+**迷ったら**: `docs/development/proposals/` または `docs/development/analysis/` に配置
+
+**理由**: docs/ root は INDEX.md / README.md のみで、詳細は既存ディレクトリに集約する設計だよ
+
 # Repository Guidelines
 
 ## Project Structure & Module Organization

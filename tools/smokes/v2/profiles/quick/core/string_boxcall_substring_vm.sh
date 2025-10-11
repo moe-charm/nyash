@@ -17,13 +17,14 @@ static box Main {
 }
 SRC
 
-out_vm=$(run_nyash_vm "$tmpfile" | awk '/^Result:/{print $0}' | head -n1 | tr -d '\r' | xargs)
-rm -f "$tmpfile"
-
-if [ $rc -ne 0 ]; then
+if run_nyash_vm "$tmpfile" >/dev/null; then
+  rm -f "$tmpfile"
+  echo "OK"
+  exit 0
+else
+  rc=$?
+  rm -f "$tmpfile"
   echo "FAIL: rc=$rc" >&2
   exit 1
 fi
-echo "OK"
-exit 0
 

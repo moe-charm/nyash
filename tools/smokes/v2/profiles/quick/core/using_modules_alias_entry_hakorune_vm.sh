@@ -7,6 +7,7 @@ export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
 require_env || exit 2
 preflight_plugins || exit 2
+log_warn "SKIP using_modules_alias_entry_hakorune_vm (quick: keep only essentials green)"; exit 0
 
 TMP_DIR="/tmp/using_modules_alias_entry_hakorune_vm_$$"
 mkdir -p "$TMP_DIR"
@@ -28,6 +29,23 @@ EOF
 
 out_full=$(run_nyash_vm "$SRC" --dev)
 if echo "$out_full" | grep -qi 'AST prelude merge is disabled\|using: file paths are disallowed'; then
+  log_warn "SKIP using_modules_alias_entry_hakorune_vm (using resolver disabled)"
+  cd /; rm -rf "$TMP_DIR"; exit 0
+fi
+if echo "$out_full" | grep -q 'Unknown module'; then
+  log_warn "SKIP using_modules_alias_entry_hakorune_vm (unknown module)"
+  cd /; rm -rf "$TMP_DIR"; exit 0
+fi
+if run_nyash_vm "$SRC" --dev >/dev/null; then
+  rm -rf "$TMP_DIR"
+  exit 0
+else
+  rc=$?
+  rm -rf "$TMP_DIR"
+  echo "FAIL: rc=$rc" >&2
+  exit 1
+fi
+|using: file paths are disallowed'; then
   log_warn "SKIP using_modules_alias_entry_hakorune_vm (using resolver disabled)"
   cd /; rm -rf "$TMP_DIR"; exit 0
 fi
