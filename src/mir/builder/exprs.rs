@@ -5,16 +5,6 @@ use crate::ast::{ASTNode, AssignStmt, ReturnStmt, BinaryExpr, CallExpr, MethodCa
 impl super::MirBuilder {
     // Main expression dispatcher
     pub(super) fn build_expression_impl(&mut self, ast: ASTNode) -> Result<ValueId, String> {
-        if matches!(
-            ast,
-            ASTNode::Program { .. }
-                | ASTNode::If { .. }
-                | ASTNode::Loop { .. }
-                | ASTNode::TryCatch { .. }
-                | ASTNode::Throw { .. }
-        ) {
-            return self.build_expression_impl_legacy(ast);
-        }
         match ast {
             ASTNode::Literal { value, .. } => self.build_literal(value),
 

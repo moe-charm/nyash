@@ -291,8 +291,8 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
 
                     // If this is an ArrayBox handle, convert to HostHandleBox so downstream
                     // routes can use HostHandleRouter (and preserve identity via registry).
+                    #[cfg(feature = "host-anchors")]
                     if real_bt == "ArrayBox" {
-                        // Convert PluginHandle(type_id,instance_id) → HostHandle(u64) via stable cache
                         let h = crate::runtime::host_api_anchors::nyash_host_from_plugin_handle(ret_type, inst);
                         return Ok(Some(Box::new(crate::runtime::host_handle_box::HostHandleBox::new(h))));
                     }
@@ -310,11 +310,12 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
                 }
             }
             9 => {
-                // Host handle (u64) → return HostHandleBox; VM 層で実体 Arc に解決
+                // Host handle (u64) → return HostHandleBox; when payload missing/empty, treat as None (void)
                 if let Some(u) = crate::runtime::plugin_ffi_common::decode::u64(payload) {
                     Box::new(crate::runtime::host_handle_box::HostHandleBox::new(u))
                 } else {
-                    Box::new(crate::box_trait::VoidBox::new())
+                    // No valid u64 in payload: interpret as no-value rather than BoxRef(Void)
+                    return Ok(None);
                 }
             }
             _ => Box::new(crate::box_trait::VoidBox::new()),
@@ -386,11 +387,11 @@ fn encode_args_final(
     out
 }
 
-fn decode_result_final(_box_type: &str, r: &NyResultFfi) -> Box<dyn NyashBox> {
+fn decode_result_final(box_type: &str, r: &NyResultFfi) -> Box<dyn NyashBox> {
     if r.status != 0 {
         return Box::new(crate::box_trait::VoidBox::new());
     }
-    // Decode by tag. Phase A': support bool/int/float/string/bytes
+    // Decode by tag. Phase A': support bool/int/float/string/bytes/handles
     match r.tag {
         // Bool: expect 1 byte payload (0/1). Missing payload => false
         1 => {

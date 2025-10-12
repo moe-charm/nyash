@@ -23,7 +23,6 @@ mod exprs_call; // call(expr)
 mod exprs_lambda; // lambda lowering
 mod exprs_peek; // peek expression
 mod exprs_qmark; // ?-propagate
-mod exprs_legacy; // legacy big-match lowering
 mod fields; // field access/assignment lowering split
 pub(crate) mod loops;
 mod ops;
