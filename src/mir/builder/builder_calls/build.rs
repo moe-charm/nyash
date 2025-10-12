@@ -284,11 +284,8 @@ impl MirBuilder {
         
         // External (builtin) ModuleFunction index — always resolve dotted+arity names
         // even when not present in current module (String/Array/Map/Console families).
-                // Direct extern mapping for Timer.now_ms (function-call form)
-        if (name == "Timer.now_ms" || name == "TimerBox.now_ms") && arg_values.is_empty() {
-            return self.emit_timer_now_ms_call();
-        }
-        if name == "Timer.now_ms/0" || name == "TimerBox.now_ms/0" {
+        // Direct extern mapping for Timer.now_ms (function-call form)
+        if (name == "Timer.now_ms" || name == "TimerBox.now_ms" || name == "Timer.now_ms/0" || name == "TimerBox.now_ms/0") && arg_values.is_empty() {
             return self.emit_timer_now_ms_call();
         }
 
@@ -666,17 +663,9 @@ impl MirBuilder {
             }
         }
 
+        // Direct route for now_ms method calls to extern timer
+        // (regardless of receiver origin for semantic stability)
         if method == "now_ms" && arguments.is_empty() {
-            // Prefer direct extern when receiver is TimerBox (origin known)
-            if self
-                .origin_get(object_value)
-                .map(|name| name == "TimerBox")
-                .unwrap_or(false)
-            {
-                return self.emit_timer_now_ms_call();
-            }
-            // Fallback: for unknown receiver origins, route now_ms to extern timer
-            // This keeps semantics stable and avoids stub returns from script fallback.
             return self.emit_timer_now_ms_call();
         }
 
