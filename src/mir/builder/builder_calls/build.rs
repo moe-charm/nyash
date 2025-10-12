@@ -6,6 +6,36 @@ use crate::mir::builder::calls::call_target::CallTarget;
 use crate::mir::TypeOpKind;
 
 impl MirBuilder {
+    /// Try to handle hostbridge.* calls by routing them to Extern
+    /// Returns Some(ValueId) if handled, None if not a hostbridge call
+    fn try_handle_hostbridge_call(
+        &mut self,
+        name: &str,
+        args: &[ASTNode],
+    ) -> Result<Option<ValueId>, String> {
+        if !name.starts_with("hostbridge.") {
+            return Ok(None);
+        }
+
+        // Build argument values
+        let mut arg_values = Vec::new();
+        for a in args {
+            arg_values.push(self.build_expression(a.clone())?);
+        }
+
+        // Strip optional "/arity" suffix if present
+        let base = name.split('/').next().unwrap_or(name).to_string();
+
+        let dst = self.value_gen.next();
+        self.emit_unified_call(
+            Some(dst),
+            CallTarget::Extern(base),
+            arg_values,
+        )?;
+
+        Ok(Some(dst))
+    }
+
     // === ChatGPT5 Pro Design: Type-safe Call Resolution System ===
     /// Normalize external (builtin) ModuleFunction names so dotted+arity strings always resolve.
     /// Examples:
@@ -54,6 +84,11 @@ impl MirBuilder {
         mut name: String,
         args: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // HostBridge earliest fast path: route hostbridge.* global calls to Extern(hostbridge.*)
+        if let Some(dst) = self.try_handle_hostbridge_call(&name, &args)? {
+            return Ok(dst);
+        }
+
         // Normalize dotted names without arity to fully qualified form
         if name.contains('.') && !name.contains('/') {
             if let Ok(norm) = crate::mir::resolve::call_resolver_core::normalize(&name, args.len()) {
@@ -148,7 +183,12 @@ impl MirBuilder {
 
         if let Some(res) = self.try_handle_math_function(&name, raw_args) { return res; }
 
-        // Phase 2: ModuleFunction unification（envガード）
+        // HostBridge fast path: route hostbridge.* global calls to Extern(hostbridge.*)
+        if let Some(dst) = self.try_handle_hostbridge_call(&name, &args)? {
+            return Ok(dst);
+        }
+
+// Phase 2: ModuleFunction unification（envガード）
         // If enabled and current module contains a matching function, emit a Call
         // with callee=ModuleFunction to avoid Global builtin path.
         let module_fn_unify = true;
@@ -238,8 +278,8 @@ impl MirBuilder {
 
         // Build argument values first (needed for arity-aware fallback)
         let mut arg_values = Vec::new();
-        for a in args {
-            arg_values.push(self.build_expression(a)?);
+        for a in &args {
+            arg_values.push(self.build_expression(a.clone())?);
         }
         
         // External (builtin) ModuleFunction index — always resolve dotted+arity names
@@ -268,7 +308,7 @@ impl MirBuilder {
 
         // General dotted fallback: treat any dotted name as a ModuleFunction even if
         // it is defined in an imported box. Normalize via CallNameResolver to append "/arity".
-        if name.contains(".") {
+        if name.contains(".") && !name.starts_with("hostbridge.") {
             let target = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, arg_values.len()) {
                 Ok(full) => full,
                 Err(_) => if name.contains('/') { name.clone() } else { format!("{}/{}", name, arg_values.len()) },
@@ -466,6 +506,10 @@ impl MirBuilder {
             };
 
             // Legacy compatibility: Create dummy func value for old systems
+            // Special-case: route hostbridge.* to Extern even in legacy mode
+            if let Some(dst) = self.try_handle_hostbridge_call(&name, &args)? {
+                return Ok(dst);
+            }
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
 
             // Emit strict Global callee to avoid legacy dynamic resolution
@@ -496,6 +540,24 @@ impl MirBuilder {
         method: String,
         arguments: Vec<ASTNode>,
     ) -> Result<ValueId, String> {
+        // HostBridge method sugar: hostbridge.box_new(...)/hostbridge.box_call(...)
+        // If the receiver is a bare variable named "hostbridge", treat it as a global extern call
+        if let ASTNode::Variable { name, .. } = &object {
+            if name == "hostbridge" {
+                let full = format!("hostbridge.{}", method);
+                let mut arg_values = Vec::new();
+                for a in &arguments { arg_values.push(self.build_expression(a.clone())?); }
+                let dst = self.value_gen.next();
+                // Route to Extern("hostbridge.*") unconditionally
+                self.emit_unified_call(
+                    Some(dst),
+                    CallTarget::Extern(full),
+                    arg_values,
+                )?;
+                return Ok(dst);
+            }
+        }
+
         // Guard: static box does not support field emulation via getField/setField on the box itself
         if let Some(cls) = self.current_static_box.clone() {
             let is_box_self = match &object {
@@ -553,7 +615,7 @@ impl MirBuilder {
                     // Build arg values (avoid overlapping borrows by collecting first)
                     let built_args: Vec<ASTNode> = arguments.clone();
                     let mut arg_values = Vec::with_capacity(built_args.len());
-                    for a in built_args.into_iter() { arg_values.push(self.build_expression(a)?); }
+                    for a in built_args.into_iter() { arg_values.push(self.build_expression(a.clone())?); }
                     let arity = arg_values.len();
                     let fname = crate::mir::builder::calls::function_lowering::generate_method_function_name(cls, &method, arity);
                     let exists = if let Some(ref module) = self.current_module { module.functions.contains_key(&fname) } else { false };
