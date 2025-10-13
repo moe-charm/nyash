@@ -56,7 +56,10 @@ pub fn call_slot_grow(handle: u64, selector_id: u64, args: &[u8]) -> Result<Vec<
 }
 
 /// Call the host name API with a growable output buffer.
-/// TODO: Implement or migrate back to host_api
+/// TODO(HostHandle Architecture): Implement after resolving HostHandle/VMValue type mismatches
+///       Status: Currently unused (no callers in codebase)
+///       Decision: Keep stub for future name-based dispatch support
+///       See: host_handle_router/README.md for architectural intent
 pub fn call_name_grow(_handle: u64, _method: &str, _args: &[u8]) -> Result<Vec<u8>, i32> {
     Err(-999) // Stub: unimplemented
 }

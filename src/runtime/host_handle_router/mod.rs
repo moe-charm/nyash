@@ -3,12 +3,14 @@
 
 #![allow(dead_code)]
 
-// TEMPORARILY: Provide stub for route_slot to fix build
-// Re-enable router module after resolving HostHandle/VMValue type mismatches
+// TODO(HostHandle Architecture): Implement after resolving HostHandle/VMValue type mismatches
+//       Blocker: Type unification between plugin and builtin boxes
+//       Caller: src/runtime/host_api.rs:270 (nyrt_host_call_slot delegates here)
+//       Impact: All HostHandle slot calls return -999 (unimplemented)
+//       See: host_handle_router/README.md for architectural intent
 
 /// Stub implementation of route_slot
-/// Returns -999 (unimplemented) for all calls
-/// TODO: Implement actual routing logic or migrate back to host_api
+/// Returns -999 (unimplemented) for all calls until HostHandle/VMValue unification is complete
 #[allow(clippy::too_many_arguments)]
 pub fn route_slot(
     _handle: u64,

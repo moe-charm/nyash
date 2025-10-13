@@ -20,6 +20,7 @@ using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 using "selfhost/hakorune-vm/instrs_locator.hako" as InstrsLocatorBox
 using "selfhost/shared/mir/mir_io_box.hako" as MirIoBox
+using "selfhost/hakorune-vm/ret_value_loader.hako" as RetValueLoaderBox
 static box HakoruneVmCore {
   // Read MIR(JSON) from file and run
   run_from_file(path) {
@@ -147,10 +148,8 @@ static box HakoruneVmCore {
       local term_map = term_result.as_Ok()
       local term_type = term_map.get("type")
       if term_type == "ret" {
-        // Load return value from register
-        local ret_reg = term_map.get("value")
-        local ret_value = ValueManagerBox.get(regs, ret_reg)
-        return Result.Ok(ret_value)
+        // Load return value from register (via unified loader)
+        return RetValueLoaderBox.load_from_terminator(term_map, regs)
       }
       if term_type == "jump" || term_type == "branch" {
         predecessor = current_bb
