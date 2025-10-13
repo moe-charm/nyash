@@ -17,6 +17,7 @@ pub mod plugin_loader_v2;
 pub mod plugin_boot_box; // unified plugin init (idempotent)
 pub mod static_plugins; // static metadata registration (features-driven)
 pub mod method_router_box; // single entry for method dispatch (façade)
+pub mod array_flatten_helper; // ArrayBox flatten helpers for CallableBox
 pub mod provider_box;
 pub mod plugin_host_box;
 pub mod codec;
@@ -31,6 +32,7 @@ pub mod host_handle_router;
 pub mod extern_registry; // ExternCall (env.*) 登録・診断用レジストリ
 pub mod host_api; // C ABI: plugins -> host 逆呼び出しAPI（TLSでVMに橋渡し）
 pub mod host_api_box; // Thin facade (slots + grow wrappers)
+#[cfg(feature = "host-anchors")]
 pub mod host_api_anchors; // Force-link host API symbols for plugin dlsym() support
 pub mod host_handles; // C ABI(TLV) 向け HostHandle レジストリ（ユーザー/内蔵Box受け渡し）
 pub mod host_handle_box; // Box wrapper to carry HostHandle(u64) across Router→FFI

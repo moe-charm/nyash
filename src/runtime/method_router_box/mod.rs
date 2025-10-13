@@ -239,59 +239,12 @@ pub fn route(
                             500 => Ok(VMValue::Integer(cb.arity() as i64)),
                             503 => Ok(VMValue::String(cb.to_string_box().value)),
                             501 => {
-                                // Flatten argv: support both builtin and plugin ArrayBox
+                                // Flatten argv: support both builtin and plugin ArrayBox (via helper)
+                                use crate::runtime::array_flatten_helper as afh;
                                 let argv: Vec<VMValue> = hako_core_callable::flatten_argv(args,
-                                    // is_array: check if value is ArrayBox (builtin or plugin)
-                                    |v: &VMValue| {
-                                        if let VMValue::BoxRef(bx)=v {
-                                            // builtin ArrayBox
-                                            if bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
-                                                return true;
-                                            }
-                                            // plugin ArrayBox
-                                            if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                                                if p.box_type == "ArrayBox" {
-                                                    return true;
-                                                }
-                                            }
-                                        }
-                                        false
-                                    },
-                                    // len: get array length (builtin or plugin via route)
-                                    |v: &VMValue| {
-                                        if let VMValue::BoxRef(bx)=v {
-                                            // builtin ArrayBox
-                                            if let Some(a) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                                                return a.items.read().unwrap().len();
-                                            }
-                                            // plugin ArrayBox: call size() via route
-                                            if let Some(_p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                                                let mut tmp_interp = crate::backend::mir_interpreter::MirInterpreter::new();
-                                                if let Ok(VMValue::Integer(sz)) = crate::runtime::method_router_box::route(&mut tmp_interp, v, "size", &[]) {
-                                                    return sz as usize;
-                                                }
-                                            }
-                                        }
-                                        0
-                                    },
-                                    // get(i): get element at index (builtin or plugin via route)
-                                    |v: &VMValue, i: usize| {
-                                        if let VMValue::BoxRef(bx)=v {
-                                            // builtin ArrayBox
-                                            if let Some(a)=bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-                                                let guard=a.items.read().unwrap();
-                                                return VMValue::from_nyash_box(guard[i].clone_box());
-                                            }
-                                            // plugin ArrayBox: call get(i) via route
-                                            if let Some(_p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-                                                let mut tmp_interp = crate::backend::mir_interpreter::MirInterpreter::new();
-                                                if let Ok(val) = crate::runtime::method_router_box::route(&mut tmp_interp, v, "get", &[VMValue::Integer(i as i64)]) {
-                                                    return val;
-                                                }
-                                            }
-                                        }
-                                        v.clone()
-                                    });
+                                    afh::is_array,
+                                    afh::get_len,
+                                    afh::get_element);
                                 if let Some(recv) = &cb.receiver {
                                     let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));
                                     crate::runtime::method_router_box::route(_interp, &recv_vm, &cb.method, &argv)
@@ -544,13 +497,13 @@ pub fn route(
                                 let callee = mp.get(key_box);
                                 if let Some(cb) = callee.as_any().downcast_ref::<crate::boxes::callable::CallableBox>() {
                                     let recv_vm = VMValue::BoxRef(std::sync::Arc::from(cb.receiver.as_ref().ok_or_else(|| VMError::InvalidInstruction("CallableBox without receiver".into()))?.share_box()));
-                                    // Reuse shared argv flattener: treat args[1] as the single argv-array input
+                                    // Reuse shared argv flattener: treat args[1] as the single argv-array input (via helper)
+                                    use crate::runtime::array_flatten_helper as afh;
                                     let argv: Vec<VMValue> = hako_core_callable::flatten_argv(
                                         &args[1..2],
-                                        |v: &VMValue| { if let VMValue::BoxRef(bx)=v { bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() } else { false } },
-                                        |v: &VMValue| { if let VMValue::BoxRef(bx)=v { bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().map(|a| a.items.read().unwrap().len()).unwrap_or(0) } else { 0 } },
-                                        |v: &VMValue, i: usize| { if let VMValue::BoxRef(bx)=v { if let Some(a)=bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() { let guard=a.items.read().unwrap(); VMValue::from_nyash_box(guard[i].clone_box()) } else { v.clone() } } else { v.clone() } }
-                                    );
+                                        afh::is_array,
+                                        afh::get_len,
+                                        afh::get_element);
                                     crate::runtime::method_router_box::route(_interp, &recv_vm, &cb.method, &argv)
                                 } else {
                                     Err(VMError::InvalidInstruction("Map.call: value is not CallableBox".into()))
