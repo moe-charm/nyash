@@ -106,7 +106,7 @@ box EventDispatcher {
     dispatch(event) {
         local activeListeners = new ArrayBox()
         local i = 0
-        local len = me.listeners.length()
+        local len = me.listeners.size()
         
         loop(i < len) {
             local listener = me.listeners.get(i)
@@ -150,7 +150,7 @@ box Listener {
     
     fini() {
         // 子→親の順で解放（カスケード）
-        local i = me.children.length() - 1
+        local i = me.children.size() - 1
         loop(i >= 0) {
             local child = me.children.get(i)
             if child != null {

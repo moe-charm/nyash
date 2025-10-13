@@ -13,13 +13,17 @@ use super::super::*;
 
 mod callee_dispatcher;
 mod method_handler;
+#[cfg(feature = "legacy-boxes")]
 mod legacy_resolver;
+#[cfg(feature = "legacy-boxes")]
 mod extern_handler;
 
 // Re-export for parent module
 #[allow(unused_imports)] pub(crate) use callee_dispatcher::*;
 #[allow(unused_imports)] pub(crate) use method_handler::*;
+#[cfg(feature = "legacy-boxes")]
 #[allow(unused_imports)] pub(crate) use legacy_resolver::*;
+#[cfg(feature = "legacy-boxes")]
 #[allow(unused_imports)] pub(crate) use extern_handler::*;
 
 impl MirInterpreter {
@@ -27,7 +31,7 @@ impl MirInterpreter {
     pub(crate) fn handle_call(
         &mut self,
         dst: Option<ValueId>,
-        func: ValueId,
+        _func: ValueId,
         callee: Option<&Callee>,
         args: &[ValueId],
     ) -> Result<(), VMError> {
@@ -36,7 +40,14 @@ impl MirInterpreter {
         let call_result = if let Some(callee_type) = callee {
             self.execute_callee_call(callee_type, &args2)?
         } else {
-            self.execute_legacy_call(func, &args2)?
+            #[cfg(feature = "legacy-boxes")]
+            {
+                self.execute_legacy_call(func, &args2)?
+            }
+            #[cfg(not(feature = "legacy-boxes"))]
+            {
+                return Err(VMError::InvalidInstruction("NameConst legacy call path disabled (legacy-boxes OFF)".into()));
+            }
         };
         if let Some(d) = dst {
             self.regs.insert(d, call_result);

@@ -33,7 +33,7 @@ members = [
 ]
 
 [modules.overrides]
-selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
+selfhost.tools.dep_tree_core = "selfhost/tools/dep_tree_core.hako"
 ```
 
 ## CLI helpers
@@ -79,7 +79,7 @@ members = [
 ]
 
 [modules.overrides]
-selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
+selfhost.tools.dep_tree_core = "selfhost/tools/dep_tree_core.hako"
 ```
 
 3) Using in code:

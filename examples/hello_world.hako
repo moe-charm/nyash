@@ -1,0 +1,15 @@
+// 🌍 Hello World - Nyash Programming Language Demo
+// Everything is Box philosophy in action!
+
+print("🐱 Hello, Nyash World!")
+
+// Basic Box creation and usage
+greeting = new StringBox("Welcome to Nyash!")
+print(greeting.toString())
+
+// Simple calculation with Box
+numbers = new IntegerBox(42)
+result = numbers + 8
+print("42 + 8 = " + result)
+
+print("✨ Everything is Box - Revolutionary programming! ✨")

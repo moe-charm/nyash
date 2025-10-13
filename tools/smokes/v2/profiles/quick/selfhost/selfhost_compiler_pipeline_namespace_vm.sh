@@ -7,6 +7,7 @@ export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_DEV=1
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 TEST_main() {
   # Ny source with using alias + simple call; hex encode and pass via --source-inline

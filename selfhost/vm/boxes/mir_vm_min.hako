@@ -17,6 +17,8 @@ using selfhost.vm.scanner as InstructionScannerBox
 static box MirVmMin {
   _tprint(msg) {
     // Only emit hard errors by default; avoid env dependencies in Mini‑VM
+    // Coerce to string to avoid VoidBox receiver issues during early boot
+    msg = "" + msg
     if msg.indexOf("[ERROR]") >= 0 { print(msg) }
   }
   _d(msg, trace) { if trace == 1 { print(msg) } }
@@ -52,6 +54,8 @@ static box MirVmMin {
   _handle_copy(seg, regs){ local dst=JsonFragBox.get_int(seg,"dst") local src=JsonFragBox.get_int(seg,"src") if dst==null || src==null {return} local v=regs.get(""+src) regs.set(""+dst, v) }
 
   _run_min(mjson) {
+    // Normalize input as string to guarantee String methods availability
+    mjson = "" + mjson
     // thin_mode=0: legacy heuristics（互換）; thin_mode=1: simplified ret
     local thin_mode = 0
     if mjson.indexOf("\"__thin__\":1") >= 0 { thin_mode = 1 }

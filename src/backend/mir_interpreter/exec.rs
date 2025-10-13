@@ -299,10 +299,7 @@ impl MirInterpreter {
                     predecessor: block.id,
                 })
             }
-            None => Err(VMError::InvalidBasicBlock(format!(
-                "unterminated block {:?}",
-                block.id
-            ))),
+            None => Err(VMError::InvalidBasicBlock(format!("unterminated block {:?}", block.id))),
             Some(MirInstruction::Throw { .. }) => {
                 // Minimal support: treat throw as immediate function return (void)
                 // This allows non-taken throw arms to be lowered without crashing the VM.
@@ -466,6 +463,7 @@ fn val_preview(v: &super::VMValue) -> String {
         super::VMValue::String(s) => format!("\"{}\"", s),
         super::VMValue::Void => "void".into(),
         super::VMValue::BoxRef(bx) => format!("{}", bx.type_name()),
+        #[cfg(feature = "legacy-boxes")]
         super::VMValue::Future(_) => "<future>".into(),
     }
 }

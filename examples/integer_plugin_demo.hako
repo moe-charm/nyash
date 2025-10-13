@@ -1,0 +1,13 @@
+// IntegerBox plugin demo
+// Build: (cd plugins/nyash-integer-plugin && cargo build --release)
+
+static box Main {
+  main() {
+    local i
+    i = new IntegerBox()
+    i.set(42)
+    me.console.log("get()=", i.get())
+    return i.get()
+  }
+}
+

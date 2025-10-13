@@ -1,0 +1,13 @@
+box Greeter {
+  name: StringBox = "Nyash"
+  greeting: StringBox => "Hello " + me.name
+}
+
+static box Main {
+  main(args) {
+    local g = new Greeter()
+    print(g.greeting)
+    return 0
+  }
+}
+

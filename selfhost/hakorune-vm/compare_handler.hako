@@ -5,6 +5,7 @@
 using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/reg_guard.hako" as RegGuardBox
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 
 static box CompareHandlerBox {
@@ -36,7 +37,9 @@ static box CompareHandlerBox {
 
     // Load operands from registers using ValueManagerBox
     local lhs_val = ValueManagerBox.get(regs, lhs_id)
+    if lhs_val == null { return Result.Err("compare: lhs v%" + StringHelpers.int_to_str(lhs_id) + " is unset") }
     local rhs_val = ValueManagerBox.get(regs, rhs_id)
+    if rhs_val == null { return Result.Err("compare: rhs v%" + StringHelpers.int_to_str(rhs_id) + " is unset") }
 
     // Execute comparison operation (result: 1=true, 0=false)
     local result_val = 0

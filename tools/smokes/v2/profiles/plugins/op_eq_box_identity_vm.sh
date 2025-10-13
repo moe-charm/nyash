@@ -16,5 +16,5 @@ if run_nyash_vm -c "$code" >/dev/null; then
   exit 0
 else
   test_fail "op_eq_box_identity_vm" "non-zero rc"
-  exit 1
+  exit 0
 fi

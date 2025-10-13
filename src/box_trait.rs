@@ -19,10 +19,14 @@ pub use crate::box_registry::{BUILTIN_BOXES, is_builtin_box};
 
 // ===== Basic Box Types (Re-exported from basic module) =====
 
-// Re-export all basic box types from the dedicated basic module
+// Re-export all basic box types from the dedicated basic module (legacy only)
+#[cfg(feature = "legacy-boxes")]
 pub use crate::boxes::basic::{
     BoolBox, ErrorBox, FileBox, IntegerBox, StringBox, VoidBox,
 };
+// When legacy is OFF, provide minimal shim types to satisfy signatures
+#[cfg(not(feature = "legacy-boxes"))]
+pub use crate::compat::basic_box_shim::{BoolBox, IntegerBox, StringBox, VoidBox};
 
 
 
@@ -31,13 +35,15 @@ pub use crate::boxes::basic::{
 
 
 // Old Box implementations have been moved to separate files
-// ArrayBox is now defined in boxes::array module
+// ArrayBox is now defined in boxes::array module (legacy only)
+#[cfg(feature = "legacy-boxes")]
 pub use crate::boxes::array::ArrayBox;
 
 // FutureBox is now implemented in src/boxes/future/mod.rs using RwLock pattern
 // and re-exported from src/boxes/mod.rs as both NyashFutureBox and FutureBox
 
-// Re-export operation boxes from the dedicated operations module
+// Re-export operation boxes from the dedicated operations module (legacy only)
+#[cfg(feature = "legacy-boxes")]
 pub use crate::box_arithmetic::{
     AddBox, CompareBox, DivideBox, ModuloBox, MultiplyBox, SubtractBox,
 };

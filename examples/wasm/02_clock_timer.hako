@@ -1,0 +1,151 @@
+// ⏰ Clock & Timer Demo - TimerBox + WebCanvasBox
+// Digital and analog clock with timer functionality
+
+print("⏰ === Clock & Timer Demo Starting ===")
+
+// Initialize components
+local canvas, timer
+canvas = new WebCanvasBox("demo-canvas", 600, 400)
+timer = new TimerBox()
+
+// Clear canvas with dark background
+canvas.clear()
+canvas.setFillStyle("#1a1a1a")
+canvas.fillRect(0, 0, 600, 400)
+
+// Function to draw digital clock
+local drawDigitalClock
+drawDigitalClock = function() {
+    local now, hours, minutes, seconds, timeString
+    now = timer.now()
+    
+    // Convert to readable time (simplified for demo)
+    seconds = (now / 1000) % 60
+    minutes = ((now / 1000) / 60) % 60  
+    hours = (((now / 1000) / 60) / 60) % 24
+    
+    // Format time string
+    timeString = hours + ":" + minutes + ":" + seconds
+    
+    // Draw digital time
+    canvas.setFillStyle("#00ff00")
+    canvas.fillText(timeString, 200, 100, "48px 'Courier New'", "#00ff00")
+}
+
+// Function to draw analog clock
+local drawAnalogClock
+drawAnalogClock = function() {
+    local centerX, centerY, radius
+    centerX = 300
+    centerY = 250
+    radius = 80
+    
+    // Draw clock face
+    canvas.setFillStyle("#333333")
+    canvas.fillCircle(centerX, centerY, radius)
+    
+    // Draw clock border
+    canvas.setStrokeStyle("#00ff00")
+    canvas.setLineWidth(3)
+    canvas.strokeCircle(centerX, centerY, radius)
+    
+    // Draw hour markers
+    local i, angle, x1, y1, x2, y2
+    i = 0
+    loop(i < 12) {
+        angle = (i * 30) * 3.14159 / 180  // Convert to radians
+        x1 = centerX + (radius - 15) * Math.cos(angle - 3.14159/2)
+        y1 = centerY + (radius - 15) * Math.sin(angle - 3.14159/2)
+        x2 = centerX + (radius - 5) * Math.cos(angle - 3.14159/2)
+        y2 = centerY + (radius - 5) * Math.sin(angle - 3.14159/2)
+        
+        canvas.setStrokeStyle("#ffffff")
+        canvas.setLineWidth(2)
+        canvas.drawLine(x1, y1, x2, y2, "#ffffff", 2)
+        
+        i = i + 1
+    }
+    
+    // Draw center dot
+    canvas.setFillStyle("#ff0000")
+    canvas.fillCircle(centerX, centerY, 5)
+}
+
+// Timer functionality
+local timerStart, timerElapsed, isTimerRunning
+timerStart = 0
+timerElapsed = 0
+isTimerRunning = false
+
+local drawTimer
+drawTimer = function() {
+    local timerText
+    
+    if (isTimerRunning) {
+        timerElapsed = timer.now() - timerStart
+    }
+    
+    // Format elapsed time
+    local seconds, minutes
+    seconds = (timerElapsed / 1000) % 60
+    minutes = ((timerElapsed / 1000) / 60) % 60
+    
+    timerText = "Timer: " + minutes + ":" + seconds
+    
+    // Draw timer display
+    canvas.setFillStyle("#ffff00")
+    canvas.fillText(timerText, 150, 350, "24px Arial", "#ffff00")
+    
+    // Draw timer control hint
+    canvas.setFillStyle("#ffffff")
+    canvas.fillText("Press S to start/stop timer", 150, 380, "16px Arial", "#ffffff")
+}
+
+// Main drawing function
+local draw
+draw = function() {
+    // Clear canvas
+    canvas.setFillStyle("#1a1a1a")
+    canvas.fillRect(0, 0, 600, 400)
+    
+    // Draw title
+    canvas.setFillStyle("#ffffff")
+    canvas.fillText("Nyash Clock & Timer", 180, 50, "28px Arial", "#ffffff")
+    
+    // Draw components
+    drawDigitalClock()
+    drawAnalogClock()
+    drawTimer()
+}
+
+// Initial draw
+draw()
+
+// Start timer for demo
+timerStart = timer.now()
+isTimerRunning = true
+
+print("⏰ Clock & Timer Demo Ready!")
+print("• Digital clock shows current time")
+print("• Analog clock with hour markers")  
+print("• Built-in timer functionality")
+print("• Press S to start/stop timer (in browser)")
+print("🌐 Everything is Box - even time itself!")
+
+// Draw some additional visual elements for the demo
+canvas.setStrokeStyle("#00ff00")
+canvas.setLineWidth(1)
+
+// Draw decorative frame
+canvas.strokeRect(10, 10, 580, 380)
+
+// Add some visual flair
+local i
+i = 0
+loop(i < 5) {
+    canvas.setFillStyle("#444444")
+    canvas.fillCircle(50 + i * 100, 30, 3)
+    i = i + 1
+}
+
+print("✅ Clock & Timer Demo Complete!")

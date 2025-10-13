@@ -1,0 +1,23 @@
+// ReceiverGuardBox - Validate boxcall/method receiver
+// Responsibility: Fail-Fast for unset/invalid receivers with contextual message
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box ReceiverGuardBox {
+  // Ensure receiver is usable before dispatch
+  // receiver: any box or null
+  // method_sig: e.g., "size/0"
+  // receiver_id: numeric ValueId (for diagnostics)
+  ensure_valid(receiver, method_sig, receiver_id) {
+    if receiver == null {
+      return Result.Err("boxcall: receiver v%" + StringHelpers.int_to_str(receiver_id) + " is unset (method=" + method_sig + ")")
+    }
+    // Heuristic Void detection via string form (best-effort; optional)
+    local s = "" + receiver
+    if s.indexOf("VoidBox") >= 0 {
+      return Result.Err("boxcall: receiver v%" + StringHelpers.int_to_str(receiver_id) + " is Void (method=" + method_sig + ")")
+    }
+    return Result.Ok(receiver)
+  }
+}

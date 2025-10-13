@@ -1,0 +1,18 @@
+// Chained await example
+
+static box Main {
+    main() {
+        local f1, f2, r1, r2
+        
+        // Create two futures
+        f1 = new FutureBox(10)
+        f2 = new FutureBox(20)
+        
+        // Await both
+        r1 = await f1
+        r2 = await f2
+        
+        // Return sum
+        return r1 + r2
+    }
+}

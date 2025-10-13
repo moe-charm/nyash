@@ -7,7 +7,7 @@ export NYASH_DISABLE_PLUGINS=1
 export NYASH_ALLOW_USING_FILE=1
 export NYASH_USING_AST=1
 # Ensure minimal modules mapping provided for E2E
-export NYASH_MODULES="selfhost.json.core.string_scan=apps/selfhost/common/json/core/string_scan.hako"
+export NYASH_MODULES="selfhost.json.core.string_scan=selfhost/shared/json/core/string_scan.hako"
 require_env || exit 2
 preflight_plugins || exit 2
 

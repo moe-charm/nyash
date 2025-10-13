@@ -74,7 +74,7 @@ pub fn llvmlite_emit_object(
 }
 
 /// Resolve ny-llvmc executable path with env/PATH fallbacks
-fn resolve_ny_llvmc() -> std::path::PathBuf {
+pub fn resolve_ny_llvmc() -> std::path::PathBuf {
     std::env::var("NYASH_NY_LLVM_COMPILER")
         .ok()
         .and_then(|s| if !s.is_empty() { Some(std::path::PathBuf::from(s)) } else { None })

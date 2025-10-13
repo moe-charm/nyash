@@ -1,0 +1,3 @@
+for(fn(){ local i = 0 }, i < 3, fn(){ i = i + 1 }, fn(){
+  print(i)
+})

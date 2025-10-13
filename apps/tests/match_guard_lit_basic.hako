@@ -1,0 +1,12 @@
+static box Main {
+  main(args) {
+    local d = 1
+    local r = match d {
+      1 if (0 == 1) => { print("no") 7 }
+      1 => { print("yes") 9 }
+      _ => 0
+    }
+    return r
+  }
+}
+

@@ -41,27 +41,30 @@ pub fn invoke_alloc(
     instance_id: u32,
     tlv_args: &[u8],
 ) -> (i32, usize, Vec<u8>) {
-    let mut out = vec![0u8; 1024];
-    let mut out_len: usize = out.len();
     let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
-    if debug {
-        eprintln!("[host_bridge] invoke_alloc ENTER: type_id={} method_id={} instance_id={} out_len_before={}",
-                  type_id, method_id, instance_id, out_len);
+    let mut cap: usize = 1024;
+    let cap_max: usize = 262144;
+    let mut out: Vec<u8> = vec![0u8; cap];
+    let mut out_len: usize = out.len();
+    loop {
+        if debug { eprintln!("[host_bridge] invoke_alloc ENTER: type_id={} method_id={} instance_id={} out_len_before={} (cap={})", type_id, method_id, instance_id, out_len, cap); }
+        let code = unsafe {
+            invoke(
+                type_id, method_id, instance_id,
+                tlv_args.as_ptr(), tlv_args.len(),
+                out.as_mut_ptr(), &mut out_len,
+            )
+        };
+        let short = out_len > cap;
+        if debug { eprintln!("[host_bridge] invoke_alloc EXIT: code={} out_len_after={} (cap={}) short={}", code, out_len, cap, short); }
+        if short {
+            let new_cap = cap_max.min(out_len.max(cap.saturating_mul(2)));
+            if new_cap <= cap { return (code, out_len, out); }
+            cap = new_cap;
+            out = vec![0u8; cap];
+            out_len = cap;
+            continue;
+        }
+        return (code, out_len, out);
     }
-    let code = unsafe {
-        invoke(
-            type_id,
-            method_id,
-            instance_id,
-            tlv_args.as_ptr(),
-            tlv_args.len(),
-            out.as_mut_ptr(),
-            &mut out_len,
-        )
-    };
-    if debug {
-        eprintln!("[host_bridge] invoke_alloc EXIT: code={} out_len_after={} (buffer_cap=1024)",
-                  code, out_len);
-    }
-    (code, out_len, out)
 }

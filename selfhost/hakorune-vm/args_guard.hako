@@ -1,0 +1,21 @@
+// args_guard.hako — ArgsGuardBox
+// Responsibility: validate argument arrays for boxcall/method (Fail‑Fast)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+
+static box ArgsGuardBox {
+  // Ensure no nulls in args_array
+  // Returns Ok(args_array) or Err with first offending index
+  ensure_no_nulls(args_array, method_sig) {
+    if args_array == null { return Result.Ok(new ArrayBox()) }
+    local n = args_array.size()
+    local i = 0
+    loop(i < n) {
+      if args_array.get(i) == null {
+        return Result.Err("args: argument[" + i + "] is unset (method=" + method_sig + ")")
+      }
+      i = i + 1
+    }
+    return Result.Ok(args_array)
+  }
+}

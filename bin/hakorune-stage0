@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Wrapper: hakorune-stage0 → Rust VM (nyash default backend)
+set -euo pipefail
+HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+"$HERE/hakorune" "$@"
+

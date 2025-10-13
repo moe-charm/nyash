@@ -13,6 +13,7 @@ export NYASH_OPERATOR_BOX_COMPARE_ADOPT=0
 export NYASH_OPERATOR_BOX_PRELUDE=0
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 unset NYASH_DEV || true
 unset NYASH_OPERATOR_BOX_ALL || true

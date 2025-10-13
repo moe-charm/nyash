@@ -22,7 +22,7 @@ static box Main {
     samples.push("-1e-9")
 
     local i = 0
-    loop(i < samples.length()) {
+    loop(i < samples.size()) {
       local s = samples.get(i)
       // Use JsonNode.parse for compact pretty-printing in MVP path
       // (JsonParserModule/full tokenizer is exercised in integration smokes)

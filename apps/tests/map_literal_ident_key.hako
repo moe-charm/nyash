@@ -1,0 +1,10 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local m = {name: "A", age: 2,}
+    console.println(m.size())
+    console.println(m.get("name"))
+    return 0
+  }
+}
+

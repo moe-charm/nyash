@@ -1,0 +1,16 @@
+// Semantics test - Array operations
+
+static box Main {
+    main() {
+        local arr, value
+        arr = new ArrayBox()
+        
+        // ArrayGet/ArraySet test
+        arr.push(10)
+        arr.push(20)
+        arr.push(30)
+        
+        value = arr.get(1)  // Should be 20
+        return value
+    }
+}

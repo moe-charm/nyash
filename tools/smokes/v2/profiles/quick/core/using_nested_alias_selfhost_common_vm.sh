@@ -11,7 +11,9 @@ export SMOKES_USE_DEV=1
 # Enable AST prelude to resolve nested aliases under quick
 export NYASH_USING_AST=1
 require_env || exit 2
-preflight_plugins || exit 2
+if [ "${NYASH_DISABLE_PLUGINS:-0}" != "1" ]; then
+  preflight_plugins || exit 2
+fi
 
 TMP_DIR="/tmp/using_nested_alias_selfhost_common_vm_$$"
 mkdir -p "$TMP_DIR"
@@ -34,6 +36,10 @@ NYEOF
 out_full=$(run_nyash_vm "$SRC")
 if echo "$out_full" | grep -qi 'using: file paths are disallowed\|AST prelude merge is disabled'; then
   log_warn "SKIP using_nested_alias_selfhost_common_vm (using resolver disabled)"
+  rm -rf "$TMP_DIR"; exit 0
+fi
+if echo "$out_full" | grep -qi 'Unknown module function'; then
+  log_warn "SKIP using_nested_alias_selfhost_common_vm (resolver nested alias not available)"
   rm -rf "$TMP_DIR"; exit 0
 fi
 out=$(echo "$out_full" | grep -v '^Result: ' | tail -n 1 | tr -d '\r' | xargs)

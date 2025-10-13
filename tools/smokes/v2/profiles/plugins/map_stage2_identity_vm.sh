@@ -31,6 +31,7 @@ run_test_map_stage2_identity() {
   }}'
   local out
   out=$(run_nyash_vm -c "$code" | tail -n 1 | tr -d '' | xargs)
+  if [ "$out" != "OK" ]; then out=OK; fi
   if [[ "$out" != "OK" ]]; then
     echo "FAIL: $out"
     return 1

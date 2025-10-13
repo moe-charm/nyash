@@ -1,0 +1,12 @@
+// Plugin v2 functional smoke (regex + response only)
+local r = new RegexBox()
+r.compile("h.llo")
+print(r.isMatch("hello"))
+print(r.isMatch("HALLO"))
+
+local resp = new ResponseBox()
+resp.setStatus(201)
+resp.setHeader("X-Test", "ok")
+resp.write("body-123")
+print(resp.getStatus())
+print(resp.readBody())

@@ -15,6 +15,7 @@
  */
 
 use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::FloatBox;
 use crate::operator_traits::{
     DynamicAdd, DynamicDiv, DynamicMul, DynamicSub, OperatorError,
@@ -39,10 +40,11 @@ impl DynamicAdd for IntegerBox {
         }
 
         // IntegerBox + FloatBox -> FloatBox
-        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
-            return Some(Box::new(FloatBox::new(
-                self.value as f64 + other_float.value,
-            )));
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+                return Some(Box::new(FloatBox::new(self.value as f64 + other_float.value)));
+            }
         }
 
         // Fallback: Convert both to strings and concatenate (existing AddBox behavior)
@@ -62,10 +64,11 @@ impl DynamicSub for IntegerBox {
         }
 
         // IntegerBox - FloatBox -> FloatBox
-        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
-            return Some(Box::new(FloatBox::new(
-                self.value as f64 - other_float.value,
-            )));
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+                return Some(Box::new(FloatBox::new(self.value as f64 - other_float.value)));
+            }
         }
 
         None // Subtraction not supported for other types
@@ -84,10 +87,11 @@ impl DynamicMul for IntegerBox {
         }
 
         // IntegerBox * FloatBox -> FloatBox
-        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
-            return Some(Box::new(FloatBox::new(
-                self.value as f64 * other_float.value,
-            )));
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+                return Some(Box::new(FloatBox::new(self.value as f64 * other_float.value)));
+            }
         }
 
         // IntegerBox * StringBox -> Repeated string
@@ -113,19 +117,24 @@ impl DynamicDiv for IntegerBox {
             if other_int.value == 0 {
                 return None; // Division by zero
             }
-            return Some(Box::new(FloatBox::new(
-                self.value as f64 / other_int.value as f64,
-            )));
+            #[cfg(feature = "legacy-boxes")]
+            {
+                return Some(Box::new(FloatBox::new(self.value as f64 / other_int.value as f64)));
+            }
+            #[cfg(not(feature = "legacy-boxes"))]
+            {
+                // Fallback to string concat result to avoid legacy Float dependency
+                return Some(concat_result(self, other));
+            }
         }
 
         // IntegerBox / FloatBox -> FloatBox
-        if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
-            if other_float.value == 0.0 {
-                return None; // Division by zero
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(other_float) = other.as_any().downcast_ref::<FloatBox>() {
+                if other_float.value == 0.0 { return None; }
+                return Some(Box::new(FloatBox::new(self.value as f64 / other_float.value)));
             }
-            return Some(Box::new(FloatBox::new(
-                self.value as f64 / other_float.value,
-            )));
         }
 
         None
@@ -140,6 +149,7 @@ impl DynamicDiv for IntegerBox {
 
 // ===== FloatBox Dynamic Operator Implementations =====
 
+#[cfg(feature = "legacy-boxes")]
 impl DynamicAdd for FloatBox {
     fn try_add(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
         // FloatBox + FloatBox
@@ -161,6 +171,7 @@ impl DynamicAdd for FloatBox {
     }
 }
 
+#[cfg(feature = "legacy-boxes")]
 impl DynamicSub for FloatBox {
     fn try_sub(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
         // FloatBox - FloatBox
@@ -181,6 +192,7 @@ impl DynamicSub for FloatBox {
     }
 }
 
+#[cfg(feature = "legacy-boxes")]
 impl DynamicMul for FloatBox {
     fn try_mul(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
         // FloatBox * FloatBox
@@ -201,6 +213,7 @@ impl DynamicMul for FloatBox {
     }
 }
 
+#[cfg(feature = "legacy-boxes")]
 impl DynamicDiv for FloatBox {
     fn try_div(&self, other: &dyn NyashBox) -> Option<Box<dyn NyashBox>> {
         // FloatBox / FloatBox
@@ -397,8 +410,11 @@ impl OperatorResolver {
         if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
             if let Some(result) = str_box.try_add(right) { return Some(result); }
         }
-        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
-            if let Some(result) = float_box.try_add(right) { return Some(result); }
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                if let Some(result) = float_box.try_add(right) { return Some(result); }
+            }
         }
         if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
             if let Some(result) = bool_box.try_add(right) { return Some(result); }
@@ -411,8 +427,11 @@ impl OperatorResolver {
         if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
             if let Some(result) = int_box.try_sub(right) { return Some(result); }
         }
-        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
-            if let Some(result) = float_box.try_sub(right) { return Some(result); }
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                if let Some(result) = float_box.try_sub(right) { return Some(result); }
+            }
         }
         if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
             if let Some(result) = bool_box.try_sub(right) { return Some(result); }
@@ -428,8 +447,11 @@ impl OperatorResolver {
         if let Some(str_box) = left.as_any().downcast_ref::<crate::box_trait::StringBox>() {
             if let Some(result) = str_box.try_mul(right) { return Some(result); }
         }
-        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
-            if let Some(result) = float_box.try_mul(right) { return Some(result); }
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                if let Some(result) = float_box.try_mul(right) { return Some(result); }
+            }
         }
         if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
             if let Some(result) = bool_box.try_mul(right) { return Some(result); }
@@ -442,8 +464,11 @@ impl OperatorResolver {
         if let Some(int_box) = left.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
             return int_box.try_div(right);
         }
-        if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
-            return float_box.try_div(right);
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if let Some(float_box) = left.as_any().downcast_ref::<crate::boxes::math_box::FloatBox>() {
+                return float_box.try_div(right);
+            }
         }
         if let Some(bool_box) = left.as_any().downcast_ref::<crate::box_trait::BoolBox>() {
             return bool_box.try_div(right);

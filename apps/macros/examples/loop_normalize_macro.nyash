@@ -19,7 +19,7 @@ static box MacroBoxSpec {
 
     // parse a JSON value starting at i and return "<end_index>#<json>"
     function parse_value(s, i) {
-      local n = s.length()
+      local n = s.size()
       if i >= n { return ("" + i) + "#" + "" }
       local ch = s.substring(i, i+1)
       // string
@@ -99,7 +99,7 @@ static box MacroBoxSpec {
     function pair_idx(pair) {
       // parse decimal at start until '#'
       local i = 0
-      local n = pair.length()
+      local n = pair.size()
       local val = 0
       loop(i < n) {
         local ch = pair.substring(i, i+1)
@@ -124,7 +124,7 @@ static box MacroBoxSpec {
     function pair_json(pair) {
       // substring after first '#'
       local i = 0
-      local n = pair.length()
+      local n = pair.size()
       loop(i < n) {
         if pair.substring(i, i+1) == "#" { return pair.substring(i+1, n) }
         i = i + 1
@@ -139,19 +139,19 @@ static box MacroBoxSpec {
       local pat = "\"target\":{\"kind\":\"Variable\",\"name\":\""
       local pos = -1
       local j = 0
-      loop(j + pat.length() <= e2.length()) {
-        if e2.substring(j, j + pat.length()) == pat { pos = j + pat.length(); break }
+      loop(j + pat.size() <= e2.size()) {
+        if e2.substring(j, j + pat.size()) == pat { pos = j + pat.size(); break }
         j = j + 1
       }
       if pos < 0 { return "" }
       // read until next unescaped quote
       local name = ""
       local k = pos
-      loop(k < e2.length()) {
+      loop(k < e2.size()) {
         local c = e2.substring(k, k+1)
         if c == "\\" {
           // skip escape and next char
-          if k + 1 < e2.length() { name = name + e2.substring(k, k+2); k = k + 2; continue }
+          if k + 1 < e2.size() { name = name + e2.substring(k, k+2); k = k + 2; continue }
         }
         if c == "\"" { break }
         name = name + c
@@ -165,9 +165,9 @@ static box MacroBoxSpec {
     local t_cond = "\"condition\":"
     local t_body = "\"body\":"
 
-    loop(i < s.length()) {
+    loop(i < s.size()) {
       // try to detect a Loop object start
-      if i + 6 < s.length() && s.substring(i, i+1) == "{" {
+      if i + 6 < s.size() && s.substring(i, i+1) == "{" {
         // look ahead inside this object to see if it begins with kind:Loop
         local val = parse_value(s, i)
         local endi = pair_idx(val)
@@ -177,8 +177,8 @@ static box MacroBoxSpec {
         {
           local found = 0
           local k = 0
-          loop(k + t_kind_loop.length() <= obj.length()) {
-            if obj.substring(k, k + t_kind_loop.length()) == t_kind_loop {
+          loop(k + t_kind_loop.size() <= obj.size()) {
+            if obj.substring(k, k + t_kind_loop.size()) == t_kind_loop {
               found = 1
               break
             }
@@ -195,18 +195,18 @@ static box MacroBoxSpec {
         // Find condition token within object string
         local oj = 0
         local pos_c = -1
-        loop(oj + t_cond.length() <= obj.length()) {
-          if obj.substring(oj, oj + t_cond.length()) == t_cond {
-            pos_c = oj + t_cond.length()
+        loop(oj + t_cond.size() <= obj.size()) {
+          if obj.substring(oj, oj + t_cond.size()) == t_cond {
+            pos_c = oj + t_cond.size()
             break
           }
           oj = oj + 1
         }
         local pos_b = -1
         local kk = 0
-        loop(kk + t_body.length() <= obj.length()) {
-          if obj.substring(kk, kk + t_body.length()) == t_body {
-            pos_b = kk + t_body.length()
+        loop(kk + t_body.size() <= obj.size()) {
+          if obj.substring(kk, kk + t_body.size()) == t_body {
+            pos_b = kk + t_body.size()
             break
           }
           kk = kk + 1
@@ -222,10 +222,10 @@ static box MacroBoxSpec {
           // if body_json is not array, keep identity
           if body_json.substring(0,1) == "[" {
             // Reorder body: move Assignment nodes to the tail (carrier-like normalization)
-            local inner = body_json.substring(1, body_json.length()-1)
+            local inner = body_json.substring(1, body_json.size()-1)
             local elems = []
             local p2 = 0
-            local n2 = inner.length()
+            local n2 = inner.size()
             local in_str2 = false
             local depth_obj2 = 0
             local depth_arr2 = 0
@@ -256,19 +256,19 @@ static box MacroBoxSpec {
             local others = []     // list of [idx,json]
             local tagA = "\"kind\":\"Assignment\""
             local t = 0
-            loop(t < elems.length()) {
+            loop(t < elems.size()) {
               local e2 = elems.get(t)
               // trim
               local a = 0
-              local b = e2.length()
+              local b = e2.size()
               loop(a < b && (e2.substring(a,a+1)==" " || e2.substring(a,a+1)=="\n" || e2.substring(a,a+1)=="\t" || e2.substring(a,a+1)=="\r")) { a = a + 1 }
               loop(b > a && (e2.substring(b-1,b)==" " || e2.substring(b-1,b)=="\n" || e2.substring(b-1,b)=="\t" || e2.substring(b-1,b)=="\r")) { b = b - 1 }
               e2 = e2.substring(a,b)
               // contains tagA?
               local found = 0
               local q = 0
-              loop(q + tagA.length() <= e2.length()) {
-                if e2.substring(q, q + tagA.length()) == tagA {
+              loop(q + tagA.size() <= e2.size()) {
+                if e2.substring(q, q + tagA.size()) == tagA {
                   found = 1
                   break
                 }
@@ -280,14 +280,14 @@ static box MacroBoxSpec {
 
             // Only reorder when all others appear before all assigns in the original order
             local ok = 1
-            if assigns.length() > 0 && others.length() > 0 {
+            if assigns.size() > 0 && others.size() > 0 {
               // max index of others, min index of assigns
               local max_o = others.get(0).get(0)
               local i2 = 1
-              loop(i2 < others.length()) { if others.get(i2).get(0) > max_o { max_o = others.get(i2).get(0) } i2 = i2 + 1 }
+              loop(i2 < others.size()) { if others.get(i2).get(0) > max_o { max_o = others.get(i2).get(0) } i2 = i2 + 1 }
               local min_a = assigns.get(0).get(0)
               i2 = 1
-              loop(i2 < assigns.length()) { if assigns.get(i2).get(0) < min_a { min_a = assigns.get(i2).get(0) } i2 = i2 + 1 }
+              loop(i2 < assigns.size()) { if assigns.get(i2).get(0) < min_a { min_a = assigns.get(i2).get(0) } i2 = i2 + 1 }
               if not (max_o <= min_a) { ok = 0 }
             }
 
@@ -297,18 +297,18 @@ static box MacroBoxSpec {
               local tagBr = "\"kind\":\"Break\""
               local tagCt = "\"kind\":\"Continue\""
               t = 0
-              loop(t < elems.length()) {
+              loop(t < elems.size()) {
                 local e3 = elems.get(t)
                 // cheap contains
                 local p = 0
-                loop(p + tagBr.length() <= e3.length()) {
-                  if e3.substring(p, p + tagBr.length()) == tagBr { has_ctrl = 1; break }
+                loop(p + tagBr.size() <= e3.size()) {
+                  if e3.substring(p, p + tagBr.size()) == tagBr { has_ctrl = 1; break }
                   p = p + 1
                 }
                 if has_ctrl == 0 {
                   p = 0
-                  loop(p + tagCt.length() <= e3.length()) {
-                    if e3.substring(p, p + tagCt.length()) == tagCt { has_ctrl = 1; break }
+                  loop(p + tagCt.size() <= e3.size()) {
+                    if e3.substring(p, p + tagCt.size()) == tagCt { has_ctrl = 1; break }
                     p = p + 1
                   }
                 }
@@ -323,7 +323,7 @@ static box MacroBoxSpec {
               local uniq = []
               t = 0
               local too_many = 0
-              loop(t < assigns.length()) {
+              loop(t < assigns.size()) {
                 local aj = assigns.get(t).get(1)
                 local nm = extract_assign_target_var(aj)
                 if nm == "" {
@@ -334,12 +334,12 @@ static box MacroBoxSpec {
                 // check if nm already recorded
                 local seen = 0
                 local u = 0
-                loop(u < uniq.length()) {
+                loop(u < uniq.size()) {
                   if uniq.get(u) == nm { seen = 1; break }
                   u = u + 1
                 }
                 if seen == 0 { uniq.push(nm) }
-                if uniq.length() > 2 { too_many = 1; break }
+                if uniq.size() > 2 { too_many = 1; break }
                 t = t + 1
               }
               if too_many == 1 { ok = 0 }
@@ -350,13 +350,13 @@ static box MacroBoxSpec {
             local first = 1
             t = 0
             if ok == 1 {
-              loop(t < others.length()) {
+              loop(t < others.size()) {
                 if first == 1 { first = 0 } else { body_new = body_new + "," }
                 body_new = body_new + others.get(t).get(1)
                 t = t + 1
               }
               t = 0
-              loop(t < assigns.length()) {
+              loop(t < assigns.size()) {
                 if first == 1 { first = 0 } else { body_new = body_new + "," }
                 body_new = body_new + assigns.get(t).get(1)
                 t = t + 1
@@ -364,7 +364,7 @@ static box MacroBoxSpec {
             } else {
               // keep original order
               local back = 0
-              loop(back < elems.length()) {
+              loop(back < elems.size()) {
                 if first == 1 { first = 0 } else { body_new = body_new + "," }
                 body_new = body_new + elems.get(back)
                 back = back + 1

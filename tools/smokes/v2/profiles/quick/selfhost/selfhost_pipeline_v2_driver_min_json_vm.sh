@@ -5,6 +5,7 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 # Gate: enable explicitly to avoid dev-only driver flakiness
 if [ "${SMOKES_ENABLE_PIPELINE_V2_DRIVER:-0}" != "1" ]; then

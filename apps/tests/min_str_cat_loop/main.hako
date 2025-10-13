@@ -1,0 +1,17 @@
+// Minimal repro: string concatenation in a loop should yield "xxx"
+
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local out = ""
+    local i = 0
+    local n = 3
+    loop(i < n) {
+      out = out + "x"
+      i = i + 1
+    }
+    console.println(out)
+    return 0
+  }
+}
+

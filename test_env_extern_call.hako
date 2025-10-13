@@ -1,0 +1,11 @@
+static box Main {
+  main() {
+    local args
+    args = new ArrayBox()
+    args.push("hostbridge.box_new")
+
+    local result
+    result = env.extern.invoke("test", args)
+    return 0
+  }
+}

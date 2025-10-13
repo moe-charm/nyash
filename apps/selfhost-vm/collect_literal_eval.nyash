@@ -3,8 +3,8 @@ static box Main {
   // helper: find from position
   index_of_from(hay, needle, pos) {
     if pos < 0 { pos = 0 }
-    if pos >= hay.length() { return -1 }
-    local tail = hay.substring(pos, hay.length())
+    if pos >= hay.size() { return -1 }
+    local tail = hay.substring(pos, hay.size())
     local rel = tail.indexOf(needle)
     if rel < 0 { return -1 } else { return pos + rel }
   }
@@ -14,7 +14,7 @@ static box Main {
     local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
     local p = json.indexOf(ki)
     if p >= 0 {
-      local i = p + ki.length()
+      local i = p + ki.size()
       local j = i
       loop (true) {
         local ch = json.substring(j, j+1)

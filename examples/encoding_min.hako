@@ -1,0 +1,8 @@
+static box Main {
+  main() {
+    local e = new EncodingBox()
+    local b64 = e.base64Encode("hello")
+    // quick check: "hello" -> aGVsbG8=
+    return b64.length() == 8
+  }
+}

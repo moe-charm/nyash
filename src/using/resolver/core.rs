@@ -63,9 +63,52 @@ pub fn populate_from_toml(
     // Directory-as-Namespace fallback (optional; env-gated)
     super::dir_namespace_discovery::discover_and_append_if_enabled(pending_modules)?;
 
+    // Normalize and deduplicate across all accumulated entries before final conflict detection
+    normalize_and_dedup_in_place(pending_modules);
     // Final duplicate detection across all accumulated entries (always on; strict -> error)
     super::conflict_detector::detect_conflicts_from_modules(pending_modules)?;
     Ok(policy)
+}
+
+/// Normalize pending_modules in-place: resolve relative paths using NYASH_ROOT (if set)
+/// and canonicalize; then deduplicate per namespace by canonical path.
+fn normalize_and_dedup_in_place(pending_modules: &mut Vec<(String, String)>) {
+    let root = std::env::var("NYASH_ROOT").ok().map(std::path::PathBuf::from);
+    use std::collections::{HashMap, HashSet};
+    let mut out: Vec<(String, String)> = Vec::with_capacity(pending_modules.len());
+    let mut seen: HashMap<String, HashSet<String>> = HashMap::new();
+    for (ns, p) in pending_modules.iter() {
+        let resolved = if std::path::Path::new(p).is_absolute() {
+            std::path::PathBuf::from(p)
+        } else if let Some(ref r) = root {
+            r.join(p)
+        } else {
+            std::path::PathBuf::from(p)
+        };
+        let canon = std::fs::canonicalize(&resolved).unwrap_or_else(|_| resolved.clone());
+        let canon_s = canon.display().to_string();
+        let entry = seen.entry(ns.clone()).or_insert_with(HashSet::new);
+        if entry.contains(&canon_s) { continue; }
+        entry.insert(canon_s);
+        out.push((ns.clone(), resolved.display().to_string()));
+    }
+    
+    // Optional: collapse duplicate namespaces by taking first occurrence (env-gated)
+    if std::env::var("HAKO_COLLAPSE_MODULE_CONFLICT").ok().as_deref() == Some("1") ||
+       std::env::var("NYASH_COLLAPSE_MODULE_CONFLICT").ok().as_deref() == Some("1") {
+        use std::collections::HashSet;
+        let mut seen_ns: HashSet<String> = HashSet::new();
+        let mut collapsed: Vec<(String, String)> = Vec::new();
+        for (ns, p) in out.into_iter() {
+            if seen_ns.insert(ns.clone()) {
+                collapsed.push((ns, p));
+            }
+        }
+        *pending_modules = collapsed;
+    } else {
+        *pending_modules = out;
+    }
+
 }
 
 

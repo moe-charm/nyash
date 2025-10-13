@@ -29,10 +29,19 @@ impl MirInterpreter {
         match v {
             VMValue::Void => "void",
             VMValue::BoxRef(b) => {
-                if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { "null" }
-                else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { "missing" }
-                else if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() { "void" }
-                else { "" }
+                if b.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
+                    return "void";
+                }
+                #[cfg(feature = "legacy-boxes")]
+                {
+                    if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() {
+                        return "null";
+                    }
+                    if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() {
+                        return "missing";
+                    }
+                }
+                ""
             }
             _ => "",
         }
@@ -70,8 +79,14 @@ impl MirInterpreter {
                 }
 
                 // MissingBox special case - treat as equal to each other
+                #[cfg(feature = "legacy-boxes")]
                 let a_is_missing = ax.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some();
+                #[cfg(not(feature = "legacy-boxes"))]
+                let a_is_missing = false;
+                #[cfg(feature = "legacy-boxes")]
                 let b_is_missing = bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some();
+                #[cfg(not(feature = "legacy-boxes"))]
+                let b_is_missing = false;
                 if a_is_missing && b_is_missing {
                     return Ok(true);
                 }

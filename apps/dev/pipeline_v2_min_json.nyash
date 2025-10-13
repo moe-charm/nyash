@@ -4,7 +4,7 @@ using "selfhost/compiler/pipeline_v2/execution_pipeline_box.hako" as PipelineMod
 static box Main {
   main(args) {
     local src = "return 0"
-    if args != null && args.length() > 0 { src = args.get(0) }
+    if args != null && args.size() > 0 { src = args.get(0) }
     local p = new ExecutionPipelineBox()
     // Stage‑3 disabled by default here
     return p.run_source(src, 0)

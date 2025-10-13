@@ -7,8 +7,11 @@ mod release_helpers;
 
 use crate::bid::{BidError, BidResult};
 use crate::box_trait::{NyashBox, StringBox, VoidBox};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::result::NyashResultBox;
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::future::FutureBox;
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::token_box::TokenBox;
 use crate::runtime::modules_registry;
 use crate::runtime::global_hooks;
@@ -27,7 +30,10 @@ pub fn extern_call(
         "env.debug" => handle_debug(method_name, args),
         "env.runtime" => handle_runtime(method_name, args),
         "env.callable" => handle_callable(method_name, args),
+        #[cfg(feature = "legacy-boxes")]
         "env.future" => handle_future(method_name, args),
+        #[cfg(not(feature = "legacy-boxes"))]
+        "env.future" => handle_runtime(method_name, args),
         // Dev-only stub for WASM experiments: enable NYASH_ENABLE_NYKERNEL_STUB=1
         // Provides minimal nykernel.* externs over VM (malloc/load_i64/store_i64)
         "nykernel" => {
@@ -116,6 +122,7 @@ fn handle_console(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Op
 }
 
 /// Handle env.result.* methods
+#[cfg(feature = "legacy-boxes")]
 fn handle_result(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "ok" => {
@@ -138,6 +145,12 @@ fn handle_result(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opt
         "release_many" => release_helpers::handle_release_many(args),
         _ => Err(BidError::PluginError),
     }
+}
+
+#[cfg(not(feature = "legacy-boxes"))]
+fn handle_result(_method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
+    // Minimal shim: pass-through first arg (Ok path). No wrapping type.
+    Ok(args.get(0).map(|b| b.clone_box()))
 }
 
 /// Handle env.modules.* methods
@@ -167,6 +180,7 @@ fn handle_modules(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Op
 }
 
 /// Handle env.task.* methods
+#[cfg(feature = "legacy-boxes")]
 fn handle_task(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "cancelCurrent" => {
@@ -187,7 +201,13 @@ fn handle_task(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Optio
     }
 }
 
+#[cfg(not(feature = "legacy-boxes"))]
+fn handle_task(_method_name: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
+    Ok(None)
+}
+
 /// Handle env.task.spawn method
+#[cfg(feature = "legacy-boxes")]
 fn handle_task_spawn(args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     if let Some(b) = args.get(0) {
         // The plugin loader originally included additional spawn logic,
@@ -198,6 +218,11 @@ fn handle_task_spawn(args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn Nya
         Ok(None)
     }
 }
+
+#[cfg(not(feature = "legacy-boxes"))]
+fn handle_task_spawn(_args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> { Ok(None) }
+
+// Minimal not-legacy implementation provided above
 
 /// Handle env.task.wait method
 fn handle_task_wait(_args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
@@ -240,6 +265,7 @@ fn handle_runtime(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Op
 }
 
 /// Handle env.future.* methods
+#[cfg(feature = "legacy-boxes")]
 fn handle_future(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         "new" | "birth" => {
@@ -268,6 +294,7 @@ fn handle_future(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Opt
 }
 
 /// Handle env.future.await method
+#[cfg(feature = "legacy-boxes")]
 fn handle_future_await(args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     if let Some(arg) = args.get(0) {
         if let Some(fut) = arg
@@ -312,6 +339,7 @@ fn handle_future_await(args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn N
 
 
 /// Handle env.callable.* methods
+#[cfg(feature = "legacy-boxes")]
 fn handle_callable(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
     match method_name {
         // make(recv, methodName, arity:int) — avoid conflict with `from` keyword
@@ -326,6 +354,12 @@ fn handle_callable(method_name: &str, args: &[Box<dyn NyashBox>]) -> BidResult<O
         }
         _ => Err(BidError::PluginError),
     }
+}
+
+#[cfg(not(feature = "legacy-boxes"))]
+fn handle_callable(_method_name: &str, _args: &[Box<dyn NyashBox>]) -> BidResult<Option<Box<dyn NyashBox>>> {
+    // Plugin-only minimal: callable not supported yet; return error to surface usage sites.
+    Err(BidError::PluginError)
 }
 
 #[cfg(test)]

@@ -140,4 +140,18 @@ static box CalleeParserBox {
 
     return mir_call_json.substring(box_type_start, box_type_end)
   }
+
+  // Extract value id from Value callee
+  // mir_call_json: '{"callee":{"type":"Value","value":5}, ...}'
+  // Returns: value register id (integer) / null on error
+  extract_value_id(mir_call_json) {
+    local val_key = "\"value\":"
+    local val_start = mir_call_json.indexOf(val_key)
+    if val_start < 0 { return null }
+    val_start = val_start + val_key.size()
+    // Read digits
+    local digits = StringHelpers.read_digits(mir_call_json, val_start)
+    if digits == "" { return null }
+    return StringHelpers.to_i64(digits)
+  }
 }

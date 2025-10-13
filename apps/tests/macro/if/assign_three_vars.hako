@@ -1,0 +1,17 @@
+function main(args) {
+  local a, b, c
+  local d = 1
+  if d == 1 {
+    a = 1
+    b = 2
+    c = 3
+  } else {
+    a = 10
+    b = 20
+    c = 30
+  }
+  print(a)
+  print(b)
+  print(c)
+}
+

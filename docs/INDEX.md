@@ -253,6 +253,7 @@ grep -r "self-hosting" docs/
 - Where to put new docs → See "Guidelines" section above
 - Cleanup progress → See [docs-cleanup-plan.md](development/proposals/ideas/refactoring/docs-cleanup-plan.md)
 - Development status → See [CURRENT_TASK.md](../CURRENT_TASK.md)
+ - HostBridge guide → [docs/guides/hostbridge.md](guides/hostbridge.md)
 
 ---
 

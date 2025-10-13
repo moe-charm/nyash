@@ -1,0 +1,25 @@
+// Static box Helper with static method to avoid instance birth
+// Build plugin:
+//   (cd plugins/nyash-array-plugin && cargo build --release)
+// Run:
+//   NYASH_USE_PLUGIN_BUILTINS=1 NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 \
+//   NYASH_JIT_SHIM_TRACE=1 NYASH_CLI_VERBOSE=1 \
+//   ./target/release/nyash --backend vm examples/jit_plugin_invoke_static_helper.nyash
+
+static box Helper {
+  static helper(arr) {
+    return arr.length()
+  }
+}
+
+debug = new DebugBox()
+debug.tracePluginCalls(true)
+
+a = new ArrayBox()
+a.push(1)
+a.push(2)
+a.push(3)
+
+print(Helper.helper(a))
+print(debug.getJitEvents())
+

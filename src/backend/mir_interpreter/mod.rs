@@ -9,6 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use crate::box_trait::NyashBox;
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::array::ArrayBox;
 
 pub(super) use crate::backend::abi_util::{eq_vm, to_bool_vm};
@@ -24,6 +25,7 @@ mod handlers;
 mod helpers;
 mod method_router;
 pub mod extern_adapter;
+pub mod diagnostics;
 mod operator_guard;
 mod vm_config;
 pub mod resolve;
@@ -155,6 +157,7 @@ impl MirInterpreter {
         let ret = if pass_argv && !func.params.is_empty() {
             let argv = {
                 // Build argv from NYASH_SCRIPT_ARGS_JSON when present (array of strings)
+                #[cfg(feature = "legacy-boxes")]
                 if let Ok(raw) = std::env::var("NYASH_SCRIPT_ARGS_JSON") {
                     if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
                         if let Some(arr) = v.as_array() {
@@ -176,8 +179,13 @@ impl MirInterpreter {
                     } else {
                         VMValue::from_nyash_box(Box::new(ArrayBox::new()))
                     }
-                } else {
-                    VMValue::from_nyash_box(Box::new(ArrayBox::new()))
+                } else { VMValue::from_nyash_box(Box::new(ArrayBox::new())) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                {
+                    // Plugin-only: pass empty Array via plugin host (best-effort)
+                    let b = crate::runtime::plugin_host_box::create_box("ArrayBox", &[])
+                        .unwrap_or_else(|_| Box::new(crate::box_trait::VoidBox::new()));
+                    VMValue::from_nyash_box(b)
                 }
             };
             let args: [VMValue; 1] = [argv];
@@ -197,7 +205,13 @@ impl MirInterpreter {
             .get(entry_name)
             .ok_or_else(|| VMError::InvalidInstruction(format!("entry not found: {}", entry_name)))?;
         if !func.params.is_empty() {
+            #[cfg(feature = "legacy-boxes")]
             let argv = VMValue::from_nyash_box(Box::new(ArrayBox::new()));
+            #[cfg(not(feature = "legacy-boxes"))]
+            let argv = VMValue::from_nyash_box(
+                crate::runtime::plugin_host_box::create_box("ArrayBox", &[])
+                    .unwrap_or_else(|_| Box::new(crate::box_trait::VoidBox::new()))
+            );
             let args: [VMValue; 1] = [argv];
             let ret = self.exec_function_inner(func, Some(&args))?;
             Ok(ret.to_nyash_box())

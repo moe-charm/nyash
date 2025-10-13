@@ -30,7 +30,7 @@ static box LoadHandlerBox {
     // Default to 0 for uninitialized memory (get() -> null if missing)
     local value = mem.get(ptr_key)
     if value == null {
-      value = 0
+      return Result.Err("load: memory[" + ptr_key + "] is unset")
     }
 
     // Store to destination register

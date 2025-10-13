@@ -1,0 +1,130 @@
+// 📊 統計計算アプリ（シンプル版） - MathBox新機能を活用！
+
+print("📊 === Statistics Calculator (Simple) ===")
+print("MathBox拡張機能を活用した統計計算デモ\n")
+
+// MathBoxインスタンス作成
+math = new MathBox()
+
+// 統計データ配列
+data = new ArrayBox()
+
+// テストデータ追加
+print("📝 Adding test data...")
+data.push(85)
+data.push(92)
+data.push(78)
+data.push(95)
+data.push(88)
+data.push(73)
+data.push(90)
+data.push(82)
+
+// データ表示
+print("\n📈 Data points (" + data.length() + " items):")
+i = 0
+loop(i < data.length()) {
+    print("  [" + i + "] = " + data.get(i))
+    i = i + 1
+}
+
+// 平均値計算
+print("\n🧮 Calculating statistics...")
+sum = 0
+i = 0
+loop(i < data.length()) {
+    sum = sum + data.get(i)
+    i = i + 1
+}
+// 除算の代わりにpow(-1)を使用
+count = data.length()
+mean = sum * math.pow(count, -1)
+print("Mean: " + mean)
+
+// 最大値・最小値
+maxVal = data.get(0)
+minVal = data.get(0)
+i = 1
+loop(i < data.length()) {
+    maxVal = math.max(maxVal, data.get(i))
+    minVal = math.min(minVal, data.get(i))
+    i = i + 1
+}
+print("Max: " + maxVal)
+print("Min: " + minVal)
+print("Range: " + (maxVal - minVal))
+
+// 分散計算
+sumSquaredDiff = 0
+i = 0
+loop(i < data.length()) {
+    diff = data.get(i) - mean
+    sumSquaredDiff = sumSquaredDiff + (diff * diff)
+    i = i + 1
+}
+variance = sumSquaredDiff * math.pow(count, -1)
+print("Variance: " + variance)
+
+// 標準偏差
+stdDev = math.sqrt(variance)
+print("Standard Deviation: " + stdDev)
+
+// 新機能：三角関数を使った周期データ
+print("\n\n🌊 === Sine Wave Data ===")
+waveData = new ArrayBox()
+pi = math.getPi()
+
+print("Generating sine wave data...")
+i = 0
+loop(i < 12) {
+    angle = i * pi * 0.1667  // π/6 ごと（30度刻み）
+    value = math.sin(angle) * 10 + 50
+    rounded = math.round(value)
+    waveData.push(rounded)
+    print("  angle=" + math.round(angle * 100) * 0.01 + " rad, sin=" + rounded)
+    i = i + 1
+}
+
+// 対数・指数関数のデモ
+print("\n\n📈 === Exponential Growth ===")
+growthData = new ArrayBox()
+
+i = 0
+loop(i < 8) {
+    value = math.exp(i * 0.3) * 10
+    rounded = math.round(value)
+    growthData.push(rounded)
+    print("  exp(" + (i * 0.3) + ") * 10 = " + rounded)
+    i = i + 1
+}
+
+// 切り捨て・切り上げのデモ
+print("\n\n🔢 === Rounding Functions ===")
+testVals = new ArrayBox()
+testVals.push(3.14)
+testVals.push(2.718)
+testVals.push(-1.5)
+testVals.push(9.99)
+
+i = 0
+loop(i < testVals.length()) {
+    val = testVals.get(i)
+    print("\nValue: " + val)
+    print("  floor: " + math.floor(val))
+    print("  ceil: " + math.ceil(val))
+    print("  round: " + math.round(val))
+    i = i + 1
+}
+
+// 数学定数の表示
+print("\n\n🌟 === Mathematical Constants ===")
+print("π (pi) = " + math.getPi())
+print("e (euler) = " + math.getE())
+
+// 累乗計算
+print("\n\n⚡ === Power Calculations ===")
+print("2^10 = " + math.pow(2, 10))
+print("10^-1 = " + math.pow(10, -1) + " (1/10)")
+print("√144 = " + math.sqrt(144))
+
+print("\n✅ Statistics Calculator completed!")

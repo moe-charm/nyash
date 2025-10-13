@@ -39,13 +39,13 @@ impl NyashRunner {
         // Thin detection: if input looks like MIR(JSON v0) ({"version":0,"kind":"MIR"}),
         // we currently do not support direct MIR JSON execution in this path.
         // Suggest using Ny-side MirVmMin or the selfhost pipeline to run it.
-        if json.contains(""kind":"MIR"") || (json.trim_start().starts_with('{') && json.contains(""functions"")) {
+        if json.contains("\"kind\":\"MIR\"") || (json.trim_start().starts_with('{') && json.contains("\"functions\"")) {
             eprintln!("❌ JSON v0 bridge error: input appears to be MIR(JSON v0).
-   Hint: Use a Ny driver with `using selfhost.vm.mir_min as MirVmMin; MirVmMin.run(json)` to execute,
+   Hint: Use a Ny driver with 'using selfhost.vm.mir_min as MirVmMin; MirVmMin.run(json)' to execute,
    or convert to AST(JSON v0) and pass via --json-file.");
             std::process::exit(1);
         }
-        if json.contains(""kind":"MIR"") || (json.trim_start().starts_with('{') and json.contains(""functions"")) {
+        if json.contains("\"kind\":\"MIR\"") || (json.trim_start().starts_with('{') && json.contains("\"functions\"")) {
             if std::env::var("NYASH_JSON_MIR_READER_DEV").ok().as_deref() == Some("1") {
                 match super::mir_json_reader::parse_mir_json_v0_to_module(&json) {
                     Ok(module) => {
@@ -59,7 +59,7 @@ impl NyashRunner {
                     }
                 }
             } else {
-                eprintln!("❌ JSON v0 bridge error: input appears to be MIR(JSON v0).\n   Hint: Use a Ny driver with `using selfhost.vm.mir_min as MirVmMin; MirVmMin.run(json)` to execute,\n   or set NYASH_JSON_MIR_READER_DEV=1 to enable experimental reader.");
+                eprintln!("❌ JSON v0 bridge error: input appears to be MIR(JSON v0).\n   Hint: Use a Ny driver with 'using selfhost.vm.mir_min as MirVmMin; MirVmMin.run(json)' to execute,\n   or set NYASH_JSON_MIR_READER_DEV=1 to enable experimental reader.");
                 std::process::exit(1);
             }
         }

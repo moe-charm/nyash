@@ -5,6 +5,7 @@ using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/shared/common/string_ops.hako" as StringOps
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/reg_guard.hako" as RegGuardBox
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 
 static box BinOpHandlerBox {
@@ -28,15 +29,33 @@ static box BinOpHandlerBox {
       return Result.Err("binop: rhs field not found")
     }
 
-    // Extract op_kind
-    local kind = JsonFieldExtractor.extract_string(inst_json, "op_kind")
-    if kind == null {
-      return Result.Err("binop: op_kind not found")
+    // Extract operation (new) or op_kind (legacy) and normalize to canonical kind
+    local kind = JsonFieldExtractor.extract_string(inst_json, "operation")
+    if kind != null {
+      // Map symbolic operator to canonical name
+      if kind == "+" { kind = "Add" }
+      else if kind == "-" { kind = "Sub" }
+      else if kind == "*" { kind = "Mul" }
+      else if kind == "/" { kind = "Div" }
+      else if kind == "%" { kind = "Mod" }
+      else {
+        return Result.Err("binop: unsupported operation: " + kind)
+      }
+    } else {
+      // Fallback: op_kind (Add/Sub/Mul/Div/Mod)
+      kind = JsonFieldExtractor.extract_string(inst_json, "op_kind")
+      if kind == null {
+        return Result.Err("binop: operation/op_kind not found")
+      }
     }
 
     // Load operands from registers using ValueManagerBox
-    local lhs_val = ValueManagerBox.get(regs, lhs_id)
-    local rhs_val = ValueManagerBox.get(regs, rhs_id)
+    local g_lhs = RegGuardBox.require_set(regs, lhs_id, "binop: lhs")
+    if g_lhs.is_Err() { return g_lhs }
+    local lhs_val = g_lhs.as_Ok()
+    local g_rhs = RegGuardBox.require_set(regs, rhs_id, "binop: rhs")
+    if g_rhs.is_Err() { return g_rhs }
+    local rhs_val = g_rhs.as_Ok()
 
     // Execute arithmetic operation
     local result_val = 0

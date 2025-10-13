@@ -9,15 +9,15 @@ static box MacroBoxSpec {
     out = ""
     i = 0
     pat = "\"kind\":\"Array\",\"elements\":["
-    plen = pat.length()
+    plen = pat.size()
     ins = "{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":0}}"
 
-    loop(i < s.length()) {
-      if i + plen <= s.length() && s.substring(i, i + plen) == pat {
+    loop(i < s.size()) {
+      if i + plen <= s.size() && s.substring(i, i + plen) == pat {
         // Copy the Array header
         out = out + pat
         // Look ahead: if next is ']' it's empty array; otherwise add comma after inserted element
-        if i + plen < s.length() && s.substring(i + plen, i + plen + 1) != "]" {
+        if i + plen < s.size() && s.substring(i + plen, i + plen + 1) != "]" {
           out = out + ins + ","
         } else {
           out = out + ins
@@ -26,10 +26,10 @@ static box MacroBoxSpec {
         continue
       }
       // Also support reversed key order: ..."elements":[ ... ],"kind":"Array"
-      if i + 12 <= s.length() && s.substring(i, i + 12) == "\"elements\":[" {
+      if i + 12 <= s.size() && s.substring(i, i + 12) == "\"elements\":[" {
         // We will inject blindly here assuming this 'elements' belongs to Array (per schema it does)
         out = out + "\"elements\":["
-        if i + 12 < s.length() && s.substring(i + 12, i + 13) != "]" {
+        if i + 12 < s.size() && s.substring(i + 12, i + 13) != "]" {
           out = out + ins + ","
         } else {
           out = out + ins

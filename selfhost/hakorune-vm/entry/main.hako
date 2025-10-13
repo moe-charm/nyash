@@ -1,0 +1,14 @@
+using "selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore
+
+static box Main {
+  // Usage: hakorune-vm-exe <mir.json>
+  main(args) {
+    local path = null
+    if args { if args.size() > 0 { @p = args.get(0) if p { path = p } } }
+    if path == null {
+      print("usage: hakorune-vm-exe <mir.json>")
+      return -1
+    }
+    return HakoruneVmCore.run_from_file(path)
+  }
+}

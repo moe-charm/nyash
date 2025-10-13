@@ -59,20 +59,20 @@ selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
 selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
 selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
 selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
-selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.hako"
-selfhost.common.json.mir_v1_adapter = "apps/selfhost/common/json/mir_v1_adapter.hako"
+selfhost.common.json.mir_builder_min = "selfhost/shared/json/mir_builder_min.hako"
+selfhost.common.json.mir_v1_adapter = "selfhost/shared/json/mir_v1_adapter.hako"
 selfhost.compiler.pipeline_v2.emit_compare = "selfhost/compiler/pipeline_v2/emit_compare_box.hako"
 selfhost.vm.json_cur = "selfhost/vm/boxes/json_cur.hako"
-selfhost.vm.json = "apps/selfhost/common/json_adapter.hako"
+selfhost.vm.json = "selfhost/shared/json_adapter.hako"
 selfhost.vm.core = "selfhost/vm/boxes/mini_vm_core.hako"
-selfhost.vm.scan = "apps/selfhost/common/mini_vm_scan.hako"
-selfhost.vm.binop = "apps/selfhost/common/mini_vm_binop.hako"
-selfhost.vm.compare = "apps/selfhost/common/mini_vm_compare.hako"
+selfhost.vm.scan = "selfhost/shared/common/mini_vm_scan.hako"
+selfhost.vm.binop = "selfhost/shared/common/mini_vm_binop.hako"
+selfhost.vm.compare = "selfhost/shared/common/mini_vm_compare.hako"
 selfhost.vm.prints = "selfhost/vm/boxes/mini_vm_prints.hako"
 selfhost.vm.seam = "selfhost/vm/boxes/seam_inspector.hako"
 selfhost.vm.mir_min = "selfhost/vm/boxes/mir_vm_min.hako"
 selfhost.vm.entry = "selfhost/vm/boxes/mini_vm_entry.hako"
-selfhost.vm.flow_runner = "apps/selfhost/vm/flow_runner.hako"
+selfhost.vm.flow_runner = "selfhost/vm/flow_runner.hako"
 selfhost.vm.scanner = "selfhost/vm/boxes/instruction_scanner.hako"
 selfhost.vm.handlers = "selfhost/vm/boxes/op_handlers.hako"
 selfhost.json.core.json_scan = "selfhost/shared/json/core/json_scan.hako"
@@ -90,7 +90,7 @@ targets.wasm.driver = "apps/targets/wasm/wasm_driver_box.hako"
 selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 
 # Temporary alias keys (migration aid; keys kept stable)
-selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
+selfhost.common.json = "selfhost/shared/json_adapter.hako"
 selfhost.common.scan = "apps/selfhost/common/mini_vm_scan.hako"
 selfhost.common.binop = "apps/selfhost/common/mini_vm_binop.hako"
 selfhost.common.compare = "apps/selfhost/common/mini_vm_compare.hako"
@@ -119,6 +119,40 @@ remove = { method_id = 6 }
 keys = { method_id = 15 }
 values = { method_id = 16 }
 fini = { method_id = 4294967295 }
+
+
+[libraries."libnyash_json_plugin.so"]
+boxes = ["JsonDocBox", "JsonNodeBox"]
+path = "plugins/nyash-json-plugin/libnyash_json_plugin.so"
+
+[libraries."libnyash_json_plugin.so".JsonDocBox]
+type_id = 70
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonDocBox.methods]
+birth = { method_id = 0 }
+parse = { method_id = 1 }
+root = { method_id = 2 }
+error = { method_id = 3 }
+fini = { method_id = 4294967295 }
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox]
+type_id = 71
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_json_plugin.so".JsonNodeBox.methods]
+birth = { method_id = 0 }
+kind = { method_id = 1 }
+get = { method_id = 2 }
+size = { method_id = 3 }
+at = { method_id = 4 }
+str = { method_id = 5 }
+int = { method_id = 6 }
+bool = { method_id = 7 }
+fini = { method_id = 4294967295 }
+
 
 [libraries."libnyash_path_plugin.so"]
 boxes = ["PathBox"]
@@ -574,4 +608,26 @@ set = { method_id = 4 }
 remove = { method_id = 6 }
 keys = { method_id = 15 }
 values = { method_id = 16 }
+fini = { method_id = 4294967295 }
+
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so"]
+boxes = ["MirJsonBuilderMin"]
+path = "plugins/nyash-mirjsonbuildermin-plugin/libnyash_mirjsonbuildermin_plugin.so"
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so".MirJsonBuilderMin]
+type_id = 72
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so".MirJsonBuilderMin.methods]
+birth = { method_id = 0 }
+start_module = { method_id = 1 }
+start_function = { method_id = 2 }
+start_block = { method_id = 3 }
+add_const = { method_id = 4 }
+add_compare = { method_id = 5 }
+add_ret = { method_id = 6 }
+end_all = { method_id = 7 }
+to_string = { method_id = 8 }
 fini = { method_id = 4294967295 }

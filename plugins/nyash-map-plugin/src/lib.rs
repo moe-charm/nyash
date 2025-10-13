@@ -123,7 +123,6 @@ extern "C" fn mapbox_resolve(name: *const c_char) -> u32 {
     }
 }
 
-#[cfg(feature = "host-handle")]
 fn map_keys_values_stage2(
     instance_id: u32,
     method_id: u32,
@@ -197,12 +196,8 @@ fn map_keys_values_stage2(
                 MapVal::I64(n) => build_tlv_i64_i64(i, n),
                 MapVal::Str(s) => build_tlv_i64_string(i, &s),
                 MapVal::Handle(t, inst_id) => {
-                    if t == TYPE_ID_ARRAY {
-                        let h = nyash_host_from_plugin_handle(t, inst_id);
-                        build_tlv_i64_host_handle(i, h)
-                    } else {
-                        build_tlv_i64_handle(i, t, inst_id)
-                    }
+                    // Prefer PluginHandle (tag=8). HostHandle conversion remains available elsewhere if needed.
+                    build_tlv_i64_handle(i, t, inst_id)
                 },
                 MapVal::Host(h) => build_tlv_i64_host_handle(i, h),
             };
@@ -257,36 +252,12 @@ extern "C" fn mapbox_invoke_id(
     result_len: *mut usize,
 ) -> i32 {
     match method_id {
-        // Stage-2: keys()/values() return HostHandle(ArrayBox) when enabled by env
+        // Stage-2: keys()/values() return HostHandle(ArrayBox) — default ON
         METHOD_KEYS | METHOD_VALUES => {
-            #[cfg(feature = "host-handle")]
-            {
-                let enable = std::env::var("NYASH_PLUGIN_MAP_ARRAY_HANDLE")
-                    .ok()
-                    .as_deref()
-                    == Some("1");
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                    eprintln!("[map-plugin] METHOD_KEYS/VALUES stage2 enable={}", enable);
-                }
-                if !enable {
-                    return NYB_E_INVALID_METHOD;
-                }
-                return map_keys_values_stage2(
-                    instance_id,
-                    method_id,
-                    args,
-                    args_len,
-                    result,
-                    result_len,
-                );
+            if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
+                eprintln!("[map-plugin] METHOD_KEYS/VALUES stage2 enable=true (default)");
             }
-            #[cfg(not(feature = "host-handle"))]
-            {
-                if std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1") {
-                    eprintln!("[map-plugin] METHOD_KEYS/VALUES host-handle disabled");
-                }
-                return NYB_E_INVALID_METHOD;
-            }
+            return map_keys_values_stage2(instance_id, method_id, args, args_len, result, result_len);
         }
         METHOD_BIRTH => {
             // Create new MapBox instance. Return format is gated for migration:
@@ -367,7 +338,7 @@ extern "C" fn mapbox_invoke_id(
                         Some(MapVal::Host(h)) => {
                             write_tlv_host_handle(*h as u64, result, result_len)
                         }
-                        None => NYB_E_INVALID_ARGS,
+                        None => unsafe { if !result_len.is_null() { *result_len = 0; } } as i32,
                     }
                 }) {
                     Ok(rc) => rc,
@@ -392,7 +363,7 @@ extern "C" fn mapbox_invoke_id(
                         Some(MapVal::Host(h)) => {
                             write_tlv_host_handle(*h as u64, result, result_len)
                         }
-                        None => NYB_E_INVALID_ARGS,
+                        None => unsafe { if !result_len.is_null() { *result_len = 0; } } as i32,
                     }
                 }) {
                     Ok(rc) => rc,
@@ -478,7 +449,7 @@ extern "C" fn mapbox_invoke_id(
             let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
             match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
                 if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                    if let Some(value) = inst.data_i64.remove(&ik) {
+                    if let Some(_value) = inst.data_i64.remove(&ik) {
                         if debug {
                             eprintln!(
                                 "[map-plugin] remove int key={} variant={}",
@@ -486,7 +457,7 @@ extern "C" fn mapbox_invoke_id(
                                 v_to_string(&value)
                             );
                         }
-                        return write_mapval_tlv(&value, result, result_len);
+                        unsafe { if !result_len.is_null() { *result_len = 0; } } ; return NYB_SUCCESS;
                     }
                     unsafe {
                         if !result_len.is_null() {
@@ -496,7 +467,7 @@ extern "C" fn mapbox_invoke_id(
                     return NYB_SUCCESS;
                 }
                 if let Some(sk) = read_arg_string(args, args_len, 0) {
-                    if let Some(value) = inst.data_str.remove(&sk) {
+                    if let Some(_value) = inst.data_str.remove(&sk) {
                         if debug {
                             eprintln!(
                                 "[map-plugin] remove str key={} variant={}",
@@ -504,7 +475,7 @@ extern "C" fn mapbox_invoke_id(
                                 v_to_string(&value)
                             );
                         }
-                        return write_mapval_tlv(&value, result, result_len);
+                        unsafe { if !result_len.is_null() { *result_len = 0; } } ; return NYB_SUCCESS;
                     }
                     unsafe {
                         if !result_len.is_null() {
@@ -560,7 +531,7 @@ extern "C" fn mapbox_invoke_id(
                     Some(MapVal::Host(h)) => {
                         write_tlv_host_handle(*h as u64, result, result_len)
                     }
-                    None => NYB_E_INVALID_ARGS,
+                    None => unsafe { if !result_len.is_null() { *result_len = 0; } } as i32,
                 }
             }) {
                 Ok(rc) => rc,

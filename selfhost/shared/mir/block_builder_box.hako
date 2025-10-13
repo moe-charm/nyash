@@ -4,6 +4,37 @@
 using "selfhost/shared/mir/mir_schema_box.hako" as Mir
 
 static box BlockBuilderBox {
+
+  // Ensure every block ends with a terminator (ret/jump/branch/throw)
+  _ensure_terminators(mod_full) {
+    if mod_full == null { return mod_full }
+    local fns = mod_full.functions
+    if fns == null || fns.size == null || fns.size() == 0 { return mod_full }
+    local blocks = fns.get(0).get("blocks")
+    if blocks == null || blocks.size == null || blocks.size() == 0 { return mod_full }
+    local bn = blocks.size()
+    local bi = 0
+    loop(bi < bn) {
+      local insts = blocks.get(bi).get("instructions")
+      if insts != null && insts.size != null && insts.size() > 0 {
+        local n = insts.size()
+        local last = insts.get(n - 1)
+        local op = null
+        if last != null && last.get != null { op = last.get("op") }
+        if !(op == "ret" || op == "jump" || op == "branch" || op == "throw") {
+          // Heuristic: choose recent dst or default to r1/0
+          local guess = 1
+          if last != null && last.get != null {
+            local d = last.get("dst")
+            if d != null { guess = d }
+          }
+          insts.push(Mir.inst_ret(guess))
+        }
+      }
+      bi = bi + 1
+    }
+    return mod_full
+  }
   // const→ret (returns literal)
   const_ret(val) {
     local insts = [
@@ -11,7 +42,8 @@ static box BlockBuilderBox {
       Mir.inst_ret(1),
     ]
     local blocks = [ Mir.block(0, insts) ]
-    return Mir.module(Mir.fn_main(blocks))
+    local _m = Mir.module(Mir.fn_main(blocks))
+    return me._ensure_terminators(_m)
   }
 
   // compare→branch→jump→ret (diamond)
@@ -29,7 +61,8 @@ static box BlockBuilderBox {
     // merge
     local b3 = [ Mir.inst_ret(6) ]
     local blocks = [ Mir.block(0, b0), Mir.block(1, b1), Mir.block(2, b2), Mir.block(3, b3) ]
-    return Mir.module(Mir.fn_main(blocks))
+    local _m = Mir.module(Mir.fn_main(blocks))
+    return me._ensure_terminators(_m)
   }
 
   // binop: const lhs/rhs; binop -> dst=3; ret 3
@@ -41,7 +74,8 @@ static box BlockBuilderBox {
       Mir.inst_ret(3)
     ]
     local blocks = [ Mir.block(0, b0) ]
-    return Mir.module(Mir.fn_main(blocks))
+    local _m = Mir.module(Mir.fn_main(blocks))
+    return me._ensure_terminators(_m)
   }
 
   // loop_counter: while (i < limit) { i = i + 1 } ; return i
@@ -56,26 +90,31 @@ static box BlockBuilderBox {
     local b2 = [ Mir.inst_binop("Add", 1, 4, 1), Mir.inst_jump(1) ]
     local b3 = [ Mir.inst_ret(1) ]
     local blocks = [ Mir.block(0, b0), Mir.block(1, b1), Mir.block(2, b2), Mir.block(3, b3) ]
-    return Mir.module(Mir.fn_main(blocks))
+    local _m = Mir.module(Mir.fn_main(blocks))
+    return me._ensure_terminators(_m)
   }
 
   // --- P3 helpers: minimal mir_call shapes ---
   // extern call (e.g., nyrt.ops.op_eq) with provided arg ids and return
   extern_call_ret(name, args_ids, dst) {
     local b0 = [ Mir.inst_mir_call_extern(name, args_ids, dst), Mir.inst_ret(dst) ]
-    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    return me._ensure_terminators(_m)
   }
   global_call_ret(name, args_ids, dst) {
     local b0 = [ Mir.inst_mir_call_global(name, args_ids, dst), Mir.inst_ret(dst) ]
-    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    return me._ensure_terminators(_m)
   }
   method_call_ret(method, recv_id, args_ids, dst) {
     local b0 = [ Mir.inst_mir_call_method(method, recv_id, args_ids, dst), Mir.inst_ret(dst) ]
-    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    return me._ensure_terminators(_m)
   }
   constructor_call_ret(box_type, args_ids, dst) {
     local b0 = [ Mir.inst_mir_call_constructor(box_type, args_ids, dst), Mir.inst_ret(dst) ]
-    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    return me._ensure_terminators(_m)
   }
 
   // --- P4 thin adapters: immediate-value variants -------------------------
@@ -93,7 +132,8 @@ static box BlockBuilderBox {
     local dst = 1 + n
     insts.push(Mir.inst_mir_call_extern(name, args_ids, dst))
     insts.push(Mir.inst_ret(dst))
-    return Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    return me._ensure_terminators(_m)
   }
 
   global_call_ival_ret(name, arg_vals) {
@@ -105,7 +145,8 @@ static box BlockBuilderBox {
     local dst = 1 + n
     insts.push(Mir.inst_mir_call_global(name, args_ids, dst))
     insts.push(Mir.inst_ret(dst))
-    return Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    return me._ensure_terminators(_m)
   }
 
   method_call_ival_ret(method, recv_val, arg_vals) {
@@ -119,7 +160,8 @@ static box BlockBuilderBox {
     local dst = 2 + n
     insts.push(Mir.inst_mir_call_method(method, 1, args_ids, dst))
     insts.push(Mir.inst_ret(dst))
-    return Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    return me._ensure_terminators(_m)
   }
 
   constructor_call_ival_ret(box_type, arg_vals) {
@@ -131,7 +173,8 @@ static box BlockBuilderBox {
     local dst = 1 + n
     insts.push(Mir.inst_mir_call_constructor(box_type, args_ids, dst))
     insts.push(Mir.inst_ret(dst))
-    return Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, insts) ]))
+    return me._ensure_terminators(_m)
   }
 
 
@@ -142,7 +185,8 @@ static box BlockBuilderBox {
       Mir.inst_mir_call_method("size", 1, new ArrayBox(), 2),
       Mir.inst_ret(2)
     ]
-    return Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    local _m = Mir.module(Mir.fn_main([ Mir.block(0, b0) ]))
+    return me._ensure_terminators(_m)
   }
 
 }

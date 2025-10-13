@@ -18,11 +18,22 @@ pub fn ensure_loaded(_config_path: Option<&str>) {
     if crate::runtime::env_gate_box::plugins_disabled() { return; }
     if !crate::runtime::env_gate_box::plugin_policy_on() { return; }
     let _ = crate::runtime::plugin_boot_box::boot();
-    let _ = crate::runtime::plugin_boot_box::reprobe_providers_for(["ArrayBox", "MapBox", "StringBox", "FileBox"].as_ref());
+    let _ = crate::runtime::plugin_boot_box::reprobe_providers_for([
+        "ArrayBox",
+        "MapBox",
+        "StringBox",
+        "FileBox",
+        "JsonDocBox",
+        "JsonNodeBox",
+        "MirJsonBuilderMin",
+    ]
+    .as_ref());
 
-    // One‑line digest (policy/config/loaded) — print once per process
+    // One‑line digest (policy/config/loaded) — print once per process (quiet‑respecting)
     static PRINTED: OnceLock<bool> = OnceLock::new();
     if PRINTED.get().copied().unwrap_or(false) == false {
+        let debug = crate::runtime::env_gate_box::debug_plugin() || crate::config::env::cli_verbose();
+        let quiet = crate::config::env::cli_quiet();
         let policy = crate::common::env_helpers::get_string_with_alias("HAKO_PLUGIN_POLICY","NYASH_PLUGIN_POLICY")
             .unwrap_or_else(|| "auto".to_string());
         let cfg_path = {
@@ -45,15 +56,21 @@ pub fn ensure_loaded(_config_path: Option<&str>) {
         let _ = ANCHORS_OK.set(anchors_ok);
         let miss_str = if missing.is_empty() { String::new() } else { missing.join(",") };
         let _ = ANCHORS_MISSING.set(miss_str.clone());
-        eprintln!(
-            "[provider] policy={} config={} loaded={{{}}} anchors={} stage2={}",
-            policy,
-            cfg_path,
-            loaded_core.join(","),
-            if anchors_ok { "ok" } else { "miss" },
-            if stage2 { "on" } else { "off" }
-        );
-        if !anchors_ok { eprintln!("[provider/check] anchors-dlsym=miss missing={}", miss_str); } else { eprintln!("[provider/check] anchors-dlsym=ok"); }
+        if debug && !quiet {
+            eprintln!(
+                "[provider] policy={} config={} loaded={{{}}} anchors={} stage2={}",
+                policy,
+                cfg_path,
+                loaded_core.join(","),
+                if anchors_ok { "ok" } else { "miss" },
+                if stage2 { "on" } else { "off" }
+            );
+            if !anchors_ok {
+                eprintln!("[provider/check] anchors-dlsym=miss missing={}", miss_str);
+            } else {
+                eprintln!("[provider/check] anchors-dlsym=ok");
+            }
+        }
         let _ = PRINTED.set(true);
 
     }

@@ -1,0 +1,35 @@
+// Demonstrate JIT mutating opt-in via JitPolicyBox whitelist
+// 1) Enable read_only → mutating hostcalls fallback (policy_denied_mutating)
+// 2) Whitelist nyash.array.push_h → allow + execute
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_policy_optin_mutating.nyash
+
+box Helper {
+  birth() {}
+  add(a) {
+    a.push(1)
+    return a.length()
+  }
+}
+
+static box Main {
+  main() {
+    local P, H, A
+    P = new JitPolicyBox()
+    // Enable read-only first (deny mutating)
+    P.set("read_only", true)
+
+    H = new Helper()
+    A = new ArrayBox()
+    // This call will fallback by policy (observe events)
+    H.add(A)
+
+    // Opt-in: allow array.push_h through whitelist
+    P.setWhitelistCsv("nyash.array.push_h")
+
+    // This call will be allowed (observe allow event)
+    return H.add(A)
+  }
+}
+

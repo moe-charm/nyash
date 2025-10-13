@@ -1,0 +1,40 @@
+// ベンチマーク8: Map操作（set/get）
+// 期待値: 499500 (0+1+2+...+999 = 999*1000/2)
+//
+// 測定内容:
+// - MapBox.set() × 1000回
+// - MapBox.get() × 1000回
+// - Plugin FFI overhead
+// - 文字列キー生成オーバーヘッド
+//
+// 重要: プラグインシステムの性能測定
+
+static box Main {
+    main() {
+        local map
+        local i
+        local sum
+        local key
+
+        map = new MapBox()
+        i = 0
+
+        loop(i < 1000) {
+            key = "key" + i
+            map.set(key, i)
+            i = i + 1
+        }
+
+        sum = 0
+        i = 0
+
+        loop(i < 1000) {
+            key = "key" + i
+            sum = sum + map.get(key)
+            i = i + 1
+        }
+
+        print("Result: " + sum)
+        return 0
+    }
+}

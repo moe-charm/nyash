@@ -1,0 +1,17 @@
+// Delegation + merge: choose() returns 4, used after merge in main.
+static box Main {
+  cond() { return 1 }
+  choose() {
+    if Main.cond() == 1 {
+      return 4
+    } else {
+      return 2
+    }
+  }
+  main() {
+    local v = Main.choose()
+    print("Result: " + v)
+    return 0
+  }
+}
+

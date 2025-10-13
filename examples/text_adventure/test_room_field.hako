@@ -1,0 +1,25 @@
+// Test Room field access issue
+
+box TestRoom {
+    init { name, visited }
+    
+    TestRoom(name) {
+        me.name = name
+        me.visited = false
+    }
+}
+
+print("Creating room...")
+room = new TestRoom("Test")
+
+print("Room name: " + room.name)
+print("Trying to access visited field...")
+
+// Direct field access
+if room.visited {
+    print("Room has been visited")
+} else {
+    print("Room has not been visited")
+}
+
+print("✅ Test completed!")

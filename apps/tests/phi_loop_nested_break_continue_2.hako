@@ -1,0 +1,20 @@
+// Nested loops (variant 2): outer counter reaches 5 with mixed break/continue.
+static box Main {
+  main() {
+    local i = 0
+    loop (true) {
+      local j = 0
+      loop (true) {
+        j = j + 1
+        if j == 2 { continue }
+        if j == 3 { break }
+      }
+      i = i + 1
+      if i == 5 { break }
+      continue
+    }
+    print("Result: " + i)
+    return 0
+  }
+}
+

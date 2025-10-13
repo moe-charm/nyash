@@ -1,0 +1,15 @@
+// reg_guard.hako — RegGuardBox
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box RegGuardBox {
+  // Ensure register is set; return Ok(value) or Err(label v%id is unset)
+  require_set(regs, reg_id, label) {
+    local key = StringHelpers.int_to_str(reg_id)
+    local v = regs.get(key)
+    if v == null {
+      return Result.Err(label + " v%" + StringHelpers.int_to_str(reg_id) + " is unset")
+    }
+    return Result.Ok(v)
+  }
+}

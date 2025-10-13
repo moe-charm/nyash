@@ -14,11 +14,12 @@ export NYASH_VM_AUTO_REGISTER_DIR_NS=1
 export NYASH_SKIP_TOML_ENV=1
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 TEST_main() {
   local ast_raw='{"version":0,"kind":"Program","body":[{"type":"Return","expr":{"type":"Call","name":"string_scan.index_of_from","args":[{"type":"String","value":"abcdef"},{"type":"String","value":"cd"},{"type":"Int","value":0}]}}]}'
   local us_raw='[{"name":"string_scan"}]'
-  local mods_raw='{ "selfhost.common.json.core.string_scan": "apps/selfhost/common/json/core/string_scan.hako" }'
+  local mods_raw='{ "selfhost.common.json.core.string_scan": "selfhost/shared/json/core/string_scan.hako" }'
 
   local ast=$(printf '%s' "$ast_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
   local us=$(printf '%s' "$us_raw" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')

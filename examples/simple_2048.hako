@@ -1,0 +1,272 @@
+// 🎮 シンプル2048ゲーム - Nyash Everything is Box実証
+
+print("🎮 === Simple 2048 Game ===")
+
+// デバッグ機能
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 🔢 シンプルタイルBox
+box SimpleTile {
+    init { value }
+    
+    SimpleTile(initialValue) {
+        me.value = initialValue
+    }
+    
+    getValue() {
+        return me.value
+    }
+    
+    setValue(newValue) {
+        me.value = newValue
+    }
+    
+    isEmpty() {
+        return me.value == 0
+    }
+    
+    toString() {
+        if me.value == 0 {
+            return "."
+        }
+        return me.value.toString()
+    }
+}
+
+// 🎲 シンプルゲームボードBox
+box SimpleGameBoard {
+    init { grid, score }
+    
+    SimpleGameBoard() {
+        me.grid = new ArrayBox()
+        me.score = 0
+        
+        // 4x4グリッド初期化
+        row = 0
+        loop(row < 4) {
+            rowArray = new ArrayBox()
+            col = 0
+            loop(col < 4) {
+                tile = new SimpleTile(0)
+                rowArray.push(tile)
+                col = col + 1
+            }
+            me.grid.push(rowArray)
+            row = row + 1
+        }
+        
+        DEBUG.trackBox(me.grid, "simple_grid")
+    }
+    
+    // タイル取得
+    getTile(x, y) {
+        if x >= 0 && x < 4 && y >= 0 && y < 4 {
+            row = me.grid.get(x)
+            return row.get(y)
+        }
+        // エラーケース用ダミータイル
+        return new SimpleTile(-1)
+    }
+    
+    // タイル設定
+    setTile(x, y, value) {
+        if x >= 0 && x < 4 && y >= 0 && y < 4 {
+            row = me.grid.get(x)
+            tile = row.get(y)
+            tile.setValue(value)
+        }
+    }
+    
+    // 空のセルに2を追加（シンプル版）
+    addRandomTile() {
+        // 最初の空いてるセルに2を追加
+        row = 0
+        loop(row < 4) {
+            col = 0
+            loop(col < 4) {
+                tile = me.getTile(row, col)
+                if tile.isEmpty() {
+                    me.setTile(row, col, 2)
+                    print("🎲 Added 2 at (" + row + "," + col + ")")
+                    return true
+                }
+                col = col + 1
+            }
+            row = row + 1
+        }
+        return false
+    }
+    
+    // ボード表示
+    display() {
+        print("📊 Score: " + me.score)
+        print("┌────┬────┬────┬────┐")
+        
+        row = 0
+        loop(row < 4) {
+            line = "│"
+            col = 0
+            loop(col < 4) {
+                tile = me.getTile(row, col)
+                value = tile.getValue()
+                if value == 0 {
+                    line = line + "    "
+                } else if value < 10 {
+                    line = line + "   " + value
+                } else if value < 100 {
+                    line = line + "  " + value  
+                } else if value < 1000 {
+                    line = line + " " + value
+                } else {
+                    line = line + value.toString()
+                }
+                line = line + "│"
+                col = col + 1
+            }
+            print(line)
+            
+            if row < 3 {
+                print("├────┼────┼────┼────┤")
+            }
+            row = row + 1
+        }
+        print("└────┴────┴────┴────┘")
+    }
+    
+    // シンプル左移動
+    moveLeft() {
+        moved = false
+        
+        row = 0
+        loop(row < 4) {
+            // 各行の値を配列に集める
+            values = new ArrayBox()
+            col = 0
+            loop(col < 4) {
+                tile = me.getTile(row, col)
+                if tile.getValue() > 0 {
+                    values.push(tile.getValue())
+                }
+                col = col + 1
+            }
+            
+            // マージ処理（シンプル版）
+            if values.length() >= 2 {
+                i = 0
+                loop(i < values.length() - 1) {
+                    val1 = values.get(i)
+                    val2 = values.get(i + 1)
+                    if val1 == val2 {
+                        newValue = val1 * 2
+                        values.set(i, newValue)
+                        values.removeAt(i + 1)
+                        me.score = me.score + newValue
+                        print("✨ Merged " + val1 + " + " + val2 + " = " + newValue)
+                        break  // 一回のみマージ
+                    }
+                    i = i + 1
+                }
+            }
+            
+            // 行を更新
+            col = 0
+            loop(col < 4) {
+                oldTile = me.getTile(row, col)
+                oldValue = oldTile.getValue()
+                
+                if col < values.length() {
+                    newValue = values.get(col)
+                } else {
+                    newValue = 0
+                }
+                
+                if oldValue != newValue {
+                    moved = true
+                    me.setTile(row, col, newValue)
+                }
+                col = col + 1
+            }
+            
+            row = row + 1
+        }
+        
+        return moved
+    }
+}
+
+// 🎮 シンプルゲームBox
+box SimpleGame2048 {
+    init { board, moves, gameStarted }
+    
+    SimpleGame2048() {
+        me.board = new SimpleGameBoard()
+        me.moves = 0
+        me.gameStarted = false
+        
+        DEBUG.trackBox(me.board, "simple_game_board")
+    }
+    
+    start() {
+        print("🚀 Starting Simple 2048 game...")
+        
+        // 初期タイル2個追加
+        me.board.addRandomTile()
+        me.board.addRandomTile()
+        
+        me.gameStarted = true
+        me.board.display()
+        
+        return me
+    }
+    
+    move(direction) {
+        if me.gameStarted == false {
+            print("❌ Game not started!")
+            return false
+        }
+        
+        moved = false
+        
+        if direction == "left" {
+            moved = me.board.moveLeft()
+        } else {
+            print("⚠️ Only 'left' direction implemented")
+            return false
+        }
+        
+        if moved {
+            me.moves = me.moves + 1
+            me.board.addRandomTile()
+            
+            print("\n📱 Move " + me.moves + " (left):")
+            me.board.display()
+        } else {
+            print("⚠️ No movement possible")
+        }
+        
+        return moved
+    }
+}
+
+// 🚀 ゲーム実行
+print("🎯 Testing Simple 2048...")
+
+game = new SimpleGame2048()
+DEBUG.trackBox(game, "main_simple_game")
+
+// ゲーム開始
+game.start()
+
+// 移動テスト
+print("\n=== Movement Testing ===")
+game.move("left")
+game.move("left")
+game.move("left")
+
+// デバッグ情報
+print("\n📊 === Debug Report ===")
+print(DEBUG.memoryReport())
+
+print("\n🎉 Simple 2048 completed!")
+print("Nyashで2048ゲームが動いたにゃ！ 🎮✨")

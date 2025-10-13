@@ -21,6 +21,9 @@ fn registry() -> &'static HashMap<&'static str, ExternSig> {
         if !m.contains_key("env.console.log") { m.insert("env.console.log", ExternSig { argc: 1 }); }
         if !m.contains_key("env.future.await") { m.insert("env.future.await", ExternSig { argc: 1 }); }
         if !m.contains_key("nyrt.ops.op_eq") { m.insert("nyrt.ops.op_eq", ExternSig { argc: 2 }); }
+        // HostBridge (Phase B) — minimal fallbacks
+        if !m.contains_key("hostbridge.box_new") { m.insert("hostbridge.box_new", ExternSig { argc: 2 }); }
+        if !m.contains_key("hostbridge.box_call") { m.insert("hostbridge.box_call", ExternSig { argc: 3 }); }
         m
     })
 }

@@ -1,0 +1,34 @@
+// Result-returning variants demo (R methods)
+// Run:
+//   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_result_chain_demo_fixed.nyash
+
+static box Main {
+  init { console }
+  
+  main() {
+    me.console = new ConsoleBox()
+    
+    local py, mR, fR, rR, badR
+    py = new PyRuntimeBox()
+    
+    // Use R variants to get Result boxes
+    me.console.log("Testing importR...")
+    mR = py.importR("math")
+    me.console.log("importR result=", mR.toString())
+    
+    me.console.log("Testing getattrR on sqrt...")
+    fR = mR.getattrR("sqrt")
+    me.console.log("getattrR result=", fR.toString())
+    
+    me.console.log("Testing callR with 9...")
+    rR = fR.callR(9)
+    me.console.log("callR result=", rR.toString())
+    
+    // Error example: getattrR on missing attribute
+    me.console.log("Testing error case...")
+    badR = mR.getattrR("no_such_attr")
+    me.console.log("missing getattrR=", badR.toString())
+    
+    return 0
+  }
+}

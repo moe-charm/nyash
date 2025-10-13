@@ -2,6 +2,7 @@
 # selfhost_mircall_extern_opeq_false_e2e_vm.sh — E2E: mir_call Extern(op_eq) false via v1→v0 adapter, then --json-file (rc-only)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 require_env || exit 2
 ensure_hako_toml
 

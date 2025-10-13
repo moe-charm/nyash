@@ -4,7 +4,7 @@ static box Tokenizer {
     tokenize(input) {
         local tokens = new ArrayBox()
         local i = 0
-        local n = input.length()
+        local n = input.size()
         // helper: skip whitespace
         fn skip_ws() {
             loop(i < n) {

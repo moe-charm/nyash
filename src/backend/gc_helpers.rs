@@ -12,18 +12,19 @@ pub fn is_mutating_builtin_call(recv: &VMValue, method: &str) -> bool {
 
     match recv {
         VMValue::BoxRef(b) => {
-            if b.as_any()
-                .downcast_ref::<crate::boxes::array::ArrayBox>()
-                .is_some()
+            #[cfg(feature = "legacy-boxes")]
             {
-                return ARRAY_METHODS.iter().any(|m| *m == method);
+                if b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
+                    return ARRAY_METHODS.iter().any(|m| *m == method);
+                }
+                if b.as_any().downcast_ref::<crate::boxes::map_box::MapBox>().is_some() {
+                    return MAP_METHODS.iter().any(|m| *m == method);
+                }
             }
-            if b.as_any()
-                .downcast_ref::<crate::boxes::map_box::MapBox>()
-                .is_some()
-            {
-                return MAP_METHODS.iter().any(|m| *m == method);
-            }
+            // Plugin-only: rely on type_name without concrete types
+            let tn = b.type_name();
+            if tn == "ArrayBox" { return ARRAY_METHODS.iter().any(|m| *m == method); }
+            if tn == "MapBox" { return MAP_METHODS.iter().any(|m| *m == method); }
             false
         }
         _ => false,

@@ -123,12 +123,6 @@ static box HakoruneVmCore {
       }
       // Execute normal instructions (non-PHI)
       local exec_result = me._execute_instructions_in_block(block_json, regs, mem)
-      // If a ret was executed within instructions, finish here
-      if regs.has("__ret_seen__") || block_json.indexOf("\"op\":\"ret\"") >= 0 {
-        return Result.Ok(exec_result.as_Ok())
-      }
-      // Execute normal instructions (non-PHI)
-      local exec_result = me._execute_instructions_in_block(block_json, regs, mem)
       if exec_result.is_Err() {
         return exec_result
       }

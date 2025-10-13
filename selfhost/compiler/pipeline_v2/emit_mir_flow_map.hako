@@ -71,4 +71,34 @@ flow EmitMirFlowMap {
     local mod_full = BlockBuilder.loop_counter(limit)
     return JsonEmitBox.to_json(mod_full)
   }
+
+
+  // P4: generic extern/global/method/constructor emitters (immediate values)
+  emit_extern_call(name, arg_vals) {
+    local mod_full = BlockBuilder.extern_call_ival_ret(name, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+  emit_global_call(name, arg_vals) {
+    local mod_full = BlockBuilder.global_call_ival_ret(name, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+  emit_method_call(method, recv_val, arg_vals) {
+    local mod_full = BlockBuilder.method_call_ival_ret(method, recv_val, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+  emit_constructor(box_type, arg_vals) {
+    local mod_full = BlockBuilder.constructor_call_ival_ret(box_type, arg_vals)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
+    return JsonEmitBox.to_json(mod_full)
+  }
+
+  // P5: ctor(ArrayBox)→size()→ret via shared builder
+  emit_array_ctor_then_size() {
+    local mod_full = BlockBuilder.ctor_then_size_ret()
+    return JsonEmitBox.to_json(mod_full)
+  }
+
 }

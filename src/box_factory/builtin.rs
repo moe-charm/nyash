@@ -18,6 +18,7 @@ use super::RuntimeError;
 use crate::box_trait::NyashBox;
 
 // Separated implementations (Phase 0: ✅ Complete)
+#[cfg(feature = "legacy-boxes")]
 use super::builtin_impls;
 
 /// Factory for builtin Box types
@@ -29,6 +30,7 @@ impl BuiltinBoxFactory {
     }
 }
 
+#[cfg(feature = "legacy-boxes")]
 impl BoxFactory for BuiltinBoxFactory {
     fn create_box(
         &self,
@@ -72,4 +74,18 @@ impl BoxFactory for BuiltinBoxFactory {
     fn is_builtin_factory(&self) -> bool {
         true
     }
+}
+
+#[cfg(not(feature = "legacy-boxes"))]
+impl BoxFactory for BuiltinBoxFactory {
+    fn create_box(
+        &self,
+        _name: &str,
+        _args: &[Box<dyn NyashBox>],
+    ) -> Result<Box<dyn NyashBox>, RuntimeError> {
+        Err(RuntimeError::InvalidOperation { message: "builtin boxes disabled (legacy-boxes OFF)".to_string() })
+    }
+
+    fn box_types(&self) -> Vec<&str> { vec![] }
+    fn is_builtin_factory(&self) -> bool { false }
 }

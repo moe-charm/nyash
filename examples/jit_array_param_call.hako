@@ -1,0 +1,12 @@
+// Param-array JIT HostCall PoC
+box Utils {
+    getArrayLength(arr) {
+        return arr.length()
+    }
+}
+
+arr = new ArrayBox()
+arr.push(1)
+arr.push(2)
+u = new Utils()
+print(u.getArrayLength(arr))

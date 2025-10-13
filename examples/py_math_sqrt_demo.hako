@@ -1,0 +1,20 @@
+// Python math.sqrt demo via plugin (autodecode on)
+// @env NYASH_PLUGIN_ONLY=1
+// @env NYASH_PY_AUTODECODE=1
+// @env NYASH_DEBUG_PLUGIN=1
+// Build:
+//   cargo build --release && (cd plugins/nyash-python-plugin && cargo build --release)
+// Run:
+//   ./target/release/nyash --backend vm examples/py_math_sqrt_demo.nyash
+
+static box Main {
+  main() {
+    local py, math, sqrt, r
+    py = new PyRuntimeBox()
+    math = py.import("math")
+    sqrt = math.getattr("sqrt")
+    r = sqrt.call(9)
+    me.console.println(r) // expects 3.0
+    return 0
+  }
+}

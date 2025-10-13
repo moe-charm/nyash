@@ -1,0 +1,176 @@
+// mir_io_box.hako — MirIoBox (Phase A, Hako-side implementation)
+// Responsibility: provide minimal read/validate/cursor API using existing locator boxes.
+// Provider selection:
+//   - Default: scan (string scanning, no plugin required)
+//   - Optional: yyjson (JsonDoc/JsonNode via HostBridge extern) when JSON plugin is available
+// Fail‑Fast:
+//   - validate() checks kind/schema/functions
+//   - validate_function(): terminator required + jump/branch target existence (scan path ensured; provider path WIP)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/function_locator.hako" as FunctionLocatorBox
+using "selfhost/hakorune-vm/blocks_locator.hako" as BlocksLocatorBox
+using "selfhost/hakorune-vm/instrs_locator.hako" as InstrsLocatorBox
+using "selfhost/hakorune-vm/backward_object_scanner.hako" as BackwardObjectScannerBox
+using "selfhost/hakorune-vm/block_iterator.hako" as BlockIteratorBox
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box MirIoBox {
+  // Provider selection: prefer JSON provider when available; otherwise use scan locators
+  // 判定は _json_root() の成否で行う（ENV不要）。
+
+
+
+  // Helper: parse JSON and return root JsonNodeBox (provider=yyjson)
+  _json_root(json) {
+    return null
+  }
+  validate(json) {
+    if json == null { return Result.Err("null json") }
+    // Accept full root (preferred)
+    if json.indexOf("\"kind\":\"MIR\"") >= 0 {
+      if json.indexOf("\"schema_version\":\"1.0\"") < 0 { return Result.Err("invalid schema_version") }
+      if json.indexOf("\"functions\"") < 0 { return Result.Err("functions missing") }
+      return Result.Ok(0)
+    }
+    // Tolerate narrowed JSON (single function object) used by nyvm bridge
+    if json.indexOf("\"instructions\"") >= 0 && json.indexOf("\"id\"") >= 0 {
+      return Result.Ok(0)
+    }
+    return Result.Err("invalid kind")
+  }
+
+  // Return function JSON meta (content)
+  functions(json) {
+    // Provider disabled: always use scan locator
+    local loc = FunctionLocatorBox.locate(json)
+    if loc.is_Err() { return loc }
+    return loc
+  }
+
+  // Return blocks[] meta (content without brackets)
+  blocks(func_json) {
+    // Provider disabled: always use scan locator
+    local loc = BlocksLocatorBox.locate(func_json)
+    if loc.is_Err() { return loc }
+    return loc
+  }
+
+  // Return instructions content and single flag
+  instructions(block_json) {
+    // Provider disabled: always use scan locator
+    local loc = InstrsLocatorBox.locate(block_json)
+    if loc.is_Err() { return loc }
+    return loc
+  }
+
+  // Return last terminator object (as string)
+  terminator(block_json) {
+    // Provider disabled: use scan locator then parse last object
+    local loc = InstrsLocatorBox.locate(block_json)
+    if loc.is_Err() { return loc }
+    local meta = loc.as_Ok()
+    local insts = meta.get("content")
+    if insts == "" { return Result.Err("terminator not found") }
+    local single = meta.get("single")
+    if single != null && single == 1 { return Result.Ok(insts) }
+    // use small window for large JSON (8192 bytes)
+    local last = BackwardObjectScannerBox.scan_last_object_opt_window(insts, 200000, 8192)
+    if last.is_Err() { return Result.Err("terminator scan failed: " + last.as_Err()) }
+    return Result.Ok(last.as_Ok())
+  }
+
+  // Strict validate for function JSON (narrow): terminator required and references valid
+  validate_function(func_json) {
+    // collect block ids
+    local bl = me.blocks(func_json)
+    if bl.is_Err() { return bl }
+    local meta = bl.as_Ok()
+    local content = meta.get("content")
+    local ids = new MapBox()
+    // iterate blocks
+    local pos = 0
+    loop(true) {
+      local it = BlockIteratorBox.next(content, pos)
+      if it.is_Err() { break }
+      local m = it.as_Ok()
+      local obj = m.get("obj")
+      pos = m.get("next_pos")
+      // parse id
+      local key_id = "\"id\":"
+      local p = obj.indexOf(key_id)
+      if p < 0 { return Result.Err("block id missing") }
+      p = p + key_id.size()
+      // skip ws
+      loop(p < obj.size()) { local ch = obj.substring(p,p+1) if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p = p + 1 continue } break }
+      local digs = StringHelpers.read_digits(obj, p)
+      if digs == "" { return Result.Err("invalid block id") }
+      ids.set(StringHelpers.int_to_str(StringHelpers.to_i64(digs)), 1)
+      // require terminator
+      if obj.indexOf("\"terminator\":{") < 0 { return Result.Err("terminator missing") }
+    }
+    // validate each block terminator references
+    pos = 0
+    loop(true) {
+      local it = BlockIteratorBox.next(content, pos)
+      if it.is_Err() { break }
+      local m = it.as_Ok()
+      pos = m.get("next_pos")
+      local obj = m.get("obj")
+      // extract terminator object
+      local ts = obj.indexOf("\"terminator\":{")
+      if ts < 0 { return Result.Err("terminator missing") }
+      local te = ts + "\"terminator\":".size()
+      // naive: use general locator to get terminator via instructions fallback if needed
+      local term = me.terminator(obj)
+      if term.is_Err() { return Result.Err("terminator parse failed") }
+      local tj = term.as_Ok()
+      // op tolerant
+      local k = "\"op\""
+      local p2 = tj.indexOf(k)
+      if p2 < 0 { return Result.Err("terminator op not found") }
+      p2 = p2 + k.size()
+      loop(p2 < tj.size()) { local ch2 = tj.substring(p2,p2+1) if ch2 == ":" { p2 = p2 + 1 break } if ch2 == " " || ch2 == "\n" || ch2 == "\r" || ch2 == "\t" { p2 = p2 + 1 continue } return Result.Err("terminator op colon not found") }
+      loop(p2 < tj.size()) { local ch3 = tj.substring(p2,p2+1) if ch3 == " " || ch3 == "\n" || ch3 == "\r" || ch3 == "\t" { p2 = p2 + 1 continue } break }
+      if tj.substring(p2,p2+1) != "\"" { return Result.Err("terminator op quote not found") }
+      local e2 = JsonCursorBox.index_of_from(tj, "\"", p2+1)
+      if e2 < 0 { return Result.Err("terminator op end not found") }
+      local op = tj.substring(p2+1, e2)
+      if op == "jump" {
+        local kt = "\"target\":"
+        local pt = tj.indexOf(kt)
+        if pt < 0 { return Result.Err("jump: target missing") }
+        pt = pt + kt.size()
+        loop(pt < tj.size()) {
+          local ch = tj.substring(pt,pt+1)
+          if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { pt = pt + 1 continue }
+          break
+        }
+        local digs2 = StringHelpers.read_digits(tj, pt)
+        if digs2 == "" { return Result.Err("jump: invalid target") }
+        local key = StringHelpers.int_to_str(StringHelpers.to_i64(digs2))
+        if ids.get(key) == null { return Result.Err("jump: unknown target") }
+      } else { if op == "branch" {
+        local k1 = "\"then_bb\":"
+        local p3 = tj.indexOf(k1)
+        if p3 < 0 { return Result.Err("branch: then_bb missing") }
+        p3 = p3 + k1.size()
+        loop(p3 < tj.size()) { local ch = tj.substring(p3,p3+1) if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p3 = p3 + 1 continue } break }
+        local d1 = StringHelpers.read_digits(tj, p3)
+        if d1 == "" { return Result.Err("branch: invalid then_bb") }
+        local k2 = "\"else_bb\":"
+        local p4 = tj.indexOf(k2)
+        if p4 < 0 { return Result.Err("branch: else_bb missing") }
+        p4 = p4 + k2.size()
+        loop(p4 < tj.size()) { local ch = tj.substring(p4,p4+1) if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { p4 = p4 + 1 continue } break }
+        local d2 = StringHelpers.read_digits(tj, p4)
+        if d2 == "" { return Result.Err("branch: invalid else_bb") }
+        if ids.get(StringHelpers.int_to_str(StringHelpers.to_i64(d1))) == null { return Result.Err("branch: unknown then_bb") }
+        if ids.get(StringHelpers.int_to_str(StringHelpers.to_i64(d2))) == null { return Result.Err("branch: unknown else_bb") }
+      } else { if op == "ret" { /* ok */ } else { return Result.Err("terminator: unsupported op "" + op + """) } }
+      }
+    }
+    return Result.Ok(0)
+  }
+}

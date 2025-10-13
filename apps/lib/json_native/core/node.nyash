@@ -24,7 +24,7 @@ static box JsonNode {
             local out = this.create_object()
             local ks = x.keys()
             local i = 0
-            loop(i < ks.length()) {
+            loop(i < ks.size()) {
                 local k = ks.get(i)
                 local v = x.get(k)
                 out.object_set(k, this.normalize_any_(v))
@@ -36,7 +36,7 @@ static box JsonNode {
         if x.length != null and x.get != null and x.push != null {
             local out = this.create_array()
             local i = 0
-            local n = x.length()
+            local n = x.size()
             loop(i < n) {
                 out.array_push(this.normalize_any_(x.get(i)))
                 i = i + 1
@@ -169,9 +169,9 @@ static box JsonNode {
         if StringUtils.starts_with(text, "{") and StringUtils.ends_with(text, "}") {
             // 単一キーの素朴なハンドリング: {"k":<num|string|bool|null>}
             local object_node = this.create_object()
-            local inner = text.substring(1, text.length() - 1)
+            local inner = text.substring(1, text.size() - 1)
             inner = StringUtils.trim(inner)
-            if inner.length() == 0 {
+            if inner.size() == 0 {
                 return object_node
             }
             // 最低限の分割（コロン一箇所想定）: indexOf があれば活用
@@ -181,7 +181,7 @@ static box JsonNode {
                 return object_node
             }
             local kraw = StringUtils.trim(inner.substring(0, sep))
-            local vraw = StringUtils.trim(inner.substring(sep + 1, inner.length()))
+            local vraw = StringUtils.trim(inner.substring(sep + 1, inner.size()))
             // キーはダブルクォート必須（簡易）
             if StringUtils.starts_with(kraw, "\"") and StringUtils.ends_with(kraw, "\"") {
                 local key = EscapeUtils.unquote_string(kraw)
@@ -243,7 +243,7 @@ static box JsonNode {
     // 配列のサイズを取得
     array_size() {
         if me.kind == "array" {
-            return me.value.length()
+            return me.value.size()
         }
         return 0
     }
@@ -251,7 +251,7 @@ static box JsonNode {
     // 配列の要素を取得（欠損時は null を返す）
     array_get(index) {
         if me.kind == "array" {
-            if index >= 0 and index < me.value.length() {
+            if index >= 0 and index < me.value.size() {
                 return this.normalize_any_(me.value.get(index))
             } else {
                 return null
@@ -322,7 +322,7 @@ static box JsonNode {
             if me.kind == "array" {
                 local parts = new ArrayBox()
                 local i = 0
-                loop(i < me.value.length()) {
+                loop(i < me.value.size()) {
                     local elem = me.value.get(i)
                     parts.push(elem.stringify())
                     i = i + 1
@@ -333,7 +333,7 @@ static box JsonNode {
                 // 安定出力のためキーを辞書順で整列
                 local keys = me.value.keys()
                 // 簡易バブルソート（要素数が小さい前提）
-                local n = keys.length()
+                local n = keys.size()
                 local i = 0
                 loop(i < n) {
                     local j = 0
@@ -351,7 +351,7 @@ static box JsonNode {
                 }
                 local parts = new ArrayBox()
                 local k = 0
-                loop(k < keys.length()) {
+                loop(k < keys.size()) {
                     local key = keys.get(k)
                     local val = me.value.get(key)
                     local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
@@ -437,7 +437,7 @@ box JsonNodeInstance {
         if me.kind == "array" {
             local parts = new ArrayBox()
             local i = 0
-            loop(i < me.value.length()) {
+            loop(i < me.value.size()) {
                 local elem = me.value.get(i)
                 parts.push(elem.stringify())
                 i = i + 1
@@ -447,7 +447,7 @@ box JsonNodeInstance {
         if me.kind == "object" {
             // 安定出力のためキーを辞書順で整列
             local keys = me.value.keys()
-            local n = keys.length()
+            local n = keys.size()
             local i = 0
             loop(i < n) {
                 local j = 0
@@ -464,7 +464,7 @@ box JsonNodeInstance {
             }
             local parts = new ArrayBox()
             local k = 0
-            loop(k < keys.length()) {
+            loop(k < keys.size()) {
                 local key = keys.get(k)
                 local val = me.value.get(key)
                 local pair = EscapeUtils.quote_string(key) + ":" + val.stringify()
@@ -491,7 +491,7 @@ box JsonNodeInstance {
     // Instance helper: array size
     array_size() {
         if me.kind == "array" {
-            return me.value.length()
+            return me.value.size()
         }
         return 0
     }
@@ -499,7 +499,7 @@ box JsonNodeInstance {
     // Instance helper: array get（欠損時は null を返す）
     array_get(index) {
         if me.kind == "array" {
-            if index >= 0 and index < me.value.length() {
+            if index >= 0 and index < me.value.size() {
                 return JsonNode.normalize_any_(me.value.get(index))
             } else {
                 return null

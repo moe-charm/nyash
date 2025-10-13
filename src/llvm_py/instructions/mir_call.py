@@ -820,6 +820,20 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
             vmap[dst_vid] = res
         return
 
+    # Special-case: env.future.await/spawn_instance (thin lowering)
+    if extern_name == "env.future.await":
+        a0 = arg_resolver.resolve_i64_or_zero(args[0]) if args else ir.Constant(i64, 0)
+        if dst_vid is not None:
+            vmap[dst_vid] = a0
+        return
+
+    if extern_name == "env.future.spawn_instance":
+        if dst_vid is not None:
+            vmap[dst_vid] = ir.Constant(i64, 0)
+        return
+
+
+
     # Look up extern function in module
     func = None
     for f in module.functions:
@@ -841,6 +855,13 @@ def lower_extern_call(builder, module, extern_name, args, dst_vid, vmap, resolve
         func = ir.Function(module, func_type, name=extern_name)
 
     # Prepare arguments with C ABI type conversion
+    # Minimal compat helper to replace legacy _resolve_arg usages
+    def _resolve_arg(vid: int):
+        try:
+            return arg_resolver.resolve_i64_or_zero(vid)
+        except Exception:
+            from llvmlite import ir as _ir
+            return _ir.Constant(_ir.IntType(64), 0)
     call_args = []
     for i, arg_id in enumerate(args):
         arg_val = _resolve_arg(arg_id)

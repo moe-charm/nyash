@@ -169,7 +169,7 @@ selfhost/shared/json/     # JSON処理（1ファイル）
 
 # 除外
 apps/selfhost/parser/          # パーサー（別調査対象）
-apps/selfhost/tools/           # ツール（別調査対象）
+selfhost/tools/           # ツール（別調査対象）
 ```
 
 ### 調査深度

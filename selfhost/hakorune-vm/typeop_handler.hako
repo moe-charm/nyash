@@ -4,6 +4,7 @@
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/reg_guard.hako" as RegGuardBox
 
 static box TypeOpHandlerBox {
   // Handle typeop instruction
@@ -39,7 +40,9 @@ static box TypeOpHandlerBox {
     }
 
     // Get source value from register
-    local src_value = ValueManagerBox.get(regs, src_reg)
+    local g_src = RegGuardBox.require_set(regs, src_reg, "typeop: value")
+    if g_src.is_Err() { return g_src }
+    local src_value = g_src.as_Ok()
 
     if kind == "Check" {
       // Phase 1: Type check - always return 1 (assume type matches)

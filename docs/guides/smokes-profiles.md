@@ -28,3 +28,32 @@ Parity harness availability
 Notes
 - Noise filtering is conservative; user output lines aren’t stripped. If differences surface, prefer tightening filters locally in the script.
 - For environment variables beyond the above, see `docs/guides/env-variables.md`.
+
+
+Selfhost Opt‑In (gated)
+- Purpose: keep quick/CI green while allowing developers to run heavier selfhost checks locally.
+- Flags:
+  - `SMOKES_SELFHOST_ENABLE=1`: enable selfhost quick tests (alias/pipeline/oop/etc.). Default OFF → tests SKIP.
+  - `SMOKES_SELFHOST_M2M3_ENABLE=1`: enable selfhost Mini‑VM M2/M3 tests (JSON→Mini‑VM eval). Default OFF → tests SKIP.
+- Rationale: these suites depend on local modules, plugin availability, and evolving emit paths. Gating avoids incidental reds.
+- Example:
+  - `SMOKES_SELFHOST_ENABLE=1 tools/smokes/v2/run.sh --profile quick-selfhost`
+  - `SMOKES_SELFHOST_M2M3_ENABLE=1 tools/smokes/v2/run.sh --profile quick-selfhost --filter 'selfhost_mir_*'`
+
+Plugin‑On Strict (dev)
+- Strict plugin semantics tests require dynamic plugins (.so) to be present.
+- We preflight with plugin tester when available:
+  - `tools/plugin-tester/target/release/plugin-tester build-all`
+  - If plugin artifacts are missing, strict tests SKIP (not FAIL) to keep quick profile green.
+- You can force a rebuild locally to run them:
+  - `tools/plugin-tester/target/release/plugin-tester build-all`
+
+
+CI Guidance (recommended)
+- Defaults (fast + stable):
+  - `quick` + `integration-core`
+  - Avoid enabling plugin-on strict or selfhost suites in default CI to keep signal clean.
+- Opt-in (developers / nightly):
+  - Selfhost: set `SMOKES_SELFHOST_ENABLE=1` (and `SMOKES_SELFHOST_M2M3_ENABLE=1` for Mini‑VM M2/M3)
+  - Plugin-on strict: ensure dynamic plugin artifacts exist or run `tools/plugin-tester/target/release/plugin-tester build-all` first.
+- Rationale: isolates evolving surfaces (plugins/selfhost) from core regressions while preserving easy local verification.

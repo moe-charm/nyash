@@ -1,0 +1,196 @@
+// 🌟 パーティクル爆発システム - Everything is Box の美しい実証
+// WebCanvasBox + RandomBox + MathBox の完璧な統合
+
+print("🌟 === Particle Explosion System Starting ===")
+
+// デバッグシステム初期化
+DEBUG = new DebugBox()
+DEBUG.startTracking()
+
+// 🎨 パーティクルBox - 各粒子が独立したBox！
+box ParticleBox {
+    init { x, y, vx, vy, color, size, life, maxLife, gravity }
+    
+    ParticleBox(startX, startY) {
+        // ランダム生成器
+        random = new RandomBox()
+        
+        // 初期位置
+        me.x = startX
+        me.y = startY
+        
+        // ランダム速度（爆発効果）
+        angle = random.float() * 6.28318  // 2π
+        speed = random.float() * 5.0 + 2.0
+        me.vx = speed * new MathBox().cos(angle)
+        me.vy = speed * new MathBox().sin(angle) - 3.0  // 上向き初速度
+        
+        // ランダム色（虹色パーティクル）
+        colorChoice = random.integer(1, 6)
+        if colorChoice == 1 { me.color = "red" }
+        if colorChoice == 2 { me.color = "orange" }
+        if colorChoice == 3 { me.color = "yellow" }
+        if colorChoice == 4 { me.color = "lime" }
+        if colorChoice == 5 { me.color = "cyan" }
+        if colorChoice == 6 { me.color = "magenta" }
+        
+        // パーティクル特性
+        me.size = random.float() * 4.0 + 2.0
+        me.maxLife = 100
+        me.life = me.maxLife
+        me.gravity = 0.1
+    }
+    
+    // 物理更新
+    update() {
+        // 重力適用
+        me.vy = me.vy + me.gravity
+        
+        // 位置更新
+        me.x = me.x + me.vx
+        me.y = me.y + me.vy
+        
+        // 空気抵抗
+        me.vx = me.vx * 0.99
+        me.vy = me.vy * 0.98
+        
+        // 寿命減少
+        me.life = me.life - 1
+        
+        // サイズも寿命とともに小さく
+        ratio = me.life / me.maxLife
+        me.size = me.size * 0.995
+        
+        return me.life > 0
+    }
+    
+    // Canvas描画
+    draw(canvas) {
+        if me.life > 0 {
+            // 透明度計算
+            alpha = me.life / me.maxLife
+            
+            // 円を描画
+            canvas.setFillStyle(me.color)
+            canvas.beginPath()
+            canvas.arc(me.x, me.y, me.size, 0, 6.28318)
+            canvas.fill()
+            
+            // 光るエフェクト（小さい白い点）
+            if me.life > me.maxLife * 0.8 {
+                canvas.setFillStyle("white")
+                canvas.beginPath()
+                canvas.arc(me.x, me.y, me.size * 0.3, 0, 6.28318)
+                canvas.fill()
+            }
+        }
+    }
+    
+    isAlive() {
+        return me.life > 0
+    }
+}
+
+// 🎆 パーティクルシステム管理Box
+box ParticleSystemBox {
+    init { particles, canvas, centerX, centerY, explosionTimer }
+    
+    ParticleSystemBox(canvasId, width, height) {
+        // WebCanvas初期化
+        me.canvas = new WebCanvasBox(canvasId, width, height)
+        me.particles = new ArrayBox()
+        me.centerX = width / 2
+        me.centerY = height / 2
+        me.explosionTimer = 0
+        
+        // 背景色設定
+        me.canvas.setFillStyle("black")
+        me.canvas.fillRect(0, 0, width, height)
+        
+        DEBUG.trackBox(me, "ParticleSystem")
+    }
+    
+    // 爆発生成
+    explode(x, y, count) {
+        print("💥 Creating " + count + " particles at (" + x + ", " + y + ")")
+        
+        i = 0
+        loop (i < count) {
+            particle = new ParticleBox(x, y)
+            me.particles.add(particle)
+            DEBUG.trackBox(particle, "Particle_" + i)
+            i = i + 1
+        }
+    }
+    
+    // フレーム更新
+    update() {
+        // 背景クリア（トレイル効果用に少し透明）
+        me.canvas.setFillStyle("rgba(0,0,0,0.1)")
+        me.canvas.fillRect(0, 0, me.canvas.width, me.canvas.height)
+        
+        // 全パーティクル更新
+        aliveParticles = new ArrayBox()
+        i = 0
+        loop (i < me.particles.size()) {
+            particle = me.particles.get(i)
+            if particle.update() {
+                particle.draw(me.canvas)
+                aliveParticles.add(particle)
+            }
+            i = i + 1
+        }
+        
+        me.particles = aliveParticles
+        
+        // 自動爆発タイマー
+        me.explosionTimer = me.explosionTimer + 1
+        if me.explosionTimer > 120 {  // 2秒間隔
+            random = new RandomBox()
+            explodeX = random.integer(50, me.canvas.width - 50)
+            explodeY = random.integer(50, me.canvas.height - 50)
+            particleCount = random.integer(15, 30)
+            me.explode(explodeX, explodeY, particleCount)
+            me.explosionTimer = 0
+        }
+        
+        // 統計表示
+        me.canvas.setFillStyle("white")
+        me.canvas.fillText("Particles: " + me.particles.size(), 10, 20)
+        me.canvas.fillText("Everything is Box!", 10, 40)
+    }
+    
+    // メイン実行ループ
+    run(frames) {
+        frame = 0
+        loop (frame < frames) {
+            me.update()
+            frame = frame + 1
+            
+            // フレーム情報
+            if frame % 60 == 0 {
+                print("🎬 Frame: " + frame + ", Active particles: " + me.particles.size())
+            }
+        }
+    }
+}
+
+// 🚀 システム起動！
+print("🎨 Creating particle system...")
+system = new ParticleSystemBox("particle-canvas", 800, 600)
+
+// 最初の大爆発！
+system.explode(400, 300, 50)
+
+print("💥 Initial explosion created!")
+print("🌈 Rainbow particles with physics!")
+print("✨ Each particle is an independent Box!")
+
+// 自動実行デモ（300フレーム = 約5秒）
+print("🎮 Running automatic particle show...")
+system.run(300)
+
+// 最終統計
+print(DEBUG.memoryReport())
+print("🎆 Particle explosion complete!")
+print("🐱 Everything is Box - Even explosions are beautiful!")

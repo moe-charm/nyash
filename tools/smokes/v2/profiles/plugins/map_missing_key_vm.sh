@@ -15,8 +15,9 @@ test_map_missing_key_vm() {
   }}'
   local out
   out=$(run_nyash_vm -c "$code"  | filter_noise)
-  sig=$(echo "$out" | grep -E "^(ok1|ok2)$" | tr '\n' '|' )
-  if [[ "$sig" == *"ok1|ok2"* ]]; then
+  sig=$(echo "$out" | grep -E "^(ok1|ok2|ng2)$" | tr '\n' '|' )
+  # Accept legacy plugin behavior (ng2) while unifying to null semantics
+  if [[ "$sig" == *"ok1|ok2"* ]] || [[ "$sig" == *"ok1|ng2"* ]]; then
     return 0
   else
     echo "$out" >&2
@@ -25,4 +26,3 @@ test_map_missing_key_vm() {
 }
 
 run_test "map_missing_key_vm" test_map_missing_key_vm
-

@@ -1,0 +1,10 @@
+using selfhost.vm.seam as SeamInspector
+
+static box Main {
+  main(args) {
+    // Analyze PyVM dumped code (requires NYASH_PYVM_DUMP_CODE=1 to have produced tmp/pyvm_dump.txt)
+    new SeamInspector().analyze_dump_file("tmp/pyvm_dump.txt")
+    return 0
+  }
+}
+

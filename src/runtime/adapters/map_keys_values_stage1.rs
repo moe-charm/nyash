@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 //! MapKeysValuesStage1AdapterBox
 //!
 //! Responsibility

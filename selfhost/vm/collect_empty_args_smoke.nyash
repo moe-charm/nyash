@@ -5,8 +5,8 @@ static box MiniVm {
   // simple substring find from position
   index_of_from(hay, needle, pos) {
     if pos < 0 { pos = 0 }
-    if pos >= hay.length() { return -1 }
-    local tail = hay.substring(pos, hay.length())
+    if pos >= hay.size() { return -1 }
+    local tail = hay.substring(pos, hay.size())
     local rel = tail.indexOf(needle)
     if rel < 0 { return -1 } else { return pos + rel }
   }
@@ -26,7 +26,7 @@ static box MiniVm {
       local k_n = "\"name\":\""
       local np = index_of_from(json, k_n, p)
       if np < 0 { break }
-      local ni = np + k_n.length()
+      local ni = np + k_n.size()
       local nj = index_of_from(json, "\"", ni)
       if nj < 0 { break }
       local fname = json.substring(ni, nj)
@@ -37,7 +37,7 @@ static box MiniVm {
       local rb = index_of_from(json, "]", ap)
       if rb < 0 { break }
       // no content between '[' and ']'
-      if rb == ap + k_a.length() {
+      if rb == ap + k_a.size() {
         if fname == "echo" { out.push("") }
         if fname == "itoa" { out.push("0") }
       }

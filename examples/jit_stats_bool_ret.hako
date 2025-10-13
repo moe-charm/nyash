@@ -1,0 +1,24 @@
+// JIT stats + boolean return hint demo
+// Enable: NYASH_JIT_THRESHOLD=1 NYASH_JIT_DUMP=1
+// Optional: NYASH_JIT_EXEC=1 (Cranelift未有効でもVM結果は不変)
+
+static box Main {
+  main() {
+    local a, b, c, s, r
+    a = 3
+    b = 5
+    // Force boolean value via branch and PHI-like merge
+    if (a < b) {
+      c = true
+    } else {
+      c = false
+    }
+    r = c
+    // Observe JIT runtime stats (JSON string)
+    s = new JitStatsBox()
+    print(s.toString())
+    // Return boolean directly (exercise ret_bool_hint)
+    return r
+  }
+}
+

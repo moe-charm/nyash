@@ -80,7 +80,7 @@ box JsonNodeCompat {
         if me._node.get_kind() == "object" {
             // MapBox.keys() is expected to exist on underlying map
             local keys = me._node.object_keys()
-            return keys.length()
+            return keys.size()
         }
         return 0
     }

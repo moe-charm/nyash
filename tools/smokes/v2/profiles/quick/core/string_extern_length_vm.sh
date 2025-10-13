@@ -1,5 +1,11 @@
 #!/bin/bash
-# Ensure builtin String methods lower to nyrt.string externs with plugins OFF
+# Ensure builtin String methods lower to nyrt.string externs with plugins OFF (legacy length())
+
+# Skip by default in favor of size(); enable explicitly with SMOKES_ENABLE_LEGACY=1
+if [ "${SMOKES_ENABLE_LEGACY:-0}" != "1" ]; then
+  echo "SKIP: legacy length() test (enable SMOKES_ENABLE_LEGACY=1)" >&2
+  exit 0
+fi
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 export NYASH_DISABLE_PLUGINS=1

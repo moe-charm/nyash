@@ -1,0 +1,17 @@
+// Await demo - demonstrates async/await functionality
+
+static box Main {
+    main() {
+        local future, result
+        
+        // Create a future with initial value
+        future = new FutureBox(42)
+        
+        // Wait for the future to complete and get value
+        result = await future
+        
+        print("Awaited result: " + result.toString())
+        
+        return result
+    }
+}

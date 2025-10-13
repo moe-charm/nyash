@@ -12,7 +12,7 @@ static box StdStringNy {
   // Return length of string s (Integer)
   string_length(s) {
     if s == null { return 0 }
-    return s.length()
+    return s.size()
   }
 
   // Concatenate two strings
@@ -31,8 +31,8 @@ static box StdStringNy {
     if s == null { return -1 }
     if sub == null { return 0 }
     local n, m, i
-    n = s.length()
-    m = sub.length()
+    n = s.size()
+    m = sub.size()
     if m == 0 { return 0 }
     if n < m { return -1 }
     i = 0

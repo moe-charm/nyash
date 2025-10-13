@@ -1,0 +1,15 @@
+// ny-plugin-ret-llvm-smoke
+// Purpose: Verify plugin return values are preserved through assign/print
+// - CounterBox.get() returns integer; return it from main (AOT prints Result: <n>)
+// - StringBox.concat returns string; print it via print()
+
+local c = new CounterBox()
+c.inc()
+local v = c.get()
+
+local s = new StringBox("ab")
+local t = s.concat("CD")
+print("S=" + t)
+
+return v
+

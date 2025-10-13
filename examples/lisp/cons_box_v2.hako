@@ -1,0 +1,117 @@
+// 📦 ConsBox - LISPのcons cell実装 v2
+// ファクトリー関数アプローチ
+
+box ConsBox {
+    car
+    cdr
+    
+    init {
+        car, cdr
+    }
+    
+    func getCar() {
+        return me.car
+    }
+    
+    func getCdr() {
+        return me.cdr
+    }
+    
+    func setCar(value) {
+        me.car = value
+    }
+    
+    func setCdr(value) {
+        me.cdr = value
+    }
+    
+    // シンプルな文字列表現
+    func toString() {
+        carStr = "nil"
+        if (not NullBox.check_null(me.car)) {
+            carStr = me.car + ""
+        }
+        
+        cdrStr = "nil"  
+        if (not NullBox.check_null(me.cdr)) {
+            cdrStr = me.cdr + ""
+        }
+        
+        return "(" + carStr + " . " + cdrStr + ")"
+    }
+}
+
+// ファクトリー関数：cons
+function cons(car, cdr) {
+    result = new ConsBox()
+    result.car = car
+    result.cdr = cdr
+    return result
+}
+
+// ファクトリー関数：リスト作成
+function list1(a) {
+    return cons(a, new NullBox())
+}
+
+function list2(a, b) {
+    return cons(a, cons(b, new NullBox()))
+}
+
+function list3(a, b, c) {
+    return cons(a, cons(b, cons(c, new NullBox())))
+}
+
+// car/cdr アクセサ関数
+function car(pair) {
+    return pair.getCar()
+}
+
+function cdr(pair) {
+    return pair.getCdr()
+}
+
+// テストコード
+print("🎯 === ConsBox v2 Test ===")
+print("")
+
+// 基本的なペア
+print("1. Basic cons cell:")
+pair1 = cons(1, 2)
+print("   (cons 1 2) = " + pair1.toString())
+
+// リスト作成
+print("")
+print("2. List creation:")
+list_a = list1("hello")
+print("   (list1 'hello') = " + list_a.toString())
+
+list_b = list2(10, 20)
+print("   (list2 10 20) = " + list_b.toString())
+
+list_c = list3("a", "b", "c")
+print("   (list3 'a' 'b' 'c') = " + list_c.toString())
+
+// car/cdr操作
+print("")
+print("3. car/cdr operations:")
+test = cons(42, "world")
+print("   test = " + test.toString())
+print("   (car test) = " + car(test))
+print("   (cdr test) = " + cdr(test))
+
+// ネストしたリスト
+print("")
+print("4. Nested lists:")
+inner = list2(1, 2)
+outer = cons(inner, list1(3))
+print("   ((1 2) 3) = " + outer.toString())
+
+// 空リスト
+print("")
+print("5. Empty list:")
+empty = new NullBox()
+print("   '() = " + empty)
+
+print("")
+print("✅ ConsBox v2 tests completed!")

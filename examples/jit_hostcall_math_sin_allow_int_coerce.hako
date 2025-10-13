@@ -1,0 +1,15 @@
+// Allow via coercion: math.sin expects f64; integer arg coerces i64->f64 in signature check
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_HOSTCALL=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_hostcall_math_sin_allow_int_coerce.nyash
+
+static box Main {
+  main() {
+    local m, x
+    m = new MathBox()
+    x = 0
+    // Registry signature allows i64 -> f64 coercion (v0 policy)
+    return m.sin(x)
+  }
+}
+

@@ -1459,3 +1459,117 @@ Unified Call（開発既定ON）
 2) CompareScanBox の完全適用（Hakorumne 側 compare の残差置換）と最小スモークを1本追加。
 3) with_usings の追加E2E（別 alias）を1本だけ quick に常設（過多回避）。
 4) Mini‑VM Debug の独立ページ（docs/guides/mini-vm-debugging.md）を作成し、CLI/ENV/落とし穴（末尾数値の抽出）を記載。
+
+
+## Rust ↔ Selfhost Coverage (Gap Analysis) — 2025‑10‑12
+
+What Rust has today (reference) vs What Selfhost has wired, and how we close the gaps in Phase 15.7.
+
+- MIR instruction coverage
+  - Implemented (Selfhost Mini‑VM): const, binop(Add/Sub/Mul/Div/Mod), compare(Eq/Ne/Lt/Le/Gt/Ge), branch, jump, ret, copy, (early) phi apply/scan
+  - Pending (Selfhost): load/store, typeop (is/cast), safepoint/barrier, throw/try, nop (no‑op semantics), unary (neg/not) — plan: P4/P5 small adapters, rc‑only smokes
+
+- Call shapes (builder/emitter → VM/LLVM)
+  - Implemented: mir_call v1/v0 for Extern(Global op_eq), Constructor/Method (minimal), Global(print/JSON.stringify) E2E via v1→v0 adapter
+  - Pending: BoxCall minimal parity, ModuleFunction tail normalize (strict), Method arities beyond size/indexOf/substring — plan: P4 thin adapters + SSOT arity table first
+
+- Registry/SSOT
+  - Implemented: slots/arity/aliases SSOT at runtime (TypeRegistry), diagnostics unification
+  - Pending: full SSOT for type resolution (type_id, box table), generator‑first flow — plan: promote SSOT to the sole source; keep static as fallback until green
+
+- Plugins (Provider/Handles)
+  - Implemented: early provider load (nyash.toml), identity cache for PluginBox/HostHandle
+  - Pending: full handle TLV coverage for map.values/keys in plugin impl, deterministic ordering policy (or tests made order‑agnostic) — plan: Stage‑2 host handle tests remain opt‑in
+
+- Using / Modules
+  - Implemented: prelude merge, alias resolver, quick profile ON; opt‑in selfhost suite with gates
+  - Pending: always‑on module aliases for selfhost.* in dev runner — plan: keep opt‑in to avoid CI drift; docs updated
+
+### Next Steps (Phase 15.7 finalize)
+- P4 (adapters): wire NewBox/Call/Method helpers to shared MirSchema/BlockBuilder and keep output‑compatible; add 1–2 rc‑only smokes
+- P5 (LocalSSA): enable ensure_calls/ensure_cond mini; add 1 rc‑only smoke and un‑skip 1 M2/M3 target
+- SSOT: prefer SSOT for resolve_typebox_by_name everywhere; generate tables from specs at build time (static fallback remains)
+- Plugins: keep plugin‑on reps order‑agnostic; strict reps preflight build via plugin‑tester; keep SKIP on missing artifacts
+- Docs/Smokes: selfhost opt‑in env (SMOKES_SELFHOST_ENABLE / SMOKES_SELFHOST_M2M3_ENABLE) documented; CI defaults remain quick+integration‑core
+
+
+## ✅ P4/P5 小結（2025‑10‑12）
+- P4（薄アダプタ直結）
+  - emit_mir_flow(_map): extern/global/method/constructor を BlockBuilder 直結の薄アダプタに統一（出力互換）
+  - emit_call/emit_method/emit_newbox（v0/v1）: 内部を shared BlockBuilder 経由に寄せ、材化は LocalSSA に委譲
+  - 代表（rc-only）: selfhost_pipeline_v2_p4_calls_rc_vm（Constructor/Method/Global/Extern の最小E2E）
+- P5（LocalSSA 最小）
+  - ensure_materialize_last_ret(mod): ret 値の定義直後に copy を 1 本
+  - ensure_cond(mod): 全ブロック走査で branch の cond を検出→定義直後に copy を 1 本（If/Loop 両対応）
+  - 代表（rc-only）: selfhost_localssa_ensure_calls_rc_vm / _ensure_cond_rc_vm / _ensure_cond_if_loop_rc_vm
+- Pipeline（v1 経路）
+  - MirCallBox 依存を Emit*（BlockBuilder 直結）に段階置換（差分最小）
+- plugin‑on の安定化
+  - quick の plugin_on_* を在庫プリチェック＋preflight 失敗時 SKIP へ統一（常緑を維持）
+- SSOT（type/slot/arity/aliases）
+  - specs/type_registry.toml を再スキャンし不足なしを確認。resolve_* は SSOT 優先（静的 fallback）で維持
+- 状態: quick 288/288 PASS、integration‑core 20/20 PASS（環境依存は SKIP）
+
+## 🧭 Backend と CLI 方針（単一 CLI, 複数バックエンド）
+- 単一 CLI: `hakorune` に集約し、`--backend {nyvm|rust|llvm}`（`HAKO_BACKEND`）で切替
+- バックエンド実体:
+  - `hakorune-vm`（Ny 製 Mini‑VM）: MIR(JSON v0) 直実行、自己ホスト検証用
+  - `hakorune-rust`（Rust VM/Runtime）: 既定の実用ライン（動的プラグイン/完全実行）
+  - `hakorune-llvm`（LLVM ライン）: llvmlite ハーネス / AOT（将来 `hako-llvmc`）
+- コンパイラーは分離: `hakorune-compiler`（selfhost/pipeline_v2）。dev ではバンドル起動を opt‑in で提供
+- 互換: `NYASH_*` は `HAKO_*` のエイリアス受理（docs 表記は HAKO を第一）
+
+## 🔧 ツール解決ポリシー（CLI→ツールのパス解決）
+- 優先順: dist/bin → workspace（tools/*, target/*）→ hako.toml [tools]/[backends] → ~/.config/hakorune/config.toml → ENV（HAKO_TOOL_PATHS, 個別変数）→ PATH →（任意）autobuild
+- オプション/ENV:
+  - `--llvm-harness`/`HAKO_LLVM_HARNESS`, `--plugin-tester`/`HAKO_PLUGIN_TESTER`, `HAKO_TOOL_PATHS`, `--autobuild-tools`
+  - 診断: `hakorune --which <tool>`（最終解決パス表示）, `--doctor tools`（在庫レポート）
+- plugin‑on の代表は在庫なしで SKIP（前検あり）に統一
+
+## 🛣 次の段階（hakorune‑vm を Rust VM 同等へ）
+- Phase‑A（安定化小結）
+  - JSON MIR v0 Reader の CLI 昇格（dev ゲート撤去）
+  - LocalSSA: ensure_after_phis_copy の代表を 1 本追加（If/Loop）
+- Phase‑B（機能差分の吸収）
+  - Stage‑3: break/continue/throw/try の最小実装（自己ホスト側 emit→VM）
+  - Map plugin: 値の handle（PluginHandle/HostHandle）対応と identity スモーク
+- Phase‑C（仕上げ）
+  - SSOT を型解決ホットパスに全面適用（静的は保険）
+  - 診断の直書き掃除（helpers 統一）
+- 受け入れ基準（同等の目安）
+  - quick 288/288 緑（在庫依存は SKIP）
+  - integration‑core 20/20 緑
+  - selfhost M2/M3（opt‑in）代表緑
+  - plugin_on_*（在庫あり）代表 PASS、診断文言は安定
+
+
+## 🧱 nyvm の実体と Mini‑VM 凍結の方針（2025‑10‑12）
+- nyvm の実体
+  - CLI `--backend nyvm` は Hakorune VM（selfhost/hakorune‑vm/*）にマップする方針。
+  - Mini‑VM（selfhost/vm/*）は dev/教育用のサンドボックスとして温存（rc‑only/opt‑in）。
+- Mini‑VM の扱い
+  - selfhost/vm に DEPRECATED マーカーを追加（新機能追加を抑制）。
+  - スモークは rc‑only とし、既定は OFF。Hakorune VM の成長を阻害しない。
+- 受け入れ（切替の前段）
+  - quick/integration 緑維持、selfhost M2/M3 緑。
+  - plugin‑on（在庫あり）代表 PASS。診断は helpers 統一。
+
+
+## 【2025-10-12 追記】Mir IO 一本化と HostBridge 設計
+
+- MirIoBox（Phase A）
+  - Hako 側に `MirIoBox` を追加。`validate/functions/blocks/instructions/terminator` の最小 API を提供。
+  - nyvm ブリッジが function オブジェクトのみを渡す narrow JSON も許容（bridge 実用性優先）。
+  - VM コアは run() 先頭で `MirIoBox.validate` を呼び構造エラーを Fail‑Fast。
+  - スモーク: `terminator_whitespace_vm`（op 後空白差）、`entry_nonzero_vm`（entry≠0 開始）を quick-selfhost に追加。
+
+- HostBridge（設計）
+  - 目的: プラグイン（動的）と埋め込み（静的）を同じ ABI で呼び出す一本化レイヤ。
+  - 方針: `HostBridgeBox.{box_new,box_call,extern_call}` の3関数に最小化。TLV で引数/戻り値を統一。
+  - 解決: `UnifiedRegistry` にて Spec（hako_box.toml or 生成SSOT）と Invoker（PluginLoaderV2/Provider）を集約。
+  - ルート: `HAKO_PLUGIN_POLICY=off|auto|force`（auto=プラグイン優先→無ければ静的）。
+  - 最初の疎通: FileBox.open/read（両経路で同形に動作）。
+
+- 次の実装
+  - run.sh の backend 正規化（空/"."/未知→vm）でスモークからノイズを根治。
+  - MirIoBox.validate に terminator 必須・参照妥当性の検証を集約（dev 緩和は ENV）。

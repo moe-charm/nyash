@@ -55,6 +55,7 @@ pub fn to_bool_vm(v: &VMValue) -> Result<bool, String> {
             Ok(true)
         }
         VMValue::Float(f) => Ok(*f != 0.0),
+        #[cfg(feature = "legacy-boxes")]
         VMValue::Future(_) => Err("cannot coerce Future to bool".to_string()),
     }
 }
@@ -74,10 +75,22 @@ pub fn eq_vm(a: &VMValue, b: &VMValue) -> bool {
         (Float(x), Integer(y)) => *x == (*y as f64),
         (BoxRef(ax), BoxRef(by)) => Arc::ptr_eq(ax, by),
         // Treat BoxRef(VoidBox/MissingBox) as equal to Void (null) for backward compatibility
-        (BoxRef(bx), Void) => bx.as_any().downcast_ref::<VoidBox>().is_some()
-            || bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some(),
-        (Void, BoxRef(bx)) => bx.as_any().downcast_ref::<VoidBox>().is_some()
-            || bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some(),
+        (BoxRef(bx), Void) => {
+            let is_void = bx.as_any().downcast_ref::<VoidBox>().is_some();
+            #[cfg(feature = "legacy-boxes")]
+            let is_missing = bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some();
+            #[cfg(not(feature = "legacy-boxes"))]
+            let is_missing = false;
+            is_void || is_missing
+        }
+        (Void, BoxRef(bx)) => {
+            let is_void = bx.as_any().downcast_ref::<VoidBox>().is_some();
+            #[cfg(feature = "legacy-boxes")]
+            let is_missing = bx.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some();
+            #[cfg(not(feature = "legacy-boxes"))]
+            let is_missing = false;
+            is_void || is_missing
+        }
         _ => false,
     }
 }
@@ -96,6 +109,7 @@ pub fn to_string_vm(v: &VMValue) -> String {
         VMValue::Bool(b) => b.to_string(),
         VMValue::Void => "null".to_string(),
         VMValue::BoxRef(bx) => bx.to_string_box().value,
+        #[cfg(feature = "legacy-boxes")]
         VMValue::Future(_) => "<future>".to_string(),
     }
 }
@@ -107,6 +121,7 @@ pub fn tag_of_vm(v: &VMValue) -> &'static str {
         VMValue::Float(_) => "Float",
         VMValue::Bool(_) => "Bool",
         VMValue::String(_) => "String",
+        #[cfg(feature = "legacy-boxes")]
         VMValue::Future(_) => "Future",
         VMValue::Void => "Void",
         VMValue::BoxRef(_) => "BoxRef",

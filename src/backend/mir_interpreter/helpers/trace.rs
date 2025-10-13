@@ -106,27 +106,38 @@ impl MirInterpreter {
 
     pub(in crate::backend::mir_interpreter) fn print_trace_emit(&self, val: &VMValue) {
         if !Self::print_trace_enabled() { return; }
-        let (kind, class, nullish) = match val {
+        let (kind, class, nullish): (&'static str, String, Option<&'static str>) = match val {
             VMValue::Integer(_) => ("Integer", "".to_string(), None),
             VMValue::Float(_) => ("Float", "".to_string(), None),
             VMValue::Bool(_) => ("Bool", "".to_string(), None),
             VMValue::String(_) => ("String", "".to_string(), None),
             VMValue::Void => ("Void", "".to_string(), None),
+            #[cfg(feature = "legacy-boxes")]
             VMValue::Future(_) => ("Future", "".to_string(), None),
             VMValue::BoxRef(b) => {
                 // Prefer InstanceBox.class_name when available
                 if let Some(inst) = b.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
                     let tag = if crate::config::env::null_missing_box_enabled() {
-                        if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { Some("null") }
-                        else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { Some("missing") }
-                        else { None }
+                        #[cfg(feature = "legacy-boxes")]
+                        {
+                            if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { Some("null") }
+                            else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { Some("missing") }
+                            else { None }
+                        }
+                        #[cfg(not(feature = "legacy-boxes"))]
+                        { None }
                     } else { None };
                     ("BoxRef", inst.class_name.clone(), tag)
                 } else {
                     let tag = if crate::config::env::null_missing_box_enabled() {
-                        if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { Some("null") }
-                        else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { Some("missing") }
-                        else { None }
+                        #[cfg(feature = "legacy-boxes")]
+                        {
+                            if b.as_any().downcast_ref::<crate::boxes::null_box::NullBox>().is_some() { Some("null") }
+                            else if b.as_any().downcast_ref::<crate::boxes::missing_box::MissingBox>().is_some() { Some("missing") }
+                            else { None }
+                        }
+                        #[cfg(not(feature = "legacy-boxes"))]
+                        { None }
                     } else { None };
                     ("BoxRef", b.type_name().to_string(), tag)
                 }

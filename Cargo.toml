@@ -11,7 +11,7 @@ categories = ["development-tools::parsing", "interpreters"]
 
 # Default features - minimal CLI only
 [features]
-default = ["cli", "plugins", "host-anchors"]
+default = ["cli", "plugins", "host-anchors", "legacy-boxes"]
 # Legacy features removed - archive cleaned up
 e2e = []
 cli = []
@@ -31,11 +31,15 @@ wasm-backend = ["dep:wasmtime", "dep:wabt"]
 # プラグイン機構の有効化（ネイティブ環境のみ推奨）
 plugins = ["dep:libloading"]
 host-anchors = []
+## Legacy built-in Boxes (src/boxes) — kept for transition; disable to test plugin-only builds
+legacy-boxes = []
 ## Static plugin linkage (optional): when enabled, runtime registers
 ## per-Box invoke pointers from statically linked plugin crates.
 static-array-plugin = ["dep:nyash-array-plugin"]
 static-map-plugin   = ["dep:nyash-map-plugin"]
 static-string-plugin= ["dep:nyash-string-plugin"]
+static-file-plugin  = ["dep:nyash-filebox-plugin"]
+static-json-plugin  = ["dep:nyash-json-plugin"]
 # MIR instruction diet PoC flags (scaffolding only; off by default)
 mir_typeop_poc = []
 mir_refbarrier_unify_poc = []
@@ -165,6 +169,7 @@ env_logger = "0.11"
 libloading = { version = "0.8", optional = true }
 toml = "0.8"
 which = "6"
+tempfile = "3"
 hako_core_string = { path = "crates/hako_core_string" }
 hako_core_array = { path = "crates/hako_core_array" }
 hako_core_map = { path = "crates/hako_core_map" }
@@ -172,6 +177,8 @@ hako_core_callable = { path = "crates/hako_core_callable" }
 nyash-array-plugin = { path = "plugins/nyash-array-plugin", optional = true }
 nyash-map-plugin   = { path = "plugins/nyash-map-plugin", optional = true }
 nyash-string-plugin= { path = "plugins/nyash-string-plugin", optional = true }
+nyash-filebox-plugin = { path = "plugins/nyash-filebox-plugin", optional = true }
+nyash-json-plugin    = { path = "plugins/nyash-json-plugin", optional = true }
 
 # 日時処理
 chrono = "0.4"
@@ -255,7 +262,6 @@ features = [
 [dev-dependencies]
 # テスト・ベンチマークツール
 criterion = "0.5"
-tempfile = "3"
 
 [build-dependencies]
 toml = "0.8"

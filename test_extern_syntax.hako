@@ -1,0 +1,7 @@
+static box Main {
+  main() {
+    local result
+    result = Extern("env.console.log")("Hello from Extern syntax!")
+    return 0
+  }
+}

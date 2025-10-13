@@ -17,7 +17,12 @@ pub mod box_factory; // unified Box Factory
 pub mod box_operators; // operator implementations for basic Box types
 pub mod box_registry; // Built-in box registry (split from box_trait)
 pub mod box_trait; // Re-exports for backward compatibility
+#[cfg(feature = "legacy-boxes")]
 pub mod boxes;
+#[cfg(not(feature = "legacy-boxes"))]
+pub mod compat {
+    pub mod basic_box_shim;
+}
 pub mod channel_box;
 pub mod core; // core models shared by backends
 pub mod environment;
@@ -87,6 +92,7 @@ pub mod tests;
 
 // Re-export main types for easy access
 pub use ast::{ASTNode, BinaryOperator, LiteralValue};
+#[cfg(feature = "legacy-boxes")]
 pub use box_arithmetic::{AddBox, CompareBox, DivideBox, ModuloBox, MultiplyBox, SubtractBox};
 pub use box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
 pub use environment::{Environment, PythonCompatEnvironment};
@@ -94,13 +100,21 @@ pub use box_factory::RuntimeError;
 pub use parser::{NyashParser, ParseError};
 pub use tokenizer::{NyashTokenizer, Token, TokenType};
 pub use type_box::{MethodSignature, TypeBox, TypeRegistry}; // 🌟 TypeBox exports
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::console_box::ConsoleBox;
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::debug_box::DebugBox;
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::map_box::MapBox;
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::math_box::{FloatBox, MathBox, RangeBox};
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::null_box::{null, NullBox};
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::random_box::RandomBox;
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::sound_box::SoundBox;
+#[cfg(feature = "legacy-boxes")]
 pub use boxes::time_box::{DateTimeBox, TimeBox, TimerBox};
 pub use channel_box::{ChannelBox, MessageBox};
 pub use instance_v2::InstanceBox; // 🎯 新実装テスト（nyash_rustパス使用）

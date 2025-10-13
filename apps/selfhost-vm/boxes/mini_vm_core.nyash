@@ -54,14 +54,14 @@ static box MiniVm {
     local k_right = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
     local lp = index_of_from(json, k_left, 0)
     if lp < 0 { return -1 }
-    local ld = read_digits(json, lp + k_left.length())
+    local ld = read_digits(json, lp + k_left.size())
     if ld == "" { return -1 }
-    local rp = index_of_from(json, k_right, lp + k_left.length())
+    local rp = index_of_from(json, k_right, lp + k_left.size())
     if rp < 0 { return -1 }
-    local rd = read_digits(json, rp + k_right.length())
+    local rd = read_digits(json, rp + k_right.size())
     if rd == "" { return -1 }
     print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
-    return rp + k_right.length()
+    return rp + k_right.size()
   }
 
   // Tokenized typed extractor: search left/right blocks then type/value pairs
@@ -77,7 +77,7 @@ static box MiniVm {
     if tp1 < 0 { return -1 }
     local vp1 = index_of_from(json, kv, tp1)
     if vp1 < 0 { return -1 }
-    local ld = read_digits(json, vp1 + kv.length())
+    local ld = read_digits(json, vp1 + kv.size())
     if ld == "" { return -1 }
     local rp = index_of_from(json, "\"right\":", lp)
     if rp < 0 { return -1 }
@@ -85,7 +85,7 @@ static box MiniVm {
     if tp2 < 0 { return -1 }
     local vp2 = index_of_from(json, kv, tp2)
     if vp2 < 0 { return -1 }
-    local rd = read_digits(json, vp2 + kv.length())
+    local rd = read_digits(json, vp2 + kv.size())
     if rd == "" { return -1 }
     print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
     return rp
@@ -102,16 +102,16 @@ static box MiniVm {
     if lp < 0 { return -1 }
     local v1 = index_of_from(json, kv, lp)
     if v1 < 0 { return -1 }
-    local ld = read_digits(json, v1 + kv.length())
+    local ld = read_digits(json, v1 + kv.size())
     if ld == "" { return -1 }
     local rp = index_of_from(json, "\"right\":", lp)
     if rp < 0 { return -1 }
     local v2 = index_of_from(json, kv, rp)
     if v2 < 0 { return -1 }
-    local rd = read_digits(json, v2 + kv.length())
+    local rd = read_digits(json, v2 + kv.size())
     if rd == "" { return -1 }
     print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
-    return v2 + kv.length()
+    return v2 + kv.size()
   }
 
   // Minimal: Print(Compare) for integers. Prints 1/0 for true/false.
@@ -126,7 +126,7 @@ static box MiniVm {
     local k_type = "\"type\":\""
     local tpos = index_of_from(json, k_type, 0)
     if tpos < 0 { return null }
-    tpos = tpos + k_type.length()
+    tpos = tpos + k_type.size()
     // Read type name until next quote
     local t_end = index_of_from(json, "\"", tpos)
     if t_end < 0 { return null }
@@ -135,7 +135,7 @@ static box MiniVm {
     local k_val = "\"value\":"
     local vpos = index_of_from(json, k_val, t_end)
     if vpos < 0 { return null }
-    vpos = vpos + k_val.length()
+    vpos = vpos + k_val.size()
     if ty == "int" || ty == "i64" || ty == "integer" {
       // read digits via MiniJson
       local digits = new MiniJson().read_digits_from(json, vpos)
@@ -163,7 +163,7 @@ static box MiniVm {
     local key = "\"value\":{\"type\":\"int\",\"value\":"
     local idx = json.lastIndexOf(key)
     if idx < 0 { return "0" }
-    local start = idx + key.length()
+    local start = idx + key.size()
     return read_digits(json, start)
   }
   // Fallback: find first BinaryOp and return sum of two numeric values as string; empty if not found
@@ -176,12 +176,12 @@ static box MiniVm {
     // first number
     local p1 = index_of_from(json, k_typed, bpos)
     if p1 < 0 { return "" }
-    local d1 = read_digits(json, p1 + k_typed.length())
+    local d1 = read_digits(json, p1 + k_typed.size())
     if d1 == "" { return "" }
     // second number
-    local p2 = index_of_from(json, k_typed, p1 + k_typed.length())
+    local p2 = index_of_from(json, k_typed, p1 + k_typed.size())
     if p2 < 0 { return "" }
-    local d2 = read_digits(json, p2 + k_typed.length())
+    local d2 = read_digits(json, p2 + k_typed.size())
     if d2 == "" { return "" }
     return _int_to_str(_str_to_int(d1) + _str_to_int(d2))
   }
@@ -197,7 +197,7 @@ static box MiniVm {
     local k_plus = "\"operator\":\"+\""
     local op = index_of_from(json, k_plus, 0)
     if op < 0 { return "" }
-    local n = json.length()
+    local n = json.size()
     local start = op - 120
     if start < 0 { start = 0 }
     local limit = op + 240
@@ -223,7 +223,7 @@ static box MiniVm {
           local b = _str_to_int(d)
           return _int_to_str(a + b)
         }
-        i = i + d.length()
+        i = i + d.size()
         continue
       }
       i = i + 1
@@ -234,19 +234,19 @@ static box MiniVm {
   sum_all_numbers(json) {
     local cur = new MiniJson()
     local i = 0
-    local n = json.length()
+    local n = json.size()
     local sum = 0
     loop (i < n) {
       local ch = json.substring(i, i+1)
       if ch == "\"" {
         // skip quoted string
         local s = cur.read_quoted_from(json, i)
-        i = i + s.length() + 2
+        i = i + s.size() + 2
         continue
       }
       // try digits
       local d = cur.read_digits_from(json, i)
-      if d != "" { sum = sum + _str_to_int(d)  i = i + d.length()  continue }
+      if d != "" { sum = sum + _str_to_int(d)  i = i + d.size()  continue }
       i = i + 1
     }
     if sum == 0 { return "" }
@@ -262,7 +262,7 @@ static box MiniVm {
         local ks = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"string\",\"value\":\""
         local ps = index_of_from(json, ks, 0)
         if ps >= 0 {
-          local si = ps + ks.length()
+          local si = ps + ks.size()
           local sj = index_of_from(json, "\"", si)
           if sj >= 0 { print(json.substring(si, sj))  return 0 }
         }
@@ -272,7 +272,7 @@ static box MiniVm {
         local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
         local pi = index_of_from(json, ki, 0)
         if pi >= 0 {
-          local ii = pi + ki.length()
+          local ii = pi + ki.size()
           // digits until closing brace
           local ie = index_of_from(json, "}", ii)
           if ie < 0 { ie = ii }
@@ -287,7 +287,7 @@ static box MiniVm {
       local k_print = "\"kind\":\"Print\""
       local p = index_of_from(json, k_print, 0)
       if p >= 0 {
-        local np0 = new MiniVmBinOp().try_print_binop_sum_expr_values(json, json.length(), p)
+        local np0 = new MiniVmBinOp().try_print_binop_sum_expr_values(json, json.size(), p)
         if np0 > 0 { return 0 }
       }
       // Typed direct inside BinaryOp object (fast and finite)
@@ -297,12 +297,12 @@ static box MiniVm {
         local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
         local li = index_of_from(json, k_lint, bpos)
         if li >= 0 {
-          local ld = read_digits(json, li + k_lint.length())
+          local ld = read_digits(json, li + k_lint.size())
           if ld != "" {
             local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
-            local ri = index_of_from(json, k_rint, li + k_lint.length())
+            local ri = index_of_from(json, k_rint, li + k_lint.size())
             if ri >= 0 {
-              local rd = read_digits(json, ri + k_rint.length())
+              local rd = read_digits(json, ri + k_rint.size())
               if rd != "" { print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  return 0 }
             }
           }
@@ -326,7 +326,7 @@ static box MiniVm {
       local p = index_of_from(json, k_print, 0)
       if p >= 0 {
         // Deterministic: sum the first two numbers from successive 'value' fields
-        local np0 = new MiniVmBinOp().try_print_binop_sum_expr_values(json, json.length(), p)
+        local np0 = new MiniVmBinOp().try_print_binop_sum_expr_values(json, json.size(), p)
         if np0 > 0 { return 0 }
       }
       // Brace-free deterministic fallback tied to the first BinaryOp
@@ -356,12 +356,12 @@ static box MiniVm {
       local k_lint = "\"left\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
       local li = index_of_from(json, k_lint, bpos)
       if li >= 0 {
-        local ld = read_digits(json, li + k_lint.length())
+        local ld = read_digits(json, li + k_lint.size())
         if ld != "" {
           local k_rint = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
-          local ri = index_of_from(json, k_rint, li + k_lint.length())
+          local ri = index_of_from(json, k_rint, li + k_lint.size())
           if ri >= 0 {
-            local rd = read_digits(json, ri + k_rint.length())
+            local rd = read_digits(json, ri + k_rint.size())
             if rd != "" {
               print(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))
               return 0
@@ -386,17 +386,17 @@ static box MiniVm {
               local p1 = index_of_from(json, k_v, obj_start)
               local d1 = ""
               loop (p1 > 0 && p1 < obj_end) {
-                d1 = new MiniJson().read_digits_from(json, p1 + k_v.length())
+                d1 = new MiniJson().read_digits_from(json, p1 + k_v.size())
                 if d1 != "" { break }
-                p1 = index_of_from(json, k_v, p1 + k_v.length())
+                p1 = index_of_from(json, k_v, p1 + k_v.size())
               }
               if d1 != "" {
-                local p2 = index_of_from(json, k_v, p1 + k_v.length())
+                local p2 = index_of_from(json, k_v, p1 + k_v.size())
                 local d2 = ""
                 loop (p2 > 0 && p2 < obj_end) {
-                  d2 = new MiniJson().read_digits_from(json, p2 + k_v.length())
+                  d2 = new MiniJson().read_digits_from(json, p2 + k_v.size())
                   if d2 != "" { break }
-                  p2 = index_of_from(json, k_v, p2 + k_v.length())
+                  p2 = index_of_from(json, k_v, p2 + k_v.size())
                 }
                 if d2 != "" {
                   local ai = _str_to_int(d1)
@@ -418,7 +418,7 @@ static box MiniVm {
       local k_print = "\"kind\":\"Print\""
       local p = index_of_from(json, k_print, 0)
       if p >= 0 {
-        local np = new MiniVmBinOp().try_print_binop_sum_any(json, json.length(), p)
+        local np = new MiniVmBinOp().try_print_binop_sum_any(json, json.size(), p)
         if np > 0 { return 0 }
       }
     }
@@ -430,7 +430,7 @@ static box MiniVm {
       local k_op = "\"operation\":\""
       local opos = index_of_from(json, k_op, cpos)
       if opos > 0 {
-        local oi = opos + k_op.length()
+        local oi = opos + k_op.size()
         local oj = index_of_from(json, "\"", oi)
         if oj > 0 {
           local op = json.substring(oi, oj)
@@ -441,14 +441,14 @@ static box MiniVm {
             local k_v = "\"value\":"
             local hv = index_of_from(json, k_v, hl)
             if hv > 0 {
-      local a = read_digits(json, hv + k_v.length())
+      local a = read_digits(json, hv + k_v.size())
               // rhs value
               local k_rhs = "\"rhs\":{\"kind\":\"Literal\""
               local hr = index_of_from(json, k_rhs, hl)
               if hr > 0 {
                 local rv = index_of_from(json, k_v, hr)
                 if rv > 0 {
-                  local b = read_digits(json, rv + k_v.length())
+                  local b = read_digits(json, rv + k_v.size())
                   if a && b {
                     local ai = _str_to_int(a)
                     local bi = _str_to_int(b)
@@ -491,17 +491,17 @@ static box MiniVm {
               local p1 = index_of_from(json, k_v, obj_start)
               local d1 = ""
               loop (p1 > 0 && p1 < obj_end) {
-                d1 = cur.read_digits_from(json, p1 + k_v.length())
+                d1 = cur.read_digits_from(json, p1 + k_v.size())
                 if d1 != "" { break }
-                p1 = index_of_from(json, k_v, p1 + k_v.length())
+                p1 = index_of_from(json, k_v, p1 + k_v.size())
               }
               if d1 != "" {
-                local p2 = index_of_from(json, k_v, p1 + k_v.length())
+                local p2 = index_of_from(json, k_v, p1 + k_v.size())
                 local d2 = ""
                 loop (p2 > 0 && p2 < obj_end) {
-                  d2 = cur.read_digits_from(json, p2 + k_v.length())
+                  d2 = cur.read_digits_from(json, p2 + k_v.size())
                   if d2 != "" { break }
-                  p2 = index_of_from(json, k_v, p2 + k_v.length())
+                  p2 = index_of_from(json, k_v, p2 + k_v.size())
                 }
                 if d2 != "" {
                   local ai = _str_to_int(d1)
@@ -545,8 +545,8 @@ static box MiniVm {
       if p < 0 { break }
       // bound current Print slice to [this, next)
       local obj_start = p
-      local next_p = index_of_from(json, k_print, p + k_print.length())
-      local obj_end = json.length()
+      local next_p = index_of_from(json, k_print, p + k_print.size())
+      local obj_end = json.size()
       if next_p > 0 { obj_end = next_p }
       if trace == 1 { print("[collect][p] "+p)  print("[collect][slice_end] "+obj_end) }
       if trace == 1 {
@@ -587,7 +587,7 @@ static box MiniVm {
                 local kn = "\"name\":\""
                 local np = index_of_from(json, kn, fcp)
               if np > 0 { if np < obj_end {
-                local ni = np + kn.length()
+                local ni = np + kn.size()
                 local nj = index_of_from(json, "\"", ni)
                 if nj > 0 { if nj <= expr_end {
                   local fname = json.substring(ni, nj)
@@ -609,7 +609,7 @@ static box MiniVm {
                     local ks = "\"type\":\"string\",\"value\":\""
                     local ps = index_of_from(json, ks, ap)
                     if ps > 0 { if ps < expr_end {
-                      local si = ps + ks.length()
+                      local si = ps + ks.size()
                       local sj = index_of_from(json, "\"", si)
                       if sj > 0 { if sj <= expr_end {
                         local sval = json.substring(si, sj)
@@ -620,7 +620,7 @@ static box MiniVm {
                     local ki = "\"type\":\"int\",\"value\":"
                     local pi = index_of_from(json, ki, ap)
                     if pi > 0 { if pi < expr_end {
-                      local ival = read_digits(json, pi + ki.length())
+                      local ival = read_digits(json, pi + ki.size())
                       if ival != "" { if fname == "itoa" { out.push(ival)  pos = obj_end + 1  continue } else { if fname == "echo" { out.push(ival)  pos = obj_end + 1  continue } } }
                     }}
                   }}
@@ -644,12 +644,12 @@ static box MiniVm {
               local k_r = "\"right\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
               local lp = index_of_from(json, k_l, bpos)
               if lp > 0 { if lp < obj_end {
-                local ld = read_digits(json, lp + k_l.length())
+                local ld = read_digits(json, lp + k_l.size())
                 if ld != "" {
-                  local rp = index_of_from(json, k_r, lp + k_l.length())
+                  local rp = index_of_from(json, k_r, lp + k_l.size())
                   if rp > 0 { if rp < obj_end {
-                    local rd = read_digits(json, rp + k_r.length())
-                    if rd != "" { if trace == 1 { print("[hit][bo-typed] "+ld+"+"+rd) } out.push(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  pos = p + k_print.length()  continue }
+                    local rd = read_digits(json, rp + k_r.size())
+                    if rd != "" { if trace == 1 { print("[hit][bo-typed] "+ld+"+"+rd) } out.push(_int_to_str(_str_to_int(ld) + _str_to_int(rd)))  pos = p + k_print.size()  continue }
                   }}
                 }
               }}
@@ -657,12 +657,12 @@ static box MiniVm {
               local k_v = "\"value\":"
               local v1 = index_of_from(json, k_v, epos)
               if v1 > 0 { if v1 < obj_end {
-                local d1 = new MiniJson().read_digits_from(json, v1 + k_v.length())
+                local d1 = new MiniJson().read_digits_from(json, v1 + k_v.size())
                 if d1 != "" {
-                  local v2 = index_of_from(json, k_v, v1 + k_v.length())
+                  local v2 = index_of_from(json, k_v, v1 + k_v.size())
                   if v2 > 0 { if v2 < obj_end {
-                    local d2 = new MiniJson().read_digits_from(json, v2 + k_v.length())
-                    if d2 != "" { if trace == 1 { print("[hit][bo-fallback] "+d1+"+"+d2) } out.push(_int_to_str(_str_to_int(d1) + _str_to_int(d2)))  pos = p + k_print.length()  continue }
+                    local d2 = new MiniJson().read_digits_from(json, v2 + k_v.size())
+                    if d2 != "" { if trace == 1 { print("[hit][bo-fallback] "+d1+"+"+d2) } out.push(_int_to_str(_str_to_int(d1) + _str_to_int(d2)))  pos = p + k_print.size()  continue }
                   }}
                 }
               }}
@@ -679,18 +679,18 @@ static box MiniVm {
           local k_op = "\"operation\":\""
           local opos = index_of_from(json, k_op, cpos)
           if opos > 0 { if opos < obj_end {
-            local oi = opos + k_op.length()
+            local oi = opos + k_op.size()
             local oj = index_of_from(json, "\"", oi)
             if oj > 0 { if oj <= obj_end {
               local op = json.substring(oi, oj)
               local k_v = "\"value\":"
               local lhs_v = index_of_from(json, k_v, oj)
               if lhs_v > 0 { if lhs_v < obj_end {
-                local la = read_digits(json, lhs_v + k_v.length())
+                local la = read_digits(json, lhs_v + k_v.size())
                 if la != "" {
-                  local rhs_v = index_of_from(json, k_v, lhs_v + k_v.length())
+                  local rhs_v = index_of_from(json, k_v, lhs_v + k_v.size())
                   if rhs_v > 0 { if rhs_v < obj_end {
-                    local rb = read_digits(json, rhs_v + k_v.length())
+                    local rb = read_digits(json, rhs_v + k_v.size())
                     if rb != "" {
                       local ai = _str_to_int(la)
                       local bi = _str_to_int(rb)
@@ -702,7 +702,7 @@ static box MiniVm {
                       if op == ">=" { if ai >= bi { res = 1 } }
                       if op == "!=" { if ai != bi { res = 1 } }
                       out.push(_int_to_str(res))
-                      pos = p + k_print.length()
+                      pos = p + k_print.size()
                       continue
                     }
                   }}
@@ -720,11 +720,11 @@ static box MiniVm {
         local ks = "\"type\":\"string\",\"value\":\""
         local ps = index_of_from(json, ks, obj_start)
         if ps > 0 { if ps < obj_end {
-          local si = ps + ks.length()
+          local si = ps + ks.size()
           local sj = index_of_from(json, "\"", si)
           if sj > 0 { if sj <= obj_end {
             if trace == 1 { print("[hit][str]") }
-            out.push(json.substring(si, sj))  pos = p + k_print.length()  continue
+            out.push(json.substring(si, sj))  pos = p + k_print.size()  continue
           }}
         }}
       }
@@ -733,14 +733,14 @@ static box MiniVm {
         local ki = "\"type\":\"int\",\"value\":"
         local pi = index_of_from(json, ki, obj_start)
         if pi > 0 { if pi < obj_end {
-          local digits = read_digits(json, pi + ki.length())
-          if digits != "" { if trace == 1 { print("[hit][i-lit] "+digits) } out.push(digits)  pos = p + k_print.length()  continue }
+          local digits = read_digits(json, pi + ki.size())
+          if digits != "" { if trace == 1 { print("[hit][i-lit] "+digits) } out.push(digits)  pos = p + k_print.size()  continue }
         }}
       }
       // Unknown: skip this Print object entirely to avoid stalls and mis-detection
       // Use coarse slice end (next Print position) when available; fallback to k_print-length step
       pos = obj_end + 1
-      if pos <= p { pos = p + k_print.length() }
+      if pos <= p { pos = p + k_print.size() }
     }
     return out
   }

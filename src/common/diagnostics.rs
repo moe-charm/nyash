@@ -11,6 +11,9 @@ pub mod msg {
     pub fn no_method_arity(cls: &str, method: &str, want: usize, known: &[usize]) -> String {
         format!("No matching method: {}.{}({} args). Available arities: {:?}", cls, method, want, known)
     }
+    pub fn no_method_arity_short(cls: &str, method: &str, want: usize) -> String {
+        format!("No method: {}.{}({})", cls, method, want)
+    }
     pub fn unknown_slot(cls: &str, method: &str, slot: u16) -> String {
         format!("Unknown slot {} for {}.{}", slot, cls, method)
     }

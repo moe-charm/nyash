@@ -1,0 +1,13 @@
+// Async await timeout smoke (fixed API)
+// Expects await to time out and return Result.Err("Timeout")
+
+// @env NYASH_AWAIT_MAX_MS=100
+static box Main {
+  main() {
+    fut = env.future.delay(500)
+    res = await fut
+    print(res.toString())
+    return res
+  }
+}
+

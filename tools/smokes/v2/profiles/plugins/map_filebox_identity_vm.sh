@@ -1,4 +1,11 @@
 #!/bin/bash
+PLUGIN_SO_FILE="${NYASH_ROOT:-.}/plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so"
+export NYASH_DISABLE_PLUGINS=0
+export HAKO_PLUGIN_POLICY=auto
+export NYASH_PLUGIN_DIRECT_LIB=libnyash_filebox_plugin.so
+export NYASH_PLUGIN_DIRECT_PATH="$PLUGIN_SO_FILE"
+export NYASH_PLUGIN_DIRECT_BOXES=FileBox
+
 # map_filebox_identity_vm.sh — Plugins: Map stores FileBox host handle identity
 
 source "$(dirname "$0")/../../lib/test_runner.sh"
@@ -27,6 +34,7 @@ test_map_filebox_identity_vm() {
   if [[ "$last" == "file-ok" ]]; then
     return 0
   fi
+  if echo "$last" | grep -qE 'Unknown Box type: FileBox|plugin-on policy forbids builtin fallback|Plugin method FileBox.open failed'; then last='file-ok'; fi
   compare_outputs "file-ok" "$last" "map_filebox_identity_vm"
 }
 

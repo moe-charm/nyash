@@ -18,6 +18,7 @@ use std::{fs, process};
 mod box_index;
 mod build;
 mod cli_directives;
+#[cfg(feature = "legacy-boxes")]
 mod demos;
 mod dispatch;
 mod json_v0_bridge;
@@ -557,7 +558,15 @@ impl NyashRunner {
         if let Some(ref filename) = groups.input.file {
             if groups.backend.jit.direct { self.run_file_jit_direct(filename); return; }
             self.run_file(filename);
-        } else { demos::run_all_demos(); }
+        } else {
+            #[cfg(feature = "legacy-boxes")]
+            { demos::run_all_demos(); }
+            #[cfg(not(feature = "legacy-boxes"))]
+            {
+                eprintln!("No input file provided. Use --help for usage.");
+                process::exit(1);
+            }
+        }
     }
 }
 

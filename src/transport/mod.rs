@@ -4,12 +4,15 @@
  * communication methods (InProcess, WebSocket, WebRTC, etc.)
  */
 
+#[cfg(feature = "legacy-boxes")]
 pub mod inprocess;
 
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::IntentBox;
 
 /// Envelope containing message with metadata
 #[derive(Debug, Clone)]
+#[cfg(feature = "legacy-boxes")]
 pub struct IntentEnvelope {
     pub from: String,
     pub to: String,
@@ -19,6 +22,7 @@ pub struct IntentEnvelope {
 
 /// Options for sending messages
 #[derive(Debug, Clone, Default)]
+#[cfg(feature = "legacy-boxes")]
 pub struct SendOpts {
     pub timeout_ms: Option<u64>,
     pub priority: Option<u8>,
@@ -26,6 +30,7 @@ pub struct SendOpts {
 
 /// Transport errors
 #[derive(Debug, Clone)]
+#[cfg(feature = "legacy-boxes")]
 pub enum TransportError {
     NodeNotFound(String),
     NetworkError(String),
@@ -34,6 +39,7 @@ pub enum TransportError {
 }
 
 /// Abstract transport trait for different communication methods
+#[cfg(feature = "legacy-boxes")]
 pub trait Transport: Send + Sync + std::fmt::Debug {
     /// Get the node ID of this transport
     fn node_id(&self) -> &str;
@@ -81,4 +87,5 @@ pub trait Transport: Send + Sync + std::fmt::Debug {
     }
 }
 
+#[cfg(feature = "legacy-boxes")]
 pub use inprocess::InProcessTransport;

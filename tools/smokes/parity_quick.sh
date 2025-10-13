@@ -5,11 +5,11 @@ ROOT_DIR=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT_DIR/.."
 
 APPS=(
-  apps/tests/ternary_nested.nyash
-  apps/tests/loop_if_phi.nyash
-  apps/tests/peek_expr_block.nyash
-  apps/tests/string_ops_basic.nyash
-  apps/tests/shortcircuit_or_phi_skip.nyash
+  apps/tests/ternary_nested.hako
+  apps/tests/loop_if_phi.hako
+  apps/tests/peek_expr_block.hako
+  apps/tests/string_ops_basic.hako
+  apps/tests/shortcircuit_or_phi_skip.hako
 )
 
 STRICT=${CMP_STRICT:-0}

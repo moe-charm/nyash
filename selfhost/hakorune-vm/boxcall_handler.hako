@@ -32,6 +32,23 @@ static box BoxCallHandlerBox {
     // We need to extract args array from inst_json
     local args_array = me._extract_args(inst_json, regs)
 
+    // Special-case: methodRef — tolerate missing/empty arity by defaulting to 0 and return early
+    if method_name == "methodRef" {
+      local name = args_array.get(0)
+      local arity = args_array.get(1)
+      if arity == null { arity = 0 }
+      local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
+      // Load receiver early for direct dispatch
+      local receiver = ValueManagerBox.get(regs, box_id)
+      if receiver == null {
+        return Result.Err("boxcall: receiver v%" + StringHelpers.int_to_str(box_id) + " is unset (method=methodRef)")
+      }
+      local result_val = receiver.methodRef(name, arity)
+      if dst_reg != null { ValueManagerBox.set(regs, dst_reg, result_val) }
+      return Result.Ok(0)
+    }
+
+
     // Guard arguments (no nulls)
     local _g = ArgsGuardBox.ensure_no_nulls(args_array, method_name + "/" + args_array.size())
     if _g.is_Err() { return _g }

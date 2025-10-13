@@ -1,0 +1,18 @@
+// JIT minimal PHI demo (single diamond)
+// Enable: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_PHI_MIN=1
+
+static box Main {
+    main() {
+        local a, b, x
+        a = 3
+        b = 5
+        if (a < b) {
+            x = 10
+        } else {
+            x = 20
+        }
+        // Merge should pick 10
+        return x
+    }
+}
+

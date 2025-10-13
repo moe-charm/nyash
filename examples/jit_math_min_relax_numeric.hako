@@ -1,0 +1,12 @@
+// Math min with mixed int/float arguments requiring coercion
+// Expect: decision="allow(coerce_f64)", arg_types=["I64","F64"]
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_RELAX_NUMERIC=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_math_min_relax_numeric.nyash
+
+static box Main {
+  main() {
+    // Mixed i64 and f64 arguments
+    return min(3, 1.5)  // 3 is i64, 1.5 is f64
+  }
+}

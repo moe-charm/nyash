@@ -1,0 +1,65 @@
+// Test if the bug is general or specific
+
+// Test 1: Simple Box
+box SimpleBox {
+    init { value }
+    
+    SimpleBox(v) {
+        me.value = v
+    }
+}
+
+function makeSimple() {
+    return new SimpleBox("test")
+}
+
+print("Test 1: SimpleBox")
+s = makeSimple()
+try {
+    print("Value: " + s.value)
+} catch {
+    print("ERROR: Cannot access value field")
+}
+
+// Test 2: Box with multiple fields
+box ComplexBox {
+    init { x, y, z }
+    
+    ComplexBox(x, y, z) {
+        me.x = x
+        me.y = y
+        me.z = z
+    }
+}
+
+function makeComplex() {
+    return new ComplexBox(1, 2, 3)
+}
+
+print("\nTest 2: ComplexBox")
+c = makeComplex()
+try {
+    print("X: " + c.x)
+    print("Y: " + c.y)
+    print("Z: " + c.z)
+} catch {
+    print("ERROR: Cannot access fields")
+}
+
+// Test 3: Nested function return
+function outer() {
+    function inner() {
+        return new SimpleBox("nested")
+    }
+    return inner()
+}
+
+print("\nTest 3: Nested function")
+n = outer()
+try {
+    print("Value: " + n.value)
+} catch {
+    print("ERROR: Cannot access value from nested function")
+}
+
+print("\n✅ Bug test completed!")

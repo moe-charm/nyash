@@ -2,6 +2,7 @@
 # call_macro_strict_vm.sh — call("Box.method/N", args...) normalization
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 require_env || exit 2
 export NYASH_MACRO_ENABLE=1

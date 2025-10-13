@@ -52,6 +52,8 @@ pub fn build_command() -> Command {
         .arg(Arg::new("emit-exe").long("emit-exe").value_name("FILE").help("Emit native executable via ny-llvmc and exit"))
         .arg(Arg::new("emit-exe-nyrt").long("emit-exe-nyrt").value_name("DIR").help("Directory containing libhako_kernel.a (or legacy libhako_kernel.a) used with --emit-exe"))
         .arg(Arg::new("emit-exe-libs").long("emit-exe-libs").value_name("FLAGS").help("Extra linker flags for ny-llvmc when emitting executable"))
+        .arg(Arg::new("which").long("which").value_name("TOOL").help("Resolve tool path (e.g., plugin-tester, llvm-harness) and exit"))
+        .arg(Arg::new("doctor-tools").long("doctor").value_name("tools").help("Run minimal tools doctor and exit").num_args(0..=1))
         .arg(Arg::new("stage3").long("stage3").help("Enable Stage-3 syntax acceptance for selfhost parser").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("ny-compiler-args").long("ny-compiler-args").value_name("ARGS").help("Pass additional args to selfhost child compiler"))
         .arg(Arg::new("using").long("using").value_name("NAME").help("Add a using directive to current session; repeat").action(clap::ArgAction::Append))
@@ -65,7 +67,7 @@ pub fn build_command() -> Command {
         .arg(Arg::new("mir-verbose").long("mir-verbose").help("Show verbose MIR output with statistics").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("mir-verbose-effects").long("mir-verbose-effects").help("Show per-instruction effect category").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("no-optimize").long("no-optimize").help("Disable MIR optimizer passes").action(clap::ArgAction::SetTrue))
-        .arg(Arg::new("backend").long("backend").value_name("BACKEND").help("Backend: vm (default), llvm, interpreter").default_value("vm"))
+        .arg(Arg::new("backend").long("backend").value_name("{nyvm|rust|llvm|vm|mir}")            .help("Select backend (aliases): nyvm→Hakorune VM (default), rust|vm→Rust VM, llvm→LLVM harness, mir→Mini‑VM")            .default_value("nyvm"))
         .arg(Arg::new("verbose").long("verbose").short('v').help("Verbose CLI output (sets NYASH_CLI_VERBOSE=1)").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("compile-wasm").long("compile-wasm").help("Compile to WebAssembly").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("compile-native").long("compile-native").help("Compile to native executable (AOT)").action(clap::ArgAction::SetTrue))
@@ -105,7 +107,7 @@ pub fn build_command() -> Command {
 pub fn from_matches(matches: &ArgMatches) -> CliConfig {
     if matches.get_flag("stage3") { std::env::set_var("NYASH_NY_COMPILER_STAGE3", "1"); }
     if let Some(a) = matches.get_one::<String>("ny-compiler-args") { std::env::set_var("NYASH_NY_COMPILER_CHILD_ARGS", a); }
-    let cfg = CliConfig {
+    let mut cfg = CliConfig {
         file: matches.get_one::<String>("file").cloned(),
         debug_fuel: parse_debug_fuel(matches.get_one::<String>("debug-fuel").unwrap()),
         dump_ast: matches.get_flag("dump-ast"),
@@ -161,7 +163,30 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         dump_expanded_ast_json: matches.get_flag("dump-expanded-ast-json"),
         macro_ctx_json: matches.get_one::<String>("macro-ctx-json").cloned(),
         entry: matches.get_one::<String>("entry").cloned(),
+        which_tool: matches.get_one::<String>("which").cloned(),
+        doctor_tools: matches.contains_id("doctor-tools"),
     };
+
+    // Backend normalization and env override (HAKO_BACKEND/NYASH_BACKEND)
+    let be_env = std::env::var("HAKO_BACKEND").ok().or_else(|| std::env::var("NYASH_BACKEND").ok());
+    if let Some(v) = be_env { cfg.backend = v; }
+    let backend_lc = cfg.backend.to_ascii_lowercase();
+    let norm = match backend_lc.as_str() {
+        // Selfhost Mini‑VM / MIR interpreter line
+        "nyvm" | "mini-vm" | "minivm" | "mir" | "interpreter" => "mir",
+        // Rust VM line (default practical backend)
+        "rust" | "vm" => "vm",
+        // LLVM harness / AOT line
+        "llvm" => "llvm",
+        other => {
+            // Keep unknown as-is; runner will Fail‑Fast with a clear message
+            other
+        }
+    };
+    cfg.backend = norm.to_string();
+    // Mirror normalized backend into NYASH_BACKEND (primary env used internally)
+    std::env::set_var("NYASH_BACKEND", &cfg.backend);
+
 
     if cfg.cli_verbose { std::env::set_var("NYASH_CLI_VERBOSE", "1"); }
     if cfg.vm_stats { std::env::set_var("NYASH_VM_STATS", "1"); }

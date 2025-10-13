@@ -1,0 +1,457 @@
+// 📈 Real-time Data Chart Demo - TimerBox + WebCanvasBox + RandomBox  
+// Dynamic chart visualization with multiple chart types and data streaming
+
+print("📈 === Real-time Data Chart Demo Starting ===")
+
+// Initialize components
+local canvas, timer, random
+canvas = new WebCanvasBox("demo-canvas", 800, 500)
+timer = new TimerBox()
+random = new RandomBox()
+
+// Chart configuration
+local chartConfig
+chartConfig = {
+    type: "line",  // line, bar, area, scatter
+    title: "Nyash Performance Metrics",
+    width: 700,
+    height: 350,
+    marginLeft: 80,
+    marginTop: 50,
+    marginRight: 50,
+    marginBottom: 80,
+    maxDataPoints: 50,
+    updateInterval: 100,  // milliseconds
+    colors: ["#3498db", "#e74c3c", "#2ecc71", "#f39c12", "#9b59b6"]
+}
+
+// Data series
+local dataSeries
+dataSeries = [
+    {name: "Memory Usage", data: [], color: "#3498db", unit: "MB"},
+    {name: "CPU Usage", data: [], color: "#e74c3c", unit: "%"},
+    {name: "Network I/O", data: [], color: "#2ecc71", unit: "KB/s"},
+    {name: "Disk Usage", data: [], color: "#f39c12", unit: "GB"}
+]
+
+// Chart drawing functions
+local drawAxes
+drawAxes = function() {
+    local plotX, plotY, plotWidth, plotHeight
+    plotX = chartConfig.marginLeft
+    plotY = chartConfig.marginTop
+    plotWidth = chartConfig.width - chartConfig.marginLeft - chartConfig.marginRight
+    plotHeight = chartConfig.height - chartConfig.marginTop - chartConfig.marginBottom
+    
+    // Draw axes
+    canvas.setStrokeStyle("#34495e")
+    canvas.setLineWidth(2)
+    
+    // Y axis
+    canvas.drawLine(plotX, plotY, plotX, plotY + plotHeight, "#34495e", 2)
+    
+    // X axis
+    canvas.drawLine(plotX, plotY + plotHeight, plotX + plotWidth, plotY + plotHeight, "#34495e", 2)
+    
+    // Grid lines
+    canvas.setStrokeStyle("#ecf0f1")
+    canvas.setLineWidth(1)
+    
+    local i, x, y
+    // Vertical grid lines
+    i = 1
+    loop(i < 10) {
+        x = plotX + (plotWidth / 10) * i
+        canvas.drawLine(x, plotY, x, plotY + plotHeight, "#ecf0f1", 1)
+        i = i + 1
+    }
+    
+    // Horizontal grid lines
+    i = 1
+    loop(i < 8) {
+        y = plotY + (plotHeight / 8) * i
+        canvas.drawLine(plotX, y, plotX + plotWidth, y, "#ecf0f1", 1)
+        i = i + 1
+    }
+}
+
+local drawLabels
+drawLabels = function() {
+    local plotX, plotY, plotWidth, plotHeight
+    plotX = chartConfig.marginLeft
+    plotY = chartConfig.marginTop
+    plotWidth = chartConfig.width - chartConfig.marginLeft - chartConfig.marginRight
+    plotHeight = chartConfig.height - chartConfig.marginTop - chartConfig.marginBottom
+    
+    // Y axis labels
+    canvas.setFillStyle("#2c3e50")
+    local i, value, y
+    i = 0
+    loop(i <= 8) {
+        value = 100 - (i * 12.5)  // 0-100 scale
+        y = plotY + (plotHeight / 8) * i
+        canvas.fillText(value.toString(), plotX - 30, y + 5, "12px Arial", "#2c3e50")
+        i = i + 1
+    }
+    
+    // X axis labels (time)
+    i = 0
+    loop(i <= 10) {
+        local timeLabel, x
+        timeLabel = "-" + (10 - i) + "s"
+        x = plotX + (plotWidth / 10) * i
+        canvas.fillText(timeLabel, x - 10, plotY + plotHeight + 20, "12px Arial", "#2c3e50")
+        i = i + 1
+    }
+    
+    // Axis titles
+    canvas.fillText("Time", plotX + plotWidth / 2 - 20, plotY + plotHeight + 50, "14px Arial", "#2c3e50")
+    
+    // Y axis title (rotated)
+    canvas.fillText("Value", 20, plotY + plotHeight / 2, "14px Arial", "#2c3e50")
+}
+
+local drawLineChart
+drawLineChart = function() {
+    local plotX, plotY, plotWidth, plotHeight
+    plotX = chartConfig.marginLeft
+    plotY = chartConfig.marginTop
+    plotWidth = chartConfig.width - chartConfig.marginLeft - chartConfig.marginRight
+    plotHeight = chartConfig.height - chartConfig.marginTop - chartConfig.marginBottom
+    
+    local i, series
+    i = 0
+    loop(i < dataSeries.length()) {
+        series = dataSeries[i]
+        
+        if (series.data.length() > 1) {
+            canvas.setStrokeStyle(series.color)
+            canvas.setLineWidth(3)
+            canvas.beginPath()
+            
+            local j, x, y, value
+            j = 0
+            loop(j < series.data.length()) {
+                value = series.data[j]
+                x = plotX + (j / (chartConfig.maxDataPoints - 1)) * plotWidth
+                y = plotY + plotHeight - (value / 100) * plotHeight
+                
+                if (j == 0) {
+                    canvas.moveTo(x, y)
+                } else {
+                    canvas.lineTo(x, y)
+                }
+                j = j + 1
+            }
+            
+            canvas.stroke(series.color, 3)
+            
+            // Draw data points
+            j = 0
+            loop(j < series.data.length()) {
+                value = series.data[j]
+                x = plotX + (j / (chartConfig.maxDataPoints - 1)) * plotWidth
+                y = plotY + plotHeight - (value / 100) * plotHeight
+                
+                canvas.setFillStyle(series.color)
+                canvas.fillCircle(x, y, 4)
+                
+                j = j + 1
+            }
+        }
+        
+        i = i + 1
+    }
+}
+
+local drawBarChart
+drawBarChart = function() {
+    local plotX, plotY, plotWidth, plotHeight
+    plotX = chartConfig.marginLeft
+    plotY = chartConfig.marginTop
+    plotWidth = chartConfig.width - chartConfig.marginLeft - chartConfig.marginRight
+    plotHeight = chartConfig.height - chartConfig.marginTop - chartConfig.marginBottom
+    
+    if (dataSeries[0].data.length() > 0) {
+        local barWidth, spacing, i, series, value, x, y, height
+        barWidth = (plotWidth / chartConfig.maxDataPoints) * 0.8
+        spacing = (plotWidth / chartConfig.maxDataPoints) * 0.2
+        
+        local dataIndex
+        dataIndex = dataSeries[0].data.length() - 1
+        
+        i = 0
+        loop(i < dataSeries.length()) {
+            series = dataSeries[i]
+            
+            if (dataIndex < series.data.length()) {
+                value = series.data[dataIndex]
+                x = plotX + plotWidth - barWidth * (i + 1) - spacing * i
+                height = (value / 100) * plotHeight
+                y = plotY + plotHeight - height
+                
+                canvas.setFillStyle(series.color)
+                canvas.fillRect(x, y, barWidth * 0.8, height)
+                
+                // Value label
+                canvas.setFillStyle("#2c3e50")
+                canvas.fillText(value.toString(), x + 5, y - 10, "10px Arial", "#2c3e50")
+            }
+            
+            i = i + 1
+        }
+    }
+}
+
+local drawAreaChart
+drawAreaChart = function() {
+    local plotX, plotY, plotWidth, plotHeight
+    plotX = chartConfig.marginLeft
+    plotY = chartConfig.marginTop
+    plotWidth = chartConfig.width - chartConfig.marginLeft - chartConfig.marginRight
+    plotHeight = chartConfig.height - chartConfig.marginTop - chartConfig.marginBottom
+    
+    local i, series
+    i = 0
+    loop(i < dataSeries.length()) {
+        series = dataSeries[i]
+        
+        if (series.data.length() > 1) {
+            // Create area fill
+            canvas.beginPath()
+            
+            local j, x, y, value
+            j = 0
+            loop(j < series.data.length()) {
+                value = series.data[j]
+                x = plotX + (j / (chartConfig.maxDataPoints - 1)) * plotWidth
+                y = plotY + plotHeight - (value / 100) * plotHeight
+                
+                if (j == 0) {
+                    canvas.moveTo(x, plotY + plotHeight)
+                    canvas.lineTo(x, y)
+                } else {
+                    canvas.lineTo(x, y)
+                }
+                j = j + 1
+            }
+            
+            // Close the area
+            canvas.lineTo(plotX + plotWidth, plotY + plotHeight)
+            canvas.lineTo(plotX, plotY + plotHeight)
+            canvas.closePath()
+            
+            // Fill with semi-transparent color
+            local fillColor
+            fillColor = series.color.replace(")", ", 0.3)")
+            if (series.color.startsWith("#")) {
+                // Convert hex to rgba
+                fillColor = series.color + "80"  // Add alpha
+            }
+            canvas.fill(fillColor)
+            
+            // Draw border line
+            canvas.setStrokeStyle(series.color)
+            canvas.setLineWidth(2)
+            
+            canvas.beginPath()
+            j = 0
+            loop(j < series.data.length()) {
+                value = series.data[j]
+                x = plotX + (j / (chartConfig.maxDataPoints - 1)) * plotWidth
+                y = plotY + plotHeight - (value / 100) * plotHeight
+                
+                if (j == 0) {
+                    canvas.moveTo(x, y)
+                } else {
+                    canvas.lineTo(x, y)
+                }
+                j = j + 1
+            }
+            canvas.stroke(series.color, 2)
+        }
+        
+        i = i + 1
+    }
+}
+
+// Legend drawing
+local drawLegend
+drawLegend = function() {
+    local legendX, legendY, i, series
+    legendX = chartConfig.width - chartConfig.marginRight - 150
+    legendY = chartConfig.marginTop + 20
+    
+    // Legend background
+    canvas.setFillStyle("#f8f9fa")
+    canvas.fillRect(legendX - 10, legendY - 10, 160, dataSeries.length() * 25 + 20)
+    canvas.setStrokeStyle("#dee2e6")
+    canvas.strokeRect(legendX - 10, legendY - 10, 160, dataSeries.length() * 25 + 20)
+    
+    canvas.setFillStyle("#2c3e50")
+    canvas.fillText("Legend", legendX, legendY, "14px Arial", "#2c3e50")
+    
+    i = 0
+    loop(i < dataSeries.length()) {
+        series = dataSeries[i]
+        
+        // Color box
+        canvas.setFillStyle(series.color)
+        canvas.fillRect(legendX, legendY + 15 + i * 25, 15, 15)
+        
+        // Series name and latest value
+        canvas.setFillStyle("#2c3e50")
+        local latestValue, valueText
+        if (series.data.length() > 0) {
+            latestValue = series.data[series.data.length() - 1]
+            valueText = series.name + ": " + latestValue + series.unit
+        } else {
+            valueText = series.name + ": --"
+        }
+        canvas.fillText(valueText, legendX + 20, legendY + 27 + i * 25, "12px Arial", "#2c3e50")
+        
+        i = i + 1
+    }
+}
+
+// Data generation
+local generateDataPoint
+generateDataPoint = function(seriesIndex) {
+    local baseValue, variation, value
+    
+    if (seriesIndex == 0) {  // Memory Usage
+        baseValue = 45
+        variation = random.randInt(-5, 15)
+    } else if (seriesIndex == 1) {  // CPU Usage
+        baseValue = 35
+        variation = random.randInt(-10, 25)
+    } else if (seriesIndex == 2) {  // Network I/O
+        baseValue = 25
+        variation = random.randInt(-15, 30)
+    } else {  // Disk Usage
+        baseValue = 60
+        variation = random.randInt(-3, 8)
+    }
+    
+    value = baseValue + variation
+    return Math.max(0, Math.min(100, value))
+}
+
+// Update data
+local updateData
+updateData = function() {
+    local i, series, newValue
+    i = 0
+    loop(i < dataSeries.length()) {
+        series = dataSeries[i]
+        newValue = generateDataPoint(i)
+        
+        // Add new data point
+        series.data.push(newValue)
+        
+        // Remove old data points if exceeding max
+        if (series.data.length() > chartConfig.maxDataPoints) {
+            series.data.removeFirst()
+        }
+        
+        i = i + 1
+    }
+}
+
+// Main chart drawing function
+local drawChart
+drawChart = function() {
+    // Clear canvas
+    canvas.setFillStyle("#ffffff")
+    canvas.fillRect(0, 0, 800, 500)
+    
+    // Title
+    canvas.setFillStyle("#2c3e50")
+    canvas.fillText(chartConfig.title, 250, 30, "20px Arial", "#2c3e50")
+    
+    // Chart type indicator
+    canvas.fillText("Chart Type: " + chartConfig.type.toUpperCase(), 50, 30, "16px Arial", "#34495e")
+    
+    // Draw chart elements
+    drawAxes()
+    drawLabels()
+    
+    if (chartConfig.type == "line") {
+        drawLineChart()
+    } else if (chartConfig.type == "bar") {
+        drawBarChart()
+    } else if (chartConfig.type == "area") {
+        drawAreaChart()
+    }
+    
+    drawLegend()
+    
+    // Status info
+    canvas.setFillStyle("#6c757d")
+    local statusText
+    statusText = "Data Points: " + dataSeries[0].data.length() + "/" + chartConfig.maxDataPoints + " | Update Rate: " + chartConfig.updateInterval + "ms"
+    canvas.fillText(statusText, 50, 480, "12px Arial", "#6c757d")
+}
+
+// Initialize with some sample data
+local i
+i = 0
+loop(i < 10) {
+    updateData()
+    i = i + 1
+}
+
+// Draw initial chart
+drawChart()
+
+// Simulate real-time updates
+local updateCount
+updateCount = 0
+
+local simulateUpdates
+simulateUpdates = function() {
+    local frameCount
+    frameCount = 0
+    
+    loop(frameCount < 20) {
+        updateData()
+        drawChart()
+        frameCount = frameCount + 1
+        updateCount = updateCount + 1
+    }
+}
+
+simulateUpdates()
+
+print("📈 Real-time Data Chart Demo Ready!")
+print("• Chart type: " + chartConfig.type)
+print("• Data series: " + dataSeries.length())
+print("• Max data points: " + chartConfig.maxDataPoints)
+print("• Update interval: " + chartConfig.updateInterval + "ms")
+print("• Total updates: " + updateCount)
+
+// Demo different chart types
+local chartTypes
+chartTypes = ["line", "bar", "area"]
+i = 0
+loop(i < chartTypes.length()) {
+    chartConfig.type = chartTypes[i]
+    drawChart()
+    print("✓ Rendered " + chartTypes[i] + " chart")
+    i = i + 1
+}
+
+// Set back to line chart
+chartConfig.type = "line"
+drawChart()
+
+print("🌟 Advanced chart features:")
+print("• Multiple visualization types (line, bar, area)")
+print("• Real-time data streaming with history")
+print("• Professional grid system and axes")
+print("• Interactive legend with current values")
+print("• Responsive layout with proper margins")
+print("• Data point management with rolling buffer")
+
+print("🌐 Everything is Box - even data visualization!")
+print("✅ Real-time Data Chart Demo Complete!")

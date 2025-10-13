@@ -8,3 +8,14 @@ jobs = 24
 [env]
 # Environment variables for all cargo commands
 CARGO_INCREMENTAL = "1"
+
+[alias]
+# Dual-line convenience aliases (naming clarity)
+# Rust line (legacy built-ins ON)
+build-rust = "build --release"
+run-rust = "run --release"
+
+# Hakorune line (plugin-only; legacy built-ins OFF)
+# Note: internal features stay unchanged; this is just a clearer alias.
+build-hako = "build --release --no-default-features -F cli,plugins,host-anchors"
+run-hako = "run --release --no-default-features -F cli,plugins,host-anchors --"

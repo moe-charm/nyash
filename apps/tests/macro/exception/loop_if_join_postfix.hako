@@ -1,0 +1,16 @@
+function f(x) {
+  return x
+}
+
+function main(args) {
+  local i = 0
+  local a = 0
+  loop(i < 2) {
+    // both branches assign to the same variable -> JoinResult(a)
+    if i % 2 == 0 { a = 1 } else { a = 2 }
+    // include postfix sugar to exercise TryCatch normalization in the same scope
+    with_cleanup(postfix_catch(f(i), "Error", fn(e){ print(e) }), fn(){ })
+    i = i + 1
+  }
+}
+

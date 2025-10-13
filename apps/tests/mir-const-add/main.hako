@@ -1,0 +1,13 @@
+// mir-const-add - minimal MIR-only smoke
+
+static box Main {
+    main() {
+        // basic const/add/return
+        local a = 1
+        local b = 2
+        local c = a + b
+        // not printed to avoid I/O; ensure interpreter path works
+        return 0
+    }
+}
+

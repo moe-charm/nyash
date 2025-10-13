@@ -32,12 +32,12 @@ static box Main {
     A.array_push(a, 3)
     local s
     s = A.array_slice(a, 0, 2)
-    if s.length() != 2 { fails = fails + 1 }
+    if s.size() != 2 { fails = fails + 1 }
     if s.get(0) != 1 { fails = fails + 1 }
     if s.get(1) != 2 { fails = fails + 1 }
     // clamp
     s = A.array_slice(a, -5, 99)
-    if s.length() != 3 { fails = fails + 1 }
+    if s.size() != 3 { fails = fails + 1 }
 
     if fails == 0 {
       print("OK: array")

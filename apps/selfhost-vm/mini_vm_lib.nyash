@@ -20,7 +20,7 @@ static box MiniVm {
     @key = "\"value\":{\"type\":\"int\",\"value\":"
     @idx = json.lastIndexOf(key)
     if idx < 0 { return "0" }
-    @start = idx + key.length()
+    @start = idx + key.size()
     return read_digits(json, start)
   }
 

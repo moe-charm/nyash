@@ -1,0 +1,15 @@
+// Python evalR OK demo (returns Result.Ok)
+// @env NYASH_PLUGIN_ONLY=1
+// @env NYASH_PY_AUTODECODE=1
+// Run:
+//   ./target/release/nyash --backend vm examples/py_result_ok_demo.nyash
+
+static box Main {
+  main() {
+    local py, r
+    py = new PyRuntimeBox()
+    r = py.evalR("1 + 2")
+    me.console.println(r)
+    return 0
+  }
+}

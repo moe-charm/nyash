@@ -4,6 +4,7 @@
 source "$(dirname "$0")/../../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 export NYASH_USING=1
 export NYASH_ALLOW_USING_FILE=1

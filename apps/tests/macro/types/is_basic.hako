@@ -1,0 +1,7 @@
+local x = 1
+if (x.is("Integer")) {
+  print(1)
+} else {
+  print(0)
+}
+

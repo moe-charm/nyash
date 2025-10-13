@@ -1,0 +1,34 @@
+// BoxcallBuilderBox — Build minimal boxcall JSON strings and manage temp regs
+// Single Responsibility: Provide small helpers to synthesize boxcall JSON safely
+// Usage: allocate temp register for args, then build JSON for BoxCallHandler
+
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+
+static box BoxcallBuilderBox {
+  // Allocate a temporary register id that does not collide with existing keys
+  alloc_tmp_reg(regs) {
+    local tmp_id = 900001
+    local try_key = StringHelpers.int_to_str(tmp_id)
+    loop(regs.has(try_key)) { tmp_id = tmp_id + 1  try_key = StringHelpers.int_to_str(tmp_id) }
+    return tmp_id
+  }
+
+  // Build a boxcall JSON for: { op: "boxcall", box: <vid>, method: "call", args: [tmp_id], dst: <dst> }
+  build_call(dst_reg, vid, tmp_id) {
+    return "{\"op\":\"boxcall\",\"dst\":" + StringHelpers.int_to_str(dst_reg) + 
+           ",\"box\":" + StringHelpers.int_to_str(vid) + 
+           ",\"method\":\"call\",\"args\":[" + StringHelpers.int_to_str(tmp_id) + "]}"
+  }
+}
+
+
+static box BoxcallBuilderBox_Methods {
+  // Generic builder: method name + args (array of reg ids as CSV string)
+  build_method(dst_reg, vid, method_name, arg_ids_csv) {
+    return "{\"op\":\"boxcall\",\"dst\":"
+      + StringHelpers.int_to_str(dst_reg)
+      + ",\"box\":" + StringHelpers.int_to_str(vid)
+      + ",\"method\":\"" + method_name + "\""
+      + ",\"args\":[" + arg_ids_csv + "]}"
+  }
+}

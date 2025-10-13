@@ -50,6 +50,7 @@ impl MirInterpreter {
                         VMValue::String(ref s) => format!("str:'{}'", s),
                         VMValue::Void => "void".into(),
                         VMValue::BoxRef(ref bx) => format!("box:{}", bx.type_name()),
+                        #[cfg(feature = "legacy-boxes")]
                         VMValue::Future(_) => "future".into(),
                     });
                 }
@@ -84,7 +85,10 @@ impl MirInterpreter {
             if func_name == "JSON.stringify" || func_name.starts_with("JSON.stringify/") {
                 if let Some(a0) = args.get(0) {
                     let v0 = match self.reg_load(*a0) { Ok(v) => v.to_nyash_box(), Err(e) => return Some(Err(e)) };
+                    #[cfg(feature = "legacy-boxes")]
                     let s = crate::boxes::json::stringify_any(v0);
+                    #[cfg(not(feature = "legacy-boxes"))]
+                    let s = v0.to_string_box().value;
                     return Some(Ok(VMValue::String(s)));
                 }
             }
@@ -128,7 +132,10 @@ impl MirInterpreter {
     ) -> Result<VMValue, VMError> {
         let label = format!("Extern:{}", extern_name);
         self.emit_call_trace_label(&label, args.len(), None);
-        self.execute_extern_function(extern_name, args)
+        #[cfg(feature = "legacy-boxes")]
+        { self.execute_extern_function(extern_name, args) }
+        #[cfg(not(feature = "legacy-boxes"))]
+        { Err(VMError::InvalidInstruction(crate::backend::mir_interpreter::diagnostics::DIAG_EXTERN_DISABLED.into())) }
     }
     pub(crate) fn execute_global_function(
         &mut self,
@@ -145,8 +152,9 @@ impl MirInterpreter {
                         self.print_trace_emit(&val);
                     }
                     // Dev observe: Null/Missing boxes quick normalization (no behavior change to prod)
-                    if let VMValue::BoxRef(bx) = &val {
+                    if let VMValue::BoxRef(_bx) = &val {
                         // NullBox → always print as null (stable)
+                        #[cfg(feature = "legacy-boxes")]
                         if bx
                             .as_any()
                             .downcast_ref::<crate::boxes::null_box::NullBox>()
@@ -156,6 +164,7 @@ impl MirInterpreter {
                             return Ok(VMValue::Void);
                         }
                         // MissingBox → default prints as null; when flag ON, show (missing)
+                        #[cfg(feature = "legacy-boxes")]
                         if bx
                             .as_any()
                             .downcast_ref::<crate::boxes::missing_box::MissingBox>()

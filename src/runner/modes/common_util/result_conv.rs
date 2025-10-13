@@ -5,6 +5,7 @@
 //! vm.rs and mir_interpreter.rs.
 
 use nyash_rust::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
+#[cfg(feature = "legacy-boxes")]
 use nyash_rust::boxes::FloatBox;
 use nyash_rust::mir::MirType;
 
@@ -23,9 +24,13 @@ pub fn convert_box_result_to_string(
 ) -> (&'static str, String) {
     match mir_type {
         MirType::Float => {
-            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
-                ("Float", format!("{}", fb.value))
-            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+            #[cfg(feature = "legacy-boxes")]
+            {
+                if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
+                    return ("Float", format!("{}", fb.value));
+                }
+            }
+            if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
                 ("Float", format!("{}", ib.value as f64))
             } else if use_coercion {
                 if let Some(s) = nyash_rust::runtime::semantics::coerce_to_string(result) {

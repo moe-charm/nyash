@@ -1,0 +1,11 @@
+// Success case: String.length() via JIT hostcall (read-only)
+// Run: NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 ./target/release/nyash --backend vm examples/jit_hostcall_len_string.nyash
+
+static box Main {
+  main() {
+    local s
+    s = "abc"
+    return s.length()
+  }
+}
+

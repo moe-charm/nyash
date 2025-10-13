@@ -1,0 +1,17 @@
+// Python callR OK demo (returns Result.Ok(value))
+// @env NYASH_PLUGIN_ONLY=1
+// @env NYASH_PY_AUTODECODE=1
+// Run:
+//   ./target/release/nyash --backend vm examples/py_callR_ok_demo.nyash
+
+static box Main {
+  main() {
+    local py, mod, sqrt, r
+    py = new PyRuntimeBox()
+    mod = py.import("math")
+    sqrt = mod.getattr("sqrt")
+    r = sqrt.callR(16)
+    me.console.println(r) // expect Ok(4.0)
+    return 0
+  }
+}

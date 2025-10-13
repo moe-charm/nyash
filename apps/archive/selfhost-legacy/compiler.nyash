@@ -32,7 +32,7 @@ static box Main {
   esc_json(s) {
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\\" { out = out + "\\\\" } else {
@@ -67,7 +67,7 @@ static box Main {
     local input_path = null
     local stage3_mode = 0
     if args != null {
-      local alen = args.length()
+      local alen = args.size()
       local i = 0
       loop(i < alen) {
         local a = args.get(i)
@@ -103,7 +103,7 @@ static box Main {
     local min_mode = 0
     local emit_mir = 0
     if args != null {
-      local alen = args.length()
+      local alen = args.size()
       local i = 0
       loop(i < alen) {
         local arg = args.get(i)
@@ -124,7 +124,7 @@ static box Main {
     local do_scopebox = 0
     local do_loopform = 0
     if args != null {
-      local alen3 = args.length()
+      local alen3 = args.size()
       local i3 = 0
       loop(i3 < alen3) {
         local a3 = args.get(i3)

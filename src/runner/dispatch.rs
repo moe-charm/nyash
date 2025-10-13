@@ -9,6 +9,11 @@ use std::{fs, process};
 
 /// Thin file dispatcher: select backend and delegate to mode executors
 pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
+    crate::runner_plugin_init::init_bid_plugins();
+    // Deprecation: warn on legacy .nyash extension (prefer .hako)
+    if filename.ends_with(".nyash") {
+        eprintln!("[deprecate] The .nyash extension is deprecated; please use .hako (see docs/guides/naming-and-extensions.md).");
+    }
     // Selfhost pipeline (Ny -> JSON v0) behind env gate
     if std::env::var("NYASH_USE_NY_COMPILER").ok().as_deref() == Some("1") {
         if runner.try_run_selfhost_pipeline(filename) {
@@ -142,12 +147,23 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         }
     }
 
-    // Backend selection
-    match groups.backend.backend.as_str() {
+    // Backend selection (normalize; fallback unknown/empty to "vm")
+    let mut backend_norm = groups.backend.backend.trim().to_string();
+    if backend_norm.is_empty() || backend_norm == "." { backend_norm = "vm".to_string(); }
+    match backend_norm.as_str() {
         "mir" => {
-            crate::cli_v!("🚀 Nyash MIR Interpreter - Executing file: {} 🚀", filename);
-            runner.execute_mir_mode(filename);
-        }
+            let eng = std::env::var("HAKO_NYVM_ENGINE").ok().unwrap_or_else(|| "hakorune".to_string());
+            if eng.eq_ignore_ascii_case("mini") {
+                crate::cli_v!("🚀 Nyash Mini‑VM (MIR Interpreter) - Executing file: {} 🚀", filename);
+                runner.execute_mir_mode(filename);
+            } else {
+                crate::cli_v!("🚀 Hakorune VM (Ny) bridge - Executing file: {} 🚀", filename);
+                if let Err(e) = runner.execute_hakorune_vm_bridge(filename) {
+                    eprintln!("❌ nyvm(hakorune) bridge error: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        },
         "vm" => {
             crate::cli_v!("🚀 Nyash VM Backend - Executing file: {} 🚀", filename);
             // Unified VM engine (Phase‑A): default=fallback
@@ -172,13 +188,44 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             runner.execute_llvm_mode(filename);
         }
         other => {
-            eprintln!("❌ Unknown backend: {}. Use 'vm' or 'llvm'.", other);
-            std::process::exit(2);
+            eprintln!("[warn] Unknown backend: {} → falling back to 'vm'", other);
+            runner.execute_vm_engine(filename);
         }
     }
 }
 
 impl NyashRunner {
+    /// Execute VM engine from in-memory source (no wrapper temp files)
+    pub(crate) fn execute_vm_engine_from_source(&self, source_inline: &str, pseudo_filename: &str) {
+        use crate::runner::vm_pipeline;
+        use std::process;
+
+        let result = (|| {
+            // Stage 1: (skipped) load from file → we already have inline source
+            let source = source_inline.to_string();
+
+            // Stage 2: Resolve `using` and preludes based on pseudo filename context
+            let (source, preludes, aliases) =
+                vm_pipeline::resolve_preludes_and_aliases(self, &source, pseudo_filename)?;
+
+            // Stage 3: Parse main source and merge with preludes
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes)?;
+
+            // Stage 4: Apply macros and desugar aliases
+            let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases)?;
+
+            // Stage 5: Register user-defined boxes from the AST
+            vm_pipeline::register_user_boxes_from_ast(&ast);
+
+            // Stage 6: Compile to MIR and execute
+            vm_pipeline::compile_and_execute_mir(ast, self.config.no_optimize)
+        })();
+
+        if let Err(e) = result {
+            eprintln!("❌ Pipeline error: {}", e);
+            process::exit(1);
+        }
+    }
     /// Compile Nyash file to MIR and execute via selected VM engine (unified entry)
     pub(crate) fn execute_vm_engine(&self, filename: &str) {
         use crate::runner::vm_pipeline;
@@ -238,6 +285,7 @@ impl NyashRunner {
         }
         use crate::backend::MirInterpreter;
         use crate::box_trait::{BoolBox, IntegerBox, StringBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::FloatBox;
         use crate::mir::MirType;
 
@@ -248,12 +296,23 @@ impl NyashRunner {
                 if let Some(func) = module.functions.get("main") {
                     let (ety, sval) = match &func.signature.return_type {
                         MirType::Float => {
-                            if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
-                                ("Float", format!("{}", fb.value))
-                            } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
-                                ("Float", format!("{}", ib.value as f64))
-                            } else {
-                                ("Float", result.to_string_box().value)
+                            #[cfg(feature = "legacy-boxes")]
+                            {
+                                if let Some(fb) = result.as_any().downcast_ref::<FloatBox>() {
+                                    ("Float", format!("{}", fb.value))
+                                } else if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                    ("Float", format!("{}", ib.value as f64))
+                                } else {
+                                    ("Float", result.to_string_box().value)
+                                }
+                            }
+                            #[cfg(not(feature = "legacy-boxes"))]
+                            {
+                                if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                                    ("Float", format!("{}", ib.value as f64))
+                                } else {
+                                    ("Float", result.to_string_box().value)
+                                }
                             }
                         }
                         MirType::Integer => {
@@ -292,5 +351,52 @@ impl NyashRunner {
                 std::process::exit(1);
             }
         }
+    }
+}
+
+
+impl NyashRunner {
+    pub(crate) fn execute_hakorune_vm_bridge(&self, filename: &str) -> Result<(), String> {
+        use crate::runner::vm_pipeline;
+        let (module_json, _ret_ty) = {
+            let source = vm_pipeline::load_and_preprocess_source(filename).map_err(|e| e.to_string())?;
+            let (source, preludes, aliases) = vm_pipeline::resolve_preludes_and_aliases(self, &source, filename).map_err(|e| e.to_string())?;
+            let ast = vm_pipeline::parse_and_merge_ast(&source, preludes).map_err(|e| e.to_string())?;
+            let ast = vm_pipeline::process_ast_macros_and_aliases(ast, &aliases).map_err(|e| e.to_string())?;
+            let mut mirc = crate::mir::MirCompiler::with_options(!self.config.no_optimize);
+            let cr = mirc.compile(ast).map_err(|e| format!("MIR compile error: {}", e))?;
+            let tf = tempfile::NamedTempFile::new().map_err(|e| e.to_string())?;
+            let p = tf.path().to_path_buf();
+            crate::runner::mir_json_emit::emit_mir_json_for_harness(&cr.module, &p).map_err(|e| e.to_string())?;
+            let json = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
+            let json_for_bridge = match serde_json::from_str::<serde_json::Value>(&json) {
+                Ok(root) => {
+                    if let Some(funcs) = root.get("functions").and_then(|v| v.as_array()) {
+                        if let Some(first) = funcs.get(0) {
+                            serde_json::to_string(first).unwrap_or(json.clone())
+                        } else { json.clone() }
+                    } else { json.clone() }
+                }
+                Err(_) => json.clone(),
+            };
+            (json_for_bridge, cr.module.functions.get("main").map(|f| f.signature.return_type.clone()))
+        };
+        
+        // Escape JSON via serde_json to embed safely in Ny source
+        let esc = serde_json::to_string(&module_json).map_err(|e| e.to_string())?;
+        let wrapper = format!(
+            "using \"selfhost/hakorune-vm/hakorune_vm_core.hako\" as HakoruneVmCore
+static box Main {{
+  main() {{
+    local j = {}
+    return HakoruneVmCore.run(j)
+  }}
+}}
+",
+            esc
+        );
+
+        self.execute_vm_engine_from_source(&wrapper, "<nyvm-bridge>");
+        Ok(())
     }
 }

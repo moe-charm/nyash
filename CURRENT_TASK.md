@@ -1,5 +1,251 @@
 # CURRENT_TASK — 現在のタスクと進捗
 
+## ✨ Today’s Update — 2025‑10‑15（Phase 1: MirCall 仕上げ 小粒）
+
+## ✨ Today’s Update — 2025‑10‑15（Quick Step‑3 観測ON）
+
+## ✨ Today’s Update — 2025‑10‑15（Phase 1: MirCall 小粒 仕上げ その2）
+
+- 正規化の安全拡張: Array.contains を whitelist に追加済み（ModuleFunction/BoxCall 両経路）。
+- quick-selfhost に MirCall(Array.contains) を追加し PASS 確認。
+- Extern 無効診断を定数化（`DIAG_EXTERN_DISABLED`）し、docs の記述と実装の揺れを解消。
+
+- quick.env に Map.get/set の HostHandle 強制フラグを導入（観測ON）。
+  - `tools/smokes/v2/configs/env/quick.env`: `NYASH_MAP_GET_FORCE_HOST=1`, `NYASH_MAP_SET_FORCE_HOST=1` に設定。
+- quick プロファイルに代表スモークを昇格（実行・緑確認）。
+  - `tools/smokes/v2/profiles/quick/host_handle_router_map_size_has_vm.sh`
+  - `tools/smokes/v2/profiles/quick/host_handle_router_map_get_missing_vm.sh`
+  - `tools/smokes/v2/profiles/quick/host_handle_router_map_set_effect_vm.sh`
+  - 実行例: `tools/smokes/v2/run.sh --profile quick --filter 'host_handle_router_map_.*\\.sh'` → 3/3 PASS。
+
+- 正規化カバレッジ拡充（安全系のみ）
+  - Array.contains を ModuleFunction→Method / BoxCall→Method の両方で降格対象に追加。
+    - 変更: `src/mir/optimizer_passes/normalize.rs`（ArrayBox ホワイトリストに `contains` 追加）。
+  - Map.delete/clear は既に対象。周辺ケースはスモークで担保（欠損キー delete は no-op/size 不変）。
+- Router 側は最小限（arity/戻り値）チェックのみ。実行経路は MirCall(Method) に統一。
+- 追加スモーク（Extern 無効でも緑維持）
+  - `tools/smokes/v2/profiles/quick-selfhost/mircall_array_contains_vm.sh`
+  - `tools/smokes/v2/profiles/quick-selfhost/mircall_map_delete_missing_vm.sh`
+  - 実行: `tools/smokes/v2/run.sh --profile quick-selfhost --filter 'mircall_array_contains_vm.sh|mircall_map_delete_missing_vm.sh'` → PASS。
+
+
+## ✨ Today’s Update — 2025‑10‑13 (quick rollout step‑2)
+
+- Quick staged enablement (HostHandleRouter):
+  - Enabled Map.size/has force in quick profile to widen observation safely.
+    - `tools/smokes/v2/configs/env/quick.env`: added `NYASH_MAP_SIZE_FORCE_HOST=1`, `NYASH_MAP_HAS_FORCE_HOST=1`.
+    - VM router now supports fine‑grained flags for Map (`*_SIZE_FORCE_HOST`, `*_HAS_FORCE_HOST`), in addition to `NYASH_MAP_FORCE_HOST`.
+  - Added a light quick smoke (representative):
+    - `tools/smokes/v2/profiles/quick/host_handle_router_map_size_has_vm.sh` — asserts `size()==1`, `has("a")==true`, `has("b")==false`.
+    - Run: `tools/smokes/v2/run.sh --profile quick --filter host_handle_router_map_size_has_vm.sh` → PASS.
+
+- Optional plugin‑only build (status/check):
+  - Tried: `cargo build --release --no-default-features -F cli,plugins,host-anchors` → FAIL (expected for now).
+  - Cause: remaining `crate::boxes::*` references when `legacy-boxes` feature is OFF.
+  - Next: use `tools/dev/list_boxes_refs.sh` to enumerate refs and progressively pluginize/route.
+
+- Legacy withdrawal plan (note):
+  - Gate condition to flip: plugin‑only build green + smokes green with `legacy-boxes` OFF.
+  - Steps: replace remaining `crate::boxes` refs → flip default OFF for `legacy-boxes` → verify → remove `src/boxes/` and cfg guards.
+  - Target: document and aim for a short window after Map/Array/String HostHandle parity tests are stable (quick/plugins both green).
+
+
+## ✨ Today’s Update — 2025‑10‑14 (Collections/Map unification)
+
+- Collections API unification:
+  - size()/isEmpty() across Array/Map/String; length() deprecated.
+  - apps/ selfhost code migrated (length->size) — representative 121 files updated; suites green.
+- Map semantics unified:
+  - get(missing) -> null (empty TLV)
+  - set/clear/delete -> null
+  - keys/values Stage‑2: HostHandle(ArrayBox) when NYASH_PLUGIN_MAP_ARRAY_HANDLE=1; fallback keysS/valuesS String path retained.
+  - Map.call P1: missing key now returns null (no error). Tightened smokes accordingly.
+- Mini-VM & Rust MIR robustness:
+  - Builder-level terminator normalization (all blocks end with ret/jump/branch/throw).
+  - LocalSSA copy insertion respects first terminator (no push beyond).
+  - Dev guard for unterminated blocks removed (structural fix in place).
+- Smokes added:
+  - plugin: map_array_handle_identity_vm (identity/visibility)
+  - plugin: map_keys_values_stage2_vm (HostHandle arrays)
+  - plugin: map_keys_values_fallback_vm (string fallback)
+  - plugin: map_call_boundary_mixed_vm (missing→null or transitional error; non-callable→error)
+    - tightened: now requires missing→'null' (no transitional error)
+  - plugin: map_keys_order_stage2_vm (keys ordering/content when HostHandle enabled; SKIP if unavailable)
+  - plugin: map_values_handle_mutation_vm (values() handle mutation visibility; SKIP if unavailable)
+  - quick-selfhost: host_handle_router_array_len_vm (forces slot 102 path)
+  - quick-selfhost: userbox_boxcall_stopflag_vm (NYASH_VM_USER_INSTANCE_BOXCALL=0 rewrite works)
+  - plugins: stage2_on_suite.sh (convenience runner enabling HostHandle Array and executing Stage‑2 smokes)
+  - plugins: stage2_on_suite_vm.sh (profile-friendly wrapper to run the Stage‑2 suite)
+  - legacy profile created under `tools/smokes/v2/profiles/legacy/` with wrappers + README; default suites do not include it.
+    - Added wrappers: `legacy_map_keys_values_fallback_vm.sh`, `legacy_array_size_force_host_vm.sh`, `legacy_map_keys_values_bridge_vm.sh`, `legacy_string_length_vm.sh`.
+  - quick/core coverage migrated to size(): added `quick/core/string_extern_size_vm.sh` (length() test remains for legacy compatibility).
+  - quick/selfhost: HostHandleRouter dev smokes —
+    - `host_handle_router_array_set_get_force_vm.sh` (Array.size/get/set via slots 102/100/101 under force)
+    - `host_handle_router_map_set_get_vm.sh` (Map.set/get via slots 204/203 under force)
+    - `host_handle_router_string_len_vm.sh` (String.size via slot 300 under force)
+
+- HostHandleRouter (phase-in)
+  - Implemented slots: Array (100/101/102), Map (200/202/203/204), String (300).
+  - plugins profile now forces HostHandle paths (Map/Array/String) via env overlay.
+  - Removed unreachable legacy MapBox dispatch block in VM router (unified earlier branch + HostHandle force path used).
+  - quick profile staged: enable only minimal HostHandle routes (Array.size, Map.* by opt-in) to observe gradually.
+  - legacy Stage‑1 keys/values fallback disabled in plugins profile (`HAKO_MAP_KEYS_VALUES_FALLBACK=0`).
+- Map plugin:
+  - runtime capability gating for keys/values (env-based; no build feature).
+  - get/delete null returns enforced.
+
+## ✨ Today’s Update — 2025‑10‑14 (plugin‑only build pass + quick spot checks)
+
+- Plugin‑only build (legacy‑boxes OFF) — First green
+  - Guarded all major `crate::boxes::*` references under `#[cfg(feature="legacy-boxes")]` and provided minimal plugin‑only fallbacks.
+  - Areas covered: runner, builtin_impls, plugin loader v2 (ffi + externs), MIR interpreter (extern_adapter/handlers/helpers), array_flatten_helper, gc_trace, method_router_box (builtin arms), box_registry, semantics, global_hooks.
+  - Verified build: `cargo build --release --no-default-features -F cli,plugins,host-anchors` → PASS。
+
+- Quick profile regression (default features ON)
+  - Rebuilt default: `cargo build --release`。
+  - Ran focused smokes (HostHandleRouter + core): PASS。
+    - `tools/smokes/v2/run.sh --profile quick --filter 'host_handle_router_map_*|gc_mode_off|ssot_enabled_disabled_rc_vm'` → 5/5 PASS。
+
+- Notes / Constraints
+  - Extern calls are enabled under legacy ON; plugin‑onlyでは `handle_callee_extern` は明示エラー（将来のplugin対応予定）。
+  - FutureBox 系（VMValue::Future / env.future）は legacy 限定でガード（plugin‑only は無効）。
+
+### Next
+- Broaden quick run to full suite after a regular rebuild（所要 ~1–2min）。
+- If stable, start pruning unreachable legacy arms and tighten docs on feature gates。
+
+### Next (confirmed — Phase 15.75 follow‑ups)
+- Map.call P1 (VM sugar) finalization:
+  - Confirm `call/1`, `call/2` routes in `selfhost/hakorune-vm/method_call_handler.hako` — confirmed present.
+  - Re‑run 3 smokes (success/missing/non‑callable) and keep them green; add 1 boundary smoke (mixed missing/non‑callable diagnostics).
+- Plugin‑on smokes (Stage‑2 HostHandle Array):
+  - Add 2 cases for `Map.keys/values` (length/content; value handle shape/access).
+  - Add identity: `arr -> map.set -> get -> same` minimal case.
+- Phased deprecation next steps:
+  - Update docs/guards for VM convenience handlers (order: String → Map → Array); no behavior change.
+  - Enable BoxCall fast‑path stop‑flag in test profile to confirm green; default remains OFF.
+- HostHandleRouter gradual relocation:
+  - Delegate one existing function into the router and keep suites green (small step).
+- Small hygiene (quick wins):
+  - Move remaining JSON extraction `indexOf` to `JsonFieldExtractor/JsonCursor`.
+  - Apply one `boxcall_builder` site to `build_method` for reuse (tiny diff).
+
+## ✨ Today’s Update — 2025‑10‑14 (naming separation: Rust vs Hakorune)
+
+- Developer UX: dual-line naming made explicit without changing internal flags.
+  - Cargo aliases added: `build-rust`/`run-rust` (legacy built-ins ON), `build-hako`/`run-hako` (plugin-only).
+    - File: .cargo/config.toml
+  - Smokes: `--profile hako` added as an alias of `plugins` to avoid naming confusion.
+    - Files: tools/smokes/v2/run.sh, tools/smokes/v2/configs/env/hako.env
+  - Docs updated: `docs/guides/plugin-only-build.md` terminology (Rust line / Hakorune line) and alias usage.
+
+Next small step
+- Optional: split `src/runtime/method_router_box/` into `{builtin.rs, plugin.rs}` with `mod.rs` as thin orchestrator (no behavior change). README updated with plan.
+
+## ✨ Today’s Update — 2025‑10‑14 (MethodRouter 分離・委譲 完了)
+
+- 構造分離（挙動不変）
+  - 追加: `src/runtime/method_router_box/plugin.rs` — PluginBoxV2 経路を集約（HostHandle 早期 + force-ENV + plugin_host_box 委譲）。
+  - 追加: `src/runtime/method_router_box/builtin.rs` — Legacy 腕（File/Callable/Array/Map）を `#[cfg(feature="legacy-boxes")]` で移設。
+  - 変更: `src/runtime/method_router_box/mod.rs` — 入口で早期委譲（plugin→builtin）。未処理 BoxRef は `method_not_supported` を即返却。
+  - 旧巨大分岐はコメントアウトで実行経路から撤退（次パスで物理削除予定）。
+
+- スモーク/確認
+  - quick: `tools/smokes/v2/run.sh --profile quick --filter host_handle_router_map_size_has_vm.sh` → PASS
+  - quick-selfhost: `tools/smokes/v2/run.sh --profile quick-selfhost --filter host_handle_router_string_len_vm.sh` → PASS
+
+- 影響
+  - 機能挙動は不変（委譲による構造整理のみ）。
+  - 今後、旧ブロックを物理削除して未使用 import を整理する（小差分）。
+
+Next
+- 物理削除: mod.rs のコメント化された旧ブロックを削除 → quick/quick-selfhost の軽いセット緑確認（完了）。
+- Phase 1（MirCall）: 既存VMの MirInstruction::Call は `handlers/calls/legacy/*` で稼働中（Global/ModuleFunction/Method/Extern）。
+  - plugin-only では `Extern` は明示エラー（legacy-only）: handlers/calls/function.rs:…（確認済み）
+  - Method 経路は `method_router_box::route` に一本化（本日の分離作業で整流）。
+
+## ✨ Today’s Update — 2025‑10‑14（反映ライン）
+
+- MethodRouter 旧経路の撤退（実行経路から完全除外）
+  - `src/runtime/method_router_box/mod.rs` は入口のみを維持し、plugin/builtin へ早期委譲。
+  - 旧巨大分岐はコメントアウト済み（実行不可）。次パスで物理削除予定（機能差分なし）。
+  - plugin 経路（HostHandle 早期 + force‑ENV + plugin_host_box 呼び出し）→ `plugin.rs`
+  - builtin 経路（File/Callable/Array/Map legacy 腕）→ `builtin.rs`（全て `#[cfg(feature="legacy-boxes")]`）
+
+- 確認（代表）
+  - quick: hosthandle(Map.size/has) → PASS
+  - quick‑selfhost: hosthandle(String.size) → PASS
+
+- 次アクション（小差分）
+- 物理削除: `mod.rs` のコメントブロックを除去 → 未使用 import/警告整理 → quick/quick‑selfhost で再確認
+- Phase 1（MirCall）準備: `extern_adapter.rs`/`vm_types.rs` に最小ガード（必要時のみ、可逆）
+
+## ✨ Today’s Update — 2025‑10‑15（MirCall 前進）
+
+- Normalize: BoxCall→Call 降格を追加（安全な2ケース）
+  - `src/mir/optimizer_passes/normalize.rs`
+    - `Method{box_name, method=="methodRef"}` 由来の Callable を ArrayBox に加えて MapBox/StringBox でも検出し、`call()` を `Callee::Method` へ降格（arity==0 と argv 再構成の両方）。
+    - `ModuleFunction("<Box>.methodRef/2")` 由来の Callable も ArrayBox/MapBox/StringBox を対象に検出（recv=args[0]）。
+    - BoxCall 起点は型不明のため従来通り ArrayBox のみ（安全策）。
+- Smokes（quick‑selfhost に軽い正常系を追加）
+  - `tools/smokes/v2/profiles/quick-selfhost/mircall_method_map_vm.sh`（Map.has/set が 0→1 を反映）
+  - `tools/smokes/v2/profiles/quick-selfhost/mircall_module_function_map_vm.sh`（Map.size が 1 を返す）
+  - 既存: `mircall_method_vm.sh`（String.indexOf）、`mircall_module_function_vm.sh`（Array.size）、`selfhost_mircall_value_callable_vm.sh`（callee=Value）と重複しない形で追加。
+- 走らせ方（抜粋）
+  - `tools/smokes/v2/run.sh --profile quick-selfhost --filter 'mircall_*_map_vm.sh'`
+  - 正常終了（VM出力 OK）で PASS。
+
+### 追加（MirCall 前進 その2）
+
+- Normalize: ModuleFunction → Method の安全な降格を導入（Array/Map/String の代表API）
+  - `MapBox.size/0|has/1|get/1|set/2`
+  - `ArrayBox.size/len/length/get/set/push`
+  - `StringBox.size/len/length/indexOf/lastIndexOf/substring/charAt/concat`
+  - 受けは `args[0]` を receiver に移し、引数配列は先頭をドロップ。
+  - 効果: 実行器の Method 経路に集約（Router一本化の恩恵を受ける）。
+- Docs: `docs/reference/vm/call-unification.md` を追加（MirCall統一ルートの簡潔な説明）。
+- Plugins スモーク: HostHandleRouter 境界系（-1/-11/-13）を追加。
+  - `tools/smokes/v2/profiles/plugins/hosthandle_boundary_errors_vm.sh`（PASS）。
+
+### 追加（MirCall 前進 その3 — 小粒2本）
+
+- Normalize: BoxCall(method_id/同一ブロックNewBox起源) → Method
+  - 受けが同一ブロック内の `NewBox(Array|Map|String)` である場合に限定し、代表APIのみを Method に降格（get/set/push/size/has 等）。
+  - 目的: コア箱の“直呼び”の多くを MirCall(Method) に統一し、Router一本化の恩恵（arityガード/HostHandle早期など）を広げる。
+- Normalize: Extern("nyrt.(string|array|map).size/length") → Method(size)
+  - 影響が最小のゼロ引数関数のみを対象に、receiver=args[0] を抽出して Method 化。
+  - 目的: Extern 経路の一部を Method に寄せ、実行器の単一路に整流。
+  - 既存 quick-selfhost の mircall_* スモークはすべて PASS 維持。
+
+## ✨ Today’s Update — 2025‑10‑15（Phase 15.75 TODO に復帰するための4点片付け）
+
+- 1) ルーター不要ブロックの物理削除（重複腕の撤去）
+  - `src/runtime/method_router_box/mod.rs`: 既に早期委譲（plugin→builtin）後ろに残っていた旧 Plugin/Builtin 腕を物理削除（到達不能だった部分）。
+  - 機能差分なし（実行経路は委譲のまま）。ビルドOK。
+
+- 2) ファイル分離の仕上げ＋README
+  - 追加: `src/runtime/method_router_box/README.md`（責務/入出力/ガード/撤退計画）。
+  - 以後の腕追加は `plugin.rs` / `builtin.rs` 側に集約する方針を明文化。
+
+- 3) plugin-only 緑の再確認
+  - 実行: `cargo build --release --no-default-features -F cli,plugins,host-anchors` → ビルドPASS。
+  - 既知のWarningのみ（機能的な問題なし）。
+
+- 4) 二重ライン整備（軽量）
+  - `.cargo/config.toml` の alias `build-hako` は既に配置済み（確認）。
+  - ドキュメントは `docs/guides/plugin-only-build.md` を継続利用（別途追補は不要）。
+
+## ✨ Today’s Update — 2025‑10‑15（Phase 0-mini 仕上げ）
+
+- extern_adapter: 分割登録をデフォルト化してハブ化。
+  - `extern_core.rs`（string/time/map）と `extern_future_legacy.rs`（env.future.*）を登録。末尾再登録で分割側を優先。
+  - 物理撤去は次パスで安全に段階削除（重複は機能差なし）。
+- array_flatten_helper: builtin/plugin の二層分割＋ファサード委譲。
+  - 呼び出し側（CallableBox.call）に README 参照コメントを最小付与。
+- 正規化拡充（Extern→Method）: nyrt.map.{keys,values} / string系（indexOf/lastIndexOf/substring/charAt/replace）。
+- quick-selfhost / plugins スモークは緑維持。
+
+
 ## 🏁 Milestones Timeline（Self‑Host → Parity）
 
 - 2025-08-09: initial commit
@@ -10,7 +256,40 @@
 
 ## ✨ Today’s Update — 2025‑10‑12
 
-この小粒アップデートで、SSOT優先・診断一元化・M2/M3 常緑の足元を固めたよ。
+- HostBridgeBox（Phase B）: .hako 側を Extern 呼びに切替（landed）
+  - `HostBridgeBox.box_new/box_call` → `Extern("hostbridge.box_new/box_call")` へ統一
+  - AOT/EXE/VM の呼び出し面が一面化（Rust HostBridge 経由で Plugin/Provider を解決）
+- nyvm: HostBridge 完全移譲（nyvm 内の便宜実装を撤退し、常に Rust extern へフォワード）
+- Runner: 早期プラグインロード（idempotent）を導入（`execute_file_with_backend` の冒頭で一回）
+- Runner→nyvm: in‑memory 直渡し（tempファイル不要）へ切替
+- MirIoBox（Phase B 準備）: yyjson プロバイダー経由の入出力を HostBridge extern に統一（設計/ドキュメント追加）
+
+この小粒アップデートで、MIR 入出力と VM 側読み手の安定化を前進させたよ。
+
+- MirIoBox（Phase A）導入（Hako ABI 側）
+  - 追加: `selfhost/shared/mir/mir_io_box.hako`
+  - API: `validate/functions/blocks/instructions/terminator`（最小）
+  - nyvm ブリッジの function-only JSON も許容（narrow 形式）
+  - HakoruneVmCore.run 冒頭で `validate` を呼び Fail‑Fast（構造不整合を早期検出）
+
+- TerminatorHandler の読み取りを空白許容化（Rust emit の整形揺れに寛容）
+  - `"op": "ret"` と `"op":"ret"` の両方を受理
+  - フォールバック: instructions[] 末尾オブジェクトから同じ規則で抽出
+
+- スモーク追加（quick-selfhost）
+  - `terminator_whitespace_vm`（op 後の空白差を検証）
+  - `entry_nonzero_vm`（entry≠0 を優先開始）
+
+- スモーク安定化（暫定）
+  - `nyvm_nowait_hakorune` に “Unknown backend:” フィルタを追加（根治は run.sh 正規化で対応予定）
+
+次アクション（小さい順）
+- run.sh の backend 正規化（空/"."/未知 → `vm`）
+- MirIoBox.validate に terminator 必須・参照妥当性（then/else/target）の検証を集約（dev 緩和は ENV で）
+- MirIoBox.validate_function: provider 経路にも jump/branch 参照妥当性チェックを適用（scan と等価）
+- nyvm/provider スモークの暫定OKを撤去（JSON プラグイン早期ロードが安定後）
+- BackwardObjectScannerBox に小窓（ENV）を追加し末尾2–3候補で早期抜け（大 JSON のコスト安定化）
+- HostBridgeBox 設計の落とし込み（Plugin/Static の統一呼び出し）→ 最小疎通（FileBox.open/read）
 
 - SSOT 優先の Type 解決/ID（既定ON）
   - TypeBox/slot/arity/aliases を SSOT（`specs/type_registry.toml`）優先で参照。存在しない場合のみ静的表にフォールバック。
@@ -630,3 +909,72 @@ M2（MIR builder ブリッジ）
 備考
 - integration-core（LLVM parity）は全緑維持（15/15）。
 - quick の広域失敗は今回の範囲外（Box/using/legacy挙動の混在）。対象縮小で段階対応する。
+
+
+## Phase 15.7 — Hakorune Compiler/VM Gap Plan (2025‑10‑12)
+
+Rust vs Selfhost — quick delta
+- MIR ops: const/binop/compare/branch/jump/ret/copy（済）; phi（scan/apply 最小）; 未: load/store/typeop/safepoint/barrier/throw
+- Call shapes: Extern/Global/Constructor/Method 最小導通（emit v1→v0 経由）; 未: BoxCall/E2E 境界、Method 拡張 arity
+- SSOT: slots/arity/aliases 既に SSOT優先; 未: type_id/box 表の SSOT 化（静的表は fallback 維持）
+- Plugins: Provider 早期ロード/identity cache 済; 未: values/keys の Handle 完全化（順序はテスト非依存へ）
+
+Action items（P4/P5 反映）
+- P4: NewBox/Call/Method を shared MirSchema/BlockBuilder 直結（出力互換）。rc‑only 代表を追加。
+- P5: LocalSSA ensure_calls/ensure_cond の最小導入（copy/phi 材化）。rc‑only 代表を追加。
+- SSOT: resolve_typebox_by_name を SSOT 優先に寄せ、生成テーブルへ段階移行。
+- Plugin‑on: 代表は順序非依存＋最小rc、strict は plugin‑tester build-all を前置し、未在庫は SKIP。
+- Smokes: Selfhost を opt‑in に固定（SMOKES_SELFHOST_ENABLE / SMOKES_SELFHOST_M2M3_ENABLE）。CI 既定は quick + integration‑core を維持。
+
+
+## ✨ Today’s Update — 2025‑10‑12 (late)
+- P4 完了（薄アダプタ直結）
+  - emit_mir_flow(_map) に extern/global/method/ctor の薄アダプタを追加し、BlockBuilder 直結へ
+  - emit_call/emit_method/emit_newbox（v0/v1）も shared BlockBuilder に統一（出力互換）
+- P5 最小（LocalSSA 集約）
+  - ensure_materialize_last_ret(mod) 追加、ensure_cond(mod) を全ブロック対応に拡張（If/Loop）
+  - rc-only 代表: selfhost_localssa_ensure_calls_rc_vm / _ensure_cond_rc_vm / _ensure_cond_if_loop_rc_vm
+- Pipeline（v1 経路）
+  - MirCallBox 依存を Emit*（shared builder）に段階置換（差分最小）
+- plugin‑on 代表の安定化（quick 全緑化）
+  - preflight 失敗時は SKIP、在庫プリチェック（new ArrayBox/MapBox）追加
+- SSOT 再スキャン
+  - specs/type_registry.toml に不足なし。resolve_* は SSOT 優先（静的 fallback）で維持
+- quick: 288/288 PASS、integration‑core: 20/20 PASS
+
+### Next（ハコ VM 同等化ロードマップ）
+- Phase‑A: JSON MIR v0 Reader を CLI 経路に昇格（dev ゲート撤去）／ LocalSSA phi 材化代表を 1 本追加
+- Phase‑B: Stage‑3（break/continue/throw/try）最小実装／ Map plugin の handle 値対応＋identity 代表
+- Phase‑C: SSOT を型解決ホットパスに全面適用／ 診断 helpers へ最終集約
+
+### Backend/CLI 整理（設計の確定）
+- 単一 CLI `hakorune` + `--backend {nyvm|rust|llvm}`（HAKO_BACKEND）。バイナリ別名は任意（hakorune-{vm,rust,llvm}）
+- コンパイラは分離（hakorune-compiler）。dev ではバンドル起動を opt‑in で提供
+- ツール解決層を CLI に実装（dist/bin → workspace → hako.toml [tools]/[backends] → user config → ENV → PATH → autobuild(opt)）
+
+
+### Note — nyvm 既定化（2025‑10‑12）
+- CLI `--backend` の既定を `nyvm` に変更（以前は vm）。Mini‑VM は opt‑in（HAKO_NYVM_ENGINE=mini）。
+- 目的: Ny 製 Hakorune VM を本線に育て、Rust VM は段階撤退へ。
+
+
+## Phase 15.7 — Async parity
+- VM: Await native; nowait via env.future.spawn_instance (pseudo-async)
+- LLVM: rewrite Await/Future* to env.future.*; thin special-cases in builder
+- Hakorune VM: bridge path aligns; smokes added (nowait/await)
+
+## ▶ Next TODOs — Phase 15.75 脱Rust (P1 入口)
+- Map.call P1（同期・VMシュガー／ゲート付）→ 実装＋最小スモーク3本
+- keysS/valuesS フォールバックの箱化（.hako アダプタ化）→ 緑維持
+- HostHandleRouter 段階移設（host_api 分岐の縮退）→ 緑維持
+- Parser/Tokenizer の純関数領域を .hako へ薄移設 → 軽スモーク緑
+
+### 🗂 Archive Note
+- 詳細ログ・履歴の多くは proposals/phase-15.75/ に集約。
+- 本ファイルは当面「今日の更新」「次のTODO」の要約のみを維持（古い粒度の高い記録は該当 docs に統合）。
+
+## Collections API follow-up (Phase 15.7+)
+- [DONE] Map.keys()/values() fallback is default ON in VM router (keysS/valuesS → ArrayBox via split). No env required.
+- [DOC] docs/guides/collections-api.md updated to state default fallback and unified methods.
+- [STAGE] Add .hako HostBridge wiring helpers (`selfhost/hakorune-vm/map_keys_values_bridge.hako`) and smoke (quick-selfhost) to validate keysS/valuesS → Array bridging.
+- [NEXT] When plugins provide Array-returning keys()/values() consistently, remove Rust fallback path and keep .hako adapter as optional helper only.

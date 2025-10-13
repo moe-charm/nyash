@@ -9,6 +9,8 @@ export SMOKES_TIMEOUT_SEC=${SMOKES_TIMEOUT_SEC:-25}
 export NYASH_DISABLE_PLUGINS=1
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
+if [ "${SMOKES_SELFHOST_M2M3_ENABLE:-0}" != "1" ]; then test_skip "selfhost M2/M3 gated (set SMOKES_SELFHOST_M2M3_ENABLE=1)"; exit 0; fi
 
 # Enabled: Mini‑VM compare/ret segment tightened
 

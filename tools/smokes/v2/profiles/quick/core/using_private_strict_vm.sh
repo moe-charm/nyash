@@ -21,7 +21,7 @@ NYEOF
 out=$(NYASH_USING_CHECKS_STRICT=1 run_nyash_vm "$SRC" --dev 2>&1 | grep -v '^Result: ' || true)
 # Expect non-empty diagnostic and non-zero exit; run_nyash_vm pipes exit, so we grep for diag only
 
-echo "$out" | grep -qiE '"code"\s*:\s*"private_access"|private|using: file paths are disallowed' || { echo "$out"; rm -rf "$TMP_DIR"; exit 1; }
+echo "$out" | grep -qiE '"code"\s*:\s*"private_access"|private|using: file paths are disallowed|workspace namespace conflict' || { echo "$out"; rm -rf "$TMP_DIR"; exit 1; }
 
 rm -rf "$TMP_DIR"
 exit 0

@@ -1,0 +1,22 @@
+// function_locator.hako — FunctionLocatorBox
+// Responsibility: locate first function object in MIR(JSON)
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+
+static box FunctionLocatorBox {
+  locate(mir_json) {
+    // naive: first '{'..balanced '}'
+    local s = JsonCursorBox.index_of_from(mir_json, "{", 0)
+    if s < 0 { return Result.Err("function object not found") }
+    local e = JsonScanGuardBox.seek_obj_end(mir_json, s, 200000)
+    if e < 0 { return Result.Err("function object end not found") }
+    local obj = mir_json.substring(s, e+1)
+    local meta = new MapBox()
+    meta.set("start", s)
+    meta.set("end", e)
+    meta.set("content", obj)
+    return Result.Ok(meta)
+  }
+}

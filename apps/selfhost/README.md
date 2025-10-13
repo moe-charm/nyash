@@ -6,7 +6,7 @@ Purpose
 
 Conventions
 - Entry scripts live under this folder; prefer minimal dependencies.
-- Use `--using-path apps/selfhost:apps` when resolving modules.
+- Use `--using-path selfhost:apps` when resolving modules.
 - Prefer VM (`--backend vm`) for speed and stability.
 
 Quickstart
@@ -17,4 +17,4 @@ Quickstart
 Guidelines
 - Keep files small and composable; avoid cross‑project coupling.
 - If moving an existing `apps/*` item here, update docs/scripts accordingly.
-- For namespace usage, pass `--using-path apps/selfhost:apps`.
+- For namespace usage, pass `--using-path selfhost:apps`.

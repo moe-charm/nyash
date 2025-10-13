@@ -7,6 +7,13 @@
 Branding note
 - Preferred binary is `hakorune` (alias: `hako`). Legacy alias `nyash` remains available in many environments. Examples in this README use `hakorune`.
 
+
+CLI backends & tools
+- See Backend selection and tool resolution guide: `docs/guides/cli-backends-and-tools.md` (nyvm default=Hakorune VM; Mini‑VM is opt‑in).
+
+Naming & extensions
+- Default extension is `.hako`. Historical `.nyash` remains accepted (deprecated); new docs and samples use `.hako`. See `docs/guides/naming-and-extensions.md`.
+
 [![Selfhost Minimal](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml/badge.svg?branch=selfhosting-dev)](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml)
 [![Core Smoke](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml/badge.svg)](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml)
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)

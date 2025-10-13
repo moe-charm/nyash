@@ -20,15 +20,32 @@ See `docs/reference/plugin-system/capabilities.md` for capability bit definition
   - プラグイン設定で `boxes = [T]` が宣言されている場合は plugin-only とみなし、プラグイン経路が失敗したらそのままエラーを返す（ビルトインフォールバック禁止）。
   - `HAKO_PLUGIN_ON_STRICT=1`（互換: `NYASH_PLUGIN_ON_STRICT=1`）を指定すると、最終フォールバックも抑止して Fail-Fast する。
 - Boot Disabled Non‑cache: boot() no longer caches “disabled” as success (allows later retry when policy flips to ON). Operationally we run with policy=auto by default so this path is rarely used.
-- Stage-2 handles (`NYASH_PLUGIN_MAP_ARRAY_HANDLE=1`) を有効にすると、`Map.keys()/values()` が HostHandle(ArrayBox) を返す。plugins プロファイルでは既定ON（`tools/smokes/v2/configs/env/plugins.env`）。
+- Stage-2 handles: `Map.keys()/values()` は既定で HostHandle(ArrayBox) を返す（Phase 15.7+）。
+  - 互換フラグ `NYASH_PLUGIN_MAP_ARRAY_HANDLE` は移行期の歴史的フラグ（未設定でも有効）。
+  - values() の要素には PluginHandle(tag=8)（例: ArrayBox）が含まれ得る。Host 側は tag=8/9 を decode し、グローバルハンドルキャッシュで identity を再利用する。
+  - Router の文字列シム（keysS/valuesS→Array 正規化）は撤退済み（Phase 15.7+）。
 
 
-## 📦 Phase 15.7 Structural Boxes
+## 📦 Phase 15.7–15.75 Structural Boxes（HostHandleRouter フェーズイン）
 
 - `src/runtime/method_router_box/method_ref.rs` が methodRef 疑似メソッドを担当。VM ルーターは最初にここへ委譲し、型チェックと CallableBox 生成を一箇所で行う。 (詳細: docs/reference/plugin-system/callable-box-guide.md)
 - `src/runtime/method_router_box/map_callable.rs` に Map.call/Map.callAsync の糖衣実装を隔離。プラグインは get/set 群だけ実装すれば良く、call 系は VM 側で一貫化。
 - `src/runtime/codec/codec_box.rs` は TLV エンコード/デコードの単一窓口。Host/Plugin ハンドル、コア Box の扱いをここで統制し、plugin_ffi_common と同じポリシーを維持する。
 - ディレクトリ README (`src/runtime/codec/README.md`) で境界の責務を明示。将来 helper を増やす場合もこの箱を経由する。
+
+### HostHandleRouter（段階導入）
+
+- 入口: `src/runtime/host_handle_router/mod.rs` に HostHandle 経由メソッドを slot で受ける薄いルーターを配置。
+- 対応スロット（15.75 現在）:
+  - ArrayBox: `len → 102`
+  - MapBox: `size → 200`, `has → 202`, `get → 203`, `set → 204`
+  - StringBox: `len → 300`
+- VM からの強制経路（開発用）
+  - `NYASH_MAP_FORCE_HOST=1` で Map.size/has/get/set を HostHandleRouter に強制。
+  - `NYASH_ARRAY_FORCE_HOST=1` で Array.size/get/set を HostHandleRouter に強制（`NYASH_ARRAY_SIZE_FORCE_HOST` は互換）。
+  - `NYASH_STRING_SIZE_FORCE_HOST=1` で String.size/len を HostHandleRouter に強制。
+- 目的: VM 内蔵の per‑type 分岐（型名ハードコード/ダウンキャスト）を段階撤退し、ABI 境界を一本化すること。
+- 互換性: 内蔵/外付け（動的）いずれも `Arc<dyn NyashBox>` を HostHandle 経由で扱うため、パッケージ方式に依存しない。
 
 ## 🎯 概要
 

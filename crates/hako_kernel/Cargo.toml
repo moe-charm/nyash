@@ -8,7 +8,7 @@ name = "hako_kernel"
 crate-type = ["staticlib", "rlib"]
 
 [dependencies]
-nyash-rust = { path = "../../" }
+nyash-rust = { path = "../../", default-features = false, features = ["plugins"] }
 
 
 [features]
@@ -16,7 +16,7 @@ nyash-rust = { path = "../../" }
 default = ["core-runtime"]
 core-runtime = []
 core-collections = ["nyash-rust/static-array-plugin", "nyash-rust/static-map-plugin", "nyash-rust/static-string-plugin"]
-core-io = []
+core-io = ["nyash-rust/static-file-plugin", "nyash-rust/static-json-plugin"]
 core-network = []
 bootstrap = ["core-runtime", "core-collections"]
 full = ["core-runtime", "core-collections", "core-io", "core-network"]

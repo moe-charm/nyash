@@ -1,0 +1,19 @@
+// ny-llvm-bitops - ビット演算とシフト演算の LLVM/AOT スモーク
+// 期待: Result: 48
+
+static box Main {
+    main() {
+        // Integer 演算の網羅（i64 経路）
+        local a = 5 & 3         // 1
+        local b = 5 | 2         // 7
+        local c = 5 ^ 1         // 4
+        local d = 1 << 5        // 32
+        local e = 32 >> 3       // 4 (算術/論理は i64 上の右シフト: 実装は算術/false指定)
+
+        local sum = a + b + c + d + e  // 1+7+4+32+4 = 48
+
+        print("Result: " + sum)
+        return 0
+    }
+}
+

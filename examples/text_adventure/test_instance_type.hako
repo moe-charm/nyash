@@ -1,0 +1,39 @@
+// Test instance type preservation
+
+box TestBox {
+    init { value }
+    
+    TestBox(v) {
+        me.value = v
+    }
+    
+    getType() {
+        return "TestBox"
+    }
+}
+
+// Direct creation
+print("=== Direct Creation ===")
+direct = new TestBox("direct")
+print("Type method: " + direct.getType())
+
+// Function return
+print("\n=== Function Return ===")
+function makeBox() {
+    return new TestBox("returned")
+}
+
+returned = makeBox()
+print("Type method: " + returned.getType())
+
+// Test if it's still an instance
+print("\n=== Instance Check ===")
+// Try to set a field (which should fail if not a proper instance)
+try {
+    returned.newField = "test"
+    print("ERROR: Should not be able to add new fields!")
+} catch {
+    print("Good: Cannot add new fields (proper instance)")
+}
+
+print("\n✅ Type test completed!")

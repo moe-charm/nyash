@@ -14,7 +14,7 @@ static box Main {
     // escape backslash and quote for JSON strings
     local out = ""
     local i = 0
-    local n = s.length()
+    local n = s.size()
     loop(i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\\" { out = out + "\\\\" } else {
@@ -27,7 +27,7 @@ static box Main {
 
   // Cursor helpers over source string
   skip_ws(src, i) {
-    local n = src.length()
+    local n = src.size()
     loop(i < n && me.is_space(src.substring(i, i+1))) { i = i + 1 }
     return i
   }
@@ -36,7 +36,7 @@ static box Main {
 
   parse_number(src, i) {
     // returns (json, next_i)
-    local n = src.length()
+    local n = src.size()
     local j = i
     loop(j < n && me.is_digit(src.substring(j, j+1))) { j = j + 1 }
     local s = src.substring(i, j)
@@ -45,7 +45,7 @@ static box Main {
   }
 
   parse_string(src, i) {
-    local n = src.length()
+    local n = src.size()
     local j = i + 1 // skip opening quote
     local out = ""
     loop(j < n) {
@@ -73,7 +73,7 @@ static box Main {
   // Recursive descent
   parse_factor(src, i) {
     // skip ws
-    local nsrc = src.length()
+    local nsrc = src.size()
     loop(i < nsrc && me.is_space(src.substring(i, i+1))) { i = i + 1 }
     local ch = src.substring(i, i+1)
     if ch == "(" {
@@ -81,9 +81,9 @@ static box Main {
       local p = me.parse_expr(src, i + 1)
       local at = p.lastIndexOf("@")
       local ej = p.substring(0, at)
-      local j = me.to_int(p.substring(at+1, p.length()))
+      local j = me.to_int(p.substring(at+1, p.size()))
       // skip ws
-      local n2 = src.length()
+      local n2 = src.size()
       loop(j < n2 && me.is_space(src.substring(j, j+1))) { j = j + 1 }
       if src.substring(j, j+1) == ")" { j = j + 1 }
       return ej + "@" + j
@@ -97,20 +97,20 @@ static box Main {
     local p = me.parse_factor(src, i)
     local at = p.lastIndexOf("@")
     local lhs = p.substring(0, at)
-    local j = me.to_int(p.substring(at+1, p.length()))
+    local j = me.to_int(p.substring(at+1, p.size()))
     local cont = 1
     loop(cont == 1) {
       // skip ws
-      local n3 = src.length()
+      local n3 = src.size()
       loop(j < n3 && me.is_space(src.substring(j, j+1))) { j = j + 1 }
-      if j >= src.length() { cont = 0 } else {
+      if j >= src.size() { cont = 0 } else {
         local op = src.substring(j, j+1)
         if op != "*" && op != "/" { cont = 0 } else {
           // parse rhs
           local q = me.parse_factor(src, j+1)
           local at2 = q.lastIndexOf("@")
           local rhs = q.substring(0, at2)
-          j = me.to_int(q.substring(at2+1, q.length()))
+          j = me.to_int(q.substring(at2+1, q.size()))
           lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
         }
       }
@@ -122,20 +122,20 @@ static box Main {
     local p = me.parse_term(src, i)
     local at = p.lastIndexOf("@")
     local lhs = p.substring(0, at)
-    local j = me.to_int(p.substring(at+1, p.length()))
+    local j = me.to_int(p.substring(at+1, p.size()))
     local cont = 1
     loop(cont == 1) {
       // skip ws
-      local n4 = src.length()
+      local n4 = src.size()
       loop(j < n4 && me.is_space(src.substring(j, j+1))) { j = j + 1 }
-      if j >= src.length() { cont = 0 } else {
+      if j >= src.size() { cont = 0 } else {
         local op = src.substring(j, j+1)
         if op != "+" && op != "-" { cont = 0 } else {
           // parse rhs
           local q = me.parse_term(src, j+1)
           local at2 = q.lastIndexOf("@")
           local rhs = q.substring(0, at2)
-          j = me.to_int(q.substring(at2+1, q.length()))
+          j = me.to_int(q.substring(at2+1, q.size()))
           lhs = "{\"type\":\"Binary\",\"op\":\"" + op + "\",\"lhs\":" + lhs + ",\"rhs\":" + rhs + "}"
         }
       }
@@ -148,7 +148,7 @@ static box Main {
     // 簡易に桁を読む（ここでは利用側が整数のみで使う）
     // ただしここは内部専用で index を取り出すだけなので、s は数字のみ想定
     // 実装簡略化のため、長さ0なら0、それ以外は手動で畳み込み
-    local n = s.length()
+    local n = s.size()
     if n == 0 { return 0 }
     local i = 0
     local acc = 0
@@ -182,10 +182,10 @@ static box Main {
     // optional leading ws + optional 'return'
     // skip leading ws
     local i = 0
-    local n0 = src.length()
+    local n0 = src.size()
     loop(i < n0 && me.is_space(src.substring(i, i+1))) { i = i + 1 }
     local j = i
-    local n = src.length()
+    local n = src.size()
     if i + 6 <= n && src.substring(i, i+6) == "return" { j = i + 6 }
     local p = me.parse_expr(src, j)
     local at = p.lastIndexOf("@")

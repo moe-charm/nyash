@@ -1,0 +1,8 @@
+static box Main {
+  main() {
+    local r = new RegexBox()
+    r.compile("a+")
+    return r.isMatch("caaab")
+  }
+}
+

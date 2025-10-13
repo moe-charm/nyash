@@ -84,10 +84,12 @@ def main():
     if args.infile is None:
         # Dummy path
         run_dummy(args.outfile)
-        print(f"[harness] dummy object written: {args.outfile}")
+        if os.environ.get('NYASH_CLI_VERBOSE') == '1':
+            print(f"[harness] dummy object written: {args.outfile}")
     else:
         run_from_json(args.infile, args.outfile)
-        print(f"[harness] object written: {args.outfile}")
+        if os.environ.get('NYASH_CLI_VERBOSE') == '1':
+            print(f"[harness] object written: {args.outfile}")
 
 if __name__ == "__main__":
     try:

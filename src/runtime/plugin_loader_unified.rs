@@ -267,6 +267,7 @@ impl PluginHost {
         args: &[Box<dyn crate::box_trait::NyashBox>],
     ) -> BidResult<Option<Box<dyn crate::box_trait::NyashBox>>> {
         // Special-case env.future.await to avoid holding loader RwLock while polling scheduler
+        #[cfg(feature = "legacy-boxes")]
         if iface_name == "env.future" && method_name == "await" {
             use crate::boxes::result::NyashResultBox;
             if let Some(arg0) = args.get(0) {

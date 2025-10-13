@@ -2,6 +2,7 @@
 # using_modules_alias2_vm.sh — Verify [modules] alias resolution (second alias; SKIP if env not ready)
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2

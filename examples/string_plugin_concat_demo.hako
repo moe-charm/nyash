@@ -1,0 +1,16 @@
+// StringBox plugin concat demo
+// Build plugin: (cd plugins/nyash-string-plugin && cargo build --release)
+
+static box Main {
+  main() {
+    local s, t
+    s = new StringBox()
+    // concat with literal
+    t = s.concat("hello")
+    // concat again (handle)
+    t = t.concat(" world")
+    // return length of resulting string
+    return t.length()
+  }
+}
+

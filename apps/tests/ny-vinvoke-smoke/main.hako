@@ -1,0 +1,17 @@
+// ny-vinvoke-smoke - 可変長(tagged vector) by-id シムのスモーク
+// 手順: set(1,42) は固定長シム（<=2引数）。
+// その後 get(1,9,8,7,6) と5引数で呼び、可変長シム経路を通す（追加引数は無視される想定）。
+
+static box Main {
+    main() {
+        local m = new MapBox()
+        m.set(1, 42)
+
+        // 可変長シムを通すため5引数で呼ぶ（先頭以外はダミー）
+        local v = m.get(1, 9, 8, 7, 6)
+
+        print("VInvokeRc: " + v.toString())
+        return 0
+    }
+}
+

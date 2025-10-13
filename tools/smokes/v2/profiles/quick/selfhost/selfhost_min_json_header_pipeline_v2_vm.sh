@@ -5,6 +5,7 @@ source "$(dirname "$0")/../../../lib/test_runner.sh"
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 test_selfhost_min_json_header_pipeline_v2_vm() {
   # Run parent runner (Rust VM) with selfhost child pipeline v2; emit-only and quiet

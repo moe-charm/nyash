@@ -66,7 +66,11 @@ pub struct CliConfig {
     pub macro_expand_child: Option<String>,
     pub dump_expanded_ast_json: bool,
     pub macro_ctx_json: Option<String>,
+    // Tools/doctor helpers
+    pub which_tool: Option<String>,
+    pub doctor_tools: bool,
 }
+
 
 pub use groups::{BackendConfig, BuildConfig, CliGroups, DebugConfig, EmitConfig, InputConfig, JitConfig, ParserPipeConfig};
 
@@ -198,6 +202,8 @@ impl Default for CliConfig {
             dump_expanded_ast_json: false,
             macro_ctx_json: None,
             entry: None,
+            which_tool: None,
+            doctor_tools: false,
         }
     }
 }

@@ -1,0 +1,19 @@
+// ArrayBox plugin demo (set)
+// Build plugin:
+//   (cd plugins/nyash-array-plugin && cargo build --release)
+// Run (plugin host auto-loads from hako.toml; compat: nyash.toml):
+//   NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/array_plugin_set_demo.nyash
+
+static box Main {
+  main() {
+    local a
+    a = new ArrayBox()
+    a.push(10)
+    a.push(20)
+    a.push(30)
+    me.console.log("before set, len=", a.length(), ", get(2)=", a.get(2))
+    a.set(2, 42)
+    me.console.log("after  set, len=", a.length(), ", get(2)=", a.get(2))
+    return a.get(2)
+  }
+}

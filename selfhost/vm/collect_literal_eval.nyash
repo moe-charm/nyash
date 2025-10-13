@@ -6,7 +6,7 @@ static box Main {
     local ki = "\"expression\":{\"kind\":\"Literal\",\"value\":{\"type\":\"int\",\"value\":"
     local p = json.indexOf(ki)
     if p >= 0 {
-      local i = p + ki.length()
+      local i = p + ki.size()
       local j = i
       loop (true) {
         local ch = json.substring(j, j+1)

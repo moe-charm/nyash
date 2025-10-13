@@ -1,0 +1,9 @@
+// Hello World for Native Build Demo
+print("🎉 Nyash Native Build Success!")
+print("Platform: " + "Linux/Windows")
+print("Compiled with Cranelift JIT")
+
+// 簡単な計算も
+local result
+result = 42 * 2
+print("The answer is: " + result)

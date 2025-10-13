@@ -74,22 +74,22 @@ flow EmitMirFlow {
   // P4: generic extern/global/method/constructor emitters (immediate values)
   emit_extern_call(name, arg_vals) {
     local mod_full = BlockBuilder.extern_call_ival_ret(name, arg_vals)
-    EmitMirFlow._ssa_materialize_last_result(mod_full)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
     return JsonEmitBox.to_json(mod_full)
   }
   emit_global_call(name, arg_vals) {
     local mod_full = BlockBuilder.global_call_ival_ret(name, arg_vals)
-    EmitMirFlow._ssa_materialize_last_result(mod_full)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
     return JsonEmitBox.to_json(mod_full)
   }
   emit_method_call(method, recv_val, arg_vals) {
     local mod_full = BlockBuilder.method_call_ival_ret(method, recv_val, arg_vals)
-    EmitMirFlow._ssa_materialize_last_result(mod_full)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
     return JsonEmitBox.to_json(mod_full)
   }
   emit_constructor(box_type, arg_vals) {
     local mod_full = BlockBuilder.constructor_call_ival_ret(box_type, arg_vals)
-    EmitMirFlow._ssa_materialize_last_result(mod_full)
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
     return JsonEmitBox.to_json(mod_full)
   }
 
@@ -102,29 +102,9 @@ flow EmitMirFlow {
 
   // Internal: LocalSSA materialize last ret value with a copy
   _ssa_materialize_last_result(mod_full) {
-    if mod_full == null { return }
-    local fns = mod_full.functions
-    if fns == null || fns.size == null || fns.size() == 0 { return }
-    local blocks = fns.get(0).get("blocks")
-    if blocks == null || blocks.size == null || blocks.size() == 0 { return }
-    local insts = blocks.get(0).get("instructions")
-    if insts == null || insts.size == null || insts.size() == 0 { return }
-    // Find last ret value
-    local n = insts.size()
-    local src = null
-    {
-      local i = 0
-      loop(i < n) {
-        local ins = insts.get(i)
-        if ins != null && ins.get != null {
-          if ins.get("op") == "ret" { src = ins.get("value") }
-        }
-        i = i + 1
-      }
-    }
-    if src == null { return }
-    // Insert copy(dst=src+1) after last def of src
-    LocalSSABox.ensure_after_last_def_copy(insts, src, src + 1)
+    // Delegate to LocalSSABox for structural materialization policy.
+    LocalSSABox.ensure_materialize_last_ret(mod_full)
   }
 
 }
+

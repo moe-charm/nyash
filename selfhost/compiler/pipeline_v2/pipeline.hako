@@ -53,7 +53,7 @@ flow PipelineV2 {
           local kn = NormalizerBox.normalize_call_ints(kc)
           if kn == null { return null }
           if SignatureVerifierBox.verify_call_name_arity(kn.get("name"), kn.get("args")) != 1 { return null }
-          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(kn.get("name"), kn.get("args")))
+          return EmitCallBox.emit_call_int_args_v1(kn.get("name"), kn.get("args"))
         }
         // Tolerant scanner fallback → v1 emit (raw; no resolver context here)
         {
@@ -61,7 +61,7 @@ flow PipelineV2 {
           if pos_body < 0 { pos_body = 0 }
           local pair = Stage1JsonScannerBox.extract_name_args(ast_json, pos_body)
           if pair != null {
-            return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(pair.get("name"), pair.get("args_text")))
+            return EmitCallBox.emit_call_int_args_v1(pair.get("name"), pair.get("args_text"))
           }
         }
         // Fallback legacy
@@ -70,7 +70,7 @@ flow PipelineV2 {
           local kn2 = NormalizerBox.normalize_call_ints(k)
           if kn2 == null { return null }
           if SignatureVerifierBox.verify_call_name_arity(kn2.get("name"), kn2.get("args")) != 1 { return null }
-          return LocalSSA.ensure_calls(MirCallBox.emit_call_v1(kn2.get("name"), kn2.get("args")))
+          return EmitCallBox.emit_call_int_args_v1(kn2.get("name"), kn2.get("args"))
         }
       }
     }
@@ -82,7 +82,7 @@ flow PipelineV2 {
         if mb != null {
           local mn = NormalizerBox.normalize_method_ints(mb)
           if mn == null { return null }
-          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(mn.get("method"), 0, mn.get("args")))
+          return EmitMethodBox.emit_method_int_args_v1(mn.get("method"), 0, mn.get("args"))
         }
         // Tolerant scanner fallback (method/args only)
         {
@@ -90,14 +90,14 @@ flow PipelineV2 {
           if pos_body < 0 { pos_body = 0 }
           local pair = Stage1JsonScannerBox.extract_label_args(ast_json, "method", pos_body)
           if pair != null {
-            return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(pair.get("label"), 0, pair.get("args_text")))
+            return EmitMethodBox.emit_method_int_args_v1(pair.get("label"), 0, pair.get("args_text"))
           }
         }
         local m = Stage1ExtractFlow.extract_return_method(ast_json)
         if m != null {
           local mn2 = NormalizerBox.normalize_method_ints(m)
           if mn2 == null { return null }
-          return LocalSSA.ensure_calls(MirCallBox.emit_method_v1(mn2.get("method"), 0, mn2.get("args")))
+          return EmitMethodBox.emit_method_int_args_v1(mn2.get("method"), 0, mn2.get("args"))
         }
       }
     }
@@ -109,7 +109,7 @@ flow PipelineV2 {
         if nb != null {
           local nn = NormalizerBox.normalize_new_ints(nb)
           if nn == null { return null }
-          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(nn.get("class"), nn.get("args")))
+          return EmitNewBoxBox.emit_newbox_int_args_v1(nn.get("class"), nn.get("args"))
         }
         // Tolerant scanner fallback (class/args only)
         {
@@ -117,14 +117,14 @@ flow PipelineV2 {
           if pos_body < 0 { pos_body = 0 }
           local pair = Stage1JsonScannerBox.extract_label_args(ast_json, "class", pos_body)
           if pair != null {
-            return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(pair.get("label"), pair.get("args_text")))
+            return EmitNewBoxBox.emit_newbox_int_args_v1(pair.get("label"), pair.get("args_text"))
           }
         }
         local n = Stage1ExtractFlow.extract_return_new(ast_json)
         if n != null {
           local nn2 = NormalizerBox.normalize_new_ints(n)
           if nn2 == null { return null }
-          return LocalSSA.ensure_calls(MirCallBox.emit_newbox_v1(nn2.get("class"), nn2.get("args")))
+          return EmitNewBoxBox.emit_newbox_int_args_v1(nn2.get("class"), nn2.get("args"))
         }
       }
     }

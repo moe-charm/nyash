@@ -1,0 +1,9 @@
+local d = 3
+local r = match d {
+  1 => 10
+  2 => 20
+  3 => 30
+  _ => 40
+}
+print(r)
+

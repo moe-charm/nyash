@@ -1,0 +1,13 @@
+// i64 compare returning boolean directly (ret_bool hint)
+// Enable: NYASH_JIT_THRESHOLD=1 NYASH_JIT_DUMP=1
+
+static box Main {
+  main() {
+    local a, b
+    a = 10
+    b = 4
+    // return boolean result directly
+    return a > b
+  }
+}
+

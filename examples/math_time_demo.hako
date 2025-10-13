@@ -1,0 +1,17 @@
+// Math/Time plugin demo
+
+static box Main {
+  main() {
+    local m, t, r
+    m = new MathBox()
+    r = m.sqrt(16)
+    t = new TimeBox()
+    // print via ConsoleBox
+    local c
+    c = new ConsoleBox()
+    c.println("sqrt(16) = " + r.toString())
+    c.println("now = " + t.now().toString())
+    return 0
+  }
+}
+

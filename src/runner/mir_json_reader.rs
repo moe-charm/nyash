@@ -32,7 +32,7 @@ fn bbid(x:u32)->BasicBlockId{ BasicBlockId::new(x) }
 
 fn parse_block(func:&mut MirFunction, f: &J) -> Result<(), String> {
     let id = as_u32(&f["id"]).unwrap_or(0);
-    if id != func.entry_block.to_u32(){ func.add_block(BasicBlock::new(bbid(id))); }
+    if id != func.entry_block.as_u32(){ func.add_block(BasicBlock::new(bbid(id))); }
     let blk = func.get_block_mut(bbid(id)).ok_or("missing block")?;
     if let Some(insts)=f.get("instructions").and_then(|x|x.as_array()){
         for inst in insts{
@@ -78,6 +78,9 @@ fn parse_block(func:&mut MirFunction, f: &J) -> Result<(), String> {
 pub fn parse_mir_json_v0_to_module(json: &str) -> Result<MirModule, String> {
     let v: J = serde_json::from_str(json).map_err(|e| format!("invalid MIR JSON: {}", e))?;
     if let Some(k)=v.get("kind").and_then(|x|x.as_str()){ if k != "MIR" { return Err("unsupported kind (expected MIR)".into()); } }
+    if let Some(sv) = v.get("schema_version").and_then(|x|x.as_str()) {
+        if sv != "1.0" { return Err(format!("unsupported schema_version: {} (expected 1.0)", sv)); }
+    }
     let funs = v.get("functions").and_then(|x|x.as_array()).ok_or("missing functions")?;
     let mut module = MirModule::new("json_v0".into());
     for f in funs{

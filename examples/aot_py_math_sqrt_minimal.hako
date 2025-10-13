@@ -1,0 +1,22 @@
+// Minimal math.sqrt example with console output
+static box Main {
+  main() {
+    local py, code, result, console, msg
+    
+    // Create console
+    console = new ConsoleBox()
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Since import/getattr not available, use eval approach
+    code = new StringBox("__import__('math').sqrt(16)")
+    result = py.eval(code)
+    
+    // Log result
+    msg = new StringBox("sqrt(16) = ")
+    console.log(msg)
+    
+    return result
+  }
+}

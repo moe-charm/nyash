@@ -1,0 +1,12 @@
+// Function-style math: sin(x) should normalize to MathBox.sin(x)
+// Run:
+//   NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_NATIVE_F64=1 NYASH_JIT_EVENTS=1 \
+//     ./target/release/nyash --backend vm examples/jit_math_function_style_sin_float.nyash
+
+static box Main {
+  main() {
+    // Expect allow(sig_ok) with native f64 enabled
+    return sin(1.5707963267948966)
+  }
+}
+

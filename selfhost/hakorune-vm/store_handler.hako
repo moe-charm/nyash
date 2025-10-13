@@ -4,6 +4,7 @@
 using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/reg_guard.hako" as RegGuardBox
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 
 static box StoreHandlerBox {
@@ -25,7 +26,9 @@ static box StoreHandlerBox {
     }
 
     // Load value from register
-    local value = ValueManagerBox.get(regs, value_id)
+    local g_val = RegGuardBox.require_set(regs, value_id, "store: value")
+    if g_val.is_Err() { return g_val }
+    local value = g_val.as_Ok()
 
     // Store to memory: regs[value] → mem[ptr]
     local ptr_key = StringHelpers.int_to_str(ptr)

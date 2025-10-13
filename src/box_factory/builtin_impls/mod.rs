@@ -16,11 +16,15 @@
 
 // Phase 2.1-2.6: Delete these modules one by one
 // string_box removed (Phase 2.1) — use nyash-string-plugin
+#[cfg(feature = "legacy-boxes")]
 pub mod integer_box;   // DELETE: Phase 2.2 (plugin ready)
+#[cfg(feature = "legacy-boxes")]
 pub mod bool_box;      // DELETE: Phase 2.3 (plugin needed)
 // array_box removed (Phase 2.4) — use nyash-array-plugin
 // map_box removed (Phase 2.5) — use nyash-map-plugin
+#[cfg(feature = "legacy-boxes")]
 pub mod console_box;   // DELETE: Phase 2.6 (LAST - critical for logging)
 
 // Special consideration
+#[cfg(feature = "legacy-boxes")]
 pub mod null_box;      // DISCUSS: Keep as primitive?

@@ -1,0 +1,19 @@
+// AOT Python kwargs via env-injected eval code (暫定ブリッジ)
+// 目的: TLVでのkwargs未整備の間、evalコードに **dict で渡す
+// Build:
+//   cargo build --release --features cranelift-jit
+// Run:
+//   NYASH_PY_EVAL_CODE="(__import__('builtins').int)(**{'x':'FF','base':16})" \
+//     ./target/release/nyash --compile-native examples/aot_py_eval_kwargs_env.nyash -o app && \
+//     NYASH_PY_EVAL_CODE="(__import__('builtins').int)(**{'x':'FF','base':16})" ./app
+
+static box Main {
+  main() {
+    local py, r
+    py = new PyRuntimeBox()
+    r = py.eval()  // code is read from NYASH_PY_EVAL_CODE (host side)
+    me.console.println(r)
+    return 0
+  }
+}
+

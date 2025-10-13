@@ -1,0 +1,17 @@
+// Semantics test - Branch/Phi example
+
+static box Main {
+    main() {
+        local x, y, result
+        x = 10
+        y = 20
+        
+        if x < y {
+            result = 100
+        } else {
+            result = 200
+        }
+        
+        return result  // Should be 100
+    }
+}

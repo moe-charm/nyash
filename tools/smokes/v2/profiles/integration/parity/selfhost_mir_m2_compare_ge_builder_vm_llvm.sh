@@ -45,6 +45,9 @@ NYASH_LLVM_USE_HARNESS=1 output_llvm=$(run_nyash_llvm "$TMP_DIR/driver.nyash" --
 norm() {
   sed -E 's/^VM execution error: VM fallback error: *//' | \
   sed -E 's/BasicBlockId\([0-9]+\)/BasicBlockId<ID>/' | \
+  grep -v '^\[provider\] ' | \
+  grep -v '^\[provider/check\] ' | \
+  grep -v '^\[map-plugin\] ' | \
   grep -v '^Result: '
 }
 compare_outputs "$(printf "%s" "$output_vm" | norm)" "$(printf "%s" "$output_llvm" | norm)" "selfhost_mir_m2_compare_ge_builder_vm_llvm" || { cd /; rm -rf "$TMP_DIR"; exit 1; }

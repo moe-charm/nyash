@@ -147,11 +147,11 @@ parse_arguments() {
 
     # プロファイル検証
     case "$PROFILE" in
-        quick|integration|integration-core|full|plugins|quick-selfhost|windows)
+        quick|integration|integration-core|full|plugins|hako|quick-selfhost|windows)
             ;;
         *)
             log_error "Invalid profile: $PROFILE"
-            log_error "Valid profiles: quick, integration, integration-core, full, plugins, quick-selfhost, windows"
+            log_error "Valid profiles: quick, integration, integration-core, full, plugins, hako, quick-selfhost, windows"
             exit 1
             ;;
     esac
@@ -202,10 +202,22 @@ setup_environment() {
 
     export SMOKES_PARALLEL_JOBS="$JOBS"
     export SMOKES_OUTPUT_FORMAT="$FORMAT"
+    # Filter aliases to ease grouping common suites
+    case "$FILTER" in
+        hosthandle)
+            # All HostHandleRouter dev smokes and Stage-2 suite wrapper
+            FILTER='host_handle_router_|stage2_on_suite_vm'
+            ;;
+    esac
     export SMOKES_TEST_FILTER="$FILTER"
 
     # Optional per-profile env overlay (if present)
-    local env_overlay="$SCRIPT_DIR/configs/env/${PROFILE}.env"
+    # 'hako' is an alias of 'plugins' to improve naming clarity.
+    local overlay_profile="$PROFILE"
+    if [ "$PROFILE" = "hako" ]; then
+        overlay_profile="hako"
+    fi
+    local env_overlay="$SCRIPT_DIR/configs/env/${overlay_profile}.env"
     if [ -f "$env_overlay" ]; then
         log_info "Sourcing env overlay: $env_overlay"
         # shellcheck disable=SC1090

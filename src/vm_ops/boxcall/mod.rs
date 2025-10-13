@@ -49,6 +49,7 @@ fn vmvalue_kind(recv: &crate::backend::vm_types::VMValue) -> String {
         V::Float(_) => "Float".into(),
         V::Bool(_) => "Bool".into(),
         V::String(_) => "String".into(),
+        #[cfg(feature = "legacy-boxes")]
         V::Future(_) => "Future".into(),
         V::BoxRef(bx) => format!("BoxRef({})", bx.type_name()),
     }

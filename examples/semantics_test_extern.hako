@@ -1,0 +1,8 @@
+// Semantics test - ExternCall (console.log)
+
+static box Main {
+    main() {
+        print("Hello from semantics test!")
+        return 42
+    }
+}

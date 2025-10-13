@@ -14,16 +14,14 @@ test_else_if_nested_assign() {
   # Expect PHI to merge with the assigned value from the nested branch (not the pre-if default).
   local script='
   local op, a, b, result
-  op = "Sub"   // choose the else-if path
+  op = "Sub"
   a = 45
   b = 3
-  result = 0    // pre-if default; should be overridden
+  result = 0
   if op == "Add" {
-    // not taken
   } else if op == "Sub" {
-    result = a - b   // only this branch writes
+    result = a - b
   } else {
-    // also not taken
   }
   print(result)
   '

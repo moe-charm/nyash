@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 /*!
  * Builtin NullBox Implementation (Phase 15.5: Consider Keeping?)
  *

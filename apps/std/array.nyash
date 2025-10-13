@@ -10,13 +10,13 @@
 static box StdArrayNy {
   array_len(a) {
     if a == null { return 0 }
-    return a.length()
+    return a.size()
   }
 
   array_push(a, x) {
     if a == null { return 0 }
     a.push(x)
-    return a.length()
+    return a.size()
   }
 
   array_pop(a) {
@@ -28,7 +28,7 @@ static box StdArrayNy {
   array_slice(a, start, end) {
     if a == null { return new ArrayBox() }
     local n, b, e
-    n = a.length()
+    n = a.size()
     b = start
     e = end
     if b < 0 { b = 0 }

@@ -4,6 +4,7 @@
 //! dedicated boundary so the main router stays focused on dispatch.
 
 use crate::backend::vm_types::{VMError, VMValue};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::callable::CallableBox;
 
 pub struct MethodRefBox;
@@ -63,7 +64,16 @@ impl MethodRefBox {
             ));
         }
 
-        let callable = CallableBox::new(Some(bound_box.share_box()), method_name, arity_i64 as usize);
-        Ok(VMValue::from_nyash_box(Box::new(callable)))
+        #[cfg(feature = "legacy-boxes")]
+        {
+            let callable = CallableBox::new(Some(bound_box.share_box()), method_name, arity_i64 as usize);
+            Ok(VMValue::from_nyash_box(Box::new(callable)))
+        }
+        #[cfg(not(feature = "legacy-boxes"))]
+        {
+            // Minimal plugin-only placeholder: represent callable as string marker
+            let s = crate::box_trait::StringBox::new(format!("methodRef:{}:{}", bound_box.type_name(), method_name));
+            Ok(VMValue::from_nyash_box(Box::new(s)))
+        }
     }
 }

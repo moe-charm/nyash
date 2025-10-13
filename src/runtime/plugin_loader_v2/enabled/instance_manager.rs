@@ -166,11 +166,16 @@ impl PluginLoaderV2 {
             // Encode provided constructor args for birth (if any)
             let tlv = crate::runtime::codec::TlvCodecBox::default().encode_args(_args);
             let (code, out_len, out_buf) = if let Some(box_invoke) = direct_invoke {
-                // Direct per-Box call (no type_id dispatch)
-                let mut out = vec![0u8; 1024];
-                let mut out_len: usize = out.len();
-                let code = (box_invoke)(0, birth_id, tlv.as_ptr(), tlv.len(), out.as_mut_ptr(), &mut out_len);
-                (code, out_len, out)
+                // Direct per-Box call (no type_id dispatch) with retry buffer growth
+                let cap: usize = 1024; let cap_max: usize = 262144;
+                let mut out = vec![0u8; cap]; let mut out_len: usize = out.len();
+                let code0 = (box_invoke)(0, birth_id, tlv.as_ptr(), tlv.len(), out.as_mut_ptr(), &mut out_len);
+                if code0 != 0 && out_len > cap {
+                    let new_cap = cap_max.min(out_len.max(cap.saturating_mul(2)));
+                    let mut out2 = vec![0u8; new_cap]; let mut out_len2: usize = out2.len();
+                    let code2 = (box_invoke)(0, birth_id, tlv.as_ptr(), tlv.len(), out2.as_mut_ptr(), &mut out_len2);
+                    (code2, out_len2, out2)
+                } else { (code0, out_len, out) }
             } else {
                 super::host_bridge::invoke_alloc(
                     super::super::nyash_plugin_invoke_v2_shim,

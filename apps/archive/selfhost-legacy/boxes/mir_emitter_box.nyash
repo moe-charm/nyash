@@ -15,18 +15,18 @@ static box MirEmitterBox {
         local q = ast_json.indexOf("\"type\":\"Int\",\"value\":", p)
         if q >= 0 {
           q = q + 23
-          local n = ast_json.length()
+          local n = ast_json.size()
           local i = q
           local s2 = ""
           loop(i < n) {
             local ch = ast_json.substring(i, i+1)
             if ch >= "0" && ch <= "9" { s2 = s2 + ch i = i + 1 } else { break }
           }
-          if s2.length() > 0 {
+          if s2.size() > 0 {
             // fast int parse
             local k = 0
             local acc = 0
-            local m = s2.length()
+            local m = s2.size()
             loop(k < m) {
               local d = s2.substring(k, k+1)
               local dv = 0

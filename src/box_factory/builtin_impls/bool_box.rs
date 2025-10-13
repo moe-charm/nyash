@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 /*!
  * Builtin BoolBox Implementation (Phase 15.5: Scheduled for Removal)
  *

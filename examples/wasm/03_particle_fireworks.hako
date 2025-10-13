@@ -1,0 +1,209 @@
+// 🎆 Particle Fireworks Demo - ParticleBox simulation
+// Demonstrates particle physics and animation using Everything is Box
+
+print("🎆 === Particle Fireworks Demo Starting ===")
+
+// Initialize components
+local canvas, timer, random
+canvas = new WebCanvasBox("demo-canvas", 800, 600)
+timer = new TimerBox()
+random = new RandomBox()
+
+// Particle system data
+local particles, maxParticles
+particles = []
+maxParticles = 100
+
+// Particle properties structure (Everything is Box approach)
+local createParticle
+createParticle = function(x, y, vx, vy, color, life) {
+    local particle
+    particle = {
+        x: x,
+        y: y,
+        vx: vx,
+        vy: vy,
+        color: color,
+        life: life,
+        maxLife: life,
+        size: random.randInt(2, 8)
+    }
+    return particle
+}
+
+// Physics constants
+local gravity, friction
+gravity = 0.1
+friction = 0.99
+
+// Update particle physics
+local updateParticles
+updateParticles = function() {
+    local i, particle
+    i = 0
+    
+    loop(i < particles.length()) {
+        particle = particles[i]
+        
+        // Update position
+        particle.x = particle.x + particle.vx
+        particle.y = particle.y + particle.vy
+        
+        // Apply physics
+        particle.vy = particle.vy + gravity
+        particle.vx = particle.vx * friction
+        particle.vy = particle.vy * friction
+        
+        // Update life
+        particle.life = particle.life - 1
+        
+        // Remove dead particles
+        if (particle.life <= 0) {
+            particles.remove(i)
+        } else {
+            i = i + 1
+        }
+    }
+}
+
+// Render particles
+local drawParticles
+drawParticles = function() {
+    local i, particle, alpha, size
+    i = 0
+    
+    loop(i < particles.length()) {
+        particle = particles[i]
+        
+        // Calculate fade based on remaining life
+        alpha = particle.life / particle.maxLife
+        size = particle.size * alpha
+        
+        // Draw particle with fading effect
+        canvas.setFillStyle(particle.color)
+        canvas.fillCircle(particle.x, particle.y, size)
+        
+        i = i + 1
+    }
+}
+
+// Create firework burst
+local createFirework
+createFirework = function(x, y) {
+    local i, angle, speed, vx, vy, colors, color
+    colors = ["#ff0000", "#00ff00", "#0000ff", "#ffff00", "#ff00ff", "#00ffff", "#ffffff", "#ff8800"]
+    
+    i = 0
+    loop(i < 20) {
+        angle = random.random() * 6.28318  // Full circle in radians
+        speed = random.randInt(2, 10)
+        
+        vx = Math.cos(angle) * speed
+        vy = Math.sin(angle) * speed
+        
+        color = colors[random.randInt(0, 7)]
+        
+        // Add particle to system
+        particles.push(createParticle(x, y, vx, vy, color, random.randInt(30, 60)))
+        
+        i = i + 1
+    }
+}
+
+// Trail particles for rocket
+local createTrail
+createTrail = function(x, y) {
+    local i, vx, vy
+    i = 0
+    loop(i < 3) {
+        vx = random.random() * 2 - 1
+        vy = random.random() * 2 + 1
+        
+        particles.push(createParticle(x, y, vx, vy, "#ffaa00", random.randInt(10, 20)))
+        i = i + 1
+    }
+}
+
+// Main animation loop simulation
+local frame, lastFirework
+frame = 0
+lastFirework = 0
+
+local animate
+animate = function() {
+    // Clear canvas with night sky
+    canvas.setFillStyle("#000011")
+    canvas.fillRect(0, 0, 800, 600)
+    
+    // Update and draw particles
+    updateParticles()
+    drawParticles()
+    
+    // Create new fireworks periodically
+    if (frame - lastFirework > 60) {  // Every ~1 second at 60fps
+        local fx, fy
+        fx = random.randInt(100, 700)
+        fy = random.randInt(100, 300)
+        
+        createFirework(fx, fy)
+        lastFirework = frame
+    }
+    
+    // Add some continuous sparkles
+    if (frame % 10 == 0) {
+        local sx, sy
+        sx = random.randInt(0, 800)
+        sy = random.randInt(400, 600)
+        createTrail(sx, sy)
+    }
+    
+    frame = frame + 1
+}
+
+// Set up initial display
+canvas.clear()
+canvas.setFillStyle("#000011")
+canvas.fillRect(0, 0, 800, 600)
+
+// Draw title
+canvas.setFillStyle("#ffffff")
+canvas.fillText("🎆 Nyash Particle Fireworks", 250, 50, "28px Arial", "#ffffff")
+
+// Create initial fireworks for demo
+createFirework(200, 150)
+createFirework(400, 200) 
+createFirework(600, 180)
+
+// Run a few animation frames for demo
+local demoFrames
+demoFrames = 0
+loop(demoFrames < 10) {
+    animate()
+    demoFrames = demoFrames + 1
+}
+
+// Draw info text
+canvas.setFillStyle("#ffff00")
+canvas.fillText("Particle Count: " + particles.length(), 50, 550, "18px Arial", "#ffff00")
+canvas.fillText("Everything is Box - even fireworks!", 400, 550, "18px Arial", "#00ff00")
+
+print("🎆 Particle Fireworks Demo Ready!")
+print("• " + particles.length() + " particles currently active")
+print("• Physics simulation with gravity and friction")
+print("• Randomized colors and burst patterns")  
+print("• Automatic firework generation")
+print("🌐 Everything is Box - explosive entertainment!")
+
+// Add some decorative elements
+canvas.setFillStyle("#444444")
+local i
+i = 0
+loop(i < 50) {
+    local starX, starY
+    starX = random.randInt(0, 800)
+    starY = random.randInt(0, 200)
+    canvas.fillCircle(starX, starY, 1)
+    i = i + 1
+}
+
+print("✅ Particle Fireworks Demo Complete!")

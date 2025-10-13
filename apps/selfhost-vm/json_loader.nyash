@@ -12,7 +12,7 @@ static box MiniJsonLoader {
     if s.substring(i, i+1) != "\"" { return "" }
     i = i + 1
     local out = ""
-    local n = s.length()
+    local n = s.size()
     loop (i < n) {
       local ch = s.substring(i, i+1)
       if ch == "\"" { break }
@@ -39,7 +39,7 @@ static box MiniJsonLoader {
   }
   next_non_ws(s, pos) {
     local i = pos
-    local n = s.length()
+    local n = s.size()
     loop (i < n) {
       local ch = s.substring(i, i+1)
       if ch != " " && ch != "\n" && ch != "\r" && ch != "\t" { return i }

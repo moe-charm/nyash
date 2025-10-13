@@ -1,0 +1,15 @@
+// Python getattrR OK demo (returns Result.Ok(handle))
+// Run:
+//   NYASH_PLUGIN_ONLY=1 ./target/release/nyash --backend vm examples/py_getattrR_ok_demo.nyash
+
+static box Main {
+  main() {
+    local py, mod, r
+    py = new PyRuntimeBox()
+    mod = py.import("math")
+    r = mod.getattrR("sqrt")
+    me.console.println(r)
+    return 0
+  }
+}
+

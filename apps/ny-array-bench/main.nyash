@@ -22,7 +22,7 @@ static box Main {
         
         // 各サイズでベンチマーク実行
         local idx = 0
-        local n = sizes.length()
+        local n = sizes.size()
         loop(idx < n) {
             local size = sizes.get(idx)
             me.console.log("Testing size: " + size)
@@ -49,7 +49,7 @@ static box Main {
     // map実装（×クロージャ → ○固定処理: 2倍）
     mapArrayDouble(array) {
         local result = new ArrayBox()
-        local length = array.length()
+        local length = array.size()
         local i = 0
         
         loop(i < length) {
@@ -64,7 +64,7 @@ static box Main {
     // reduce実装（総和）
     reduceArraySum(array) {
         local acc = 0
-        local length = array.length()
+        local length = array.size()
         local i = 0
         
         loop(i < length) {
@@ -77,7 +77,7 @@ static box Main {
     
     // find実装（等値）
     findInArrayEq(array, target) {
-        local length = array.length()
+        local length = array.size()
         local i = 0
         
         loop(i < length) {

@@ -1,0 +1,42 @@
+// Test Python Parser Plugin
+// 環境変数 NYASH_PY_CODE からPythonコードを読み取ってパース
+
+static box Main {
+    main() {
+        local console = new ConsoleBox()
+        
+        // 環境変数からPythonコードを取得
+        local env_code = ConsoleBox.getEnv("NYASH_PY_CODE")
+        if env_code == null {
+            console.log("Usage: NYASH_PY_CODE='def main(): return 0' nyash test_python_parser.nyash")
+            return 1
+        }
+        
+        console.log("=== Python Code ===")
+        console.log(env_code)
+        console.log("")
+        
+        // パーサープラグインを読み込み（仮想的に）
+        // 実際にはプラグインローダー経由で呼び出す必要がある
+        console.log("=== Parse Result ===")
+        console.log("(Parser plugin integration pending)")
+        
+        // 期待される出力形式を表示
+        console.log("")
+        console.log("Expected output format:")
+        console.log("{")
+        console.log('  "success": true,')
+        console.log('  "dump": "Module(body=[FunctionDef(...)])",')
+        console.log('  "counts": {')
+        console.log('    "total_nodes": 5,')
+        console.log('    "functions": 1,')
+        console.log('    "classes": 0,')
+        console.log('    "supported": 1,')
+        console.log('    "unsupported": 0')
+        console.log('  },')
+        console.log('  "unsupported": []')
+        console.log("}")
+        
+        return 0
+    }
+}

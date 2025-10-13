@@ -27,7 +27,7 @@ static box Main {
     cases.push("\"unterminated")  // unterminated string
 
     local i = 0
-    loop(i < cases.length()) {
+    loop(i < cases.size()) {
       local s = cases.get(i)
       // Quick profile: avoid full parser construction; fast-paths only
       // Auto-birth enabled: parser is alive after creation
@@ -37,10 +37,10 @@ static box Main {
       local t = s
       // Minimal integer check (digits only)
       local is_int = 1
-      if t.length() == 0 { is_int = 0 }
+      if t.size() == 0 { is_int = 0 }
       else {
         local kk = 0
-        loop(kk < t.length()) {
+        loop(kk < t.size()) {
           local ch = t.substring(kk, kk+1)
           if not ((ch >= "0") and (ch <= "9")) {
             is_int = 0
@@ -52,15 +52,15 @@ static box Main {
       // 文字列の fast-path: 厳密性はトークナイザーに委譲しつつ、単独の "…" はOKとして扱う
       // （完全検証はパーサに任せつつも、代表ケースでの性能とテスト安定性を確保）
       if (t == "null" or t == "true" or t == "false" or is_int == 1
-          or ((t.length() >= 2) and (t.substring(0,1) == "\"") and (t.substring(t.length()-1, t.length()) == "\""))) {
+          or ((t.size() >= 2) and (t.substring(0,1) == "\"") and (t.substring(t.size()-1, t.size()) == "\""))) {
         print("OK")
       } else {
         // 明確な不正（開きクォートのみ）は即 ERROR
-        if ((t.length() >= 1) and (t.substring(0,1) == "\"") and not (t.length() >= 1 and t.substring(t.length()-1, t.length()) == "\"")) {
+        if ((t.size() >= 1) and (t.substring(0,1) == "\"") and not (t.size() >= 1 and t.substring(t.size()-1, t.size()) == "\"")) {
           print("ERROR")
-        } else if ((t.length() >= 1) and (t.substring(0,1) == "{") and not (t.length() >= 1 and t.substring(t.length()-1, t.length()) == "}")) {
+        } else if ((t.size() >= 1) and (t.substring(0,1) == "{") and not (t.size() >= 1 and t.substring(t.size()-1, t.size()) == "}")) {
           print("ERROR")
-        } else if ((t.length() >= 1) and (t.substring(0,1) == "[") and not (t.length() >= 1 and t.substring(t.length()-1, t.length()) == "]")) {
+        } else if ((t.size() >= 1) and (t.substring(0,1) == "[") and not (t.size() >= 1 and t.substring(t.size()-1, t.size()) == "]")) {
           print("ERROR")
         } else {
           // Minimal structural fast-paths used by quick smoke

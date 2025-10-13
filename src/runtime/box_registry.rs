@@ -127,15 +127,17 @@ fn plugin_policy_enabled() -> bool {
     crate::runtime::env_gate_box::plugin_policy_on()
 }
 
-fn register_core_builtins(reg: &BoxFactoryRegistry) {
+fn register_core_builtins(_reg: &BoxFactoryRegistry) {
     // TimerBox: provide builtin constructor so `new TimerBox()` works without plugins.
     // Plugin 設定が適用されると上書きされる（Plugin-First 原則を維持）。
+    #[cfg(feature = "legacy-boxes")]
     reg.register_builtin("TimerBox", |_args: &[Box<dyn NyashBox>]| {
         Ok(Box::new(crate::boxes::time_box::TimerBox::new()))
     });
 
     // Thin embedded providers (Hako ABI same-face)
     // Register only when plugin policy is OFF to avoid shadowing plugin-on path.
+    #[cfg(feature = "legacy-boxes")]
     if !plugin_policy_enabled() {
         reg.register_builtin("ArrayBox", |_args: &[Box<dyn NyashBox>]| {
             Ok(Box::new(crate::boxes::array::ArrayBox::new()))
@@ -144,7 +146,6 @@ fn register_core_builtins(reg: &BoxFactoryRegistry) {
             Ok(Box::new(crate::boxes::map_box::MapBox::new()))
         });
         reg.register_builtin("StringBox", |args: &[Box<dyn NyashBox>]| {
-            // Support 0-arg constructor and a pragmatic 1-arg constructor that seeds initial value
             if args.is_empty() {
                 Ok(Box::new(crate::box_trait::StringBox::new("")))
             } else {
@@ -154,7 +155,6 @@ fn register_core_builtins(reg: &BoxFactoryRegistry) {
             }
         });
         reg.register_builtin("FileBox", |args: &[Box<dyn NyashBox>]| {
-            // FileBox::new() creates default, then use .open() for path
             if args.is_empty() {
                 Ok(Box::new(crate::boxes::file::FileBox::new()))
             } else {

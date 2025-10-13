@@ -15,10 +15,22 @@ using "selfhost/hakorune-vm/constructor_call_handler.hako" as ConstructorCallHan
 using "selfhost/hakorune-vm/closure_call_handler.hako" as ClosureCallHandlerBox
 using "selfhost/shared/host_bridge/host_bridge_box.hako" as HostBridge
 using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/boxcall_builder.hako" as BoxcallBuilderBox
 using "selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 
 static box MirCallHandlerBox {
+  // Internal helpers (boxed for clarity)
+  _alloc_tmp_reg(regs) {
+    local tmp_id = 900001
+    local try_key = StringHelpers.int_to_str(tmp_id)
+    loop(regs.has(try_key)) { tmp_id = tmp_id + 1  try_key = StringHelpers.int_to_str(tmp_id) }
+    return tmp_id
+  }
+  _build_boxcall_js(dst_reg, vid, tmp_id) {
+    return "{\"op\":\"boxcall\",\"dst\":" + StringHelpers.int_to_str(dst_reg) + ",\"box\":" + StringHelpers.int_to_str(vid) + ",\"method\":\"call\",\"args\":[" + StringHelpers.int_to_str(tmp_id) + "]}"
+  }
+
   // Handle MirCall instruction
   // inst_json: {"op":"mir_call","mir_call":{...},"dst":X}
   // regs: register MapBox
@@ -85,13 +97,13 @@ static box MirCallHandlerBox {
       if fnv == null { return Result.Err("mir_call: value v%" + vid + " is unset") }
 
       // Invoke callable with provided arguments (ArrayBox). Empty array => zero-arg call.
-      local call_result = fnv.call(args_array)
-
-      // Store result to destination register if present
-      if dst_reg != null {
-        ValueManagerBox.set(regs, dst_reg, call_result)
-      }
-      return Result.Ok(0)
+      // Allocate temp for args_array and synthesize boxcall
+      local tmp_id = me._alloc_tmp_reg(regs)
+      regs.set(StringHelpers.int_to_str(tmp_id), args_array)
+      local js = me._build_boxcall_js(dst_reg, vid, tmp_id)
+      local bc = BoxCallHandlerBox.handle(js, regs)
+      if bc.is_Err() { return bc }
+return Result.Ok(0)
     }
 
     // For other callee types (Global, Extern, ModuleFunction): Extract name

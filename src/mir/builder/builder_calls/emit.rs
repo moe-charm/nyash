@@ -358,6 +358,19 @@ impl MirBuilder {
                     Ok(full) => full,
                     Err(_) => format!("{}/{}", name, args.len()),
                 };
+                // Special-case: route hostbridge.* globals to Extern("hostbridge.*") for unified HostBridge
+                if name.starts_with("hostbridge.") {
+                    let mut args = args;
+                    crate::mir::builder::ssa::local::finalize_args(self, &mut args);
+                    self.emit_instruction(MirInstruction::Call {
+                        dst,
+                        func: ValueId::new(0),
+                        callee: Some(crate::mir::definitions::call_unified::Callee::Extern(name.clone())),
+                        args,
+                        effects: crate::mir::builder::calls::extern_calls::compute_extern_effects("hostbridge", name.strip_prefix("hostbridge.").unwrap_or("")),
+                    })?;
+                    return Ok(());
+                }
                 // Prefer direct ModuleFunction when available in current module (avoids legacy string callee)
                 // Use CallNameResolverBox::normalize to ensure fully qualified form before lookup.
                 if let Some(ref module) = self.current_module {

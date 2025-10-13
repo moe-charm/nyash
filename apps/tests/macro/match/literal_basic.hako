@@ -1,0 +1,7 @@
+local d = 2
+local r = match d {
+  1 => 10
+  2 => 20
+  _ => 30
+}
+print(r)

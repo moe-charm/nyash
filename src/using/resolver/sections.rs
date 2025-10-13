@@ -44,10 +44,38 @@ pub fn process_modules_section(
         super::modules_processor::process_options(opts_tbl);
     }
 
-    // Conflict detection after all modules processing
+// Normalize and deduplicate module paths before conflict detection
+    normalize_and_dedup_modules(config_path, pending_modules);
+    // Conflict detection after all modules processing (post-normalization)
     super::conflict_detector::detect_conflicts_from_modules(pending_modules)?;
 
     Ok(())
+}
+
+/// Normalize module paths to absolute (based on config_path dir) and
+/// deduplicate entries that resolve to the same canonical path per namespace.
+fn normalize_and_dedup_modules(config_path: &std::path::Path, pending_modules: &mut Vec<(String, String)>) {
+    let base_dir = config_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let mut out: Vec<(String, String)> = Vec::with_capacity(pending_modules.len());
+    use std::collections::{HashMap, HashSet};
+    let mut seen: HashMap<String, HashSet<String>> = HashMap::new(); // ns -> {canon_path}
+    for (ns, p) in pending_modules.iter() {
+        let resolved = if std::path::Path::new(p).is_absolute() {
+            std::path::PathBuf::from(p)
+        } else {
+            base_dir.join(p)
+        };
+        // Best-effort canonicalization; fall back to normalized path if it fails
+        let canon = std::fs::canonicalize(&resolved).unwrap_or_else(|_| resolved.clone());
+        let canon_s = canon.display().to_string();
+        let entry = seen.entry(ns.clone()).or_insert_with(HashSet::new);
+        if entry.contains(&canon_s) {
+            continue; // duplicate of existing resolved path for this namespace
+        }
+        entry.insert(canon_s);
+        out.push((ns.clone(), resolved.display().to_string()));
+    }
+    *pending_modules = out;
 }
 
 /// Process entire [using] section

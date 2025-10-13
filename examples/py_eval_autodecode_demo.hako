@@ -1,0 +1,16 @@
+// Auto-decode demo for eval/getattr/call
+// Run:
+//   NYASH_PY_AUTODECODE=1 NYASH_CLI_VERBOSE=1 ./target/release/nyash --backend vm examples/py_eval_autodecode_demo.nyash
+
+static box Main {
+  main() {
+    local py, n, s
+    py = new PyRuntimeBox()
+    n = py.eval("3.14159")
+    s = py.eval("'hello world'")
+    me.console.log("eval num=", n.toString())
+    me.console.log("eval str=", s)
+    return 0
+  }
+}
+

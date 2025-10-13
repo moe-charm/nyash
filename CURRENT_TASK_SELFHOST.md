@@ -263,7 +263,7 @@ Guardrails / CI policy（開発中は弱め）
 Run cheatsheet
 - Build: `cargo build --release`
 - Quick: `tools/smokes/v2/run.sh --profile quick`
-- Summary (on demand): `./target/release/nyash apps/selfhost/tools/dep_tree_main.hako apps/selfhost/ny-parser-nyash/main.nyash --summary`
+- Summary (on demand): `./target/release/nyash selfhost/tools/dep_tree_main.hako apps/selfhost/ny-parser-nyash/main.nyash --summary`
 
 
 ---
@@ -346,3 +346,21 @@ Next
 - [ ] builder入出力の微整合（NYASH_LLVM_OBJ_OUT、一時名、末尾改行/単一行）
 - [ ] `NYASH_MIR_BUILDER_EXE` 既定ON
 - [ ] quick 側の代表2本を緑化（Program/MIR経路のみ対象）
+
+
+## Phase 15.7 — Selfhost Completion Path (2025‑10‑12)
+
+Status
+- quick-selfhost: 常時緑（重い/前提系は opt‑in SKIP）
+- integration-core: 緑（VM↔LLVM 小セット）
+
+Next
+- P4: emit_mir_flow(_map) に Call/Method/NewBox 薄アダプタを追加し、BlockBuilder の *_call_ret 直結。rc‑only 代表を1–2本追加。
+- P5: LocalSSA ensure_calls/ensure_cond の最小導入（copy/phi 材化）。rc‑only 代表を1本追加。
+- SSOT: resolve_typebox_by_name を SSOT 優先へ段階移行。生成テーブル（specs）起点へ。
+- Plugin‑on: 代表は順序非依存＋rc‑only、strict は plugin‑tester build-all 前置で在庫無ければ SKIP。
+
+Gates & How‑to
+- selfhost 全般: `SMOKES_SELFHOST_ENABLE=1 tools/smokes/v2/run.sh --profile quick-selfhost`
+- M2/M3（Mini‑VM）: `SMOKES_SELFHOST_M2M3_ENABLE=1 tools/smokes/v2/run.sh --profile quick-selfhost --filter 'selfhost_mir_*'`
+- strict plugin-on（quick）: `tools/plugin-tester/target/release/plugin-tester build-all` → `tools/smokes/v2/run.sh --profile quick --filter 'plugin_on_strict_*'`

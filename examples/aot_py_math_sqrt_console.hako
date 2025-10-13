@@ -1,0 +1,33 @@
+// AOT Python math.sqrt with ConsoleBox output
+static box Main {
+  main() {
+    local py, math, sqrt_func, sixteen, result, console
+    
+    // Create console for output
+    console = new ConsoleBox()
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Print start message
+    console.log("Starting sqrt calculation...")
+    
+    // Import math module
+    math = py.import("math")
+    
+    // Get sqrt function
+    sqrt_func = py.getattr(math, "sqrt")
+    
+    // Create number
+    sixteen = new IntegerBox(16)
+    
+    // Call sqrt(16)
+    result = py.call(sqrt_func, sixteen)
+    
+    // Print result message
+    console.log("Result calculated")
+    
+    // Return result (should be 4.0)
+    return result
+  }
+}

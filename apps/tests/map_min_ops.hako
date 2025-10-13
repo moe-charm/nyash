@@ -1,0 +1,14 @@
+static box Main {
+  main(args) {
+    local console = new ConsoleBox()
+    local m = new MapBox()
+    m.set("a", 1)
+    m.set("b", 2)
+    console.println("msz=" + m.size())
+    console.println("ha=" + m.has("a"))
+    console.println("hc=" + m.has("c"))
+    console.println("ga=" + m.get("a"))
+    return 0
+  }
+}
+

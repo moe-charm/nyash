@@ -1,0 +1,10 @@
+using selfhost.vm.scan as MiniVmScan
+
+static box Main {
+  main(args) {
+    local s = "xx42yy"
+    print(new MiniVmScan().read_digits(s, 2))
+    return 0
+  }
+}
+

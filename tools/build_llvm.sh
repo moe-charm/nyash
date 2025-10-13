@@ -121,11 +121,11 @@ if [[ "${NYASH_LLVM_SKIP_EMIT:-0}" != "1" ]]; then
     if [[ "${NYASH_LLVM_FEATURE:-llvm}" == "llvm-inkwell-legacy" ]]; then
       # Legacy path: do not use harness (LLVM_SYS_180_PREFIX needed)
       _LLVMPREFIX=$(llvm-config-18 --prefix)
-      NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
+      timeout 60s env NYASH_LLVM_OBJ_OUT="$OBJ" LLVM_SYS_181_PREFIX="${_LLVMPREFIX}" LLVM_SYS_180_PREFIX="${_LLVMPREFIX}" \
         ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
     else
       # Harness path (Python llvmlite - LLVM_SYS_180_PREFIX不要)
-      NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 \
+      timeout 60s env NYASH_LLVM_OBJ_OUT="$OBJ" NYASH_LLVM_USE_HARNESS=1 HAKO_ALLOW_USING_FILE=1 NYASH_ALLOW_USING_FILE=1 NYASH_USING_AST=1 \
         ./target/release/nyash --backend llvm "$INPUT" >/dev/null || true
     fi
   fi

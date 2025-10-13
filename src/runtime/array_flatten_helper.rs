@@ -7,25 +7,21 @@
 
 use crate::backend::vm_types::VMValue;
 
+#[path = "array_flatten_helper_builtin.rs"]
+mod array_flatten_helper_builtin;
+#[path = "array_flatten_helper_plugin.rs"]
+mod array_flatten_helper_plugin;
+
 /// Check if the given VMValue is an ArrayBox (builtin or plugin).
 ///
 /// Returns true if:
 /// - VMValue::BoxRef contains builtin crate::boxes::array::ArrayBox, OR
 /// - VMValue::BoxRef contains PluginBoxV2 with box_type == "ArrayBox"
 pub fn is_array(v: &VMValue) -> bool {
-    if let VMValue::BoxRef(bx) = v {
-        // Check builtin ArrayBox
-        if bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
-            return true;
-        }
-        // Check plugin ArrayBox
-        if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-            if p.box_type == "ArrayBox" {
-                return true;
-            }
-        }
-    }
-    false
+    // Prefer builtin when available; otherwise plugin判定
+    #[cfg(feature = "legacy-boxes")]
+    if array_flatten_helper_builtin::is_array(v) { return true; }
+    array_flatten_helper_plugin::is_array(v)
 }
 
 /// Get the length of an ArrayBox.
@@ -35,20 +31,9 @@ pub fn is_array(v: &VMValue) -> bool {
 ///
 /// Returns 0 if not an ArrayBox or error occurs.
 pub fn get_len(v: &VMValue) -> usize {
-    if let VMValue::BoxRef(bx) = v {
-        // Builtin ArrayBox
-        if let Some(a) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            return a.items.read().unwrap().len();
-        }
-        // Plugin ArrayBox: call size() via route
-        if let Some(_p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-            let mut tmp_interp = crate::backend::mir_interpreter::MirInterpreter::new();
-            if let Ok(VMValue::Integer(sz)) = crate::runtime::method_router_box::route(&mut tmp_interp, v, "size", &[]) {
-                return sz as usize;
-            }
-        }
-    }
-    0
+    #[cfg(feature = "legacy-boxes")]
+    if let Some(n) = array_flatten_helper_builtin::get_len(v) { return n; }
+    array_flatten_helper_plugin::get_len(v)
 }
 
 /// Get element at index i from an ArrayBox.
@@ -58,19 +43,7 @@ pub fn get_len(v: &VMValue) -> usize {
 ///
 /// Returns cloned value if successful, otherwise returns cloned v.
 pub fn get_element(v: &VMValue, i: usize) -> VMValue {
-    if let VMValue::BoxRef(bx) = v {
-        // Builtin ArrayBox
-        if let Some(a) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
-            let guard = a.items.read().unwrap();
-            return VMValue::from_nyash_box(guard[i].clone_box());
-        }
-        // Plugin ArrayBox: call get(i) via route
-        if let Some(_p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
-            let mut tmp_interp = crate::backend::mir_interpreter::MirInterpreter::new();
-            if let Ok(val) = crate::runtime::method_router_box::route(&mut tmp_interp, v, "get", &[VMValue::Integer(i as i64)]) {
-                return val;
-            }
-        }
-    }
-    v.clone()
+    #[cfg(feature = "legacy-boxes")]
+    if let Some(val) = array_flatten_helper_builtin::get_element(v, i) { return val; }
+    array_flatten_helper_plugin::get_element(v, i)
 }

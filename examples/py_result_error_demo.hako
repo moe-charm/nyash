@@ -1,0 +1,15 @@
+// Python evalR error demo (returns Result.Err)
+// @env NYASH_PLUGIN_ONLY=1
+// Run:
+//   ./target/release/nyash --backend vm examples/py_result_error_demo.nyash
+
+static box Main {
+  main() {
+    local py, r
+    py = new PyRuntimeBox()
+    // Division by zero triggers a Python exception
+    r = py.evalR("1/0")
+    me.console.println(r)
+    return 0
+  }
+}

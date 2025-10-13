@@ -2,6 +2,7 @@
 # plugin_off_string_boxcall_vm.sh — StringBox BoxCall sanity with plugins OFF
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 export HAKO_PLUGIN_POLICY=off
 export NYASH_DISABLE_PLUGINS=1
 require_env || exit 2

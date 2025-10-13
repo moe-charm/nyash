@@ -1,0 +1,26 @@
+using selfhost.shared.host_bridge as HostBridgeBox
+
+static box Main {
+  main() {
+    local json
+    json = "{\"test\":42}"
+
+    local doc
+    doc = HostBridgeBox.box_new("JsonDocBox", [])
+    HostBridgeBox.print("Step 1: doc created")
+
+    HostBridgeBox.box_call(doc, "parse", [json])
+    HostBridgeBox.print("Step 2: parse OK")
+
+    local node
+    node = HostBridgeBox.box_call(doc, "root", [])
+    HostBridgeBox.print("Step 3: node retrieved")
+
+    local node_str
+    node_str = HostBridgeBox.box_call(node, "toString", [])
+    HostBridgeBox.print("Step 4: node type = ")
+    HostBridgeBox.print(node_str)
+
+    return 0
+  }
+}

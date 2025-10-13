@@ -9,6 +9,12 @@ use std::{fs, process};
 impl NyashRunner {
     /// Execute LLVM mode (split)
     pub(crate) fn execute_llvm_mode(&self, filename: &str) {
+        // Ensure future ops (Await/FutureNew/FutureSet) are rewritten to Extern calls for LLVM path
+        // so the Python/llvmlite builder can lower them uniformly.
+        if std::env::var("NYASH_REWRITE_FUTURE").ok().is_none() {
+            std::env::set_var("NYASH_REWRITE_FUTURE", "1");
+        }
+
         // Early SMOKES bypass: under smokes profiles, avoid ny-llvmc path entirely
         // to keep suites green without AOT linking noise. This runs the VM path
         // for output parity. Opt-out by setting NYASH_LLVM_BYPASS_UNDER_SMOKES=0.

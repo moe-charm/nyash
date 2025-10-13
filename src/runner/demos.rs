@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 //! Runner demo helpers (moved out of mod.rs to reduce file size)
 use nyash_rust::ast::ASTNode;
 use nyash_rust::box_trait::{AddBox, BoolBox, BoxCore, IntegerBox, NyashBox, StringBox, VoidBox};

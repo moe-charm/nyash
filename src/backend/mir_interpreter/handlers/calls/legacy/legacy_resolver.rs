@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 //! Legacy function name resolution and execution
 //!
 //! Handles string-based function calls from NameConst MIR instructions.

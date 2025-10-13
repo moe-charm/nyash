@@ -16,7 +16,7 @@ box JsonScanner {
     birth(input_text) {
         me.text = input_text
         me.position = 0
-        me.length = input_text.length()
+        me.length = input_text.size()
     }
     
     // ===== 基本読み取りメソッド =====
@@ -79,12 +79,12 @@ box JsonScanner {
     
     // 指定文字列にマッチするかチェック
     match_string(expected) {
-        if expected.length() > me.remaining() {
+        if expected.size() > me.remaining() {
             return false
         }
         
         local i = 0
-        loop(i < expected.length()) {
+        loop(i < expected.size()) {
             local pos = me.position + i
             if pos >= me.length {
                 return false

@@ -36,6 +36,12 @@ JsonNode = "json_node"
 path = "apps/lib/json_native/core/node.hako"
 
 [modules]
+selfhost.tools.dep_tree = "selfhost/tools/dep_tree.hako"
+selfhost.tools.dep_tree_main = "selfhost/tools/dep_tree_main.hako"
+selfhost.tools.dep_tree_simple = "selfhost/tools/dep_tree_simple.hako"
+selfhost.tools.dep_tree_min_string = "selfhost/tools/dep_tree_min_string.hako"
+selfhost.tools.dep_tree_summary = "selfhost/tools/dep_tree_summary.hako"
+selfhost.tools.dep_tree_annotator = "selfhost/tools/dep_tree_annotator.hako"
 
 # Selfhost VM boxes (migration)
 selfhost.vm.boxes.mini_vm_entry = "selfhost/vm/boxes/mini_vm_entry.hako"
@@ -67,8 +73,9 @@ selfhost.compiler.pipeline_v2.emit_binop = "selfhost/compiler/pipeline_v2/emit_b
 selfhost.compiler.pipeline_v2.header_emit = "selfhost/compiler/pipeline_v2/header_emit_box.hako"
 selfhost.compiler.pipeline_v2.mir_call = "selfhost/compiler/pipeline_v2/mir_call_box.hako"
 selfhost.compiler.pipeline_v2.name_resolve = "selfhost/compiler/pipeline_v2/name_resolve_box.hako"
-selfhost.common.json.mir_builder_min = "apps/selfhost/common/json/mir_builder_min.hako"
-selfhost.common.json.mir_v1_adapter = "apps/selfhost/common/json/mir_v1_adapter.hako"
+selfhost.common.json.mir_builder_min = "selfhost/shared/json/mir_builder_min.hako"
+selfhost.common.json.mir_v1_adapter = "selfhost/shared/json/mir_v1_adapter.hako"
+selfhost.common.json.core.string_scan = "selfhost/shared/json/core/string_scan.hako"
 selfhost.core.timer = "core.timer.TimerBox"
 timer = "core.timer.TimerBox"
 hakorune.common.json.cursor = "apps/hakorune/common/json/json_cursor_alias.hako"
@@ -88,7 +95,7 @@ selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
 # selfhost.common.json = "apps/selfhost/common/json_adapter.hako"
 
 # Tools (dep_tree utilities)
-selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
+selfhost.tools.dep_tree_core = "selfhost/tools/dep_tree_core.hako"
 
 # v2 Plugin libraries (loader reads these for TypeBox ABI)
 
@@ -117,7 +124,7 @@ selfhost.vm.prints = "selfhost.vm.boxes.mini_vm_prints"
 selfhost.vm.json_cur = "selfhost.vm.boxes.json_cur"
 selfhost.vm.core = "selfhost.vm.boxes.mini_vm_core"
 selfhost.vm.seam = "selfhost.vm.boxes.seam_inspector"
-selfhost.vm.json = "selfhost.common.json_adapter"
+selfhost.vm.json = "selfhost.shared.json_adapter"
 hakorune.vm.inst_scan = "hakorune.vm.boxes.inst_scan"
 hakorune.vm.inst_value_scan = "hakorune.vm.boxes.inst_value_scan"
 # Short alias
@@ -151,12 +158,26 @@ timer = "core.timer.TimerBox"
  selfhost.hakorune_vm.args_extractor = "selfhost/hakorune-vm/args_extractor.hako"
  selfhost.hakorune_vm.global_call_handler = "selfhost/hakorune-vm/global_call_handler.hako"
  selfhost.hakorune_vm.extern_call_handler = "selfhost/hakorune-vm/extern_call_handler.hako"
+
+
+# Resolve duplicate namespaces explicitly (prefer apps/* paths)
+selfhost.compiler.debug = "apps/selfhost-compiler/boxes/debug_box.hako"
+selfhost.compiler.parser = "apps/selfhost-compiler/boxes/parser_box.hako"
+selfhost.compiler.emitter = "apps/selfhost-compiler/boxes/emitter_box.hako"
+selfhost.compiler.mir = "apps/selfhost-compiler/boxes/mir_emitter_box.hako"
+selfhost.compiler.main = "apps/selfhost-compiler/compiler.hako"
+
+# JSON native helpers
+selfhost.json.stringify = "apps/lib/json_native/stringify.hako"
+
+# Hakorune VM entry
+hakorune.vm.entry = "apps/hakorune/vm/boxes/hakorune_vm_entry.hako"
  selfhost.hakorune_vm.module_function_call_handler = "selfhost/hakorune-vm/module_function_call_handler.hako"
  selfhost.hakorune_vm.method_call_handler = "selfhost/hakorune-vm/method_call_handler.hako"
  selfhost.hakorune_vm.constructor_call_handler = "selfhost/hakorune-vm/constructor_call_handler.hako"
  selfhost.hakorune_vm.boxcall_handler = "selfhost/hakorune-vm/boxcall_handler.hako"
 
- selfhost.tools.dep_tree_core = "apps/selfhost/tools/dep_tree_core.hako"
+ selfhost.tools.dep_tree_core = "selfhost/tools/dep_tree_core.hako"
  # Dev VM utility boxes (for tests that reference them directly)
  selfhost.vm.boxes.guard_box = "selfhost/vm/boxes/guard_box.hako"
  selfhost.vm.boxes.scanner_box = "selfhost/vm/boxes/scanner_box.hako"
@@ -167,10 +188,10 @@ timer = "core.timer.TimerBox"
 [modules.workspace]
 members = [
   "selfhost/vm/hako_module.toml",
+  "selfhost/shared/hako_module.toml",
   "apps/hakorune/vm/hako_module.toml",
   "apps/selfhost-compiler/hako_module.toml",
   "apps/hakorune/common/hako_module.toml",
-  "apps/selfhost/common/hako_module.toml",
   "apps/lib/json_native/hako_module.toml",
   "apps/examples/module_hako_demo"
 ]
@@ -590,3 +611,25 @@ patterns = [
 [private.options]
 on_violation = "warn"          # 最初は警告のみ
 enable_diagnostics = true       # 安定したJSON診断を1行で出す
+
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so"]
+boxes = ["MirJsonBuilderMin"]
+path = "plugins/nyash-mirjsonbuildermin-plugin/libnyash_mirjsonbuildermin_plugin.so"
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so".MirJsonBuilderMin]
+type_id = 72
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_mirjsonbuildermin_plugin.so".MirJsonBuilderMin.methods]
+birth = { method_id = 0 }
+start_module = { method_id = 1 }
+start_function = { method_id = 2 }
+start_block = { method_id = 3 }
+add_const = { method_id = 4 }
+add_compare = { method_id = 5 }
+add_ret = { method_id = 6 }
+end_all = { method_id = 7 }
+to_string = { method_id = 8 }
+fini = { method_id = 4294967295 }

@@ -37,6 +37,10 @@ Everything is Box の方針に合わせ、ArrayBox / MapBox の最小仕様を�
 
 Stage-1 互換として文字列版 `keysS()/valuesS()` も残しているが、将来的に削除予定。新規コードは Stage-2 Array 経路を利用すること。
 
+Note（HostHandleRouter 運用）
+- plugins プロファイルでは、HostHandleRouter 経路を既定で優先（Map.size/has/get/set、Array.size/get/set、String.size/len を slot へ強制）。
+- quick プロファイルでは既定OFF（開発時に `NYASH_MAP_FORCE_HOST=1`, `NYASH_ARRAY_FORCE_HOST=1`, `NYASH_STRING_SIZE_FORCE_HOST=1` を使用）。
+
 ## Identity Smokes
 
 Phase 15.7 では下記の恒等性テストを常時回している：

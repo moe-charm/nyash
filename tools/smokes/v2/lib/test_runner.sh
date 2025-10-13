@@ -37,6 +37,11 @@ fi
 if [ -z "${NYASH_USING:-}" ] && [ -z "${NYASH_ENABLE_USING:-}" ]; then
   export NYASH_USING=1
 fi
+# Mirror critical NYASH_* → HAKO_* for hakorune CLI compatibility (non-destructive)
+if [ -z "${HAKO_USING:-}" ] && [ -n "${NYASH_USING:-}" ]; then export HAKO_USING="$NYASH_USING"; fi
+if [ -z "${HAKO_USING_STRATEGY:-}" ] && [ -n "${NYASH_USING_STRATEGY:-}" ]; then export HAKO_USING_STRATEGY="$NYASH_USING_STRATEGY"; fi
+if [ -z "${HAKO_USING_PROFILE:-}" ] && [ -n "${NYASH_USING_PROFILE:-}" ]; then export HAKO_USING_PROFILE="$NYASH_USING_PROFILE"; fi
+if [ -z "${HAKO_ALLOW_USING_FILE:-}" ] && [ -n "${NYASH_ALLOW_USING_FILE:-}" ]; then export HAKO_ALLOW_USING_FILE="$NYASH_ALLOW_USING_FILE"; fi
 # Provide a minimal default modules mapping for selfhost Mini-VM smokes when unset
 if [ -z "${NYASH_MODULES:-}" ]; then
   export NYASH_MODULES="selfhost.vm.mir_min=selfhost/vm/boxes/mir_vm_min.hako"
@@ -67,6 +72,13 @@ if [ -z "${NYASH_BIN:-}" ]; then
     if [ -x "$cand" ]; then NYASH_BIN="$cand"; break; fi
   done
   export NYASH_BIN="${NYASH_BIN:-$NYASH_ROOT/target/release/nyash}"
+
+# Normalize backend CLI args via a thin wrapper to avoid "Unknown backend: ." noise.
+# The wrapper replaces "--backend ." or "--backend=." with "--backend vm".
+if [ -z "${NYASH_BIN_WRAPPER_DISABLED:-}" ]; then
+  export NYASH_BIN_REAL="$NYASH_BIN"
+  export NYASH_BIN="$NYASH_ROOT/tools/smokes/v2/lib/nyash_bin_wrapper.sh"
+fi
 fi
 
 # グローバル変数
@@ -133,17 +145,21 @@ filter_noise() {
   | grep -v '^Traceback \(most recent call last\):' \
   | grep -v 'llvmlite/binding/ffi\.py' \
   | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
+  | grep -v '^\[macro\]\[compat\] NYASH_MACRO_BOX_CHILD_RUNNER is deprecated' \
   | grep -v '^\[warn\] dev verify:' \
   | grep -v '^Result: ' \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
   | grep -v '^\{"kind":"contracts_' \
+  | grep -v '"kind":"modules_error"' \
+  | grep -v '"code":"conflict"' \
   | grep -v '^\{"resolve":' \
   | grep -v '^\[deprecate\] CLI name' \
   | grep -v '^\[env\] NYASH_ENABLE_USING is deprecated; use NYASH_USING instead' \
   | grep -v '^\[deprecate\] \[modules.aliases\]' \
   | grep -v '^\[deprecate\]' \
+  | grep -v '^\[map-plugin\]' \
   | grep -v "plugins/nyash-array-plugin" \
   | grep -v "plugins/nyash-map-plugin" \
       | grep -v "Phase 15.5: Everything is Plugin" \
@@ -158,6 +174,7 @@ filter_noise() {
       | grep -v '^✅ Mock exit code:' \
   | grep -v '^\[provider\] ' \
   | grep -v '^\[provider/check\] ' \
+  | grep -v '^Unknown backend: \.' \
   | sed -E 's/^❌[[:space:]]*//' \
   | sed -E 's/^Pipeline error: *//' \
   | sed -E 's/bb[0-9]+/bb<ID>/g' \
@@ -311,13 +328,13 @@ run_nyash_vm() {
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" \
             HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" \
-            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         else
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" \
             HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" \
-            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+            NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         fi
         local exit_code=${PIPESTATUS[0]}
@@ -332,11 +349,11 @@ run_nyash_vm() {
         ensure_hako_toml
         if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
-            HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+            HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         else
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
-            HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 "${ENV_PREFIX[@]}" \
+            HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         fi
         return ${PIPESTATUS[0]}
@@ -390,9 +407,10 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
+            grep -v '^\[provider\]' | grep -v '^\[provider/check\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | \
             grep -v '^\[deprecate\] \[modules\.aliases\]' | \
@@ -411,9 +429,10 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
+            grep -v '^\[provider\]' | grep -v '^\[provider/check\]' | \
             grep -v '^✅ LLVM (harness) execution completed' | grep -v '^📊 MIR Module compiled successfully' | grep -v '^📊 Functions:' | grep -v 'JSON Parse Errors:' | grep -v 'Parsing errors' | grep -v 'No parsing errors' | grep -v 'Error at line ' | \
             grep -v '^\[ny-llvmc\]' | grep -v '^\[harness\]' | grep -v '^Compiled to ' | grep -v '^/usr/bin/ld:' | grep -v '^\[deprecate\] CLI name' | grep -v '^\{"kind":"contracts_' | \
             grep -v '^\[deprecate\] \[modules\.aliases\]' | \
@@ -458,6 +477,9 @@ compare_outputs() {
         sed -E 's/^❌[[:space:]]*//' | \
         sed -E 's/^Pipeline error: *//' | \
         sed -E 's/\bbb[0-9]+\b/bb<ID>/g' | \
+        grep -vi 'deprecate.*nyash extension' | \
+        grep -v '^Nyash LLVM Backend - Executing file:' | \
+        grep -v '^SMOKES bypass' | \
         grep -v '^🔧 Mock LLVM Backend Execution' | \
         grep -v '^✅ Mock exit code:' | \
         grep -v 'NYASH_LLVM_USE_HARNESS' | \

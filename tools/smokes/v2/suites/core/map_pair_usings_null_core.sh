@@ -11,7 +11,7 @@ fi
 
 test_core_map_pair_usings_null() {
   local code=$(cat << 'NY'
-using "./apps/selfhost/tools/dep_tree_simple.hako" as Dep
+using selfhost.tools.dep_tree_simple as Dep
 
 static box Main {
   main() {

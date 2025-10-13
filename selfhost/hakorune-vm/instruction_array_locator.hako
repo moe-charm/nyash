@@ -1,0 +1,27 @@
+// instruction_array_locator.hako — InstructionArrayLocatorBox
+// Responsibility: robustly locate instructions[] segment in a block JSON
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+
+static box InstructionArrayLocatorBox {
+  // Locate instructions array in a block JSON
+  // Returns Ok({ start: <idx>, end: <idx>, content: <string> })
+  locate(block_json) {
+    local key = r#""instructions""#
+    local kpos = JsonCursorBox.index_of_from(block_json, key, 0)
+    if kpos < 0 { return Result.Err("instructions key not found") }
+    // find '[' after the key
+    local lbr = JsonCursorBox.index_of_from(block_json, r#"["#, kpos)
+    if lbr < 0 { return Result.Err("instructions array not found") }
+    local arr_end = JsonScanGuardBox.seek_array_end(block_json, lbr, 200000)
+    if arr_end < 0 { return Result.Err("instructions array end not found") }
+    local content = block_json.substring(lbr + 1, arr_end)
+    local meta = new MapBox()
+    meta.set("start", lbr + 1)
+    meta.set("end", arr_end)
+    meta.set("content", content)
+    return Result.Ok(meta)
+  }
+}

@@ -1,0 +1,14 @@
+// Simple await example for testing MIR Await instruction
+
+static box Main {
+    main() {
+        local f
+        f = me.createFuture()
+        return await f
+    }
+    
+    createFuture() {
+        // Simple future that resolves to 100
+        return new FutureBox(100)
+    }
+}

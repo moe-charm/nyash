@@ -1,0 +1,38 @@
+// blocks_locator.hako — BlocksLocatorBox
+// Responsibility: locate blocks[] array in function JSON
+
+using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/hakorune-vm/json_scan_guard.hako" as JsonScanGuardBox
+
+static box BlocksLocatorBox {
+  locate(func_json) {
+    // Find key "blocks"
+    local kpos = JsonCursorBox.index_of_from(func_json, r#""blocks""#, 0)
+    if kpos < 0 { return Result.Err("blocks key not found") }
+    // find ':' then '['
+    local i = kpos + r#""blocks""#.size()
+    loop(i < func_json.size()) {
+      local ch = func_json.substring(i, i+1)
+      if ch == ":" { i = i + 1  break }
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1  continue }
+      return Result.Err("blocks key format invalid")
+    }
+    loop(i < func_json.size()) {
+      local ch = func_json.substring(i, i+1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { i = i + 1  continue }
+      if ch == "[" { break }
+      return Result.Err("blocks array not found")
+    }
+    local lbr = i
+    local arr_end = JsonScanGuardBox.seek_array_end(func_json, lbr, 200000)
+    if arr_end < 0 { return Result.Err("blocks array end not found") }
+    // exclude brackets
+    local content = func_json.substring(lbr+1, arr_end)
+    local meta = new MapBox()
+    meta.set("start", lbr+1)
+    meta.set("end", arr_end)
+    meta.set("content", content)
+    return Result.Ok(meta)
+  }
+}

@@ -2,9 +2,11 @@
 # oop_instance_call_vm.sh — Instance method call should work in prod via builder rewrite
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 export SMOKES_USE_PYVM=0
 require_env || exit 2
 preflight_plugins || exit 2
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 # Force prod profile and disallow VM runtime fallback for user instance BoxCall
 export NYASH_USING_PROFILE=prod

@@ -14,7 +14,7 @@ TMP_DIR="/tmp/jsonscan_seek_array_end_vm_$$"
 mkdir -p "$TMP_DIR"
 
 export NYASH_USING=1
-export NYASH_MODULES="json.scan=apps/selfhost/common/json/core/json_scan.hako"
+export NYASH_MODULES="json.scan=selfhost/shared/json/core/json_scan.hako"
 
 cat > "$TMP_DIR/driver.nyash" << 'NY'
 using json.scan as JsonScanBox

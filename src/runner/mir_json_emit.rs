@@ -15,6 +15,7 @@ use crate::mir::definitions::call_unified::Callee;
 /// Includes version, capabilities, metadata for advanced MIR features
 fn create_json_v1_root(functions: serde_json::Value) -> serde_json::Value {
     json!({
+        "kind": "MIR",
         "schema_version": "1.0",
         "capabilities": [
             "unified_call",      // Phase 15.5: Unified MirCall support
@@ -36,6 +37,7 @@ fn create_json_v1_root(functions: serde_json::Value) -> serde_json::Value {
 struct EmitConfig {
     use_v1_schema: bool,
     use_unified_call: bool,
+    #[allow(dead_code)]
     downgrade_v1: bool,
     skip_validator: bool,
     dev_marker: bool,
@@ -90,7 +92,11 @@ fn wrap_functions(funs: Vec<serde_json::Value>, config: &EmitConfig) -> serde_js
     if config.use_v1_schema {
         create_json_v1_root(json!(funs))
     } else {
-        json!({"functions": funs})
+        json!({
+            "kind": "MIR",
+            "schema_version": "1.0",
+            "functions": funs
+        })
     }
 }
 
@@ -196,6 +202,8 @@ pub fn emit_mir_json_for_harness(
         let mut blocks = Vec::new();
         let mut ids: Vec<_> = f.blocks.keys().copied().collect();
         ids.sort();
+        // Determine entry as the minimal block id (stable default)
+        let entry_id_u32 = ids.first().copied().map(|v| v.as_u32()).unwrap_or(0);
         for bid in ids {
             if let Some(bb) = f.blocks.get(&bid) {
                 let mut insts = Vec::new();
@@ -509,7 +517,7 @@ pub fn emit_mir_json_for_harness(
         }
         // Export parameter value-ids so a VM can bind arguments
         let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
-        funs.push(json!({"name": name, "params": params, "blocks": blocks}));
+        funs.push(json!({"name": name, "params": params, "entry": entry_id_u32, "blocks": blocks}));
     }
 
     let mut root = wrap_functions(funs, &config);
@@ -531,6 +539,7 @@ pub fn emit_mir_json_for_harness_bin(
         let mut blocks = Vec::new();
         let mut ids: Vec<_> = f.blocks.keys().copied().collect();
         ids.sort();
+        let entry_id_u32 = ids.first().copied().map(|v| v.as_u32()).unwrap_or(0);
         for bid in ids {
             if let Some(bb) = f.blocks.get(&bid) {
                 let mut insts = Vec::new();
@@ -776,7 +785,7 @@ pub fn emit_mir_json_for_harness_bin(
             }
         }
         let params: Vec<_> = f.params.iter().map(|v| v.as_u32()).collect();
-        funs.push(json!({"name": name, "params": params, "blocks": blocks}));
+        funs.push(json!({"name": name, "params": params, "entry": entry_id_u32, "blocks": blocks}));
     }
 
     let mut root = wrap_functions(funs, &config);

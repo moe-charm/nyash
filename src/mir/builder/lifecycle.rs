@@ -305,6 +305,50 @@ impl super::MirBuilder {
             }
         }
 
+        // Normalize: ensure every basic block ends with a terminator (ret/jump/branch/throw)
+        // This guards against unterminated blocks observed in rc paths.
+        {
+            use crate::mir::{MirInstruction, types::MirType};
+            let mut fun = function.clone();
+            // Collect block ids first to satisfy borrow rules
+            let ids: Vec<_> = fun.blocks.keys().cloned().collect();
+            for bid in ids {
+                let mut need_fix = false;
+                if let Some(bb) = fun.get_block(bid) {
+                    if !bb.is_terminated() {
+                        need_fix = true;
+                    }
+                }
+                if need_fix {
+                    match fun.signature.return_type {
+                        MirType::Void | MirType::Unknown => {
+                            if let Some(bbm) = fun.get_block_mut(bid) {
+                                bbm.add_instruction(MirInstruction::Return { value: None });
+                            }
+                        }
+                        _ => {
+                            // Try to return the last defined value in the block; otherwise return 0
+                            let mut last_dst: Option<crate::mir::ValueId> = None;
+                            if let Some(bb) = fun.get_block(bid) {
+                                for inst in bb.instructions.iter().rev() {
+                                    if let Some(d) = inst.dst_value() { last_dst = Some(d); break; }
+                                }
+                            }
+                            let ret_val = if let Some(d) = last_dst {
+                                d
+                            } else {
+                                crate::mir::function_emission::emit_const_integer(&mut fun, bid, 0)
+                            };
+                            crate::mir::function_emission::emit_return_value(&mut fun, bid, ret_val);
+                        }
+                    }
+                }
+            }
+            // Recompute CFG after edits
+            fun.update_cfg();
+            function = fun;
+        }
+
         module.add_function(function);
 
         // Dev stub: provide condition_fn when missing to satisfy predicate calls in JSON lexers
@@ -327,6 +371,46 @@ impl super::MirBuilder {
             module.add_function(f);
         }
 
-        Ok(module)
+        
+        // Final normalization: ensure every block in every function has a terminator
+        {
+            use crate::mir::{MirInstruction, types::MirType};
+            // Collect function names to avoid borrow issues
+            let fnames: Vec<String> = module.functions.keys().cloned().collect();
+            for fname in fnames {
+                if let Some(fun) = module.functions.get_mut(&fname) {
+                    let ids: Vec<_> = fun.blocks.keys().cloned().collect();
+                    for bid in ids {
+                        let need_fix = fun.get_block(bid).map(|bb| !bb.is_terminated()).unwrap_or(false);
+                        if need_fix {
+                            match fun.signature.return_type {
+                                MirType::Void | MirType::Unknown => {
+                                    if let Some(bbm) = fun.get_block_mut(bid) {
+                                        bbm.add_instruction(MirInstruction::Return { value: None });
+                                    }
+                                }
+                                _ => {
+                                    let mut last_dst: Option<crate::mir::ValueId> = None;
+                                    if let Some(bb) = fun.get_block(bid) {
+                                        for inst in bb.instructions.iter().rev() {
+                                            if let Some(d) = inst.dst_value() { last_dst = Some(d); break; }
+                                        }
+                                    }
+                                    let ret_val = if let Some(d) = last_dst {
+                                        d
+                                    } else {
+                                        crate::mir::function_emission::emit_const_integer(fun, bid, 0)
+                                    };
+                                    crate::mir::function_emission::emit_return_value(fun, bid, ret_val);
+                                }
+                            }
+                        }
+                    }
+                    fun.update_cfg();
+                }
+            }
+        }
+
+Ok(module)
     }
 }

@@ -9,7 +9,7 @@ if [ "${SMOKES_ENABLE_ALIAS2:-0}" != "1" ]; then
 fi
 export SMOKES_DISABLE_PLUGIN_CHECKS=1
 export NYASH_DISABLE_PLUGINS=1
-export NYASH_MODULES="selfhost.vm.mir_min=selfhost/vm/boxes/mir_vm_min.hako,selfhost.vm.handlers=selfhost/vm/boxes/op_handlers.hako,selfhost.json.utils.json_frag=apps/selfhost/common/json/utils/json_frag.hako,selfhost.json.core.string_scan=apps/selfhost/common/json/core/string_scan.hako"
+export NYASH_MODULES="selfhost.vm.mir_min=selfhost/vm/boxes/mir_vm_min.hako,selfhost.vm.handlers=selfhost/vm/boxes/op_handlers.hako,selfhost.json.utils.json_frag=selfhost/shared/json/utils/json_frag.hako,selfhost.json.core.string_scan=selfhost/shared/json/core/string_scan.hako"
 require_env || exit 2
 preflight_plugins || exit 2
 

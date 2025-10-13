@@ -23,6 +23,7 @@
 | **integration** | 5-10分 | 基本パリティ確認 | VM↔LLVM整合性 |
 | **full** | 15-30分 | 完全マトリックス | 全組み合わせテスト |
 | **plugins** | 数十秒〜 | 任意の補助スイート | using.dylib 自動読み込みなど |
+| **legacy** | 任意 | 移行・互換スモーク保管庫 | デフォルト非対象（手動実行） |
 
 ### プロファイル環境オーバーレイ
 
@@ -39,6 +40,8 @@
 ./run.sh --profile plugins
 ./run.sh --profile integration --filter "plugins:*"
 ./run.sh --profile full --format json --jobs 4 --timeout 300
+# HostHandleRouter 代表のみ（フィルタ別名: hosthandle）
+./run.sh --profile plugins --filter hosthandle
 ```
 
 ### LLVM ハーネス系スモーク（更新）
@@ -89,6 +92,11 @@ tools/smokes/v2/
 │       └── stress/           # 負荷・ストレステスト
 │   └── plugins/              # プラグイン専用スイート（任意）
 │       └── dylib_autoload.sh # using kind="dylib" 自動読み込みの動作確認（Fixture/Counter 等）
+│   └── legacy/               # 旧/移行スモーク（デフォルト非対象）
+│       ├── README.md         # 方針・運用
+│       ├── run_all_legacy.sh # 一括実行
+│       ├── legacy_map_keys_values_fallback_vm.sh
+│       └── legacy_array_size_force_host_vm.sh
 ├── lib/                      # 共通ライブラリ（強制使用）
 │   ├── test_runner.sh        # 中核実行器
 │   ├── plugin_manager.sh     # プラグイン設定管理

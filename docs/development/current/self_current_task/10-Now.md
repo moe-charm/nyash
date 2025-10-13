@@ -58,5 +58,5 @@ Nyashの開発哲学「Everything is Box」に従い、スコープも箱化す�
 
 代表コマンド
 - ビルド: `cargo build --release`
-- 最小 dep-tree: `./target/release/nyash --backend vm apps/selfhost/tools/dep_tree_min_string.hako`
+- 最小 dep-tree: `./target/release/nyash --backend vm selfhost/tools/dep_tree_min_string.hako`
 - 生成: `make dep-tree`（`tmp/deps.json`）

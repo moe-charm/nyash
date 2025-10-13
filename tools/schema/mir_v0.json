@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/mir_v0.json",
+  "title": "MIR JSON v0",
+  "type": "object",
+  "required": ["kind", "schema_version", "functions"],
+  "properties": {
+    "kind": {"const": "MIR"},
+    "schema_version": {"const": "1.0"},
+    "functions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+          "name": {"type": "string"},
+          "blocks": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "instructions"],
+              "properties": {
+                "id": {"type": "integer", "minimum": 0},
+                "instructions": {"type": "array"}
+              }
+            }
+          },
+          "instructions": {"type": "array"}
+        }
+      }
+    }
+  }
+}

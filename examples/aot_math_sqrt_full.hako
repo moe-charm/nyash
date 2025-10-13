@@ -1,0 +1,39 @@
+// Full math.sqrt with import/getattr/call
+static box Main {
+  main() {
+    local py, math, sqrt_func, sixteen, result, console, msg1, msg2
+    
+    // Create console
+    console = new ConsoleBox()
+    
+    // Create Python runtime  
+    py = new PyRuntimeBox()
+    
+    // Print start message (text only)
+    msg1 = new StringBox("Starting calculation")
+    console.log(msg1)
+    
+    // Import math module
+    local math_name
+    math_name = new StringBox("math")
+    math = py.import(math_name)
+    
+    // Get sqrt function
+    local sqrt_name
+    sqrt_name = new StringBox("sqrt")
+    sqrt_func = py.getattr(math, sqrt_name)
+    
+    // Create argument
+    sixteen = new IntegerBox(16)
+    
+    // Call sqrt(16)
+    result = py.call(sqrt_func, sixteen)
+    
+    // Print done message (text only)
+    msg2 = new StringBox("Calculation complete")
+    console.log(msg2)
+    
+    // Return result (should be 4.0)
+    return result
+  }
+}

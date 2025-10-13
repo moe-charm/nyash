@@ -1,0 +1,17 @@
+// Python callR positional args demo: int('FF', 16) => Ok(255)
+// @env NYASH_PLUGIN_ONLY=1
+// @env NYASH_PY_AUTODECODE=1
+// Run:
+//   ./target/release/nyash --backend vm examples/py_callR_int_base16_ok_demo.nyash
+
+static box Main {
+  main() {
+    local py, bi, intf, r
+    py = new PyRuntimeBox()
+    bi = py.import("builtins")
+    intf = bi.getattr("int")
+    r = intf.callR("FF", 16)
+    me.console.println(r) // expect Ok(255)
+    return 0
+  }
+}

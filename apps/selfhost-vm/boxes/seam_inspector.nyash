@@ -29,9 +29,9 @@ static box SeamInspector {
   // Find index of exact token in plain text from position
   _index_of_from(h, needle, pos) {
     if pos < 0 { pos = 0 }
-    @n = h.length()
+    @n = h.size()
     if pos >= n { return -1 }
-    @m = needle.length()
+    @m = needle.size()
     if m <= 0 { return pos }
     @i = pos
     @limit = n - m
@@ -46,7 +46,7 @@ static box SeamInspector {
   _find_balanced_object_end(text, idx) {
     if text.substring(idx, idx+1) != "{" { return -1 }
     @i = idx
-    @n = text.length()
+    @n = text.size()
     @depth = 0
     loop (i < n) {
       @ch = text.substring(i, i+1)
@@ -70,13 +70,13 @@ static box SeamInspector {
   // Scan boxes: return array of {name, start, end}
   _scan_boxes(text) {
     @i = 0
-    @n = text.length()
+    @n = text.size()
     @res = new ArrayBox()
     @tok = "static box "
     loop (i < n) {
       @p = _index_of_from(text, tok, i)
       if p < 0 { break }
-      @j = p + tok.length()
+      @j = p + tok.size()
       // read identifier
       @name = ""
       loop (j < n) {

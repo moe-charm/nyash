@@ -9,3 +9,8 @@ feature = "static-map-plugin"
 [[plugins]]
 path = "plugins/nyash-string-plugin"
 feature = "static-string-plugin"
+
+
+[[plugins]]
+path = "plugins/nyash-json-plugin"
+feature = "static-json-plugin"

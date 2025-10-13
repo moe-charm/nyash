@@ -2,6 +2,7 @@
 # json_macro_roundtrip_vm.sh — Selfhost minimal macros: json/arr passthrough
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 
 require_env || exit 2
 export NYASH_MACRO_ENABLE=1

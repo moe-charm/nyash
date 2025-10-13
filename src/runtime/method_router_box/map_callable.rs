@@ -12,6 +12,7 @@ pub struct MapCallableBox;
 impl MapCallableBox {
     /// Handles `MapBox.call` and `MapBox.callAsync` whenever the receiver is a
     /// plugin-backed MapBox. Returns `None` for unrelated invocations.
+    #[allow(unused_variables)]
     pub fn try_route(
         interp: &mut MirInterpreter,
         receiver: &VMValue,
@@ -33,6 +34,7 @@ impl MapCallableBox {
         Some(Self::invoke(interp, plugin_box, method, args))
     }
 
+    #[allow(unused_variables)]
     fn invoke(
         interp: &mut MirInterpreter,
         plugin_box: &PluginBoxV2,
@@ -54,16 +56,17 @@ impl MapCallableBox {
         )
         .map_err(|err| VMError::InvalidInstruction(format!("Map.{} get failed: {:?}", method, err)))?;
 
-        let callable_arc = match value {
+        let val = match value {
             Some(ret) => VMValue::from_nyash_box(ret),
             None => VMValue::Void,
         };
+        if let VMValue::Void = val {
+            // P1 spec: missing or nullish value → null
+            return Ok(VMValue::Void);
+        }
 
-        let callable_arc = match callable_arc {
+        let callable_arc = match val {
             VMValue::BoxRef(bx) => bx,
-            VMValue::Void => {
-                return Err(VMError::InvalidInstruction("Map.call: value is null".into()))
-            }
             _ => {
                 return Err(VMError::InvalidInstruction(
                     "Map.call: value is not CallableBox".into(),
@@ -71,23 +74,31 @@ impl MapCallableBox {
             }
         };
 
+        #[cfg(feature = "legacy-boxes")]
         let callable = callable_arc
             .as_ref()
             .as_any()
             .downcast_ref::<crate::boxes::callable::CallableBox>()
             .ok_or_else(|| VMError::InvalidInstruction("Map.call: value is not CallableBox".into()))?;
-
-        if callable.receiver.is_none() {
-            return Err(VMError::InvalidInstruction(
-                "CallableBox without receiver".into(),
-            ));
+        #[cfg(not(feature = "legacy-boxes"))]
+        {
+            return Err(VMError::InvalidInstruction("Map.call: value is not CallableBox (legacy only)".into()));
         }
 
-        let call_args = vec![args[1].clone()];
-        if method == "callAsync" {
-            super::route(interp, &VMValue::BoxRef(callable_arc), "callAsync", &call_args)
-        } else {
-            super::route(interp, &VMValue::BoxRef(callable_arc), "call", &call_args)
+        #[cfg(feature = "legacy-boxes")]
+        {
+            if callable.receiver.is_none() {
+                return Err(VMError::InvalidInstruction(
+                    "CallableBox without receiver".into(),
+                ));
+            }
+
+            let call_args = vec![args[1].clone()];
+            if method == "callAsync" {
+                super::route(interp, &VMValue::BoxRef(callable_arc), "callAsync", &call_args)
+            } else {
+                super::route(interp, &VMValue::BoxRef(callable_arc), "call", &call_args)
+            }
         }
     }
 }

@@ -2,6 +2,7 @@
 
 use crate::bid::{BidError, BidResult};
 use crate::box_trait::{NyashBox, StringBox};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::{BufferBox, FloatBox};
 use crate::runtime::plugin_loader_v2::enabled::loader::util::dbg_on;
 use crate::runtime::plugin_loader_v2::enabled::PluginLoaderV2;
@@ -264,7 +265,10 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
             }
             5 => {
                 let x = crate::runtime::plugin_ffi_common::decode::f64(payload).unwrap_or(0.0);
-                Box::new(crate::boxes::FloatBox::new(x))
+                #[cfg(feature = "legacy-boxes")]
+                { Box::new(crate::boxes::FloatBox::new(x)) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                { Box::new(crate::box_trait::StringBox::new(format!("{}", x))) }
             }
             6 | 7 => {
                 let s = crate::runtime::plugin_ffi_common::decode::string(payload);
@@ -287,7 +291,7 @@ fn decode_tlv_result(box_type: &str, data: &[u8]) -> BidResult<Option<Box<dyn Ny
                         };
                         x
                     };
-                    let invoke_fn = super::super::nyash_plugin_invoke_v2_shim;
+                    // keep resolved invoke shim via fully-qualified path; no local binding needed
 
                     // If this is an ArrayBox handle, convert to HostHandleBox so downstream
                     // routes can use HostHandleRouter (and preserve identity via registry).
@@ -349,6 +353,7 @@ fn encode_args_final(
             continue;
         }
         // Float
+        #[cfg(feature = "legacy-boxes")]
         if let Some(f) = a.as_any().downcast_ref::<FloatBox>() {
             let bits = f.value.to_bits();
             out.push(NyValueFfi { tag: 5, reserved: 0, data0: bits, data1: 0, ptr: std::ptr::null(), len: 0 });
@@ -364,6 +369,7 @@ fn encode_args_final(
             continue;
         }
         // Bytes (BufferBox)
+        #[cfg(feature = "legacy-boxes")]
         if let Some(buf) = a.as_any().downcast_ref::<BufferBox>() {
             let bytes = buf.to_vec();
             let len = bytes.len();
@@ -387,7 +393,7 @@ fn encode_args_final(
     out
 }
 
-fn decode_result_final(box_type: &str, r: &NyResultFfi) -> Box<dyn NyashBox> {
+fn decode_result_final(_box_type: &str, r: &NyResultFfi) -> Box<dyn NyashBox> {
     if r.status != 0 {
         return Box::new(crate::box_trait::VoidBox::new());
     }
@@ -422,9 +428,15 @@ fn decode_result_final(box_type: &str, r: &NyResultFfi) -> Box<dyn NyashBox> {
                 b.copy_from_slice(slice);
                 let bits = u64::from_le_bytes(b);
                 let f = f64::from_bits(bits);
-                Box::new(FloatBox::new(f))
+                #[cfg(feature = "legacy-boxes")]
+                { Box::new(FloatBox::new(f)) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                { Box::new(StringBox::new(format!("{}", f))) }
             } else {
-                Box::new(FloatBox::new(0.0))
+                #[cfg(feature = "legacy-boxes")]
+                { Box::new(FloatBox::new(0.0)) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                { Box::new(StringBox::new(String::new())) }
             }
         }
         // String (utf8)
@@ -437,20 +449,26 @@ fn decode_result_final(box_type: &str, r: &NyResultFfi) -> Box<dyn NyashBox> {
                 Box::new(StringBox::new(""))
             }
         }
-        // Bytes → BufferBox
+        // Bytes → BufferBox (legacy) or String placeholder (plugin-only)
         7 => {
             if !r.ptr.is_null() && r.len > 0 {
                 let s = unsafe { std::slice::from_raw_parts(r.ptr, r.len) };
-                Box::new(BufferBox::from_vec(s.to_vec()))
+                #[cfg(feature = "legacy-boxes")]
+                { Box::new(BufferBox::from_vec(s.to_vec())) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                { Box::new(StringBox::new(format!("<bytes:{}>", s.len()))) }
             } else {
-                Box::new(BufferBox::from_vec(Vec::new()))
+                #[cfg(feature = "legacy-boxes")]
+                { Box::new(BufferBox::from_vec(Vec::new())) }
+                #[cfg(not(feature = "legacy-boxes"))]
+                { Box::new(StringBox::new(String::new())) }
             }
         }
         _ => Box::new(crate::box_trait::VoidBox::new()),
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-boxes"))]
 mod tests {
     use super::*;
 

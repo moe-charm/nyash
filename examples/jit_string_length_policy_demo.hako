@@ -1,0 +1,13 @@
+// @jit-debug
+// @plugin-builtins
+
+static box Main {
+  main() {
+    local s
+    s = new StringBox("")  // empty string
+    // In a real case we'd set content; plugin StringBox.length() is RO path demo
+    // For observable behavior, length() on empty should be 0
+    return s.length()
+  }
+}
+

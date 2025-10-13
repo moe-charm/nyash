@@ -7,7 +7,7 @@ static box JsonBuilder {
   join(arr, sep) {
     local out = ""
     local i = 0
-    local n = arr.length()
+    local n = arr.size()
     loop(i < n) {
       out = out + arr.get(i)
       if i + 1 < n { out = out + sep }
@@ -20,7 +20,7 @@ static box JsonBuilder {
   escape_string(s) {
     local out = ""
     local i = 0
-    loop(i < s.length()) {
+    loop(i < s.size()) {
       local ch = s.substring(i, i + 1)
       if ch == "\\" {
         out = out + "\\\\"
@@ -73,13 +73,13 @@ static box JsonBuilder {
     // vars: array[string], inits: array[string|null]
     local vs = []
     local i = 0
-    loop(i < vars.length()) {
+    loop(i < vars.size()) {
       vs.push(this.quote(vars.get(i)))
       i = i + 1
     }
     local is = []
     i = 0
-    loop(i < inits.length()) {
+    loop(i < inits.size()) {
       local v = inits.get(i)
       if v == null { is.push("null") } else { is.push(v) }
       i = i + 1
@@ -94,7 +94,7 @@ static box JsonBuilder {
     // entries: array of [k:string, v:json]
     local parts = []
     local i = 0
-    loop(i < entries.length()) {
+    loop(i < entries.size()) {
       local kv = entries.get(i)
       local k = kv.get(0)
       local v = kv.get(1)

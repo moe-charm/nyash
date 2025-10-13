@@ -37,6 +37,7 @@ pub(super) fn handle_release_many(
     args: &[Box<dyn NyashBox>]
 ) -> BidResult<Option<Box<dyn NyashBox>>> {
     if let Some(b) = args.get(0) {
+        #[cfg(feature = "legacy-boxes")]
         if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
             let n = arr.len();
             for i in 0..n {

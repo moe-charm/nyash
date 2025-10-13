@@ -2,6 +2,7 @@
 # plugin_off_newbox_sanity_vm.sh — plugins OFF sanity, ensure VM runs basic program
 
 source "$(dirname "$0")/../../../lib/test_runner.sh"
+if [ "${SMOKES_SELFHOST_ENABLE:-0}" != "1" ]; then test_skip "selfhost suite gated (set SMOKES_SELFHOST_ENABLE=1)"; exit 0; fi
 export NYASH_DISABLE_PLUGINS=1
 export SMOKES_USE_PYVM=0
 require_env || exit 2

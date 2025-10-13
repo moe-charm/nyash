@@ -4,6 +4,7 @@
 using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/reg_guard.hako" as RegGuardBox
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 
 static box CopyHandlerBox {
@@ -20,7 +21,9 @@ static box CopyHandlerBox {
     }
 
     // Load value from src register using ValueManagerBox
-    local val = ValueManagerBox.get(regs, src)
+    local g = RegGuardBox.require_set(regs, src, "copy: src")
+    if g.is_Err() { return g }
+    local val = g.as_Ok()
 
     // Store value in dst register using ValueManagerBox
     ValueManagerBox.set(regs, dst, val)

@@ -1,0 +1,24 @@
+// AOT minimal example with split println
+static box Main {
+  main() {
+    local py, code, result, console, msg
+    
+    // Create console
+    console = new ConsoleBox()
+    
+    // Create Python runtime
+    py = new PyRuntimeBox()
+    
+    // Eval math.sqrt
+    code = new StringBox("__import__('math').sqrt(16)")
+    result = py.eval(code)
+    
+    // Print text first
+    msg = new StringBox("Result is:")
+    console.log(msg)
+    
+    // Print value separately (would need toString method)
+    // For now just return the result
+    return result
+  }
+}

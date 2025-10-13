@@ -1,0 +1,12 @@
+// mir-store-load - exercise minimal StackSlot-based Load/Store
+
+static box Main {
+    main() {
+        local x, y
+        x = 1
+        y = 2
+        x = x + y
+        return x  // expect 3
+    }
+}
+

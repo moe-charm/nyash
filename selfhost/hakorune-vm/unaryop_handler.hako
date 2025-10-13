@@ -5,6 +5,7 @@ using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/shared/common/string_ops.hako" as StringOps
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/reg_guard.hako" as RegGuardBox
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 
 static box UnaryOpHandlerBox {
@@ -31,7 +32,9 @@ static box UnaryOpHandlerBox {
     }
 
     // Load operand from registers using ValueManagerBox
-    local operand_val = ValueManagerBox.get(regs, operand_id)
+    local g_op = RegGuardBox.require_set(regs, operand_id, "unaryop: operand")
+    if g_op.is_Err() { return g_op }
+    local operand_val = g_op.as_Ok()
 
     // Execute unary operation
     local result_val = 0

@@ -82,10 +82,10 @@ pub trait BoxCore: Send + Sync {
 /// This embodies the "Everything is Box" philosophy with Rust's type safety.
 pub trait NyashBox: BoxCore + Debug {
     /// Convert this box to a string representation (equivalent to Python's toString())
-    fn to_string_box(&self) -> crate::boxes::basic::StringBox;
+    fn to_string_box(&self) -> crate::box_trait::StringBox;
 
     /// Check equality with another box (equivalent to Python's equals())
-    fn equals(&self, other: &dyn NyashBox) -> crate::boxes::basic::BoolBox;
+    fn equals(&self, other: &dyn NyashBox) -> crate::box_trait::BoolBox;
 
     /// Get the type name of this box for debugging
     fn type_name(&self) -> &'static str {

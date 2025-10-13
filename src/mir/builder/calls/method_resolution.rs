@@ -70,7 +70,8 @@ pub fn is_extern_function(name: &str) -> bool {
     name.starts_with("nyash.") ||
     name.starts_with("nyrt.") ||
     name.starts_with("env.") ||
-    name.starts_with("system.")
+    name.starts_with("system.") ||
+    name.starts_with("hostbridge.")
 }
 
 /// Check if method is commonly shadowed (for warning generation)

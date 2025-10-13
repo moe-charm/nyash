@@ -1,0 +1,19 @@
+// Minimal AOT Python demo: uses env to avoid string args
+// @env NYASH_PLUGIN_ONLY=1
+// Notes:
+// - PyRuntimeBox.eval() with zero args reads NYASH_PY_EVAL_CODE on the host side.
+// - Avoids StringBox and println to minimize unsupported JIT lowerings.
+// - Build AOT:
+//     bash tools/build_python_aot.sh examples/aot_py_eval_env_min.nyash -o app
+// - Run:
+//     NYASH_PY_EVAL_CODE="(__import__('math').sqrt)(9)" ./app
+
+static box Main {
+  main() {
+    local py, _
+    py = new PyRuntimeBox()
+    _ = py.eval()  // no args; plugin reads NYASH_PY_EVAL_CODE
+    return 0       // keep return simple for AOT strict
+  }
+}
+

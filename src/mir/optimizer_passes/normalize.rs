@@ -18,6 +18,24 @@ pub fn normalize_legacy_instructions(
 
     // Env gate for callable lowering (dev-opt): HAKO_CALLABLE_LOWERING=1
     let callable_lowering = std::env::var("HAKO_CALLABLE_LOWERING").ok().map(|v| v=="1" || v=="true" || v=="on").unwrap_or(false);
+    // Helper: central whitelist (箱化). Keep a single source of truth for
+    // safe method names per core box to avoid drift between passes.
+    #[inline]
+    fn is_safe_core_method(box_name: &str, method: &str) -> bool {
+        match box_name {
+            // Array — pure or well-understood ops only
+            "ArrayBox" => matches!(
+                method,
+                "size" | "len" | "length" | "get" | "set" | "push" | "slice" | "join" | "contains" | "indexOf"
+            ),
+            // Map — core CRUD + keys/values
+            "MapBox" => matches!(method, "size" | "len" | "has" | "get" | "set" | "delete" | "clear" | "keys" | "values"),
+            // String — byte-semantics only（index/substring/char等）
+            "StringBox" => matches!(method, "size" | "len" | "length" | "indexOf" | "lastIndexOf" | "substring" | "charAt" | "concat"),
+            _ => false,
+        }
+    }
+
     for (_fname, function) in &mut module.functions {
         use std::collections::HashMap;
         // Precompute definition map, constant maps, and callable origins
@@ -44,14 +62,33 @@ pub fn normalize_legacy_instructions(
         for (_bb, block) in &function.blocks {
             for inst in &block.instructions {
                 match inst {
+                    // methodRef captured via Method callee (whitelisted builtin boxes)
                     I::Call { dst: Some(d), callee: Some(crate::mir::definitions::call_unified::Callee::Method { box_name, method, receiver, .. }), args, .. } => {
-                        if box_name=="ArrayBox" && method=="methodRef" && args.len()==2 { if let Some(recv)=receiver { callable_info.insert(*d, (box_name.clone(), *recv, args[0], args[1])); } }
+                        if method=="methodRef" && args.len()==2 {
+                            if let Some(recv)=receiver {
+                                if box_name=="ArrayBox" || box_name=="MapBox" || box_name=="StringBox" {
+                                    callable_info.insert(*d, (box_name.clone(), *recv, args[0], args[1]));
+                                }
+                            }
+                        }
                     }
+                    // methodRef constructed via ModuleFunction (BoxName.methodRef/2) — capture receiver from args[0]
                     I::Call { dst: Some(d), callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name)), args, .. } => {
-                        if name=="ArrayBox.methodRef/2" && args.len()==3 { callable_info.insert(*d, ("ArrayBox".to_string(), args[0], args[1], args[2])); }
+                        if args.len()==3 {
+                            if name=="ArrayBox.methodRef/2" {
+                                callable_info.insert(*d, ("ArrayBox".to_string(), args[0], args[1], args[2]));
+                            } else if name=="MapBox.methodRef/2" {
+                                callable_info.insert(*d, ("MapBox".to_string(), args[0], args[1], args[2]));
+                            } else if name=="StringBox.methodRef/2" {
+                                callable_info.insert(*d, ("StringBox".to_string(), args[0], args[1], args[2]));
+                            }
+                        }
                     }
                     I::BoxCall { dst: Some(d), box_val: recv, method, args, .. } => {
-                        if method=="methodRef" && args.len()==2 { callable_info.insert(*d, ("ArrayBox".to_string(), *recv, args[0], args[1])); }
+                        // Legacy BoxCall-based methodRef: keep ArrayBox-only (type unknown here)
+                        if method=="methodRef" && args.len()==2 {
+                            callable_info.insert(*d, ("ArrayBox".to_string(), *recv, args[0], args[1]));
+                        }
                     }
                     _ => {}
                 }
@@ -161,6 +198,44 @@ pub fn normalize_legacy_instructions(
                     _ => {}
                 }
             }
+            // ModuleFunction("<Box>.<method>/<arity>") → Method(box=<Box>, method, receiver=args[0])
+            // Safe whitelist: ArrayBox, MapBox, StringBox の代表APIのみ
+            for inst in &mut block.instructions {
+                if let I::Call { dst, func: _, callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(name)), args, effects } = inst {
+                    // Parse name like "MapBox.get/1"
+                    let (box_name, method, arity_ok) = (|| {
+                        if let Some((bn, rest)) = name.split_once('.') {
+                            if let Some((m, ar)) = rest.split_once('/') {
+                                // accept digits only
+                                if ar.bytes().all(|b| b.is_ascii_digit()) { return (bn.to_string(), m.to_string(), true); }
+                            }
+                        }
+                        (String::new(), String::new(), false)
+                    })();
+                    if !arity_ok { continue; }
+                    // require at least 1 arg to extract receiver
+                    if args.is_empty() { continue; }
+                    // Whitelist of safe methods by box（箱化された判定に委譲）
+                    let ok = is_safe_core_method(&box_name, method.as_str());
+                    if !ok { continue; }
+                    // Rewrite to Callee::Method and drop receiver from args
+                    let recv = args[0];
+                    let new_args: Vec<ValueId> = args.iter().cloned().skip(1).collect();
+                    *inst = I::Call {
+                        dst: *dst,
+                        func: ValueId::new(0),
+                        callee: Some(crate::mir::definitions::call_unified::Callee::Method {
+                            box_name: box_name.clone(),
+                            method: method.clone(),
+                            receiver: Some(recv),
+                            certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
+                        }),
+                        args: new_args,
+                        effects: *effects,
+                    };
+                    stats.intrinsic_optimizations += 1;
+                }
+            }
             // Callable lowering (methodRef.call → direct) for arity==0 only
             if callable_lowering {
                 for inst in &mut block.instructions {
@@ -234,6 +309,85 @@ pub fn normalize_legacy_instructions(
                                             }
                                         }
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Pass A: Extern("nyrt.*") → Method for core boxes
+            // Safe subset only: string/array (size/len + common string ops) / map (size/keys/values)
+            for inst in &mut block.instructions {
+                if let I::Call { dst, func: _, callee: Some(crate::mir::definitions::call_unified::Callee::Extern(name)), args, effects } = inst {
+                    let (box_name, method_opt) = match name.as_str() {
+                        "nyrt.string.length" => ("StringBox", Some("size")),
+                        "nyrt.string.indexOf" => ("StringBox", Some("indexOf")),
+                        "nyrt.string.lastIndexOf" => ("StringBox", Some("lastIndexOf")),
+                        "nyrt.string.substring" => ("StringBox", Some("substring")),
+                        "nyrt.string.charAt" => ("StringBox", Some("charAt")),
+                        "nyrt.string.replace" => ("StringBox", Some("replace")),
+                        "nyrt.array.size"    => ("ArrayBox",  Some("size")),
+                        "nyrt.map.size"      => ("MapBox",    Some("size")),
+                        "nyrt.map.keys"      => ("MapBox",    Some("keys")),
+                        "nyrt.map.values"    => ("MapBox",    Some("values")),
+                        _ => ("", None),
+                    };
+                    if let Some(m) = method_opt {
+                        if !args.is_empty() {
+                            let recv = args[0];
+                            let new_args: Vec<ValueId> = args.iter().cloned().skip(1).collect();
+                            *inst = I::Call {
+                                dst: *dst,
+                                func: ValueId::new(0),
+                                callee: Some(crate::mir::definitions::call_unified::Callee::Method {
+                                    box_name: box_name.to_string(),
+                                    method: m.to_string(),
+                                    receiver: Some(recv),
+                                    certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
+                                }),
+                                args: new_args,
+                                effects: *effects,
+                            };
+                            stats.intrinsic_optimizations += 1;
+                        }
+                    }
+                }
+            }
+
+            // Pass B: BoxCall → Method when receiver is a local NewBox(Array/Map/String) in the same block
+            // Safe whitelist per box to avoid unintended semantics
+            for (idx, insn) in block.instructions.clone().into_iter().enumerate() {
+                if let I::BoxCall { dst, box_val, method, method_id: _mid, args, effects } = insn.clone() {
+                    // Check receiver def site
+                    if let Some((def_bb, def_i)) = def_map.get(&box_val).cloned() {
+                        if def_bb == *bb_id && def_i < idx {
+                            // Receiver must be a recent NewBox of a whitelisted core box
+                            let mut recv_box_name: Option<&'static str> = None;
+                            if let I::NewBox { dst: rdst, box_type, .. } = &block.instructions[def_i] {
+                                if *rdst == box_val {
+                                    match box_type.as_str() {
+                                        "ArrayBox" | "MapBox" | "StringBox" => recv_box_name = Some(Box::leak(box_type.clone().into_boxed_str())),
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            if let Some(bx) = recv_box_name {
+                                let ok = is_safe_core_method(bx, method.as_str());
+                                if ok {
+                                    block.instructions[idx] = I::Call {
+                                        dst,
+                                        func: ValueId::new(0),
+                                        callee: Some(crate::mir::definitions::call_unified::Callee::Method {
+                                            box_name: bx.to_string(),
+                                            method: method.clone(),
+                                            receiver: Some(box_val),
+                                            certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
+                                        }),
+                                        args,
+                                        effects,
+                                    };
+                                    stats.intrinsic_optimizations += 1;
                                 }
                             }
                         }
