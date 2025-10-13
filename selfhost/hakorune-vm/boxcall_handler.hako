@@ -3,9 +3,12 @@
 
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/shared/common/string_ops.hako" as StringOps
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
 using "selfhost/hakorune-vm/args_extractor.hako" as ArgsExtractorBox
+using "selfhost/hakorune-vm/args_guard.hako" as ArgsGuardBox
 using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
+using "selfhost/hakorune-vm/receiver_guard.hako" as ReceiverGuardBox
 
 static box BoxCallHandlerBox {
   // Handle boxcall instruction
@@ -29,21 +32,20 @@ static box BoxCallHandlerBox {
     // We need to extract args array from inst_json
     local args_array = me._extract_args(inst_json, regs)
 
+    // Guard arguments (no nulls)
+    local _g = ArgsGuardBox.ensure_no_nulls(args_array, method_name + "/" + args_array.size())
+    if _g.is_Err() { return _g }
+
     // Extract destination register
     local dst_reg = JsonFieldExtractor.extract_int(inst_json, "dst")
 
     // Load receiver object
     local receiver = ValueManagerBox.get(regs, box_id)
     if receiver == null {
-      return Result.Err("boxcall: receiver is null")
+      return Result.Err("boxcall: receiver v%" + StringHelpers.int_to_str(box_id) + " is unset (method=" + method_name + ")")
     }
 
-    // Debug trace: receiver type (TEMPORARY)
-    // Note: Call receiver.size() outside print() to avoid Rust VM bug
-    local recv_size = receiver.size()
-    print("[DEBUG-BOXCALL] box_id=" + box_id + " method=" + method_name + " recv_size=" + recv_size)
-
-    // Dispatch based on method name and arg count
+    // Prepare method signature for dispatch
     local arg_count = args_array.size()
     local method_sig = method_name + "/" + arg_count
 
@@ -72,8 +74,6 @@ static box BoxCallHandlerBox {
     // ArrayBox methods
     else if method_sig == "push/1" {
       result_val = receiver.push(args_array.get(0))
-      local recv_size_after = receiver.size()
-      print("[DEBUG-PUSH] result=" + result_val + " recv_size_after=" + recv_size_after)
     } else if method_sig == "get/1" {
       result_val = receiver.get(args_array.get(0))
     } else if method_sig == "set/2" {
@@ -103,17 +103,15 @@ static box BoxCallHandlerBox {
       result_val = receiver.keys()
     } else if method_sig == "values/0" {
       result_val = receiver.values()
-    }
-
-    // CallableBox methods (slot 113, 500-503) & Map.call methods (slot 210-211)
-    else if method_sig == "methodRef/2" {
+    } else if method_sig == "methodRef/2" {
       // slot 113: Array.methodRef(method_name, arity) -> CallableBox
       result_val = receiver.methodRef(args_array.get(0), args_array.get(1))
     } else if method_sig == "call/1" {
-      // slot 500: CallableBox.call(args_array) -> any
-      result_val = receiver.call(args_array.get(0))
+      // slot 501: CallableBox.call(args_array) -> any
+      // Flatten: pass the entire ArrayBox to CallableBox.call for argument expansion
+      result_val = receiver.call(args_array)
     } else if method_sig == "arity/0" {
-      // slot 501: CallableBox.arity() -> Integer
+      // slot 500: CallableBox.arity() -> Integer
       result_val = receiver.arity()
     } else if method_sig == "call/2" {
       // slot 210: Map.call(key, args_array) -> any
@@ -123,7 +121,8 @@ static box BoxCallHandlerBox {
       result_val = receiver.callAsync(args_array.get(0), args_array.get(1))
     } else if method_sig == "callAsync/1" {
       // slot 502: CallableBox.callAsync(args_array) -> FutureBox
-      result_val = receiver.callAsync(args_array.get(0))
+      // Flatten: pass the entire ArrayBox to CallableBox.callAsync for argument expansion
+      result_val = receiver.callAsync(args_array)
     }
 
     // Fallback: unknown method

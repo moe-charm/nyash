@@ -13,6 +13,10 @@ using "selfhost/hakorune-vm/module_function_call_handler.hako" as ModuleFunction
 using "selfhost/hakorune-vm/method_call_handler.hako" as MethodCallHandlerBox
 using "selfhost/hakorune-vm/constructor_call_handler.hako" as ConstructorCallHandlerBox
 using "selfhost/hakorune-vm/closure_call_handler.hako" as ClosureCallHandlerBox
+using "selfhost/shared/host_bridge/host_bridge_box.hako" as HostBridge
+using "selfhost/shared/common/string_helpers.hako" as StringHelpers
+using "selfhost/hakorune-vm/boxcall_handler.hako" as BoxCallHandlerBox
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 
 static box MirCallHandlerBox {
   // Handle MirCall instruction
@@ -71,7 +75,26 @@ static box MirCallHandlerBox {
       return ClosureCallHandlerBox.handle(mir_call_json, dst_reg, regs)
     }
 
-    // For other callee types: Extract name
+    // Phase 2: Value (handle before name extraction since Value has no name field)
+    if callee_type == "Value" {
+      // Directly invoke CallableBox.call(args_array) instead of synthesizing boxcall JSON.
+      // This mirrors the Rust VM behaviour where call/1 flattens the Array of arguments.
+      local vid = CalleeParserBox.extract_value_id(mir_call_json)
+      if vid == null { return Result.Err("mir_call: Value callee missing 'value'") }
+      local fnv = ValueManagerBox.get(regs, vid)
+      if fnv == null { return Result.Err("mir_call: value v%" + vid + " is unset") }
+
+      // Invoke callable with provided arguments (ArrayBox). Empty array => zero-arg call.
+      local call_result = fnv.call(args_array)
+
+      // Store result to destination register if present
+      if dst_reg != null {
+        ValueManagerBox.set(regs, dst_reg, call_result)
+      }
+      return Result.Ok(0)
+    }
+
+    // For other callee types (Global, Extern, ModuleFunction): Extract name
     local callee_name = CalleeParserBox.extract_name(mir_call_json)
     if callee_name == null {
       return Result.Err("mir_call: failed to extract callee name")
@@ -86,13 +109,8 @@ static box MirCallHandlerBox {
       return ExternCallHandlerBox.handle(callee_name, args_array, dst_reg, regs, mem)
     }
 
-    // Phase 2: ModuleFunction, Value
     if callee_type == "ModuleFunction" {
       return ModuleFunctionCallHandlerBox.handle(callee_name, args_array, dst_reg, regs)
-    }
-
-    if callee_type == "Value" {
-      return Result.Err("mir_call: Value call not yet implemented (Phase 2)")
     }
 
     return Result.Err("mir_call: unknown callee type: " + callee_type)

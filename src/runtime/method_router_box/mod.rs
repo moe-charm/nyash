@@ -12,6 +12,7 @@ mod method_ref;
 use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
 use crate::box_trait::NyashBox;
+use crate::vm_ops::boxcall;
 use map_callable::MapCallableBox;
 use method_ref::MethodRefBox;
 
@@ -200,6 +201,36 @@ pub fn route(
         }
         // Builtin core boxes
         match bx.type_name() {
+            "FileBox" => {
+                if let Some(fb) = bx.as_any().downcast_ref::<crate::boxes::file::FileBox>() {
+                    let _ = maybe_arity_guard("FileBox", method, args.len());
+                    return match method {
+                        "open" => {
+                            if args.len() != 2 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("FileBox","open", args.len(), &[2]))); }
+                            let path = args[0].to_string();
+                            let mode = args[1].to_string();
+                            let ok = fb.open_in_place(&path, &mode);
+                            Ok(VMValue::Bool(ok))
+                        }
+                        "read" => { Ok(VMValue::from_nyash_box(fb.read())) }
+                        "exists" => { Ok(VMValue::from_nyash_box(fb.exists())) }
+                        "write" => {
+                            if args.len() != 1 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("FileBox","write", args.len(), &[1]))); }
+                            let content = args[0].to_nyash_box();
+                            Ok(VMValue::from_nyash_box(fb.write(content)))
+                        }
+                        "append" => {
+                            if args.len() != 1 { return Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::no_method_arity("FileBox","append", args.len(), &[1]))); }
+                            let content = args[0].to_nyash_box();
+                            Ok(VMValue::from_nyash_box(fb.append(content)))
+                        }
+                        "close" => { let _ = fb.close_in_place(); Ok(VMValue::Void) }
+                        _ => return Err(boxcall::unknown_method_err("FileBox", method, args.len())),
+                    };
+                }
+                return Err(crate::vm_ops::boxcall::downcast_failed("FileBox"));
+            },
+
             "CallableBox" => {
                 if let Some(cb) = bx.as_any().downcast_ref::<crate::boxes::callable::CallableBox>() {
                     let _ = crate::vm_ops::boxcall::arity_guard_for("CallableBox", method, args.len());
@@ -208,20 +239,58 @@ pub fn route(
                             500 => Ok(VMValue::Integer(cb.arity() as i64)),
                             503 => Ok(VMValue::String(cb.to_string_box().value)),
                             501 => {
+                                // Flatten argv: support both builtin and plugin ArrayBox
                                 let argv: Vec<VMValue> = hako_core_callable::flatten_argv(args,
+                                    // is_array: check if value is ArrayBox (builtin or plugin)
                                     |v: &VMValue| {
-                                        if let VMValue::BoxRef(bx)=v { bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() } else { false }
+                                        if let VMValue::BoxRef(bx)=v {
+                                            // builtin ArrayBox
+                                            if bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().is_some() {
+                                                return true;
+                                            }
+                                            // plugin ArrayBox
+                                            if let Some(p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                                if p.box_type == "ArrayBox" {
+                                                    return true;
+                                                }
+                                            }
+                                        }
+                                        false
                                     },
+                                    // len: get array length (builtin or plugin via route)
                                     |v: &VMValue| {
-                                        if let VMValue::BoxRef(bx)=v { bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>().map(|a| a.items.read().unwrap().len()).unwrap_or(0) } else { 0 }
+                                        if let VMValue::BoxRef(bx)=v {
+                                            // builtin ArrayBox
+                                            if let Some(a) = bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                                                return a.items.read().unwrap().len();
+                                            }
+                                            // plugin ArrayBox: call size() via route
+                                            if let Some(_p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                                let mut tmp_interp = crate::backend::mir_interpreter::MirInterpreter::new();
+                                                if let Ok(VMValue::Integer(sz)) = crate::runtime::method_router_box::route(&mut tmp_interp, v, "size", &[]) {
+                                                    return sz as usize;
+                                                }
+                                            }
+                                        }
+                                        0
                                     },
+                                    // get(i): get element at index (builtin or plugin via route)
                                     |v: &VMValue, i: usize| {
                                         if let VMValue::BoxRef(bx)=v {
+                                            // builtin ArrayBox
                                             if let Some(a)=bx.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
                                                 let guard=a.items.read().unwrap();
-                                                VMValue::from_nyash_box(guard[i].clone_box())
-                                            } else { v.clone() }
-                                        } else { v.clone() }
+                                                return VMValue::from_nyash_box(guard[i].clone_box());
+                                            }
+                                            // plugin ArrayBox: call get(i) via route
+                                            if let Some(_p) = bx.as_any().downcast_ref::<crate::runtime::plugin_loader_v2::PluginBoxV2>() {
+                                                let mut tmp_interp = crate::backend::mir_interpreter::MirInterpreter::new();
+                                                if let Ok(val) = crate::runtime::method_router_box::route(&mut tmp_interp, v, "get", &[VMValue::Integer(i as i64)]) {
+                                                    return val;
+                                                }
+                                            }
+                                        }
+                                        v.clone()
                                     });
                                 if let Some(recv) = &cb.receiver {
                                     let recv_vm = VMValue::BoxRef(std::sync::Arc::from(recv.share_box()));

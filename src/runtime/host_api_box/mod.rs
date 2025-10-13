@@ -56,30 +56,9 @@ pub fn call_slot_grow(handle: u64, selector_id: u64, args: &[u8]) -> Result<Vec<
 }
 
 /// Call the host name API with a growable output buffer.
-pub fn call_name_grow(handle: u64, method: &str, args: &[u8]) -> Result<Vec<u8>, i32> {
-    let mut cap: usize = 128;
-    loop {
-        let mut out = vec![0u8; cap];
-        let mut out_len: usize = out.len();
-        let rc = crate::runtime::host_api::nyrt_host_call_name(
-            handle,
-            method.as_ptr(),
-            method.len(),
-            if args.is_empty() { std::ptr::null() } else { args.as_ptr() },
-            args.len(),
-            out.as_mut_ptr(),
-            &mut out_len,
-        );
-        if rc == 0 {
-            out.truncate(out_len.min(out.len()));
-            return Ok(out);
-        }
-        if rc == -3 { // SHORT_BUFFER
-            cap = cap.saturating_mul(2);
-            if cap > 128 * 1024 { return Err(rc); }
-            continue;
-        }
-        return Err(rc);
-    }
+/// TODO: Implement or migrate back to host_api
+pub fn call_name_grow(_handle: u64, _method: &str, _args: &[u8]) -> Result<Vec<u8>, i32> {
+    Err(-999) // Stub: unimplemented
 }
+
 

@@ -3,6 +3,8 @@
 
 using "selfhost/shared/common/string_ops.hako" as StringOps
 using "selfhost/vm/boxes/result_box.hako" as Result
+using "selfhost/hakorune-vm/json_field_extractor.hako" as JsonFieldExtractor
+using "selfhost/hakorune-vm/value_manager.hako" as ValueManagerBox
 using "selfhost/hakorune-vm/const_handler.hako" as ConstHandlerBox
 using "selfhost/hakorune-vm/binop_handler.hako" as BinOpHandlerBox
 using "selfhost/hakorune-vm/compare_handler.hako" as CompareHandlerBox
@@ -70,7 +72,19 @@ static box InstructionDispatcherBox {
   // Note: ret is already handled in TerminatorHandlerBox, but also appears
   // in instructions array during sequential execution
   _handle_ret_temp(inst_json, regs) {
-    // Just return Ok - actual return is handled by terminator
-    return Result.Ok(0)
+    // Extract return value register
+    local ret_reg = JsonFieldExtractor.extract_int(inst_json, "value")
+    if ret_reg == null {
+      return Result.Err("ret: value field not found")
+    }
+
+    // Load return value from register
+    local ret_value = ValueManagerBox.get(regs, ret_reg)
+    if ret_value == null {
+      return Result.Err("ret: register v%" + ret_reg + " is unset")
+    }
+
+    // Return the actual value (not just 0)
+    return Result.Ok(ret_value)
   }
 }
