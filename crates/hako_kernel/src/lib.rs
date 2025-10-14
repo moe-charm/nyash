@@ -293,42 +293,41 @@ pub extern "C" fn nyash_box_from_i8_string(ptr: *const i8) -> i64 {
 }
 
 // Array.size(handle) -> i64
+#[cfg(feature = "legacy-bridge")]
 #[export_name = "nyrt.array.size"]
 pub extern "C" fn nyrt_array_size(handle: i64) -> i64 {
     use nyash_rust::{boxes::array::ArrayBox, runtime::host_handles as handles};
-    if handle <= 0 {
-        return 0;
-    }
+    if handle <= 0 { return 0; }
     if let Some(obj) = handles::get(handle as u64) {
-        if let Some(arr) = obj.as_any().downcast_ref::<ArrayBox>() {
-            return arr.len() as i64;
-        }
+        if let Some(arr) = obj.as_any().downcast_ref::<ArrayBox>() { return arr.len() as i64; }
     }
     0
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[export_name = "nyrt.array.size"]
+pub extern "C" fn nyrt_array_size_nonlegacy(_handle: i64) -> i64 { 0 }
 
 // Map.size(handle) -> i64
+#[cfg(feature = "legacy-bridge")]
 #[export_name = "nyrt.map.size"]
 pub extern "C" fn nyrt_map_size(handle: i64) -> i64 {
-    use nyash_rust::{
-        box_trait::IntegerBox, boxes::map_box::MapBox, runtime::host_handles as handles,
-    };
-    if handle <= 0 {
-        return 0;
-    }
+    use nyash_rust::{ box_trait::IntegerBox, boxes::map_box::MapBox, runtime::host_handles as handles };
+    if handle <= 0 { return 0; }
     if let Some(obj) = handles::get(handle as u64) {
         if let Some(map) = obj.as_any().downcast_ref::<MapBox>() {
             let size_box = map.size();
-            if let Some(int_box) = size_box.as_any().downcast_ref::<IntegerBox>() {
-                return int_box.value;
-            }
+            if let Some(int_box) = size_box.as_any().downcast_ref::<IntegerBox>() { return int_box.value; }
         }
     }
     0
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[export_name = "nyrt.map.size"]
+pub extern "C" fn nyrt_map_size_nonlegacy(_handle: i64) -> i64 { 0 }
 
 // box.from_f64(val) -> handle
 // Helper: build a FloatBox and return a handle
+#[cfg(feature = "legacy-bridge")]
 #[export_name = "nyash.box.from_f64"]
 pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
     use nyash_rust::{box_trait::NyashBox, boxes::FloatBox, runtime::host_handles as handles};
@@ -336,19 +335,23 @@ pub extern "C" fn nyash_box_from_f64(val: f64) -> i64 {
     nyash_rust::runtime::global_hooks::gc_alloc(8);
     handles::to_handle_arc(arc) as i64
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[export_name = "nyash.box.from_f64"]
+pub extern "C" fn nyash_box_from_f64_nonlegacy(_val: f64) -> i64 { 0 }
 
 // box.from_i64(val) -> handle
 // Helper: build an IntegerBox and return a handle
+#[cfg(feature = "legacy-bridge")]
 #[export_name = "nyash.box.from_i64"]
 pub extern "C" fn nyash_box_from_i64(val: i64) -> i64 {
-    use nyash_rust::{
-        box_trait::{IntegerBox, NyashBox},
-        runtime::host_handles as handles,
-    };
+    use nyash_rust::{ box_trait::{IntegerBox, NyashBox}, runtime::host_handles as handles };
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(IntegerBox::new(val));
     nyash_rust::runtime::global_hooks::gc_alloc(8);
     handles::to_handle_arc(arc) as i64
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[export_name = "nyash.box.from_i64"]
+pub extern "C" fn nyash_box_from_i64_nonlegacy(_val: i64) -> i64 { 0 }
 
 // env.box.new(type_name: *const i8) -> handle (i64)
 // Minimal shim for Core-13 pure AOT: constructs Box via registry by name (no args)
@@ -367,20 +370,23 @@ pub extern "C" fn nyash_env_box_new(type_name: *const i8) -> i64 {
         Ok(s) => s,
         Err(_) => return 0,
     };
-    // Core-first special cases: construct built-in boxes directly
-    if ty == "MapBox" {
-        use nyash_rust::boxes::map_box::MapBox;
-        let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(MapBox::new());
-        return handles::to_handle_arc(arc) as i64;
-    }
-    if ty == "ArrayBox" {
-        use nyash_rust::boxes::array::ArrayBox;
-        let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(ArrayBox::new());
-        let h = handles::to_handle_arc(arc) as i64;
-        if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
-            eprintln!("nyrt: env.box.new ArrayBox -> handle={}", h);
+    // Prefer registry (plugin-first). Legacy direct constructors are gated below.
+    #[cfg(feature = "legacy-bridge")]
+    {
+        if ty == "MapBox" {
+            use nyash_rust::boxes::map_box::MapBox;
+            let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(MapBox::new());
+            return handles::to_handle_arc(arc) as i64;
         }
-        return h;
+        if ty == "ArrayBox" {
+            use nyash_rust::boxes::array::ArrayBox;
+            let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(ArrayBox::new());
+            let h = handles::to_handle_arc(arc) as i64;
+            if std::env::var("NYASH_CLI_VERBOSE").ok().as_deref() == Some("1") {
+                eprintln!("nyrt: env.box.new ArrayBox -> handle={}", h);
+            }
+            return h;
+        }
     }
     let reg = get_global_registry();
     match reg.create_box(ty, &[]) {
@@ -489,16 +495,19 @@ pub extern "C" fn nyash_any_length_h_export(handle: i64) -> i64 {
         return 0;
     }
     if let Some(obj) = handles::get(handle as u64) {
-        if let Some(arr) = obj
-            .as_any()
-            .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
+        #[cfg(feature = "legacy-bridge")]
         {
-            if let Some(ib) = arr
-                .length()
+            if let Some(arr) = obj
                 .as_any()
-                .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
             {
-                return ib.value;
+                if let Some(ib) = arr
+                    .length()
+                    .as_any()
+                    .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                {
+                    return ib.value;
+                }
             }
         }
         if let Some(sb) = obj
@@ -507,16 +516,19 @@ pub extern "C" fn nyash_any_length_h_export(handle: i64) -> i64 {
         {
             return sb.value.len() as i64;
         }
-        if let Some(map) = obj
-            .as_any()
-            .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
+        #[cfg(feature = "legacy-bridge")]
         {
-            if let Some(ib) = map
-                .size()
+            if let Some(map) = obj
                 .as_any()
-                .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
             {
-                return ib.value;
+                if let Some(ib) = map
+                    .size()
+                    .as_any()
+                    .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                {
+                    return ib.value;
+                }
             }
         }
     }
@@ -531,12 +543,15 @@ pub extern "C" fn nyash_any_is_empty_h_export(handle: i64) -> i64 {
         return 1;
     }
     if let Some(obj) = handles::get(handle as u64) {
-        if let Some(arr) = obj
-            .as_any()
-            .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
+        #[cfg(feature = "legacy-bridge")]
         {
-            if let Ok(items) = arr.items.read() {
-                return if items.is_empty() { 1 } else { 0 };
+            if let Some(arr) = obj
+                .as_any()
+                .downcast_ref::<nyash_rust::boxes::array::ArrayBox>()
+            {
+                if let Ok(items) = arr.items.read() {
+                    return if items.is_empty() { 1 } else { 0 };
+                }
             }
         }
         if let Some(sb) = obj
@@ -545,16 +560,19 @@ pub extern "C" fn nyash_any_is_empty_h_export(handle: i64) -> i64 {
         {
             return if sb.value.is_empty() { 1 } else { 0 };
         }
-        if let Some(map) = obj
-            .as_any()
-            .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
+        #[cfg(feature = "legacy-bridge")]
         {
-            if let Some(ib) = map
-                .size()
+            if let Some(map) = obj
                 .as_any()
-                .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                .downcast_ref::<nyash_rust::boxes::map_box::MapBox>()
             {
-                return if ib.value == 0 { 1 } else { 0 };
+                if let Some(ib) = map
+                    .size()
+                    .as_any()
+                    .downcast_ref::<nyash_rust::box_trait::IntegerBox>()
+                {
+                    return if ib.value == 0 { 1 } else { 0 };
+                }
             }
         }
     }
@@ -707,19 +725,29 @@ pub extern "C" fn nyash_console_birth_h_export() -> i64 {
 // ArrayBox birth shim for AOT/JIT handle-based creation
 #[export_name = "nyash.array.birth_h"]
 pub extern "C" fn nyash_array_birth_h_export() -> i64 {
-    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
-        std::sync::Arc::new(nyash_rust::boxes::array::ArrayBox::new());
-    nyash_rust::runtime::global_hooks::gc_alloc(0);
-    nyash_rust::runtime::host_handles::to_handle_arc(arc) as i64
+    if let Ok(host_g) = nyash_rust::runtime::get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box("ArrayBox", &[]) {
+            let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
+            nyash_rust::runtime::global_hooks::gc_alloc(0);
+            return h as i64;
+        }
+    }
+    0
 }
 
 // MapBox birth shim for AOT/JIT handle-based creation
 #[export_name = "nyash.map.birth_h"]
 pub extern "C" fn nyash_map_birth_h_export() -> i64 {
-    let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> =
-        std::sync::Arc::new(nyash_rust::boxes::map_box::MapBox::new());
-    nyash_rust::runtime::global_hooks::gc_alloc(0);
-    nyash_rust::runtime::host_handles::to_handle_arc(arc) as i64
+    if let Ok(host_g) = nyash_rust::runtime::get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box("MapBox", &[]) {
+            let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
+            nyash_rust::runtime::global_hooks::gc_alloc(0);
+            return h as i64;
+        }
+    }
+    0
 }
 // ---- Process entry (driver) ----
 #[cfg(not(test))]

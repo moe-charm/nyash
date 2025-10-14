@@ -1,5 +1,6 @@
 // ---- Array helpers for LLVM lowering (handle-based) ----
 // Exported as: nyash_array_get_h(i64 handle, i64 idx) -> i64
+#[cfg(feature = "legacy-bridge")]
 #[no_mangle]
 pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
     use nyash_rust::{box_trait::IntegerBox, runtime::host_handles as handles};
@@ -25,8 +26,12 @@ pub extern "C" fn nyash_array_get_h(handle: i64, idx: i64) -> i64 {
     }
     0
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[no_mangle]
+pub extern "C" fn nyash_array_get_h(_handle: i64, _idx: i64) -> i64 { 0 }
 
 // Exported as: nyash_array_set_h(i64 handle, i64 idx, i64 val) -> i64
+#[cfg(feature = "legacy-bridge")]
 #[no_mangle]
 pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
     use nyash_rust::{box_trait::IntegerBox, runtime::host_handles as handles};
@@ -61,8 +66,12 @@ pub extern "C" fn nyash_array_set_h(handle: i64, idx: i64, val: i64) -> i64 {
     }
     0
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[no_mangle]
+pub extern "C" fn nyash_array_set_h(_handle: i64, _idx: i64, _val: i64) -> i64 { 0 }
 
 // Exported as: nyash_array_push_h(i64 handle, i64 val) -> i64 (returns new length)
+#[cfg(feature = "legacy-bridge")]
 #[no_mangle]
 pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
     use nyash_rust::{
@@ -100,8 +109,12 @@ pub extern "C" fn nyash_array_push_h(handle: i64, val: i64) -> i64 {
     }
     0
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[no_mangle]
+pub extern "C" fn nyash_array_push_h(_handle: i64, _val: i64) -> i64 { 0 }
 
 // Exported as: nyash_array_length_h(i64 handle) -> i64
+#[cfg(feature = "legacy-bridge")]
 #[no_mangle]
 pub extern "C" fn nyash_array_length_h(handle: i64) -> i64 {
     use nyash_rust::runtime::host_handles as handles;
@@ -118,6 +131,9 @@ pub extern "C" fn nyash_array_length_h(handle: i64) -> i64 {
     }
     0
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[no_mangle]
+pub extern "C" fn nyash_array_length_h(_handle: i64) -> i64 { 0 }
 
 // --- AOT ObjectModule dotted-name aliases (Array) ---
 // Provide dotted symbol names expected by ObjectBuilder lowering, forwarding to existing underscored exports.
@@ -142,11 +158,25 @@ pub extern "C" fn nyash_array_len_h_alias(handle: i64) -> i64 {
 }
 
 // Create a new builtin ArrayBox and return its HostHandle (u64 as i64)
+#[cfg(feature = "legacy-bridge")]
 #[no_mangle]
 pub extern "C" fn nyash_array_new_h() -> i64 {
     use nyash_rust::{box_trait::NyashBox, boxes::array::ArrayBox};
     let arc: std::sync::Arc<dyn NyashBox> = std::sync::Arc::new(ArrayBox::new());
     nyash_rust::runtime::host_handles::to_handle_arc(arc) as i64
+}
+#[cfg(not(feature = "legacy-bridge"))]
+#[no_mangle]
+pub extern "C" fn nyash_array_new_h() -> i64 {
+    if let Ok(host_g) = nyash_rust::runtime::get_global_plugin_host().read() {
+        if let Ok(b) = host_g.create_box("ArrayBox", &[]) {
+            let arc: std::sync::Arc<dyn nyash_rust::box_trait::NyashBox> = std::sync::Arc::from(b);
+            let h = nyash_rust::runtime::host_handles::to_handle_arc(arc);
+            nyash_rust::runtime::global_hooks::gc_alloc(0);
+            return h as i64;
+        }
+    }
+    0
 }
 
 // Dotted alias for the same symbol (for consistency with other exports)

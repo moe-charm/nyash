@@ -14,12 +14,18 @@ pub(crate) fn nyrt_encode_arg_or_legacy(buf: &mut Vec<u8>, val: i64, _pos: usize
     // Handle direct values and plugin objects, bypass legacy VM fallback
     if val > 0 {
         if let Some(obj) = handles::get(val as u64) {
-            if let Some(bufbox) = obj
-                .as_any()
-                .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
+            #[cfg(feature = "legacy-bridge")]
             {
-                nyash_rust::runtime::plugin_ffi_common::encode::bytes(buf, &bufbox.to_vec());
-                return;
+                if let Some(bufbox) = obj
+                    .as_any()
+                    .downcast_ref::<nyash_rust::boxes::buffer::BufferBox>()
+                {
+                    nyash_rust::runtime::plugin_ffi_common::encode::bytes(
+                        buf,
+                        &bufbox.to_vec(),
+                    );
+                    return;
+                }
             }
             if let Some(p) = obj.as_any().downcast_ref::<PluginBoxV2>() {
                 let host = nyash_rust::runtime::get_global_plugin_host();

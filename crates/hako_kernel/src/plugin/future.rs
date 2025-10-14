@@ -1,6 +1,7 @@
 #![allow(unused_mut, unused_assignments)]
 // Spawn a plugin instance method asynchronously and return a Future handle (i64)
 // Exported as: nyash.future.spawn_method_h(type_id, method_id, argc, recv_h, vals*, tags*) -> i64 (FutureBox handle)
+#[cfg(feature = "legacy-bridge")]
 #[export_name = "nyash.future.spawn_method_h"]
 pub extern "C" fn nyash_future_spawn_method_h(
     type_id: i64,
@@ -232,11 +233,25 @@ pub extern "C" fn nyash_future_spawn_method_h(
     );
     handle as i64
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[export_name = "nyash.future.spawn_method_h"]
+pub extern "C" fn nyash_future_spawn_method_h(
+    _type_id: i64,
+    _method_id: i64,
+    _argc: i64,
+    _recv_h: i64,
+    _vals: *const i64,
+    _tags: *const i64,
+) -> i64 {
+    // Plugin-only minimal stub: no async support yet
+    0
+}
 
 // Simpler spawn shim for JIT: pass argc(total explicit args incl. method_name),
 // receiver handle (a0), method name (a1), and first payload (a2). Extra args
 // are read from legacy VM args, same as plugin_invoke3_*.
 // Returns a handle (i64) to FutureBox.
+#[cfg(feature = "legacy-bridge")]
 #[export_name = "nyash.future.spawn_instance3_i64"]
 pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, argc: i64) -> i64 {
     use nyash_rust::box_trait::{IntegerBox, NyashBox, StringBox};
@@ -494,3 +509,6 @@ pub extern "C" fn nyash_future_spawn_instance3_i64(a0: i64, a1: i64, a2: i64, ar
     );
     handle as i64
 }
+#[cfg(not(feature = "legacy-bridge"))]
+#[export_name = "nyash.future.spawn_instance3_i64"]
+pub extern "C" fn nyash_future_spawn_instance3_i64(_a0: i64, _a1: i64, _a2: i64, _argc: i64) -> i64 { 0 }
