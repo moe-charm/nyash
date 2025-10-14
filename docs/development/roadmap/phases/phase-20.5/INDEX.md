@@ -1,8 +1,8 @@
-# Phase 15.79 — Index
+# Phase 20.5 — Index
 
 **Escape from Rust: Bootstrap Compiler Implementation**
 
-Status: Planning
+Status: Planning (Gate plan active)
 Duration: 10 weeks (2025-12-21 - 2026-02-28)
 
 ---
@@ -35,18 +35,22 @@ Duration: 10 weeks (2025-12-21 - 2026-02-28)
    - PHI resolution strategy
    - Test strategy (43 test cases)
 
+5. **[PLAN.md](PLAN.md)** ✅ Gate-based execution plan（短縮版）
+   - 5行サマリ / 最小命令セット / DoD
+   - Gate A〜E（Parser→MIR→VM PoC→op_eq→統合）
+   - テスト/CI/リスク/次ステップ
+
 ---
 
 ## 🎯 Quick Reference
 
-### What is Phase 15.79?
+### What is Phase 20.5? (5-line summary)
 
-**Goal**: Use the frozen EXE from Phase 15.77 to create a Hakorune-written compiler that can compile itself.
-
-**Why Important?**:
-- Achieves true self-hosting (Hakorune compiles Hakorune)
-- Minimizes Rust dependency (only VM executor remains)
-- Enables faster language development (single codebase)
+1) Goal: 脱Rust。凍結EXEを土台に自己ホストへ前進。
+2) Strategy: Gate方式（Parser→MIR→VM PoC→op_eq→統合）。
+3) Boundary: C‑ABI/HostBridgeのみ外部境界。中はEverything is Box。
+4) Proof: 決定性（JSON正規化）、Golden＆固定点で検証。
+5) Policy: 小さく、順序よく、SKIPはWARN、回帰のみFAIL。
 
 ### Key Deliverables
 
@@ -161,8 +165,8 @@ Total Effort: ~750 lines (vs 2500+ for Option A)
 ## 📦 Directory Structure
 
 ```
-Phase 15.79 Planning:
-docs/development/roadmap/phases/phase-15.79/
+Phase 20.5 Planning:
+docs/development/roadmap/phases/phase-20.5/
 ├── INDEX.md                          # ← You are here
 ├── README.md                         # Phase overview
 ├── MILESTONE.md                      # Milestones & DoD
@@ -238,7 +242,7 @@ bash tools/verify_bootstrap_chain.sh
 - [x] MIR JSON → .o → EXE pipeline verified
 - [x] Windows (MSVC/MinGW) + Linux support
 
-### For Phase 15.79
+### For Phase 20.5
 
 - [ ] apps/selfhost-compiler/ analysis complete (Week 1-2)
 - [ ] Frozen EXE constraints documented (Week 1-2)
@@ -281,7 +285,7 @@ bash tools/verify_bootstrap_chain.sh
 
 ### Next
 
-- **Phase 15.80 - Complete Rust Removal**
+- **Phase 20.6 - Complete Rust Removal**
   - VM executor → Hakorune implementation
   - Rust codebase → 0 lines
   - Pure Hakorune self-hosting
@@ -305,9 +309,9 @@ bash tools/verify_bootstrap_chain.sh
 
 ### Issue Tracking
 
-- Use GitHub issues with label `phase-15.79`
+- Use GitHub issues with label `phase-20.5`
 - Prefix: `[15.79]` in commit messages
-- Milestone: `Phase 15.79 - Bootstrap Compiler`
+- Milestone: `Phase 20.5 - Bootstrap Compiler`
 
 ### Review Process
 

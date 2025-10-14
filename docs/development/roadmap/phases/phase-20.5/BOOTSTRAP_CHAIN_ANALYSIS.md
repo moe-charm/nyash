@@ -1,4 +1,4 @@
-# Bootstrap Chain Analysis — Phase 15.79
+# Bootstrap Chain Analysis — Phase 20.5
 
 Purpose: Detailed analysis of the 3-stage bootstrap chain for achieving true self-hosting
 
@@ -556,7 +556,7 @@ After Bootstrap Chain is verified:
 1. **True Self-Hosting**: Hakorune compiles Hakorune
 2. **Reproducibility**: v2 == v3 proves determinism
 3. **Independence**: No Rust needed for new features
-4. **Foundation**: Ready for Phase 15.80 (complete Rust removal)
+4. **Foundation**: Ready for Phase 20.6 (complete Rust removal)
 
 ---
 

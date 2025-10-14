@@ -2,7 +2,7 @@
 
 ## Context
 
-This document captures ChatGPT Pro's strategic recommendation for Phase 15.79, received on 2025-10-14.
+This document captures ChatGPT Pro's strategic recommendation for Phase 20.5, received on 2025-10-14.
 
 **Original Question**: Should we implement a C Code Generator (500 lines) or pursue a different strategy for "Escape from Rust"?
 
@@ -181,8 +181,8 @@ This document captures ChatGPT Pro's strategic recommendation for Phase 15.79, r
 - Focus: Long-term architecture, not short-term bootstrap
 
 **Timeline**:
-- Original: 10 weeks (Phase 15.79 complete)
-- Pure Hakorune: 30+ weeks (Phase 15.79→15.80→15.81→15.82)
+- Original: 10 weeks (Phase 20.5 complete)
+- Pure Hakorune: 30+ weeks (Phase 20.5→15.80→15.81→15.82)
 
 **Philosophy**:
 ```
@@ -203,21 +203,21 @@ Pure Hako: "Hakorune IS Hakorune" (VM in Hakorune)
 **Challenges**:
 - ⚠️ Much longer timeline (30+ weeks vs 10 weeks)
 - ⚠️ Higher implementation complexity (VM in Hakorune)
-- ⚠️ Requires phased approach (can't do all in Phase 15.79)
+- ⚠️ Requires phased approach (can't do all in Phase 20.5)
 
 **Recommendation**:
-- Phase 15.79 (10 weeks): Phase A (HostBridge) + Phase B start (VM foundations)
-- Phase 15.80 (12 weeks): Phase B complete (VM core) + Phase C (Dispatch)
-- Phase 15.81 (8 weeks): Phase D (Collections in Hakorune)
-- Phase 15.82 (6 weeks): Phase E (GC v0) + Phase F (Rust VM compat mode)
+- Phase 20.5 (10 weeks): Phase A (HostBridge) + Phase B start (VM foundations)
+- Phase 20.6 (12 weeks): Phase B complete (VM core) + Phase C (Dispatch)
+- Phase 20.7 (8 weeks): Phase D (Collections in Hakorune)
+- Phase 20.8 (6 weeks): Phase E (GC v0) + Phase F (Rust VM compat mode)
 
 ---
 
 ## Next Steps
 
 1. **Get Task Agent's opinion**: Can we reconcile the two approaches?
-2. **Revise Phase 15.79 plan**: HostBridge + VM foundations (not C Generator)
-3. **Create Phase 15.80-15.82 roadmap**: Pure Hakorune completion
+2. **Revise Phase 20.5 plan**: HostBridge + VM foundations (not C Generator)
+3. **Create Phase 20.6-15.82 roadmap**: Pure Hakorune completion
 4. **Decision point**: Do we accept the longer timeline for architectural elegance?
 
 **User's preference**: "純 Hakorune 大作戦" (Pure Hakorune Grand Strategy) ✅
