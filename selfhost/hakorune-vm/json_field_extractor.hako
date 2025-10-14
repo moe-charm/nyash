@@ -16,13 +16,36 @@ static box JsonFieldExtractor {
       return null
     }
     start = start + key.size()
-
-    local digits = StringHelpers.read_digits(json, start)
-    if digits == "" {
-      return null
+    // skip whitespace
+    loop(start < json.size()) {
+      local ch = json.substring(start, start+1)
+      if ch == " " || ch == "\n" || ch == "\r" || ch == "\t" { start = start + 1  continue }
+      break
     }
-
-    return StringHelpers.to_i64(digits)
+    // Case 1: plain integer (e.g., "dst":3)
+    {
+      local digits = StringHelpers.read_digits(json, start)
+      if digits != "" {
+        return StringHelpers.to_i64(digits)
+      }
+    }
+    // Case 2: wrapped i64 (e.g., "dst":{"type":"i64","value":3})
+    if json.substring(start, start+1) == "{" {
+      local key_val = "\"value\":"
+      local val_pos = StringOps.index_of_from(json, key_val, start)
+      if val_pos >= 0 {
+        val_pos = val_pos + key_val.size()
+        // skip whitespace
+        loop(val_pos < json.size()) {
+          local ch2 = json.substring(val_pos, val_pos+1)
+          if ch2 == " " || ch2 == "\n" || ch2 == "\r" || ch2 == "\t" { val_pos = val_pos + 1  continue }
+          break
+        }
+        local digits2 = StringHelpers.read_digits(json, val_pos)
+        if digits2 != "" { return StringHelpers.to_i64(digits2) }
+      }
+    }
+    return null
   }
 
   // Extract string field from JSON

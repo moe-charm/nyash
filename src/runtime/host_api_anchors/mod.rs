@@ -112,3 +112,31 @@ pub extern "C" fn nyash_host_from_plugin_handle(type_id: u32, instance_id: u32) 
     }
     0
 }
+
+// ========== JSON API (canonicalize) ==========
+
+/// Canonicalize JSON string from a StringBox host handle and return a new StringBox handle.
+/// - Input: i64 host handle (StringBox)
+/// - Output: i64 host handle (StringBox) with canonicalized JSON (keys sorted; arrays preserve order)
+/// - On parse error: returns the original string (identity)
+#[no_mangle]
+#[cfg(feature = "host-anchors")]
+pub extern "C" fn nyash_json_canonicalize_h(input_handle: i64) -> i64 {
+    let Some(arc) = crate::runtime::host_handles::get(input_handle as u64) else { return 0 };
+    if let Some(sb) = arc.as_any().downcast_ref::<crate::box_trait::StringBox>() {
+        let src = &sb.value;
+        match serde_json::from_str::<serde_json::Value>(src) {
+            Ok(v) => {
+                let out = crate::common::json_canonical::to_canonical_string(&v);
+                let sbox = crate::box_trait::StringBox::new(out);
+                return host_handles::to_handle_box(Box::new(sbox)) as i64;
+            }
+            Err(_) => {
+                // Identity fallback on invalid JSON
+                let sbox = crate::box_trait::StringBox::new(src.clone());
+                return host_handles::to_handle_box(Box::new(sbox)) as i64;
+            }
+        }
+    }
+    0
+}

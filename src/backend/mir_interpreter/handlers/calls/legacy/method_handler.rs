@@ -133,6 +133,7 @@ impl MirInterpreter {
                                                 }
                                             }
                                             // Minimal safety: common pure methods with undefined recv return neutral defaults
+                                            // Minimal compatibility only for legacy 'length' when receiver is truly undefined
                                             if method == "length" { return Ok(VMValue::Integer(0)); }
                                             return Err(e);
                                         }
@@ -166,6 +167,10 @@ impl MirInterpreter {
                             }
                         }
                     };
+                    // Early extern bridge for Array length-like methods to avoid fragile Method(recv)
+                    if (box_name == "ArrayBox") && (method == "size" || method == "len" || method == "length") && args.is_empty() {
+                        return self.handle_callee_extern("nyrt.array.size", &[recv_id]);
+                    }
                     let dev_trace = VmConfig::global().general_trace;
                     // Builtin box fast-paths removed (Phase 15.7). Route via normal dispatch.
                     // Primitive strings now route via standard call paths

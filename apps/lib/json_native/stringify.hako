@@ -3,9 +3,37 @@ using "apps/lib/json_native/utils/escape.hako" as EscapeUtils
 
 static box JSON {
   // Public minimal API
-  stringify(o) { return o.toJSON() }
-  stringify_map(m) { return m.toJSON() }
-  stringify_array(a) { return a.toJSON() }
+  stringify(o) {
+    if o == null { return "null" }
+    if o.toJSON != null {
+      local tj = o.toJSON()
+      if tj != null { return tj.toString() }
+    }
+    // Fallback: primitive or container heuristics
+    return me._stringify_value(o)
+  }
+  stringify_map(m) {
+    if m == null { return "{}" }
+    if m.toJSON != null {
+      local tj = m.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "{" { return s }
+      }
+    }
+    return me._stringify_map(m)
+  }
+  stringify_array(a) {
+    if a == null { return "[]" }
+    if a.toJSON != null {
+      local tj = a.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "[" { return s }
+      }
+    }
+    return me._stringify_array(a)
+  }
 
   // Internal helpers
   _quote_string(s) {
@@ -43,41 +71,34 @@ static box JSON {
 
   _stringify_array(a) {
     if a == null { return "[]" }
-    // Assume ArrayBox API: length(), get(i)
+    // Prefer native toJSON when available (safer)
+    {
+      local tj = a.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "[" { return s }
+      }
+    }
+    // Fallback: iterate assuming ArrayBox API only for the receiver (avoid size/keys on elements)
     local out = "["
     local n = a.size()
     local i = 0
     loop(i < n) {
       if i > 0 { out = out + "," }
       local e = a.get(i)
-      // Dispatch by heuristic: prefer map/array detection, else primitive
-      // Map detection: e.keys() returns ArrayBox; on non-MapBox many boxes return an "Error:" string
-      local is_map = 0
-      local keys_val = null
-      if e != null {
-        keys_val = e.keys()
-        if keys_val != null {
-          local ks = keys_val.toString()
-          if ks.size() >= 1 && ks.substring(0,1) == "[" { is_map = 1 }
+      // Try element.toJSON first; otherwise stringify as primitive safely
+      local appended = 0
+      if e != null && e.toJSON != null {
+        local ej = e.toJSON()
+        if ej != null {
+          local es = ej.toString()
+          if es.size() > 0 {
+            local h = es.substring(0,1)
+            if h == "{" || h == "[" { out = out + es  appended = 1 }
+          }
         }
       }
-      if is_map == 1 {
-        out = out + me._stringify_map(e)
-      } else {
-        // Array detection: e.size() numeric
-        local l = e.size()
-        local ls = l.toString()
-        local is_num = 1
-        local j = 0
-        if ls.size() == 0 { is_num = 0 }
-        if ls.size() > 0 && ls.substring(0,1) == "-" { if ls.size() == 1 { is_num = 0 } else { j = 1 } }
-        loop(j < ls.size()) {
-          local ch = ls.substring(j,j+1)
-          if !(ch >= "0" && ch <= "9") { is_num = 0  break }
-          j = j + 1
-        }
-        if is_num == 1 { out = out + me._stringify_array(e) } else { out = out + me._stringify_value(e) }
-      }
+      if appended == 0 { out = out + me._stringify_value(e) }
       i = i + 1
     }
     out = out + "]"
@@ -86,9 +107,18 @@ static box JSON {
 
   _stringify_map(m) {
     if m == null { return "{}" }
-    // MapBox API: keys() -> ArrayBox of string keys (sorted), get(key)
+    // Prefer native toJSON when available (safer)
+    {
+      local tj = m.toJSON()
+      if tj != null {
+        local s = tj.toString()
+        if s.size() > 0 && s.substring(0,1) == "{" { return s }
+      }
+    }
+    // Fallback: iterate assuming MapBox API only for the receiver; avoid keys()/size() on values
     local out = "{"
     local ks = m.keys()
+    if ks == null { return "{}" }
     local n = ks.size()
     local i = 0
     loop(i < n) {
@@ -97,29 +127,19 @@ static box JSON {
       local kv = k.toString()
       out = out + me._quote_string(kv) + ":"
       local v = m.get(kv)
-      // Heuristic dispatch (Map→Array→primitive)
-      local is_map_v = 0
-      local keys_val_v = v.keys()
-      if keys_val_v != null {
-        local ksvs = keys_val_v.toString()
-        if ksvs.size() >= 1 && ksvs.substring(0,1) == "[" { is_map_v = 1 }
-      }
-      if is_map_v == 1 {
-        out = out + me._stringify_map(v)
-      } else {
-        local lv = v.size()
-        local lvs = lv.toString()
-        local is_num_v = 1
-        local t = 0
-        if lvs.size() == 0 { is_num_v = 0 }
-        if lvs.size() > 0 && lvs.substring(0,1) == "-" { if lvs.size() == 1 { is_num_v = 0 } else { t = 1 } }
-        loop(t < lvs.size()) {
-          local ch = lvs.substring(t,t+1)
-          if !(ch >= "0" && ch <= "9") { is_num_v = 0  break }
-          t = t + 1
+      // Prefer value.toJSON() when it looks like JSON, else treat as primitive
+      local appended = 0
+      if v != null && v.toJSON != null {
+        local vj = v.toJSON()
+        if vj != null {
+          local vs = vj.toString()
+          if vs.size() > 0 {
+            local h = vs.substring(0,1)
+            if h == "{" || h == "[" { out = out + vs  appended = 1 }
+          }
         }
-        if is_num_v == 1 { out = out + me._stringify_array(v) } else { out = out + me._stringify_value(v) }
       }
+      if appended == 0 { out = out + me._stringify_value(v) }
       i = i + 1
     }
     out = out + "}"

@@ -4,6 +4,7 @@ pub mod intrinsics;
 pub mod normalize;
 pub mod reorder;
 // normalize_core13_pure removed (deprecated)
+pub mod repair;
 // normalize_legacy_all removed (dead wrapper, delegated to normalize::normalize_legacy_instructions)
 pub mod hints_config;
 pub mod detectors;

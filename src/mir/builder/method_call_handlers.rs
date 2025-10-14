@@ -129,19 +129,19 @@ impl MirBuilder {
                     let dst = builder.value_gen.next();
                     let full = spec.extern_name.to_string();
                     let name_const = crate::mir::builder::name_const::make_name_const_result(builder, &full).ok()?;
-                    let call_args: Vec<ValueId> = if spec.prepend_recv {
-                        let mut v = Vec::with_capacity(1 + args.len());
-                        v.push(obj);
-                        v.extend(args.drain(..));
-                        v
-                    } else {
-                        args.drain(..).collect()
-                    };
+                    // LocalSSA materialization: ensure receiver/args have in-block defs
+                    let recv_local = if spec.prepend_recv { Some(builder.local_recv(obj)) } else { None };
+                    let mut argv_loc: Vec<ValueId> = Vec::with_capacity(if recv_local.is_some() { 1 + args.len() } else { args.len() });
+                    if let Some(r) = recv_local { argv_loc.push(r); }
+                    while let Some(a) = args.first().cloned() {
+                        let _ = args.remove(0);
+                        argv_loc.push(builder.local_arg(a));
+                    }
                     let _ = builder.emit_instruction(MirInstruction::Call {
                         dst: Some(dst),
                         func: name_const,
                         callee: Some(crate::mir::Callee::Extern(full)),
-                        args: call_args,
+                        args: argv_loc,
                         effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
                     });
                     builder.annotate_call_result_from_func_name(dst, method);
@@ -175,6 +175,11 @@ impl MirBuilder {
             }
             // Lower string methods for inferred String types (literals/expressions)
             if inferred_string {
+                if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
+            }
+            // Conservative fallback: size/length/len with 0 args → treat receiver as string-like
+            // This avoids fragile Method(receiver) on unknown types in selfhost JSON scanners.
+            if (method == "size" || method == "length" || method == "len") && arg_values.is_empty() {
                 if let Some(dst) = try_lower_via_table(self, Some("StringBox"), &method, object_value, &mut arg_values) { return Ok(dst); }
             }
         }

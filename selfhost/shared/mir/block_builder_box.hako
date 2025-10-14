@@ -8,7 +8,7 @@ static box BlockBuilderBox {
   // Ensure every block ends with a terminator (ret/jump/branch/throw)
   _ensure_terminators(mod_full) {
     if mod_full == null { return mod_full }
-    local fns = mod_full.functions
+    local fns = mod_full.get("functions")
     if fns == null || fns.size == null || fns.size() == 0 { return mod_full }
     local blocks = fns.get(0).get("blocks")
     if blocks == null || blocks.size == null || blocks.size() == 0 { return mod_full }

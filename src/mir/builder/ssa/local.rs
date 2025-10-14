@@ -29,6 +29,9 @@ impl LocalKind {
 /// Always emits a Copy in the current block when not cached.
 pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId {
     let bb_opt = builder.current_block;
+    if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+        eprintln!("[local-ssa] ensure ENTRY bb_opt={:?} kind={:?} v=%{}", bb_opt, kind, v.0);
+    }
     if let Some(bb) = bb_opt {
         if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
             eprintln!("[local-ssa] ensure bb={:?} kind={:?} v=%{}", bb, kind, v.0);
@@ -38,9 +41,16 @@ pub fn ensure(builder: &mut MirBuilder, v: ValueId, kind: LocalKind) -> ValueId 
             return loc;
         }
         let loc = builder.value_gen.next();
-        // Best-effort: errors are propagated by caller; we ignore here to keep helper infallible
-        let _ = builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: v });
+        // Best-effort: errors are propagated by caller; we log but ignore to keep helper infallible
         if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+            let fn_name = builder.current_function.as_ref().map(|f| f.signature.name.as_str()).unwrap_or("<none>");
+            eprintln!("[local-ssa] BEFORE emit_instruction fn={} current_block={:?} target_bb={:?}", fn_name, builder.current_block, bb);
+        }
+        if let Err(e) = builder.emit_instruction(crate::mir::MirInstruction::Copy { dst: loc, src: v }) {
+            if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+                eprintln!("[local-ssa] FAILED copy bb={:?} kind={:?} %{} -> %{} error={}", bb, kind, v.0, loc.0, e);
+            }
+        } else if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
             eprintln!("[local-ssa] copy  bb={:?} kind={:?} %{} -> %{}", bb, kind, v.0, loc.0);
         }
         if let Some(t) = builder.value_types.get(&v).cloned() {
@@ -87,6 +97,9 @@ pub fn finalize_callee_and_args(builder: &mut MirBuilder, callee: &mut Callee, a
                 }
             }
         }
+        // FIX: Materialize receiver in current block (was missing!)
+        // This ensures literal.method() has the receiver const emitted.
+        r = recv(builder, r);
         *callee = Callee::Method { box_name, method, receiver: Some(r), certainty };
     }
     for a in args.iter_mut() {

@@ -358,6 +358,8 @@ impl NyashRunner {
         }
         // Preprocess usings and directives (includes dep-tree log)
         self.preprocess_usings_and_directives(&groups);
+        // Gate C: NyVM direct (MIR JSON via file/stdin)
+        if self.try_run_nyvm_mir_pipe() { return; }
         // JSON v0 bridge
         if self.try_run_json_v0_pipe() { return; }
         // Named task

@@ -270,7 +270,7 @@ Pure Hakorune realizes this fully.
 
 **Reasoning**:
 - Phase 20.5 deliverables are achievable (high confidence)
-- Phase 20.6+ depends on learnings from 15.79 (medium confidence)
+- Phase 20.6+ depends on learnings from 20.5 (medium confidence)
 - Fallback options exist if needed (risk mitigation)
 
 ---

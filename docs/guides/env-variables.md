@@ -1,8 +1,17 @@
 # ENV Variables — Core (Plugins/Provider)
 
+**Important / 重要**
+- Primary names are `HAKO_*`. `NYASH_*` are compatibility aliases. Use `HAKO_*` in new scripts/docs; runners mirror common `NYASH_*` → `HAKO_*` non‑destructively.
+
 Key variables (current)
 - `HAKO_PLUGIN_POLICY` (auto|off|force) — primary plugin load policy (preferred)
-- `NYASH_PLUGIN_CONFIG` — plugin config path (prefer `hako.toml`)
+  - `auto`（既定）: Plugin優先。未提供/失敗時は互換の範囲でbuiltinへフォールバック可。
+  - `off`: Plugin無効（すべてbuiltin/embedded）。
+  - `force`（Strict）: Plugin提供がある型はフォールバック禁止。Plugin未実装/失敗は即 Fail‑Fast（InvalidInstruction）。
+    - 代表エラー例: `plugin strict: builtin fallback disabled for MapBox.noSuchMethod(0 args)`
+    - ルーター境界で強制され、builtin への委譲は行われません。
+- `HAKO_PLUGIN_CONFIG` — plugin config path (prefer `hako.toml`)  
+  compat: `NYASH_PLUGIN_CONFIG`
 - `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — Stage‑2: 1 で keys/values HostHandle 経路を有効化。0 で Stage‑1(keysS/valuesS) シム（plugins プロファイルは既定ON）。
 - `NYASH_MAP_FORCE_HOST` — Dev/Test: Map.size/has/get/set を HostHandleRouter の slot(200/202/203/204) へ強制。既定OFF（plugins プロファイルはON）。
 - `NYASH_ARRAY_FORCE_HOST` — Dev/Test: Array.size/get/set を HostHandleRouter の slot(102/100/101) へ強制。既定OFF（plugins プロファイルはON）。
@@ -10,6 +19,12 @@ Key variables (current)
 - `NYASH_STRING_SIZE_FORCE_HOST` — Dev/Test: String.size/len を HostHandleRouter の slot(300) へ強制。既定OFF（plugins プロファイルはON）。
 - `HAKO_HOST_HANDLE_TRACE` / `NYASH_HOST_HANDLE_TRACE` — HostHandle slot呼び出しの観測ログ（短命/既定OFF）
 - `HAKO_MIRIO_PROVIDER` (scan|yyjson) — MirIoBox の入力プロバイダー選択（既定=scan）。yyjson は JSON プラグイン配置が必要。
+
+### JSON Canonicalization (testing aid)
+
+- `HAKO_JSON_CANON` (0|1) — Enable canonicalization (sorted object keys, arrays preserve order) for JSON golden/tests. Default OFF.
+  - Scope: Parser AST JSON CLI already uses canonical emit by default; this flag is for future MirIoBox ingress when host bridge is wired.
+  - Behavior: When OFF, behavior unchanged. When ON (and Extern bridge available), MIR JSON at ingress is normalized for stable comparisons.
   - 互換: `NYASH_JSON_PROVIDER`（legacy）。同時指定時は `HAKO_MIRIO_PROVIDER` を優先。
 - `HAKO_ALLOW_USING_FILE` — using でファイルパス参照を許可（開発/スモーク用）。
 - `NYASH_USING_AST` — using prelude の AST マージを有効化（開発/スモーク用）。
@@ -36,7 +51,7 @@ Deprecated (compat) — avoid in new scripts
 - `NYASH_BUILTIN_DISABLE_{STRING|ARRAY|MAP}` — superseded by `HAKO_PLUGIN_POLICY`
 
 Profiles
-- plugin‑on: sets `HAKO_PLUGIN_POLICY=auto`, `NYASH_PLUGIN_CONFIG=hako.toml`
+- plugin‑on: sets `HAKO_PLUGIN_POLICY=auto`, `HAKO_PLUGIN_CONFIG=hako.toml` (compat: `NYASH_PLUGIN_CONFIG`)
 - plugins: Stage‑2 HostHandle 既定ON（`NYASH_PLUGIN_MAP_ARRAY_HANDLE=1`）＋ HostHandleRouter 経路を優先（Map/Array/String の強制ENVをON）
 - quick: 段階導入（最小）— `NYASH_ARRAY_SIZE_FORCE_HOST=1` のみ既定ON。他は必要時に opt‑in。
 

@@ -97,6 +97,13 @@ pub enum VerificationError {
         instruction_index: usize,
         method: String,
     },
+    /// Method(StringBox.size/len/length) must have an in-block receiver Copy right before call (dev-gated)
+    MethodReceiverMissingLocalCopy {
+        block: BasicBlockId,
+        instruction_index: usize,
+        method: String,
+        receiver: ValueId,
+    },
 }
 
 impl std::fmt::Display for VerificationError {
@@ -261,6 +268,13 @@ impl std::fmt::Display for VerificationError {
                     f,
                     "Method receiver missing in block {} at {} for {} (receiver must be explicit when Known)",
                     block, instruction_index, method
+                )
+            }
+            VerificationError::MethodReceiverMissingLocalCopy { block, instruction_index, method, receiver } => {
+                write!(
+                    f,
+                    "String receiver not materialized locally in block {} at {} for {} (recv=%{:?} needs in-block Copy)",
+                    block, instruction_index, method, receiver
                 )
             }
         }

@@ -1,0 +1,22 @@
+// json_canonical_box.hako — JsonCanonicalBox (Phase 20.5 Gate A unification)
+// Responsibility: Provide a single entry to canonicalize JSON strings.
+// Current behavior: identity (no-op) until Extern anchor bridging is wired.
+// Future: call host anchor `nyash_json_canonicalize_h` via Extern/HostBridge to obtain canonical form.
+
+static box JsonCanonicalBox {
+  canonicalize(json) {
+    // Guard: enable only when HAKO_JSON_CANON is truthy
+    local e = hostbridge.extern_invoke("env.local.get", ["HAKO_JSON_CANON"])
+    if e == null { return json }
+    // accept common truthy values
+    if e != "1" && e != "true" && e != "on" && e != "yes" { return json }
+    // Bridge to host via extern invoke (iface.method form): "nyash.json.canonicalize_h"
+    // Arguments: [ json: String ]
+    // Return: String (canonicalized JSON)
+    local args = new ArrayBox()
+    args.push(json)
+    local out = hostbridge.extern_invoke("nyash.json.canonicalize_h", args)
+    if out == null { return json }
+    return out
+  }
+}

@@ -22,6 +22,16 @@ using "selfhost/hakorune-vm/instrs_locator.hako" as InstrsLocatorBox
 using "selfhost/shared/mir/mir_io_box.hako" as MirIoBox
 using "selfhost/hakorune-vm/ret_value_loader.hako" as RetValueLoaderBox
 static box HakoruneVmCore {
+  // Unchecked entry: skip MIR(JSON) schema validation (Gate C smoke/helper)
+  run_unchecked(mir_json) {
+    // Initialize registers and memory
+    local regs = new MapBox()
+    local mem = new MapBox()
+    // Execute
+    local result = me._execute_blocks(mir_json, regs, mem)
+    if result.is_Ok() { return result.as_Ok() }
+    else { print("[ERROR] Hakorune-VM: " + result.as_Err()) return -1 }
+  }
   // Read MIR(JSON) from file and run
   run_from_file(path) {
     local fb = new FileBox()

@@ -1,4 +1,4 @@
-# 🐱 HakoRune Programming Language (aka Nyash)
+# 🐱 HakoRune Programming Language (formerly Nyash)
 **A Seriously-Crafted Hobby Language**
 **63-Day Self-Hosting Achievement - The AI-Powered Language Revolution (10-50x Faster than Industry Standard)**
 
@@ -14,8 +14,8 @@ CLI backends & tools
 Naming & extensions
 - Default extension is `.hako`. Historical `.nyash` remains accepted (deprecated); new docs and samples use `.hako`. See `docs/guides/naming-and-extensions.md`.
 
-[![Selfhost Minimal](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml/badge.svg?branch=selfhosting-dev)](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml)
-[![Core Smoke](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml/badge.svg)](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml)
+[![Selfhost Minimal](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml/badge.svg?branch=selfhosting-dev)](https://github.com/moe-charm/nyash/actions/workflows/selfhost-minimal.yml) <!-- legacy repo slug for CI -->
+[![Core Smoke](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml/badge.svg)](https://github.com/moe-charm/nyash/actions/workflows/smoke.yml) <!-- legacy repo slug for CI -->
 [![Everything is Box](https://img.shields.io/badge/Philosophy-Everything%20is%20Box-blue.svg)](#philosophy)
 [![Performance](https://img.shields.io/badge/Performance-13.5x%20Faster-ff6b6b.svg)](#performance)
 [![JIT Ready](https://img.shields.io/badge/JIT-Cranelift%20Powered%20(runtime%20disabled)-orange.svg)](#execution-modes)
@@ -169,9 +169,9 @@ Note: JIT runtime execution is currently disabled to reduce debugging overhead. 
 
 ## 🚀 **Breaking News: Self-Hosting Revolution!**
 
-**September 2, 2025** - 🔥 **ABI as a Box!** Nyash ABI itself implemented as TypeBox (C language) - path to self-hosting clear!
-**September 1, 2025** - Revolutionary TypeBox ABI unification achieved! C ABI + Nyash ABI seamlessly integrated.
-**August 29, 2025** - Just 20 days after inception, Nyash can now compile to native executables!
+**September 2, 2025** - 🔥 **ABI as a Box!** Hako ABI (legacy Nyash ABI) implemented as TypeBox (C language) — path to self‑hosting clear!
+**September 1, 2025** - Revolutionary TypeBox ABI unification achieved! C ABI + Hako ABI seamlessly integrated.
+**August 29, 2025** - Just 20 days after inception, Hakorune can now compile to native executables!
 
 ```bash
 # From Nyash source to native binary (Cranelift required)
@@ -180,20 +180,20 @@ cargo build --release --features cranelift-jit
 ./app                                             # Standalone execution!
 ```
 
-**What we achieved in 24 days:**
+**What we achieved in 24 days (historical):**
 - ✅ Full programming language with interpreter
 - ✅ VM with 13.5x performance boost  
 - ✅ JIT compiler (Cranelift integration)
 - ✅ WebAssembly support
-- ✅ Plugin system (C ABI + Nyash ABI unified)
+- ✅ Plugin system (C ABI + Hako ABI unified)
 - ✅ Native binary generation
 - ✅ Python integration via plugins
 - ✅ TypeBox ABI bridge (revolutionary plugin unification)
-- ✅ **Self-hosting path clear** (Nyash ABI in C, no Rust dependency!)
+- ✅ **Self‑hosting path clear** (Hako ABI in C, no Rust dependency!)
 
 ---
 
-## ✨ **Why Nyash?**
+## ✨ **Why Hakorune?**
 
 ### 🎯 **Everything is Box Philosophy**
 ```nyash

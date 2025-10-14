@@ -37,6 +37,12 @@ impl MirOptimizer {
             println!("🚀 Starting MIR optimization passes");
         }
 
+        // Pre-pass repairs: ensure local materialization for fragile call sites
+        // 1) String/Array length-like Method calls
+        stats.merge(crate::mir::optimizer_passes::repair::repair_string_len_receivers(module));
+        // 2) BoxCall receivers (always insert in-block Copy before call)
+        stats.merge(crate::mir::optimizer_passes::repair::repair_boxcall_receivers(module));
+
         // Env toggles (legacy): Core-13 normalization is always ON for legacy ops
 
         // Pass 0: Normalize legacy instructions to unified forms
@@ -102,6 +108,10 @@ impl MirOptimizer {
         let diag2 =
             crate::mir::optimizer_passes::diagnostics::diagnose_legacy_instructions(self, module);
         stats.merge(diag2);
+
+        // Post-normalize repair: re-apply Method(ArrayBox/StringBox length-like) → Extern and
+        // ensure in-block receiver materialization in case later passes introduced new Method calls.
+        stats.merge(crate::mir::optimizer_passes::repair::repair_string_len_receivers(module));
 
         stats
     }

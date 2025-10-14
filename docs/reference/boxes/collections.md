@@ -41,6 +41,11 @@ Note（HostHandleRouter 運用）
 - plugins プロファイルでは、HostHandleRouter 経路を既定で優先（Map.size/has/get/set、Array.size/get/set、String.size/len を slot へ強制）。
 - quick プロファイルでは既定OFF（開発時に `NYASH_MAP_FORCE_HOST=1`, `NYASH_ARRAY_FORCE_HOST=1`, `NYASH_STRING_SIZE_FORCE_HOST=1` を使用）。
 
+Length 系の統一（実装メモ）
+- String/Array の `size/len/length` は、Builder 正規化で Extern に降格（String:`nyrt.string.length` / Array:`nyrt.array.size`）。
+- 受けの materialize は EmitGuard で一度だけ実施し、正規化では新しい ValueId を発行しない（再materialize禁止）。
+- VM extern は HostHandle/Builtin を吸収し、受け未定義や Method 経路の揺れに影響されない。
+
 ## Identity Smokes
 
 Phase 15.7 では下記の恒等性テストを常時回している：

@@ -705,5 +705,5 @@ void nyrt_gc_safepoint(void);
 ---
 
 **Created**: 2025-10-14
-**Phase**: 15.79 (Week 7-8)
+**Phase**: 20.5 (Week 7-8)
 **Component**: C Code Generator

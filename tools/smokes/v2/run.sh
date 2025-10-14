@@ -427,14 +427,17 @@ run_single_test() {
 
     end_time=$(date +%s.%N)
     duration=$(echo "$end_time - $start_time" | bc -l)
+    # Format duration to 3 decimals (seconds)
+    local duration_fmt
+    duration_fmt=$(printf '%.3f' "$duration")
 
     # 結果出力
     case "$FORMAT" in
         text)
             if [ $exit_code -eq 0 ]; then
-                echo -e "${GREEN}PASS${NC} (${duration}s)"
+                echo -e "${GREEN}PASS${NC} (${duration_fmt}s)"
             else
-                echo -e "${RED}FAIL${NC} (exit=$exit_code, ${duration}s)"
+                echo -e "${RED}FAIL${NC} (exit=$exit_code, ${duration_fmt}s)"
                 echo -e "${YELLOW}[WARN]${NC} Test file: $test_file"
                 local TAIL_N="${SMOKES_NOTIFY_TAIL:-80}"
                 echo "----- LOG (tail -n $TAIL_N) -----"
@@ -445,13 +448,34 @@ run_single_test() {
         json)
             local status_json
             status_json=$([ $exit_code -eq 0 ] && echo "pass" || echo "fail")
-            echo "{"name":"$test_name","path":"$test_file","status":"$status_json","duration":$duration,"exit":$exit_code}"
+            echo "{"name":"$test_name","path":"$test_file","status":"$status_json","duration":$duration_fmt,"exit":$exit_code}"
             ;;
         junit)
             # JUnit形式は後でまとめて出力（pathも保持）
-            echo "$test_name:$exit_code:$duration:$test_file" >> /tmp/junit_results.txt
+            echo "$test_name:$exit_code:$duration_fmt:$test_file" >> /tmp/junit_results.txt
             ;;
     esac
+
+    # 統一メタ行出力（パース容易性のため）
+    local status_meta
+    # Detect SKIP in log
+    if grep -q '^\[WARN\] SKIP ' "$log_file"; then
+        status_meta="SKIP"
+        exit_code=0
+    fi
+    if [ $exit_code -eq 0 ]; then
+        status_meta=${status_meta:-PASS}
+    elif [ $exit_code -eq 124 ] || [ $exit_code -eq 137 ]; then
+        status_meta="FAIL"  # Timeout (124=timeout, 137=SIGKILL)
+    else
+        status_meta="FAIL"
+    fi
+    # SMOKES_STATUS形式: SMOKES_STATUS: <status> test=<name> code=<exit> duration=<sec>
+    if [ "${SMOKES_EMIT_META:-1}" = "1" ]; then
+        echo "SMOKES_STATUS: $status_meta test=$test_name code=$exit_code duration=${duration_fmt}s" >&2
+    fi
+    # Export last status for summary counting
+    export SMOKES_LAST_STATUS="$status_meta"
 
     # 後始末
     rm -f "$log_file" 2>/dev/null || true
@@ -487,6 +511,7 @@ run_tests() {
     log_header "Starting $PROFILE profile tests"
 
     local passed=0
+    local skipped=0
     local failed=0
     local start_time
     start_time=$(date +%s.%N)
@@ -510,7 +535,11 @@ run_tests() {
         first_test=false
 
         if run_single_test "$test_file"; then
-            passed=$((passed+1))
+            case "${SMOKES_LAST_STATUS:-PASS}" in
+              SKIP) skipped=$((skipped+1));;
+              PASS) passed=$((passed+1));;
+              *) passed=$((passed+1));; # default safety
+            esac
         else
             failed=$((failed+1))
             # Fast fail モード
@@ -531,10 +560,15 @@ run_tests() {
             echo ""
             log_header "Test Results Summary"
             echo "Profile: $PROFILE"
-            echo "Total: $((passed + failed))"
+            echo "Total: $((passed + failed + skipped))"
             echo "Passed: $passed"
+            echo "Skipped: $skipped"
             echo "Failed: $failed"
-            echo "Duration: ${total_duration}s"
+            echo "Duration: $(printf '%.3f' "$total_duration")s"
+            # Emit machine-parsable summary meta line
+            if [ "${SMOKES_EMIT_META:-1}" = "1" ]; then
+                echo "SMOKES_SUMMARY: total=$((passed+failed+skipped)) pass=$passed skip=$skipped fail=$failed duration=$(printf '%.3f' "$total_duration")s"
+            fi
 
             if [ $failed -eq 0 ]; then
                 log_success "All tests passed! ✨"

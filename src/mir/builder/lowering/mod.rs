@@ -31,9 +31,8 @@ pub fn lower_builtin_method(
             ("charAt", 1) => Some(LoweredExternSpec { extern_name: "nyrt.string.charAt", prepend_recv: true }),
             _ => None,
         },
-        // Array builtins
+        // Array builtins: do not lower here. Prefer BoxCall/unified route and later normalize/extern adapter.
         "ArrayBox" => match (method, arity) {
-            ("length", 0) | ("size", 0) | ("len", 0) => Some(LoweredExternSpec { extern_name: "nyrt.array.size", prepend_recv: true }),
             _ => None,
         },
         // Map builtins

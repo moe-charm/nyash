@@ -10,8 +10,212 @@
  */
 
 use super::*;
+use serde_json::Value as J;
+
+fn gate_c_canonicalize_mir_json(v: &mut J) {
+    if let Some(funcs) = v.get_mut("functions").and_then(|x| x.as_array_mut()) {
+        for f in funcs.iter_mut() {
+            if let Some(blocks) = f.get_mut("blocks").and_then(|x| x.as_array_mut()) {
+                for b in blocks.iter_mut() {
+                    if let Some(insts) = b.get_mut("instructions").and_then(|x| x.as_array_mut()) {
+                        for inst in insts.iter_mut() {
+                            // dst: {type:..., value:N} → N
+                            if let Some(dst) = inst.get_mut("dst") {
+                                if let Some(val) = dst.get("value").and_then(|x| x.as_u64()) { *dst = J::from(val as u32); }
+                            }
+                            // ret.value: {type:..., value:N} → N
+                            if let Some(op) = inst.get("op").and_then(|x| x.as_str()) {
+                                if op == "ret" || op == "return" {
+                                    if let Some(vv) = inst.get_mut("value") {
+                                        if let Some(val) = vv.get("value").and_then(|x| x.as_u64()) { *vv = J::from(val as u32); }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 
 impl NyashRunner {
+    /// Gate C: Read MIR(JSON v0) and execute via Hakorune VM Core
+    /// --nyvm-json-file <path> or --nyvm-pipe (stdin)
+    /// Returns true if handled.
+    pub(super) fn try_run_nyvm_mir_pipe(&self) -> bool {
+        let groups = self.config.as_groups();
+        if !(groups.parser.nyvm_pipe || groups.parser.nyvm_json_file.is_some()) {
+            return false;
+        }
+        // Early direct path for Gate C: parse MIR(JSON) and execute via interpreter (quiet)
+        // This avoids going through Ny wrappers and eliminates noisy logs.
+        // Now gated by NYASH_GATE_C_DIRECT=1 to keep default behavior stable for smokes.
+        if std::env::var("NYASH_GATE_C_DIRECT").ok().as_deref() == Some("1") {
+            // Quiet/run-only env for Gate C
+            std::env::set_var("NYASH_QUIET", "1");
+            std::env::set_var("HAKO_QUIET", "1");
+            std::env::set_var("NYASH_CLI_VERBOSE", "0");
+            std::env::set_var("NYASH_NYRT_SILENT_RESULT", "1");
+            std::env::set_var("NYASH_OPERATOR_BOX_PRELUDE", "0");
+            std::env::set_var("NYASH_DISABLE_PLUGINS", "1");
+            std::env::set_var("NYASH_SUPPRESS_MODULE_CONFLICT", "1");
+            std::env::set_var("NYASH_CHECK_CONTRACTS", "0");
+
+            if let Some(path) = &groups.parser.nyvm_json_file {
+                if let Ok(json) = std::fs::read_to_string(path) {
+                    let mut v: J = match serde_json::from_str(&json) { Ok(x) => x, Err(_) => return true };
+                    gate_c_canonicalize_mir_json(&mut v);
+                    let json2 = serde_json::to_string(&v).unwrap_or_default();
+                    if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                        use crate::backend::MirInterpreter;
+                        let mut interp = MirInterpreter::new();
+                        if let Ok(result) = interp.execute_module(&module) {
+                            if let Some(ib) = result.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                                println!("{}", ib.value);
+                            } else {
+                                let s = result.to_string_box().value;
+                                if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                            }
+                        } else { eprintln!("❌ VM execution error: run failed"); }
+                    } else { eprintln!("❌ MIR JSON reader error: parse failed"); }
+                } else { eprintln!("❌ json-file read error"); }
+                return true;
+            }
+            if groups.parser.nyvm_pipe {
+                use std::io::Read;
+                let mut buf = String::new();
+                if let Err(e) = std::io::stdin().read_to_string(&mut buf) { eprintln!("❌ stdin read error: {}", e); return true; }
+                let mut v: J = match serde_json::from_str(&buf) { Ok(x) => x, Err(_) => return true };
+                gate_c_canonicalize_mir_json(&mut v);
+                let json2 = serde_json::to_string(&v).unwrap_or_default();
+                if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                    use crate::backend::MirInterpreter;
+                    let mut interp = MirInterpreter::new();
+                    if let Ok(result) = interp.execute_module(&module) {
+                        if let Some(ib) = result.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                            println!("{}", ib.value);
+                        } else {
+                            let s = result.to_string_box().value;
+                            if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                        }
+                    } else { eprintln!("❌ VM execution error: run failed"); }
+                } else { eprintln!("❌ MIR JSON reader error: parse failed"); }
+                return true;
+            }
+        }
+        // Default path: parse MIR(JSON v0) and execute via interpreter, printing a single numeric line.
+        // This avoids Ny wrapper VM pipeline instability during Gate C bring-up.
+        if let Some(path) = &groups.parser.nyvm_json_file {
+            // Quiet + strict env for Gate C
+            std::env::set_var("NYASH_USING", "1");
+            std::env::set_var("NYASH_USING_AST", "1");
+            std::env::set_var("HAKO_ALLOW_USING_FILE", "1");
+            std::env::set_var("NYASH_SUPPRESS_MODULE_CONFLICT", "1");
+            std::env::set_var("NYASH_NYRT_SILENT_RESULT", "1");
+            std::env::set_var("HAKO_QUIET", "1");
+            std::env::set_var("NYASH_QUIET", "1");
+            std::env::set_var("NYASH_CLI_VERBOSE", "0");
+            std::env::set_var("NYASH_OPERATOR_BOX_PRELUDE", "0");
+            std::env::set_var("NYASH_DISABLE_PLUGINS", "1");
+            std::env::set_var("NYASH_CHECK_CONTRACTS", "0");
+            // Quiet/run-only env for Gate C numeric output
+            std::env::set_var("NYASH_QUIET", "1");
+            std::env::set_var("HAKO_QUIET", "1");
+            std::env::set_var("NYASH_CLI_VERBOSE", "0");
+            std::env::set_var("NYASH_NYRT_SILENT_RESULT", "1");
+            // Read and canonicalize, then execute via interpreter
+            match std::fs::read_to_string(path) {
+                Ok(json) => {
+                    let mut v: J = match serde_json::from_str(&json) { Ok(x) => x, Err(_) => return true };
+                    gate_c_canonicalize_mir_json(&mut v);
+                    let json2 = serde_json::to_string(&v).unwrap_or_default();
+                    if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                        use crate::backend::MirInterpreter;
+                        let mut interp = MirInterpreter::new();
+                        if let Ok(result) = interp.execute_module(&module) {
+                            if let Some(ib) = result.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                                println!("{}", ib.value);
+                            } else {
+                                let s = result.to_string_box().value;
+                                if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                            }
+                        } else { eprintln!("❌ VM execution error: run failed"); }
+                    } else { eprintln!("❌ MIR JSON reader error: parse failed"); }
+                }
+                Err(e) => eprintln!("❌ json-file read error: {}", e),
+            }
+            return true;
+        }
+        // stdin mode
+        // stdin mode (direct path first)
+        if groups.parser.nyvm_pipe {
+            // If direct path is explicitly requested, handle here and return
+            if std::env::var("NYASH_GATE_C_DIRECT").ok().as_deref() == Some("1") {
+                use std::io::Read;
+                let mut buf = String::new();
+                if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
+                    eprintln!("❌ stdin read error: {}", e);
+                    std::process::exit(1);
+                }
+                std::env::set_var("NYASH_USING", "1");
+                std::env::set_var("NYASH_USING_AST", "1");
+                std::env::set_var("HAKO_ALLOW_USING_FILE", "1");
+                std::env::set_var("NYASH_SUPPRESS_MODULE_CONFLICT", "1");
+                std::env::set_var("NYASH_NYRT_SILENT_RESULT", "1");
+                std::env::set_var("HAKO_QUIET", "1");
+                std::env::set_var("NYASH_QUIET", "1");
+                std::env::set_var("NYASH_CLI_VERBOSE", "0");
+                std::env::set_var("NYASH_OPERATOR_BOX_PRELUDE", "0");
+                std::env::set_var("NYASH_DISABLE_PLUGINS", "1");
+                std::env::set_var("NYASH_CHECK_CONTRACTS", "0");
+                match super::mir_json_reader::parse_mir_json_v0_to_module(&buf) {
+                    Ok(module) => {
+                        use crate::backend::MirInterpreter;
+                        let mut interp = MirInterpreter::new();
+                        match interp.execute_module(&module) {
+                            Ok(result) => {
+                                if let Some(ib) = result.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                                    println!("{}", ib.value);
+                                } else {
+                                    let s = result.to_string_box().value;
+                                    if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                                }
+                            }
+                            Err(e) => { eprintln!("❌ VM execution error: {}", e); }
+                        }
+                    }
+                    Err(e) => eprintln!("❌ MIR JSON reader error: {}", e),
+                }
+                return true;
+            }
+            use std::io::Read;
+            let mut buf = String::new();
+            if let Err(e) = std::io::stdin().read_to_string(&mut buf) {
+                eprintln!("❌ stdin read error: {}", e);
+                std::process::exit(1);
+            }
+            // Directly execute the MIR(JSON) via interpreter and print a single numeric line
+            let mut v: J = match serde_json::from_str(&buf) { Ok(x) => x, Err(_) => return true };
+            gate_c_canonicalize_mir_json(&mut v);
+            let json2 = serde_json::to_string(&v).unwrap_or_default();
+            if let Ok(module) = super::mir_json_reader::parse_mir_json_v0_to_module(&json2) {
+                use crate::backend::MirInterpreter;
+                let mut interp = MirInterpreter::new();
+                if let Ok(result) = interp.execute_module(&module) {
+                    if let Some(ib) = result.as_any().downcast_ref::<crate::box_trait::IntegerBox>() {
+                        println!("{}", ib.value);
+                    } else {
+                        let s = result.to_string_box().value;
+                        if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                    }
+                } else { eprintln!("❌ VM execution error: run failed"); }
+            } else { eprintln!("❌ MIR JSON reader error: parse failed"); }
+            return true;
+        }
+        // Fallback wrapper path removed (Gate C uses direct interpreter path above)
+        true
+    }
     /// Try to handle `--ny-parser-pipe` / `--json-file` flow.
     /// Returns true if the request was handled (program should return early).
     pub(super) fn try_run_json_v0_pipe(&self) -> bool {

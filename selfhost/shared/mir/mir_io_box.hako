@@ -9,6 +9,7 @@
 
 using "selfhost/vm/boxes/result_box.hako" as Result
 using "selfhost/shared/json/json_cursor.hako" as JsonCursorBox
+using "selfhost/shared/json/json_canonical_box.hako" as JsonCanonicalBox
 using "selfhost/hakorune-vm/function_locator.hako" as FunctionLocatorBox
 using "selfhost/hakorune-vm/blocks_locator.hako" as BlocksLocatorBox
 using "selfhost/hakorune-vm/instrs_locator.hako" as InstrsLocatorBox
@@ -17,6 +18,10 @@ using "selfhost/hakorune-vm/block_iterator.hako" as BlockIteratorBox
 using "selfhost/shared/common/string_helpers.hako" as StringHelpers
 
 static box MirIoBox {
+  // Return canonicalized full MIR JSON (keys sorted, arrays preserve order)
+  normalize(json) {
+    return JsonCanonicalBox.canonicalize(json)
+  }
   // Provider selection: prefer JSON provider when available; otherwise use scan locators
   // 判定は _json_root() の成否で行う（ENV不要）。
 
@@ -28,6 +33,8 @@ static box MirIoBox {
   }
   validate(json) {
     if json == null { return Result.Err("null json") }
+    // Optional: canonicalize full MIR JSON at ingress (identity until host bridge is wired)
+    json = JsonCanonicalBox.canonicalize(json)
     // Accept full root (preferred)
     if json.indexOf("\"kind\":\"MIR\"") >= 0 {
       if json.indexOf("\"schema_version\":\"1.0\"") < 0 { return Result.Err("invalid schema_version") }
@@ -43,6 +50,8 @@ static box MirIoBox {
 
   // Return function JSON meta (content)
   functions(json) {
+    // Canonicalize full root when present (identity until host bridge is wired)
+    json = JsonCanonicalBox.canonicalize(json)
     // Provider disabled: always use scan locator
     local loc = FunctionLocatorBox.locate(json)
     if loc.is_Err() { return loc }

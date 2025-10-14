@@ -53,7 +53,7 @@ Using/プラグイン（ENV要約）:
 - 詳細: `docs/guides/operator-boxes.md`
 
 開発モードと既定
-- `nyash --dev script.hako` で開発向け既定（AST using ON / Operator Boxes 観測ON / 診断の最小ON）を一括で有効化できます。`nyash script.hako` は本番相当（静かで安定）。
+- `hakorune --dev script.hako` で開発向け既定（AST using ON / Operator Boxes 観測ON / 診断の最小ON）を一括で有効化できます。`hakorune script.hako` は本番相当（静かで安定）。
 - ワンコマンドの dev ショートカットも引き続き利用できます（`tools/opbox-json.sh` / `tools/opbox-quick.sh`）。
 - using ガード: 同じファイルの重複 import（または alias の再バインド）はエラーになり、行番号付きで通知されます。
   - 例: `using: duplicate import of '<canon_path>' at file.hako:12 (previous alias 'X' first seen at line 5)`

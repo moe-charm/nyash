@@ -49,8 +49,19 @@ pub fn choose_route(box_name: &str, method: &str, certainty: TypeCertainty, arit
         reason = "nonstring-box-string-like";
         Route::BoxCall
     } else if crate::runtime::type_registry::is_core_box(box_name) {
-        reason = "core_box";
-        Route::BoxCall
+        // Core boxes default to BoxCall to preserve legacy behavior.
+        // Exception: length-like (size/len/length, arity=0) on String/Array route to Unified
+        // so builder can normalize to stable externs (avoids recv SSA fragility).
+        if ((box_name == "StringBox") || (box_name == "ArrayBox"))
+            && arity == 0
+            && matches!(method, "size" | "len" | "length")
+        {
+            reason = "core_box_len_unified";
+            Route::Unified
+        } else {
+            reason = "core_box";
+            Route::BoxCall
+        }
     } else if !box_name.ends_with("Box") {
         reason = "user_instance";
         Route::BoxCall

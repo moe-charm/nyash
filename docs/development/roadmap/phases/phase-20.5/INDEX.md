@@ -310,7 +310,7 @@ bash tools/verify_bootstrap_chain.sh
 ### Issue Tracking
 
 - Use GitHub issues with label `phase-20.5`
-- Prefix: `[15.79]` in commit messages
+- Prefix: `[20.5]` in commit messages
 - Milestone: `Phase 20.5 - Bootstrap Compiler`
 
 ### Review Process

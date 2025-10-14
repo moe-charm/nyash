@@ -7,3 +7,4 @@ pub mod reenter_guard;
 pub mod using_core;
 pub mod core_box_methods;
 pub mod env_helpers;
+pub mod json_canonical;

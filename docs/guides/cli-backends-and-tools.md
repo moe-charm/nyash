@@ -23,6 +23,20 @@ Examples
 - LLVM harness:
   - `hakorune --backend llvm apps/APP/main.hako`
 
+## NyVM Pipe (MIR JSON direct)
+
+- Execute MIR(JSON v0) via Hakorune VM Core directly (Gate C thin wiring):
+  - From file: `hakorune --nyvm-json-file tmp/mir.json`
+  - From stdin: `cat tmp/mir.json | hakorune --nyvm-pipe`
+  - The wrapper uses `selfhost/hakorune-vm/hakorune_vm_core.hako` and prints the numeric result line at the end.
+
+## Builder → LLVM (one‑liner)
+
+- With python3 + llvmlite installed, you can emit LLVM IR from a MIR JSON file:
+  - `python3 tools/llvmlite_harness.py --in tmp/mir.json --emit-ll --out tmp/out.ll`
+  - To generate `tmp/mir.json` from the in‑repo builder quickly:
+    - `hakorune -c $'using "selfhost/shared/mir/block_builder_box.hako" as B; using "apps/lib/json_native/stringify.hako" as J; static box Main { main() { print(J.stringify_map(B.binop(2,3,"Add"))); return 0 } }' | tail -n1 > tmp/mir.json`
+
 ## Tools resolution
 
 - Inspect tools with:

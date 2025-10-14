@@ -11,41 +11,10 @@ use crate::mir::ValueId;
 ///
 /// Returns true if the callee/args were rewritten.
 pub fn normalize_string_length_call(
-    _builder: &mut MirBuilder,
+    builder: &mut MirBuilder,
     callee: &mut Callee,
     args: &mut Vec<ValueId>,
 ) -> bool {
-    // Already normalized
-    if matches!(callee, Callee::Extern(name) if name == "nyrt.string.length") {
-        return false;
-    }
-
-    // Method form with 0 args
-    if let Callee::Method { method, receiver: Some(r), .. } = callee.clone() {
-        if (method.as_str() == "size" || method.as_str() == "len" || method.as_str() == "length") && args.is_empty() {
-            // receiver is already materialized by finalize_call_operands
-            let recv_local = r;
-            *callee = Callee::Extern("nyrt.string.length".to_string());
-            args.clear();
-            args.push(recv_local);
-            return true;
-        }
-    }
-
-    // ModuleFunction form with 1 arg (the receiver)
-    if let Callee::ModuleFunction(name) = callee.clone() {
-        if (name.starts_with("StringBox.size/") || name.starts_with("StringBox.len/") || name.starts_with("StringBox.length/"))
-            && args.len() == 1
-        {
-            // receiver is already materialized by finalize_call_operands
-            let recv_local = args[0];
-            *callee = Callee::Extern("nyrt.string.length".to_string());
-            args.clear();
-            args.push(recv_local);
-            return true;
-        }
-    }
-
-    false
+    super::normalize_length_call(builder, callee, args, "StringBox", "nyrt.string.length")
 }
 

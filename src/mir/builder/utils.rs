@@ -1,5 +1,5 @@
 use super::{BasicBlock, BasicBlockId};
-use crate::mir::{BarrierOp, TypeOpKind, WeakRefOp};
+use crate::mir::{BarrierOp, WeakRefOp};
 use std::sync::atomic::{AtomicUsize, Ordering};
 // include path resolver removed (using handles modules)
 
@@ -252,38 +252,6 @@ impl super::MirBuilder {
             }
         }
         Ok(())
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn emit_type_check(
-        &mut self,
-        value: super::ValueId,
-        expected_type: String,
-    ) -> Result<super::ValueId, String> {
-        let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::TypeOp {
-            dst,
-            op: TypeOpKind::Check,
-            value,
-            ty: super::MirType::Box(expected_type),
-        })?;
-        Ok(dst)
-    }
-
-    #[allow(dead_code)]
-    pub(super) fn emit_cast(
-        &mut self,
-        value: super::ValueId,
-        target_type: super::MirType,
-    ) -> Result<super::ValueId, String> {
-        let dst = self.value_gen.next();
-        self.emit_instruction(super::MirInstruction::TypeOp {
-            dst,
-            op: TypeOpKind::Cast,
-            value,
-            ty: target_type.clone(),
-        })?;
-        Ok(dst)
     }
 
     #[allow(dead_code)]

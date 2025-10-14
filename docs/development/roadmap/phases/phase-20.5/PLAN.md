@@ -12,12 +12,28 @@ Scope: Minimal, verifiable, gate‑based execution plan
 
 ## Gates (must pass in order)
 - Gate A: Parser v1 (Hakorune) produces canonical AST JSON
-  - DoD: 10 cases PASS; no non‑determinism; keys sorted
+  - DoD: ~10 cases PASS; no non‑determinism; keys sorted
+  - Implemented CLI: `--dump-ast-json` (stdout), `--emit-ast-json <file>` (pre‑macro)
+  - Smokes (quick‑selfhost):
+    - parser_ast_json_canonical_vm.sh, parser_ast_json_return_vm.sh, parser_ast_json_unary_vm.sh
+    - parser_ast_json_array_literal_vm.sh, parser_ast_json_map_literal_vm.sh
+    - parser_ast_json_empty_array_vm.sh, parser_ast_json_empty_map_vm.sh
+    - parser_ast_json_if_else_vm.sh, parser_ast_json_emit_file_vm.sh
+  - MirIoBox normalize（guarded by `HAKO_JSON_CANON`）: mirio_canonicalize_vm.sh
 - Gate B: MIR Builder v1 (Hakorune) emits minimal MIR (16 ops)
-  - DoD: 16 ops reachable; golden JSON matches; keys sorted
+  - Scope (P1): const, ret, binop(Add/Sub/Mul/Div/Mod), compare(Eq/Ne/Lt/Le/Gt/Ge), jump, branch
+  - DoD: 16 ops reachable; quick-selfhostで4本の代表スモークPASS（不足はSKIPガードで段階導入）
+  - Smokes (quick-selfhost):
+    - mir_builder_const_ret_vm.sh（const→ret）
+    - mir_builder_binop_add_vm.sh（const,const→binop(Add)→ret）
+    - mir_builder_compare_eq_vm.sh（compare(Eq)→branch→then/else→ret）
+    - mir_builder_compare_lt_vm.sh（compare(Lt)→branch→then/else→ret）
 - Gate C: VM Foundations (Pure Hakorune) — 5 ops PoC via HostBridge
   - Ops: const, binop, compare, jump, ret
   - DoD: Simple programs run end‑to‑end; measurable performance
+  - CLI entry (thin wiring):
+    - `--nyvm-json-file <path>` → read MIR(JSON v0) and execute via HakoruneVmCore.run_from_file
+    - `--nyvm-pipe` → read MIR(JSON v0) from stdin and execute via HakoruneVmCore.run
 - Gate D: op_eq Migration (NoOperatorGuard + 8 types)
   - DoD: 20 golden tests PASS; ≥70% perf vs Rust‑VM
 - Gate E: Integration & Docs
@@ -59,4 +75,3 @@ Note: C Code Generator track is preserved as design reference but not primary; P
 3) Migrate op_eq with NoOperatorGuard + 20 golden tests
 4) Turn SKIP gates into PASS progressively（quick‑selfhost → plugins → integration）
 5) Update MILESTONE/INDEX weekly; keep artifacts/manifest fresh
-

@@ -107,6 +107,62 @@ M3達成: 2025年10月11日 (63日後)
 
 ---
 
+### 🎉 **Hakorune VM実装完了発見！** (2025-10-14)
+**Phase 20.5計画の全面改訂 - 36週間→6週間に短縮 ⭐重大発見**
+
+#### 💡 **Critical Discovery**
+**仮定**: Hakorune VMは未実装、36週間かけてゼロから構築する必要がある
+**現実**: **Hakorune VMは100%完成していた！** ✅
+
+**発見場所**: `selfhost/hakorune-vm/` (2025-10-05 → 10-13実装、8日間)
+
+#### 📊 **実装状況**
+```
+selfhost/hakorune-vm/ (3,413 lines, 44 files)
+├── 22 instruction handlers  ✅ (16 MIR + 6 advanced = 138%カバレッジ)
+├── @match-based dispatch    ✅ (instruction_dispatcher.hako)
+├── Result-based errors      ✅ (Rust-style error handling)
+├── 26+ comprehensive tests  ✅ (tests/*.hako)
+└── Block-based execution    ✅ (hakorune_vm_core.hako)
+```
+
+#### 🎯 **22 Instruction Handlers実装済み**
+```
+✅ barrier, binop, boxcall, closure_call, compare, const
+✅ constructor_call, copy, extern_call, global_call, load
+✅ method_call, mircall, module_function_call, newbox, nop
+✅ phi, safepoint, store, terminator, typeop, unaryop
+```
+
+#### 🔄 **Phase 20.5戦略の全面改訂**
+**旧計画** (OBSOLETE):
+- 36週間（Phase 20.5 → 20.8）
+- VM実装: Week 5-12 (8週間)
+- Dispatch統一: Week 13-18 (6週間)
+- Collections実装: Week 19-26 (8週間)
+
+**新計画** (UPDATED):
+- **6週間** (Phase 20.5のみ)
+- Week 1-2: VM検証・テスト拡充
+- Week 3-4: Golden Testing（Rust-VM vs Hako-VM完全一致保証）
+- Week 5: CLI統合（`--backend vm-hako`）
+- Week 6: ドキュメント整備
+
+#### 📚 **関連ドキュメント**
+- **[HAKORUNE_VM_DISCOVERY.md](docs/development/roadmap/phases/phase-20.5/HAKORUNE_VM_DISCOVERY.md)** ⭐発見レポート
+- **[Phase 20.5 README](docs/development/roadmap/phases/phase-20.5/README.md)** ⭐全面改訂済み
+- **[STRATEGY_RECONCILIATION.md](docs/development/roadmap/phases/phase-20.5/STRATEGY_RECONCILIATION.md)** - 戦略比較
+
+#### 🚀 **次のステップ**
+1. **Week 1 (即座)**: 既存テスト26+件を実行・検証
+2. **Week 2-3**: Golden Testフレームワーク構築
+3. **Week 4**: CLI統合（`--backend vm-hako`）
+4. **Week 5-6**: ドキュメント・Phase 20.6計画
+
+**重要**: Phase 20.6以降（HostBridge API等）は「必要に応じて」実施。Hakorune VM単体で完結可能。
+
+---
+
 ### 📝 **最近の完了Phase**
 
 **詳細**: [claude_archive_2025_10.md](docs/archive/claude_archive_2025_10.md)

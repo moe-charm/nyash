@@ -225,7 +225,7 @@ impl MirBuilder {
         // Reverting can re-introduce use-before-def across block boundaries (e.g., String.size()).
         let mut callee2 = callee.clone();
         let mut args2 = args_local.clone();
-        crate::mir::builder::materialize::call_site::finalize_call_site(self, &mut callee2, &mut args2);
+        crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee2, &mut args2);
         // Safety net: ensure receiver/args are materialized in the CURRENT block right before emission.
         // This defends against any late block switches that may have occurred upstream.
         match &mut callee2 {

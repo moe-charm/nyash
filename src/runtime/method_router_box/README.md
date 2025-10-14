@@ -13,11 +13,11 @@ Method Router Box — Split Adapters (Phase 15.75)
 ガード/方針
 - Arity: TypeRegistry の known arities に基づくガード（`maybe_arity_guard`）を境界で適用。
 - HostHandle: `HostHandleBox` は実体へ置換して再入（再帰）。
-- String: プリミティブはここで直接処理（BoxRef ではないため builtin へ委譲不可）。
+- String: プリミティブは builtin 側の `try_route_string_primitive` へ委譲（BoxRef ではないため専用関数）。
 - Plugin → Builtin の順に 1 本ずつ委譲し、未処理は `method_not_supported` を返す。
 
 撤退計画
-- 旧経路（mod.rs 内の巨大分岐）は委譲実装への移設完了後に物理削除（済み）。
+- 旧経路（mod.rs 内の巨大分岐）は委譲実装への移設完了後に物理削除（String/Array/Map を段階移設中。String は委譲済み）。
 - 以後の機能追加は `plugin.rs` / `builtin.rs` へ集約し、`mod.rs` は薄い入口を維持する。
 
 HostHandle slots / ENV（開発用）

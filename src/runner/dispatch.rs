@@ -148,6 +148,28 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         return;
     }
 
+    // Dump parsed AST as canonical JSON v0 and exit (pre-macro)
+    if groups.debug.dump_ast_json {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => {
+                eprintln!("❌ Error reading file {}: {}", filename, e);
+                process::exit(1);
+            }
+        };
+        let ast = match NyashParser::parse_from_string(&code) {
+            Ok(ast) => ast,
+            Err(e) => {
+                eprintln!("❌ Parse error: {}", e);
+                process::exit(1);
+            }
+        };
+        let j = crate::r#macro::ast_json::ast_to_json(&ast);
+        let s = crate::common::json_canonical::to_canonical_string(&j);
+        println!("{}", s);
+        return;
+    }
+
     // Dump expanded AST as JSON v0 and exit
     if runner.config.dump_expanded_ast_json {
         let code = match fs::read_to_string(filename) {
@@ -164,6 +186,25 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
         } else { ast };
         let j = crate::r#macro::ast_json::ast_to_json(&expanded);
         println!("{}", j.to_string());
+        return;
+    }
+
+    // Emit parsed AST as canonical JSON v0 to file and exit (pre-macro)
+    if let Some(out_path) = &groups.emit.emit_ast_json {
+        let code = match fs::read_to_string(filename) {
+            Ok(content) => content,
+            Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
+        };
+        let ast = match NyashParser::parse_from_string(&code) {
+            Ok(ast) => ast,
+            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+        };
+        let j = crate::r#macro::ast_json::ast_to_json(&ast);
+        let s = crate::common::json_canonical::to_canonical_string(&j);
+        if let Err(e) = std::fs::write(out_path, s.as_bytes()) {
+            eprintln!("❌ Failed to write {}: {}", out_path, e);
+            process::exit(1);
+        }
         return;
     }
 
@@ -345,6 +386,16 @@ impl NyashRunner {
         let mut interp = MirInterpreter::new();
         match interp.execute_module(module) {
             Ok(result) => {
+                // Gate C: when requested, print bare numeric and return (quiet mode)
+                if std::env::var("NYASH_GATE_C_OUTPUT_NUMERIC").ok().as_deref() == Some("1") {
+                    if let Some(ib) = result.as_any().downcast_ref::<IntegerBox>() {
+                        println!("{}", ib.value);
+                    } else {
+                        let s = result.to_string_box().value;
+                        if let Some(num) = s.trim().parse::<i64>().ok() { println!("{}", num); } else { println!("{}", s); }
+                    }
+                    return;
+                }
                 println!("✅ MIR interpreter execution completed!");
                 if let Some(func) = module.functions.get("main") {
                     let (ety, sval) = match &func.signature.return_type {

@@ -4,6 +4,25 @@ use crate::backend::vm_types::{VMError, VMValue};
 use crate::box_trait::NyashBox;
 use super::map_callable::MapCallableBox;
 
+fn plugin_normalize_enabled() -> bool {
+    matches!(std::env::var("HAKO_PLUGIN_NORMALIZE").ok().as_deref(), Some("1"|"true"|"on"|"yes"))
+}
+
+fn normalize_plugin_value(v: VMValue) -> VMValue {
+    if !plugin_normalize_enabled() { return v; }
+    match v {
+        // Normalization hook (phase-in): keep Void stable, unwrap VoidBox if any leaked
+        VMValue::BoxRef(ref arc) => {
+            if arc.as_any().downcast_ref::<crate::box_trait::VoidBox>().is_some() {
+                VMValue::Void
+            } else {
+                v
+            }
+        }
+        _ => v,
+    }
+}
+
 /// Try routing a PluginBoxV2 receiver.
 /// Phase 0-mini: scaffold only. Keep behavior in mod.rs for now.
 /// Returns Ok(None) when not handled.
@@ -37,7 +56,7 @@ pub fn try_route_plugin_box(
                 if rc == -3 { out_len = 128; out_buf.resize(out_len, 0); let _ = crate::runtime::host_api::nyrt_host_call_slot(hh, 200, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len); }
                 if rc == 0 && out_len >= 6 {
                     if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
+                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(normalize_plugin_value(v))); }
                     }
                 }
             }
@@ -52,7 +71,7 @@ pub fn try_route_plugin_box(
                 if rc == -3 { out_len = 128; out_buf.resize(out_len, 0); let _ = crate::runtime::host_api::nyrt_host_call_slot(hh, 202, tlv_args.as_ptr(), tlv_args.len(), out_buf.as_mut_ptr(), &mut out_len); }
                 if rc == 0 && out_len >= 6 {
                     if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
+                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(normalize_plugin_value(v))); }
                     }
                 }
             }
@@ -67,7 +86,7 @@ pub fn try_route_plugin_box(
                 if rc == -3 { out_len = 128; out_buf.resize(out_len, 0); let _ = crate::runtime::host_api::nyrt_host_call_slot(hh, 203, tlv_args.as_ptr(), tlv_args.len(), out_buf.as_mut_ptr(), &mut out_len); }
                 if rc == 0 && out_len >= 6 {
                     if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
+                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(normalize_plugin_value(v))); }
                     }
                 }
             }
@@ -107,35 +126,17 @@ pub fn try_route_plugin_box(
             let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 102, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
             if rc == 0 && out_len >= 6 {
                 if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                    if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
+                    if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(normalize_plugin_value(v))); }
                 }
             }
         }
 
-        // Fallback host path for Map.* if forced and still not returned (size/has/get)
-        if p.box_type == "MapBox" {
-            let force_map_all = std::env::var("NYASH_MAP_FORCE_HOST").ok().as_deref() == Some("1");
-            let force_map_size = force_map_all || std::env::var("NYASH_MAP_SIZE_FORCE_HOST").ok().as_deref() == Some("1");
-            let force_map_has = force_map_all || std::env::var("NYASH_MAP_HAS_FORCE_HOST").ok().as_deref() == Some("1");
-            let force_map_get = force_map_all || std::env::var("NYASH_MAP_GET_FORCE_HOST").ok().as_deref() == Some("1");
-            if method == "size" && force_map_size {
-                let hh = crate::runtime::host_handles::to_handle_arc(bx.clone());
-                let mut out_buf = vec![0u8; 64];
-                let mut out_len: usize = out_buf.len();
-                let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 200, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
-                if rc == 0 && out_len >= 6 {
-                    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
-                    }
-                }
-            }
-            // (duplicate has/get paths removed)
-        }
+        // (duplicate Map.* fallback removed; early-host branches above cover size/has/get/set)
 
         // Delegate to plugin host
         let out = crate::runtime::plugin_host_box::invoke_instance_method(&p.box_type, method, p.inner.instance_id, &argv);
         return match out {
-            Ok(Some(ret)) => Ok(Some(VMValue::from_nyash_box(ret))),
+            Ok(Some(ret)) => Ok(Some(normalize_plugin_value(VMValue::from_nyash_box(ret)))),
             Ok(None) => Ok(Some(VMValue::Void)),
             Err(e) => Err(VMError::InvalidInstruction(format!("Plugin method {}.{} failed: {:?}", p.box_type, method, e))),
         };

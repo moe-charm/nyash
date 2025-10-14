@@ -201,7 +201,7 @@ Captured Execution Logs
 - Windows（MSVC/MinGW）: `build/WINDOWS_LINK_TEST_REPORT.md`（結果と手順を記録）
 
 Doctor quick check
-- `tools/aot/doctor_frozen_v1.sh` は Linux/WSL の標準ルートを検証します。
+- `tools/aot/doctor_frozen_v1.sh` は Linux/WSL の標準ルートを検証します（Hakorune 凍結ラインの健全性）。
 - Windows 連携で躓いたら：
   - `clang.exe` のパス例: `C:\\LLVM-18\\bin\\clang.exe`
   - VS/MSVC ランタイム: `Visual Studio Build Tools` と `Windows SDK` を導入

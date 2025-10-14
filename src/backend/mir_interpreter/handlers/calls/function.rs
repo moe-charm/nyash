@@ -573,6 +573,13 @@ impl MirInterpreter {
                 match class {
                     "ArrayBox" | "MapBox" | "StringBox" | "ConsoleBox" => {
                         if method != "birth" {
+                            // Early extern for String length/size/len to avoid fragile Method(receiver)
+                            if class == "StringBox" && (method == "size" || method == "length" || method == "len") {
+                                let recv = args[0];
+                                let cal = crate::mir::Callee::Extern("nyrt.string.length".to_string());
+                                // Extern expects (recv) as args
+                                return self.execute_callee_call(&cal, &[*&recv]);
+                            }
                             // Build a Method callee and reuse the legacy method path which returns VMValue
                             let recv = args[0];
                             let rest: Vec<ValueId> = args.iter().copied().skip(1).collect();

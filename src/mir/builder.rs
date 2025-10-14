@@ -51,8 +51,8 @@ mod infer; // ReceiverInferenceBox（受け手推定の一元化）
 pub mod lowering; // Builtin→Extern lowering map（対応表）
 // rewrite は既存モジュールを使用（gate サブモジュールを追加）
 mod indexes; // InstanceMethodIndexBox（(Box,method,arity)登録/照会）
-mod materialize; // MaterializeBox（Call直前の材化を一元化）
 mod verify; // CallOrderVerifyBox（dev-only 検証ラッパ）
+mod normalize; // Normalization helpers (boxed): string length, etc.
 pub mod effects; // EffectResolverBox（効果決定の単一入口・既定OFF）
 pub mod entry; // Public entrypoint wrapper (AST→MIR module)
 

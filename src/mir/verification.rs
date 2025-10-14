@@ -17,6 +17,7 @@ mod static_self_fields;
 mod phi_inputs;
 mod utils;
 mod ssa;
+mod string_receivers;
 
 
 /// MIR verifier for SSA form and semantic correctness
@@ -116,6 +117,13 @@ impl MirVerifier {
         // 9.7. Unified Call invariants
         if let Err(mut call_errors) = self.verify_calls(function) {
             local_errors.append(&mut call_errors);
+        }
+
+        // 9.8. String length receiver materialization (dev-only gate)
+        if std::env::var("NYASH_VERIFY_STRING_RECV_COPY").ok().as_deref() == Some("1") {
+            if let Err(mut recv_errors) = string_receivers::check_string_len_receiver_materialized(function) {
+                local_errors.append(&mut recv_errors);
+            }
         }
 
         // 10. PHI-off strict edge-copy policy (optional)

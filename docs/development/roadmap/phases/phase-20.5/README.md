@@ -1,28 +1,49 @@
-# Phase 20.5 - Escape from Rust (Pure Hakorune Strategy)
+# Phase 20.5 - Hakorune VM Validation & Adoption
 
-**期間**: 2025-12-21 - 2026-02-28 (10週間)
-**状態**: Planning (Pure Hakorune Strategy Adopted)
+**期間**: 2025-12-21 - 2026-01-31 (6週間)
+**状態**: Planning ⚠️ **CRITICAL UPDATE** - VM already exists!
 **前提**: Phase 15.77完了 (凍結EXE確定)
-**戦略変更**: C Code Generator → Pure Hakorune VM (2025-10-14)
+**重大発見**: Hakorune VM is **100% COMPLETE** (2025-10-14)
 
 ---
 
-## 🎯 このフェーズで実現すること
+## 🎉 Critical Discovery (2025-10-14)
 
-**"Rust=floor, Hakorune=house" - VM自体をHakoruneで実装**
+**Original Assumption**: Hakorune VM does not exist, needs 36 weeks to build.
 
-1. **HostBridge API完成**: C-ABI境界の最小化（Rust↔Hakorune）
-2. **op_eq移行**: 等価性ロジックをRust→Hakoruneへ（NoOperatorGuard実装）
-3. **VM Foundations実装**: 命令ディスパッチの概念実証（5命令）
-4. **Pure Hakorune Roadmap**: Phase 20.6-15.82への詳細計画
+**Actual Reality**: **Hakorune VM is COMPLETE** in `selfhost/hakorune-vm/`!
+- ✅ 3,413 lines of Hakorune code
+- ✅ 44 files including 22 instruction handlers
+- ✅ 26+ comprehensive tests
+- ✅ All 16 MIR instructions + 6 advanced handlers
+- ✅ @match-based dispatch architecture
+- ✅ Result-based error handling
+- ✅ Implementation period: October 5-13, 2025 (8 days!)
 
-**注意**: C Code Generator実装は**中止**（Pure Hakorune戦略採用のため）
+**Impact**: Phase 20.5 changes from "implementation" to **"validation & adoption"**.
+
+📖 **Full Discovery Report**: [HAKORUNE_VM_DISCOVERY.md](HAKORUNE_VM_DISCOVERY.md)
 
 ---
 
-## 💡 このフェーズの位置づけ
+## 🎯 このフェーズで実現すること（更新版）
 
-### Pure Hakorune戦略（6フェーズ）のPhase A+B開始
+**"Hakorune VM → 検証 → CLI統合 → デフォルト化"**
+
+1. **Hakorune VM検証**: 既存22ハンドラーの動作確認
+2. **Golden Testing**: Rust-VM vs Hako-VM 完全一致保証
+3. **CLI統合**: `--backend vm-hako` 実装
+4. **ドキュメント整備**: アーキテクチャ・移行ガイド
+5. **オプション: HostBridge API**: C-ABI境界（他の理由で必要な場合のみ）
+
+**変更点**:
+- ❌ **VM実装** → ✅ **VM検証**（既に完成）
+- ❌ **36週間** → ✅ **6週間**
+- ❌ **段階的実装** → ✅ **全機能検証**
+
+---
+
+## 💡 このフェーズの位置づけ（更新版）
 
 ```
 Phase 15.77（凍結EXE確定）✅
@@ -30,449 +51,578 @@ Phase 15.77（凍結EXE確定）✅
 ├── NyRT関数呼び出し可能
 └── MIR JSON → .o → EXE 導線確立
 
-Phase 20.5（Pure Hakorune基盤）← 今ここ
-├── Phase A: HostBridge API（Week 1-4）✅
-├── Phase B開始: VM Foundations（Week 5-8）
-│   ├── op_eq移行（Week 5-6）
-│   └── 命令ディスパッチPoC（Week 7-8）
-└── ドキュメント整備（Week 9-10）
+Hakorune VM実装完了（2025-10-05 → 10-13）✅
+├── 3,413 lines / 44 files
+├── 22 instruction handlers
+├── 26+ comprehensive tests
+└── selfhost/hakorune-vm/
 
-Phase 20.6（VM Core完成）
-├── Phase B完了: 16命令すべて実装
-└── Phase C: ディスパッチ統一（Resolver）
+Phase 20.5（VM検証・統合）← 今ここ
+├── Week 1-2: VM検証・テスト拡充
+├── Week 3-4: Golden Testing（Rust-VM vs Hako-VM）
+├── Week 5: CLI統合（--backend vm-hako）
+└── Week 6: ドキュメント・Phase 20.6計画
 
-Phase 20.7（コレクション）
-└── Phase D: MapBox/ArrayBox in Hakorune
-
-Phase 20.8（GC + Rust非推奨化）
-├── Phase E: GC v0（Mark & Sweep）
-└── Phase F: Rust VM互換モード
-
-合計: 36週間（Phase 20.5-15.82）
+Phase 20.6（オプション: HostBridge + Rust最小化）
+├── HostBridge API実装（必要な場合）
+├── Rust VM非推奨化
+└── Hakorune VM デフォルト化
 ```
+
+**重要**: Phase 20.6以降は「必要に応じて」実施。Hakorune VM単体で動作可能。
 
 ---
 
 ## 🏆 成功基準（DoD）
 
-### 1️⃣ HostBridge API完成
+### 1️⃣ Hakorune VM検証完了
 
 ```bash
-# C-ABI関数が動作
-./test_hostbridge_abi  # Ubuntu
-./test_hostbridge_abi.exe  # Windows
+# 既存テストスイート実行
+cd selfhost/hakorune-vm
+for test in tests/*.hako; do
+    NYASH_DISABLE_PLUGINS=1 ../../target/release/hako "$test"
+done
 
-# 5コア関数実装
-# - Hako_RunScriptUtf8
-# - Hako_Retain / Hako_Release
-# - Hako_ToUtf8
-# - Hako_LastError
+# 期待: 26+ tests ALL PASS
 ```
 
-- [ ] 5コア関数実装完了
-- [ ] Ubuntu ABIテスト PASS
-- [ ] Windows ABIテスト PASS
-- [ ] エラーハンドリング（TLS）動作確認
+**チェックリスト**:
+- [ ] 26個の既存テスト すべて PASS
+- [ ] 22個のハンドラー動作確認
+- [ ] エラーハンドリング（Result）動作確認
+- [ ] @match dispatch 動作確認
 
-### 2️⃣ op_eq移行完了
+### 2️⃣ Golden Testing完了
 
 ```bash
-# Hakorune側op_eqが動作
-HAKO_USE_PURE_EQ=1 ./hako test.hako
+# Golden Test実行（Rust-VM vs Hako-VM）
+bash tools/golden_test_hakorune_vm.sh
 
-# Golden Test: Rust vs Hako
-./test_op_eq_golden.sh
-# Expected: 100% parity
+# 期待: 100% parity
 ```
 
-- [ ] NoOperatorGuard実装
-- [ ] 8種類の比較実装（int/bool/null/string/array/map/enum/user）
-- [ ] Golden Test: 20個すべて PASS
-- [ ] パフォーマンス: Hako-VM ≥ 70% of Rust-VM
+**テストケース**:
+- [ ] 算術演算（10ケース）
+- [ ] 制御フロー（10ケース）
+- [ ] コレクション操作（10ケース）
+- [ ] 再帰（5ケース）
+- [ ] クロージャ（5ケース）
+- [ ] 合計40ケース すべて一致
 
-### 3️⃣ VM Foundations PoC
+### 3️⃣ CLI統合完了
 
 ```bash
-# 5命令が動作
-./hako --backend vm-hako simple_program.hako
-# 命令: const, binop, compare, jump, ret
+# Hakorune VM経由で実行可能
+./target/release/hako --backend vm-hako program.hako
+
+# 環境変数でもOK
+HAKO_USE_HAKORUNE_VM=1 ./target/release/hako program.hako
 ```
 
-- [ ] 5命令実装（const, binop, compare, jump, ret）
-- [ ] MIR実行ループ（Hakorune実装）
-- [ ] 統合テスト: 簡単なプログラム実行可能
-- [ ] パフォーマンス: 測定可能
+**チェックリスト**:
+- [ ] `--backend vm-hako` フラグ実装
+- [ ] `HAKO_USE_HAKORUNE_VM=1` 環境変数対応
+- [ ] エラーメッセージ整備
+- [ ] パフォーマンス測定
 
-### 4️⃣ ドキュメント整備
+### 4️⃣ ドキュメント整備完了
 
-- [ ] STRATEGY_RECONCILIATION.md（戦略変更の理由）
-- [ ] HOSTBRIDGE_API_DESIGN.md（C-ABI仕様）
-- [ ] OP_EQ_MIGRATION.md（等価性実装ガイド）
-- [ ] PURE_HAKORUNE_ROADMAP.md（Phase 20.5-15.82計画）
-- [ ] Phase 20.6計画書
+**必須ドキュメント**:
+- [ ] `selfhost/hakorune-vm/README.md` - アーキテクチャ概要
+- [ ] `selfhost/hakorune-vm/DESIGN.md` - 設計パターン
+- [ ] `selfhost/hakorune-vm/TESTING.md` - テスト戦略
+- [ ] `docs/guides/hakorune-vm-migration.md` - 移行ガイド
+- [ ] Phase 20.6計画書（オプション: HostBridge）
 
 ---
 
-## 📊 週次計画（Week 1-10）
+## 📊 週次計画（Week 1-6）
 
-### Week 1-2（2025-12-21 - 2026-01-03）HostBridge API設計・実装
+### Week 1（2025-12-21 - 12-27）VM検証・テスト実行
 
-**目標**: C-ABI境界の確立
-
-#### タスク
-- [ ] HostBridge API設計（5コア関数）
-- [ ] HandleRegistry実装（Rust側）
-- [ ] C header生成（hakorune_hostbridge.h）
-- [ ] 基本実装（RunScriptUtf8, Retain/Release）
-
-#### 成果物
-```
-src/hostbridge/
-├── mod.rs                     # C-ABI exports
-├── handle_registry.rs         # Handle管理
-└── tests.rs                   # Unit tests
-
-include/
-└── hakorune_hostbridge.h      # C header
-```
-
-### Week 3-4（2026-01-04 - 01-17）HostBridge API完成・テスト
-
-**目標**: Ubuntu/Windows ABIテスト PASS
+**目標**: 既存実装の動作確認
 
 #### タスク
-- [ ] ToUtf8, LastError実装
-- [ ] エラーハンドリング（TLS）
-- [ ] ABIテスト作成（C言語）
-- [ ] Ubuntu/Windows検証
-
-#### 成果物
-```
-tests/
-├── hostbridge_abi_test.c      # C ABIテスト
-└── hostbridge_integration/    # 統合テスト
-    └── test_hostbridge_call.hako
-
-tools/
-└── test_hostbridge_abi.sh     # テストスクリプト
-```
-
-### Week 5-6（2026-01-18 - 01-31）op_eq移行
-
-**目標**: 等価性ロジックをRust→Hakoruneへ
-
-#### タスク
-- [ ] NoOperatorGuard実装（再帰防止）
-- [ ] 8種類の比較実装（int/bool/null/string/array/map/enum/user）
-- [ ] Golden Test作成（20ケース）
-- [ ] Rust-VM vs Hako-VM パリティ検証
-
-#### 成果物
-```
-apps/hakorune-vm/
-├── op_eq_box.hako             # 等価性実装
-├── no_operator_guard_box.hako # Guard実装
-└── tests/                     # Unit tests
-
-tests/golden/op_eq/            # Golden tests
-├── primitives.hako
-├── arrays.hako
-├── maps.hako
-├── recursion.hako
-└── user_defined.hako
-```
-
-### Week 7-8（2026-02-01 - 02-14）VM Foundations PoC
-
-**目標**: 命令ディスパッチの概念実証（5命令）
-
-#### タスク
-- [ ] MIR実行ループ（Hakorune実装）
-- [ ] 5命令実装（const, binop, compare, jump, ret）
-- [ ] 統合テスト（簡単なプログラム実行）
-- [ ] パフォーマンス測定
-
-#### 成果物
-```
-apps/hakorune-vm/
-├── mini_vm_box.hako           # VM実行ループ
-├── instruction_dispatch.hako  # ディスパッチ
-└── tests/                     # 統合テスト
-
-tests/vm_poc/                  # VM PoC tests
-├── hello.hako                 # Hello World
-├── arithmetic.hako            # 算術演算
-└── control_flow.hako          # 制御フロー
-```
-
-### Week 9（2026-02-15 - 02-21）統合テスト・パフォーマンス測定
-
-**目標**: 全コンポーネント統合動作確認
-
-#### タスク
-- [ ] HostBridge + op_eq + VM PoC 統合
-- [ ] E2Eテスト（10ケース）
-- [ ] パフォーマンス測定・比較
-- [ ] 問題点の特定・修正
-
-#### 検証スクリプト
 ```bash
-# tools/phase_15_79_verify.sh
+# 1. 既存テスト全実行
+cd selfhost/hakorune-vm
+for test in tests/*.hako; do
+    echo "Testing: $test"
+    NYASH_DISABLE_PLUGINS=1 ../../target/release/hako "$test" || echo "FAIL"
+done
 
+# 2. ハンドラーカバレッジ確認
+ls *_handler.hako | wc -l  # 期待: 22
+
+# 3. エラーケーステスト
+# - 不正なMIR JSON
+# - 未定義命令
+# - 型エラー
+```
+
+**成果物**:
+- [ ] テスト実行レポート（26+ tests）
+- [ ] カバレッジレポート（22 handlers）
+- [ ] バグ修正リスト（あれば）
+
+### Week 2（2025-12-28 - 2026-01-03）テスト拡充
+
+**目標**: テストカバレッジ拡大
+
+#### タスク
+```bash
+# 新規テストケース追加
+selfhost/hakorune-vm/tests/
+├── test_edge_cases/
+│   ├── test_large_numbers.hako
+│   ├── test_deep_recursion.hako
+│   ├── test_long_strings.hako
+│   └── test_complex_control_flow.hako
+└── test_stress/
+    ├── test_1000_instructions.hako
+    └── test_nested_calls_100_deep.hako
+```
+
+**成果物**:
+- [ ] 10個の新規テストケース
+- [ ] エッジケース網羅
+- [ ] ストレステスト実施
+
+### Week 3-4（2026-01-04 - 01-17）Golden Testing
+
+**目標**: Rust-VM vs Hako-VM 完全一致保証
+
+#### Golden Testスイート作成
+```bash
+tests/golden/hakorune-vm/
+├── arithmetic/
+│   ├── test_add.hako
+│   ├── test_mul.hako
+│   └── test_div.hako (10 tests)
+├── control_flow/
+│   ├── test_if_else.hako
+│   ├── test_loop.hako
+│   └── test_branch.hako (10 tests)
+├── collections/
+│   ├── test_array_ops.hako
+│   ├── test_map_ops.hako
+│   └── test_string_ops.hako (10 tests)
+├── recursion/
+│   ├── test_factorial.hako
+│   └── test_fibonacci.hako (5 tests)
+└── closures/
+    ├── test_capture.hako
+    └── test_nested.hako (5 tests)
+```
+
+#### Golden Test実行スクリプト
+```bash
+# tools/golden_test_hakorune_vm.sh
 #!/bin/bash
 set -e
 
-echo "Test 1: HostBridge API"
-./test_hostbridge_abi
+PASS=0
+FAIL=0
 
-echo "Test 2: op_eq Golden Tests"
-./test_op_eq_golden.sh
+for test in tests/golden/hakorune-vm/**/*.hako; do
+    echo "Testing: $test"
 
-echo "Test 3: VM PoC"
-./hako --backend vm-hako tests/vm_poc/arithmetic.hako
+    # Rust VM実行
+    ./target/release/hako --backend vm "$test" > /tmp/rust_out.txt 2>&1
+    rust_exit=$?
 
-echo "✅ PASS: Phase 20.5 統合テスト"
+    # Hakorune VM実行
+    ./target/release/hako --backend vm-hako "$test" > /tmp/hako_out.txt 2>&1
+    hako_exit=$?
+
+    # 出力比較
+    if diff /tmp/rust_out.txt /tmp/hako_out.txt && [ $rust_exit -eq $hako_exit ]; then
+        echo "  ✅ PASS"
+        ((PASS++))
+    else
+        echo "  ❌ FAIL"
+        echo "  Rust output:"
+        cat /tmp/rust_out.txt
+        echo "  Hako output:"
+        cat /tmp/hako_out.txt
+        ((FAIL++))
+    fi
+done
+
+echo ""
+echo "Golden Test Results:"
+echo "  PASS: $PASS"
+echo "  FAIL: $FAIL"
+echo "  Total: $((PASS + FAIL))"
+
+if [ $FAIL -eq 0 ]; then
+    echo "✅ All Golden Tests PASSED!"
+    exit 0
+else
+    echo "❌ Some Golden Tests FAILED"
+    exit 1
+fi
 ```
 
-### Week 10（2026-02-22 - 02-28）ドキュメント・Phase 20.6計画
+**成果物**:
+- [ ] 40個のGolden Testケース
+- [ ] Golden Test実行スクリプト
+- [ ] CI統合（GitHub Actions）
+- [ ] パフォーマンス比較レポート
+
+### Week 5（2026-01-18 - 01-24）CLI統合
+
+**目標**: `--backend vm-hako` 実装
+
+#### 実装ファイル
+```rust
+// src/backend/hakorune_vm_runner.rs (NEW)
+use std::path::PathBuf;
+use crate::error::Result;
+
+pub fn run_hakorune_vm(mir_json: String) -> Result<i64> {
+    // 1. selfhost/hakorune-vm/hakorune_vm_core.hako をロード
+    let vm_core_path = PathBuf::from("selfhost/hakorune-vm/hakorune_vm_core.hako");
+
+    // 2. Rust VMでHakoruneVmCoreBoxを実行
+    let vm_instance = load_and_run_box(&vm_core_path)?;
+
+    // 3. HakoruneVmCoreBox.run(mir_json) を呼び出し
+    let result = vm_instance.call_method("run", vec![Box::new(mir_json)])?;
+
+    // 4. 結果を返す
+    Ok(result.as_int()?)
+}
+
+// src/cli.rs (MODIFY)
+match backend {
+    Backend::Vm => run_rust_vm(mir),
+    Backend::VmHako => run_hakorune_vm(mir),  // NEW!
+    Backend::Llvm => run_llvm(mir),
+    Backend::Wasm => run_wasm(mir),
+}
+```
+
+**テスト**:
+```bash
+# 基本実行
+./target/release/hako --backend vm-hako apps/tests/hello.hako
+# 期待: Hello World出力
+
+# 環境変数版
+HAKO_USE_HAKORUNE_VM=1 ./target/release/hako apps/tests/hello.hako
+
+# デバッグモード
+HAKO_VM_TRACE=1 ./target/release/hako --backend vm-hako test.hako
+```
+
+**成果物**:
+- [ ] `src/backend/hakorune_vm_runner.rs` 実装
+- [ ] CLI統合完了
+- [ ] 環境変数対応
+- [ ] エラーメッセージ整備
+
+### Week 6（2026-01-25 - 01-31）ドキュメント・Phase 20.6計画
 
 **目標**: ドキュメント整備、次フェーズ計画
 
-#### タスク
-- [ ] 戦略変更文書（STRATEGY_RECONCILIATION.md）
-- [ ] HostBridge API仕様（HOSTBRIDGE_API_DESIGN.md）
-- [ ] op_eq移行ガイド（OP_EQ_MIGRATION.md）
-- [ ] Pure Hakorune Roadmap（PURE_HAKORUNE_ROADMAP.md）
-- [ ] Phase 20.6計画書作成
-- [ ] 完了報告書作成
-
-#### 成果物
+#### ドキュメント作成
 ```
+selfhost/hakorune-vm/
+├── README.md                         # アーキテクチャ概要
+├── DESIGN.md                         # 設計パターン詳解
+├── TESTING.md                        # テスト戦略
+└── CHANGELOG.md                      # 実装履歴（Oct 5-13）
+
+docs/guides/
+└── hakorune-vm-migration.md          # ユーザー移行ガイド
+
 docs/development/roadmap/phases/phase-20.5/
-├── STRATEGY_RECONCILIATION.md # 戦略変更理由
-├── HOSTBRIDGE_API_DESIGN.md   # C-ABI仕様
-├── OP_EQ_MIGRATION.md         # 等価性ガイド
-├── PURE_HAKORUNE_ROADMAP.md   # 全体計画
-├── COMPLETION_REPORT.md       # 完了報告
-└── LESSONS_LEARNED.md         # 学び
+├── HAKORUNE_VM_DISCOVERY.md          # 発見レポート
+├── README.md                         # このファイル（更新済み）
+├── VALIDATION_REPORT.md              # 検証レポート
+└── COMPLETION_REPORT.md              # 完了報告
 
-docs/development/roadmap/phases/phase-20.6/
-└── README.md                  # Phase 20.6計画
+docs/development/roadmap/phases/phase-20.6/ (オプション)
+└── README.md                         # HostBridge計画（必要な場合）
 ```
+
+**成果物**:
+- [ ] 5個のドキュメント完成
+- [ ] Phase 20.5完了報告書
+- [ ] Phase 20.6計画書（オプション）
+- [ ] tomoakiさんへの報告
 
 ---
 
-## 🎯 実装戦略の決定
+## 🎯 Hakorune VM アーキテクチャ（既存実装）
 
-### 戦略変更: C Code Generator → Pure Hakorune（2025-10-14）
-
-**原案（Task Agent）**:
-- C Code Generator実装（500行）
-- MIR JSON → Cコード変換
-- 10週間でBootstrap達成
-
-**新戦略（ChatGPT Pro + User承認）**:
-- VM自体をHakoruneで実装
-- Rust = 薄い橋（C-ABI のみ）
-- 36週間（Phase 20.5-15.82）で完全実現
-
-### Pure Hakorune戦略の優位性
-
-**アーキテクチャの美しさ**:
-```
-C Generator:  Hakorune→MIR→C→EXE（複数パス）
-Pure Hakorune: Hakorune→MIR→Hako-VM実行（単一パス）
-```
-
-**長期保守性**:
-- ✅ 実行パス単一（Hakorune VMのみ）
-- ✅ VM意味論を一箇所で定義（Hakorune内）
-- ✅ 外部コンパイラ依存なし（clang/gcc不要）
-- ✅ デバッグ容易（すべてHakorune内）
-
-**過去の学びの反映**:
-- Equals/== 再帰バグ → NoOperatorGuard で構造的に解決
-- Handle管理複雑性 → 最小C-ABI（Retain/Release）
-- ディスパッチ断片化 → 単一解決パス（Resolver）
-
-**究極のBox理論実現**:
-> Everything is Box、VMもBox。
-
-### Phase 20.5での実現範囲
-
-**✅ 10週間で完成**:
-1. HostBridge API（C-ABI境界）
-2. op_eq移行（等価性をHakoruneへ）
-3. VM Foundations PoC（5命令）
-
-**⏸️ Phase 20.6+へ延期**:
-4. VM Core完成（16命令すべて）
-5. Dispatch統一（Resolver経由）
-6. Collections in Hakorune
-7. GC v0
-8. Rust VM非推奨化
-
----
-
-## 🎯 Pure Hakorune 3つの柱
-
-ChatGPT Pro提案の"三位一体"（不変原則）:
-
-### 1. 唯一の境界 = C-ABI（HostBridge）
+### ファイル構成
 
 ```
-Rust (floor)          ┃          Hakorune (house)
-OS/FFI/File/Process   ┃   VM/Collections/Dispatch/etc.
-     ~100 lines       ┃        Everything Else
-                      ┃
-                  HostBridge (C-ABI)
-              ┃
-        5 functions only:
-        - Hako_RunScriptUtf8
-        - Hako_Retain / Release
-        - Hako_ToUtf8
-        - Hako_LastError
+selfhost/hakorune-vm/ (3,413 lines, 44 files)
+├── hakorune_vm_core.hako (225 lines)       # Entry point
+├── instruction_dispatcher.hako (72 lines)   # @match dispatch
+├── blocks_locator.hako                     # Control flow
+├── error_builder.hako                      # Error messages
+├── args_guard.hako                         # Argument validation
+├── json_normalize_box.hako                 # JSON processing
+│
+├── [22 handler files]                      # Instruction handlers:
+│   ├── barrier_handler.hako                # GC barrier
+│   ├── binop_handler.hako                  # Binary operations
+│   ├── boxcall_handler.hako                # Box method calls
+│   ├── closure_call_handler.hako           # Closure invocation
+│   ├── compare_handler.hako                # Comparisons
+│   ├── const_handler.hako                  # Constants
+│   ├── constructor_call_handler.hako       # Constructor calls
+│   ├── copy_handler.hako                   # Copy operation
+│   ├── extern_call_handler.hako            # External calls
+│   ├── global_call_handler.hako            # Global functions
+│   ├── load_handler.hako                   # Memory load
+│   ├── method_call_handler.hako            # Method calls
+│   ├── mircall_handler.hako                # Unified MIR call
+│   ├── module_function_call_handler.hako   # Module functions
+│   ├── newbox_handler.hako                 # Box creation
+│   ├── nop_handler.hako                    # No-op
+│   ├── phi_handler.hako                    # PHI nodes
+│   ├── safepoint_handler.hako              # GC safepoint
+│   ├── store_handler.hako                  # Memory store
+│   ├── terminator_handler.hako             # Control flow (jump/branch/ret)
+│   ├── typeop_handler.hako                 # Type operations
+│   └── unaryop_handler.hako                # Unary operations
+│
+└── tests/ (26+ files)                      # Comprehensive tests
+    ├── test_phase1_minimal.hako
+    ├── test_phase2_day4.hako
+    ├── test_boxcall.hako
+    ├── test_mircall_*.hako (5 files)
+    ├── test_mapbox_*.hako (3 files)
+    └── ... (16 more)
 ```
 
-### 2. 唯一の呼び出し = MethodHandle
+### 設計パターン
 
+#### 1. @match-Based Dispatch
 ```hakorune
-// すべての呼び出しはこれ1つ
-ExecBox.call_by_handle(handle, args, NoOperatorGuard)
+// instruction_dispatcher.hako
+dispatch(inst_json, regs, mem) {
+    local op = extract_op(inst_json)
 
-// handle の取得元:
-Resolver.lookup(type_id, method, arity) -> MethodHandle
+    return match op {
+        "const" => ConstHandlerBox.handle(inst_json, regs)
+        "binop" => BinOpHandlerBox.handle(inst_json, regs)
+        "compare" => CompareHandlerBox.handle(inst_json, regs)
+        "load" => LoadHandlerBox.handle(inst_json, regs, mem)
+        "store" => StoreHandlerBox.handle(inst_json, regs, mem)
+        "mir_call" => MirCallHandlerBox.handle(inst_json, regs, mem)
+        "boxcall" => BoxCallHandlerBox.handle(inst_json, regs)
+        "newbox" => NewBoxHandlerBox.handle(inst_json, regs)
+        "phi" => PhiHandlerBox.handle(inst_json, regs)
+        "copy" => CopyHandlerBox.handle(inst_json, regs)
+        "typeop" => TypeOpHandlerBox.handle(inst_json, regs, mem)
+        "nop" => NopHandlerBox.handle(inst_json, regs, mem)
+        "safepoint" => SafepointHandlerBox.handle(inst_json, regs, mem)
+        "barrier" => BarrierHandlerBox.handle(inst_json, regs, mem)
+        "jump" | "branch" | "ret" => TerminatorHandlerBox.handle(inst_json, regs)
+        _ => Result.Err("Unsupported instruction: " + op)
+    }
+}
 ```
 
-**重要**: NoOperatorGuard で equals/== 再帰を構造的に防止
+**特徴**:
+- ✅ すべての命令を1箇所で管理
+- ✅ 新規命令の追加が容易
+- ✅ Fail-Fast（未知命令→即エラー）
 
-### 3. 唯一の解決 = Resolver
-
+#### 2. Result-Based Error Handling
 ```hakorune
-// 特別扱いなし、すべてResolver経由
-Resolver.lookup(type_id, method, arity) -> MethodHandle
+// Every handler returns Result<Value>
+static box BinOpHandlerBox {
+    handle(inst_json, regs) {
+        // Validation
+        local lhs_result = get_register(regs, lhs_id)
+        if lhs_result.is_Err() {
+            return Result.Err("BinOp: lhs register not found")
+        }
 
-// 例: Array.push
-local handle = Resolver.lookup(arr_type_id, :push, 1)
-ExecBox.call_by_handle(handle, [arr, value], NoOperatorGuard)
+        // Compute
+        local result = compute_binop(kind, lhs, rhs)
+        if result.is_Err() {
+            return result  // Propagate error
+        }
+
+        // Store result
+        set_register(regs, dst, result.as_Ok())
+        return Result.Ok(result.as_Ok())
+    }
+}
 ```
+
+**特徴**:
+- ✅ 型安全なエラー処理
+- ✅ エラー伝播が明示的
+- ✅ Rustと同じパターン
+
+#### 3. Block-Based Execution
+```hakorune
+// hakorune_vm_core.hako
+_execute_blocks(mir_json, regs, mem) {
+    local current_block = "entry"
+
+    loop(current_block != null) {
+        // Get block instructions
+        local block = BlocksLocatorBox.locate(mir_json, current_block)
+        if block.is_Err() { return block }
+
+        // Execute instructions
+        local result = me._execute_block(block.as_Ok(), regs, mem)
+        if result.is_Err() { return result }
+
+        // Update current block (from terminator)
+        current_block = result.as_Ok()
+    }
+
+    return Result.Ok(get_register(regs, "return_value"))
+}
+```
+
+**特徴**:
+- ✅ MIR Block構造に忠実
+- ✅ Control flowが明示的
+- ✅ TerminatorでBlock遷移
 
 ---
 
-## ⚠️ リスク & 対策
+## 🔄 Phase 20.6以降（オプション）
 
-### リスク1: タイムラインの長期化（36週間）
+### Option A: Pure Hakorune Path（推奨）
 
-**問題**: 原案10週間→新戦略36週間
+**前提**: Hakorune VM単体で完結
 
-**影響**: HIGH（完全自己ホスト達成の遅延）
+**Phase 20.6以降は不要**:
+- ✅ VM実装完了
+- ✅ すべての命令サポート済み
+- ✅ テストカバレッジ十分
+- ✅ CLI統合可能
 
-**対策**:
-- Phase 20.5で独立価値提供（HostBridge, op_eq, VM PoC）
-- 各フェーズ独立（中断・再開可能）
-- 段階的リスク低減（簡単→難しい順）
-- Phase 20.6以降の優先度再評価可能
+**次のステップ**:
+1. Hakorune VMをデフォルトに
+2. Rust VMを `--backend vm-rust` (互換モード)
+3. パフォーマンス最適化
 
-### リスク2: 実装複雑性の増大
+### Option B: HostBridge Path（必要な場合のみ）
 
-**問題**: VM in Hakoruneは C Generator より難しい
+**条件**: C-ABI境界が他の理由で必要
 
-**影響**: MEDIUM（実装工数増加）
+**Phase 20.6（8週間）**:
+- Week 1-4: HostBridge API実装
+- Week 5-6: Rust最小化（~100行）
+- Week 7-8: ドキュメント・検証
 
-**対策**:
-- Rust VMを参考実装として活用
-- Golden Test で早期バグ検出
-- 段階的実装（5命令→16命令）
-- ChatGPT/Claude協調開発
+---
 
-### リスク3: Rust VM二重保守
+## ⚠️ リスク & 対策（更新版）
 
-**問題**: 移行期間中の二重保守負担
+### リスク1: Hakorune VM のバグ
 
-**影響**: MEDIUM（保守工数）
+**問題**: 既存実装に未発見のバグがある可能性
 
-**対策**:
-- Phase 20.5後 Rust VM凍結（新機能なし）
-- 新規開発はHakorune VMのみ
-- 明確な非推奨化タイムライン（Phase 20.8）
-- Golden Test で乖離防止
-
-### リスク4: C-ABI安定性
-
-**問題**: HostBridge API変更の可能性
-
-**影響**: LOW（十分理解された境界）
+**影響**: MEDIUM（Golden Testで検出可能）
 
 **対策**:
-- 最小API（5関数のみ）
-- 実績あるデザイン（Lua/Python C API参考）
-- バージョン関数（Hako_ApiVersion）
-- 包括的ABIテスト（Ubuntu/Windows）
+- Golden Testで Rust-VM との一致を検証
+- エッジケーステスト拡充
+- ストレステスト実施
+- バグ発見時は即座に修正
+
+### リスク2: パフォーマンス
+
+**問題**: Hakorune VM が Rust VM より遅い可能性
+
+**影響**: LOW（機能的には問題なし）
+
+**対策**:
+- ベンチマーク測定
+- ボトルネック特定
+- 最適化は Phase 20.7以降
+- 「動作正しさ」が最優先
+
+### リスク3: CLI統合の複雑性
+
+**問題**: Rust VM経由で Hakorune VM を呼び出す必要
+
+**影響**: LOW（標準的なパターン）
+
+**対策**:
+- Rust VM の既存実行パスを再利用
+- Box loading機構を活用
+- エラーハンドリング整備
 
 ---
 
 ## 📚 関連リソース
 
 ### Phase 20.5ドキュメント
-- **[STRATEGY_RECONCILIATION.md](STRATEGY_RECONCILIATION.md)** - 戦略変更の理由・2戦略比較
-- **[HOSTBRIDGE_API_DESIGN.md](HOSTBRIDGE_API_DESIGN.md)** - C-ABI仕様・実装ガイド
-- **[OP_EQ_MIGRATION.md](OP_EQ_MIGRATION.md)** - 等価性実装ガイド・NoOperatorGuard
-- **[PURE_HAKORUNE_ROADMAP.md](PURE_HAKORUNE_ROADMAP.md)** - Phase 20.5-15.82 全体計画
-- **[CHATGPT_PURE_HAKORUNE_STRATEGY.md](CHATGPT_PURE_HAKORUNE_STRATEGY.md)** - ChatGPT Pro原案
+- **[HAKORUNE_VM_DISCOVERY.md](HAKORUNE_VM_DISCOVERY.md)** ⭐ 重大発見レポート
+- **[STRATEGY_RECONCILIATION.md](STRATEGY_RECONCILIATION.md)** - 戦略変更の理由
+- **[PURE_HAKORUNE_ROADMAP.md](PURE_HAKORUNE_ROADMAP.md)** - 全体計画（更新予定）
 - [C_CODE_GENERATOR_DESIGN.md](C_CODE_GENERATOR_DESIGN.md) - ❌ 中止（参考用）
-- [BOOTSTRAP_CHAIN_ANALYSIS.md](BOOTSTRAP_CHAIN_ANALYSIS.md) - ❌ 旧戦略（参考用）
+
+### Hakorune VM実装
+- **Location**: `selfhost/hakorune-vm/` (3,413 lines)
+- **Entry Point**: `hakorune_vm_core.hako`
+- **Dispatcher**: `instruction_dispatcher.hako`
+- **Tests**: `tests/*.hako` (26+ files)
 
 ### 前フェーズ
 - [Phase 15.77 - 凍結EXE確定](../phase-15.77/)
 - [Phase 15.76 - extern_c & Frozen Toolchain](../phase-15.76/)
-
-### 参考実装
-- [apps/selfhost-compiler/](../../../../apps/selfhost-compiler/) - Hakoruneコンパイラ（参考）
-- Rust VM実装 - `src/backend/mir_interpreter/` （Pure Hakorune参考実装）
-
-### 業界パターン
-- **Lua**: C-APIミニマル（5-10関数）
-- **Python**: C-API + Pure Python stdlib
-- **Rust**: stage0（凍結）→ stage1（ブートストラップ）→ stage2（検証）
-- **Go**: Go 1.4 frozen → Go 1.5 self-hosted
 
 ---
 
 ## 💬 開発体制
 
 ### 実装担当
-- **ChatGPT**: HostBridge API・op_eq移行 実装主導
-- **Claude**: レビュー・ドキュメント整備・統合テスト
-- **tomoaki**: 戦略決定・最終承認
+- **tomoaki**: Hakorune VM実装完了 ✅（Oct 5-13, 2025）
+- **ChatGPT**: Golden Test設計・CLI統合支援
+- **Claude**: ドキュメント整備・検証スクリプト作成
 
 ### レビュー方針
-- 各Week終了時にレビュー
-- Golden Test で Rust-VM パリティ維持
-- 問題発生時は即座にロールバック可能
+- Week 2, 4, 6終了時にレビュー
+- Golden Test すべて PASS が必須
+- バグ発見時は即座に修正
 
 ---
 
 ## 🎉 成功後の世界
 
-### Phase 20.5完了後（10週間）:
+### Phase 20.5完了後（6週間）:
 
-1. **HostBridge API確立**: Rust↔Hakorune境界明確化
-2. **op_eq in Hakorune**: 等価性の正しさ向上（NoOperatorGuard）
-3. **VM PoC成功**: Hakorune-VM実現可能性実証
-4. **Phase 20.6への道筋**: 詳細計画完成
+1. **Hakorune VM検証完了**: 22ハンドラーすべて動作確認
+2. **Golden Testing完了**: Rust-VM vs Hako-VM 100%一致
+3. **CLI統合完了**: `--backend vm-hako` で実行可能
+4. **ドキュメント完備**: アーキテクチャ・移行ガイド
+5. **次フェーズ判断**: HostBridge必要性の決定
 
-### Phase 20.8完了後（36週間、2026-09-30）:
+### Option A: Pure Hakorune Path（推奨）
 
-5. **完全自己ホスト達成**: Hakorune IS Hakorune
-6. **Rust最小化**: ~100行（C-ABI橋のみ）
-7. **究極のBox理論**: VMもBoxで実装
-8. **長期保守性**: 単一パス実行、単一コードベース
+6. **Hakorune VMデフォルト化**: `--backend vm` で Hakorune VM 使用
+7. **Rust VM互換モード化**: `--backend vm-rust` でRust VM（旧来）
+8. **完全自己ホスト達成**: Hakorune IS Hakorune ✅
+
+### Option B: HostBridge Path（必要な場合）
+
+6. **HostBridge API実装**: C-ABI境界確立
+7. **Rust最小化**: ~100行（C-ABI橋のみ）
+8. **Phase 20.7以降**: パフォーマンス最適化、GC改良
 
 ---
 
 **作成日**: 2025-10-14
-**戦略変更日**: 2025-10-14（Pure Hakorune採用）
+**重大更新**: 2025-10-14（Hakorune VM発見による全面改訂）
 **Phase開始予定**: 2025-12-21（Phase 15.77完了後）
-**想定期間**: 10週間（Phase 20.5のみ）
-**完全実現**: 36週間（Phase 20.5-15.82）
-**戦略**: Pure Hakorune（"Rust=floor, Hakorune=house"）
+**想定期間**: 6週間（36週間 → 6週間に短縮！）
+**戦略**: 検証・統合（実装ではなく）
+**成果**: Pure Hakorune VM 実現 ✅

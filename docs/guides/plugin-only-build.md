@@ -63,6 +63,11 @@ Limitations (current)
 - `env.future`/`VMValue::Future` are legacy‑only (guarded). Plugin‑only returns explicit errors for legacy externs.
 - Builtin arms in method router (`FileBox`/`CallableBox`/`ArrayBox`/`MapBox`) are legacy‑only; plugin‑only uses plugin paths.
 
+Strict plugin policy (runtime)
+- Forbid fallback to builtin when plugins are ON and a Plugin provider exists for the box type.
+- Enable with `HAKO_PLUGIN_POLICY=force` (alias: `NYASH_PLUGIN_POLICY=force`).
+- Error text: `plugin strict: builtin fallback disabled for <Box>.<method>(<arity> args)`
+
 Minimal CI example (build‑only)
 ```
 name: plugin-only-build

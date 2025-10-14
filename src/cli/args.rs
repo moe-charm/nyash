@@ -35,6 +35,7 @@ pub fn build_command() -> Command {
             .help("Specify entry function (e.g., Main.main). Overrides resolver defaults when provided."))
         .arg(Arg::new("macro-expand-child").long("macro-expand-child").value_name("FILE").help("Macro sandbox child: read AST JSON v0 from stdin, expand using Nyash macro file, write AST JSON v0 to stdout (PoC)"))
         .arg(Arg::new("dump-ast").long("dump-ast").help("Dump parsed AST and exit").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("dump-ast-json").long("dump-ast-json").help("Dump parsed AST as canonical JSON v0 and exit").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-preexpand").long("macro-preexpand").help("Enable selfhost macro pre-expand").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-preexpand-auto").long("macro-preexpand-auto").help("Auto enable selfhost macro pre-expand").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("macro-top-level-allow").long("macro-top-level-allow").help("Allow top-level macro usage").action(clap::ArgAction::SetTrue))
@@ -48,7 +49,11 @@ pub fn build_command() -> Command {
         .arg(Arg::new("parser").long("parser").value_name("{rust|ny}").help("Choose parser: 'rust' (default) or 'ny' (direct v0 bridge)"))
         .arg(Arg::new("ny-parser-pipe").long("ny-parser-pipe").help("Read Ny JSON IR v0 from stdin and execute via MIR Interpreter").action(clap::ArgAction::SetTrue))
         .arg(Arg::new("json-file").long("json-file").value_name("FILE").help("Read Ny JSON IR v0 from a file and execute via MIR Interpreter"))
+        // Gate C (NyVM direct) — execute MIR(JSON) via Hakorune VM Core
+        .arg(Arg::new("nyvm-pipe").long("nyvm-pipe").help("Read MIR JSON (v0) from stdin and execute via Hakorune VM").action(clap::ArgAction::SetTrue))
+        .arg(Arg::new("nyvm-json-file").long("nyvm-json-file").value_name("FILE").help("Read MIR JSON (v0) from a file and execute via Hakorune VM"))
         .arg(Arg::new("emit-mir-json").long("emit-mir-json").value_name("FILE").help("Emit MIR JSON v0 to file and exit"))
+        .arg(Arg::new("emit-ast-json").long("emit-ast-json").value_name("FILE").help("Emit parsed AST as canonical JSON v0 to file and exit"))
         .arg(Arg::new("emit-exe").long("emit-exe").value_name("FILE").help("Emit native executable via ny-llvmc and exit"))
         .arg(Arg::new("emit-exe-nyrt").long("emit-exe-nyrt").value_name("DIR").help("Directory containing libhako_kernel.a (or legacy libhako_kernel.a) used with --emit-exe"))
         .arg(Arg::new("emit-exe-libs").long("emit-exe-libs").value_name("FLAGS").help("Extra linker flags for ny-llvmc when emitting executable"))
@@ -148,6 +153,8 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         parser_ny: matches.get_one::<String>("parser").map(|s| s == "ny").unwrap_or(false),
         ny_parser_pipe: matches.get_flag("ny-parser-pipe"),
         json_file: matches.get_one::<String>("json-file").cloned(),
+        nyvm_pipe: matches.get_flag("nyvm-pipe"),
+        nyvm_json_file: matches.get_one::<String>("nyvm-json-file").cloned(),
         build_path: matches.get_one::<String>("build").cloned(),
         build_app: matches.get_one::<String>("build-app").cloned(),
         build_out: matches.get_one::<String>("build-out").cloned(),
@@ -156,11 +163,13 @@ pub fn from_matches(matches: &ArgMatches) -> CliConfig {
         build_target: matches.get_one::<String>("build-target").cloned(),
         cli_usings: matches.get_many::<String>("using").map(|v| v.cloned().collect()).unwrap_or_else(|| Vec::new()),
         emit_mir_json: matches.get_one::<String>("emit-mir-json").cloned(),
+        emit_ast_json: matches.get_one::<String>("emit-ast-json").cloned(),
         emit_exe: matches.get_one::<String>("emit-exe").cloned(),
         emit_exe_nyrt: matches.get_one::<String>("emit-exe-nyrt").cloned(),
         emit_exe_libs: matches.get_one::<String>("emit-exe-libs").cloned(),
         macro_expand_child: matches.get_one::<String>("macro-expand-child").cloned(),
         dump_expanded_ast_json: matches.get_flag("dump-expanded-ast-json"),
+        dump_ast_json: matches.get_flag("dump-ast-json"),
         macro_ctx_json: matches.get_one::<String>("macro-ctx-json").cloned(),
         entry: matches.get_one::<String>("entry").cloned(),
         which_tool: matches.get_one::<String>("which").cloned(),

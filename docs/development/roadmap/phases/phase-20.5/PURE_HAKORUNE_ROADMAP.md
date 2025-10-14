@@ -76,7 +76,7 @@ Phase F: Rust Compat Mode  (Week 33-36)  ← Phase 20.8
 
 #### Phase B Complete (Week 1-6):
 1. **All 16 MIR Instructions** in Hakorune:
-   - const, binop, compare, jump, branch, phi, ret ✅ (from 15.79)
+  - const, binop, compare, jump, branch, phi, ret ✅ (from 20.5)
    - call, boxcall, externcall
    - load, store, copy, typeop
    - barrier, safepoint, loopform
@@ -478,5 +478,5 @@ jobs:
 
 **Status**: APPROVED
 **Timeline**: 2025-12-21 → 2026-09-30 (36 weeks)
-**Current Phase**: 15.79 (Week 1-10)
+**Current Phase**: 20.5 (Week 1-10)
 **Next Phase**: 15.80 (Week 11-22)

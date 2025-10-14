@@ -9,6 +9,7 @@ pub struct InputConfig {
 pub struct DebugConfig {
     pub debug_fuel: Option<usize>,
     pub dump_ast: bool,
+    pub dump_ast_json: bool,
     pub dump_mir: bool,
     pub verify_mir: bool,
     pub mir_verbose: bool,
@@ -58,6 +59,7 @@ pub struct BuildConfig {
 pub struct EmitConfig {
     pub emit_cfg: Option<String>,
     pub emit_mir_json: Option<String>,
+    pub emit_ast_json: Option<String>,
     pub emit_exe: Option<String>,
     pub emit_exe_nyrt: Option<String>,
     pub emit_exe_libs: Option<String>,
@@ -68,6 +70,9 @@ pub struct ParserPipeConfig {
     pub parser_ny: bool,
     pub ny_parser_pipe: bool,
     pub json_file: Option<String>,
+    // Gate C (NyVM direct): read MIR(JSON) and execute via Hakorune VM core
+    pub nyvm_pipe: bool,
+    pub nyvm_json_file: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -87,4 +92,3 @@ pub struct CliGroups {
     pub run_task: Option<String>,
     pub load_ny_plugins: bool,
 }
-

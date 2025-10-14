@@ -3,6 +3,47 @@ use std::collections::HashMap;
 
 use crate::backend::vm_types::{VMError, VMValue};
 
+fn extern_array_size_handler(args: &[VMValue]) -> Result<VMValue, VMError> {
+    if args.is_empty() {
+        return Err(VMError::InvalidInstruction(
+            "nyrt.array.size requires receiver".into(),
+        ));
+    }
+    match &args[0] {
+        VMValue::BoxRef(b) => {
+            #[cfg(feature = "legacy-boxes")]
+            if let Some(arr) = b.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {
+                let n = arr.len();
+                return Ok(VMValue::Integer(n as i64));
+            }
+            let hh = crate::runtime::host_handles::to_handle_arc(b.clone());
+            let mut out_buf = vec![0u8; 64];
+            let mut out_len: usize = out_buf.len();
+            let rc = crate::runtime::host_api::nyrt_host_call_slot(
+                hh,
+                102,
+                std::ptr::null(),
+                0,
+                out_buf.as_mut_ptr(),
+                &mut out_len,
+            );
+            if rc == 0 && out_len >= 6 {
+                if let Some((tag, _sz, payload)) =
+                    crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len])
+                {
+                    if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) {
+                        return Ok(v);
+                    }
+                }
+            }
+            Ok(VMValue::Integer(0))
+        }
+        _ => Err(VMError::TypeError(
+            "nyrt.array.size expects ArrayBox".into(),
+        )),
+    }
+}
+
 pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
     // nyrt.time.now_ms(): i64
     map.insert(("nyrt.time".into(), "now_ms".into()), |args: &[VMValue]| {
@@ -77,6 +118,11 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
         Ok(VMValue::String(hako_core_string::replace_all(&s, &from, &to)))
     });
 
+    // nyrt.array.size(recv:Array) -> i64
+    map.insert(("nyrt.array".into(), "size".into()), extern_array_size_handler as super::HandlerFn);
+    // Alias: nyrt.array.length → size
+    map.insert(("nyrt.array".into(), "length".into()), extern_array_size_handler as super::HandlerFn);
+
     // nyrt.map.size/keys/values
     map.insert(("nyrt.map".into(), "size".into()), |args: &[VMValue]| {
         if args.is_empty() { return Err(VMError::InvalidInstruction("nyrt.map.size requires receiver".into())); }
@@ -119,5 +165,33 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
             _ => Err(VMError::TypeError("nyrt.map.values expects MapBox".into())),
         }
     });
-}
 
+    // env.local.get(key:String) -> String (ENV value or empty string)
+    map.insert(("env.local".into(), "get".into()), |args: &[VMValue]| {
+        if args.len() < 1 { return Err(VMError::InvalidInstruction("env.local.get requires 1 arg".into())); }
+        let key = match &args[0] {
+            VMValue::String(s) => s.clone(),
+            VMValue::BoxRef(b) => b.to_string_box().value,
+            v => v.to_string(),
+        };
+        let val = std::env::var(&key).unwrap_or_else(|_| "".to_string());
+        Ok(VMValue::String(val))
+    });
+
+    // nyash.json.canonicalize_h(json:String) -> String
+    map.insert(("nyash.json".into(), "canonicalize_h".into()), |args: &[VMValue]| {
+        if args.len() < 1 { return Err(VMError::InvalidInstruction("nyash.json.canonicalize_h requires 1 arg".into())); }
+        let src = match &args[0] {
+            VMValue::String(s) => s.clone(),
+            VMValue::BoxRef(b) => b.to_string_box().value,
+            v => v.to_string(),
+        };
+        match serde_json::from_str::<serde_json::Value>(&src) {
+            Ok(v) => {
+                let s = crate::common::json_canonical::to_canonical_string(&v);
+                Ok(VMValue::String(s))
+            }
+            Err(_) => Ok(VMValue::String(src)),
+        }
+    });
+}

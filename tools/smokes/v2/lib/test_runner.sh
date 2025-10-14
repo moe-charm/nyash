@@ -17,6 +17,30 @@ alias_env_prefixes() {
   done < <(env)
 }
 
+# Mirror selected NYASH_* → HAKO_* (prefer Hakorune branding for new docs/tools)
+mirror_nyash_to_hako() {
+  # Only set HAKO_* if unset, to avoid clobbering explicit values
+  set_if_unset() { local k="$1"; local v="$2"; [ -z "${!k:-}" ] && export "$k"="$v" || true; }
+  # Core toggles
+  [ -n "${NYASH_USING:-}" ]              && set_if_unset HAKO_USING              "$NYASH_USING"
+  [ -n "${NYASH_USING_STRATEGY:-}" ]     && set_if_unset HAKO_USING_STRATEGY     "$NYASH_USING_STRATEGY"
+  [ -n "${NYASH_USING_PROFILE:-}" ]      && set_if_unset HAKO_USING_PROFILE      "$NYASH_USING_PROFILE"
+  [ -n "${NYASH_ALLOW_USING_FILE:-}" ]   && set_if_unset HAKO_ALLOW_USING_FILE   "$NYASH_ALLOW_USING_FILE"
+  # Plugins
+  [ -n "${NYASH_PLUGIN_POLICY:-}" ]      && set_if_unset HAKO_PLUGIN_POLICY      "$NYASH_PLUGIN_POLICY"
+  [ -n "${NYASH_DISABLE_PLUGINS:-}" ]    && set_if_unset HAKO_DISABLE_PLUGINS    "$NYASH_DISABLE_PLUGINS"
+  [ -n "${NYASH_PLUGIN_CONFIG:-}" ]      && set_if_unset HAKO_PLUGIN_CONFIG      "$NYASH_PLUGIN_CONFIG"
+  [ -n "${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" ] && set_if_unset HAKO_PLUGIN_MAP_ARRAY_HANDLE "$NYASH_PLUGIN_MAP_ARRAY_HANDLE"
+  # Diagnostics / LLVM harness
+  [ -n "${NYASH_CLI_VERBOSE:-}" ]        && set_if_unset HAKO_CLI_VERBOSE        "$NYASH_CLI_VERBOSE"
+  [ -n "${NYASH_LLVM_USE_HARNESS:-}" ]   && set_if_unset HAKO_LLVM_USE_HARNESS   "$NYASH_LLVM_USE_HARNESS"
+  # VM fuel/limits
+  [ -n "${NYASH_VM_MAX_INSTRUCTIONS:-}" ]&& set_if_unset HAKO_VM_MAX_INSTRUCTIONS "$NYASH_VM_MAX_INSTRUCTIONS"
+  [ -n "${NYASH_VM_MAX_BLOCK_EXEC:-}" ]  && set_if_unset HAKO_VM_MAX_BLOCK_EXEC  "$NYASH_VM_MAX_BLOCK_EXEC"
+  # Modules mapping
+  [ -n "${NYASH_MODULES:-}" ]            && set_if_unset HAKO_MODULES            "$NYASH_MODULES"
+}
+
 # ルート/バイナリ検出（CWDに依存しない実行を保証）
 alias_env_prefixes
 if [ -z "${NYASH_ROOT:-}" ]; then
@@ -25,6 +49,8 @@ if [ -z "${NYASH_ROOT:-}" ]; then
     export NYASH_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
   fi
 fi
+# Mirror NYASH_* to HAKO_* for common toggles (branding forward-compat)
+mirror_nyash_to_hako
 # Optional profile env overlay (e.g., SMOKES_PROFILE_ENV=quick)
 if [ -n "${SMOKES_PROFILE_ENV:-}" ]; then
   CAND="$NYASH_ROOT/tools/smokes/v2/configs/${SMOKES_PROFILE_ENV}.env"
@@ -37,11 +63,7 @@ fi
 if [ -z "${NYASH_USING:-}" ] && [ -z "${NYASH_ENABLE_USING:-}" ]; then
   export NYASH_USING=1
 fi
-# Mirror critical NYASH_* → HAKO_* for hakorune CLI compatibility (non-destructive)
-if [ -z "${HAKO_USING:-}" ] && [ -n "${NYASH_USING:-}" ]; then export HAKO_USING="$NYASH_USING"; fi
-if [ -z "${HAKO_USING_STRATEGY:-}" ] && [ -n "${NYASH_USING_STRATEGY:-}" ]; then export HAKO_USING_STRATEGY="$NYASH_USING_STRATEGY"; fi
-if [ -z "${HAKO_USING_PROFILE:-}" ] && [ -n "${NYASH_USING_PROFILE:-}" ]; then export HAKO_USING_PROFILE="$NYASH_USING_PROFILE"; fi
-if [ -z "${HAKO_ALLOW_USING_FILE:-}" ] && [ -n "${NYASH_ALLOW_USING_FILE:-}" ]; then export HAKO_ALLOW_USING_FILE="$NYASH_ALLOW_USING_FILE"; fi
+# (legacy specific mirrors remain covered by mirror_nyash_to_hako)
 # Provide a minimal default modules mapping for selfhost Mini-VM smokes when unset
 if [ -z "${NYASH_MODULES:-}" ]; then
   export NYASH_MODULES="selfhost.vm.mir_min=selfhost/vm/boxes/mir_vm_min.hako"
@@ -132,12 +154,19 @@ filter_noise() {
       | grep -v "^\[using/resolve\]" \
       | grep -v "^\[builder\]" \
       | grep -v '^\[TypeRegistry\] CORE type ids:' \
-      | grep -v "^\\[vm-trace\\]" \
+  | grep -v "^\\[vm-trace\\]" \
   | grep -v '^\{"ev":' \
       | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
       | grep -v '^\[deps\] missing:' \
       | sed -E 's/^❌ VM fallback error: *//' \
       | sed -E 's/^❌ Pipeline error: *//' \
+      | sed -E 's/^JSON v0 bridge error:[[:space:]]*(.*)$/SMOKES_ERR: json_bridge \1/' \
+      | sed -E 's/^Direct JSON v0 parse error:[[:space:]]*(.*)$/SMOKES_ERR: json_parse \1/' \
+      | sed -E 's/^Direct bridge parse error:[[:space:]]*(.*)$/SMOKES_ERR: json_bridge_parse \1/' \
+      | sed -E 's/^MIR JSON reader error:[[:space:]]*(.*)$/SMOKES_ERR: mir_json_reader \1/' \
+      | sed -E 's/^stdin read error:[[:space:]]*(.*)$/SMOKES_ERR: io_stdin \1/' \
+      | sed -E 's/^json-file read error:[[:space:]]*(.*)$/SMOKES_ERR: io_file \1/' \
+      | sed -E 's/^Invalid instruction:[[:space:]]*(.*)$/SMOKES_ERR: invalid_inst \1/' \
   | sed -E 's/^VM execution error: VM fallback error: *//' \
   | grep -v '^VM execution error: ' \
   | grep -v '^\[DEBUG-' \
@@ -170,11 +199,29 @@ filter_noise() {
       | grep -v "^✅ plugin host fully configured" \
       | grep -v "Failed to load nyash.toml - plugins disabled" \
       | grep -v "^🚀 Nyash VM Backend - Executing file:" \
+      | grep -v "^⚡ Nyash LLVM Backend - Executing file:" \
+      | grep -v "^⚡.*Backend.*Executing" \
       | grep -v '^🔧 Mock LLVM Backend Execution' \
       | grep -v '^✅ Mock exit code:' \
   | grep -v '^\[provider\] ' \
   | grep -v '^\[provider/check\] ' \
   | grep -v '^Unknown backend: \.' \
+  | {
+    # SMOKES_STRICT_NOISE トグル: デフォルト1（完全抑制）、0で詳細エラー表示
+    if [ "${SMOKES_STRICT_NOISE:-1}" = "1" ]; then
+      # 完全抑制モード
+      grep -v '^\[ERROR\] Plugin rebuild failed' \
+        | grep -v '^`using` resolution error:' \
+        | grep -v '^Tokenize error:' \
+        | grep -v '^Parse error in using prelude'
+    else
+      # 詳細エラー正規化モード（SMOKES_ERR: 形式で1行通す）
+      sed -E 's/^\[ERROR\] Plugin rebuild failed.*$/SMOKES_ERR: plugin_rebuild failed/' \
+        | sed -E 's/^`using` resolution error:[[:space:]]*(.*)$/SMOKES_ERR: using_resolution \1/' \
+        | sed -E 's/^Tokenize error:[[:space:]]*(.*)$/SMOKES_ERR: tokenize \1/' \
+        | sed -E 's/^Parse error in using prelude[[:space:]]*(.*)$/SMOKES_ERR: parse_prelude \1/'
+    fi
+  } \
   | sed -E 's/^❌[[:space:]]*//' \
   | sed -E 's/^Pipeline error: *//' \
   | sed -E 's/bb[0-9]+/bb<ID>/g' \

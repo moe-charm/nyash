@@ -1,7 +1,7 @@
 # Self‑Hosting — How‑To（前提→手順→検証）
 
 目的
-- Ny → MIR → VM/JIT の自己ホスト経路を最短手順で動かす。
+- Hako → MIR → VM/AOT の自己ホスト経路を最短手順で動かす。
 
 前提
 - Rust（stable）: `cargo --version`
@@ -11,7 +11,7 @@
 1) ビルド
    - 実行: `cargo build --release`
 2) 最小 E2E（VM、plugins 無効）
-   - 実行: `NYASH_PLUGIN_POLICY=off ./target/release/hako --backend vm apps/selfhost-minimal/main.nyash`（compat: `NYASH_DISABLE_PLUGINS=1`）
+   - 実行: `HAKO_PLUGIN_POLICY=off ./target/release/hakorune --backend vm apps/selfhost-minimal/main.hako`（compat: `NYASH_DISABLE_PLUGINS=1`）
 3) クイックスモーク（VM軸）
    - 実行: `tools/smokes/v2/run.sh --profile quick`
 4) プラグイン（任意・動的）
@@ -20,23 +20,23 @@
    - 実行: `tools/smokes/v2/run.sh --profile integration`
 
 Selfhost（公式ランナー経由）
-- 親→子の ENV 透過で Ny コンパイラを起動し、最小 JSON を取得します。
+- 親→子の ENV 透過で Hako コンパイラを起動し、最小 JSON を取得します。
 - 例（AST ヘッダ非空）:
 ```
 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 NYASH_JSON_ONLY=1 \
-  timeout 5 ./target/release/hako --backend vm apps/examples/string_p0.nyash
+  timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako
 ```
 - 例（最小 MIR: const→ret）:
 ```
 NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 \
   NYASH_NY_COMPILER_CHILD_ARGS="--emit-mir" NYASH_JSON_ONLY=1 \
-  timeout 5 ./target/release/hako --backend vm apps/examples/string_p0.nyash
+  timeout 5 ./target/release/hakorune --backend vm apps/examples/string_p0.hako
 ```
 
-最小 Ny 実行器（MirVmMin）
-- 目的: Ny だけで MIR(JSON v0) のごく最小セット（const/binop/compare/ret）を実行できることを確認。
+最小 Hako 実行器（MirVmMin）
+- 目的: Hako だけで MIR(JSON v0) のごく最小セット（const/binop/compare/ret）を実行できることを確認。
 - 実行例（VM）:
-  - `./target/release/hako --backend vm selfhost/vm/mir_min_entry.nyash`
+  - `./target/release/hakorune --backend vm selfhost/vm/mir_min_entry.hako`
   - 引数で MIR(JSON) を渡すことも可能（単一文字列）。簡単な例は `selfhost/vm/mir_min_entry.nyash` のコメントを参照。
 
 検証
@@ -44,7 +44,7 @@ NYASH_USE_NY_COMPILER=1 NYASH_NY_COMPILER_MIN_JSON=1 \
 - スモーク：全成功（非 0 は失敗）
 
 便利フラグ
-- `NYASH_PLUGIN_POLICY=off` 外部プラグイン無効化（compat: `NYASH_DISABLE_PLUGINS=1`）
+- `HAKO_PLUGIN_POLICY=off` 外部プラグイン無効化（compat: `NYASH_DISABLE_PLUGINS=1`）
 - `NYASH_CLI_VERBOSE=1` 実行ログ詳細
 - `NYASH_USING_DYLIB_AUTOLOAD=1` using.dylib 自動ロード（開発用）
 

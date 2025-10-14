@@ -189,7 +189,22 @@ run_test "test_name" {
 - Cartesian積実行
 - 回帰テスト・互換性確認
 
-## 📊 出力形式
+## 📊 出力形式（メタ行・正規化）
+
+### メタ行（既定ON）
+
+- 各テスト終了時（stderr）：
+  - `SMOKES_STATUS: <PASS|SKIP|FAIL> test=<name> code=<exit> duration=<0.000s>`
+- サマリ（stderr）：
+  - `SMOKES_SUMMARY: total=<N> pass=<N> skip=<N> fail=<N> duration=<0.000s>`
+- 設定：`SMOKES_EMIT_META=0` で無効化、`SMOKES_STRICT_NOISE=0` で詳細1行（SMOKES_ERR）を通過
+
+### エラー正規化（filter_noise）
+
+- 代表的な長文エラーを 1 行に正規化：
+  - `SMOKES_ERR: json_bridge …` `json_parse …` `mir_json_reader …`
+  - `SMOKES_ERR: io_stdin …` `io_file …` `invalid_inst …`
+  - `SMOKES_ERR: using …` `tokenize …` `using_prelude`
 
 ### text（デフォルト）
 ```
@@ -199,7 +214,7 @@ run_test "test_name" {
    Actual: "Hell"
 ```
 
-### json
+### json（--format json）
 ```json
 {
   "profile": "quick",
@@ -211,7 +226,7 @@ run_test "test_name" {
 }
 ```
 
-### junit（CI用）
+### junit（--format junit / CI向け）
 ```xml
 <testsuite name="smokes_quick" tests="15" failures="1" time="78.5">
   <testcase name="basic_print" classname="quick.core" time="0.2"/>

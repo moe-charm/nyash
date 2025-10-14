@@ -4,6 +4,27 @@ Note: Terminology updated — “Nyash ABI” is now referred to as “Hako ABI 
 
 ## Policy & Lifecycle — Final Rules (Phase 15.7)
 
+### Strict Plugin Policy（HAKO_PLUGIN_POLICY=force）
+
+- plugins が ON かつ対象 Box に Plugin provider が存在する場合、VM ルーターは builtin へのフォールバックを禁止して Fail‑Fast します。
+- 未実装・未知メソッドは即時エラーとなり、原因が隠蔽されません。
+- 代表エラー: `plugin strict: builtin fallback disabled for MapBox.noSuchMethod(0 args)`
+- 推奨運用:
+  - plugins プロファイルやCIの一部で Strict を有効化（フォールバック検出）。
+  - 互換や観測を優先する quick プロファイルでは `auto` を維持。
+
+### Length 系の統一（String/Array）
+
+- String/Array の `size/len/length` は Extern に正規化して実装を一本化します。
+  - String: `Extern("nyrt.string.length")` — 受けは String 値（BoxRef の場合は文字列化）
+  - Array:  `Extern("nyrt.array.size")` — 受けは Array（HostHandle 経路: slot 102）
+- Builder 側:
+  - 受けの materialize は EmitGuard（finalize_call_operands）で一度だけ実施し、正規化（normalize_*）では再materializeしない。
+  - これにより、未定義 ValueId の生成（use-before-def）を防止。
+- VM 側:
+  - Method(String/Array).length 系は早期Externに橋渡しする（安全弁）。
+  - Extern 実装は HostHandle/legacy の双方を吸収する。
+
 ## Capabilities (Policy Hooks)
 
 See `docs/reference/plugin-system/capabilities.md` for capability bit definitions (IO/NET/ENV/TIME/...).

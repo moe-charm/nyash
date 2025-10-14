@@ -296,3 +296,79 @@ pub fn try_route_builtin_box(
     }
     Ok(None)
 }
+
+/// Handle primitive String receiver (non-BoxRef) via TypeRegistry slots.
+/// Returns Ok(Some(VMValue)) when handled; Ok(None) if receiver is not String or method unknown.
+pub fn try_route_string_primitive(
+    _interp: &mut MirInterpreter,
+    receiver: &VMValue,
+    method: &str,
+    args: &[VMValue],
+) -> Result<Option<VMValue>, VMError> {
+    if let VMValue::String(s) = receiver {
+        let _ = super::maybe_arity_guard("StringBox", method, args.len());
+        if let Some(slot) = crate::runtime::type_registry::resolve_slot_by_name("StringBox", method, args.len()) {
+            let res = match slot as u32 {
+                300 => {
+                    if std::env::var("NYASH_STRING_SIZE_FORCE_HOST").ok().as_deref() == Some("1") {
+                        let sb = Box::new(crate::box_trait::StringBox::new(s.clone())) as Box<dyn crate::box_trait::NyashBox>;
+                        let hh = crate::runtime::host_handles::to_handle_box(sb);
+                        let mut out_len: usize = 64;
+                        let mut out_buf = vec![0u8; out_len];
+                        let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 300, std::ptr::null(), 0, out_buf.as_mut_ptr(), &mut out_len);
+                        if rc == 0 {
+                            if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
+                                if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
+                            }
+                        }
+                    }
+                    Ok(Some(VMValue::Integer(hako_core_string::length_bytes(s))))
+                },
+                301 => {
+                    let start = args.get(0).map(|v| v.as_integer().unwrap_or(0)).unwrap_or(0);
+                    let end = args.get(1).map(|v| v.as_integer().unwrap_or(hako_core_string::length_bytes(s))).unwrap_or(hako_core_string::length_bytes(s));
+                    Ok(Some(VMValue::String(hako_core_string::substring_bytes(s, start, end))))
+                }
+                303 => {
+                    let needle = args.get(0).map(|v| v.to_string()).unwrap_or_default();
+                    let from = args.get(1).map(|v| v.as_integer().unwrap_or(0)).unwrap_or(0);
+                    Ok(Some(VMValue::Integer(hako_core_string::index_of(s, &needle, from))))
+                }
+                313 => {
+                    let needle = args.get(0).map(|v| v.to_string()).unwrap_or_default();
+                    let from = args.get(1).map(|v| v.as_integer().unwrap_or(hako_core_string::length_bytes(s))).unwrap_or(hako_core_string::length_bytes(s));
+                    Ok(Some(VMValue::Integer(hako_core_string::last_index_of(s, &needle, from))))
+                }
+                314 => {
+                    let idx = args.get(0).map(|v| v.as_integer().unwrap_or(0)).unwrap_or(0);
+                    Ok(Some(VMValue::String(hako_core_string::char_at_byte(s, idx))))
+                }
+                302 => {
+                    let rhs = args.get(0).map(|v| v.to_string()).unwrap_or_default();
+                    let mut out = String::with_capacity(s.len() + rhs.len());
+                    out.push_str(s);
+                    out.push_str(&rhs);
+                    Ok(Some(VMValue::String(out)))
+                }
+                304 => {
+                    let from = args.get(0).map(|v| v.to_string()).unwrap_or_default();
+                    let to = args.get(1).map(|v| v.to_string()).unwrap_or_default();
+                    Ok(Some(VMValue::String(hako_core_string::replace_all(s, &from, &to))))
+                }
+                305 => Ok(Some(VMValue::String(s.trim().to_string()))),
+                306 => Ok(Some(VMValue::String(s.to_uppercase()))),
+                307 => Ok(Some(VMValue::String(s.to_lowercase()))),
+                308 => Ok(Some(VMValue::String(s.clone()))),
+                309 => Ok(Some(VMValue::String(s.clone()))),
+                310 => { let needle = args.get(0).map(|v| v.to_string()).unwrap_or_default(); Ok(Some(VMValue::Bool(s.starts_with(&needle)))) }
+                311 => { let needle = args.get(0).map(|v| v.to_string()).unwrap_or_default(); Ok(Some(VMValue::Bool(s.ends_with(&needle)))) }
+                312 => Ok(Some(VMValue::Bool(hako_core_string::is_empty(s)))) ,
+                _ => Err(VMError::InvalidInstruction(crate::common::diagnostics::msg::unknown_slot("StringBox", method, slot))),
+            }?;
+            return Ok(res);
+        } else {
+            return Err(crate::vm_ops::boxcall::unknown_method_err("StringBox", method, args.len()));
+        }
+    }
+    Ok(None)
+}
