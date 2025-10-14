@@ -33,8 +33,13 @@ Recommended ENV (minimal)
 - `NYASH_MACRO_STRICT=1`
 - `NYASH_MACRO_TRACE=0|1`
 
+Syntactic macros (built‑in, gated)
+- When `NYASH_MACRO_ENABLE=1`, the parser accepts planned syntactic macros:
+  - `@derive('Equals','ToString', ...)` before a box (injects missing methods only)
+  - `@for (x in expr) { ... }` (MVP: arrays only; lowers to a counted loop)
+- See reference/language/macro-syntax.md for details. In strict profiles, unsupported forms fail fast with diagnostics.
+
 Deprecated ENV (kept for compatibility for now)
 - `NYASH_MACRO_BOX_NY=1` + `NYASH_MACRO_BOX_NY_PATHS=...` → use `NYASH_MACRO_PATHS`
 - `NYASH_MACRO_BOX_CHILD_RUNNER` → no longer needed
 - `NYASH_MACRO_TOPLEVEL_ALLOW` → default OFF; prefer CLI `--macro-top-level-allow` when necessary
-

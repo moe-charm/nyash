@@ -8,6 +8,8 @@ stmt      := 'return' expr
            | 'local' IDENT '=' expr
            | 'if' expr block ('else' block)?
            | 'loop' '('? expr ')' ? block
+           | derive_decl                 ; gated by NYASH_MACRO_ENABLE=1 (planned/mvp)
+           | for_macro                   ; gated by NYASH_MACRO_ENABLE=1 (planned/mvp)
            | flow_decl                 ; default ON (disable: NYASH_ENABLE_FLOW=0)
            | expr                         ; expression statement
 
@@ -54,6 +56,22 @@ flow_decl := 'flow' IDENT '{' flow_member* '}'
 flow_member := method_decl
 ; Forbidden inside flow: field declarations, 'birth'/'fini' methods, 'me' usage in method bodies
 
+; ---- Macro syntax (planned; gated by NYASH_MACRO_ENABLE=1) ----
+; Attribute derive for the following box declaration:
+;   @derive('Equals', 'ToString', ...)
+;   box Name { ... }
+derive_decl := '@' 'derive' '(' (STRING (',' STRING)*)? ')' box_decl
+
+; Foreach sugar:
+;   @for (x in expr) { block }
+;   @for (k, IDENT 'in' expr) { block }  ; map pairs
+;   @for (IDENT 'in' expr RANGE expr) { block } ; range (end exclusive)
+for_macro := '@' 'for' '(' IDENT (',' IDENT)? 'in' expr (RANGE expr)? ')' block
+
+; Repeat sugar (counted loop) and assert sugar
+repeat_macro := '@' 'repeat' '(' expr ')' block
+assert_macro := '@' 'assert' '(' expr (',' expr)? ')'
+
 Notes
 - ASI: Newline is the primary statement separator. Do not insert a semicolon between a closed block and a following 'else'.
 - Semicolon (optional): When `NYASH_PARSER_ALLOW_SEMICOLON=1` is set, `;` is accepted as an additional statement separator (equivalent to newline). It is not allowed between `}` and a following `else`.
@@ -65,6 +83,7 @@ Notes
 - Map literal is enabled when syntax sugar is on (NYASH_SYNTAX_SUGAR_LEVEL=basic|full) or when NYASH_ENABLE_MAP_LITERAL=1 is set.
 - Identifier keys (`{name: v}`) are Stage‑3 and require either NYASH_SYNTAX_SUGAR_LEVEL=full or NYASH_ENABLE_MAP_IDENT_KEY=1.
 - Pattern matching: `match` replaces legacy `peek`. MVP supports wildcard `_`, literals, simple type patterns, fixed/variadic array heads `[hd, ..tl]`, simple map key extract `{ "k": v, .. }`, OR patterns, and guards `if`.
+ - Macro syntax (planned): `@derive` and `@for` are recognized when macros are enabled. MVP limits `@for` to array iteration. See macro-syntax.md for details.
 
 ## Box Members (Phase‑15, env gate: NYASH_ENABLE_UNIFIED_MEMBERS; default ON)
 

@@ -129,32 +129,7 @@ pub fn try_route_plugin_box(
                     }
                 }
             }
-            if method == "has" && args.len() == 1 && force_map_has {
-                let hh = crate::runtime::host_handles::to_handle_arc(bx.clone());
-                let args_boxes = vec![args[0].to_nyash_box()];
-                let tlv_args = crate::runtime::plugin_ffi_common::encode_args(&args_boxes);
-                let mut out_buf = vec![0u8; 64];
-                let mut out_len: usize = out_buf.len();
-                let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 202, tlv_args.as_ptr(), tlv_args.len(), out_buf.as_mut_ptr(), &mut out_len);
-                if rc == 0 && out_len >= 6 {
-                    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
-                    }
-                }
-            }
-            if method == "get" && args.len() == 1 && force_map_get {
-                let hh = crate::runtime::host_handles::to_handle_arc(bx.clone());
-                let args_boxes = vec![args[0].to_nyash_box()];
-                let tlv_args = crate::runtime::plugin_ffi_common::encode_args(&args_boxes);
-                let mut out_buf = vec![0u8; 64];
-                let mut out_len: usize = out_buf.len();
-                let rc = crate::runtime::host_api::nyrt_host_call_slot(hh, 203, tlv_args.as_ptr(), tlv_args.len(), out_buf.as_mut_ptr(), &mut out_len);
-                if rc == 0 && out_len >= 6 {
-                    if let Some((tag, _sz, payload)) = crate::runtime::plugin_ffi_common::decode::tlv_first(&out_buf[..out_len]) {
-                        if let Some(v) = crate::runtime::host_api::vmvalue_from_tlv(tag, payload) { return Ok(Some(v)); }
-                    }
-                }
-            }
+            // (duplicate has/get paths removed)
         }
 
         // Delegate to plugin host

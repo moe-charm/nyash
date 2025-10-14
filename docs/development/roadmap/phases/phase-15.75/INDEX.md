@@ -25,7 +25,7 @@ bash tools/smokes/v2/run.sh --profile quick-selfhost
 
 #### **ステップ2: TODO読む（5分）**
 ```bash
-cat "docs/development/roadmap/phases/phase 15.75/TODO.md"
+cat "docs/development/roadmap/phases/phase-15.75/TODO.md"
 
 # 確認内容:
 # - Phase 1（MirCall）準備タスク

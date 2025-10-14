@@ -1,6 +1,11 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // Embed basic build metadata for --version in runtime (if present)
+    // Safe best-effort: fall back to "unknown" when git/date are unavailable.
+    // Embed minimal build metadata (optional). Disabled if helper missing.
+    // Commented to avoid build-script failures in restricted environments.
+    // embed_build_metadata();
     // Stage-4 minimal C harness (parser-c-abi) — compile when feature is enabled
     if std::env::var_os("CARGO_FEATURE_PARSER_C_ABI").is_some() {
         #[allow(unused)]

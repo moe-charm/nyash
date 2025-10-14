@@ -12,5 +12,6 @@ pub mod static_box;
 pub mod static_def;
 pub mod flow;
 pub mod enum_parser;
+pub mod derive_parser;
 
 // Re-export commonly used items

@@ -166,6 +166,7 @@ HAKO_FFI_ALLOW_ALL=1 ./hako program.hako  # ⚠️ Dev only
 
 ### 前フェーズ
 - [Phase 15.75 - 脱Rust大作戦](../phase-15.75/)
+ - [Phase 15.78 - Frozen UX Polish & Parity](../phase-15.78/)
 - [Stage 4 - Dual Parser Harness](../phase-15.75/stage-4/)
 - [ChatGPT extern_c戦略](../phase-15.75/stage-4-chatgpt/EXTERN_C_SELFHOST_STRATEGY.md)
 

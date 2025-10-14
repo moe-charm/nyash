@@ -753,6 +753,17 @@ pub extern "C" fn nyash_map_birth_h_export() -> i64 {
 #[cfg(not(test))]
 #[no_mangle]
 pub extern "C" fn main() -> i32 {
+    // --version: print minimal build metadata and exit 0
+    let mut want_version = false;
+    for a in std::env::args() {
+        if a == "--version" || a == "-V" { want_version = true; break; }
+    }
+    if want_version {
+        let commit = option_env!("HAKO_BUILD_COMMIT").unwrap_or("unknown");
+        let date = option_env!("HAKO_BUILD_DATE").unwrap_or("unknown");
+        println!("hakorune-frozen v1 | commit={} | build={}", commit, date);
+        return 0;
+    }
     // Initialize plugin host: prefer hako.toml next to the executable; fallback to nyash/hakorune and CWD
     let exe_dir = std::env::current_exe()
         .ok()

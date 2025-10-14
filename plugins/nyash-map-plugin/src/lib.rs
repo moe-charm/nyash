@@ -338,7 +338,14 @@ extern "C" fn mapbox_invoke_id(
                         Some(MapVal::Host(h)) => {
                             write_tlv_host_handle(*h as u64, result, result_len)
                         }
-                        None => unsafe { if !result_len.is_null() { *result_len = 0; } } as i32,
+                        None => {
+                            unsafe {
+                                if !result_len.is_null() {
+                                    *result_len = 0;
+                                }
+                            }
+                            NYB_SUCCESS
+                        },
                     }
                 }) {
                     Ok(rc) => rc,
@@ -363,7 +370,14 @@ extern "C" fn mapbox_invoke_id(
                         Some(MapVal::Host(h)) => {
                             write_tlv_host_handle(*h as u64, result, result_len)
                         }
-                        None => unsafe { if !result_len.is_null() { *result_len = 0; } } as i32,
+                        None => {
+                            unsafe {
+                                if !result_len.is_null() {
+                                    *result_len = 0;
+                                }
+                            }
+                            NYB_SUCCESS
+                        },
                     }
                 }) {
                     Ok(rc) => rc,
@@ -449,7 +463,7 @@ extern "C" fn mapbox_invoke_id(
             let debug = std::env::var("NYASH_DEBUG_PLUGIN").ok().as_deref() == Some("1");
             match with_instance_mut!(instance_id, |inst: &mut MapInstance| {
                 if let Some(ik) = read_arg_i64(args, args_len, 0) {
-                    if let Some(_value) = inst.data_i64.remove(&ik) {
+                    if let Some(value) = inst.data_i64.remove(&ik) {
                         if debug {
                             eprintln!(
                                 "[map-plugin] remove int key={} variant={}",
@@ -457,7 +471,12 @@ extern "C" fn mapbox_invoke_id(
                                 v_to_string(&value)
                             );
                         }
-                        unsafe { if !result_len.is_null() { *result_len = 0; } } ; return NYB_SUCCESS;
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        return NYB_SUCCESS;
                     }
                     unsafe {
                         if !result_len.is_null() {
@@ -467,7 +486,7 @@ extern "C" fn mapbox_invoke_id(
                     return NYB_SUCCESS;
                 }
                 if let Some(sk) = read_arg_string(args, args_len, 0) {
-                    if let Some(_value) = inst.data_str.remove(&sk) {
+                    if let Some(value) = inst.data_str.remove(&sk) {
                         if debug {
                             eprintln!(
                                 "[map-plugin] remove str key={} variant={}",
@@ -475,7 +494,12 @@ extern "C" fn mapbox_invoke_id(
                                 v_to_string(&value)
                             );
                         }
-                        unsafe { if !result_len.is_null() { *result_len = 0; } } ; return NYB_SUCCESS;
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        return NYB_SUCCESS;
                     }
                     unsafe {
                         if !result_len.is_null() {
@@ -531,7 +555,14 @@ extern "C" fn mapbox_invoke_id(
                     Some(MapVal::Host(h)) => {
                         write_tlv_host_handle(*h as u64, result, result_len)
                     }
-                    None => unsafe { if !result_len.is_null() { *result_len = 0; } } as i32,
+                    None => {
+                        unsafe {
+                            if !result_len.is_null() {
+                                *result_len = 0;
+                            }
+                        }
+                        NYB_SUCCESS
+                    },
                 }
             }) {
                 Ok(rc) => rc,

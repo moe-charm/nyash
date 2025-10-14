@@ -79,11 +79,16 @@ def run_from_json_to_object(in_path: str, out_path: str) -> None:
 def run_from_json_to_ll(in_path: str, out_ll: str) -> None:
     # Import builder as a module to get IR text directly
     import importlib.util
+    import sys
     spec = importlib.util.spec_from_file_location("llvm_builder", str(PY_BUILDER))
     if spec is None or spec.loader is None:
         raise RuntimeError("failed to import llvm_builder.py")
     mod = importlib.util.module_from_spec(spec)
     sys.modules["llvm_builder"] = mod
+    # Ensure builder directory on sys.path for relative imports (instructions, builders, etc.)
+    builder_dir = str(PY_BUILDER.parent)
+    if builder_dir not in sys.path:
+        sys.path.insert(0, builder_dir)
     spec.loader.exec_module(mod)  # type: ignore
     # Read MIR JSON
     with open(in_path, 'r') as f:

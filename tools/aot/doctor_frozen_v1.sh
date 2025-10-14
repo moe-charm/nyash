@@ -1,63 +1,110 @@
 #!/usr/bin/env bash
 # Frozen v1 Doctor — quick end-to-end validation for the frozen mint pipeline
-# Runs: emit MIR JSON -> extern_c to .o -> link with NyRT -> run and check Result line
+# Runs: emit MIR JSON -> extern_c to .o -> (optional) link with NyRT -> run and check Result line
 
 set -euo pipefail
+
+SHOW_HELP=0
+NO_BUILD=0
+VERBOSE=0
+
+for arg in "$@"; do
+  case "$arg" in
+    --help|-h) SHOW_HELP=1 ;;
+    --no-build) NO_BUILD=1 ;;
+    --verbose|-v) VERBOSE=1 ;;
+    *) echo "[doctor][WARN] Unknown arg: $arg" ;;
+  esac
+done
+
+if [ $SHOW_HELP -eq 1 ]; then
+  cat <<'H'
+Frozen v1 Doctor — options:
+  --no-build   Skip cargo build steps (assumes artifacts present)
+  --verbose    Print extra diagnostics
+  --help       Show this message
+H
+  exit 0
+fi
 
 ROOT="${NYASH_ROOT:-$(cd "$(dirname "$0")/../.." && pwd)}"
 BIN="${ROOT}/target/release/hakorune"
 
 echo "[doctor] root: $ROOT"
 
+# Preflight: python + llvmlite
 if ! command -v python3 >/dev/null 2>&1; then
-  echo "[doctor] python3 not found" >&2
+  echo "[doctor][ERROR] python3 not found. Install: sudo apt-get install -y python3 python3-pip" >&2
   exit 2
 fi
-
-python3 - <<'PY' || { echo "[doctor] llvmlite not importable" >&2; exit 2; }
+python3 - <<'PY' || { echo "[doctor][ERROR] llvmlite not importable. Try: pip install llvmlite" >&2; exit 2; }
 try:
   import llvmlite.ir as _
   import llvmlite.binding as _
-  print("[doctor] llvmlite OK")
+  print("[doctor][OK] llvmlite import")
 except Exception as e:
-  print("[doctor] llvmlite import error:", e)
+  print("[doctor][ERROR] llvmlite import:", e)
   raise
 PY
 
-if [ ! -x "$BIN" ]; then
+# Build VM if missing
+if [ ! -x "$BIN" ] && [ $NO_BUILD -eq 0 ]; then
   echo "[doctor] building hakorune VM..." && cargo build --release >/dev/null
 fi
 
-echo "[doctor] building llvm_backend (cdylib) ..."
-cargo build --release -p llvm_backend >/dev/null
+# Build llvm_backend cdylib
+if [ $NO_BUILD -eq 0 ]; then
+  echo "[doctor] building llvm_backend (cdylib) ..."
+  cargo build --release -p llvm_backend >/dev/null
+fi
 
-NYRT_A="${ROOT}/crates/hako_kernel/target/release/libhako_kernel.a"
-if [ ! -f "$NYRT_A" ]; then
+# Optional NyRT (static runtime)
+NYRT_A="${ROOT}/target/release/libhako_kernel.a"
+if [ ! -f "$NYRT_A" ] && [ $NO_BUILD -eq 0 ]; then
   echo "[doctor] building hako_kernel (static NyRT) ..."
   set +e
   cargo build --release -p hako_kernel >/dev/null
   EC=$?
   set -e
   if [ $EC -ne 0 ] || [ ! -f "$NYRT_A" ]; then
-    echo "[doctor] NyRT build unavailable; will use a tiny C main() stub instead" >&2
+    echo "[doctor][WARN] NyRT not available; will use a tiny C main() stub (link still attempted)" >&2
     NYRT_A=""
   fi
 fi
 
+# Tooling check
+DO_SKIP_LINK=0
+if ! command -v clang >/dev/null 2>&1; then
+  echo "[doctor][WARN] clang not found. Link step will be skipped." >&2
+  echo "[doctor][HINT] Linux/WSL: sudo apt-get install -y clang" >&2
+  echo "[doctor][HINT] Windows(MSVC): install LLVM (e.g., C:\\LLVM-18) and use clang.exe" >&2
+  DO_SKIP_LINK=1
+fi
+
+# Allowlist + lib path for extern_c
 export HAKO_FFI_LIB_PATHS="${ROOT}/target/release"
-export HAKO_FFI_ALLOW_LIST=$(echo "${HAKO_FFI_ALLOW_LIST:-},llvm_compile_mir_to_object" | sed 's/^,//')
+if [[ ",${HAKO_FFI_ALLOW_LIST:-}," != *",llvm_compile_mir_to_object,"* ]]; then
+  export HAKO_FFI_ALLOW_LIST=$(echo "${HAKO_FFI_ALLOW_LIST:-},llvm_compile_mir_to_object" | sed 's/^,//')
+  echo "[doctor][OK] allowlist extended: HAKO_FFI_ALLOW_LIST=$HAKO_FFI_ALLOW_LIST"
+fi
 
 WORK="${ROOT}/build/doctor"
 mkdir -p "$WORK/obj" "$WORK/mir" "$WORK/bin" "$WORK/ir"
 
 SRC="${ROOT}/examples/simple_return.hako"
-test -f "$SRC" || { echo "[doctor] sample source missing: $SRC" >&2; exit 2; }
+test -f "$SRC" || { echo "[doctor][ERROR] sample source missing: $SRC" >&2; exit 2; }
 
 echo "[doctor] emitting MIR JSON ..."
 "$BIN" --backend mir --emit-mir-json "$WORK/mir/main.mir.json" "$SRC" >/dev/null
 
 echo "[doctor] emitting object via extern_c ..."
 tools/aot/emit_object_via_extern_c.sh "$WORK/mir/main.mir.json" "$WORK/obj/main.o" >/dev/null
+
+if [ $DO_SKIP_LINK -eq 1 ]; then
+  echo "[doctor][SKIP] link step (clang not found). Object at: $WORK/obj/main.o"
+  echo "[doctor][HINT] To link: sudo apt-get install -y clang; then run tools/aot/link_with_clang.sh"
+  exit 0
+fi
 
 echo "[doctor] linking ..."
 if [ -n "$NYRT_A" ]; then
@@ -101,12 +148,15 @@ set +e
 OUT=$("$WORK/bin/hako-doctor" 2>&1)
 EC=$?
 set -e
-echo "$OUT" | sed -E 's/^/[doctor] run | /'
+if [ $VERBOSE -eq 1 ]; then echo "$OUT" | sed -E 's/^/[doctor] run | /'; fi
 
 if echo "$OUT" | grep -q "^Result: "; then
-  echo "[doctor] PASS"
+  echo "[doctor][OK] run: Result line detected"
 else
-  echo "[doctor] FAIL (exit=$EC)" >&2
+  echo "[doctor][ERROR] run: no Result line (exit=$EC). Check allowlist/lib paths/nyrt." >&2
+  echo "[doctor][HINT] Ensure: HAKO_FFI_ALLOW_LIST includes llvm_compile_mir_to_object" >&2
+  echo "[doctor][HINT] Ensure: HAKO_FFI_LIB_PATHS includes $(printf '%q' "$ROOT/target/release")" >&2
+  echo "[doctor][HINT] If NyRT missing, doctor auto-stubs; for parity, build -p hako_kernel" >&2
   exit ${EC:-1}
 fi
 
@@ -150,15 +200,15 @@ set +e
 OUT2=$("$WORK/bin/hako-doctor-ext" 2>&1)
 EC2=$?
 set -e
-echo "$OUT2" | sed -E 's/^/[doctor] run ext | /'
+if [ $VERBOSE -eq 1 ]; then echo "$OUT2" | sed -E 's/^/[doctor] run ext | /'; fi
 
 if echo "$OUT2" | grep -q "^Result: "; then
-  echo "[doctor] PASS (extended)"
+  echo "[doctor][OK] extended run: Result line detected"
   exit 0
 fi
 if [ ${EC2:-1} -eq 0 ]; then
-  echo "[doctor] PASS (extended: exit=0)"
+  echo "[doctor][OK] extended run: exit=0"
   exit 0
 fi
-echo "[doctor] FAIL (extended) exit=$EC2" >&2
+echo "[doctor][ERROR] extended run failed (exit=$EC2)." >&2
 exit ${EC2:-1}

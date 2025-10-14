@@ -846,7 +846,7 @@ hakorune --emit-stage1-json test.nyash
 
 成果物:
 - docs/reference/frontend-layers.md (更新)
-- docs/development/roadmap/phases/phase 15.75/PHASE_4_COMPLETED.md (新規)
+- docs/development/roadmap/phases/phase-15.75/PHASE_4_COMPLETED.md (新規)
 
 検証:
 SMOKES_PARSER_MODE=both bash tools/smokes/v2/run.sh --profile phase-a
@@ -1117,9 +1117,9 @@ SMOKES_PARSER_MODE=both bash tools/smokes/v2/run.sh --profile phase-a
 
 ### A. 参考ドキュメント
 
-- **TODO.md**: `/home/tomoaki/git/hakorune-selfhost/docs/development/roadmap/phases/phase 15.75/TODO.md`
-- **ROADMAP.md**: `/home/tomoaki/git/hakorune-selfhost/docs/development/roadmap/phases/phase 15.75/ROADMAP.md`
-- **STRATEGY.md**: `/home/tomoaki/git/hakorune-selfhost/docs/development/roadmap/phases/phase 15.75/STRATEGY.md`
+- **TODO.md**: `/home/tomoaki/git/hakorune-selfhost/docs/development/roadmap/phases/phase-15.75/TODO.md`
+- **ROADMAP.md**: `/home/tomoaki/git/hakorune-selfhost/docs/development/roadmap/phases/phase-15.75/ROADMAP.md`
+- **STRATEGY.md**: `/home/tomoaki/git/hakorune-selfhost/docs/development/roadmap/phases/phase-15.75/STRATEGY.md`
 - **frontend-layers.md**: `/home/tomoaki/git/hakorune-selfhost/docs/reference/frontend-layers.md`
 
 ### B. 実装チェックリスト

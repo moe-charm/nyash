@@ -31,6 +31,9 @@ User macros executed in the sandbox must not depend on external plugins. The fol
 
 Notes
 - These APIs are available only inside the macro sandbox child. Application execution (PyVM/LLVM) continues to use the normal plugin system.
+
+Note (syntactic macros)
+- Planned syntactic macros like `@derive` and `@for` are parser‑level sugar and do not execute in the sandbox. They lower deterministically to existing language constructs and therefore do not require IO/NET/ENV capabilities.
 - The sandbox disables plugins by default (`NYASH_PLUGIN_POLICY=off`, compat: `NYASH_DISABLE_PLUGINS=1`) to ensure determinism; only the above minimal Boxes are relied upon by macros.
 - Built-in core normalization (for/foreach → Loop, match → If, Loop tail alignment) does not use Boxes and is not affected by plugin state.
 

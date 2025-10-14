@@ -3,7 +3,7 @@
 .PHONY: build build-release run-minimal smoke-core smoke-selfhost bootstrap roundtrip clean quick fmt lint dep-tree \
 	smoke-quick smoke-quick-filter smoke-integration \
 	artifacts-nyash artifacts-apps artifacts-all artifacts-clean \
-	artifacts-move artifacts-unlink artifacts-restore
+	artifacts-move artifacts-unlink artifacts-restore release freeze-linux freeze-win-gnu freeze-win-msvc
 
 build:
 	cargo build --features cranelift-jit
@@ -134,3 +134,33 @@ build: check-root
 # テスト前にルートチェック  
 test: check-root
 	cargo test
+
+# --- Release packaging (frozen toolchain) ---
+release:
+	@echo "[release] packaging dist artifacts..."
+	bash tools/release/package_dist.sh
+	@echo "[release] manifest: dist/release.json"
+
+.PHONY: release-sign
+release-sign:
+	@if [ -z "$$GPG_SIGN" ] || [ -z "$$GPG_KEY_ID" ]; then \
+	  echo "Usage: GPG_SIGN=1 GPG_KEY_ID=<KEYID> make release-sign"; \
+	  exit 2; \
+	fi
+	bash tools/release/sign_artifacts.sh
+
+freeze-linux:
+	@echo "[freeze-linux] ensure Ubuntu frozen binary is present"
+	@./target/release/hakorune --backend mir --emit-mir-json build/frozen_ubuntu/mir/main.mir.json examples/simple_return.hako
+	@bash tools/aot/emit_object_via_extern_c.sh build/frozen_ubuntu/mir/main.mir.json build/frozen_ubuntu/obj/main.o
+	@bash tools/aot/link_with_clang.sh -o bin/hako-frozen-v1 build/frozen_ubuntu/obj/main.o --nyrt target/release/libhako_kernel.a || bash tools/aot/link_with_clang.sh -o bin/hako-frozen-v1 build/frozen_ubuntu/obj/main.o
+	@mkdir -p dist && cp -f bin/hako-frozen-v1 dist/hako-frozen-v1-linux-x64
+
+freeze-win-gnu:
+	@echo "[freeze-win-gnu] ensure MinGW frozen binary is present"
+	@bash tools/aot/windows/build_mingw_static.sh target/x86_64-pc-windows-gnu/release/libhako_kernel.a build/test_min.exe
+	@mkdir -p dist && cp -f build/test_min.exe dist/hako-frozen-v1-win-x64-gnu.exe
+
+freeze-win-msvc:
+	@echo "[freeze-win-msvc] copy test_msvc.exe when present (Windows build)"
+	@mkdir -p dist && [ -f build/test_msvc.exe ] && cp -f build/test_msvc.exe dist/hako-frozen-v1-win-x64-msvc.exe || true

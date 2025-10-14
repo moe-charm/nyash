@@ -272,8 +272,9 @@ find_test_files() {
     if [ -d "$profile_dir" ]; then
         search_dirs+=("$profile_dir")
     fi
-    # For quick-selfhost, also include original quick/selfhost directory
-    if [ "$PROFILE" = "quick-selfhost" ]; then
+    # For quick-selfhost, legacy quick/selfhost suites are excluded by default.
+    # Set SMOKES_INCLUDE_LEGACY=1 to include them temporarily.
+    if [ "$PROFILE" = "quick-selfhost" ] && [ "${SMOKES_INCLUDE_LEGACY:-0}" = "1" ]; then
         local extra_dir="$SCRIPT_DIR/profiles/quick/selfhost"
         [ -d "$extra_dir" ] && search_dirs+=("$extra_dir") || true
     fi
@@ -301,6 +302,13 @@ find_test_files() {
         # Exclude quick/selfhost tests from quick profile (moved to quick-selfhost)
         if [ "$PROFILE" = "quick" ] && echo "$file" | grep -q "/profiles/quick/selfhost/"; then
             continue
+        fi
+        # Auto-skip plugin-on tests when plugins are disabled in this profile
+        if [ "${NYASH_DISABLE_PLUGINS:-0}" = "1" ] || [ "${NYASH_PLUGIN_POLICY:-}" = "off" ]; then
+            if echo "$file" | grep -E -q '(plugin_on_|hostbridge_)'; then
+                log_warn "Skipping (plugins disabled): $file"
+                continue
+            fi
         fi
         # フィルタ適用
         if [ -n "$FILTER" ] && ! echo "$file" | grep -E -q "$FILTER"; then

@@ -11,7 +11,7 @@
 このディレクトリには、Hakoruneプロジェクトの「完全脱Rust」に向けた包括的なドキュメントが含まれています。
 
 ### メインドキュメント
-- **[PHASE_15_75_RUST_FREE_ROADMAP.md](../../roadmap/phases/phase 15.75/PHASE_15_75_RUST_FREE_ROADMAP.md)** - 最重要！総合ロードマップ
+- **[PHASE_15_75_RUST_FREE_ROADMAP.md](../../roadmap/phases/phase-15.75/PHASE_15_75_RUST_FREE_ROADMAP.md)** - 最重要！総合ロードマップ
 
 ### 詳細ドキュメント
 1. **[rust_dependency_analysis.md](rust_dependency_analysis.md)** - Rust依存関係の完全な詳細分析
@@ -66,7 +66,7 @@
 ## 🚀 次のステップ
 
 ### 即座に実行すべきアクション
-1. **メインロードマップを読む** - [PHASE_15_75_RUST_FREE_ROADMAP.md](../../roadmap/phases/phase 15.75/PHASE_15_75_RUST_FREE_ROADMAP.md)
+1. **メインロードマップを読む** - [PHASE_15_75_RUST_FREE_ROADMAP.md](../../roadmap/phases/phase-15.75/PHASE_15_75_RUST_FREE_ROADMAP.md)
 2. **Phase 1計画を確認** - [hakorune_vm_completion.md](hakorune_vm_completion.md)
 3. **技術的課題を理解** - [technical_challenges.md](technical_challenges.md)
 4. **実装を開始** - Phase 1: Hakorune VM MirCall実装

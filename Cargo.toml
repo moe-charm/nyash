@@ -73,7 +73,9 @@ parser-c-abi = []
 [lib]
 name = "nyash_rust"
 path = "src/lib.rs"
-crate-type = ["cdylib", "rlib"]
+# Build as rlib only to simplify cross-target static linking (Windows MinGW/MSVC).
+# Dynamic `cdylib` for this root crate is not required; plugin crates provide their own cdylibs.
+crate-type = ["rlib"]
 #doctest disabled by default for CI stability
 doctest = false
 

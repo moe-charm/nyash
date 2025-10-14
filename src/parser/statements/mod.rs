@@ -10,6 +10,9 @@ pub mod helpers;
 
 // Control flow statements
 pub mod control_flow;
+pub mod for_macro;
+pub mod repeat_macro;
+pub mod assert_macro;
 
 // Declaration statements
 pub mod declarations;
@@ -194,7 +197,32 @@ impl NyashParser {
             | TokenType::GLOBAL
             | TokenType::FUNCTION
             | TokenType::STATIC
-            | TokenType::AT => self.parse_declaration_statement(),
+            | TokenType::AT => {
+                // Distinguish @for (statement) from declaration macros
+                if matches!(self.peek_token(), TokenType::IDENTIFIER(s) if s == "for") {
+                    // Gate by macro enable
+                    if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                        self.parse_for_macro()
+                    } else {
+                        // Fall back to declaration parser to get a proper error message
+                        self.parse_declaration_statement()
+                    }
+                } else if matches!(self.peek_token(), TokenType::IDENTIFIER(s) if s == "repeat") {
+                    if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                        self.parse_repeat_macro()
+                    } else {
+                        self.parse_declaration_statement()
+                    }
+                } else if matches!(self.peek_token(), TokenType::IDENTIFIER(s) if s == "assert") {
+                    if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                        self.parse_assert_macro()
+                    } else {
+                        self.parse_declaration_statement()
+                    }
+                } else {
+                    self.parse_declaration_statement()
+                }
+            },
 
             // Control flow
             TokenType::IF

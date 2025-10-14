@@ -631,3 +631,42 @@ add_ret = { method_id = 6 }
 end_all = { method_id = 7 }
 to_string = { method_id = 8 }
 fini = { method_id = 4294967295 }
+[libraries."libnyash_array_plugin.so"]
+boxes = ["ArrayBox"]
+path = "plugins/nyash-array-plugin/libnyash_array_plugin.so"
+
+[libraries."libnyash_array_plugin.so".ArrayBox]
+type_id = 12
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_array_plugin.so".ArrayBox.methods]
+birth = { method_id = 0 }
+len   = { method_id = 1 }
+get   = { method_id = 2 }
+push  = { method_id = 3 }
+slice = { method_id = 5 }
+fini  = { method_id = 4294967295 }
+
+[libraries."libnyash_map_plugin.so"]
+boxes = ["MapBox"]
+path = "plugins/nyash-map-plugin/libnyash_map_plugin.so"
+
+[libraries."libnyash_map_plugin.so".MapBox]
+type_id = 11
+abi_version = 1
+singleton = false
+
+[libraries."libnyash_map_plugin.so".MapBox.methods]
+birth   = { method_id = 0 }
+size    = { method_id = 1 }
+get     = { method_id = 2 }
+has     = { method_id = 3 }
+set     = { method_id = 4 }
+remove  = { method_id = 6 }
+clear   = { method_id = 7 }
+keysS   = { method_id = 8 }
+valuesS = { method_id = 13 }
+keys    = { method_id = 15 }
+values  = { method_id = 16 }
+fini    = { method_id = 4294967295 }

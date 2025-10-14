@@ -23,15 +23,23 @@ impl NyashParser {
             TokenType::AT => {
                 // Consume @
                 self.advance();
-                // Check for "enum"
+                // Dispatch macro name
                 match &self.current_token().token_type {
                     TokenType::IDENTIFIER(s) if s == "enum" => {
                         self.advance(); // consume "enum"
                         self.parse_enum_declaration()
                     }
+                    TokenType::IDENTIFIER(s) if s == "derive" => {
+                        // Gate: require macros enabled (planned default ON in dev/ci)
+                        if std::env::var("NYASH_MACRO_ENABLE").ok().map(|v| v != "0" && v != "false" && v != "off").unwrap_or(false) {
+                            self.parse_derive_then_box()
+                        } else {
+                            Err(ParseError::UnexpectedToken { found: TokenType::IDENTIFIER("derive".into()), expected: "macro feature enabled (NYASH_MACRO_ENABLE=1)".to_string(), line: self.current_token().line })
+                        }
+                    }
                     _ => Err(ParseError::UnexpectedToken {
                         found: self.current_token().token_type.clone(),
-                        expected: "macro name (enum)".to_string(),
+                        expected: "macro name (enum|derive)".to_string(),
                         line: self.current_token().line,
                     }),
                 }

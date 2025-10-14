@@ -33,7 +33,7 @@ Risks
 
 Related
 - docs/reference/language/extern_c.md
-- docs/development/roadmap/phases/phase 15.76/MILESTONE.md
+- docs/development/roadmap/phases/phase-15.76/MILESTONE.md
 - docs/reference/boxes/frozen_v1.md
 
 ---
@@ -129,15 +129,127 @@ Notes
 
 ---
 
+Windows (MinGW/MSVC) — Static Runtime link (verified)
+
+This is the minimal, copy‑paste path we validated on WSL (MinGW cross) to produce a Windows EXE that links against the static runtime `hako_kernel` and calls dotted NyRT symbols.
+
+1) Build static runtime for Windows
+
+MinGW (from WSL)
+```
+rustup target add x86_64-pc-windows-gnu
+cargo build -p hako_kernel --release --target x86_64-pc-windows-gnu \
+  --no-default-features -F core-runtime
+# Artifact: target/x86_64-pc-windows-gnu/release/libhako_kernel.a
+```
+
+MSVC (on Windows)
+```
+rustup target add x86_64-pc-windows-msvc
+cargo build -p hako_kernel --release --target x86_64-pc-windows-msvc \
+  --no-default-features -F core-runtime
+# Artifact: target\x86_64-pc-windows-msvc\release\hako_kernel.lib
+```
+
+2) Provide a tiny `ny_main` (COFF .obj) that uses dotted exports
+
+```
+cat > build/ny_main_win.c << 'EOF'
+#include <stdint.h>
+extern int64_t nyash_box_from_i8_string(const char*) asm("nyash.box.from_i8_string");
+extern int64_t nyash_string_concat_hh(int64_t, int64_t) asm("nyash.string.concat_hh");
+extern int64_t nyash_string_len_h(int64_t) asm("nyash.string.len_h");
+__declspec(dllexport) int64_t ny_main(void) {
+  int64_t a = nyash_box_from_i8_string("hi");
+  int64_t b = nyash_box_from_i8_string("yo");
+  int64_t c = nyash_string_concat_hh(a, b);
+  return nyash_string_len_h(c); // -> 4
+}
+EOF
+
+MinGW: x86_64-w64-mingw32-gcc -c -O2 -o build/ny_main_win.obj build/ny_main_win.c
+MSVC/clang: C:\\LLVM-18\\bin\\clang.exe -target x86_64-pc-windows-msvc -c build\\ny_main_win.c -o build\\ny_main_win.obj
+```
+
+3) Link EXE with the static runtime
+
+```
+MinGW
+```
+x86_64-w64-mingw32-gcc -static -o build/test_min.exe \
+  build/ny_main_win.obj \
+  target/x86_64-pc-windows-gnu/release/libhako_kernel.a \
+  -Wl,--allow-multiple-definition \
+  -lws2_32 -ladvapi32 -luserenv -lole32 -lbcrypt -lntdll -luser32 -lkernel32
+```
+
+MSVC/clang
+```
+C:\\LLVM-18\\bin\\clang.exe build\\ny_main_win.obj \
+  target\\x86_64-pc-windows-msvc\\release\\hako_kernel.lib \
+  ws2_32.lib advapi32.lib userenv.lib ole32.lib bcrypt.lib user32.lib kernel32.lib \
+  -Wl,/FORCE:MULTIPLE \
+  -o build\\test_msvc.exe
+```
+
+Output (example):
+- MinGW: ~7.4MB EXE, prints `Result: 6` for `"Main()"` sample
+- MSVC:  ~724KB EXE, prints `Result: 6` for `"Main()"` sample
+
+Captured Execution Logs
+- Ubuntu（ELF）: `build/UBUNTU_EXECUTION_LOG.txt`
+- Windows（MSVC/MinGW）: `build/WINDOWS_LINK_TEST_REPORT.md`（結果と手順を記録）
+
+Doctor quick check
+- `tools/aot/doctor_frozen_v1.sh` は Linux/WSL の標準ルートを検証します。
+- Windows 連携で躓いたら：
+  - `clang.exe` のパス例: `C:\\LLVM-18\\bin\\clang.exe`
+  - VS/MSVC ランタイム: `Visual Studio Build Tools` と `Windows SDK` を導入
+  - MinGW（WSL→Windows）: `x86_64-w64-mingw32-gcc` と `rustup target add x86_64-pc-windows-gnu`
+- MinGW/MSVC（Windows）ログ: `build/WINDOWS_EXECUTION_LOG.txt`
+
+Quicklinks
+- MinGW: `tools/aot/windows/build_mingw_static.sh [path/to/libhako_kernel.a] [out.exe]`
+- MSVC:  `tools/aot/windows/build_msvc_static.bat [path\to\hako_kernel.lib] [out.exe]`
+ - PowerShell: `tools/aot/windows/build_msvc_static.ps1 -KernelLib target\x86_64-pc-windows-msvc\release\hako_kernel.lib -OutExe build\test_msvc.exe`
+```
+
+MSVC notes
+- Build `hako_kernel` on Windows with the MSVC toolchain (`rustup target add x86_64-pc-windows-msvc`), then link with `link.exe` or `clang-cl`.
+- Provide the same `ny_main` COFF object; link against `hako_kernel.lib`.
+- We recommend recording `Result: <n>` output for reproducibility once linked.
+
+---
+
 Frozen v1 Checklist (Ready to mint)
 - [ ] extern_c（MIR/VM/Fail‑Fast）に合意済み（docs + smokes）
 - [ ] `libs/llvm_backend` がビルド緑で、`.o` 出力が検証済み
 - [ ] allowlist は ENV/TOML 経由で拡張可能（既定はDeny）
-- [ ] MIR JSON の出力→`.o`→リンク手順がdocs通り再現
+- [x] MIR JSON の出力→`.o`→リンク手順がdocs通り再現（Ubuntu/Windows）
 - [ ] 凍結EXEに同梱する最小Box（String/Array/Map/Console/Time/JSON/File[min]）を決定
 - [ ] 配布/再現のためのタグ付け・ハッシュ記録をドキュメント化
 
 ---
+
+Support Matrix (snapshot)
+- Linux (Ubuntu): ELF, clang、静的NyRT推奨（hako_kernel.a）。結果ログは `build/UBUNTU_EXECUTION_LOG.txt`。
+- Windows (MSVC 推奨): PE (UCRT)、EXEが小サイズ。clang.exe で asm alias 使用。結果ログは `build/WINDOWS_EXECUTION_LOG.txt`。
+- Windows (MinGW 互換): PE（静的リンク）、EXEは大きめ。環境差対策として併配布。
+
+---
+
+Signing (optional)
+- 準備: GPG鍵を用意し公開鍵を配布（例: dist/keys/hakorune-signing.pub.asc）
+- 署名生成（手元）:
+  - タグ署名（任意）: `git tag -s -u <KEYID> v1.0-frozen -f`
+  - アーティファクト署名: `GPG_SIGN=1 GPG_KEY_ID=<KEYID> make release-sign`
+    - 生成: dist/*.asc（各ファイルの detached ASCII 署名）
+    - manifest: dist/release.json に signatures マップを付与
+- 検証（利用者）:
+  - 公開鍵インポート: `gpg --import dist/keys/hakorune-signing.pub.asc`
+  - アーティファクト: `gpg --verify <file>.asc <file>`
+  - タグ: `git tag -v v1.0-frozen`
+
 
 Standard Mint Recipe — Freeze a runnable EXE (copy/paste)
 

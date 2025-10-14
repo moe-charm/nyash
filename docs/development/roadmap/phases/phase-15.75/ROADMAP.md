@@ -1166,10 +1166,10 @@ Week 27 ━━━━━ 10,400行（最適化）← Option A達成！
 
 ```bash
 # Step 1: 今週の状況確認
-cat "docs/development/roadmap/phases/phase 15.75/TODO.md"
+cat "docs/development/roadmap/phases/phase-15.75/TODO.md"
 
 # Step 2: 先週完了分を [DONE] マーク
-vim "docs/development/roadmap/phases/phase 15.75/TODO.md"
+vim "docs/development/roadmap/phases/phase-15.75/TODO.md"
 # - 完了タスクに [DONE] 追加
 # - 未完了タスクは来週に繰越
 
@@ -1180,7 +1180,7 @@ vim "docs/development/roadmap/phases/phase 15.75/TODO.md"
 bash tools/smokes/v2/run.sh --profile quick-selfhost
 
 # Step 5: Git commit
-git add "docs/development/roadmap/phases/phase 15.75/TODO.md"
+git add "docs/development/roadmap/phases/phase-15.75/TODO.md"
 git commit -m "docs: update TODO.md for Week X-Y"
 ```
 
@@ -1188,7 +1188,7 @@ git commit -m "docs: update TODO.md for Week X-Y"
 
 ```bash
 # Step 1: 今週の完了状況を TODO.md に記録
-vim "docs/development/roadmap/phases/phase 15.75/TODO.md"
+vim "docs/development/roadmap/phases/phase-15.75/TODO.md"
 # - Status Notes セクションを更新
 # - 完了数/残存数を記録
 
