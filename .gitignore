@@ -22,7 +22,9 @@ pip-delete-this-directory.txt
 Thumbs.db
 
 # Build artifacts
-build/
+build/*
+!build/windows_artifacts/
+!build/WINDOWS_EXECUTION_LOG.txt
 dist/
 *.egg-info/
 
@@ -214,3 +216,17 @@ docs/research/papers-under-review/
 nekocode-rust/
 benchmarks/sum_loop_bench_c
 src/llvm_py/tmp/
+
+# ========================================
+# 🎯 Phase 15.77 Frozen Artifacts (例外)
+# ========================================
+# 凍結EXE・成果物は Git追跡対象に含める
+
+# Windows Frozen EXE テストファイル
+!build/windows_artifacts/
+!build/windows_artifacts/*.exe
+!build/windows_artifacts/*.c
+!build/windows_artifacts/README.md
+
+# Windows実行ログ
+!build/WINDOWS_EXECUTION_LOG.txt

@@ -1,0 +1,107 @@
+================================================================================
+Windows Frozen EXE Execution Log - Phase 15.77
+Generated: 2025-10-14 11:00 JST
+Platform: Windows 10/11 (via WSL interop)
+================================================================================
+
+TEST 1: MinGW Static Runtime
+----------------------------
+Build Environment: WSL Ubuntu (x86_64-pc-windows-gnu cross-compile)
+Compiler: x86_64-w64-mingw32-gcc 13-win32
+Linker: x86_64-w64-mingw32-gcc (ld)
+Runtime Library: libhako_kernel.a (39MB, static)
+
+Executable:
+  Path: C:\temp\test_min.exe
+  Size: 7.4 MB (7,749,632 bytes)
+  Format: PE32+ executable (console) x86-64, for MS Windows, 22 sections
+
+Build Command:
+  cargo build -p hako_kernel --release \
+      --target x86_64-pc-windows-gnu \
+      --no-default-features -F core-runtime
+  
+  x86_64-w64-mingw32-gcc -c ny_main_win.c -o ny_main_win.o
+  
+  x86_64-w64-mingw32-gcc -static ny_main_win.o \
+      target/x86_64-pc-windows-gnu/release/libhako_kernel.a \
+      -Wl,--allow-multiple-definition \
+      -lws2_32 -ladvapi32 -luserenv -lole32 -lbcrypt -lntdll \
+      -luser32 -lkernel32 -o test_min.exe
+
+Execution (Windows cmd.exe):
+  C:\> test_min.exe
+  Result: 6
+  
+  Exit Code: 0
+
+Status: ✅ PASS
+
+
+TEST 2: MSVC Static Runtime
+----------------------------
+Build Environment: WSL Ubuntu (x86_64-pc-windows-msvc)
+Compiler: clang.exe 18.1.8 (Windows LLVM, via WSL interop)
+Linker: link.exe (MSVC linker, invoked by clang)
+Runtime Library: hako_kernel.lib (42MB, static)
+
+Executable:
+  Path: C:\temp\test_msvc.exe
+  Size: 724 KB (741,888 bytes)
+  Format: PE32+ executable (console) x86-64, for MS Windows, 6 sections
+
+Build Command:
+  cargo build -p hako_kernel --release \
+      --target x86_64-pc-windows-msvc \
+      --no-default-features -F core-runtime
+  
+  /mnt/c/LLVM-18/bin/clang.exe \
+      --target=x86_64-pc-windows-msvc \
+      -c C:\temp\ny_main_win.c -o C:\temp\ny_main_win.obj
+  
+  /mnt/c/LLVM-18/bin/clang.exe \
+      --target=x86_64-pc-windows-msvc \
+      C:\temp\ny_main_win.obj C:\temp\hako_kernel.lib \
+      -lws2_32 -ladvapi32 -luserenv -lole32 -lbcrypt -lntdll \
+      -luser32 -lkernel32 -lshell32 \
+      -Wl,/FORCE:MULTIPLE \
+      -o C:\temp\test_msvc.exe
+
+Warnings (non-fatal):
+  LNK4006: main already defined in ny_main_win.obj
+  LNK4088: image created with /FORCE option
+
+Execution (Windows cmd.exe):
+  C:\> test_msvc.exe
+  Result: 6
+  
+  Exit Code: 0
+
+Status: ✅ PASS
+
+
+COMPARISON SUMMARY
+==================
+| Metric          | MinGW            | MSVC             |
+|-----------------|------------------|------------------|
+| Library Size    | 39 MB            | 42 MB            |
+| EXE Size        | 7.4 MB           | 724 KB ⭐       |
+| Build Location  | WSL-only         | WSL + Win tools  |
+| Link Type       | Static (-static) | Dynamic (default)|
+| Result          | 6                | 6                |
+| Status          | ✅ PASS          | ✅ PASS          |
+
+Size Difference: MSVC is 10.2x smaller (724KB vs 7.4MB)
+
+NyRT Runtime Functions Verified:
+  ✅ nyash.box.from_i8_string   - String box creation
+  ✅ nyash.string.concat_hh      - String concatenation  
+  ✅ nyash.string.len_h          - String length
+
+Test Program Logic:
+  "Main(" (5 chars) + ")" (1 char) = "Main()" (6 chars) → Result: 6
+
+================================================================================
+Phase 15.77 Milestone: Both Routes Complete ✅
+Next: Integrate into frozen-toolchain guide with copy-paste commands
+================================================================================
