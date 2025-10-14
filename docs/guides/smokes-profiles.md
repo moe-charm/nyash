@@ -13,6 +13,14 @@ How to run
 - `tools/smokes/v2/run.sh --profile quick`
 - `tools/smokes/v2/run.sh --profile integration`
 - `tools/smokes/v2/run.sh --profile full`
+ - Dual parser (opt‑in): set `SMOKES_PARSER_MODE=rust|hako|both` (default `rust`). Example:
+   - `SMOKES_PARSER_MODE=both tools/smokes/v2/run.sh --profile quick-selfhost --filter 'parser_facade_*|selfhost_min_json_header_vm.sh'`
+- HostHandleRouter boundary suite (plugins profile):
+  - `tools/smokes/v2/run.sh --profile plugins --filter 'hosthandle_boundary_*'`
+  - To observe return type mismatch (-14) boundary with a test hook:
+    - `HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1 tools/smokes/v2/run.sh --profile plugins --filter hosthandle_return_type_mismatch_vm.sh`
+ - Parser facade (quick-selfhost, opt-in):
+   - `tools/smokes/v2/run.sh --profile quick-selfhost --filter 'parser_facade_*'`
 
 Environment flags (minimal)
 - `SMOKES_FORCE_LLVM=1`: Force LLVM path in parity tests (skip detection).

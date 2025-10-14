@@ -1,3 +1,4 @@
+#![cfg(feature = "legacy-boxes")]
 use crate::mir::{MirModule, MirFunction, FunctionSignature, MirInstruction, EffectMask, BasicBlockId, ConstValue};
 use crate::backend::VM;
 use crate::backend::vm::VMValue;
@@ -46,4 +47,3 @@ fn vm_call_functionbox_returns_42() {
     let out = vm.execute_module(&m).expect("vm exec");
     assert_eq!(out.to_string_box().value, "42");
 }
-

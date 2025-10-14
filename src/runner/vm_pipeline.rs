@@ -113,10 +113,15 @@ pub fn resolve_preludes_and_aliases(
 
 /// Stage 3: Parse the main source code and merge it with prelude ASTs.
 pub fn parse_and_merge_ast(code: &str, prelude_asts: Vec<ASTNode>) -> Result<ASTNode> {
-    use crate::parser::NyashParser;
-
-    let main_ast =
-        NyashParser::parse_from_string(code).map_err(|e| PipelineError::Parse(e.to_string()))?;
+    // Opt-in dev flag: prefer front::parser_layer facade for parsing
+    let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+    let main_ast = if use_facade {
+        crate::front::parser_layer::facade::parse_source_to_ast(code)
+            .map_err(|e| PipelineError::Parse(e.message))?
+    } else {
+        use crate::parser::NyashParser;
+        NyashParser::parse_from_string(code).map_err(|e| PipelineError::Parse(e.to_string()))?
+    };
 
     if crate::config::env::using_ast_enabled() && !prelude_asts.is_empty() {
         Ok(

@@ -126,10 +126,12 @@ mod tests {
         assert_eq!(out.to_string_box().value, "v");
     }
 
+    #[cfg(feature = "legacy-boxes")]
     #[test]
     fn mapbox_keys_values_return_arrays() {
         // Direct Box-level test (not via VM): keys()/values() should return ArrayBox
         use crate::box_trait::{IntegerBox, NyashBox, StringBox};
+        #[cfg(feature = "legacy-boxes")]
         use crate::boxes::map_box::MapBox;
 
         let map = MapBox::new();

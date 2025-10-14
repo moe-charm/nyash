@@ -6,6 +6,35 @@ use super::*;
 use crate::runner::json_v0_bridge;
 use nyash_rust::parser::NyashParser;
 use std::{fs, process};
+#[cfg(feature = "parser-c-abi")]
+use std::ffi::CString;
+#[cfg(feature = "parser-c-abi")]
+use std::os::raw::c_char;
+
+#[cfg(feature = "parser-c-abi")]
+#[repr(C)]
+struct HakoParseResult {
+    abi_version: u32,
+    struct_size: u32,
+    success: u32,
+    stmt_count: u32,
+    kind: *const c_char,
+    error_msg: *const c_char,
+}
+#[cfg(feature = "parser-c-abi")]
+#[allow(non_camel_case_types)]
+#[repr(i32)]
+enum HakoParseMode { RUST=0, HAKO=1, BOTH=2 }
+#[cfg(feature = "parser-c-abi")]
+extern "C" {
+    fn parse_source_dual(src: *const c_char, mode: HakoParseMode) -> *mut HakoParseResult;
+    fn free_parse_result(r: *mut HakoParseResult);
+}
+#[cfg(feature = "parser-c-abi")]
+fn cstr_to_string(ptr: *const c_char) -> String {
+    if ptr.is_null() { return String::new(); }
+    unsafe { std::ffi::CStr::from_ptr(ptr).to_string_lossy().into_owned() }
+}
 
 /// Thin file dispatcher: select backend and delegate to mode executors
 pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
@@ -20,6 +49,30 @@ pub(crate) fn execute_file_with_backend(runner: &NyashRunner, filename: &str) {
             return;
         } else {
             crate::cli_v!("[ny-compiler] fallback to default path (MVP unavailable for this input)");
+        }
+    }
+
+    // Optional: Stage-4 header parity check via C-ABI harness (no-op unless requested)
+    #[cfg(feature = "parser-c-abi")]
+    {
+        if let Some(mode_s) = std::env::var("SMOKES_PARSER_MODE").ok() {
+            let mode = match mode_s.as_str() { "both" => Some(HakoParseMode::BOTH), "hako" => Some(HakoParseMode::HAKO), _ => None };
+            if let Some(m) = mode {
+                if let Ok(code) = fs::read_to_string(filename) {
+                    if let Ok(ccode) = CString::new(code) {
+                        unsafe {
+                            let res = parse_source_dual(ccode.as_ptr(), m);
+                            if !res.is_null() {
+                                let r = &*res;
+                                if r.success == 0 {
+                                    eprintln!("[parser-header] parity check failed: {}", cstr_to_string(r.error_msg));
+                                }
+                                free_parse_result(res);
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 

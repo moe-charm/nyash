@@ -1,5 +1,5 @@
 use super::super::NyashRunner;
-use nyash_rust::{parser::NyashParser, mir::MirCompiler};
+use nyash_rust::mir::MirCompiler;
 use std::{fs, process};
 
 impl NyashRunner {
@@ -10,10 +10,20 @@ impl NyashRunner {
             Ok(c) => c,
             Err(e) => { eprintln!("❌ Error reading file {}: {}", filename, e); process::exit(1); }
         };
-        // Parse → AST
-        let ast = match NyashParser::parse_from_string(&code) {
-            Ok(ast) => ast,
-            Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+        // Parse → AST (opt-in facade)
+        let ast = {
+            let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+            if use_facade {
+                match nyash_rust::front::parser_layer::facade::parse_source_to_ast(&code) {
+                    Ok(a) => a,
+                    Err(e) => { eprintln!("❌ Parse error: {}", e.message); process::exit(1); }
+                }
+            } else {
+                match nyash_rust::parser::NyashParser::parse_from_string(&code) {
+                    Ok(a) => a,
+                    Err(e) => { eprintln!("❌ Parse error: {}", e); process::exit(1); }
+                }
+            }
         };
         let ast = crate::r#macro::maybe_expand_and_dump(&ast, false);
         // AST → MIR

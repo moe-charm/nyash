@@ -1,5 +1,97 @@
 # CURRENT_TASK — 現在のタスクと進捗
 
+## ✨ Today’s Update — 2025‑10‑16（Frozen mint recipe + LL emit）
+
+- 凍結EXEミントの標準レシピを具体化（コピペ可）。
+  - `docs/guides/frozen-toolchain.md` に「Standard Mint Recipe」を追加。
+  - 1) MIR JSON emit → 2) extern_c で .o 化（wrapper）→ 3) clang ラップでリンク → 4) 検証/タグ。
+- 最小リンクラッパを追加（開発専用）。
+  - `tools/aot/link_with_clang.sh` — Linux で `-ldl -lpthread -lm` を付与、`--nyrt` と `--extra` を受理。
+- LL 出力の拡張（Week‑3 項目を前倒しで実装）。
+  - `libs/llvm_backend`: `llvm_compile_mir_to_ll(mir_json, out_ll)` を追加。
+  - `tools/llvmlite_harness.py`: `--emit-ll <path>` をサポート（MIR→.ll）。
+  - 便利ラッパ: `tools/aot/emit_ll_via_extern_c.sh <mir.json> <out.ll>` を追加。
+- Docs 更新
+  - `docs/reference/language/extern_c.md` に `.ll` 出力の例を追記。
+  - 15.76 MILESTONE を更新（Week‑3 完了扱いへ）。
+  - `docs/guides/frozen-toolchain.md` に Box セット＆Feature プリセット、Doctor 診断を追記。
+  - 新規: `docs/reference/boxes/frozen_v1.md`（Frozen v1 の最小Boxと設計方針）。
+
+Windows (WSL→Windows) — 最小EXE 完全成功
+- 生成: WSL で MIR→.ll→COFF .obj（または直接 --target windows で .obj）。
+- リンク: Windows の clang で C スタブ + ASM スタブ（開発用）を併せてリンク → EXE 作成。
+- 実行: Result: 0（成功）。
+- レポート: build/WINDOWS_LINK_TEST_REPORT.md（手順/出力/トラブルシュート）。
+
+Doctor（mint 検証の導線）
+- 追加: `tools/aot/doctor_frozen_v1.sh`（E2E: MIR JSON → .o → link → run）。
+- `docs/guides/frozen-toolchain.md` に Doctor セクション（前提/実行/診断）を追記。
+- 実行結果（この環境）: `.o` 生成まで PASS、`clang` 未導入のためリンクで停止（stub 経路を用意済み）。
+
+Next smalls (optional)
+- `frozen-toolchain.md` に “Frozen v1 Doctor” の簡易診断チェックを追記（未着手）。
+- CI に build-only の `llvm_backend` ジョブ追加（任意）。
+
+Follow-ups (Phase 15.77)
+- Windows plan docs + helpers added:
+  - `tools/aot/windows/`（README, link_with_clang_mingw.bat, link_with_clang_cl.bat, link_stub_main.c）
+  - `docs/development/roadmap/phases/phase-15.77/INDEX.md`
+  - `docs/guides/frozen-toolchain.md` に Windows Notes を追記
+
+## ✨ Today’s Update — 2025‑10‑16（Stage‑4 完了・15.76 起動）
+
+- Stage‑4（Dual Parser Harness / C‑ABI 最小）を“完了ライン”まで固定。
+  - C‑ABI ハーネス（`parse_source_dual/free_parse_result`）を feature `parser-c-abi` 配下に配置。
+  - Rust 薄層（ヘッダ出力/文字列ユーティリティ）実装、hako ヘッダは当面 Rust パーサ再利用で parity 確保。
+  - ランナー導線を追加（`SMOKES_PARSER_MODE=both|hako` のときヘッダパリティ検査を実行）。既定はOFFで無影響。
+  - スモーク（quick-selfhost）: `parser_facade_both_min_header_vm.sh` を追加（ビルド失敗時は SKIP）。
+  - Docs 整理: stage‑4 入口に Start Here/DoD/Status 追記、15.76 への導線を追加。
+
+- Phase 15.76（extern_c / Self‑Host Bootstrap）のフォルダを新設し、導線と TODO を追加。
+  - `docs/development/roadmap/phases/phase 15.76/INDEX.md`（目的/範囲/DoD/Start Here）
+  - `docs/development/roadmap/phases/phase 15.76/TODO.md`（Week1〜4 の薄いタスク）
+  - `docs/development/roadmap/phases/phase 15.76/MILESTONE.md`（凍結ラインと設定ベース許可への移行計画）
+  - 戦略文書: `stage-4-chatgpt/EXTERN_C_SELFHOST_STRATEGY.md` を参照（リンク整備済み）
+
+Docs（15.76 補強）
+- 新規: `docs/reference/language/extern_c.md`（構文/ロワリング/VM意味論/許可モデル）
+- 新規: `docs/guides/frozen-toolchain.md`（凍結EXE運用ガイド）
+- 追記: `docs/guides/plugin-only-build.md` に凍結ラインの導線を追加
+
+Next（15.76 Week‑1 — extern_c MVP） — DONE
+- Parser: `extern_c "name" (args)` を AST に追加（ASTNode::ExternCCall）
+- MIR: Call + `Callee::Extern("ffi.dynamic.<symbol>")` を発行
+- VM: `handle_callee_extern_dynamic()` で 0/1/2 引数（C string→i64）を実装、シンボルはホワイトリスト（getpid/strlen/system）
+- スモーク: quick-selfhost に3本追加（getpid/strlen/system）
+
+## ✨ Today’s Update — 2025‑10‑16（refs削減と検証ラインの整備）
+
+- refs削減（by‑dir・小粒）
+  - `src/tests/vm_functionbox_call.rs`: `#![cfg(feature="legacy-boxes")]` を先頭へ移動（use前に適用）。legacy OFF の plugin‑only ビルドでの参照エラーを解消。
+- 検証・観測ラインの安定化
+  - plugin‑only build チェックに個別タイムアウトを付与し、ランナーの30s既定タイムアウトに阻まれないように調整。
+    - `tools/smokes/v2/profiles/plugins/plugin_only_build_check.sh`: `# SMOKES_TIMEOUT=180` と `# SMOKES_ENV+=SMOKES_TIMEOUT_SEC=180` を追加。
+    - 実行: `tools/smokes/v2/run.sh --profile plugins --filter plugin_only_build_check.sh` → PASS（キャッシュ有りで高速）。
+- 方針（継続）
+  - `rg --by-file` で上位ディレクトリから順に `crate::boxes::*` 参照を棚卸し→ `#[cfg(feature="legacy-boxes")]` でガード or plugin 経路へ委譲。
+  - 非対象（legacy内部の `src/boxes/**`）はそのまま。外縁（runtime/backend/tests）からの直参照のみ削減を継続。
+
+検証:
+- plugins プロファイル build-only スモークを再実行 → 継続 PASS（タイムアウトヘッダ有効化後）。
+
+
+## ✨ Today’s Update — 2025‑10‑15（Phase‑0 mini tidy）
+
+- Docs: HostHandleRouter 統合スイートのランナー導線を追記。
+  - `tools/smokes/v2/README.md`: 一括実行フィルタと -14 フックの例を追加。
+  - `docs/guides/smokes-profiles.md`: plugins プロファイルでの境界スイート実行方法を追記。
+  - `tools/smokes/v2/profiles/plugins/README.md`: 1行ガイド（境界スイート）を新設。
+- 正規化の最小追加: 追加は不要（`normalize.rs:is_safe_core_method` は Array/Map/String の安全APIを既に網羅）。不足が出たら同関数のみを更新方針。
+- plugin-only 警告のスポット掃除: 未使用import警告を抑制。
+  - `src/runtime/plugin_loader_v2/enabled/extern_functions/mod.rs`: `#[allow(unused_imports)]` を付与。
+- Callable 再構成（3要素 argv）の追加は見送り。
+  - 現状の安全ホワイトリストに 3引数メソッドが無いため。0/1/2 引数＋インターリーブは既にスモークで網羅。
+
 ## ✨ Today’s Update — 2025‑10‑15（Phase 1: MirCall 仕上げ 小粒）
 
 ## ✨ Today’s Update — 2025‑10‑15（Quick Step‑3 観測ON）
@@ -244,6 +336,30 @@ Next
   - 呼び出し側（CallableBox.call）に README 参照コメントを最小付与。
 - 正規化拡充（Extern→Method）: nyrt.map.{keys,values} / string系（indexOf/lastIndexOf/substring/charAt/replace）。
 - quick-selfhost / plugins スモークは緑維持。
+
+## ✨ Today’s Update — 2025‑10‑15（Phase 3 小粒継続）
+
+進捗（P3-5）
+- WASM v2 backend を legacy 前提にゲート（plugin-only との交差を回避）
+  - `src/backend/wasm_v2/{mod.rs, unified_dispatch.rs}`: `#![cfg(all(feature="wasm-backend", feature="legacy-boxes"))]`
+
+進捗（P3-6）
+- LLVM interpreter の legacy 依存を cfg 分岐（Float/Null の非legacy代替）
+- tests 将来ガード（build-with-tests 互換向け）
+  - `src/tests/policy_mutdeny.rs`: `#[cfg(all(feature="cranelift-jit", feature="legacy-boxes"))]`
+
+進捗（P3-7）
+- tests の legacy 直参照に軽ガードを追加
+  - `src/tests/box_tests.rs`: `#![cfg(feature="legacy-boxes")]`
+  - `src/tests/refcell_assignment_test.rs`: `#![cfg(all(feature="interpreter-legacy", feature="legacy-boxes"))]`
+  - `src/tests/vm_functionbox_call.rs`: `#![cfg(feature="legacy-boxes")]`
+  - `src/tests/host_reverse_slot.rs`: MapBox 部分に `#[cfg(feature="legacy-boxes")]`
+  - `src/tests/nyash_abi_basic.rs`: MapBox import を `#[cfg(feature="legacy-boxes")]`
+  - `src/tests/typebox_tlv_diff.rs`: ArrayBox/FloatBox import を `#[cfg(feature="legacy-boxes")]`
+
+進捗（2025-10-15 P3-8 小粒）
+- [x] host_reverse_slot を plugin-only で PluginBox 経路に切替
+  - `src/tests/host_reverse_slot.rs`: legacy は MapBox.new、非legacyは `plugin_host_box::create_box("MapBox")`
 
 
 ## 🏁 Milestones Timeline（Self‑Host → Parity）
@@ -978,3 +1094,48 @@ Action items（P4/P5 反映）
 - [DOC] docs/guides/collections-api.md updated to state default fallback and unified methods.
 - [STAGE] Add .hako HostBridge wiring helpers (`selfhost/hakorune-vm/map_keys_values_bridge.hako`) and smoke (quick-selfhost) to validate keysS/valuesS → Array bridging.
 - [NEXT] When plugins provide Array-returning keys()/values() consistently, remove Rust fallback path and keep .hako adapter as optional helper only.
+- Phase 2（Parser/Resolver）キックオフ（構造のみ）
+  - `src/layers/` にインターフェースを追加（`interfaces.rs`）。ParserOutput/ResolverInput の箱を定義。
+  - Guard 用ディレクトリを追加（ビルド非影響／構造のみ）。
+    - `src/front/parser_layer/{README.md,LAYER_GUARD.rs}`
+    - `src/front/resolver_layer/{README.md,LAYER_GUARD.rs}`
+  - `src/lib.rs` に `pub mod layers;` を追加（実装は既存 parser.rs/resolver 相当を維持）。
+  - 参照ドキュメント: `docs/reference/frontend-layers.md` を新設（契約・検証方法）。
+  - スモーク導線: `quick-selfhost/selfhost_min_json_header_vm.sh` の実行例を README に追記（gated）。
+  - 追加スモーク（Facade 経路, opt-in）: `parser_facade_min_vm.sh`, `parser_facade_simple_fn_vm.sh`
+
+## Phase 3 — Boxes Migration（レガシー撤退の実務）
+
+目的
+- `src/boxes/` の参照を段階的に削減し、plugin/HostHandleRouter 経路に一本化する。
+
+現状（2025-10-15）
+- plugin-only build は build-only 緑（警告あり）。refs は残っている（`tools/dev/list_boxes_refs.sh` 参照）。
+- type_registry の core factory は legacy-OFF で plugin 優先（Array/Map/String）。
+- router/extern/array helper は分割済み（builtin/plugin）。
+
+次アクション（P3-1）
+1) 参照の棚卸しと優先順位付け（fanout 高→低）
+   - runner/extern/MIR handlers を先に cfg で囲い、plugin-only ビルドの阻害要因を解消
+2) plugins プロファイルの代表スモークを必要に応じて追加（経路変更時）
+3) plugin-only build を定期確認（build-only）
+4) refs が 0 に近づいたら、短期ブランチで `legacy-boxes` 既定OFF→ `src/boxes/` 削除
+
+進捗（2025-10-15 P3-1 小粒）
+- [x] messaging を legacy 専用にガード
+  - `src/messaging/message_bus.rs` に `#![cfg(feature="legacy-boxes")]` を追加（transport 側は既に cfg 済）
+- [x] plugin-only build の build-only スモークを追加（任意）
+  - `tools/smokes/v2/profiles/plugins/plugin_only_build_check.sh`
+
+進捗（2025-10-15 P3-4 小粒）
+- [x] LLVM interpreter から直接の legacy 依存を排除（cfg/代替）
+  - `src/backend/llvm/compiler/interpreter.rs`: Float/Null を `#[cfg]` で分岐（plugin-only は StringBox/VoidBox 代替）
+- [x] 参照棚卸しツール拡張（by-dir/文脈）
+  - `tools/dev/list_boxes_refs.sh`: `--by-dir`, `--context N` を追加して優先順位付けを容易に
+- [x] テストの将来ガード（plugin-only での build-with-tests 互換）
+  - `src/box_trait.rs`: テストモジュールを `#[cfg(all(test, feature="legacy-boxes"))]` に変更
+
+進捗（2025-10-15 P3-5 小粒）
+- [x] WASM v2 backend を legacy 前提にゲート（plugin-only との交差を回避）
+  - `src/backend/wasm_v2/{mod.rs, unified_dispatch.rs}`: `#![cfg(all(feature="wasm-backend", feature="legacy-boxes"))]`
+- [x] 棚卸し by-dir の確認で大物の現状把握（runtime/method_router_box/builtin.rs 等は既に内部を #[cfg] で保護済み）

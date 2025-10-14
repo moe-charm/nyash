@@ -1,6 +1,21 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // Stage-4 minimal C harness (parser-c-abi) — compile when feature is enabled
+    if std::env::var_os("CARGO_FEATURE_PARSER_C_ABI").is_some() {
+        #[allow(unused)]
+        {
+            // Guard cc dependency presence; if missing, show a helpful note
+            #[allow(unused_imports)]
+            use cc as _;
+            println!("cargo:rerun-if-changed=src/parser_harness/parser_harness.c");
+            println!("cargo:rerun-if-changed=src/parser_harness/parser_harness.h");
+            cc::Build::new()
+                .file("src/parser_harness/parser_harness.c")
+                .include("src/parser_harness")
+                .compile("parser_harness");
+        }
+    }
     // Opt-in export of host C ABI symbols and dynamic symbol table
     // Set HAKO_EXPORT_HOST=1 to enable (used by Stage-2 plugin array return)
     if std::env::var("HAKO_EXPORT_HOST").ok().as_deref() == Some("1")

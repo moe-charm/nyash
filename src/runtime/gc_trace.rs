@@ -9,7 +9,7 @@ use crate::box_trait::NyashBox;
 
 /// Visit child boxes of a given object and invoke `visit(child)` for each.
 /// This function recognizes builtin containers (ArrayBox/MapBox) and is a no-op otherwise.
-pub fn trace_children(obj: &dyn NyashBox, _visit: &mut dyn FnMut(Arc<dyn NyashBox>)) {
+pub fn trace_children(obj: &dyn NyashBox, visit: &mut dyn FnMut(Arc<dyn NyashBox>)) {
     // ArrayBox
     #[cfg(feature = "legacy-boxes")]
     if let Some(arr) = obj.as_any().downcast_ref::<crate::boxes::array::ArrayBox>() {

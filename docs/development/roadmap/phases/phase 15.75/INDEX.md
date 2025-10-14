@@ -103,6 +103,21 @@ Level 3: Full Rollback（10-30分）
 
 ---
 
+### 2.5️⃣ **Stage‑4（最短導線）**
+**ChatGPT最小プラン（2日）**: [stage-4-chatgpt/INDEX.md](./stage-4-chatgpt/INDEX.md)
+- 2関数のC ABIハーネス / feature配下 / スモーク1本（bothヘッダ一致）
+- 先の統合戦略: [INTEGRATION_STRATEGY_CLAUDE.md](./stage-4-chatgpt/INTEGRATION_STRATEGY_CLAUDE.md)
+
+**フル設計（Claude版）**: [stage-4/INDEX.md](./stage-4/INDEX.md)
+
+---
+
+### 2.6️⃣ **Next Phase（15.76）**
+**extern_c / Self‑Host Bootstrap**: ../phase\ 15.76/INDEX.md
+- TODO: ../phase\ 15.76/TODO.md
+
+---
+
 ### 3️⃣ **[STRATEGY.md](./STRATEGY.md)** ← 失敗が怖い人
 **読むべき人**: 「本当に安全なのか」「失敗したらどうなるのか」が不安な人
 **内容**: MIR疎結合によるゼロリスク戦略 + ツールチェーン要件
@@ -248,11 +263,33 @@ Level 3: Full Rollback（10-30分）
   - 詳細は ROADMAP.md 参照
 ```
 
-### **Phase 3-5: Boxes プラグイン化 + Runtime置き換え**
+### **Phase 3: Boxes Migration（進行中）**
 ```
-🔄 Phase 3: Box移行（src/boxes → plugins）
-🔄 Phase 4: Runtime置き換え
-🔄 Phase 5: AOT化
+🔄 現状: P3-4（レガシー撤退）
+✅ ChatGPT担当
+📋 詳細: PHASE_3_BOXES_MIGRATION.md
+```
+
+### **Phase 4: Dual Parser Harness（次のフェーズ）**
+```
+🎯 目標: Rust Parser層を100-200行のC ABI層に縮退
+
+📚 完全ドキュメント: stage-4/ フォルダ
+  - INDEX.md - エントリーポイント
+  - QUICKSTART.md - 3行要約 + 2日間スケジュール
+  - C_ABI_DESIGN_SPEC.md - C ABI層設計
+  - HAKO_ABI_DESIGN_SPEC.md - Hako ABI層設計
+  - TECHNICAL_REQUIREMENTS.md - 技術要件
+  - SCHEDULE.md - 詳細スケジュール
+  - RISK_ANALYSIS.md - リスク分析
+
+👉 次のアクション: cd stage-4/ && cat INDEX.md
+```
+
+### **Phase 5以降**
+```
+🔄 Phase 5: Parser完全移行（1週間）
+🔄 Phase 6-N: 他のコンポーネントも同様にC ABI化
 
 ※ ROADMAP.md 参照
 ```
@@ -268,6 +305,8 @@ Level 3: Full Rollback（10-30分）
 | **ROADMAP.md** | 41KB | 15-20分 | ★★★★ | 全体戦略＋タスクリスト |
 | **STRATEGY.md** | 30KB | 15分 | ★★★★ | 安全性保証＋ツール |
 | **ANALYSIS.md** | 18.2KB | 10分 | ★★★ | 実績分析＋見積もり |
+| **stage-4/** | 165KB | 2時間 | ★★★★ | Stage 4完全設計 |
+| **PHASE_3_BOXES_MIGRATION.md** | 1.9KB | 3分 | ★★★ | Stage 3進行状況 |
 
 ---
 
@@ -290,6 +329,9 @@ Level 3: Full Rollback（10-30分）
 
 ### Q6: 1ヶ月で本当に可能？
 **A**: Git履歴の実績ベースで可能です。詳細は [ANALYSIS.md](./ANALYSIS.md) 参照
+
+### Q7: Stage 4（Dual Parser Harness）って何？
+**A**: Rust Parser層を100-200行のC ABI層に縮退するフェーズです。詳細は [stage-4/INDEX.md](./stage-4/INDEX.md) 参照
 
 ---
 

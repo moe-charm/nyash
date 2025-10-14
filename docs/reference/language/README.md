@@ -13,7 +13,7 @@ This is the entry point for Nyash language documentation.
 - Match Expression (pattern matching): see the Language Reference and EBNF (peek was replaced by match)
 
 Statement separation and semicolons
-- See: reference/language/statements.md — newline as primary separator; semicolons optional for multiple statements on one line; minimal ASI rules.
+- See: reference/language/statements.md — newline as primary separator; semicolons accepted by default (useful for multiple statements on one line); minimal ASI rules.
 
 Imports and namespaces
 - See: reference/language/using.md — `using` syntax, runner resolution, and style guidance.

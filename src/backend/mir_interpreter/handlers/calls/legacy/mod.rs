@@ -31,7 +31,7 @@ impl MirInterpreter {
     pub(crate) fn handle_call(
         &mut self,
         dst: Option<ValueId>,
-        _func: ValueId,
+        func: ValueId,
         callee: Option<&Callee>,
         args: &[ValueId],
     ) -> Result<(), VMError> {

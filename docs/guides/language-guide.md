@@ -61,8 +61,8 @@ When you need the implementation details
 - Parser: src/parser/expressions.rs, src/parser/statements.rs
 - Lowering to MIR: src/mir/builder/**
 Statement Separation (Semicolons)
-- Newline separates statements by default; semicolons are optional.
-- Use semicolons only when placing multiple statements on one line.
+- Newline separates statements by default; semicolons are accepted by default.
+- Use semicolons for multiple statements on one line; newline remains the preferred separator.
 - Minimal ASI rules: newline does not end a statement when the line ends with an operator/dot/comma, or while inside grouping.
 - Static box fields
   ```nyash

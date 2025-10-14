@@ -8,7 +8,8 @@ impl NyashTokenizer {
                 let lv = v.to_ascii_lowercase();
                 lv == "1" || lv == "true" || lv == "on"
             }
-            None => false,
+            // Default ON: semicolons are accepted as statement separators
+            None => true,
         }
     }
 

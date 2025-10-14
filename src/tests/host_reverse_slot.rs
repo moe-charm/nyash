@@ -6,8 +6,19 @@ mod tests {
     #[test]
     fn host_reverse_call_map_slots() {
         // Build a MapBox and turn it into a HostHandle
-        let map = std::sync::Arc::new(crate::boxes::map_box::MapBox::new())
-            as std::sync::Arc<dyn crate::box_trait::NyashBox>;
+        let map: std::sync::Arc<dyn crate::box_trait::NyashBox> = {
+            #[cfg(feature = "legacy-boxes")]
+            {
+                std::sync::Arc::new(crate::boxes::map_box::MapBox::new())
+                    as std::sync::Arc<dyn crate::box_trait::NyashBox>
+            }
+            #[cfg(not(feature = "legacy-boxes"))]
+            {
+                let bx = crate::runtime::plugin_host_box::create_box("MapBox", &[])
+                    .expect("plugin MapBox create");
+                std::sync::Arc::from(bx)
+            }
+        };
         let h = host_handles::to_handle_arc(map);
 
         // TLV args: key="k", val=42

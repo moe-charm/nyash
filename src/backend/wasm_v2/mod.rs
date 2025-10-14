@@ -4,7 +4,7 @@
 //! - vtable/スロット解決に基づく統一ディスパッチ経路の雛形
 //! - 既存ビルドに影響を与えない最小構成（feature/target gate）
 
-#![cfg(feature = "wasm-backend")]
+#![cfg(all(feature = "wasm-backend", feature = "legacy-boxes"))]
 
 pub mod unified_dispatch;
 pub mod vtable_codegen;

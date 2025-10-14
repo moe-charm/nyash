@@ -14,6 +14,22 @@ Key variables (current)
 - `HAKO_ALLOW_USING_FILE` — using でファイルパス参照を許可（開発/スモーク用）。
 - `NYASH_USING_AST` — using prelude の AST マージを有効化（開発/スモーク用）。
 
+## FFI / extern_c (Phase 15.76)
+
+- `HAKO_FFI_ALLOW_LIST` — 追加許可するシンボルをカンマ区切りで指定
+  - 例: `HAKO_FFI_ALLOW_LIST=llvm_compile_mir_to_object`
+- `HAKO_FFI_ALLOW_ALL` — 1 ですべて許可（開発専用。CI/配布では禁止）
+- `HAKO_FFI_LIB_PATHS` — バックエンドlib探索パス（`:`区切り）
+  - 既定探索: `./target/release`, `$NYASH_ROOT/target/release`, `.`
+  - 例: `HAKO_FFI_LIB_PATHS=$(pwd)/target/release`
+
+TOML（プロジェクト設定）
+```
+[ffi.dynamic]
+allow = ["strlen", "getpid", "system", "llvm_compile_mir_to_object"]
+```
+優先順位（強い→弱い）: CLI(将来) → ENV → TOML → 既定（最小）
+
 Deprecated (compat) — avoid in new scripts
 - `NYASH_USE_PLUGIN_BUILTINS` — superseded by `HAKO_PLUGIN_POLICY`
 - `NYASH_PLUGIN_OVERRIDE_TYPES` — superseded by `HAKO_PLUGIN_POLICY`

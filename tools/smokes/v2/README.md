@@ -42,6 +42,13 @@
 ./run.sh --profile full --format json --jobs 4 --timeout 300
 # HostHandleRouter 代表のみ（フィルタ別名: hosthandle）
 ./run.sh --profile plugins --filter hosthandle
+
+# HostHandleRouter 統合スイート（境界系 -1/-11/-13/-14）
+# すべての境界チェックを一括実行（plugins プロファイル）
+./run.sh --profile plugins --filter 'hosthandle_boundary_*'
+# 返却型不一致（-14）を観測する場合はテストフックを有効化
+HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1 \
+  ./run.sh --profile plugins --filter hosthandle_return_type_mismatch_vm.sh
 ```
 
 ### LLVM ハーネス系スモーク（更新）
@@ -54,6 +61,13 @@ NYASH_LLVM_USE_HARNESS=1 ./run.sh --profile quick --filter "aot_extern_"
 
 # Extended（heavy LLVM; opt-in）
 NYASH_LLVM_USE_HARNESS=1 APP_BIN_DIR=tmp ./run_llvm_extended.sh release
+```
+
+### フロントエンド（Parser）ミニチェック（quick-selfhost, gated）
+```bash
+# selfhost 子プロセスの最小 JSON ヘッダ検証（--min-json）
+SMOKES_SELFHOST_ENABLE=1 \
+  ./run.sh --profile quick-selfhost --filter selfhost_min_json_header_vm.sh
 ```
 
 ビルドポリシー

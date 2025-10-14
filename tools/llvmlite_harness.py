@@ -3,8 +3,9 @@
 Nyash llvmlite harness (scaffold)
 
 Usage:
-  - python3 tools/llvmlite_harness.py --out out.o                # dummy ny_main -> object
-  - python3 tools/llvmlite_harness.py --in mir.json --out out.o  # MIR(JSON) -> object (partial support)
+  - python3 tools/llvmlite_harness.py --out out.o                      # dummy ny_main -> object
+  - python3 tools/llvmlite_harness.py --in mir.json --out out.o        # MIR(JSON) -> object (partial support)
+  - python3 tools/llvmlite_harness.py --in mir.json --emit-ll out.ll   # MIR(JSON) -> LLVM IR (.ll)
 
 Notes:
   - For initial scaffolding, when --in is omitted, a trivial ny_main that returns 0 is emitted.
@@ -58,7 +59,7 @@ def run_dummy(out_path: str) -> None:
     with open(out_path, "wb") as f:
         f.write(obj)
 
-def run_from_json(in_path: str, out_path: str) -> None:
+def run_from_json_to_object(in_path: str, out_path: str) -> None:
     # Delegate to python builder to keep code unified
     import runpy
     # Enable safe defaults for prepasses unless explicitly disabled by env
@@ -75,19 +76,88 @@ def run_from_json(in_path: str, out_path: str) -> None:
     sys.argv = [str(PY_BUILDER), str(in_path), "-o", str(out_path)]
     runpy.run_path(str(PY_BUILDER), run_name="__main__")
 
+def run_from_json_to_ll(in_path: str, out_ll: str) -> None:
+    # Import builder as a module to get IR text directly
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("llvm_builder", str(PY_BUILDER))
+    if spec is None or spec.loader is None:
+        raise RuntimeError("failed to import llvm_builder.py")
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["llvm_builder"] = mod
+    spec.loader.exec_module(mod)  # type: ignore
+    # Read MIR JSON
+    with open(in_path, 'r') as f:
+        mir = json.load(f)
+    builder = mod.NyashLLVMBuilder()
+    ir_text = builder.build_from_mir(mir)
+    Path(out_ll).parent.mkdir(parents=True, exist_ok=True)
+    with open(out_ll, 'w') as f:
+        f.write(ir_text)
+
 def main():
     ap = argparse.ArgumentParser()
+    ap.add_argument("pos_infile", nargs="?", help="MIR JSON input (positional)", default=None)
     ap.add_argument("--in", dest="infile", help="MIR JSON input", default=None)
-    ap.add_argument("--out", dest="outfile", help="output object (.o)", required=True)
+    ap.add_argument("--out", "-o", dest="outfile", help="output object (.o)")
+    ap.add_argument("--emit-ll", dest="outll", help="output LLVM IR (.ll)")
+    ap.add_argument("--target", dest="target", help="target triple key (native|wasm32|windows)")
     args = ap.parse_args()
+    infile = args.infile or args.pos_infile
 
-    if args.infile is None:
-        # Dummy path
+    # Validate output mode
+    if (args.outfile is None) and (args.outll is None):
+        print("[harness] error: one of --out or --emit-ll is required", file=sys.stderr)
+        sys.exit(2)
+
+    if args.outll:
+        # Emit LLVM IR
+        if infile is None:
+            # Dummy IR for ny_main()
+            import llvmlite.ir as ir
+            mod = ir.Module(name="nyash_module")
+            i64 = ir.IntType(64)
+            ny_main_ty = ir.FunctionType(i64, [])
+            ir.Function(mod, ny_main_ty, name="ny_main")
+            Path(args.outll).parent.mkdir(parents=True, exist_ok=True)
+            with open(args.outll, 'w') as f:
+                f.write(str(mod))
+        else:
+            # Allow target selection when emitting IR
+            if args.target in ("native", "wasm32", "windows"):
+                import importlib.util
+                spec = importlib.util.spec_from_file_location("llvm_builder", str(PY_BUILDER))
+                mod = importlib.util.module_from_spec(spec)
+                assert spec and spec.loader
+                spec.loader.exec_module(mod)  # type: ignore
+                with open(infile, 'r') as f:
+                    mir = json.load(f)
+                builder = mod.NyashLLVMBuilder(target=args.target)
+                ir_text = builder.build_from_mir(mir)
+                Path(args.outll).parent.mkdir(parents=True, exist_ok=True)
+                with open(args.outll, 'w') as f:
+                    f.write(ir_text)
+            else:
+                run_from_json_to_ll(infile, args.outll)
+        if os.environ.get('NYASH_CLI_VERBOSE') == '1':
+            print(f"[harness] ll written: {args.outll}")
+        return
+
+    # Default: emit object
+    if infile is None:
         run_dummy(args.outfile)
         if os.environ.get('NYASH_CLI_VERBOSE') == '1':
             print(f"[harness] dummy object written: {args.outfile}")
     else:
-        run_from_json(args.infile, args.outfile)
+        # Pass target to builder CLI if specified
+        if args.target in ("native", "wasm32", "windows"):
+            import runpy
+            builder_dir = str(PY_BUILDER.parent)
+            if builder_dir not in sys.path:
+                sys.path.insert(0, builder_dir)
+            sys.argv = [str(PY_BUILDER), str(infile), "-o", str(args.outfile), "--target", args.target]
+            runpy.run_path(str(PY_BUILDER), run_name="__main__")
+        else:
+            run_from_json_to_object(infile, args.outfile)
         if os.environ.get('NYASH_CLI_VERBOSE') == '1':
             print(f"[harness] object written: {args.outfile}")
 

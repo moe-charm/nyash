@@ -27,6 +27,10 @@
 - 安全ホワイトリストの箱化
   - `normalize.rs` 内の `is_safe_core_method(&str,&str)` が唯一の判定点（Array/Map/String の安全APIを列挙）
   - ModuleFunction→Method と BoxCall→Method の両経路で同判定を使用（ドリフト防止）
+  - 現在の対象（2025-10）:
+    - ArrayBox: size/len/length/get/set/push/slice/join/contains/indexOf
+    - MapBox: size/len/has/get/set/delete/clear/keys/values
+    - StringBox: size/len/length/indexOf/lastIndexOf/substring/charAt/concat
 
 エラー方針（抜粋）
 - HostHandleRouter（early path）

@@ -220,6 +220,43 @@ fn check_layer_boundary() {
 4. 最後に実装
 
 ---
+
+## 8. Migration Policy — Rust → Hakorune（段階移行の基本）
+
+目的
+- 既存の Rust 実行ラインを維持しつつ、Hakorune 自己ホスト（.hako）へ段階移行する。
+- 常に緑を保ち、境界は箱で先に切る（Fail‑Fast / 可逆 / 小差分）。
+
+二重ライン（常時）
+- Rust ライン（既定）: `cargo build --release`
+- Hakorune ライン（検証）: `cargo build --release --no-default-features -F cli,plugins,host-anchors`
+  - 補助スモーク（任意・build‑only）: `tools/smokes/v2/run.sh --profile plugins --filter plugin_only_build_check.sh`
+
+レガシー撤退（Phase‑3 の原則）
+- `src/boxes/` 参照は `#[cfg(feature="legacy-boxes")]` で囲む。新規コードにレガシー経路を増やさない。
+- runtime/extern/router/helper は `{builtin, plugin}` に分割し、`mod.rs` は薄い委譲のみ。
+- tests の `crate::boxes::*` 直参照は `#[cfg(feature="legacy-boxes")]` を付与するか、plugin 経路に切り替える。
+
+Dual Parser（Phase‑4 の入口）
+- Rust 側は既定でセミコロン受理（改行/; の両方を区切りとして扱う）。
+- 自己ホスト側は最小 JSON v0 ヘッダ（`{"version":"0","kind":"Program","stats":{"stmts":N}}`）を先行実装。
+- スモークは共通ハーネスで切替: `SMOKES_PARSER_MODE=rust|hako|both`（既定=rust）。`both` は最小キーのみ比較。
+
+禁止・注意
+- レガシー API/型の露出を新規で広げない（cfg の内側に限定）。
+- 静かなフォールバックは禁止（Fail‑Fast）。診断は安定文言へ集約（diagnostics::msg）。
+- ドキュメント/スモークは既存の配置規約に従う（docs/ の8分類。root 直下に勝手なディレクトリを作らない）。
+
+運用ショートカット
+- Plugin‑only build: `cargo build --release --no-default-features -F cli,plugins,host-anchors`
+- HostHandleRouter 代表のみ（plugins プロファイル）: `tools/smokes/v2/run.sh --profile plugins --filter hosthandle`
+- Dual Parser（opt‑in）: `SMOKES_PARSER_MODE=both tools/smokes/v2/run.sh --profile quick-selfhost --filter 'parser_facade_*|selfhost_min_json_header_vm.sh'`
+
+受け入れ基準（段階）
+- Phase‑3: plugin‑only build（build‑only）緑、代表スモーク緑、レガシー参照の縮小傾向。
+- Phase‑4: Dual Parser 最小スモークが `both` で緑。既定（rust）の速度・安定は不変。
+
+---
 ### 8. 環境変数ポリシー（芯の通った最小主義）
 
 目的

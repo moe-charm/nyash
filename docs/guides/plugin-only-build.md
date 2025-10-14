@@ -51,6 +51,10 @@ Dual build lines (Phase 15.75)
   - Job A: legacy build + quick smokes
   - Job B: plugin‑only build (build‑only) to ensure guard coverage
 
+Frozen toolchain (Phase 15.76)
+- Long‑term, switch daily development to a frozen EXE (see `docs/guides/frozen-toolchain.md`).
+- The Rust line is kept only to mint the frozen binary and for emergencies.
+
 Notes
 - ENV toggles for HostHandleRouter are development‑only and will be removed once unified paths are stable.
 - Keep plugin configs explicit (e.g., `NYASH_PLUGIN_CONFIG=hako.toml`) to avoid implicit loads when testing.
@@ -71,4 +75,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build (plugin-only)
         run: cargo build --release --no-default-features -F cli,plugins,host-anchors
+```
+
+Smokes (optional, build‑only)
+
+```
+# Run build‑only check under plugins profile (optional developer step)
+tools/smokes/v2/run.sh --profile plugins --filter plugin_only_build_check.sh
+
+# If initial build is cold and may exceed default per‑test timeout,
+# the smoke supports a per‑test header timeout. You can also pass it via CLI:
+SMOKES_DEFAULT_TIMEOUT=180 tools/smokes/v2/run.sh --profile plugins --filter plugin_only_build_check.sh
 ```

@@ -1,5 +1,6 @@
 use super::LLVMCompiler;
-use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox};
+use crate::box_trait::{BoolBox, IntegerBox, NyashBox, StringBox, VoidBox};
+#[cfg(feature = "legacy-boxes")]
 use crate::boxes::{math_box::FloatBox, null_box::NullBox};
 use crate::mir::function::MirModule;
 use crate::mir::instruction::{BinaryOp, ConstValue, MirInstruction as I};
@@ -22,10 +23,20 @@ impl LLVMCompiler {
                 I::Const { dst, value } => {
                     let v: Box<dyn NyashBox> = match value {
                         ConstValue::Integer(i) => Box::new(IntegerBox::new(*i)),
-                        ConstValue::Float(f) => Box::new(FloatBox::new(*f)),
+                        ConstValue::Float(f) => {
+                            #[cfg(feature = "legacy-boxes")]
+                            { Box::new(FloatBox::new(*f)) }
+                            #[cfg(not(feature = "legacy-boxes"))]
+                            { Box::new(StringBox::new(f.to_string())) }
+                        },
                         ConstValue::String(s) => Box::new(StringBox::new(s.clone())),
                         ConstValue::Bool(b) => Box::new(BoolBox::new(*b)),
-                        ConstValue::Null => Box::new(NullBox::new()),
+                        ConstValue::Null => {
+                            #[cfg(feature = "legacy-boxes")]
+                            { Box::new(NullBox::new()) }
+                            #[cfg(not(feature = "legacy-boxes"))]
+                            { Box::new(VoidBox::new()) }
+                        },
                         ConstValue::Void => Box::new(IntegerBox::new(0)),
                     };
                     self.values.insert(*dst, v);

@@ -69,10 +69,14 @@ class NyashLLVMBuilder:
             # WASM target: initialize all targets to enable wasm32
             llvm.initialize_all_targets()
             llvm.initialize_all_asmprinters()
-        else:
+        elif target == "native":
             # Native target (default)
             llvm.initialize_native_target()
             llvm.initialize_native_asmprinter()
+        else:
+            # Cross targets (e.g., windows) — initialize all
+            llvm.initialize_all_targets()
+            llvm.initialize_all_asmprinters()
 
         # Module and basic types
         self.module = ir.Module(name="nyash_module")
@@ -152,8 +156,10 @@ class NyashLLVMBuilder:
 
         # Create ny_main wrapper if necessary (delegated builder; no legacy fallback)
         try:
-            from builders.entry import ensure_ny_main as _ensure_ny_main
-            _ensure_ny_main(self)
+            import os as _os
+            if _os.environ.get('NYASH_LLVM_NO_NY_MAIN', '0') not in ('1', 'true', 'on', 'YES', 'yes'):
+                from builders.entry import ensure_ny_main as _ensure_ny_main
+                _ensure_ny_main(self)
         except Exception as _e:
             try:
                 trace_debug(f"[Python LLVM] ensure_ny_main failed: {_e}")
@@ -565,15 +571,15 @@ class NyashLLVMBuilder:
 
 def main():
     # CLI:
-    #   llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native]
-    #   llvm_builder.py --dummy [-o output.o] [--target wasm32|native]
+    #   llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native|windows]
+    #   llvm_builder.py --dummy [-o output.o] [--target wasm32|native|windows]
     output_file = os.path.join('tmp', 'nyash_llvm_py.o')
     args = sys.argv[1:]
     dummy = False
     target = "native"  # Default target
 
     if not args:
-        print("Usage: llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native] | --dummy [-o output.o] [--target wasm32|native]")
+        print("Usage: llvm_builder.py <input.mir.json> [-o output.o] [--target wasm32|native|windows] | --dummy [-o output.o] [--target wasm32|native|windows]")
         sys.exit(1)
 
     # Parse --target option
@@ -581,8 +587,8 @@ def main():
         idx = args.index("--target")
         if idx + 1 < len(args):
             target = args[idx + 1]
-            if target not in ("wasm32", "native"):
-                print(f"error: invalid target '{target}', must be 'wasm32' or 'native'", file=sys.stderr)
+            if target not in ("wasm32", "native", "windows"):
+                print(f"error: invalid target '{target}', must be 'wasm32' or 'native' or 'windows'", file=sys.stderr)
                 sys.exit(1)
             del args[idx:idx+2]
 

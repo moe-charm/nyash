@@ -48,7 +48,7 @@ pub use crate::box_arithmetic::{
     AddBox, CompareBox, DivideBox, ModuloBox, MultiplyBox, SubtractBox,
 };
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-boxes"))]
 mod tests {
     use super::*;
 

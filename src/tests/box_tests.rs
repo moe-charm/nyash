@@ -1,4 +1,5 @@
-//! Tests for NyashBox trait implementations
+#![cfg(feature = "legacy-boxes")]
+//! Tests for NyashBox trait implementations (legacy boxes)
 use crate::box_trait::{BoxCore, IntegerBox, NyashBox, StringBox};
 use crate::boxes::{ArrayBox, BufferBox, JSONBox, NyashFutureBox, NyashResultBox, NyashStreamBox};
 

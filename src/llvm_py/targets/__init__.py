@@ -17,6 +17,7 @@ Usage:
 from .base import BaseTarget
 from .wasm import WasmTarget
 from .native import NativeTarget
+from .windows import WindowsTarget
 
 __all__ = ['BaseTarget', 'WasmTarget', 'NativeTarget']
 
@@ -26,7 +27,7 @@ def create_target(target_name: str) -> BaseTarget:
     Factory function to create target instance
 
     Args:
-        target_name: "wasm32" or "native"
+        target_name: "wasm32" or "native" or "windows"
 
     Returns:
         BaseTarget instance
@@ -40,5 +41,7 @@ def create_target(target_name: str) -> BaseTarget:
         return WasmTarget()
     elif target_name == "native":
         return NativeTarget()
+    elif target_name in ("windows", "win64", "x86_64-pc-windows-msvc"):
+        return WindowsTarget()
     else:
-        raise ValueError(f"Unknown target: {target_name}. Use 'wasm32' or 'native'.")
+        raise ValueError(f"Unknown target: {target_name}. Use 'wasm32' or 'native' or 'windows'.")

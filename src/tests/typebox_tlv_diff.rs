@@ -1,7 +1,9 @@
 #[cfg(all(test, not(feature = "jit-direct-only")))]
 mod tests {
     use crate::box_trait::{IntegerBox, NyashBox, StringBox};
+    #[cfg(feature = "legacy-boxes")]
     use crate::boxes::array::ArrayBox;
+    #[cfg(feature = "legacy-boxes")]
     use crate::boxes::math_box::FloatBox;
     use crate::runtime::plugin_loader_unified::PluginHost;
     use std::env;

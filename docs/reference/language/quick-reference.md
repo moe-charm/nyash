@@ -38,12 +38,14 @@ Operators (precedence high→low)
 - Logical: `&& ||` (short‑circuit, side‑effect aware)
 
 Semicolons and ASI (Automatic Semicolon Insertion)
+- Semicolons are accepted by default. Newline remains the preferred separator.
 - Allowed to omit semicolon at:
   - End of line, before `}` or at EOF, when the statement is syntactically complete.
 - Not allowed:
   - Line break immediately after a binary operator (e.g., `1 +\n2`)
   - Ambiguous continuations; parser must Fail‑Fast with a clear message.
  - Enforce (dev flag): `NYASH_ASI_STRICT=1`（既定は互換・OFF）
+ - Disable semicolons entirely (dev/testing): set `NYASH_PARSER_ALLOW_SEMICOLON=0`
 
 Truthiness (boolean context)
 - `Bool` → itself

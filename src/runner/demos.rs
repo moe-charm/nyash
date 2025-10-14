@@ -76,7 +76,14 @@ pub(super) fn demo_parser_system() {
         }
     }
     "#;
-    match NyashParser::parse_from_string(simple_code) {
+    let use_facade = std::env::var("HAKO_FRONT_USE_FACADE").ok().map(|v| v=="1"||v=="true"||v=="on").unwrap_or(false);
+    let parsed = if use_facade {
+        nyash_rust::front::parser_layer::facade::parse_source_to_ast(simple_code)
+            .map_err(|e| e.message)
+    } else {
+        NyashParser::parse_from_string(simple_code).map_err(|e| e.to_string())
+    };
+    match parsed {
         Ok(ast) => {
             println!("    Input: {}", simple_code.trim());
             println!("    AST: {}", ast);

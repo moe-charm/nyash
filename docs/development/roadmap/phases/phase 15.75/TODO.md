@@ -77,6 +77,115 @@
 - [ ] 既知の軽警告の後始末（機会があれば）
   - `host_api_anchors/mod.rs` の属性整列、未使用 import の整理
 
+## 2025-10-16 追記（Stage‑3: boxes 剥がしの完了条件と現在地）
+
+Stage‑3 DoD（Definition of Done）
+- 参照ゼロ（外縁）: `crate::boxes::*` が `src/boxes/**` と `#[cfg(feature="legacy-boxes")]` ガード配下以外に存在しない
+- ビルド緑:
+  - Legacy（既定ON）: `cargo build --release`
+  - Plugin‑only（検証線）: `cargo build --release --no-default-features -F cli,plugins,host-anchors`
+  - スモーク: quick と plugins（build‑only）が PASS
+- 実行経路の分離: Router（builtin/plugin）と extern_adapter（core/future‑legacy）の二分体制が成立
+- ドキュメント/CI: CURRENT_TASK と guides を更新、CIに plugin‑only build（build‑only）を追加（最小）
+
+現在地（2025‑10‑16）
+- refs 棚卸し: 外縁の直参照は `#[cfg(feature="legacy-boxes")]` で封じ込め済み（runtime/backend/tests）。
+  - 代表: runner/dispatch の FloatBox、box_operators の FloatBox、result_conv の FloatBox、ast の Float は cfg 下で分岐。
+  - messaging/transport はファイル/モジュール単位で legacy‑only。
+- 検証: plugins プロファイルの build‑only スモーク（個別タイムアウト導入）→ PASS を継続確認。
+- 追加作業（継続）: tests で legacy 直参照するファイルは先頭に `#![cfg(feature="legacy-boxes")]` を寄せて統一。
+
+次の一手（Stage‑3 締め）
+- by‑dir 上位から `crate::boxes::*` 参照を再確認（helper: `tools/dev/list_boxes_refs.sh --by-dir`）。
+- 参照ゼロ化が確認できたら、CIに plugin‑only build（build‑only）ジョブを追加（docsのサンプルどおり）。
+- 既定フラグOFF/`src/boxes/` 物理撤去は、観測安定後の独立PRで（可逆運用を優先）。
+
+## Phase 2 — Parser/Resolver（構造→導線→段階移設）
+
+目的
+- 既存実装の挙動を変えずに“箱と境界”を先に整える。薄いFacadeで導線を用意し、ミニスモークで観測可能にする。
+
+状態（2025-10-15）
+- [x] Interfaces: `src/layers/interfaces.rs` に `ParserOutput`/`ResolverInput`/`FrontendError`
+- [x] Guards: `src/front/{parser_layer,resolver_layer}/LAYER_GUARD.rs`
+- [x] Facades: `front::parser_layer::facade::parse_source_to_ast`, `front::resolver_layer::facade::resolve_passthrough`
+- [x] Impl適合: `ast::ASTNode` を `ParserOutput`/`ResolverInput` に適合
+- [x] Doc: `docs/reference/frontend-layers.md`
+- [x] Opt-in導線: Runner で `HAKO_FRONT_USE_FACADE=1` のとき Facade 経由でパース
+- [x] Smoke（最小）: `quick-selfhost/parser_facade_min_vm.sh`
+
+次アクション（P2-1）
+1) README強化（I/O例・最小AST例）
+   - `src/front/parser_layer/README.md` / `src/front/resolver_layer/README.md`
+2) 追加スモーク（必要なら）
+   - 空プログラム/単一関数などの極小ケースを1本
+3) Facade採用の範囲拡大（任意・段階）
+   - ランナーの他経路（例: demos/jit）でも dev-flag 下で Facade を採用
+4) 本移設（別タスク）
+   - 純関数ヘルパから段階移設。既存APIは薄い委譲に変更（挙動不変）
+
+受け入れ基準
+- quick/quick-selfhost 緑。既定挙動は不変（dev-flagのみ影響）。
+- 仕様/契約が `docs/reference/frontend-layers.md` と README に明記されている。
+
+## Phase 3 — Boxes Migration（レガシー撤退の実務）
+
+目的
+- `src/boxes/` の参照を段階的に削減し、plugin/HostHandleRouter 経路に一本化する。
+
+現状（2025-10-15）
+- plugin-only build は build-only 緑（警告あり）。refs は残っている（`tools/dev/list_boxes_refs.sh` 参照）。
+- type_registry の core factory は legacy-OFF で plugin 優先（Array/Map/String）。
+- router/extern/array helper は分割済み（builtin/plugin）。
+
+次アクション（P3-1）
+1) 参照の棚卸しと優先順位付け（fanout 高→低）
+   - runner/extern/MIR handlers を先に cfg で囲い、plugin-only ビルドの阻害要因を解消
+2) plugins プロファイルの代表スモークを必要に応じて追加（経路変更時）
+3) plugin-only build を定期確認（build-only）
+4) refs が 0 に近づいたら、短期ブランチで `legacy-boxes` 既定OFF→ `src/boxes/` 削除
+
+受け入れ基準
+- legacy（デフォルト）+ quick: 緑維持
+- plugin-only: build-only 緑
+- plugins プロファイル代表スモーク: 緑
+
+ドキュメント
+- 詳細計画: `PHASE_3_BOXES_MIGRATION.md`
+
+## Phase 4 — Dual Parser Harness（入口の一本化・観測の強化）
+
+目的
+- Rust ラインと Hakorune 自己ホストラインの両方で同じスモークを回し、最小同等性を段階保証する。
+
+範囲（最小）
+- ハーネス: `SMOKES_PARSER_MODE=rust|hako|both`（既定=rust）
+- 仕様: 最小 JSON v0 ヘッダ（`{"version":"0","kind":"Program","stats":{"stmts":N}}`）
+- 判定: `version/kind/stats.stmts` の比較のみ（AST 完全一致は要求しない）
+
+受け入れ基準
+- `both` で Phase‑A スモーク（セミコロン受理/if‑else/ブロック終端/using 最小）が緑
+- 既定（rust）の速度・安定は不変
+
+備考
+- セミコロンは既定受理（Rust/ハコ双方）。無効化は `NYASH_PARSER_ALLOW_SEMICOLON=0`（開発用）
+
+進捗メモ（2025-10-15 P3-5〜P3-9 抜粋）
+- WASM v2 backend を legacy 前提にゲート（plugin-only との交差を回避）
+- LLVM interpreter の Float/Null を cfg 分岐（plugin-only は String/Void 代替）
+- tests の legacy 直参照に軽ガード（build-with-tests 互換）
+  - box_tests/refcell_assignment_test/vm_functionbox_call/policy_mutdeny などを legacy 前提に
+  - host_reverse_slot は plugin-only で PluginBox 経路に切替
+
+### 2025-10-16 追記（Stage‑4 完了ライン TODO）
+- [x] C‑ABI ハーネス（2関数）配置（feature `parser-c-abi` 配下）
+- [x] Rust 薄層（ヘッダ出力・C文字列ユーティリティ）実装
+- [x] both モード最小スモーク追加（ヘッダ一致／ビルド失敗時は SKIP）
+- [x] hako ヘッダは当面 Rust パーサを再利用して parity を確保（後に Hako Parser に差替）
+- [x] Docs 整理（Start Here/DoD/Status と 15.76 への導線）
+- [x] ランナー導線（任意）：`SMOKES_PARSER_MODE=both|hako` の時に C‑ABI を呼ぶ薄い分岐（bin 依存を解消）
+- [ ] CI（任意）：`parser-c-abi` を build‑only で1本だけ回す軽量ジョブ（既定 OFF）
+
 ## Next — Phase 1（MirCall 小粒・箱化方針で進行）
 
 - [x] 安全メソッドの whitelist を箱化（一元化）
@@ -87,6 +196,7 @@
   - plugins プロファイルに1本追加（型不一致を明示検出）。ENVフック `HAKO_HOSTHANDLE_TEST_RET_MISMATCH=1` で再現
 - [ ] 正規化の安全拡張（必要時のみ）
   - 既存正常系（Array.slice/join、Map.delete/clear）を維持。追加が必要なら `is_safe_core_method` にのみ追記（箱化原則）
+  - 2025-10-15: StringBox.replace を安全リストに追加済み（Extern/ModuleFunction → Method 降格）。
 - [x] ドキュメントの参照強化（設計の導線統一）
   - `docs/reference/vm/call-unification.md` に `is_safe_core_method`（安全判定の箱）への短い言及を追加
 - [ ] plugin-only 警告のスポット掃除（任意）

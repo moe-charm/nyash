@@ -3,7 +3,7 @@
 //! - TypeRegistryのスロット表と一致させた呼び出し分岐の雛形
 //! - env.console.log とArray/Map統一ディスパッチの最小実装
 
-#![cfg(feature = "wasm-backend")]
+#![cfg(all(feature = "wasm-backend", feature = "legacy-boxes"))]
 
 use crate::box_trait::{BoolBox, NyashBox, StringBox, VoidBox};
 use crate::boxes::{ArrayBox, ConsoleBox, MapBox};

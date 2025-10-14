@@ -31,7 +31,11 @@ pub fn normalize_legacy_instructions(
             // Map — core CRUD + keys/values
             "MapBox" => matches!(method, "size" | "len" | "has" | "get" | "set" | "delete" | "clear" | "keys" | "values"),
             // String — byte-semantics only（index/substring/char等）
-            "StringBox" => matches!(method, "size" | "len" | "length" | "indexOf" | "lastIndexOf" | "substring" | "charAt" | "concat"),
+            "StringBox" => matches!(method,
+                "size" | "len" | "length"
+                | "indexOf" | "lastIndexOf" | "substring" | "charAt"
+                | "concat" | "replace"
+            ),
             _ => false,
         }
     }

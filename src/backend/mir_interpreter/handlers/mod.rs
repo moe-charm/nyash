@@ -14,9 +14,9 @@ impl MirInterpreter {
     pub(super) fn execute_instruction(&mut self, inst: &MirInstruction) -> Result<(), VMError> {
         match inst {
             // Async/Future operations
-            MirInstruction::FutureNew { dst: _dst, value } => {
+            MirInstruction::FutureNew { dst, value } => {
                 // Evaluate the value, create a Future and resolve it immediately
-                let _v = self.reg_load(*value)?;
+                let v = self.reg_load(*value)?;
                 #[cfg(feature = "legacy-boxes")]
                 {
                     let fut = crate::boxes::future::FutureBox::new();
@@ -27,13 +27,13 @@ impl MirInterpreter {
             MirInstruction::FutureSet { future, value } => {
                 // Set the given future's result (if a Future), otherwise no-op
                 let fv = self.reg_load(*future)?;
-                let _vv = self.reg_load(*value)?;
+                let vv = self.reg_load(*value)?;
                 match fv {
                     #[cfg(feature = "legacy-boxes")]
                     super::VMValue::Future(f) => {
                         f.set_result(vv.to_nyash_box());
                     }
-                    super::VMValue::BoxRef(_arc) => {
+                    super::VMValue::BoxRef(arc) => {
                         #[cfg(feature = "legacy-boxes")]
                         {
                             if let Some(fb) = arc

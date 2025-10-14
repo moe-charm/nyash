@@ -606,6 +606,14 @@ pub enum ASTNode {
         arguments: Vec<ASTNode>,
         span: Span,
     },
+
+    /// extern_c 呼び出し: extern_c "symbol" (args)
+    /// Lowers to MIR Call with callee=Extern("ffi.dynamic.<symbol>")
+    ExternCCall {
+        symbol: String,
+        arguments: Vec<ASTNode>,
+        span: Span,
+    },
 }
 
 // Tests moved to integration tests to keep this file lean

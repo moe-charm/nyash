@@ -9,6 +9,7 @@ repository = "https://github.com/user/nyash"
 keywords = ["language", "interpreter", "box", "memory-safe", "rust"]
 categories = ["development-tools::parsing", "interpreters"]
 
+
 # Default features - minimal CLI only
 [features]
 default = ["cli", "plugins", "host-anchors", "legacy-boxes"]
@@ -67,6 +68,7 @@ cranelift-jit = []
 #   "dep:cranelift-native"
 # ]
 aot-plan-import = []
+parser-c-abi = []
 
 [lib]
 name = "nyash_rust"
@@ -98,6 +100,12 @@ required-features = ["dynamic-file"]
 [[bin]]
 name = "ny_mir_builder"
 path = "src/bin/ny_mir_builder.rs"
+
+# Build only when C-ABI parser harness is enabled
+[[bin]]
+name = "parser_facade_both_min"
+path = "src/bin/parser_facade_both_min.rs"
+required-features = ["parser-c-abi"]
 
 # Examples for development - only available as examples, not bins
 [[example]]
@@ -264,6 +272,7 @@ features = [
 criterion = "0.5"
 
 [build-dependencies]
+cc = { version = "1" }
 toml = "0.8"
 serde = { version = "1.0", features = ["derive"] }
 once_cell = "1.20"
@@ -277,6 +286,7 @@ once_cell = "1.20"
 members = [
   "crates/*",
   "plugins/*",
+  "libs/llvm_backend",
 ]
 exclude = [
   "plugins/nyash-file",

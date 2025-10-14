@@ -70,6 +70,12 @@ NYASH_PLUGIN_POLICY = "off"   # compat: NYASH_DISABLE_PLUGINS = "1"
  - NYASH_NY_LLVM_COMPILER: ハーネス用 ny-llvmc のフルパス（未設定時は `target/release/ny-llvmc` を自動推定）
  - NYASH_EMIT_EXE_NYRT: emit‑exe 時の nyrt ライブラリの探索ディレクトリ（例: `target/release`）
 
+### FFI / extern_c（Phase 15.76）
+- HAKO_FFI_ALLOW_LIST: 追加許可するシンボルをカンマ区切りで指定（例: `llvm_compile_mir_to_object`）
+- HAKO_FFI_ALLOW_ALL: 1 ですべて許可（開発専用。CI/配布では禁止）
+- HAKO_FFI_LIB_PATHS: バックエンドlib探索パス（`:`区切り; 例: `$(pwd)/target/release`）
+  - 既定探索: `./target/release`, `$NYASH_ROOT/target/release`, `.`
+
 ### LLVM Feature 詳細
 - **llvm** (デフォルト): llvmlite Python ハーネス使用、LLVM_SYS_180_PREFIX不要
 - **llvm-inkwell-legacy**: Rust inkwell bindings使用、LLVM_SYS_180_PREFIX必要

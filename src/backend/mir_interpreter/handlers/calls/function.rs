@@ -3,6 +3,47 @@
 //! Behavior-preserving extraction of execute_global_function from legacy.
 
 use super::super::*;
+use std::collections::HashSet;
+use std::sync::OnceLock;
+
+// Load a TOML-based allowlist from hako.toml/nyash.toml (once), merging both locations.
+fn load_toml_allowlist() -> &'static HashSet<String> {
+    static ALLOWLIST: OnceLock<HashSet<String>> = OnceLock::new();
+    ALLOWLIST.get_or_init(|| {
+        let mut set: HashSet<String> = HashSet::new();
+        // candidate files in precedence order: CWD hako.toml, CWD nyash.toml, $NYASH_ROOT/hako.toml, $NYASH_ROOT/nyash.toml
+        let mut files: Vec<std::path::PathBuf> = Vec::new();
+        files.push(std::path::PathBuf::from("hako.toml"));
+        files.push(std::path::PathBuf::from("nyash.toml"));
+        if let Ok(root) = std::env::var("NYASH_ROOT") {
+            files.push(std::path::PathBuf::from(&root).join("hako.toml"));
+            files.push(std::path::PathBuf::from(&root).join("nyash.toml"));
+        }
+        for f in files {
+            if !f.exists() { continue; }
+            if let Ok(txt) = std::fs::read_to_string(&f) {
+                if let Ok(value) = toml::from_str::<toml::Value>(&txt) {
+                    // Navigate to [ffi.dynamic].allow = ["..."]
+                    if let Some(ffi) = value.get("ffi") {
+                        if let Some(dynamic) = ffi.get("dynamic") {
+                            if let Some(arr) = dynamic.get("allow") {
+                                if let Some(seq) = arr.as_array() {
+                                    for itm in seq {
+                                        if let Some(s) = itm.as_str() {
+                                            let s = s.trim();
+                                            if !s.is_empty() { set.insert(s.to_string()); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        set
+    })
+}
 
 impl MirInterpreter {
     /// Helper: Check reentrancy and emit trace if enabled.
@@ -132,10 +173,165 @@ impl MirInterpreter {
     ) -> Result<VMValue, VMError> {
         let label = format!("Extern:{}", extern_name);
         self.emit_call_trace_label(&label, args.len(), None);
+
+        // Stage‑4/15.76 bridge: allow dynamic FFI via Extern("ffi.dynamic.<symbol>") or Extern("ffi.<symbol>")
+        {
+            // Minimal dotted name split (iface.method)
+            let (iface, method) = if let Some((i, m)) = extern_name.rsplit_once('.') {
+                (i.to_string(), m.to_string())
+            } else {
+                ("nyash".to_string(), extern_name.to_string())
+            };
+            if iface == "ffi" || iface == "ffi.dynamic" {
+                return self.handle_callee_extern_dynamic(&method, args);
+            }
+        }
+
         #[cfg(feature = "legacy-boxes")]
         { self.execute_extern_function(extern_name, args) }
         #[cfg(not(feature = "legacy-boxes"))]
         { Err(VMError::InvalidInstruction(crate::backend::mir_interpreter::diagnostics::DIAG_EXTERN_DISABLED.into())) }
+    }
+
+    /// Dynamic FFI path (ffi/ffi.dynamic) — 0/1/2 args (const char*) -> i64
+    fn handle_callee_extern_dynamic(&mut self, symbol: &str, args: &[ValueId]) -> Result<VMValue, VMError> {
+        use std::ffi::CString;
+        use std::os::raw::c_char;
+        // Whitelist enforcement (Stage‑4/15.76 MVP)
+        #[inline]
+        fn ffi_symbol_allowed(name: &str) -> bool {
+            if std::env::var("HAKO_FFI_ALLOW_ALL").ok().as_deref() == Some("1") { return true; }
+            // Base compiled‑in allowlist (minimal, safe)
+            let allowed_base: [&str; 3] = ["getpid", "strlen", "system"];
+            // ENV overlay: HAKO_FFI_ALLOW_LIST=foo,bar
+            if let Ok(list) = std::env::var("HAKO_FFI_ALLOW_LIST") {
+                for item in list.split(',') {
+                    let s = item.trim();
+                    if !s.is_empty() && s == name { return true; }
+                }
+            }
+            // TOML overlay: [ffi.dynamic].allow = ["foo","bar"]
+            if load_toml_allowlist().contains(name) { return true; }
+            // base set fallback
+            allowed_base.iter().any(|s| *s == name)
+        }
+        if !ffi_symbol_allowed(symbol) {
+            return Err(VMError::InvalidInstruction(format!("ffi: symbol not allowed: {}", symbol)));
+        }
+        // Load args as strings (to C strings)
+        let mut cstrs: Vec<CString> = Vec::new();
+        for a in args {
+            let v = self.reg_load(*a)?;
+            cstrs.push(CString::new(v.to_string()).map_err(|_| VMError::InvalidInstruction("ffi arg contains NUL".into()))?);
+        }
+        unsafe {
+            // Load from a reasonable C runtime candidate
+            // Linux: libc.so.6, macOS: libSystem.B.dylib, Windows: msvcrt.dll/ucrtbase.dll
+            unsafe fn open_default_c_lib() -> Result<libloading::Library, libloading::Error> {
+                #[cfg(target_os = "linux")]
+                {
+                    libloading::Library::new("libc.so.6")
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    libloading::Library::new("/usr/lib/libSystem.B.dylib")
+                        .or_else(|_| libloading::Library::new("libSystem.B.dylib"))
+                }
+                #[cfg(target_os = "windows")]
+                {
+                    libloading::Library::new("ucrtbase.dll")
+                        .or_else(|_| libloading::Library::new("msvcrt.dll"))
+                }
+                #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+                { libloading::Library::new("libc.so") }
+            }
+            // Try to open a backend support library for custom symbols (e.g., libllvm_backend)
+            unsafe fn try_open_backend_lib() -> Option<libloading::Library> {
+                use std::env;
+                use std::path::PathBuf;
+                let mut candidates: Vec<PathBuf> = Vec::new();
+                // User-provided search paths (':' separated)
+                if let Ok(paths) = env::var("HAKO_FFI_LIB_PATHS") {
+                    for p in paths.split(':') { if !p.is_empty() { candidates.push(PathBuf::from(p)); } }
+                }
+                // Common dev locations
+                if let Ok(root) = env::var("NYASH_ROOT") { candidates.push(PathBuf::from(root).join("target/release")); }
+                candidates.push(PathBuf::from("target/release"));
+                candidates.push(PathBuf::from("."));
+
+                #[cfg(target_os = "linux")]
+                let names = ["libllvm_backend.so"];
+                #[cfg(target_os = "macos")]
+                let names = ["libllvm_backend.dylib"];
+                #[cfg(target_os = "windows")]
+                let names = ["llvm_backend.dll"];
+                #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "windows")))]
+                let names = ["libllvm_backend.so"];
+
+                for dir in candidates {
+                    for nm in names.iter() {
+                        let cand = dir.join(nm);
+                        if cand.exists() {
+                            if let Ok(lib) = libloading::Library::new(cand) { return Some(lib); }
+                        }
+                    }
+                }
+                // Also try bare names (RPATH/LD_LIBRARY_PATH may resolve)
+                for nm in names.iter() {
+                    if let Ok(lib) = libloading::Library::new(*nm) { return Some(lib); }
+                }
+                None
+            }
+            let lib = match open_default_c_lib() {
+                Ok(l) => l,
+                Err(_) => return Err(VMError::InvalidInstruction("ffi: cannot open C runtime library".into())),
+            };
+            match cstrs.len() {
+                0 => {
+                    type F = unsafe extern "C" fn() -> i64;
+                    if let Ok(func) = lib.get::<F>(symbol.as_bytes()) {
+                        let ret = func();
+                        return Ok(VMValue::Integer(ret));
+                    }
+                    if let Some(backend) = try_open_backend_lib() {
+                        if let Ok(func) = backend.get::<F>(symbol.as_bytes()) {
+                            let ret = func();
+                            return Ok(VMValue::Integer(ret));
+                        }
+                    }
+                    Err(VMError::InvalidInstruction(format!("ffi symbol not found: {}", symbol)))
+                }
+                1 => {
+                    type F = unsafe extern "C" fn(*const c_char) -> i64;
+                    if let Ok(func) = lib.get::<F>(symbol.as_bytes()) {
+                        let ret = func(cstrs[0].as_ptr());
+                        return Ok(VMValue::Integer(ret));
+                    }
+                    if let Some(backend) = try_open_backend_lib() {
+                        if let Ok(func) = backend.get::<F>(symbol.as_bytes()) {
+                            let ret = func(cstrs[0].as_ptr());
+                            return Ok(VMValue::Integer(ret));
+                        }
+                    }
+                    Err(VMError::InvalidInstruction(format!("ffi symbol not found: {}", symbol)))
+                }
+                2 => {
+                    type F = unsafe extern "C" fn(*const c_char, *const c_char) -> i64;
+                    if let Ok(func) = lib.get::<F>(symbol.as_bytes()) {
+                        let ret = func(cstrs[0].as_ptr(), cstrs[1].as_ptr());
+                        return Ok(VMValue::Integer(ret));
+                    }
+                    if let Some(backend) = try_open_backend_lib() {
+                        if let Ok(func) = backend.get::<F>(symbol.as_bytes()) {
+                            let ret = func(cstrs[0].as_ptr(), cstrs[1].as_ptr());
+                            return Ok(VMValue::Integer(ret));
+                        }
+                    }
+                    Err(VMError::InvalidInstruction(format!("ffi symbol not found: {}", symbol)))
+                }
+                n => Err(VMError::InvalidInstruction(format!("ffi: unsupported arity {} for {}", n, symbol))),
+            }
+        }
     }
     pub(crate) fn execute_global_function(
         &mut self,
@@ -152,7 +348,7 @@ impl MirInterpreter {
                         self.print_trace_emit(&val);
                     }
                     // Dev observe: Null/Missing boxes quick normalization (no behavior change to prod)
-                    if let VMValue::BoxRef(_bx) = &val {
+                    if let VMValue::BoxRef(bx) = &val {
                         // NullBox → always print as null (stable)
                         #[cfg(feature = "legacy-boxes")]
                         if bx

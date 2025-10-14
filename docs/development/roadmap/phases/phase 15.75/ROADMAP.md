@@ -4,7 +4,7 @@
 
 **Status**: Proposal
 **Created**: 2025-10-13
-**Updated**: 2025-10-14
+**Updated**: 2025-10-16
 **Author**: Claude (comprehensive analysis & task planning)
 **Purpose**: Hakoruneプロジェクトの「完全脱Rust」に向けた実行可能な統合ロードマップ
 
@@ -1145,6 +1145,18 @@ Week 27 ━━━━━ 10,400行（最適化）← Option A達成！
 □ ドキュメント: 今週の実装をドキュメント化済み？
 □ 次週準備: 来週のタスクが明確？
 ```
+
+### Stage‑3（Boxes剥がし）— 完了条件サマリー（2025‑10‑16）
+
+- 参照ゼロ（外縁）: `crate::boxes::*` が `src/boxes/**` と `#[cfg(feature="legacy-boxes")]` 配下以外に存在しないこと（helper: `tools/dev/list_boxes_refs.sh --by-dir`）
+- ビルド緑:
+  - Legacy（既定ON）: `cargo build --release`
+  - Plugin‑only（検証線）: `cargo build --release --no-default-features -F cli,plugins,host-anchors`
+  - スモーク: quick と plugins（build‑only） PASS
+- 実行経路の分離が成立: Router を `builtin.rs/plugin.rs` に二分、extern_adapter を `extern_core.rs/extern_future_legacy.rs` に分割済み
+- ドキュメント/CI: CURRENT_TASK と guides を更新、plugin‑only build（build‑only）の最小ジョブ雛形を guides に掲載済み
+
+現状: 外縁の直参照は cfg 封じ込めを確認済み。plugins プロファイルの build‑only スモークはタイムアウトヘッダ付きで安定 PASS。残りは by‑dir の再確認と tests の先頭 cfg 統一を進める。
 
 ---
 

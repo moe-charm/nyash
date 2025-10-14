@@ -68,6 +68,27 @@ impl super::MirBuilder {
                 self.build_function_call(c.name, c.arguments)
             }
 
+            ASTNode::ExternCCall { symbol, arguments, .. } => {
+                // Build arguments
+                let mut args: Vec<ValueId> = Vec::with_capacity(arguments.len());
+                for a in arguments {
+                    args.push(self.build_expression_impl(a)?);
+                }
+                // Normalize args into SSA locals
+                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
+                let full = format!("ffi.dynamic.{}", symbol);
+                let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects("ffi.dynamic", &symbol);
+                let dst = self.value_gen.next();
+                self.emit_instruction(MirInstruction::Call {
+                    dst: Some(dst),
+                    func: ValueId::new(0),
+                    callee: Some(crate::mir::definitions::call_unified::Callee::Extern(full)),
+                    args,
+                    effects,
+                })?;
+                Ok(dst)
+            }
+
             ASTNode::Call {
                 callee, arguments, ..
             } => self.build_indirect_call_expression(*callee.clone(), arguments.clone()),

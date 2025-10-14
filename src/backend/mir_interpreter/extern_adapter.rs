@@ -50,32 +50,13 @@ fn build_adapter() -> VmExternAdapterBox {
     // map externs are registered via extern_adapter/extern_core.rs
 
     // nyrt.rune.eval(code: String) -> i64 (skeleton mock)
-    map.insert(("nyrt.rune".into(), "eval".into()), |args: &[VMValue]| {
-        // Disabled-by-default; return -1 when not enabled
-        let enabled = crate::runtime::env_gate_box::bool_any(&["HAKO_RUNE_ENABLE"]);
-        if !enabled {
-            return Ok(VMValue::Integer(-1));
-        }
-        let provider = std::env::var("HAKO_RUNE_PROVIDER").unwrap_or_else(|_| "mock".to_string());
-        // Expect first arg as code string (best-effort)
-        let code = if let Some(VMValue::String(s)) = args.get(0) { s.clone() } else { String::new() };
-        if provider == "mock" {
-            // Very small evaluator: support "A+B" with non-negative integers, ignore spaces
-            let c = code.replace(" ", "");
-            if let Some(pos) = c.find('+') {
-                let (a, b) = c.split_at(pos);
-                let b = &b[1..];
-                let pa = a.parse::<i64>().unwrap_or(0);
-                let pb = b.parse::<i64>().unwrap_or(0);
-                return Ok(VMValue::Integer(pa + pb));
-            }
-            // Fallback: try integer literal
-            if let Ok(n) = c.parse::<i64>() { return Ok(VMValue::Integer(n)); }
-            return Ok(VMValue::Integer(-2)); // unsupported form
-        }
-        // Unknown provider
-        Ok(VMValue::Integer(-3))
-    });
+    // Boxed: nyrt.rune.*
+    #[allow(unused)]
+    {
+        #[path = "extern_adapter/extern_rune_dev.rs"]
+        mod extern_rune_dev;
+        extern_rune_dev::register(&mut map);
+    }
 
     // nyrt.ops.op_eq(a, b): bool - Equality operator
     // Delegates to op_handlers::op_eq_static() for logic reuse
@@ -91,52 +72,13 @@ fn build_adapter() -> VmExternAdapterBox {
         crate::backend::mir_interpreter::handlers::op_handlers::op_eq_static(&args[0], &args[1])
     });
 
-    // --- File I/O (nyrt.file.*) ---
-    // nyrt.file.read(path: String) -> String
-    map.insert(("nyrt.file".into(), "read".into()), |args: &[VMValue]| {
-        if args.is_empty() {
-            return Err(VMError::InvalidInstruction(
-                "nyrt.file.read requires path argument".into(),
-            ));
-        }
-        let path = match &args[0] {
-            VMValue::String(s) => s.clone(),
-            v => v.to_string(),
-        };
-
-        match std::fs::read_to_string(&path) {
-            Ok(content) => Ok(VMValue::String(content)),
-            Err(e) => Err(VMError::IoError(format!(
-                "Failed to read file '{}': {}",
-                path, e
-            ))),
-        }
-    });
-
-    // nyrt.file.write(path: String, content: String) -> Void
-    map.insert(("nyrt.file".into(), "write".into()), |args: &[VMValue]| {
-        if args.len() < 2 {
-            return Err(VMError::InvalidInstruction(
-                "nyrt.file.write requires path and content arguments".into(),
-            ));
-        }
-        let path = match &args[0] {
-            VMValue::String(s) => s.clone(),
-            v => v.to_string(),
-        };
-        let content = match &args[1] {
-            VMValue::String(s) => s.clone(),
-            v => v.to_string(),
-        };
-
-        match std::fs::write(&path, content) {
-            Ok(_) => Ok(VMValue::Void),
-            Err(e) => Err(VMError::IoError(format!(
-                "Failed to write file '{}': {}",
-                path, e
-            ))),
-        }
-    });
+    // Boxed: nyrt.file.*
+    #[allow(unused)]
+    {
+        #[path = "extern_adapter/extern_file_dev.rs"]
+        mod extern_file_dev;
+        extern_file_dev::register(&mut map);
+    }
 
 
     // --- nykernel.* (dev stub for wasm std Array) ---
@@ -148,23 +90,13 @@ fn build_adapter() -> VmExternAdapterBox {
 
     // env.future externs are registered via extern_adapter/extern_future_legacy.rs
 
-    // nykernel.malloc(size: i64) -> i64 (byte address)
-    map.insert(("nykernel".into(), "malloc".into()), |args: &[VMValue]| {
-        let size = args.get(0).map(crate::runtime::nykernel_stub::vmvalue_to_i64).unwrap_or(0);
-        crate::runtime::nykernel_stub::malloc_bytes(size)
-    });
-    // nykernel.load_i64(addr: i64) -> i64
-    map.insert(("nykernel".into(), "load_i64".into()), |args: &[VMValue]| {
-        let addr = args.get(0).map(crate::runtime::nykernel_stub::vmvalue_to_i64).unwrap_or(0);
-        crate::runtime::nykernel_stub::load_i64(addr)
-    });
-    // nykernel.store_i64(addr: i64, value: i64) -> void
-    map.insert(("nykernel".into(), "store_i64".into()), |args: &[VMValue]| {
-        if args.len() < 2 { return Err(VMError::InvalidInstruction("need 2 args".into())); }
-        let addr = crate::runtime::nykernel_stub::vmvalue_to_i64(&args[0]);
-        let val  = crate::runtime::nykernel_stub::vmvalue_to_i64(&args[1]);
-        crate::runtime::nykernel_stub::store_i64(addr, val)
-    });
+    // Boxed: nykernel.* dev stub
+    #[allow(unused)]
+    {
+        #[path = "extern_adapter/extern_nykernel_stub.rs"]
+        mod extern_nykernel_stub;
+        extern_nykernel_stub::register(&mut map);
+    }
 
     VmExternAdapterBox { handlers: map }
 }

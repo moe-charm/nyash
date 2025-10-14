@@ -79,6 +79,10 @@ pub mod runner;
 pub mod guards;
 pub mod using; // using resolver scaffolding (Phase 15)
 pub mod common; // shared policies/helpers (builder/VM)
+// Front-end layer interfaces (structure-only; implementations remain in existing modules)
+pub mod layers;
+// Front-end facades (parser/resolver): stable entry points during migration
+pub mod front;
 
 // Expose the macro engine module under a raw identifier; the source lives under `src/macro/`.
 #[path = "macro/mod.rs"]

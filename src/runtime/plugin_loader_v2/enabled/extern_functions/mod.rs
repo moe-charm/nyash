@@ -6,6 +6,7 @@
 mod release_helpers;
 
 use crate::bid::{BidError, BidResult};
+#[allow(unused_imports)]
 use crate::box_trait::{NyashBox, StringBox, VoidBox};
 #[cfg(feature = "legacy-boxes")]
 use crate::boxes::result::NyashResultBox;

@@ -127,7 +127,7 @@ fn plugin_policy_enabled() -> bool {
     crate::runtime::env_gate_box::plugin_policy_on()
 }
 
-fn register_core_builtins(_reg: &BoxFactoryRegistry) {
+fn register_core_builtins(reg: &BoxFactoryRegistry) {
     // TimerBox: provide builtin constructor so `new TimerBox()` works without plugins.
     // Plugin 設定が適用されると上書きされる（Plugin-First 原則を維持）。
     #[cfg(feature = "legacy-boxes")]
