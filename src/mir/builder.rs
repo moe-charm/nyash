@@ -55,6 +55,7 @@ mod verify; // CallOrderVerifyBox（dev-only 検証ラッパ）
 mod normalize; // Normalization helpers (boxed): string length, etc.
 pub mod effects; // EffectResolverBox（効果決定の単一入口・既定OFF）
 pub mod entry; // Public entrypoint wrapper (AST→MIR module)
+mod field_origin_registry; // FieldOriginRegistryBox（field origin tracking統一）
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -104,10 +105,8 @@ pub struct MirBuilder {
     /// Unified members: BoxName -> {propName -> Kind}
     pub(super) property_getters_by_box: HashMap<String, HashMap<String, PropertyKind>>,
 
-    /// Remember class of object fields after assignments: (base_id, field) -> class_name
-    pub(super) field_origin_class: HashMap<(ValueId, String), String>,
-    /// Class-level field origin (cross-function heuristic): (BaseBoxName, field) -> FieldBoxName
-    pub(super) field_origin_by_box: HashMap<(String, String), String>,
+    /// Field origin registry (centralized tracking for value-level and box-level field origins)
+    pub(super) field_origin_registry: field_origin_registry::FieldOriginRegistryBox,
 
     /// Optional per-value type annotations (MIR-level): ValueId -> MirType
     pub(super) value_types: HashMap<ValueId, super::MirType>,
@@ -198,8 +197,7 @@ impl MirBuilder {
             static_box_names: HashSet::new(),
             weak_fields_by_box: HashMap::new(),
             property_getters_by_box: HashMap::new(),
-            field_origin_class: HashMap::new(),
-            field_origin_by_box: HashMap::new(),
+            field_origin_registry: field_origin_registry::FieldOriginRegistryBox::new(),
             value_types: HashMap::new(),
             plugin_method_sigs,
             current_static_box: None,

@@ -63,25 +63,18 @@ impl super::MirBuilder {
             effects: EffectMask::READ,
         })?;
 
-        // Propagate recorded origin class for this field if any (ValueId-scoped)
+        // Propagate recorded origin class for this field if any (FieldOriginRegistryBox)
+        let base_cls_hint = self.origin_get(object_value).map(|s| s.to_string());
         if let Some(class_name) = self
-            .field_origin_class
-            .get(&(object_value, field.clone()))
-            .cloned()
+            .field_origin_registry
+            .infer_field_origin(object_value, &field, base_cls_hint.as_deref())
         {
-            self.origin_register(field_val, class_name);
-        } else if let Some(base_cls) = self.origin_get(object_value).map(|s| s.to_string()) {
-            // Cross-function heuristic: use class-level field origin mapping
-            if let Some(fcls) = self
-                .field_origin_by_box
-                .get(&(base_cls.clone(), field.clone()))
-                .cloned()
-            {
-                if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
-                    super::utils::builder_debug_log(&format!("field-origin hit by box-level map: base={} .{} -> {}", base_cls, field, fcls));
+            if super::utils::builder_debug_enabled() || std::env::var("NYASH_BUILDER_DEBUG").ok().as_deref() == Some("1") {
+                if let Some(ref base_cls) = base_cls_hint {
+                    super::utils::builder_debug_log(&format!("field-origin hit: base={} .{} -> {}", base_cls, field, class_name));
                 }
-                self.origin_register(field_val, fcls);
             }
+            self.origin_register(field_val, class_name);
         }
 
         // If base is a known newbox and field is weak, emit WeakLoad (+ optional barrier)
@@ -95,11 +88,8 @@ impl super::MirBuilder {
             } = object_clone
             {
                 if let Ok(base_id) = self.build_expression(*inner_obj.clone()) {
-                    if let Some(cls) = self
-                        .field_origin_class
-                        .get(&(base_id, inner_field))
-                        .cloned()
-                    {
+                    // Use FieldOriginRegistryBox for nested field lookup
+                    if let Some(cls) = self.field_origin_registry.infer_field_origin(base_id, &inner_field, None) {
                         inferred_class = Some(cls);
                     }
                 }
@@ -185,14 +175,15 @@ impl super::MirBuilder {
             }
         }
 
-        // Record origin class for this field value if known
+        // Record origin class for this field value if known (FieldOriginRegistryBox)
         if let Some(val_cls) = self.origin_get(value_result).map(|s| s.to_string()) {
-            self.field_origin_class
-                .insert((object_value, field.clone()), val_cls.clone());
-            // Also record class-level mapping if base object class is known
+            // Register value-level field origin
+            self.field_origin_registry
+                .register_value_field(object_value, field.clone(), val_cls.clone());
+            // Also register box-level mapping if base object class is known
             if let Some(base_cls) = self.origin_get(object_value).map(|s| s.to_string()) {
-                self.field_origin_by_box
-                    .insert((base_cls, field.clone()), val_cls);
+                self.field_origin_registry
+                    .register_box_field(base_cls, field.clone(), val_cls);
             }
         }
 
