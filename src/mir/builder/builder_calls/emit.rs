@@ -202,6 +202,9 @@ impl MirBuilder {
         }
 
         // Before creating the call, ensure receiver is materialized in the current block
+        if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") {
+            eprintln!("[emit-call] BEFORE materialize current_block={:?}", self.current_block);
+        }
         let callee = match callee {
             Callee::Method { box_name, method, receiver: Some(r), certainty } => {
                 Callee::Method { box_name, method, receiver: Some(r), certainty }
@@ -217,12 +220,22 @@ impl MirBuilder {
         // Create MirCall instruction using the new module (pure data composition)
         let mir_call = call_unified::create_mir_call(dst, callee.clone(), args_local.clone());
 
-        // Final materialization unified
+        // Final materialization unified — keep materialized receiver/args as-is.
+        // IMPORTANT: Do not revert receiver to the original (pre-materialization) id.
+        // Reverting can re-introduce use-before-def across block boundaries (e.g., String.size()).
         let mut callee2 = callee.clone();
         let mut args2 = args_local.clone();
         crate::mir::builder::materialize::call_site::finalize_call_site(self, &mut callee2, &mut args2);
-        if let (Some(orig), Callee::Method { receiver, .. }) = (orig_recv, &mut callee2) {
-            *receiver = Some(orig);
+        // Safety net: ensure receiver/args are materialized in the CURRENT block right before emission.
+        // This defends against any late block switches that may have occurred upstream.
+        match &mut callee2 {
+            Callee::Method { receiver: Some(r), .. } => {
+                *r = self.local_recv(*r);
+            }
+            _ => {}
+        }
+        for a in args2.iter_mut() {
+            *a = self.local_arg(*a);
         }
         // Dev trace: show final callee/recv right before emission (guarded)
         if std::env::var("NYASH_LOCAL_SSA_TRACE").ok().as_deref() == Some("1") || super::super::utils::builder_debug_enabled() {
@@ -238,6 +251,12 @@ impl MirBuilder {
             }
         }
 
+
+        // Centralized rewrite:
+        // - String size/len/length → Extern("nyrt.string.length")
+        // - Array  size/len/length → Extern("nyrt.array.length")
+        crate::mir::builder::normalize::string_length::normalize_string_length_call(self, &mut callee2, &mut args2);
+        crate::mir::builder::normalize::array_length::normalize_array_length_call(self, &mut callee2, &mut args2);
 
         // For Phase 2: Convert to legacy Call instruction with new callee field (use finalized operands)
         let legacy_call = MirInstruction::Call {
@@ -267,6 +286,48 @@ impl MirBuilder {
         // callee model and RouterPolicy. Behavior is unchanged.
         match target {
             CallTarget::Method { receiver, method, box_type: _ } => {
+                // Centralized rewrite: string size/len/length (0 args) → Extern("nyrt.string.length")
+                {
+                    let mut callee = Callee::Method { box_name: "StringBox".to_string(), method: method.clone(), receiver: Some(receiver), certainty: crate::mir::definitions::call_unified::TypeCertainty::Union };
+                    let mut argv = Vec::<ValueId>::new();
+                    let changed = crate::mir::builder::normalize::string_length::normalize_string_length_call(self, &mut callee, &mut argv);
+                    if changed {
+                        crate::mir::builder::ssa::local::finalize_args(self, &mut argv);
+                        let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                        let name_const = crate::mir::builder::name_const::make_name_const_result(self, "nyrt.string.length")?;
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(dstv),
+                            func: name_const,
+                            callee: Some(callee),
+                            args: argv,
+                            effects: EffectMask::READ.add(Effect::ReadHeap),
+                        })?;
+                        // Annotate result as Integer
+                        self.value_types.insert(dstv, crate::mir::MirType::Integer);
+                        return Ok(());
+                    }
+                }
+                // Centralized rewrite: array size/len/length (0 args) → Extern("nyrt.array.length")
+                {
+                    let mut callee = Callee::Method { box_name: "ArrayBox".to_string(), method: method.clone(), receiver: Some(receiver), certainty: crate::mir::definitions::call_unified::TypeCertainty::Union };
+                    let mut argv = Vec::<ValueId>::new();
+                    let changed = crate::mir::builder::normalize::array_length::normalize_array_length_call(self, &mut callee, &mut argv);
+                    if changed {
+                        crate::mir::builder::ssa::local::finalize_args(self, &mut argv);
+                        let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                        let name_const = crate::mir::builder::name_const::make_name_const_result(self, "nyrt.array.size")?;
+                        self.emit_instruction(MirInstruction::Call {
+                            dst: Some(dstv),
+                            func: name_const,
+                            callee: Some(callee),
+                            args: argv,
+                            effects: EffectMask::READ.add(Effect::ReadHeap),
+                        })?;
+                        // Annotate result as Integer
+                        self.value_types.insert(dstv, crate::mir::MirType::Integer);
+                        return Ok(());
+                    }
+                }
                 // Special-case: instance.birth(args) should invoke lowered ModuleFunction (user-defined birth)
                 if method == "birth" {
                     let (cls, _cert) = crate::mir::builder::infer::receiver::infer_receiver(
@@ -354,6 +415,23 @@ impl MirBuilder {
                 })
             },
             CallTarget::Global(name) => {
+                // Early rewrite for dotted StringBox methods: StringBox.size/1 → Extern("nyrt.string.length")
+                if (name.starts_with("StringBox.size") || name.starts_with("StringBox.length") || name.starts_with("StringBox.len")) && args.len() == 1 {
+                    let recv_local = self.local_recv(args[0]);
+                    let mut argv = vec![recv_local];
+                    crate::mir::builder::ssa::local::finalize_args(self, &mut argv);
+                    let dstv = dst.unwrap_or_else(|| self.value_gen.next());
+                    let name_const = crate::mir::builder::name_const::make_name_const_result(self, "nyrt.string.length")?;
+                    self.emit_instruction(MirInstruction::Call {
+                        dst: Some(dstv),
+                        func: name_const,
+                        callee: Some(crate::mir::definitions::call_unified::Callee::Extern("nyrt.string.length".to_string())),
+                        args: argv,
+                        effects: EffectMask::READ.add(Effect::ReadHeap),
+                    })?;
+                    self.value_types.insert(dstv, crate::mir::MirType::Integer);
+                    return Ok(());
+                }
                 let normalized = match crate::mir::resolve::call_name_resolver::CallNameResolverBox::normalize(&name, args.len()) {
                     Ok(full) => full,
                     Err(_) => format!("{}/{}", name, args.len()),

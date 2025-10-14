@@ -226,16 +226,19 @@ pub fn emit_mir_json_for_harness(
                 }
                 // Track which values have been emitted (to order copies after their sources)
                 let mut emitted_defs: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                let mut delayed_copies: Vec<(u32, u32)> = Vec::new();
                 // PHI first（オプション）
                 for inst in &bb.instructions {
                     if let I::Copy { dst, src } = inst {
                         // For copies whose source will be defined later in this block, delay emission
                         let s = src.as_u32();
+                        let d = dst.as_u32();
                         if block_defines.contains(&s) && !emitted_defs.contains(&s) {
                             // delayed; will be emitted after non-PHI pass
+                            delayed_copies.push((d, s));
                         } else {
-                            insts.push(json!({"op":"copy","dst": dst.as_u32(), "src": src.as_u32()}));
-                            emitted_defs.insert(dst.as_u32());
+                            insts.push(json!({"op":"copy","dst": d, "src": s}));
+                            emitted_defs.insert(d);
                         }
                         continue;
                     }
@@ -266,8 +269,6 @@ pub fn emit_mir_json_for_harness(
                     }
                 }
                 // Non-PHI
-                // Non-PHI
-                let mut delayed_copies: Vec<(u32, u32)> = Vec::new();
                 for inst in &bb.instructions {
                     match inst {
                         I::Copy { dst, src } => {
@@ -559,6 +560,7 @@ pub fn emit_mir_json_for_harness_bin(
                     }
                 }
                 let mut emitted_defs: std::collections::HashSet<u32> = std::collections::HashSet::new();
+                let mut delayed_copies: Vec<(u32, u32)> = Vec::new();
                 for inst in &bb.instructions {
                     if let I::Phi { dst, inputs } = inst {
                         let values_objs: Vec<_> = inputs
@@ -586,7 +588,6 @@ pub fn emit_mir_json_for_harness_bin(
                         emitted_defs.insert(dst.as_u32());
                     }
                 }
-                let mut delayed_copies: Vec<(u32, u32)> = Vec::new();
                 for inst in &bb.instructions {
                     match inst {
                         I::Copy { dst, src } => {

@@ -321,7 +321,8 @@ pub fn normalize_legacy_instructions(
             }
 
             // Pass A: Extern("nyrt.*") → Method for core boxes
-            // Safe subset only: string/array (size/len + common string ops) / map (size/keys/values)
+            // Safe subset only: string (size/len + common string ops) / map (size/keys/values)
+            // NOTE: nyrt.array.size remains Extern to avoid fragile Method(receiver) materialization issues.
             for inst in &mut block.instructions {
                 if let I::Call { dst, func: _, callee: Some(crate::mir::definitions::call_unified::Callee::Extern(name)), args, effects } = inst {
                     let (box_name, method_opt) = match name.as_str() {
@@ -331,7 +332,7 @@ pub fn normalize_legacy_instructions(
                         "nyrt.string.substring" => ("StringBox", Some("substring")),
                         "nyrt.string.charAt" => ("StringBox", Some("charAt")),
                         "nyrt.string.replace" => ("StringBox", Some("replace")),
-                        "nyrt.array.size"    => ("ArrayBox",  Some("size")),
+                        // Keep array.size as Extern (do not revert to Method)
                         "nyrt.map.size"      => ("MapBox",    Some("size")),
                         "nyrt.map.keys"      => ("MapBox",    Some("keys")),
                         "nyrt.map.values"    => ("MapBox",    Some("values")),
@@ -379,18 +380,36 @@ pub fn normalize_legacy_instructions(
                             if let Some(bx) = recv_box_name {
                                 let ok = is_safe_core_method(bx, method.as_str());
                                 if ok {
-                                    block.instructions[idx] = I::Call {
-                                        dst,
-                                        func: ValueId::new(0),
-                                        callee: Some(crate::mir::definitions::call_unified::Callee::Method {
-                                            box_name: bx.to_string(),
-                                            method: method.clone(),
-                                            receiver: Some(box_val),
-                                            certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
-                                        }),
-                                        args,
-                                        effects,
-                                    };
+                                    // Special-case: ArrayBox length-like → keep Extern for robustness
+                                    if bx == "ArrayBox" && matches!(method.as_str(), "size" | "len" | "length") {
+                                        block.instructions[idx] = I::Call {
+                                            dst,
+                                            func: ValueId::new(0),
+                                            callee: Some(crate::mir::definitions::call_unified::Callee::Extern(
+                                                "nyrt.array.size".to_string(),
+                                            )),
+                                            args: {
+                                                let mut v = Vec::with_capacity(1 + args.len());
+                                                v.push(box_val);
+                                                v.extend(args.into_iter());
+                                                v
+                                            },
+                                            effects,
+                                        };
+                                    } else {
+                                        block.instructions[idx] = I::Call {
+                                            dst,
+                                            func: ValueId::new(0),
+                                            callee: Some(crate::mir::definitions::call_unified::Callee::Method {
+                                                box_name: bx.to_string(),
+                                                method: method.clone(),
+                                                receiver: Some(box_val),
+                                                certainty: crate::mir::definitions::call_unified::TypeCertainty::Known,
+                                            }),
+                                            args,
+                                            effects,
+                                        };
+                                    }
                                     stats.intrinsic_optimizations += 1;
                                 }
                             }
