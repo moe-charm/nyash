@@ -304,7 +304,47 @@ clang-cl /Fe:bin\\hako-frozen-v1.exe build\\obj\\main.obj \
 WSL parity
 - 本リポのスモークは WSL での動作を前提に整備済みです。Windows ネイティブの EXE 生成は、当面は「WSL で .o 生成 → Windows 側でリンク」という二段運用が簡単です。
 - long‑term: hako_kernel を MSVC/MinGW 双方で安定ビルドできるよう順次対応します。
- - Report: build/WINDOWS_LINK_TEST_REPORT.md — end-to-end steps and outputs
+- Report: build/WINDOWS_LINK_TEST_REPORT.md — end-to-end steps and outputs
+
+Windows quicklink (copy/paste)
+```
+# 1) WSL: produce Windows COFF .obj
+python3 tools/llvmlite_harness.py --in build/mir/main.mir.json --target windows --out build/obj/main_win.obj
+
+# 2) Windows: build dev stubs (when static runtime not present)
+C:\\LLVM-18\\bin\\clang.exe -c C:\\temp\\link_stub_main.c -o C:\\temp\\link_stub_main.obj --target=x86_64-pc-windows-msvc
+C:\\LLVM-18\\bin\\clang.exe -c C:\\temp\\nyrt_min_stubs_win.S -o C:\\temp\\nyrt_min_stubs_win.obj --target=x86_64-pc-windows-msvc
+
+# 3) Windows: link
+C:\\LLVM-18\\bin\\clang.exe C:\\temp\\main_win.obj C:\\temp\\link_stub_main.obj C:\\temp\\nyrt_min_stubs_win.obj -o C:\\temp\\test_main.exe
+
+# 4) Run → Result: 0
+```
+
+Static runtime (Windows) — example (replace dev stubs)
+- MinGW/Clang
+```
+# Build (from Windows or WSL cross) — MinGW route
+# Prereqs: rustup target add x86_64-pc-windows-gnu; MinGW toolchain available
+cargo build --release -p hako_kernel --target x86_64-pc-windows-gnu --no-default-features -F core-runtime,core-collections,core-io
+
+# Link (replace dev stubs with the static runtime)
+clang C:\\temp\\main_win.obj -o C:\\temp\\hako-frozen-v1.exe \
+  -Wl,--whole-archive C:\\path\\to\\libhako_kernel.a -Wl,--no-whole-archive -lws2_32 -lbcrypt
+```
+- MSVC/clang-cl
+```
+# Build (Developer Prompt) — MSVC route
+# Prereqs: rustup target add x86_64-pc-windows-msvc; proper LIB/INCLUDE
+cargo build --release -p hako_kernel --target x86_64-pc-windows-msvc --no-default-features -F core-runtime,core-collections,core-io
+
+# Link
+clang-cl /Fe:C:\\temp\\hako-frozen-v1.exe C:\\temp\\main_win.obj \
+  /link /LIBPATH:C:\\path\\to hako_kernel.lib
+```
+Notes
+- Early in Phase 15.77, `hako_kernel` may still reference legacy types on some platforms; if build fails, fallback to dev stubs above and proceed with EXE verification.
+- Once `hako_kernel` static builds stabilize on Windows, replace the dev stubs in examples and capture a “static runtime” success log in this guide.
 
 Windows object generation
 - Method 1 (recommended on Windows):
