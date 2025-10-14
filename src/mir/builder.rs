@@ -56,6 +56,7 @@ mod normalize; // Normalization helpers (boxed): string length, etc.
 pub mod effects; // EffectResolverBox（効果決定の単一入口・既定OFF）
 pub mod entry; // Public entrypoint wrapper (AST→MIR module)
 mod field_origin_registry; // FieldOriginRegistryBox（field origin tracking統一）
+mod weak_field_registry; // WeakFieldRegistryBox（weak field tracking統一）
 
 // Unified member property kinds for computed/once/birth_once
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -99,8 +100,8 @@ pub struct MirBuilder {
     /// Names of static boxes (including flow) declared in the current module
     pub(super) static_box_names: HashSet<String>,
 
-    /// Weak field registry: BoxName -> {weak field names}
-    pub(super) weak_fields_by_box: HashMap<String, HashSet<String>>,
+    /// Weak field registry (centralized tracking for weak reference fields)
+    pub(super) weak_field_registry: weak_field_registry::WeakFieldRegistryBox,
 
     /// Unified members: BoxName -> {propName -> Kind}
     pub(super) property_getters_by_box: HashMap<String, HashMap<String, PropertyKind>>,
@@ -195,7 +196,7 @@ impl MirBuilder {
             value_origin_newbox: HashMap::new(),
             user_defined_boxes: HashSet::new(),
             static_box_names: HashSet::new(),
-            weak_fields_by_box: HashMap::new(),
+            weak_field_registry: weak_field_registry::WeakFieldRegistryBox::new(),
             property_getters_by_box: HashMap::new(),
             field_origin_registry: field_origin_registry::FieldOriginRegistryBox::new(),
             value_types: HashMap::new(),

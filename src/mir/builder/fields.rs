@@ -96,12 +96,10 @@ impl super::MirBuilder {
             }
         }
         if let Some(class_name) = inferred_class {
-            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) {
-                    let loaded = self.emit_weak_load(field_val)?;
-                    let _ = self.emit_barrier_read(loaded);
-                    return Ok(loaded);
-                }
+            if self.weak_field_registry.is_weak_field(&class_name, &field) {
+                let loaded = self.emit_weak_load(field_val)?;
+                let _ = self.emit_barrier_read(loaded);
+                return Ok(loaded);
             }
         }
 
@@ -143,10 +141,8 @@ impl super::MirBuilder {
 
         // If base is known and field is weak, create WeakRef before store
         if let Some(class_name) = self.origin_get(object_value).map(|s| s.to_string()) {
-            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) {
-                    value_result = self.emit_weak_new(value_result)?;
-                }
+            if self.weak_field_registry.is_weak_field(&class_name, &field) {
+                value_result = self.emit_weak_new(value_result)?;
             }
         }
 
@@ -168,10 +164,8 @@ impl super::MirBuilder {
 
         // Write barrier if weak field
         if let Some(class_name) = self.origin_get(object_value).map(|s| s.to_string()) {
-            if let Some(weak_set) = self.weak_fields_by_box.get(&class_name) {
-                if weak_set.contains(&field) {
-                    let _ = self.emit_barrier_write(value_result);
-                }
+            if self.weak_field_registry.is_weak_field(&class_name, &field) {
+                let _ = self.emit_barrier_write(value_result);
             }
         }
 
