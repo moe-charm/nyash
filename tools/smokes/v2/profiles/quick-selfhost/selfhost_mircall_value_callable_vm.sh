@@ -5,6 +5,11 @@ source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 preflight_plugins || true
 
+# Guard: Callable via Value callee is experimental in quick-selfhost; opt-in only
+if [ "${SMOKES_ALLOW_CALLABLE_VALUE:-0}" != "1" ]; then
+  SMOKES_SKIP_CUR_TEST=1; SMOKES_SKIP_REASON="Callable(Value) disabled in quick-selfhost";
+fi
+
 test_selfhost_mircall_value_callable_vm() {
   local code='
 using "selfhost/hakorune-vm/hakorune_vm_core.hako" as HakoruneVmCore

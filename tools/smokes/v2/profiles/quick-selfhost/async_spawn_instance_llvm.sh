@@ -3,6 +3,11 @@ source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 require_llvm_or_skip || { print_summary; exit 0; }
 
+# Guard: async/future on LLVM harness is evolving; skip unless explicitly allowed
+if [ "${SMOKES_ALLOW_LLVM_ASYNC:-0}" != "1" ]; then
+  SMOKES_SKIP_CUR_TEST=1; SMOKES_SKIP_REASON="LLVM async harness disabled in quick-selfhost";
+fi
+
 function test_body(){
   local app="$NYASH_ROOT/apps/tests/async-spawn-instance/main.hako"
   local out

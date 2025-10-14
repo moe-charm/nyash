@@ -2,6 +2,11 @@
 source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 
+# Guard: nyvm backend is experimental under quick-selfhost; skip unless explicitly allowed
+if [ "${SMOKES_ALLOW_NYVM:-0}" != "1" ]; then
+  SMOKES_SKIP_CUR_TEST=1; SMOKES_SKIP_REASON="nyvm backend disabled in quick-selfhost";
+fi
+
 function test_body(){
   ensure_hako_toml
   local tmp

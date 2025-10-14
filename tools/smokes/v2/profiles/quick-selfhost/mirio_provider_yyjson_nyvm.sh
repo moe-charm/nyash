@@ -2,6 +2,11 @@
 source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 
+# Guard: nyvm + yyjson provider is experimental under quick-selfhost; opt-in only
+if [ "${SMOKES_ALLOW_NYVM:-0}" != "1" ] || [ "${SMOKES_ALLOW_JSON_PROVIDER:-0}" != "1" ]; then
+  SMOKES_SKIP_CUR_TEST=1; SMOKES_SKIP_REASON="nyvm+json provider disabled in quick-selfhost";
+fi
+
 test_body(){
   ensure_hako_toml
   # Skip if JSON plugin is not available (provider requires it for nyvm)

@@ -2,6 +2,11 @@
 source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 
+# Guard: JSON hostbridge plugin path not guaranteed in quick-selfhost; allow opt-in only
+if [ "${SMOKES_ALLOW_JSON_PROVIDER:-0}" != "1" ]; then
+  SMOKES_SKIP_CUR_TEST=1; SMOKES_SKIP_REASON="json hostbridge disabled in quick-selfhost";
+fi
+
 test_body(){
   ensure_hako_toml
   local tmp

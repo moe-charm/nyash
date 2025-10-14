@@ -22,33 +22,44 @@ cp_if_exists() { # src -> dist
   if [ -f "$src" ]; then cp -f "$src" "$DIST/$base"; echo "$DIST/$base"; else echo ""; fi
 }
 
+# Pick latest release notes (v1.1 preferred, fallback to v1.0)
+find_notes() {
+  local cand1="dist/RELEASE_NOTES_v1.1-frozen.md"
+  local cand0="dist/RELEASE_NOTES_v1.0-frozen.md"
+  if [ -f "$cand1" ]; then echo "$cand1"; elif [ -f "$cand0" ]; then echo "$cand0"; else echo ""; fi
+}
+
 # Linux
 if [ -f "$DIST/hako-frozen-v1-linux-x64" ]; then
   QS="$(cp_if_exists docs/guides/README_FROZEN_QUICKSTART.md)"
+  RN="$(find_notes)"
   pkg_one hakorune-frozen-v1-linux-x64.tar.gz \
-    "$DIST/hako-frozen-v1-linux-x64" "$DIST/RELEASE_NOTES_v1.0-frozen.md" "$DIST/HASHES.txt" ${QS:+"$QS"}
+    "$DIST/hako-frozen-v1-linux-x64" "$RN" "$DIST/HASHES.txt" ${QS:+"$QS"}
 fi
 
 # Windows GNU
 if [ -f "$DIST/hako-frozen-v1-win-x64-gnu.exe" ]; then
   QS="$(cp_if_exists docs/guides/README_FROZEN_QUICKSTART.md)"
+  RN="$(find_notes)"
   pkg_one hakorune-frozen-v1-win-x64-gnu.zip \
-    "$DIST/hako-frozen-v1-win-x64-gnu.exe" "$DIST/RELEASE_NOTES_v1.0-frozen.md" "$DIST/HASHES.txt" ${QS:+"$QS"}
+    "$DIST/hako-frozen-v1-win-x64-gnu.exe" "$RN" "$DIST/HASHES.txt" ${QS:+"$QS"}
 fi
 
 # Windows MSVC
 if [ -f "$DIST/hako-frozen-v1-win-x64-msvc.exe" ]; then
   QS="$(cp_if_exists docs/guides/README_FROZEN_QUICKSTART.md)"
+  RN="$(find_notes)"
   pkg_one hakorune-frozen-v1-win-x64-msvc.zip \
-    "$DIST/hako-frozen-v1-win-x64-msvc.exe" "$DIST/RELEASE_NOTES_v1.0-frozen.md" "$DIST/HASHES.txt" ${QS:+"$QS"}
+    "$DIST/hako-frozen-v1-win-x64-msvc.exe" "$RN" "$DIST/HASHES.txt" ${QS:+"$QS"}
 fi
 
 # All-in-one
 if [ -f "$DIST/hako-frozen-v1-linux-x64" ] && [ -f "$DIST/hako-frozen-v1-win-x64-msvc.exe" ]; then
   QS="$(cp_if_exists docs/guides/README_FROZEN_QUICKSTART.md)"
+  RN="$(find_notes)"
   pkg_one hakorune-frozen-v1-all.zip \
     "$DIST/hako-frozen-v1-linux-x64" "$DIST/hako-frozen-v1-win-x64-msvc.exe" \
-    "$DIST/RELEASE_NOTES_v1.0-frozen.md" "$DIST/HASHES.txt" ${QS:+"$QS"}
+    "$RN" "$DIST/HASHES.txt" ${QS:+"$QS"}
 fi
 
 # Manifest

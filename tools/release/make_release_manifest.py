@@ -24,11 +24,11 @@ def main():
     commit = os.popen('git rev-parse --short HEAD').read().strip() or 'unknown'
     now = int(time.time())
     manifest = {
-        'version_tag': 'v1.0-frozen',
+        'version_tag': 'v1.1-frozen',
         'commit': commit,
         'generated_at': now,
         'artifacts': artifacts,
-        'notes': 'Frozen toolchain baseline (Ubuntu + Windows, MSVC/GNU)',
+        'notes': 'Frozen toolchain remint with macro enhancements (Ubuntu + Windows, MSVC/GNU)',
         'support_matrix': {
             'linux-x64': {'format':'ELF','runtime':'static','linker':'clang','status':'verified'},
             'win-x64-msvc': {'format':'PE','runtime':'static','toolchain':'MSVC/clang','status':'verified'},
