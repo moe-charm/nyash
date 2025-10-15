@@ -146,16 +146,17 @@ log_error() {
 # 共通ノイズフィルタ（VM実行時の出力整形）
 filter_noise() {
     # プラグイン初期化やメタログ、動的ローダの案内等を除去
+    # Categories: Plugin init, Using resolver, Builder internals, Dev warnings, Error normalization, etc.
     grep -v "^\[UnifiedBoxRegistry\]" \
       | grep -v "^\[FileBox\]" \
       | grep -v "^Net plugin:" \
-  | grep -v "^\[.*\] Plugin" \
+      | grep -v "^\[.*\] Plugin" \
       | grep -v "^\[using\]" \
       | grep -v "^\[using/resolve\]" \
       | grep -v "^\[builder\]" \
       | grep -v '^\[TypeRegistry\] CORE type ids:' \
-  | grep -v "^\\[vm-trace\\]" \
-  | grep -v '^\{"ev":' \
+      | grep -v "^\\[vm-trace\\]" \
+      | grep -v '^\{"ev":' \
       | grep -v '^\[warn\] dev fallback: user instance BoxCall' \
       | grep -v '^\[deps\] missing:' \
       | sed -E 's/^❌ VM fallback error: *//' \
@@ -176,7 +177,7 @@ filter_noise() {
   | grep -v "FunctionPassManager object has no attribute '_as_parameter_'" \
   | grep -v '^\[macro\]\[compat\] NYASH_MACRO_BOX_CHILD_RUNNER is deprecated' \
   | grep -v '^\[warn\] dev verify:' \
-  | grep -v '^Result: ' \
+  | { if [ "${SMOKES_KEEP_RESULT:-0}" = "1" ]; then cat; else grep -v '^Result: '; fi; } \
   | grep -v '^Invalid instruction: operation on unborn instance (call birth() first)$' \
   | grep -v '^\[warn\] dev verify: NewBox ' \
   | grep -v '^\[warn\] dev verify: NewBox→birth invariant warnings:' \
@@ -302,6 +303,8 @@ run_test() {
     local start_time=$(date +%s.%N)
 
     log_info "Running test: $test_name"
+    # Expose current test name to helpers (e.g., to inject --using for specific suites)
+    export SMOKES_CURRENT_TEST="$test_name"
     if [ "${SMOKES_ENV_STAMP:-0}" = "1" ]; then
         print_env_stamp
     fi
@@ -332,6 +335,9 @@ run_test() {
 
 # Nyash実行ヘルパー（Rust VM）
 run_nyash_vm() {
+    # ========================================
+    # 1. ARGUMENT HANDLING
+    # ========================================
     local program="$1"
     shift
     local USE_PYVM="${SMOKES_USE_PYVM:-0}"
@@ -339,6 +345,14 @@ run_nyash_vm() {
     if [ "${SMOKES_USE_DEV:-0}" = "1" ]; then
         EXTRA_ARGS+=("--dev")
     fi
+    # Gate B exact stabilization: auto-inject using alias for mir_builder_* tests
+    if [ -n "${SMOKES_CURRENT_TEST:-}" ] && echo "${SMOKES_CURRENT_TEST}" | grep -q '^mir_builder_'; then
+        EXTRA_ARGS+=("--using" "selfhost.shared.mir.builder")
+    fi
+
+    # ========================================
+    # 2. ENVIRONMENT SANITIZATION
+    # ========================================
     # Optional env sanitization between rapid invocations (default OFF)
     # Enable with: SMOKES_CLEAN_ENV=1
     local ENV_PREFIX=( )
@@ -352,12 +366,18 @@ run_nyash_vm() {
     if [ -z "${NYASH_USING_AST:-}" ]; then
         export NYASH_USING_AST=1
     fi
+
+    # ========================================
+    # 3. FILE PREPARATION (-c option)
+    # ========================================
     # -c オプションの場合は一時ファイル経由で実行
     if [ "$program" = "-c" ]; then
         local code="$1"
         shift
         local tmpfile="/tmp/nyash_test_$$.nyash"
         echo "$code" > "$tmpfile"
+
+        # --- 3a. ASI Fixes ---
         # 軽量ASIFix（テスト用）: ブロック終端の余剰セミコロンを寛容に除去
         if [ "${SMOKES_ASI_STRIP_SEMI:-1}" = "1" ]; then
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$tmpfile" || true
@@ -369,15 +389,26 @@ run_nyash_vm() {
         fi
 
         fi
-        # プラグイン初期化メッセージを除外
+
+        # ========================================
+        # 4. EXECUTION WITH TIMEOUT
+        # ========================================
         ensure_hako_toml
         if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
+            # ========================================
+            # 5. NOISE FILTERING
+            # ========================================
+            # All output piped through filter_noise
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" \
             HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" \
             NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$tmpfile" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         else
+            # ========================================
+            # 5. NOISE FILTERING
+            # ========================================
+            # All output piped through filter_noise
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" \
             HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" \
@@ -388,17 +419,33 @@ run_nyash_vm() {
         rm -f "$tmpfile"
         return $exit_code
     else
+        # ========================================
+        # 3. FILE PREPARATION (file path)
+        # ========================================
+
+        # --- 3a. ASI Fixes ---
         # 軽量ASIFix（テスト用）: ブロック終端の余剰セミコロンを寛容に除去
         if [ "${SMOKES_ASI_STRIP_SEMI:-1}" = "1" ] && [ -f "$program" ]; then
             sed -i -E 's/;([[:space:]]*)(\}|$)/\1\2/g' "$program" || true
         fi
-        # プラグイン初期化メッセージを除外
+
+        # ========================================
+        # 4. EXECUTION WITH TIMEOUT
+        # ========================================
         ensure_hako_toml
         if [ -n "${SMOKES_TIMEOUT_SEC:-}" ] && [ "${SMOKES_TIMEOUT_SEC}" != "0" ]; then
+            # ========================================
+            # 5. NOISE FILTERING
+            # ========================================
+            # All output piped through filter_noise
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 timeout -s KILL "${SMOKES_TIMEOUT_SEC}s" "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
         else
+            # ========================================
+            # 5. NOISE FILTERING
+            # ========================================
+            # All output piped through filter_noise
             HAKO_PLUGIN_POLICY="${HAKO_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_POLICY="${NYASH_PLUGIN_POLICY:-auto}" NYASH_PLUGIN_CONFIG="${NYASH_PLUGIN_CONFIG:-}" \
             HAKO_HOST_HANDLE_TRACE="${HAKO_HOST_HANDLE_TRACE:-}" NYASH_PLUGIN_MAP_ARRAY_HANDLE="${NYASH_PLUGIN_MAP_ARRAY_HANDLE:-}" NYASH_VM_USE_PY="$USE_PYVM" NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" "${ENV_PREFIX[@]}" \
                 "$NYASH_BIN" --backend vm "$program" "${EXTRA_ARGS[@]}" "$@" 2>&1 | filter_noise
@@ -454,7 +501,7 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" NYASH_ALLOW_USING_FILE="${NYASH_ALLOW_USING_FILE:-1}" NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$tmpfile" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^\[provider\]' | grep -v '^\[provider/check\]' | \
@@ -476,7 +523,7 @@ run_nyash_llvm() {
         # プラグイン初期化メッセージを除外
         ensure_hako_toml
         # Harness-first policy: always use llvmlite harness unless explicitly overridden
-        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
+        env PYTHONPATH="${PYTHONPATH:-$NYASH_ROOT}" NYASH_LLVM_USE_HARNESS=1 NYASH_LLVM_RUN_EMIT_EXE="${NYASH_LLVM_RUN_EMIT_EXE:-0}" NYASH_NY_LLVM_COMPILER="$NYASH_ROOT/target/release/ny-llvmc" NYASH_EMIT_EXE_NYRT="$NYASH_ROOT/target/release" NYASH_VM_USE_PY=0 NYASH_ENTRY_ALLOW_TOPLEVEL_MAIN=1 HAKO_ALLOW_USING_FILE="${HAKO_ALLOW_USING_FILE:-1}" NYASH_ALLOW_USING_FILE="${NYASH_ALLOW_USING_FILE:-1}" NYASH_HAKO_MIN_SEM="${NYASH_HAKO_MIN_SEM:-1}" "$NYASH_BIN" --backend llvm "$program" "$@" 2>&1 | \
             grep -v "^\[UnifiedBoxRegistry\]" | grep -v "^\[FileBox\]" | grep -v "^Net plugin:" | grep -v "^\[.*\] Plugin" | \
             grep -v '^\[using\]' | grep -v '^\[using/resolve\]' | \
             grep -v '^\[provider\]' | grep -v '^\[provider/check\]' | \

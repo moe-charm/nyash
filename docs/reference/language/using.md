@@ -153,6 +153,7 @@ Using resolution is centralized under the `[using]` table. Three forms are suppo
 
 Notes
 - Aliases are fully resolved: `using json` first rewrites to `json_native`, then resolves to a concrete path via `[using.json_native]`.
+- Quoted module using is supported: `using "selfhost.shared.mir.builder" as BlockBuilderBox;` → `[modules]`/workspace exports を優先解決し、見つからない場合のみファイル探索へフォールバック（dev限定）。
 - `include` は廃止。代替は `using "./path/to/file.nyash" as Name`。prod では `hako.toml`（互換: nyash.toml）への登録が必須。
  - Declarative MIR authoring is recommended when emitting JSON: write Map/Array literals and call `.toJSON()` (see guides/declarative-mir.md).
 

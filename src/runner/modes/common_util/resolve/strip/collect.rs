@@ -118,6 +118,85 @@ pub fn collect_using_and_strip(
             // Record local alias for namespace targets to enable nested alias in subsequent lines
             crate::runner::modes::common_util::resolve::alias_expand::record_local_namespace_alias(&target, &alias_name, &mut local_aliases);
             if is_path {
+                // Special case: quoted module name (e.g., "selfhost.ns.box") should resolve
+                // via modules/exports before treating it as a literal file path.
+                // This avoids "failed to read 'ns.name'" when the intent is a module.
+                let mut handled_as_module = false;
+                if target.starts_with('"') {
+                    let inner = target.trim_matches('"');
+                    let looks_like_module = !inner.contains('/')
+                        && !inner.contains('\\')
+                        && !inner.ends_with(".hako")
+                        && !inner.ends_with(".nyash");
+                    if looks_like_module {
+                        // Merge static aliases with local aliases collected so far
+                        let mut merged_aliases = using_ctx.aliases.clone();
+                        for (k, v) in local_aliases.iter() {
+                            merged_aliases.insert(k.clone(), v.clone());
+                        }
+                        match crate::runner::pipeline::resolve_using_target(
+                            inner,
+                            false,
+                            &using_ctx.pending_modules,
+                            &using_ctx.using_paths,
+                            &merged_aliases,
+                            &using_ctx.packages,
+                            ctx_dir,
+                            strict,
+                            verbose,
+                        ) {
+                            Ok(value) => {
+                                // Only file-like results are candidates for AST merge.
+                                if !value.starts_with("dylib:")
+                                    && (value.ends_with(".hako")
+                                        || value.ends_with(".nyash")
+                                        || value.contains('/')
+                                        || value.contains('\\'))
+                                {
+                                    let mut p = std::path::PathBuf::from(&value);
+                                    if p.is_relative() {
+                                        if let Some(dir) = ctx_dir {
+                                            let cand = dir.join(&p);
+                                            if cand.exists() {
+                                                p = cand;
+                                            }
+                                        }
+                                        if p.is_relative() {
+                                            if let Ok(root) = std::env::var("NYASH_ROOT") {
+                                                let cand = std::path::Path::new(&root).join(&p);
+                                                if cand.exists() {
+                                                    p = cand;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    let path_str = p.to_string_lossy().to_string();
+                                    // Record alias pair if present (alias -> canonical path)
+                                    if let Some(alias) = alias_name.clone() {
+                                        let canon = std::fs::canonicalize(&path_str)
+                                            .ok()
+                                            .map(|pb| pb.to_string_lossy().to_string())
+                                            .unwrap_or_else(|| path_str.clone());
+                                        if !seen_aliases.contains_key(&alias) {
+                                            seen_aliases.insert(alias.clone(), (canon.clone(), line_no));
+                                            alias_pairs.push((alias, canon));
+                                        }
+                                    }
+                                    if should_skip_prelude_path(&path_str) {
+                                        if verbose { crate::runner::trace::log(format!("[using/prelude] skip path '{}' (module→file)", path_str)); }
+                                    } else {
+                                        prelude_paths.push(path_str);
+                                    }
+                                    handled_as_module = true;
+                                }
+                            }
+                            Err(_) => {
+                                // Fall back to legacy path handling below
+                            }
+                        }
+                    }
+                }
+                if handled_as_module { continue; }
                 // SSOT: Disallow file-using at top-level; allow only for sources located
                 // under a declared package root (internal package wiring), so that packages
                 // can organize their modules via file paths.

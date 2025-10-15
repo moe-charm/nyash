@@ -10,6 +10,7 @@ Key variables (current)
   - `force`（Strict）: Plugin提供がある型はフォールバック禁止。Plugin未実装/失敗は即 Fail‑Fast（InvalidInstruction）。
     - 代表エラー例: `plugin strict: builtin fallback disabled for MapBox.noSuchMethod(0 args)`
     - ルーター境界で強制され、builtin への委譲は行われません。
+  - Smokes noise control: `SMOKES_STRICT_NOISE=1` で、動的プラグイン再ビルド失敗の一部メッセージを WARN にダウングレード（後続の成功時にノイズを抑制）。
 - `HAKO_PLUGIN_CONFIG` — plugin config path (prefer `hako.toml`)  
   compat: `NYASH_PLUGIN_CONFIG`
 - `NYASH_PLUGIN_MAP_ARRAY_HANDLE` — Stage‑2: 1 で keys/values HostHandle 経路を有効化。0 で Stage‑1(keysS/valuesS) シム（plugins プロファイルは既定ON）。
@@ -20,6 +21,12 @@ Key variables (current)
 - `HAKO_HOST_HANDLE_TRACE` / `NYASH_HOST_HANDLE_TRACE` — HostHandle slot呼び出しの観測ログ（短命/既定OFF）
 - `HAKO_MIRIO_PROVIDER` (scan|yyjson) — MirIoBox の入力プロバイダー選択（既定=scan）。yyjson は JSON プラグイン配置が必要。
 
+### Smoke runner (profiles/tests)
+- `SMOKES_REQUIRED_PLUGINS` — 必須プラグインのキー集合を動的指定（カンマ/スペース区切り）。
+  - 既定: `stringbox integerbox mathbox arraybox mapbox filebox setbox`
+  - 例: `SMOKES_REQUIRED_PLUGINS="stringbox arraybox mapbox setbox" tools/smokes/v2/run.sh --profile plugins`
+  - ランナーはキー→crate 名へマップし、`cargo build -p <crate>` を自動実行（不足は警告し SKIP 方針）。
+
 ### JSON Canonicalization (testing aid)
 
 - `HAKO_JSON_CANON` (0|1) — Enable canonicalization (sorted object keys, arrays preserve order) for JSON golden/tests. Default OFF.
@@ -28,6 +35,11 @@ Key variables (current)
   - 互換: `NYASH_JSON_PROVIDER`（legacy）。同時指定時は `HAKO_MIRIO_PROVIDER` を優先。
 - `HAKO_ALLOW_USING_FILE` — using でファイルパス参照を許可（開発/スモーク用）。
 - `NYASH_USING_AST` — using prelude の AST マージを有効化（開発/スモーク用）。
+
+### Gate C (NyVM 直実行の薄配線)
+- `NYASH_GATE_C_DIRECT=1` — `--nyvm-json-file/--nyvm-pipe` を直接 Interpreter に接続し、数値1行のみ出力（静音/Fail‑Fast）。
+  - Canonicalizer: `{type:"i64", value:N}` を整数へ自動アンラップ（dst/ret.value は既定対応、他オペランドは段階拡張）。
+  - プラグインは既定OFF（`NYASH_DISABLE_PLUGINS=1`）。
 
 ## FFI / extern_c (Phase 15.76)
 
@@ -63,6 +75,13 @@ Notes
 - Prefer CLI/Profiles over ENV when possible; ENV should be minimal and scoped.
 - Primary names are `HAKO_*`; `NYASH_*` are compatibility aliases. 新規は `HAKO_*` を優先。短命のデバッグ用 ENV のみプロファイル内で使用。
 - HostHandleRouter フェーズイン中の強制ENV（`NYASH_MAP_FORCE_HOST` / `NYASH_ARRAY_FORCE_HOST` / `NYASH_ARRAY_SIZE_FORCE_HOST` / `NYASH_STRING_SIZE_FORCE_HOST`）は開発・スモーク専用。長期運用は想定しない（将来的に削除）。
+
+### NYASH_MODULES（開発限定・段階撤退）
+
+- 目的: 一時的に「モジュール名 → ファイルパス」を手元で差し込むための開発補助（短命）。
+- 現状: 既定のプロファイルでは最小限のみ（selfhost.vm.mir_min）。builder/schema の自動注入は撤退済みです。
+- 推奨: 新規テスト・アプリでは `hako.toml [modules]` / workspace の `hako_module.toml [exports]` を使用してください。ENV は最後の手段に限定します。
+- 互換: 過去のスクリプトで必要な場合のみ、テストスクリプト内で明示的に設定してください（推奨しません）。
 
 Direct load (dev‑only)
 - `NYASH_PLUGIN_DIRECT_LIB` / `NYASH_PLUGIN_DIRECT_PATH` / `NYASH_PLUGIN_DIRECT_BOXES`

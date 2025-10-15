@@ -28,6 +28,11 @@ Environment flags (minimal)
 - `SMOKES_DEFAULT_TIMEOUT=<sec>`: Per-test timeout.
 - `NYASH_USING=1`: Using resolver ON (default for smokes).
 
+Dynamic plugin set
+- `SMOKES_REQUIRED_PLUGINS` — required plugin keys (space or comma separated). Defaults to core set.
+  - Example: `SMOKES_REQUIRED_PLUGINS="stringbox arraybox mapbox setbox" tools/smokes/v2/run.sh --profile plugins`
+  - Runner maps keys → crates and builds only the required subset (`cargo build -p ...`). Missing artifacts are warned and tests may SKIP.
+
 Parity harness availability
 - Parity scripts call a shared gate `require_llvm_or_skip`.
   - If LLVM feature or Python harness(llvmlite) is unavailable, tests are SKIPped.
@@ -36,6 +41,15 @@ Parity harness availability
 Notes
 - Noise filtering is conservative; user output lines aren’t stripped. If differences surface, prefer tightening filters locally in the script.
 - For environment variables beyond the above, see `docs/guides/env-variables.md`.
+
+Module Resolution (Selfhost)
+- Prefer module resolution via `hako.toml [modules]` and workspace `hako_module.toml [exports]`.
+- Quoted module using is supported: `using "selfhost.shared.mir.builder" as BlockBuilderBox;`
+  - The resolver first looks up the module name in `[modules]`/workspace exports, then falls back to file lookup only if not matched.
+- Development ENV `NYASH_MODULES` is being phased out; it remains available for temporary, local overrides but should not be relied on in new tests.
+- Quick‑selfhost profile no longer injects builder/schema into `NYASH_MODULES` by default; tests that need them should either:
+  - add an explicit `using "selfhost.shared.mir.builder" as BlockBuilderBox;`, or
+  - define entries under `[modules]` / workspace exports.
 
 
 Selfhost Opt‑In (gated)

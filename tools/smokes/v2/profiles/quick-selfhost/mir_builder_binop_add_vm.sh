@@ -5,11 +5,13 @@ source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 
 test_mir_builder_binop_add() {
-  local code=$'using "selfhost/shared/mir/block_builder_box.hako" as BlockBuilder\n\n'
-  code+=$'static box Main {\n  main(args) {\n    local mir = BlockBuilder.binop(2, 3, "Add");\n    local insts = mir.get("functions").get(0).get("blocks").get(0).get("instructions");\n    local i=0; local out="";\n    loop(i<insts.size()) { if i>0 { out = out + "," } out = out + insts.get(i).get("op"); i = i + 1 }\n    print(out);\n    return 0;\n  }\n}\n'
+  local code=$'\n'
+  # Ensure BlockBuilderBox is available via module alias (resolver)
+  code+=$'using "selfhost.shared.mir.builder" as BlockBuilderBox;\n'
+  code+=$'static box Main {\n  main(args) {\n    print(BlockBuilderBox.binop_ops(2,3, "Add"));\n    return 0;\n  }\n}\n'
   local out ec
-  set +e; out=$(run_nyash_vm -c "$code"); ec=$?; set -e
-  out=$(echo "$out" | filter_noise | tail -n1)
+  set +e; out=$(HAKO_QUIET=0 NYASH_QUIET=0 SMOKES_KEEP_RESULT=1 NYASH_JSON_ONLY=0 run_nyash_vm -c "$code" --using selfhost.shared.mir.builder); ec=$?; set -e
+  out=$(echo "$out" | filter_noise | awk 'NF{last=$0} END{print last}')
   if check_exact "const,const,binop,ret" "$out" "mir_builder_binop_add_vm"; then
     test_pass mir_builder_binop_add_vm
   else

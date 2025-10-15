@@ -34,6 +34,27 @@ pub fn process_modules_section(
         super::modules_processor::process_overrides(ovr, pending_modules);
     }
 
+    // Top-level direct mappings under [modules] (excluding known subsections)
+    // Example:
+    // [modules]
+    // selfhost.shared.mir.schema = "selfhost/shared/mir/mir_schema_box.hako"
+    // selfhost.shared.mir.builder = "selfhost/shared/mir/block_builder_box.hako"
+    // These were previously ignored; include them by flattening a filtered view.
+    {
+        let mut filtered: toml::value::Table = toml::value::Table::new();
+        for (k, v) in modules_tbl.iter() {
+            // Skip known subsections that have dedicated processors
+            if k == "workspace" || k == "overrides" || k == "aliases" || k == "options" {
+                continue;
+            }
+            filtered.insert(k.clone(), v.clone());
+        }
+        if !filtered.is_empty() {
+            let mut flat = crate::common::using_core::flatten_modules_table(&filtered);
+            pending_modules.append(&mut flat);
+        }
+    }
+
     // [modules.aliases] (DEPRECATED)
     if let Some(alias_tbl) = modules_tbl.get("aliases").and_then(|v| v.as_table()) {
         super::modules_processor::process_aliases(alias_tbl, aliases);
