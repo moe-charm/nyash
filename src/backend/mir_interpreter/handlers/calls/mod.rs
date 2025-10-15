@@ -14,6 +14,7 @@ pub(super) mod legacy;
 // Active submodules
 pub(super) mod function;
 pub(super) mod method;
+pub(super) mod trampolines;
 
 // Re-export legacy impl to preserve current API surface
 #[allow(unused_imports)]

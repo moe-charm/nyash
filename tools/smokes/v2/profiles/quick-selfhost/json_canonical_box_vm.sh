@@ -5,9 +5,9 @@ source "$(dirname "$0")/../../lib/test_runner.sh"
 require_env || exit 2
 
 test_json_canonical_box() {
+  export HAKO_JSON_CANON=1
   local code=$'using "selfhost/shared/json/json_canonical_box.hako" as JsonCanonicalBox\n\n'
-  code+=$'static box Main {\n  main(args) {\n    local j; j = "{\\\"b\\\":1,\\\"a\\\":2}";\n'
-  code+=$'    local out; out = JsonCanonicalBox.canonicalize(j);\n    print(out);\n    return 0;\n  }\n}\n'
+  code+=$'static box Main {\n  main(args) {\n    local j = "{\\"b\\":1,\\"a\\":2}";\n    local out = JsonCanonicalBox.canonicalize(j);\n    if out.get != null {\n      print(out.get(0));\n    } else if out.to_string_box != null {\n      print(out.to_string_box().value);\n    } else {\n      print(out);\n    }\n    return 0;\n  }\n}\n'
 
   local expected='{"a":2,"b":1}'
   local raw out ec
@@ -22,4 +22,3 @@ test_json_canonical_box() {
 }
 
 run_test json_canonical_box_vm test_json_canonical_box
-

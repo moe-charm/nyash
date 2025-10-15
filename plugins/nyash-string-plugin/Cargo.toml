@@ -6,6 +6,9 @@ edition = "2021"
 [lib]
 crate-type = ["cdylib", "staticlib"]
 
+[profile.release]
+lto = false  # Phase 31-A: Disable LTO for static linking compatibility
+
 [dependencies]
 once_cell = "1.20"
 hako_core_string = { path = "../../crates/hako_core_string" }

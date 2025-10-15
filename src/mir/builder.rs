@@ -66,7 +66,6 @@ pub(crate) enum PropertyKind {
     BirthOnce,
 }
 
-
 /// MIR builder for converting AST to SSA form
 pub struct MirBuilder {
     /// Current module being built
@@ -173,6 +172,9 @@ pub struct MirBuilder {
     pub(super) schedule_mat_map: HashMap<(BasicBlockId, ValueId), ValueId>,
     /// Pending entry pin copies (emitted after PHI, before first non-PHI instruction)
     pending_entry_pin_copies: HashMap<BasicBlockId, Vec<super::MirInstruction>>,
+
+    /// Function-local cache to reuse static singleton placeholders within the same function.
+    current_fn_singletons: HashMap<String, ValueId>,
 }
 
 impl MirBuilder {
@@ -222,6 +224,7 @@ impl MirBuilder {
             local_ssa_map: HashMap::new(),
             schedule_mat_map: HashMap::new(),
             pending_entry_pin_copies: HashMap::new(),
+            current_fn_singletons: HashMap::new(),
         }
     }
 
@@ -440,6 +443,28 @@ impl MirBuilder {
     pub fn origin_register<S: Into<String>>(&mut self, value_id: ValueId, class_name: S) {
         let mut tracker = self.origin_tracker();
         tracker.register_newbox(value_id, class_name);
+    }
+
+    pub fn emit_static_me_placeholder(&mut self, box_name: &str) -> ValueId {
+        let me_id = crate::mir::builder::emission::constant::emit_void(self);
+        self.value_types
+            .insert(me_id, super::MirType::Box(box_name.to_string()));
+        self.origin_register(me_id, box_name.to_string());
+        me_id
+    }
+
+    pub(super) fn current_fn_singleton(&mut self, box_name: &str) -> ValueId {
+        if let Some(&cached) = self.current_fn_singletons.get(box_name) {
+            return cached;
+        }
+        let me = self.emit_static_me_placeholder(box_name);
+        self.current_fn_singletons
+            .insert(box_name.to_string(), me);
+        me
+    }
+
+    pub(super) fn clear_current_fn_singletons(&mut self) {
+        self.current_fn_singletons.clear();
     }
 
     pub fn origin_propagate(&mut self, from: ValueId, to: ValueId) {

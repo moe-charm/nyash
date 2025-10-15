@@ -3,6 +3,7 @@
  */
 
 use super::{BasicBlockId, ValueId};
+use crate::mir::MirType;
 
 /// Verification error types
 #[derive(Debug, Clone, PartialEq)]
@@ -20,8 +21,24 @@ pub enum VerificationError {
     /// Method calls must have an explicit receiver (Known certainty)
     MethodReceiverMissing {
         block: BasicBlockId,
+       instruction_index: usize,
+       method: String,
+    },
+    /// Static ModuleFunction 呼び出しなのに receiver を渡していない
+    ModuleFunctionStaticReceiverMissing {
+        block: BasicBlockId,
         instruction_index: usize,
-        method: String,
+        function: String,
+        expected_args: usize,
+        actual_args: usize,
+    },
+    /// Static ModuleFunction の先頭引数が Box(Type) になっていない
+    ModuleFunctionStaticReceiverTypeMismatch {
+        block: BasicBlockId,
+        instruction_index: usize,
+        function: String,
+        expected_box: String,
+        actual_type: Option<MirType>,
     },
     MultipleDefinition {
         value: ValueId,
@@ -147,6 +164,36 @@ impl std::fmt::Display for VerificationError {
             }
             VerificationError::ControlFlowError { block, reason } => {
                 write!(f, "Control flow error in block {}: {}", block, reason)
+           }
+            VerificationError::ModuleFunctionStaticReceiverMissing {
+                block,
+                instruction_index,
+                function,
+                expected_args,
+                actual_args,
+            } => {
+                write!(
+                    f,
+                    "ModuleFunction call '{}' in block {} at {} is missing static receiver: expected {} args (including singleton), found {}",
+                    function, block, instruction_index, expected_args, actual_args
+                )
+            }
+            VerificationError::ModuleFunctionStaticReceiverTypeMismatch {
+                block,
+                instruction_index,
+                function,
+                expected_box,
+                actual_type,
+            } => {
+                let actual_desc = actual_type
+                    .as_ref()
+                    .map(|ty| format!("{:?}", ty))
+                    .unwrap_or_else(|| "unknown".to_string());
+                write!(
+                    f,
+                    "ModuleFunction call '{}' in block {} at {} has receiver type mismatch: expected Box({}), found {}",
+                    function, block, instruction_index, expected_box, actual_desc
+                )
             }
             VerificationError::DominatorViolation {
                 value,

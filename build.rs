@@ -1,6 +1,12 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    // Phase 31-A: Static plugin linking
+    if std::env::var_os("CARGO_FEATURE_STATIC_STRING_PLUGIN").is_some() {
+        println!("cargo:rustc-link-search=native=target/release");
+        println!("cargo:rustc-link-lib=static=nyash_string_plugin");
+    }
+
     // Embed basic build metadata for --version in runtime (if present)
     // Safe best-effort: fall back to "unknown" when git/date are unavailable.
     // Embed minimal build metadata (optional). Disabled if helper missing.

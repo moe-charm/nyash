@@ -45,6 +45,14 @@ pub fn route(
         return result;
     }
 
+    if matches!(receiver, VMValue::Void) {
+        return Err(VMError::InvalidInstruction(format!(
+            "Method router missing receiver (static singleton not materialized) for {}({} args)",
+            method,
+            args.len()
+        )));
+    }
+
     if let VMValue::BoxRef(bx) = receiver {
         if let Some(hh) = bx.as_any().downcast_ref::<crate::runtime::host_handle_box::HostHandleBox>() {
             if let Some(real) = crate::runtime::host_handles::get(hh.id) {

@@ -344,10 +344,11 @@ impl MirVerifier {
     /// Verify unified Call invariants
     fn verify_calls(&self, function: &MirFunction) -> Result<(), Vec<VerificationError>> {
         use crate::mir::MirInstruction as I;
+        use crate::mir::MirType;
         let mut errors = Vec::new();
         for (bid, block) in &function.blocks {
             for (idx, inst) in block.instructions.iter().enumerate() {
-                if let I::Call { callee, .. } = inst {
+                if let I::Call { callee, args, .. } = inst {
                     if callee.is_none() {
                         errors.push(VerificationError::LegacyCallMissingCallee { block: *bid, instruction_index: idx });
                         continue;
@@ -355,6 +356,43 @@ impl MirVerifier {
                     if let Some(crate::mir::definitions::Callee::Method { receiver, method, certainty, .. }) = callee {
                         if matches!(certainty, crate::mir::definitions::call_unified::TypeCertainty::Known) && receiver.is_none() {
                             errors.push(VerificationError::MethodReceiverMissing { block: *bid, instruction_index: idx, method: method.clone() });
+                        }
+                    }
+                    if let Some(crate::mir::definitions::Callee::ModuleFunction(name)) = callee {
+                        if let (Some(dot), Some(slash)) = (name.find('.'), name.rfind('/')) {
+                            if slash > dot && dot > 0 && slash + 1 < name.len() {
+                                if let Ok(arity) = name[slash + 1..].parse::<usize>() {
+                                    let expected = arity.saturating_add(1);
+                                    if args.len() != expected {
+                                        errors.push(VerificationError::ModuleFunctionStaticReceiverMissing {
+                                            block: *bid,
+                                            instruction_index: idx,
+                                            function: name.clone(),
+                                            expected_args: expected,
+                                            actual_args: args.len(),
+                                        });
+                                        continue;
+                                    }
+                                    if let Some(first_arg) = args.first() {
+                                        let actual_type = function
+                                            .metadata
+                                            .value_types
+                                            .get(first_arg)
+                                            .cloned();
+                                        if let Some(MirType::Box(ref bx)) = actual_type {
+                                            if bx != &name[..dot] {
+                                                errors.push(VerificationError::ModuleFunctionStaticReceiverTypeMismatch {
+                                                    block: *bid,
+                                                    instruction_index: idx,
+                                                    function: name.clone(),
+                                                    expected_box: name[..dot].to_string(),
+                                                    actual_type,
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }

@@ -47,12 +47,16 @@ pub fn prepare_method_signature(
 /// No 'me' parameter needed
 pub fn prepare_static_method_signature(
     func_name: String,
+    box_name: &str,
     params: &[String],
     body: &[ASTNode],
 ) -> FunctionSignature {
     let mut param_types = Vec::new();
 
-    // Parameters (type unknown initially)
+    // Synthetic 'me' parameter (singleton)
+    param_types.push(MirType::Box(box_name.to_string()));
+
+    // Additional parameters supplied by user code
     for _ in params {
         param_types.push(MirType::Unknown);
     }
@@ -90,4 +94,3 @@ pub fn wrap_in_program(statements: Vec<ASTNode>) -> ASTNode {
         span: crate::ast::Span::unknown(),
     }
 }
-

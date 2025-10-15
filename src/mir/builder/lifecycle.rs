@@ -47,6 +47,7 @@ impl super::MirBuilder {
         self.current_module = Some(module);
         self.current_function = Some(main_function);
         self.current_block = Some(entry_block);
+        self.clear_current_fn_singletons();
 
         // Hint: scope enter at function entry (id=0 for main)
         self.hint_scope_enter(0);

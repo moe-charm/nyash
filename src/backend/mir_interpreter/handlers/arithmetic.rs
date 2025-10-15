@@ -2,6 +2,17 @@ use super::*;
 
 impl MirInterpreter {
     pub(super) fn handle_const(&mut self, dst: ValueId, value: &ConstValue) -> Result<(), VMError> {
+        if matches!(value, ConstValue::Void) {
+            if let Some(cur) = self.cur_fn.as_ref() {
+                if let Some(fun) = self.functions.get(cur) {
+                    if let Some(crate::mir::MirType::Box(box_name)) = fun.metadata.value_types.get(&dst) {
+                        let singleton = crate::runtime::static_singleton::get(box_name)?;
+                        self.regs.insert(dst, VMValue::BoxRef(singleton));
+                        return Ok(());
+                    }
+                }
+            }
+        }
         let v = match value {
             ConstValue::Integer(i) => VMValue::Integer(*i),
             ConstValue::Float(f) => VMValue::Float(*f),

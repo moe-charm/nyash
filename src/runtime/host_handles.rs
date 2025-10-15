@@ -126,6 +126,15 @@ pub fn get(h: u64) -> Option<Arc<dyn NyashBox>> {
     out
 }
 
+/// Release a host handle previously allocated via `to_handle_box` / `to_handle_arc`.
+///
+/// In Phase 15 the registry keeps handles alive until explicitly dropped. Canonicalization
+/// helpers and short-lived host bridge calls should call this once the returned value is
+/// materialized to avoid leaking entries.
+pub fn release(h: HostHandle) {
+    reg().drop_handle(h);
+}
+
 /// Snapshot all current handles as Arc<dyn NyashBox> roots for diagnostics/GC traversal.
 pub fn snapshot() -> Vec<Arc<dyn NyashBox>> {
     reg().snapshot()

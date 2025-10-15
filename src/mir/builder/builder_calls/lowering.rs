@@ -29,63 +29,69 @@ impl MirBuilder {
         let saved_types = std::mem::take(&mut self.value_types);
         let saved_origin = self.origin_snapshot();
         let saved_value_gen = self.value_gen.clone();
-        self.value_gen.reset();
-        self.current_function = Some(function);
-        self.current_block = Some(entry);
-        self.ensure_block_exists(entry)?;
-        let mut me_origin: Option<ValueId> = None;
-        if let Some(ref mut f) = self.current_function {
-            let me_id = self.value_gen.next();
-            me_origin = Some(me_id);
-            f.params.push(me_id);
-            self.variable_map.insert("me".to_string(), me_id);
-            for p in &params {
-                let pid = self.value_gen.next();
-                f.params.push(pid);
-                self.variable_map.insert(p.clone(), pid);
+        let saved_singletons = std::mem::take(&mut self.current_fn_singletons);
+
+        let result = (|| -> Result<(), String> {
+            self.value_gen.reset();
+            self.current_function = Some(function);
+            self.current_block = Some(entry);
+            self.ensure_block_exists(entry)?;
+            let mut me_origin: Option<ValueId> = None;
+            if let Some(ref mut f) = self.current_function {
+                let me_id = self.value_gen.next();
+                me_origin = Some(me_id);
+                f.params.push(me_id);
+                self.variable_map.insert("me".to_string(), me_id);
+                for p in &params {
+                    let pid = self.value_gen.next();
+                    f.params.push(pid);
+                    self.variable_map.insert(p.clone(), pid);
+                }
             }
-        }
-        if let Some(me_id) = me_origin {
-            self.origin_register(me_id, box_name.clone());
-        }
-        let program_ast = function_lowering::wrap_in_program(body);
-        let _last = self.build_expression(program_ast)?;
-        if !returns_value && !self.is_current_block_terminated() {
-            let void_val = crate::mir::builder::emission::constant::emit_void(self);
-            self.emit_instruction(MirInstruction::Return {
-                value: Some(void_val),
-            })?;
-        }
-        if let Some(ref mut f) = self.current_function {
-            if returns_value
-                && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
-            {
-                let mut inferred: Option<MirType> = None;
-                'search: for (_bid, bb) in f.blocks.iter() {
-                    for inst in bb.instructions.iter() {
-                        if let MirInstruction::Return { value: Some(v) } = inst {
+            if let Some(me_id) = me_origin {
+                self.origin_register(me_id, box_name.clone());
+            }
+            let program_ast = function_lowering::wrap_in_program(body);
+            let _last = self.build_expression(program_ast)?;
+            if !returns_value && !self.is_current_block_terminated() {
+                let void_val = crate::mir::builder::emission::constant::emit_void(self);
+                self.emit_instruction(MirInstruction::Return {
+                    value: Some(void_val),
+                })?;
+            }
+            if let Some(ref mut f) = self.current_function {
+                if returns_value
+                    && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
+                {
+                    let mut inferred: Option<MirType> = None;
+                    'search: for (_bid, bb) in f.blocks.iter() {
+                        for inst in bb.instructions.iter() {
+                            if let MirInstruction::Return { value: Some(v) } = inst {
+                                if let Some(mt) = self.value_types.get(v).cloned() {
+                                    inferred = Some(mt);
+                                    break 'search;
+                                }
+                            }
+                        }
+                        if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
                             if let Some(mt) = self.value_types.get(v).cloned() {
                                 inferred = Some(mt);
-                                break 'search;
+                                break;
                             }
                         }
                     }
-                    if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
-                        if let Some(mt) = self.value_types.get(v).cloned() {
-                            inferred = Some(mt);
-                            break;
-                        }
+                    if let Some(mt) = inferred {
+                        f.signature.return_type = mt;
                     }
                 }
-                if let Some(mt) = inferred {
-                    f.signature.return_type = mt;
-                }
             }
-        }
-        let finalized_function = self.current_function.take().unwrap();
-        if let Some(ref mut module) = self.current_module {
-            module.add_function(finalized_function);
-        }
+            let finalized_function = self.current_function.take().unwrap();
+            if let Some(ref mut module) = self.current_module {
+                module.add_function(finalized_function);
+            }
+            Ok(())
+        })();
+
         self.current_function = saved_function;
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
@@ -93,7 +99,8 @@ impl MirBuilder {
         self.value_types = saved_types;
         self.origin_restore(saved_origin);
         self.value_gen = saved_value_gen;
-        Ok(())
+        self.current_fn_singletons = saved_singletons;
+        result
     }
 
     // Lower a static method body into a standalone MIR function (no `me` parameter)
@@ -105,16 +112,28 @@ impl MirBuilder {
     ) -> Result<(), String> {
         // Derive static box context from function name prefix, e.g., "BoxName.method/N"
         let saved_static_ctx = self.current_static_box.clone();
+        let mut static_box_name: Option<String> = None;
         if let Some(pos) = func_name.find('.') {
             let box_name = &func_name[..pos];
             if !box_name.is_empty() {
                 // Canonicalize alias-alias (X_X -> X)
-                let canon = if let Some((a,b)) = box_name.split_once('_') { if a == b { a } else { box_name } } else { box_name };
-                self.current_static_box = Some(canon.to_string());
+                let canon = if let Some((a, b)) = box_name.split_once('_') {
+                    if a == b { a } else { box_name }
+                } else {
+                    box_name
+                };
+                let canon = canon.to_string();
+                self.current_static_box = Some(canon.clone());
+                static_box_name = Some(canon);
             }
         }
+        let box_name_for_signature = static_box_name
+            .clone()
+            .or_else(|| self.current_static_box.clone())
+            .unwrap_or_else(|| "StaticBox".to_string());
         let signature = function_lowering::prepare_static_method_signature(
             func_name,
+            &box_name_for_signature,
             &params,
             &body,
         );
@@ -127,69 +146,83 @@ impl MirBuilder {
         let saved_types = std::mem::take(&mut self.value_types);
         let saved_origin = self.origin_snapshot();
         let saved_value_gen = self.value_gen.clone();
-        self.value_gen.reset();
-        self.current_function = Some(function);
-        self.current_block = Some(entry);
-        self.ensure_block_exists(entry)?;
-        if let Some(ref mut f) = self.current_function {
-            for p in &params {
-                let pid = self.value_gen.next();
-                f.params.push(pid);
-                self.variable_map.insert(p.clone(), pid);
-            }
-        }
-        let program_ast = function_lowering::wrap_in_program(body);
-        let _last = self.build_expression(program_ast)?;
-        if !returns_value {
+        let saved_singletons = std::mem::take(&mut self.current_fn_singletons);
+
+        let result = (|| -> Result<(), String> {
+            self.value_gen.reset();
+            self.current_function = Some(function);
+            self.current_block = Some(entry);
+            self.ensure_block_exists(entry)?;
+            let mut me_origin: Option<ValueId> = None;
             if let Some(ref mut f) = self.current_function {
-                if let Some(block) = f.get_block(self.current_block.unwrap()) {
-                    if !block.is_terminated() {
-                        let void_val = crate::mir::builder::emission::constant::emit_void(self);
-                        self.emit_instruction(MirInstruction::Return {
-                            value: Some(void_val),
-                        })?;
+                let me_id = self.value_gen.next();
+                me_origin = Some(me_id);
+                f.params.push(me_id);
+                self.variable_map.insert("me".to_string(), me_id);
+                for p in &params {
+                    let pid = self.value_gen.next();
+                    f.params.push(pid);
+                    self.variable_map.insert(p.clone(), pid);
+                }
+            }
+            if let (Some(me_id), Some(ref cls)) = (me_origin, static_box_name.as_ref()) {
+                self.origin_register(me_id, cls.to_string());
+            }
+            let program_ast = function_lowering::wrap_in_program(body);
+            let _last = self.build_expression(program_ast)?;
+            if !returns_value {
+                if let Some(ref mut f) = self.current_function {
+                    if let Some(block) = f.get_block(self.current_block.unwrap()) {
+                        if !block.is_terminated() {
+                            let void_val = crate::mir::builder::emission::constant::emit_void(self);
+                            self.emit_instruction(MirInstruction::Return {
+                                value: Some(void_val),
+                            })?;
+                        }
                     }
                 }
             }
-        }
-        if let Some(ref mut f) = self.current_function {
-            if returns_value
-                && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
-            {
-                let mut inferred: Option<MirType> = None;
-                'search: for (_bid, bb) in f.blocks.iter() {
-                    for inst in bb.instructions.iter() {
-                        if let MirInstruction::Return { value: Some(v) } = inst {
+            if let Some(ref mut f) = self.current_function {
+                if returns_value
+                    && matches!(f.signature.return_type, MirType::Void | MirType::Unknown)
+                {
+                    let mut inferred: Option<MirType> = None;
+                    'search: for (_bid, bb) in f.blocks.iter() {
+                        for inst in bb.instructions.iter() {
+                            if let MirInstruction::Return { value: Some(v) } = inst {
+                                if let Some(mt) = self.value_types.get(v).cloned() {
+                                    inferred = Some(mt);
+                                    break 'search;
+                                }
+                            }
+                        }
+                        if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
                             if let Some(mt) = self.value_types.get(v).cloned() {
                                 inferred = Some(mt);
-                                break 'search;
+                                break;
                             }
                         }
                     }
-                    if let Some(MirInstruction::Return { value: Some(v) }) = &bb.terminator {
-                        if let Some(mt) = self.value_types.get(v).cloned() {
-                            inferred = Some(mt);
-                            break;
-                        }
+                    if let Some(mt) = inferred {
+                        f.signature.return_type = mt;
                     }
                 }
-                if let Some(mt) = inferred {
-                    f.signature.return_type = mt;
-                }
             }
-        }
-        let finalized = self.current_function.take().unwrap();
-        if let Some(ref mut module) = self.current_module {
-            module.add_function(finalized);
-        }
+            let finalized = self.current_function.take().unwrap();
+            if let Some(ref mut module) = self.current_module {
+                module.add_function(finalized);
+            }
+            Ok(())
+        })();
+
         self.current_function = saved_function;
         self.current_block = saved_block;
         self.variable_map = saved_var_map;
         self.value_types = saved_types;
         self.origin_restore(saved_origin);
         self.value_gen = saved_value_gen;
-        // Restore static box context
+        self.current_fn_singletons = saved_singletons;
         self.current_static_box = saved_static_ctx;
-        Ok(())
+        result
     }
 }

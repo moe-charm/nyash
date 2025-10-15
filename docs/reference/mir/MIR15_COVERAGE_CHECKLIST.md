@@ -15,6 +15,15 @@ How to verify
   - Run representative examples or unit snippets via `--backend vm`.
   - Enable VM stats for visibility: `NYASH_VM_STATS=1`
 
+Static→Singleton invariants (Phase‑31)
+- ModuleFunction 呼び出しは `receiver=Type.singleton` を第1引数に含む（実体は VM 側で BoxRef に具体化される）。
+- Verifier は以下を Fail‑Fast する：
+  - `callee=ModuleFunction("Type.method/N")` なのに `args.len()!=N+1`（受領者欠落）
+  - 先頭引数の型が `Box(Type)` ではない（型不一致）
+- 確認方法：
+  - MIR JSON を出力して ModuleFunction 形状を確認
+  - Verifier を有効にして（既定ON） missing/type mismatch を検出
+
 - JIT (compiler-only, exe emission where applicable)
   - Enable JIT compile path and hostcall: `NYASH_JIT_EXEC=1 NYASH_JIT_THRESHOLD=1 NYASH_JIT_HOSTCALL=1`
   - For PHI minimal path tests: `NYASH_JIT_PHI_MIN=1`
@@ -32,6 +41,7 @@ Suggested minimal scenarios
 - Load/Store: local slot store → load (VM) and JIT local slots (lower/core) coverage.
 - TypeOp: `is`/`as` via builder emits TypeOp.
 - NewBox/BoxCall: call basic methods (e.g., StringBox.length, IntegerBox.get via PluginInvoke where applicable).
+  - ModuleFunction: `call("String.len/1", s)` が `ModuleFunction("StringBox.length/0")` + `args=[s]` になること
 - PluginInvoke/by-name: `nyash.handle.of` + invoke name path.
 - Arrays: len/get/set/push hostcalls (JIT: handle-based externs wired).
 - ExternCall: `env.console.log`, `env.debug.trace`, `env.runtime.checkpoint`.

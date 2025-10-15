@@ -1,6 +1,6 @@
 # Phase‑31 — Box Normalization（Static→Singleton 正規化）
 
-最終更新: 2025‑10‑16
+最終更新: 2025‑10‑16（A‑1b 反映）
 
 ## サマリ
 - ねらい: すべてのメソッド呼び出し形を「me + args」に統一し、static box を型ごとのシングルトンインスタンス（`Type.singleton`）に正規化する。
@@ -163,3 +163,40 @@
 
 > 補足: 今回のバグ（ArrayBox(1) 漏れ）の根は「受け渡し規約が2通りあった」こと。構造で1通りに揃えるのが再発防止の最短路だよ。
 
+---
+
+## 進捗（実装済み）
+
+### Phase A‑1b — 関数スコープのシングルトン・キャッシュ導入（完了）
+- 目的: `emit_static_me_placeholder()` を各所で都度呼ぶ“分散生成”をやめ、関数内で 1 回だけ生成して再利用する。
+- 実装:
+  - `MirBuilder.current_fn_singletons: HashMap<String, ValueId>` を追加。
+  - 関数開始時にスコープを作り、関数終了時に復元（キャッシュは関数単位で生存）。
+  - `maybe_prepend_static_me()` から `current_fn_singleton(box_name)` を利用し、ModuleFunction 経由の静的呼び出しに一貫して `me` を付与。
+- 変更点（主な参照）:
+  - `src/mir/builder.rs:176, 448-468` — キャッシュ本体とプレースホルダ生成の単一ルート。
+  - `src/mir/builder/builder_calls/build.rs:39-46, 138-149, 232-241, 249-258, 265-274` — `maybe_prepend_static_me()` による受領者注入。
+  - `src/mir/builder/builder_calls/lowering.rs` — メソッド/静的メソッドを関数化する際にキャッシュを save/restore。
+  - `src/mir/builder/lifecycle.rs:50` — `main` 構築時のキャッシュ初期化。
+- 効果:
+  - 同一関数内の静的メソッド連続呼び出しで `me` プレースホルダの重複生成が解消。
+  - 将来の OnceLock 実体置換を 1 箇所で行える導線ができた。
+
+### Phase A‑1c — ModuleFunction トランポリン整備 & Verifier 補強（完了）
+- 目的: ModuleFunction 経由の静的呼び出しで receiver 欠落を早期検出し、VM 側も常に receiver あり前提に揃える。
+- 実装:
+  - Verifier: `ModuleFunction(box.method/arity)` で Known かつ Box 型の受領者が無い場合に Fail‑Fast。
+  - Runtime: MethodRouter が Void 受領者を即時 InvalidInstruction とし、legacy fallback も receiver 前提に統一。
+  - Trampoline: `handlers/calls/trampolines.rs` を追加し、Array/Map/String/Console の ModuleFunction → Method 変換を表駆動化。
+
+### Phase A‑2 — singleton 実体（lazy 初期化）導入（完了）
+- 目的: `emit_static_me_placeholder()` が生成する Void const を実体 BoxRef に置き換える。
+- 実装:
+  - `runtime/static_singleton.rs` を追加し、`OnceCell<Mutex<…>>` で Box 名ごとのシングルトンを lazy 作成。
+  - Interpreter `handle_const` が `MirType::Box(..)` を検知した場合に `static_singleton::get()` を参照し、`VMValue::BoxRef` を登録。
+- 効果:
+  - MIR 側は Box 型として `me` を扱い、VM 実行時に実体 Arc<NyashBox> が注入される。後続のマクロ/Verifier 強化に備えて受領者が具体化された。
+
+### 残タスク（Phase A 継続）
+- Plugin ABI: 既存 C ABI 互換のトランポリンを registry に登録し、外部呼び出し経路を段階移行。
+- Docs/Tests: Phase-31 変更点のドキュメント整備とスモーク追加（singleton/Verifier 回り）。

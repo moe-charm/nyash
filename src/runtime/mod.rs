@@ -47,6 +47,7 @@ pub mod diagnostics;
 pub mod spec_ingest_box;
 pub mod env_gate_box;
 pub mod method_ids_box;
+pub mod static_singleton;
 
 #[cfg(test)]
 mod tests;

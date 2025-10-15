@@ -255,14 +255,60 @@ rebuild_plugins() {
         for req in "${required_plugins[@]}"; do
             case "$req" in
                 filebox)
-                    if [ -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" ]; then
-                        cp -f "plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so" \
-                              "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so" 2>/dev/null || true
+                    local src="plugins/nyash-filebox-plugin/target/release/libnyash_filebox_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_filebox_plugin.so" ]; then
+                        src="target/release/libnyash_filebox_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-filebox-plugin/libnyash_filebox_plugin.so" 2>/dev/null || true
                     fi ;;
                 setbox)
-                    if [ -f "plugins/nyash-set-plugin/target/release/libnyash_set_plugin.so" ]; then
-                        cp -f "plugins/nyash-set-plugin/target/release/libnyash_set_plugin.so" \
-                              "plugins/nyash-set-plugin/libnyash_set_plugin.so" 2>/dev/null || true
+                    local src="plugins/nyash-set-plugin/target/release/libnyash_set_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_set_plugin.so" ]; then
+                        src="target/release/libnyash_set_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-set-plugin/libnyash_set_plugin.so" 2>/dev/null || true
+                    fi ;;
+                stringbox)
+                    local src="plugins/nyash-string-plugin/target/release/libnyash_string_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_string_plugin.so" ]; then
+                        src="target/release/libnyash_string_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-string-plugin/libnyash_string_plugin.so" 2>/dev/null || true
+                    fi ;;
+                arraybox)
+                    local src="plugins/nyash-array-plugin/target/release/libnyash_array_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_array_plugin.so" ]; then
+                        src="target/release/libnyash_array_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-array-plugin/libnyash_array_plugin.so" 2>/dev/null || true
+                    fi ;;
+                mapbox)
+                    local src="plugins/nyash-map-plugin/target/release/libnyash_map_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_map_plugin.so" ]; then
+                        src="target/release/libnyash_map_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-map-plugin/libnyash_map_plugin.so" 2>/dev/null || true
+                    fi ;;
+                integerbox)
+                    local src="plugins/nyash-integer-plugin/target/release/libnyash_integer_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_integer_plugin.so" ]; then
+                        src="target/release/libnyash_integer_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-integer-plugin/libnyash_integer_plugin.so" 2>/dev/null || true
+                    fi ;;
+                mathbox)
+                    local src="plugins/nyash-math-plugin/target/release/libnyash_math_plugin.so"
+                    if [ ! -f "$src" ] && [ -f "target/release/libnyash_math_plugin.so" ]; then
+                        src="target/release/libnyash_math_plugin.so"
+                    fi
+                    if [ -f "$src" ]; then
+                        cp -f "$src" "plugins/nyash-math-plugin/libnyash_math_plugin.so" 2>/dev/null || true
                     fi ;;
                 *) : ;;
             esac

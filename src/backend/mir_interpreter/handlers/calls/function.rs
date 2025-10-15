@@ -565,39 +565,10 @@ impl MirInterpreter {
             format!("{}/{}", name, args.len())
         };
 
-        // Bridge: Builtin vtable dispatch for dotted names (ArrayBox/MapBox/StringBox/ConsoleBox)
-        // This allows tests and builder to use unified ModuleFunction while VM routes to BoxCall.
         if let Some((class, method_arity)) = name.split_once('.') {
             let method = if let Some((m, _arity)) = method_arity.split_once('/') { m } else { method_arity };
-            if !args.is_empty() {
-                match class {
-                    "ArrayBox" | "MapBox" | "StringBox" | "ConsoleBox" => {
-                        if method != "birth" {
-                            // Early extern for String length/size/len to avoid fragile Method(receiver)
-                            if class == "StringBox" && (method == "size" || method == "length" || method == "len") {
-                                let recv = args[0];
-                                let cal = crate::mir::Callee::Extern("nyrt.string.length".to_string());
-                                // Extern expects (recv) as args
-                                return self.execute_callee_call(&cal, &[*&recv]);
-                            }
-                            // Build a Method callee and reuse the legacy method path which returns VMValue
-                            let recv = args[0];
-                            let rest: Vec<ValueId> = args.iter().copied().skip(1).collect();
-                            let box_name = match self.reg_load(recv) {
-                                Ok(super::super::VMValue::BoxRef(bx)) => {
-                                    if let Some(inst) = bx.as_any().downcast_ref::<crate::instance_v2::InstanceBox>() {
-                                        inst.class_name.clone()
-                                    } else { bx.type_name().to_string() }
-                                }
-                                Ok(super::super::VMValue::String(_)) => "StringBox".to_string(),
-                                _ => class.to_string(),
-                            };
-                            let cal = crate::mir::Callee::Method { box_name, method: method.to_string(), receiver: Some(recv), certainty: crate::mir::definitions::call_unified::TypeCertainty::Known };
-                            return self.execute_callee_call(&cal, &rest);
-                        }
-                    }
-                    _ => {}
-                }
+            if let Some(result) = super::trampolines::try_module_function_trampoline(self, class, method, args) {
+                return result;
             }
         }
 

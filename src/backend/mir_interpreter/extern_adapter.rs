@@ -1,10 +1,27 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::backend::vm_types::VMValue;
+use crate::backend::vm_types::{VMError, VMValue};
 use crate::mir::externs::registry as extreg;
 
-use crate::backend::vm_types::VMError;
+#[path = "extern_adapter/extern_array.rs"]
+mod extern_array;
+#[path = "extern_adapter/extern_env.rs"]
+mod extern_env;
+#[path = "extern_adapter/extern_file_dev.rs"]
+mod extern_file_dev;
+#[path = "extern_adapter/extern_future_legacy.rs"]
+mod extern_future_legacy;
+#[path = "extern_adapter/extern_map.rs"]
+mod extern_map;
+#[path = "extern_adapter/extern_nykernel_stub.rs"]
+mod extern_nykernel_stub;
+#[path = "extern_adapter/extern_rune_dev.rs"]
+mod extern_rune_dev;
+#[path = "extern_adapter/extern_set.rs"]
+mod extern_set;
+#[path = "extern_adapter/extern_string.rs"]
+mod extern_string;
 
 pub type HandlerFn = fn(&[VMValue]) -> Result<VMValue, VMError>;
 
@@ -36,40 +53,18 @@ fn build_adapter() -> VmExternAdapterBox {
         Ok(VMValue::Integer(clamped))
     });
     // string/array/map/set/env
-    {
-        #[path = "extern_adapter/extern_string.rs"] mod extern_string; extern_string::register(&mut map);
-        #[path = "extern_adapter/extern_array.rs"]  mod extern_array;  extern_array::register(&mut map);
-        #[path = "extern_adapter/extern_map.rs"]    mod extern_map;    extern_map::register(&mut map);
-        #[path = "extern_adapter/extern_set.rs"]    mod extern_set;    extern_set::register(&mut map);
-        #[path = "extern_adapter/extern_env.rs"]    mod extern_env;    extern_env::register(&mut map);
-    }
+    extern_string::register(&mut map);
+    extern_array::register(&mut map);
+    extern_map::register(&mut map);
+    extern_set::register(&mut map);
+    extern_env::register(&mut map);
 
     // Register future/async legacy externs (isolated for feature-gating/ownership)
-    #[allow(unused)]
-    {
-        #[allow(unused_imports)]
-        use crate as nyash_rust;
-        #[allow(clippy::single_component_path_imports)]
-        {
-            // Delegate registration into a small submodule to reduce coupling
-            #[path = "extern_adapter/extern_future_legacy.rs"]
-            mod extern_future_legacy;
-            extern_future_legacy::register(&mut map);
-        }
-    }
-
-    // Final override pass removed: split modules own all handlers
-
-    // array/map externs are registered via split modules
+    extern_future_legacy::register(&mut map);
 
     // nyrt.rune.eval(code: String) -> i64 (skeleton mock)
     // Boxed: nyrt.rune.*
-    #[allow(unused)]
-    {
-        #[path = "extern_adapter/extern_rune_dev.rs"]
-        mod extern_rune_dev;
-        extern_rune_dev::register(&mut map);
-    }
+    extern_rune_dev::register(&mut map);
 
     // nyrt.ops.op_eq(a, b): bool - Equality operator
     // Delegates to op_handlers::op_eq_static() for logic reuse
@@ -86,12 +81,7 @@ fn build_adapter() -> VmExternAdapterBox {
     });
 
     // Boxed: nyrt.file.*
-    #[allow(unused)]
-    {
-        #[path = "extern_adapter/extern_file_dev.rs"]
-        mod extern_file_dev;
-        extern_file_dev::register(&mut map);
-    }
+    extern_file_dev::register(&mut map);
 
 
     // --- nykernel.* (dev stub for wasm std Array) ---
@@ -104,12 +94,7 @@ fn build_adapter() -> VmExternAdapterBox {
     // env.future externs are registered via extern_adapter/extern_future_legacy.rs
 
     // Boxed: nykernel.* dev stub
-    #[allow(unused)]
-    {
-        #[path = "extern_adapter/extern_nykernel_stub.rs"]
-        mod extern_nykernel_stub;
-        extern_nykernel_stub::register(&mut map);
-    }
+    extern_nykernel_stub::register(&mut map);
 
     VmExternAdapterBox { handlers: map }
 }

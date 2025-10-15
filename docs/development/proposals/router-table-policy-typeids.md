@@ -12,6 +12,8 @@ Scope (small, reversible)
 - Introduced `src/runtime/host_handle_router/consts.rs` with slot IDs and error codes.
 - Added `src/runtime/method_router_box/tables.rs` to hold declarative HostHandle routes (String/Array/Map).
 - Refactored `method_router_box/plugin.rs` and `builtin.rs` to consume the table helpers and `env_gate_box`.
+- Introduced `method_router_box/host_slot.rs` as the single HostHandle execution helper (plugin/builtin/primitive String share TLV + ERR_BUF_SMALL handling).
+- builtin router now consumes the same Array/Map tables; primitive String also reuses `STRING_HOST_ROUTES` before falling back to TypeRegistry slots.
 - Split VM extern adapter into per‑iface modules (`extern_{string,array,map,set,env}.rs`) with `nyrt.time.now_ms` remaining inline.
 - Behavior remains unchanged (env flags preserved), no semantic shifts.
 

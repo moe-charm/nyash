@@ -13,14 +13,12 @@ use hako_abi_impl::tlv::{
 };
 
 // Import instance manager macros
-use hako_abi_impl::{define_instance_storage, with_instance, with_instance_mut};
+use hako_abi_impl::{define_instance_storage, with_instance};
 
 const OK: i32 = 0;
-const E_SHORT: i32 = -1;
 const E_TYPE: i32 = -2;
 const E_METHOD: i32 = -3;
 const E_ARGS: i32 = -4;
-const E_PLUGIN: i32 = -5;
 const E_HANDLE: i32 = -8;
 
 const M_BIRTH: u32 = 0;
@@ -89,178 +87,119 @@ extern "C" fn string_invoke_id(
     result: *mut u8,
     result_len: *mut usize,
 ) -> i32 {
-    unsafe {
-        match method_id {
-            M_BIRTH => {
-                // Create new StringBox instance
-                let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                let init = read_arg_string(args, args_len, 0).unwrap_or_else(|| String::new());
-                eprintln!("[StringBox] M_BIRTH called: id={}, init={:?}", id, init);
-                if let Ok(mut m) = INST.lock() {
-                    m.insert(id, StrInstance { s: init.clone() });
-                    eprintln!("[StringBox] Inserted into INST map");
-                    return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
-                } else {
-                    return E_PLUGIN;
-                }
+    match method_id {
+        M_BIRTH => {
+            let init = read_arg_string(args, args_len, 0).unwrap_or_default();
+            let id = allocate_instance_id();
+            match store_instance(id, StrInstance { s: init }) {
+                Ok(()) => write_tlv_handle(TYPE_ID_STRING, id, result, result_len),
+                Err(code) => code,
             }
-            M_FINI => {
-                // Destroy StringBox instance
-                if let Ok(mut m) = INST.lock() {
-                    m.remove(&instance_id);
-                    return OK;
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_IS_EMPTY => {
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_bool(inst.s.is_empty(), result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_LENGTH => {
-                eprintln!("[StringBox] M_LENGTH called: instance_id={}", instance_id);
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let len = inst.s.len();
-                        eprintln!(
-                            "[StringBox] Found instance, string={:?}, len={}",
-                            inst.s, len
-                        );
-                        return write_tlv_i64(len as i64, result, result_len);
-                    } else {
-                        eprintln!(
-                            "[StringBox] Instance {} not found in INST map!",
-                            instance_id
-                        );
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_SUBSTRING => {
-                // args: start(i64), end(i64)
-                let start = read_arg_i64(args, args_len, 0).unwrap_or(0);
-                let end = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let sub = hako_core_string::substring_bytes(&inst.s, start, end);
-                        return write_tlv_string(&sub, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_INDEX_OF => {
-                // args: sub(String), from(i64 optional)
-                let needle = read_arg_string(args, args_len, 0).unwrap_or_default();
-                let from = read_arg_i64(args, args_len, 1).unwrap_or(0);
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let idx = hako_core_string::index_of(&inst.s, &needle, from);
-                        return write_tlv_i64(idx, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_LAST_INDEX_OF => {
-                // args: sub(String), from(i64 optional)
-                let needle = read_arg_string(args, args_len, 0).unwrap_or_default();
-                let from = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let idx = hako_core_string::last_index_of(&inst.s, &needle, from);
-                        return write_tlv_i64(idx, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_CHAR_AT => {
-                // args: idx(i64) -> returns String (one unicode scalar value)
-                let idx = read_arg_i64(args, args_len, 0).unwrap_or(0);
-                if idx < 0 {
-                    return E_ARGS;
-                }
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let ch_opt = inst.s.chars().nth(idx as usize);
-                        let s = ch_opt.map(|c| c.to_string()).unwrap_or_default();
-                        return write_tlv_string(&s, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_TO_UTF8 => {
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        return write_tlv_string(&inst.s, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            M_CONCAT => {
-                // support String/Bytes or StringBox handle
-                let (ok, rhs) = if let Some((t, inst)) = read_arg_handle(args, args_len, 0) {
-                    if t != TYPE_ID_STRING {
-                        return E_TYPE;
-                    }
-                    if let Ok(m) = INST.lock() {
-                        if let Some(s2) = m.get(&inst) {
-                            (true, s2.s.clone())
-                        } else {
-                            (false, String::new())
-                        }
-                    } else {
-                        return E_PLUGIN;
-                    }
-                } else if let Some(s) = read_arg_string(args, args_len, 0) {
-                    (true, s)
-                } else {
-                    (false, String::new())
-                };
-                if !ok {
-                    return E_ARGS;
-                }
-                if let Ok(m) = INST.lock() {
-                    if let Some(inst) = m.get(&instance_id) {
-                        let mut new_s = inst.s.clone();
-                        new_s.push_str(&rhs);
-                        drop(m);
-                        let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);
-                        if let Ok(mut mm) = INST.lock() {
-                            mm.insert(id, StrInstance { s: new_s });
-                        }
-                        return write_tlv_handle(TYPE_ID_STRING, id, result, result_len);
-                    } else {
-                        return E_HANDLE;
-                    }
-                } else {
-                    return E_PLUGIN;
-                }
-            }
-            _ => E_METHOD,
         }
+        M_FINI => {
+            if remove_instance(instance_id).is_some() {
+                OK
+            } else {
+                E_HANDLE
+            }
+        }
+        M_IS_EMPTY => match with_instance!(instance_id, |inst: &StrInstance| inst.s.is_empty()) {
+            Ok(is_empty) => write_tlv_bool(is_empty, result, result_len),
+            Err(code) => code,
+        },
+        M_LENGTH => match with_instance!(instance_id, |inst: &StrInstance| inst.s.len()) {
+            Ok(len) => write_tlv_i64(len as i64, result, result_len),
+            Err(code) => code,
+        },
+        M_SUBSTRING => {
+            let start = read_arg_i64(args, args_len, 0).unwrap_or(0);
+            let end = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
+            match with_instance!(instance_id, |inst: &StrInstance| {
+                hako_core_string::substring_bytes(&inst.s, start, end)
+            }) {
+                Ok(sub) => write_tlv_string(&sub, result, result_len),
+                Err(code) => code,
+            }
+        }
+        M_INDEX_OF => {
+            let needle = read_arg_string(args, args_len, 0).unwrap_or_default();
+            let from = read_arg_i64(args, args_len, 1).unwrap_or(0);
+            match with_instance!(instance_id, |inst: &StrInstance| {
+                hako_core_string::index_of(&inst.s, &needle, from)
+            }) {
+                Ok(idx) => write_tlv_i64(idx, result, result_len),
+                Err(code) => code,
+            }
+        }
+        M_LAST_INDEX_OF => {
+            let needle = read_arg_string(args, args_len, 0).unwrap_or_default();
+            let from = read_arg_i64(args, args_len, 1).unwrap_or(i64::MAX);
+            match with_instance!(instance_id, |inst: &StrInstance| {
+                hako_core_string::last_index_of(&inst.s, &needle, from)
+            }) {
+                Ok(idx) => write_tlv_i64(idx, result, result_len),
+                Err(code) => code,
+            }
+        }
+        M_CHAR_AT => {
+            let idx = read_arg_i64(args, args_len, 0).unwrap_or(0);
+            if idx < 0 {
+                return E_ARGS;
+            }
+            match with_instance!(instance_id, |inst: &StrInstance| {
+                inst.s.chars().nth(idx as usize).map(|c| c.to_string())
+            }) {
+                Ok(Some(s)) => write_tlv_string(&s, result, result_len),
+                Ok(None) => write_tlv_string("", result, result_len),
+                Err(code) => code,
+            }
+        }
+        M_CHAR_CODE_AT => {
+            let idx = read_arg_i64(args, args_len, 0).unwrap_or(0);
+            if idx < 0 {
+                return E_ARGS;
+            }
+            match with_instance!(instance_id, |inst: &StrInstance| {
+                inst.s.chars().nth(idx as usize).map(|c| c as i64)
+            }) {
+                Ok(Some(codepoint)) => write_tlv_i64(codepoint, result, result_len),
+                Ok(None) => E_ARGS,
+                Err(code) => code,
+            }
+        }
+        M_TO_UTF8 => match with_instance!(instance_id, |inst: &StrInstance| inst.s.clone()) {
+            Ok(value) => write_tlv_string(&value, result, result_len),
+            Err(code) => code,
+        },
+        M_CONCAT => {
+            let rhs = if let Some((type_id, other_id)) = read_arg_handle(args, args_len, 0) {
+                if type_id != TYPE_ID_STRING {
+                    return E_TYPE;
+                }
+                match with_instance!(other_id, |inst: &StrInstance| inst.s.clone()) {
+                    Ok(s) => s,
+                    Err(code) => return code,
+                }
+            } else if let Some(s) = read_arg_string(args, args_len, 0) {
+                s
+            } else {
+                return E_ARGS;
+            };
+
+            let base = match with_instance!(instance_id, |inst: &StrInstance| inst.s.clone()) {
+                Ok(s) => s,
+                Err(code) => return code,
+            };
+            let mut merged = base;
+            merged.push_str(&rhs);
+
+            let new_id = allocate_instance_id();
+            match store_instance(new_id, StrInstance { s: merged }) {
+                Ok(()) => write_tlv_handle(TYPE_ID_STRING, new_id, result, result_len),
+                Err(code) => code,
+            }
+        }
+        _ => E_METHOD,
     }
 }
 

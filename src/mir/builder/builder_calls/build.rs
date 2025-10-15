@@ -36,6 +36,15 @@ impl MirBuilder {
         Ok(Some(dst))
     }
 
+    fn maybe_prepend_static_me(&mut self, target: &str, args: &mut Vec<ValueId>) {
+        if let Some((box_name, arity)) = self.method_index.static_signature(target) {
+            if args.len() == arity {
+                let me = self.current_fn_singleton(&box_name);
+                args.insert(0, me);
+            }
+        }
+    }
+
     // === ChatGPT5 Pro Design: Type-safe Call Resolution System ===
     /// Normalize external (builtin) ModuleFunction names so dotted+arity strings always resolve.
     /// Examples:
@@ -127,6 +136,7 @@ impl MirBuilder {
                 if let Some(ext_name) = normalized {
                     let dst = self.value_gen.next();
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
+                    self.maybe_prepend_static_me(&ext_name, &mut call_args);
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(dst),
                         func: fun_val,
@@ -212,6 +222,7 @@ impl MirBuilder {
                                 let fun_val2 = crate::mir::builder::name_const::make_name_const_result(self, &target_key)?;
                                 let mut arg_values2 = Vec::new();
                                 for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
+                                self.maybe_prepend_static_me(&target_key, &mut arg_values2);
                                 self.emit_instruction(MirInstruction::Call {
                                     dst: Some(dst2),
                                     func: fun_val2,
@@ -230,6 +241,7 @@ impl MirBuilder {
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
                     let mut arg_values = Vec::new();
                     for a in &args { arg_values.push(self.build_expression(a.clone())?); }
+                    self.maybe_prepend_static_me(&name, &mut arg_values);
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(dst), func: fun_val,
                         callee: Some(crate::mir::Callee::ModuleFunction(name.clone())),
@@ -244,6 +256,7 @@ impl MirBuilder {
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &cand2)?;
                     let mut arg_values = Vec::new();
                     for a in &args { arg_values.push(self.build_expression(a.clone())?); }
+                    self.maybe_prepend_static_me(&cand2, &mut arg_values);
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(dst), func: fun_val,
                         callee: Some(crate::mir::Callee::ModuleFunction(cand2.clone())),
@@ -262,6 +275,7 @@ impl MirBuilder {
                         let fun_val2 = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
                         let mut arg_values2 = Vec::new();
                         for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
+                        self.maybe_prepend_static_me(&fname, &mut arg_values2);
                         self.emit_instruction(MirInstruction::Call {
                             dst: Some(dst2),
                             func: fun_val2,
@@ -292,6 +306,7 @@ impl MirBuilder {
         if let Some(ext_name) = self.normalize_external_module_function_name(&name, arg_values.len()) {
             let dst = self.value_gen.next();
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
+            self.maybe_prepend_static_me(&ext_name, &mut arg_values);
             self.emit_instruction(MirInstruction::Call {
                 dst: Some(dst),
                 func: fun_val,
@@ -312,6 +327,7 @@ impl MirBuilder {
             };
             let dst = self.value_gen.next();
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &target)?;
+            self.maybe_prepend_static_me(&target, &mut arg_values);
             self.emit_instruction(MirInstruction::Call {
                 dst: Some(dst),
                 func: fun_val,
@@ -379,6 +395,7 @@ impl MirBuilder {
                     let dst = self.value_gen.next();
                     // func field retained for legacy compatibility (diagnostics/SSA references)
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
+                    self.maybe_prepend_static_me(&fname, &mut arg_values);
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(dst),
                         func: fun_val,
@@ -401,6 +418,7 @@ impl MirBuilder {
                     let result_id = self.value_gen.next();
                     let fun_name = format!("{}.{}{}", cls_name, name, format!("/{}", arg_values.len()));
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fun_name)?;
+                    self.maybe_prepend_static_me(&fun_name, &mut arg_values);
                     self.emit_instruction(MirInstruction::Call {
                         dst: Some(result_id),
                         func: fun_val,

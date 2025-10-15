@@ -1059,6 +1059,276 @@ ChatGPT思考:
 
 ---
 
+### 8.5 Phase 31: Static Box Singleton 正規化 — 予言の成就
+
+#### 第1幕: 初期提案と却下（2025年8月）
+
+**開発初期の直感**:
+```
+tomoaki:
+「static box を singleton に正規化したらどうかにゃ？
+ static method も instance method と同じ形で呼べるようになる」
+
+ChatGPT:
+「それは...重いですね
+ すべての static box に singleton インスタンスが必要になります
+ メモリオーバーヘッドが増えます
+ 本当に必要ですか？」
+    ↓
+普通に断られた！
+```
+
+**却下の理由**:
+- static box は状態を持たない → singleton 不要
+- メモリオーバーヘッド（型ごとに1インスタンス）
+- 実装コスト（Builder/Router/Verifier すべて変更）
+- 「やりすぎ」感
+
+#### 第2幕: 2ヶ月後のバグ発見（2025年10月）
+
+**JsonCanonicalBox ArrayBox(1) Bug**:
+```rust
+// 問題: static box method が receiver を受け取ってしまう
+JsonCanonicalBox.canonicalize(json)
+    ↓ Router が勝手に receiver 追加
+JsonCanonicalBox.canonicalize(JsonCanonicalBox, json)  // ArrayBox(1) になる！
+```
+
+**根本原因**:
+```
+呼び出し規約が2通り存在:
+  - static box method: receiver なし (args のみ)
+  - instance method: receiver あり (me + args)
+    ↓
+Router が「いつ receiver を渡すべきか」を判断できない
+    ↓
+パラメータ数でヒューリスティック判定
+    ↓
+条件分岐が複雑化 → バグ混入
+```
+
+**tomoaki の反応**:
+```
+「あ...これ、8月に提案した singleton 正規化で解決できるやつだ...
+ ChatGPT に却下されたやつ...
+ やっぱり必要だったんだにゃ...」
+```
+
+#### 第3幕: 決断と Phase 31 計画（2025年10月16日）
+
+**判断の逆転**:
+```yaml
+8月時点:
+  - 理由: 「Everything is Box の完全性」
+  - ChatGPT: "重い、不要" → 却下
+  - 結果: 見送り
+
+10月時点:
+  - 理由: 「実際のバグが発生」
+  - ChatGPT: "Phase 31 として実装しましょう" → 即採用
+  - 結果: Phase 31 計画書完成（ChatGPT5 Pro と協議）
+```
+
+**Phase 31 の目標**:
+```
+すべてのメソッド呼び出しを「me + args」に統一
+
+Before (2通り):
+  - static: Type.method(args)           ← receiver なし
+  - instance: instance.method(args)     ← receiver あり
+
+After (1通り):
+  - static: Type.singleton.method(args) ← receiver = Type.singleton
+  - instance: instance.method(args)     ← receiver = instance
+    ↓
+完全統一！Router は常に receiver を受け取る！
+```
+
+#### 技術的正規化の詳細
+
+**Builder 層の変換**:
+```rust
+// ModuleFunction 呼び出し発見時
+if method != "birth" && is_static_box(Type) {
+    // Singleton 正規化
+    let singleton = get_or_create_singleton(Type);
+    emit_method_call(Type, Some(singleton), method, args);
+} else {
+    // Instance はそのまま
+    emit_method_call(Type, receiver, method, args);
+}
+```
+
+**Singleton キャッシュ**:
+```rust
+struct MirBuilder {
+    static_singletons: HashMap<String, ValueId>,
+}
+
+fn get_singleton(&mut self, type_name: &str) -> ValueId {
+    if let Some(&id) = self.static_singletons.get(type_name) {
+        return id;  // Cache hit
+    }
+    // 初回のみ生成
+    let id = self.emit_const(Void, origin=Type.singleton);
+    self.static_singletons.insert(type_name.to_string(), id);
+    id
+}
+```
+
+#### 実装上の改良点（tomoaki の指摘）
+
+**ChatGPT5 Pro の初期実装**:
+```rust
+// 多箇所で呼び出し（分散）
+emit_static_me_placeholder(...);  // build.rs:120
+emit_static_me_placeholder(...);  // build.rs:236
+emit_static_me_placeholder(...);  // build.rs:247
+// ... 9箇所に分散
+```
+
+**tomoaki の懸念**:
+```
+「木構造作るときに一つのシングルトンに正規化すればいいのでは？
+ 結構下の方で対応しているように見える...
+ 後で置き換えるのかにゃ？」
+```
+
+**改良方針**:
+```rust
+// 2段階置き換え
+Phase A-1 (現在):
+  - 分散呼び出し → キャッシュ統一
+  - emit_static_me_placeholder() 削除
+  - get_singleton() に一本化
+
+Phase A-2 (将来):
+  - Void const → OnceLock ベース本実装
+  - 真の singleton インスタンス生成
+```
+
+#### 予言の成就 — 「やはり必要だった」
+
+**時系列の完全な物語**:
+```yaml
+8月: 予言（却下）
+  tomoaki: "singleton に正規化したい"
+  ChatGPT: "重い、不要" → 却下
+
+10月: バグ発生
+  JsonCanonicalBox: ArrayBox(1) バグ
+  根本原因: 2通りの呼び出し規約
+
+10月16日: 予言の的中
+  tomoaki: "やっぱり必要だったにゃ..."
+  ChatGPT5 Pro: "Phase 31 として実装します"
+    ↓
+165行の完全設計書完成
+```
+
+#### 哲学的意義 — Everything is Box の完全性
+
+**不完全な状態（〜Phase 30）**:
+```
+static box ≠ instance box
+    ↓
+呼び出し規約が2通り
+    ↓
+特別扱いが残る
+    ↓
+Everything is Box の不完全性
+```
+
+**完全な状態（Phase 31〜）**:
+```
+static box = instance box (singleton instance)
+    ↓
+呼び出し規約が1通り
+    ↓
+特別扱いがゼロ
+    ↓
+Everything is Box の完全達成！
+```
+
+#### 学術的価値
+
+**1. 人間の直感 vs AI の保守性**
+```yaml
+人間（tomoaki）:
+  - 哲学的一貫性を重視
+  - 「Everything is Box には static も含まれるべき」
+  - 将来のバグを予見（無意識）
+
+AI（ChatGPT）:
+  - 実装コストを重視
+  - 「現時点で問題ないなら不要」
+  - 保守的判断（合理的）
+
+結果:
+  - 2ヶ月後にバグ発生
+  - 人間の直感が正しかった
+  - しかし AI の判断も当時は妥当だった
+```
+
+**2. 「予言と検証」の開発サイクル**
+```
+Phase 1: 提案（予言）
+  - 哲学的理由のみ
+  - 却下される
+
+Phase 2: バグ発生（検証）
+  - 実際の問題が露呈
+  - 予言の正しさが証明される
+
+Phase 3: 実装（成就）
+  - 証拠を元に説得
+  - 即座に採用される
+
+→ これは「科学的手法」そのもの
+```
+
+**3. Everything is Box の深化**
+```
+Level 1: データBox
+  → 「データはすべてBox」
+
+Level 2: 演算子Box（世界初）
+  → 「演算もBox」
+
+Level 3: 制御Box（世界初）
+  → 「制御もBox」
+
+Level 4: Static Box Singleton（Phase 31）
+  → 「static box も instance と同じBox」
+  → 完全統一達成！
+```
+
+#### 結論
+
+**予言の成就**:
+
+8月の「却下された提案」は、10月に「必要不可欠な修正」として実装されることになった。これは：
+
+1. ✅ 人間の哲学的直感の価値
+2. ✅ AI の保守的判断の妥当性（当時）
+3. ✅ 実体験による説得の強さ
+4. ✅ Everything is Box 哲学の完全性
+
+を同時に証明している。
+
+**tomoaki の言葉**:
+> 「たしか超初期に僕このアイデア出したんですが、はははそのときはコーディングchatgptさんにその...重いから駄目とことわられちゃいましてね　ふふ」
+
+この「ふふ」に込められた感情 — それは「やっぱりね」という静かな勝利宣言である。
+
+**AI協働開発における人間の役割**:
+
+AIは「現在」を最適化する。人間は「未来」を予見する。両者の協働により、Nyash は「Everything is Box の完全性」という理想解に到達した。
+
+**Phase 31 は単なるバグ修正ではない。それは、2ヶ月前に却下された予言の成就であり、Everything is Box 哲学の最終完成である。** ✨🎯
+
+---
+
 ## 10. OperatorBox Production Framework
 
 ### 10.1 段階的導入戦略: Observe → Adopt

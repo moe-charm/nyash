@@ -61,6 +61,27 @@ impl MethodIndexBox {
         &self.static_methods
     }
 
+    /// Lookup static method metadata by fully-qualified canonical name ("Box.method/arity")
+    pub fn static_signature(&self, canonical: &str) -> Option<(String, usize)> {
+        let (dot, slash) = (canonical.find('.'), canonical.rfind('/'));
+        match (dot, slash) {
+            (Some(d), Some(s)) if s > d => {
+                let box_name = &canonical[..d];
+                let method = &canonical[d + 1..s];
+                let arity_str = &canonical[s + 1..];
+                if let Ok(arity) = arity_str.parse::<usize>() {
+                    if let Some(entries) = self.static_methods.get(method) {
+                        if entries.iter().any(|(bx, ar)| bx == box_name && *ar == arity) {
+                            return Some((box_name.to_string(), arity));
+                        }
+                    }
+                }
+                None
+            }
+            _ => None,
+        }
+    }
+
     /// Rebuild tail index from function names
     fn rebuild_tail_index(&mut self, functions: &HashMap<String, MirFunction>) {
         self.tail_index.clear();

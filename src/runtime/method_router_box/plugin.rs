@@ -3,7 +3,7 @@ use crate::backend::mir_interpreter::MirInterpreter;
 use crate::backend::vm_types::{VMError, VMValue};
 use crate::box_trait::NyashBox;
 use super::map_callable::MapCallableBox;
-use super::tables::{ARRAY_HOST_ROUTES, HostSlotRoute, MAP_HOST_ROUTES, STRING_HOST_ROUTES};
+use super::tables::{ARRAY_HOST_ROUTES, MAP_HOST_ROUTES, STRING_HOST_ROUTES};
 
 fn plugin_normalize_enabled() -> bool {
     crate::runtime::env_gate_box::bool_alias_or("HAKO_PLUGIN_NORMALIZE", "NYASH_PLUGIN_NORMALIZE", false)

@@ -129,6 +129,57 @@ Notes
 
 ---
 
+Windows COFF (llvmlite harness quick path)
+
+Goal
+- Emit a Windows COFF object (`.obj`) directly from MIR JSON on Linux/WSL, then link it with the static runtime artifacts.
+- Keep the steps reproducible so selfhost CI can validate the Windows line without leaving Linux.
+
+Steps
+1) Emit MIR JSON as usual（Linux と同じ手順）
+   ```
+   ./target/release/hakorune --backend mir \
+     --emit-mir-json build/mir/main_win.mir.json \
+     examples/simple_return.hako
+   ```
+2) Use the llvmlite harness to compile the JSON into a COFF object  
+   `--target windows` forces PE/COFF codegen and selects the correct relocation model
+   ```
+   python3 tools/llvmlite_harness.py \
+     --in build/mir/main_win.mir.json \
+     --target windows \
+     --out build/obj/main_win.obj
+   ```
+   - The script locates `libllvm_backend` automatically when you run it from the repo root.
+   - Set `HAKO_FFI_ALLOW_LIST=llvm_compile_mir_to_object` if the allowlist is empty.
+3) (Optional) Build the Windows static runtime on the same host  
+   ```
+   rustup target add x86_64-pc-windows-gnu
+   cargo build -p hako_kernel --release --target x86_64-pc-windows-gnu \
+     --no-default-features -F core-runtime
+   ```
+   Artifacts land under `target/x86_64-pc-windows-gnu/release/libhako_kernel.a`.
+4) Link on Linux/WSL using MinGW tools  
+   ```
+   x86_64-w64-mingw32-gcc -static -o build/test_win.exe \
+     build/obj/main_win.obj \
+     target/x86_64-pc-windows-gnu/release/libhako_kernel.a \
+     -Wl,--allow-multiple-definition \
+     -lws2_32 -ladvapi32 -luserenv -lole32 -lbcrypt -lntdll -luser32 -lkernel32
+   ```
+   - Replace the library path if you copied `libhako_kernel.a` elsewhere.
+   - The `--allow-multiple-definition` flag mirrors the Linux doctor script; omit it once duplicate helpers are resolved.
+5) Run the EXE on Windows（または `wine` で簡易確認）  
+   ```
+   wine build/test_win.exe 2>/dev/null | grep Result
+   ```
+
+Outcome
+- The object emitted in Step 2 is the same input that the Windows linker expects.
+- Once the Windows CI lane is available, reuse Steps 1–2 to produce artifacts and upload them as part of the frozen toolchain pipeline.
+
+---
+
 Windows (MinGW/MSVC) — Static Runtime link (verified)
 
 This is the minimal, copy‑paste path we validated on WSL (MinGW cross) to produce a Windows EXE that links against the static runtime `hako_kernel` and calls dotted NyRT symbols.

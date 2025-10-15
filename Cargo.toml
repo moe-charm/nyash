@@ -300,7 +300,7 @@ exclude = [
 [profile.release]
 # 最適化設定
 opt-level = 3
-lto = true
+lto = false  # Phase 31-A: Disabled for static plugin linking (will re-enable in Phase B)
 codegen-units = 1
 panic = "abort"
 

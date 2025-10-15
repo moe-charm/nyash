@@ -254,20 +254,24 @@ impl MirInterpreter {
                 None
             }
         } {
-            // Build argv: decide whether to pass receiver as first arg
-            // - If func.params.len() == args.len(): static box method, don't pass receiver
-            // - If func.params.len() == args.len() + 1: instance method with 'me', pass receiver
+            // Build argv: static/instance ともに receiver を先頭に含める（Phase-31）
             let recv_vm = self.reg_load(box_val)?;
-            let pass_receiver = func.params.len() == args.len() + 1;
-            let mut argv: Vec<VMValue> = Vec::with_capacity(if pass_receiver { 1 + args.len() } else { args.len() });
-            if pass_receiver {
-                argv.push(recv_vm.clone());
+            let expected_params = args.len() + 1;
+            if func.params.len() != expected_params {
+                return Err(VMError::InvalidInstruction(format!(
+                    "Method fallback expects receiver-first signature: function {} has {} params but call supplied {} args",
+                    func.signature.name,
+                    func.params.len(),
+                    args.len()
+                )));
             }
+            let mut argv: Vec<VMValue> = Vec::with_capacity(1 + args.len());
+            argv.push(recv_vm.clone());
             for a in args { argv.push(self.reg_load(*a)?); }
 
             // DEBUG: Trace BoxCall user-method fallback argv
             if std::env::var("HAKO_DEBUG_BOXCALL_ARGV").is_ok() {
-                eprintln!("[BOXCALL-ARGV] method={} recv_vm={:?} args_len={} func_params_len={} pass_receiver={} argv_len={}",
+                eprintln!("[BOXCALL-ARGV] method={} recv_vm={:?} args_len={} func_params_len={} pass_receiver=true argv_len={}",
                           method,
                           match &recv_vm {
                               VMValue::String(s) => format!("String({})", s),
@@ -278,7 +282,6 @@ impl MirInterpreter {
                           },
                           args.len(),
                           func.params.len(),
-                          pass_receiver,
                           argv.len());
                 for (idx, v) in argv.iter().enumerate() {
                     eprintln!("[BOXCALL-ARGV]   argv[{}]={:?}", idx, match v {

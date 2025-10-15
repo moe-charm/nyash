@@ -3,8 +3,12 @@
 //! Registers specs from hako_box.toml embedded in plugin folders and
 //! records type_id and method ids in the loader, so type/handle lookups
 //! work even before dynamic config/loader are active.
+//!
+//! Phase 31: Invoke pointer registration (Phase A experimental)
 
 use serde::Deserialize;
+
+mod manual;
 
 #[derive(Deserialize)]
 struct BoxHeader { type_name: String, type_id: u32, provider: String }
@@ -36,3 +40,8 @@ pub fn register_from_toml(toml_str: &str) {
 
 // Build-script generated registration entry
 include!(concat!(env!("OUT_DIR"), "/static_plugins_generated.rs"));
+
+/// Initialize invoke pointers after metadata registration (Phase 31-A)
+pub fn init_invoke_pointers() {
+    manual::register_manual_invoke_pointers();
+}
