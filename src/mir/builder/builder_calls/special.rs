@@ -122,14 +122,15 @@ impl MirBuilder {
         };
         // Prefer unified ModuleFunction callee to avoid legacy recursion
         let mut args_local = arg_values.clone();
-        super::super::ssa::local::finalize_args(self, &mut args_local);
-        if let Err(e) = self.emit_instruction(MirInstruction::Call {
-            dst: Some(result_id),
-            func: super::super::ValueId::new(0),
-            callee: Some(crate::mir::definitions::call_unified::Callee::ModuleFunction(fun_name.clone())),
-            args: args_local,
-            effects: EffectMask::READ.add(Effect::ReadHeap)
-        }) { return Some(Err(e)); }
+        if let Err(e) = self.emit_call_with_guard(
+            Some(result_id),
+            super::super::ValueId::new(0),
+            crate::mir::Callee::ModuleFunction(fun_name.clone()),
+            args_local,
+            EffectMask::READ.add(Effect::ReadHeap),
+        ) {
+            return Some(Err(e));
+        }
         self.annotate_call_result_from_func_name(result_id, &fun_name);
         Some(Ok(result_id))
     }

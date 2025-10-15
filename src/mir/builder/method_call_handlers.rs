@@ -51,13 +51,13 @@ impl MirBuilder {
 
         // Prefer ModuleFunction emission; VM側の末尾一致フォールバックで alias/宣言名の揺れを吸収
         let name_val = crate::mir::builder::name_const::make_name_const_result(self, &target_name)?;
-        self.emit_instruction(MirInstruction::Call {
-            dst: Some(dst),
-            func: name_val,
-            callee: Some(crate::mir::Callee::ModuleFunction(target_name.clone())),
-            args: arg_values,
-            effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-        })?;
+        self.emit_call_with_guard(
+            Some(dst),
+            name_val,
+            crate::mir::Callee::ModuleFunction(target_name.clone()),
+            arg_values,
+            crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+        )?;
         self.annotate_call_result_from_func_name(dst, &target_name);
         return Ok(dst)
     }
@@ -137,13 +137,13 @@ impl MirBuilder {
                         let _ = args.remove(0);
                         argv_loc.push(builder.local_arg(a));
                     }
-                    let _ = builder.emit_instruction(MirInstruction::Call {
-                        dst: Some(dst),
-                        func: name_const,
-                        callee: Some(crate::mir::Callee::Extern(full)),
-                        args: argv_loc,
-                        effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-                    });
+                    let _ = builder.emit_call_with_guard(
+                        Some(dst),
+                        name_const,
+                        crate::mir::Callee::Extern(full),
+                        argv_loc,
+                        crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                    );
                     builder.annotate_call_result_from_func_name(dst, method);
                     return Some(dst);
                 }

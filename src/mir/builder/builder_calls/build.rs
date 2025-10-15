@@ -137,13 +137,13 @@ impl MirBuilder {
                     let dst = self.value_gen.next();
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
                     self.maybe_prepend_static_me(&ext_name, &mut call_args);
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(dst),
-                        func: fun_val,
-                        callee: Some(crate::mir::Callee::ModuleFunction(ext_name.clone())),
-                        args: call_args,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
+                    self.emit_call_with_guard(
+                        Some(dst),
+                        fun_val,
+                        crate::mir::Callee::ModuleFunction(ext_name.clone()),
+                        call_args,
+                        EffectMask::READ.add(Effect::ReadHeap),
+                    )?;
                     self.annotate_call_result_from_func_name(dst, &ext_name);
                     return Ok(dst);
                 }
@@ -223,13 +223,13 @@ impl MirBuilder {
                                 let mut arg_values2 = Vec::new();
                                 for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
                                 self.maybe_prepend_static_me(&target_key, &mut arg_values2);
-                                self.emit_instruction(MirInstruction::Call {
-                                    dst: Some(dst2),
-                                    func: fun_val2,
-                                    callee: Some(crate::mir::Callee::ModuleFunction(target_key.clone())),
-                                    args: arg_values2,
-                                    effects: EffectMask::READ.add(Effect::ReadHeap),
-                                })?;
+                                self.emit_call_with_guard(
+                                    Some(dst2),
+                                    fun_val2,
+                                    crate::mir::Callee::ModuleFunction(target_key.clone()),
+                                    arg_values2,
+                                    EffectMask::READ.add(Effect::ReadHeap),
+                                )?;
                                 self.annotate_call_result_from_func_name(dst2, &target_key);
                                 return Ok(dst2);
                             }
@@ -242,12 +242,13 @@ impl MirBuilder {
                     let mut arg_values = Vec::new();
                     for a in &args { arg_values.push(self.build_expression(a.clone())?); }
                     self.maybe_prepend_static_me(&name, &mut arg_values);
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(dst), func: fun_val,
-                        callee: Some(crate::mir::Callee::ModuleFunction(name.clone())),
-                        args: arg_values,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
+                    self.emit_call_with_guard(
+                        Some(dst),
+                        fun_val,
+                        crate::mir::Callee::ModuleFunction(name.clone()),
+                        arg_values,
+                        EffectMask::READ.add(Effect::ReadHeap),
+                    )?;
                     self.annotate_call_result_from_func_name(dst, &name);
                     return Ok(dst);
                 }
@@ -257,12 +258,13 @@ impl MirBuilder {
                     let mut arg_values = Vec::new();
                     for a in &args { arg_values.push(self.build_expression(a.clone())?); }
                     self.maybe_prepend_static_me(&cand2, &mut arg_values);
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(dst), func: fun_val,
-                        callee: Some(crate::mir::Callee::ModuleFunction(cand2.clone())),
-                        args: arg_values,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
+                    self.emit_call_with_guard(
+                        Some(dst),
+                        fun_val,
+                        crate::mir::Callee::ModuleFunction(cand2.clone()),
+                        arg_values,
+                        EffectMask::READ.add(Effect::ReadHeap),
+                    )?;
                     self.annotate_call_result_from_func_name(dst, &cand2);
                     return Ok(dst);
                 }
@@ -276,13 +278,13 @@ impl MirBuilder {
                         let mut arg_values2 = Vec::new();
                         for a in &args { arg_values2.push(self.build_expression(a.clone())?); }
                         self.maybe_prepend_static_me(&fname, &mut arg_values2);
-                        self.emit_instruction(MirInstruction::Call {
-                            dst: Some(dst2),
-                            func: fun_val2,
-                            callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
-                            args: arg_values2,
-                            effects: EffectMask::READ.add(Effect::ReadHeap),
-                        })?;
+                        self.emit_call_with_guard(
+                            Some(dst2),
+                            fun_val2,
+                            crate::mir::Callee::ModuleFunction(fname.clone()),
+                            arg_values2,
+                            EffectMask::READ.add(Effect::ReadHeap),
+                        )?;
                         self.annotate_call_result_from_func_name(dst2, &fname);
                         return Ok(dst2);
                     }
@@ -307,13 +309,13 @@ impl MirBuilder {
             let dst = self.value_gen.next();
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &ext_name)?;
             self.maybe_prepend_static_me(&ext_name, &mut arg_values);
-            self.emit_instruction(MirInstruction::Call {
-                dst: Some(dst),
-                func: fun_val,
-                callee: Some(crate::mir::Callee::ModuleFunction(ext_name.clone())),
-                args: arg_values,
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+            self.emit_call_with_guard(
+                Some(dst),
+                fun_val,
+                crate::mir::Callee::ModuleFunction(ext_name.clone()),
+                arg_values,
+                EffectMask::READ.add(Effect::ReadHeap),
+            )?;
             self.annotate_call_result_from_func_name(dst, &ext_name);
             return Ok(dst);
         }
@@ -328,13 +330,13 @@ impl MirBuilder {
             let dst = self.value_gen.next();
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &target)?;
             self.maybe_prepend_static_me(&target, &mut arg_values);
-            self.emit_instruction(MirInstruction::Call {
-                dst: Some(dst),
-                func: fun_val,
-                callee: Some(crate::mir::Callee::ModuleFunction(target.clone())),
-                args: arg_values,
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+            self.emit_call_with_guard(
+                Some(dst),
+                fun_val,
+                crate::mir::Callee::ModuleFunction(target.clone()),
+                arg_values,
+                EffectMask::READ.add(Effect::ReadHeap),
+            )?;
             self.annotate_call_result_from_func_name(dst, &target);
             return Ok(dst);
         }
@@ -396,13 +398,13 @@ impl MirBuilder {
                     // func field retained for legacy compatibility (diagnostics/SSA references)
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fname)?;
                     self.maybe_prepend_static_me(&fname, &mut arg_values);
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(dst),
-                        func: fun_val,
-                        callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
-                        args: arg_values,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
+                    self.emit_call_with_guard(
+                        Some(dst),
+                        fun_val,
+                        crate::mir::Callee::ModuleFunction(fname.clone()),
+                        arg_values,
+                        EffectMask::READ.add(Effect::ReadHeap),
+                    )?;
                     self.annotate_call_result_from_func_name(dst, &fname);
                     return Ok(dst);
                 }
@@ -419,13 +421,13 @@ impl MirBuilder {
                     let fun_name = format!("{}.{}{}", cls_name, name, format!("/{}", arg_values.len()));
                     let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &fun_name)?;
                     self.maybe_prepend_static_me(&fun_name, &mut arg_values);
-                    self.emit_instruction(MirInstruction::Call {
-                        dst: Some(result_id),
-                        func: fun_val,
-                        callee: Some(crate::mir::Callee::ModuleFunction(fun_name.clone())),
-                        args: arg_values,
-                        effects: EffectMask::READ.add(Effect::ReadHeap),
-                    })?;
+                    self.emit_call_with_guard(
+                        Some(result_id),
+                        fun_val,
+                        crate::mir::Callee::ModuleFunction(fun_name.clone()),
+                        arg_values,
+                        EffectMask::READ.add(Effect::ReadHeap),
+                    )?;
                     self.annotate_call_result_from_func_name(result_id, &fun_name);
                     return Ok(result_id);
                 }
@@ -528,13 +530,13 @@ impl MirBuilder {
             let fun_val = crate::mir::builder::name_const::make_name_const_result(self, &name)?;
 
             // Emit strict Global callee to avoid legacy dynamic resolution
-            self.emit_instruction(MirInstruction::Call {
-                dst: Some(dst),
-                func: fun_val,                  // Retained for diagnostics/SSA references
-                callee: Some(crate::mir::Callee::Global(name.clone())),
-                args: arg_values,
-                effects: EffectMask::READ.add(Effect::ReadHeap),
-            })?;
+            self.emit_call_with_guard(
+                Some(dst),
+                fun_val,
+                crate::mir::Callee::Global(name.clone()),
+                arg_values,
+                EffectMask::READ.add(Effect::ReadHeap),
+            )?;
             Ok(dst)
         } else {
             // Unified path for builtins/externs
@@ -647,13 +649,13 @@ impl MirBuilder {
                             Err(e) => return Err(e),
                         };
                         // Prefer ModuleFunction callee when enabled; fallback to legacy (callee=None)
-                        self.emit_instruction(MirInstruction::Call {
-                                dst: Some(dst),
-                                func: c,
-                                callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
-                                args: call_args,
-                                effects: crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
-                            })?;
+                        self.emit_call_with_guard(
+                            Some(dst),
+                            c,
+                            crate::mir::Callee::ModuleFunction(fname.clone()),
+                            call_args,
+                            crate::mir::EffectMask::READ.add(crate::mir::Effect::ReadHeap),
+                        )?;
                         self.annotate_call_result_from_func_name(dst, &fname);
                         return Ok(dst);
                     }

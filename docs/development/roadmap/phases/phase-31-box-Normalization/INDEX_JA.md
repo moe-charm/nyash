@@ -200,3 +200,12 @@
 ### 残タスク（Phase A 継続）
 - Plugin ABI: 既存 C ABI 互換のトランポリンを registry に登録し、外部呼び出し経路を段階移行。
 - Docs/Tests: Phase-31 変更点のドキュメント整備とスモーク追加（singleton/Verifier 回り）。
+
+### 現在の既知問題（dev）
+- Extern 経路（`nyrt.string.length`）で、受領者の素材化が Builder の finalize 前に抜けるパスがあり、φ 合流で未定義→Void 伝播→Extern TypeError となるケースがある。
+  - 露呈のきっかけ: Static→singleton 正規化により Extern 経路が prominent になった（Router 表は問題の中心ではない）。
+  - 対策方針（短期）:
+    1) Builder finalize/repair で Extern 呼び出しの受領者を in‑block Copy で素材化（Method と同等に）
+    2) VM の Copy 寛容ガード（未定義→Void 初期化）は既定 OFF（Fail‑Fast）へ戻す
+    3) φ 合流を含む最小スモーク（Extern length）を quick-selfhost に追加
+  - 参考 ENV: `NYASH_DEBUG_STRING_LEN=1`（Extern handler での引数デバッグ出力）

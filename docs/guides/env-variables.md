@@ -145,3 +145,12 @@ All runtime consumers read these via `env_gate_box` helpers to keep alias handli
 - `HAKO_ENABLE_NYKERNEL_STUB` / `NYASH_ENABLE_NYKERNEL_STUB` — enable nykernel dev heap stub (malloc/load/store).
 
 All values are normalized via `env_gate_box` helpers so aliases stay in sync. Prefer `HAKO_*` when introducing new scripts or docs.
+
+### Debug toggles (dev only)
+
+- `NYASH_DEBUG_HOST_SLOT=1`
+  - HostHandle 経路（テーブル駆動）での呼び出しを stderr にデバッグ出力します（plugin/builtin いずれも）。
+  - 形式: `[debug:host_slot] route=<name> slot=<id> -> <VMValue>` / `[debug:plugin host] Box.method -> <VMValue>` / `[debug:builtin host] Box.method -> <VMValue>`
+- `NYASH_DEBUG_STRING_LEN=1`
+  - `nyrt.string.length(recv)` の Extern ハンドラで受領引数の種類をデバッグ出力します（Unexpected の場合に `unexpected arg=...`）。
+  - Extern 経路の受領者素材化（materialization）確認や未定義伝播の切り分けに使用します。

@@ -13,6 +13,7 @@ Scope (small, reversible)
 - Added `src/runtime/method_router_box/tables.rs` to hold declarative HostHandle routes (String/Array/Map).
 - Refactored `method_router_box/plugin.rs` and `builtin.rs` to consume the table helpers and `env_gate_box`.
 - Introduced `method_router_box/host_slot.rs` as the single HostHandle execution helper (plugin/builtin/primitive String share TLV + ERR_BUF_SMALL handling).
+- Added `try_invoke_arc()` helper to consume a `HostSlotRoutes` table uniformly from plugin/builtin routers. This keeps the ENV gate and slot selection centralized and minimizes divergence between routers.
 - builtin router now consumes the same Array/Map tables; primitive String also reuses `STRING_HOST_ROUTES` before falling back to TypeRegistry slots.
 - Split VM extern adapter into per‑iface modules (`extern_{string,array,map,set,env}.rs`) with `nyrt.time.now_ms` remaining inline.
 - Behavior remains unchanged (env flags preserved), no semantic shifts.
@@ -44,6 +45,9 @@ Migration plan
 Testing
 - Targeted smokes: `host_handle_router_*`, plugins parity (map/array size/has/get/set), and quick profile.
 - No profile default changes; only internal refactor.
+
+Notes (follow‑up)
+- String.size/len は Builder が Extern(`nyrt.string.length`) へ正規化するため、Router 表は（primitive String のみ）開発/検証用途で利用します。Extern 経路の受領者素材化は Builder 側（finalize/repair）で担保します。
 
 Backout
 - Delete `consts.rs` and restore in‑file literals; revert single file change in plugin router. No data migration.

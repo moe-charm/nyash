@@ -8,7 +8,12 @@ pub fn register(map: &mut HashMap<(String, String), super::HandlerFn>) {
         match &args[0] {
             VMValue::String(s) => Ok(VMValue::Integer(hako_core_string::length_bytes(s))),
             VMValue::BoxRef(b) => Ok(VMValue::Integer(hako_core_string::length_bytes(&b.to_string_box().value))),
-            _ => Err(VMError::TypeError("nyrt.string.length expects String".into())),
+            other => {
+                if std::env::var("NYASH_DEBUG_STRING_LEN").ok().as_deref() == Some("1") {
+                    eprintln!("[debug:string.len] unexpected arg={:?}", other);
+                }
+                Err(VMError::TypeError("nyrt.string.length expects String".into()))
+            }
         }
     });
 

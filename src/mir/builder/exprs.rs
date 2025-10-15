@@ -75,17 +75,16 @@ impl super::MirBuilder {
                     args.push(self.build_expression_impl(a)?);
                 }
                 // Normalize args into SSA locals
-                crate::mir::builder::ssa::local::finalize_args(self, &mut args);
                 let full = format!("ffi.dynamic.{}", symbol);
                 let effects = crate::mir::builder::calls::extern_calls::compute_extern_effects("ffi.dynamic", &symbol);
                 let dst = self.value_gen.next();
-                self.emit_instruction(MirInstruction::Call {
-                    dst: Some(dst),
-                    func: ValueId::new(0),
-                    callee: Some(crate::mir::definitions::call_unified::Callee::Extern(full)),
+                self.emit_call_with_guard(
+                    Some(dst),
+                    ValueId::new(0),
+                    crate::mir::Callee::Extern(full),
                     args,
                     effects,
-                })?;
+                )?;
                 Ok(dst)
             }
 

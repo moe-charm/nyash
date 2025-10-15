@@ -238,6 +238,90 @@ impl MirInstruction {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::mir::definitions::call_unified::{Callee, TypeCertainty};
+    use crate::mir::{EffectMask, ValueId};
+
+    #[test]
+    fn used_values_method_includes_receiver_and_args() {
+        let func_sym = ValueId::new(1);
+        let arg0 = ValueId::new(2);
+        let receiver = ValueId::new(3);
+        let inst = MirInstruction::Call {
+            dst: Some(ValueId::new(4)),
+            func: func_sym,
+            callee: Some(Callee::Method {
+                box_name: "StringBox".to_string(),
+                method: "len".to_string(),
+                receiver: Some(receiver),
+                certainty: TypeCertainty::Known,
+            }),
+            args: vec![arg0],
+            effects: EffectMask::READ,
+        };
+        let used = inst.used_values();
+        assert_eq!(used, vec![func_sym, arg0, receiver]);
+    }
+
+    #[test]
+    fn used_values_method_without_receiver_keeps_function_and_args_only() {
+        let func_sym = ValueId::new(10);
+        let arg0 = ValueId::new(11);
+        let inst = MirInstruction::Call {
+            dst: Some(ValueId::new(12)),
+            func: func_sym,
+            callee: Some(Callee::Method {
+                box_name: "ArrayBox".to_string(),
+                method: "size".to_string(),
+                receiver: None,
+                certainty: TypeCertainty::Union,
+            }),
+            args: vec![arg0],
+            effects: EffectMask::READ,
+        };
+        let used = inst.used_values();
+        assert_eq!(used, vec![func_sym, arg0]);
+    }
+
+    #[test]
+    fn used_values_closure_includes_me_and_captures() {
+        let func_sym = ValueId::new(20);
+        let call_arg = ValueId::new(21);
+        let capture_val = ValueId::new(22);
+        let me_capture = ValueId::new(23);
+        let inst = MirInstruction::Call {
+            dst: Some(ValueId::new(24)),
+            func: func_sym,
+            callee: Some(Callee::Closure {
+                params: vec!["x".to_string()],
+                captures: vec![("cap".to_string(), capture_val)],
+                me_capture: Some(me_capture),
+            }),
+            args: vec![call_arg],
+            effects: EffectMask::PURE,
+        };
+        let used = inst.used_values();
+        assert_eq!(used, vec![func_sym, call_arg, me_capture, capture_val]);
+    }
+
+    #[test]
+    fn new_closure_used_values_include_captures_and_me() {
+        let capture_val = ValueId::new(30);
+        let me_capture = ValueId::new(31);
+        let inst = MirInstruction::NewClosure {
+            dst: ValueId::new(32),
+            params: vec!["y".to_string()],
+            body: Vec::new(),
+            captures: vec![("cap".to_string(), capture_val)],
+            me: Some(me_capture),
+        };
+        let used = inst.used_values();
+        assert_eq!(used, vec![capture_val, me_capture]);
+    }
+}
+
 
 impl ConstValue {
     /*

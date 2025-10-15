@@ -39,15 +39,16 @@ pub(crate) fn try_known_rewrite_to_dst(
     let mut call_args = Vec::with_capacity(arity + 1);
     call_args.push(object_value);
     call_args.append(&mut arg_values);
-    crate::mir::builder::ssa::local::finalize_args(builder, &mut call_args);
     let actual_dst = want_dst.unwrap_or_else(|| builder.value_gen.next());
-    if let Err(e) = builder.emit_instruction(MirInstruction::Call {
-        dst: Some(actual_dst),
-        func: name_const,
-        callee: Some(crate::mir::Callee::ModuleFunction(fname.clone())),
-        args: call_args,
-        effects: EffectMask::READ.add(Effect::ReadHeap)
-    }) { return Some(Err(e)); }
+    if let Err(e) = builder.emit_call_with_guard(
+        Some(actual_dst),
+        name_const,
+        crate::mir::Callee::ModuleFunction(fname.clone()),
+        call_args,
+        EffectMask::READ.add(Effect::ReadHeap),
+    ) {
+        return Some(Err(e));
+    }
     builder.annotate_call_result_from_func_name(actual_dst, &fname);
     let meta = serde_json::json!({
         "recv_cls": cls,

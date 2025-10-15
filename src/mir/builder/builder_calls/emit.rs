@@ -276,7 +276,21 @@ impl MirBuilder {
             Callee::Method { receiver: Some(r), .. } => { *r = self.local_recv(*r); }
             _ => {}
         }
-        for a in args2.iter_mut() { *a = self.local_arg(*a); }
+        let mut pre_call_copies: Vec<MirInstruction> = Vec::new();
+        if !matches!(callee2, Callee::Extern(_)) {
+            for a in args2.iter_mut() {
+                let src = *a;
+                let dst_local = self.value_gen.next();
+                pre_call_copies.push(MirInstruction::Copy { dst: dst_local, src });
+                if let Some(t) = self.value_types.get(&src).cloned() {
+                    self.value_types.insert(dst_local, t);
+                }
+                if let Some(orig) = self.origin_get(src).map(|s| s.to_string()) {
+                    self.origin_register(dst_local, orig);
+                }
+                *a = dst_local;
+            }
+        }
         if let Callee::Method { method, receiver, box_name, .. } = &callee2 {
             if let Some(r) = receiver {
                 if super::super::utils::builder_debug_enabled() {
@@ -302,6 +316,18 @@ impl MirBuilder {
         };
 
         let res = self.emit_instruction(legacy_call);
+        if res.is_ok() && !pre_call_copies.is_empty() {
+            if let (Some(bb), Some(function)) = (self.current_block, self.current_function.as_mut()) {
+                if let Some(block) = function.get_block_mut(bb) {
+                    let insert_at = block.instructions.len().saturating_sub(1);
+                    let mut idx = 0usize;
+                    for inst in pre_call_copies {
+                        block.instructions.insert(insert_at + idx, inst);
+                        idx += 1;
+                    }
+                }
+            }
+        }
         // Dev-only: verify block schedule invariants after emitting call
         crate::mir::builder::emit_guard::verify_after_call(self);
         res

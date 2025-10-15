@@ -192,6 +192,9 @@ impl MirInterpreter {
                 Ok(())
             }
             Err(e) => {
+                if !super::VmConfig::global().tolerate_void {
+                    return Err(e);
+                }
                 if self.regs.contains_key(&dst) {
                     if super::VmConfig::global().general_trace {
                         eprintln!(
@@ -202,19 +205,15 @@ impl MirInterpreter {
                     }
                     return Ok(());
                 }
-                if super::VmConfig::global().tolerate_void {
-                    if super::VmConfig::global().general_trace {
-                        eprintln!(
-                            "[vm-copy] src undefined v%{} → init dst v%{} = Void (tolerate)",
-                            src.as_u32(),
-                            dst.as_u32()
-                        );
-                    }
-                    self.regs.insert(dst, super::VMValue::Void);
-                    Ok(())
-                } else {
-                    Err(e)
+                if super::VmConfig::global().general_trace {
+                    eprintln!(
+                        "[vm-copy] src undefined v%{} → init dst v%{} = Void (tolerate)",
+                        src.as_u32(),
+                        dst.as_u32()
+                    );
                 }
+                self.regs.insert(dst, super::VMValue::Void);
+                Ok(())
             }
         }
     }

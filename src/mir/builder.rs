@@ -611,6 +611,24 @@ impl MirBuilder {
 
     // フェーズM: insert_edge_copy()メソッド削除（no_phi_mode撤廃により不要）
 
+    pub(super) fn emit_call_with_guard(
+        &mut self,
+        dst: Option<ValueId>,
+        func: ValueId,
+        mut callee: crate::mir::Callee,
+        mut args: Vec<ValueId>,
+        effects: EffectMask,
+    ) -> Result<(), String> {
+        crate::mir::builder::emit_guard::finalize_call_operands(self, &mut callee, &mut args);
+        self.emit_instruction(MirInstruction::Call {
+            dst,
+            func,
+            callee: Some(callee),
+            args,
+            effects,
+        })
+    }
+
 
     /// Build new expression: new ClassName(arguments)
     pub(super) fn build_new_expression(
